@@ -1,0 +1,16 @@
+/.agents/
+/.antigravitycli/
+/.claude/
+/.config/
+/AGENTS.md
+/CLAUDE.md
+/memory.md
+/todo.md
+/target/
+/*.trace/
+.idea
+.vscode
+.DS_Store
+*.swp
+*.swo
+*.orig

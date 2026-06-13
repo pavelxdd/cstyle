@@ -1,0 +1,6 @@
+[profile.default]
+failure-output = "immediate-final"
+
+[profile.release-perf]
+failure-output = "immediate-final"
+test-threads = 1
