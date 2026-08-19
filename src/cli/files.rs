@@ -135,7 +135,7 @@ mod tests {
             recursive,
             console,
             "cstyle",
-            "1.0.0",
+            "test-version",
         )
     }
 

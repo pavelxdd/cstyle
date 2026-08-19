@@ -8,10 +8,13 @@ use super::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
 use super::line_scan::last_unmatched_open_delimiter;
+use super::line_scan::trailing_comment_split_limit;
 use super::line_scan::trailing_matching_parens;
+use super::operators::{head_ends_assignment_operator, head_ends_binary_operator};
 
 use super::return_types::is_return_type_line;
 use super::state::{FormatterBraceType, PreviousToken};
+use super::switch_cases::{is_case_label_start, is_default_label_start};
 use super::syntax::{
     function_head_has_assignment, function_name_start, scoped_name_is_constructor,
 };
@@ -70,6 +73,17 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
+        if self.continues_operator_expression()
+            && matches!(
+                self.previous,
+                PreviousToken::Word
+                    | PreviousToken::Literal
+                    | PreviousToken::CloseParen
+                    | PreviousToken::CloseBracket
+            )
+        {
+            return false;
+        }
         if self.current.trim_end().ends_with('*') {
             return true;
         }
@@ -137,6 +151,28 @@ impl FormatEngine<'_> {
         following_operator: Option<&str>,
     ) -> bool {
         if !matches!(operator, "*" | "&" | "^") {
+            return false;
+        }
+        if self.continues_operator_expression()
+            && matches!(
+                self.previous,
+                PreviousToken::Word
+                    | PreviousToken::Literal
+                    | PreviousToken::CloseParen
+                    | PreviousToken::CloseBracket
+            )
+        {
+            return false;
+        }
+        if matches!(self.previous, PreviousToken::Literal)
+            || (self
+                .current
+                .trim_end()
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch.is_ascii_digit() || ch == '\'' || ch == '"')
+                && !self.looks_like_pointer_declaration_context())
+        {
             return false;
         }
         if let Some(Token::Word(word)) = next
@@ -332,6 +368,39 @@ impl FormatEngine<'_> {
         }
         is_pointer_type_word(trailing_word(&self.current))
             || self.looks_like_pointer_declaration_context()
+    }
+
+    fn continues_operator_expression(&self) -> bool {
+        self.output.last_non_empty_line().is_some_and(|line| {
+            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            if head_ends_assignment_operator(code) {
+                return true;
+            }
+            // `>=` is always a comparison; a trailing `>` whose line has a
+            // `<` is usually a template close, not an expression break.
+            if code.ends_with(">=") {
+                return true;
+            }
+            if code.ends_with('>') && code.contains('<') {
+                return false;
+            }
+            let trimmed = code.trim_start();
+            let ends_single_word_label = trimmed.split_once(':').is_some_and(|(label, rest)| {
+                rest.is_empty()
+                    && !label.is_empty()
+                    && label.trim_end().chars().all(is_identifier_continue)
+            });
+            let ends_ternary_colon = code.ends_with(':')
+                && !is_case_label_start(trimmed)
+                && !is_default_label_start(trimmed)
+                && (self.frame_stack.last_ternary_with_colon().is_some()
+                    || !ends_single_word_label);
+            head_ends_binary_operator(code)
+                || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
+                    .iter()
+                    .any(|operator| code.ends_with(operator))
+                || ends_ternary_colon
+        })
     }
 
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {

@@ -248,6 +248,92 @@ fn call_argument_after_cast_expression_keeps_sibling_indent() {
 }
 
 #[test]
+fn one_line_ternary_return_does_not_leak_into_next_logical_chain() {
+    let source = fixture!(
+        "static const char *month_text(uint8_t month)",
+        "{",
+        "    return month >= 1u && month <= 2u ? months[month - 1u] : nullptr;",
+        "}",
+        "",
+        "static bool show_value(const struct view *view)",
+        "{",
+        "    if (!write_text(&temperature, \"T=\") ||",
+        "        ((view->reasons & FLAG_X) !=",
+        "         0u ? !write_text(&temperature, \"??\") :",
+        "         !write_number(&temperature, view->temperature_c, 1u)) ||",
+        "        !write_text(&temperature, \" Wm=\") ||",
+        "        !write_number(&temperature, view->w, 1u)) {",
+        "        return false;",
+        "    }",
+        "    return true;",
+        "}",
+    );
+
+    assert_eq!(format_c(source, &one_true_brace_c_options()), source);
+}
+
+#[test]
+fn case_block_ternary_arm_keeps_assignment_continuation_column() {
+    let source = fixture!(
+        "static void helper(uint8_t month)",
+        "{",
+        "    uint8_t next = 0u;",
+        "    switch (month) {",
+        "        case 12u: {",
+        "            next.month = next.month == 12u ?",
+        "                         1u : (uint8_t)(next.month + 1u);",
+        "            break;",
+        "        }",
+        "        default:",
+        "            break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_c(source, &one_true_brace_c_options()), source);
+}
+
+#[test]
+fn case_block_statement_after_multiline_ternary_keeps_case_body_indent() {
+    let source = fixture!(
+        "static bool helper(uint8_t value)",
+        "{",
+        "    uint8_t result = 0u;",
+        "    switch (value) {",
+        "        case 2u:",
+        "            if (value > 1u) {",
+        "                return false;",
+        "            }",
+        "            result =",
+        "                result == 1u ?",
+        "                2u :",
+        "                (uint8_t)(result + 1u);",
+        "            return true;",
+        "        default:",
+        "            break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_c(source, &one_true_brace_c_options()), source);
+}
+
+#[test]
+fn call_closing_after_ternary_argument_keeps_callee_column() {
+    let source = fixture!(
+        "static bool helper(void)",
+        "{",
+        "    return write_glyph(",
+        "               line, alt_mode ? UINT8_C(0x2a) : UINT8_C(0x20)",
+        "           ) &&",
+        "           write_text(line, \"  \");",
+        "}",
+    );
+
+    assert_eq!(format_c(source, &one_true_brace_c_options()), source);
+}
+
+#[test]
 fn call_argument_after_ternary_argument_keeps_call_column() {
     assert_eq!(
         format_c(

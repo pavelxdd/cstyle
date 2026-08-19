@@ -351,7 +351,10 @@ impl FormatEngine<'_> {
                     Some(self.state.indent() + 1 + self.case_body_indent_extra(LineKind::Normal));
             }
             self.continuation_indent.next_line_indent_spaces = None;
-        } else if matches!(next, Some(Token::Symbol(';' | ','))) {
+        } else if matches!(next, Some(Token::Symbol(';'))) {
+            self.continuation_indent.next_line_indent =
+                Some(self.state.indent() + self.case_body_indent_extra(LineKind::Normal));
+        } else if matches!(next, Some(Token::Symbol(','))) {
             self.continuation_indent.next_line_indent = Some(self.state.indent());
         } else {
             self.continuation_indent.next_line_indent = None;

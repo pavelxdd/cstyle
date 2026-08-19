@@ -726,15 +726,14 @@ impl FormatEngine<'_> {
                 let normal_spaces = normal_indent * width;
                 let previous_indent = leading_visual_width(previous, tab_width);
                 if previous_indent > normal_spaces
-                    && self.output.iter().rev().skip(1).take(16).any(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
-                        let trimmed = code.trim_start();
-                        code.ends_with('{')
-                            && leading_visual_width(line, tab_width) + width == previous_indent
-                            && (starts_header_word(trimmed, "if")
-                                || starts_header_word(trimmed, "for")
-                                || starts_header_word(trimmed, "while")
-                                || trimmed.starts_with("else"))
+                    && self.frame_stack.active_brace().is_some_and(|frame| {
+                        frame.body_indent_column == previous_indent
+                            && frame.header.as_deref().is_some_and(|header| {
+                                starts_header_word(header, "if")
+                                    || starts_header_word(header, "for")
+                                    || starts_header_word(header, "while")
+                                    || header.starts_with("else")
+                            })
                     })
                 {
                     return Some(previous_indent);

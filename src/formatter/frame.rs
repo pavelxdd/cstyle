@@ -272,6 +272,7 @@ pub(super) struct FrameStack {
     last_argument: Option<ArgumentFrame>,
     ternary_frames: Vec<TernaryFrame>,
     ternary_colon_output_lines: Vec<usize>,
+    open_ternary_line_ends: Vec<usize>,
     logical_frames: Vec<LogicalFrame>,
     stream_frames: Vec<StreamFrame>,
     constructor_initializer_frame: Option<ConstructorInitializerFrame>,
@@ -485,6 +486,24 @@ impl FrameStack {
         self.ternary_colon_output_lines.last().copied()
     }
 
+    pub(super) fn has_open_ternary(&self) -> bool {
+        !self.ternary_frames.is_empty()
+    }
+
+    pub(super) fn mark_line_ended_open_ternary(&mut self, line: usize) {
+        if self
+            .open_ternary_line_ends
+            .last()
+            .is_none_or(|last| *last != line)
+        {
+            self.open_ternary_line_ends.push(line);
+        }
+    }
+
+    pub(super) fn line_ended_open_ternary(&self, line: usize) -> bool {
+        self.open_ternary_line_ends.contains(&line)
+    }
+
     pub(super) fn pop_active_ternary(&mut self) {
         if let Some(index) = self
             .ternary_frames
@@ -493,6 +512,11 @@ impl FrameStack {
         {
             self.ternary_frames.remove(index);
         }
+    }
+
+    pub(super) fn pop_completed_ternaries(&mut self) {
+        self.ternary_frames
+            .retain(|frame| frame.colon_role.is_none());
     }
 
     pub(super) fn push_logical(&mut self, frame: LogicalFrame) {

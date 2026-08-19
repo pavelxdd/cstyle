@@ -8,7 +8,7 @@ use super::brace_classification::{
 use super::columns::leading_visual_width;
 use super::compound_literals::line_ends_compound_literal_cast;
 use super::frame::{BraceSemanticKind, ConstructorInitializerLayout};
-use super::headers::line_is_control_body_header;
+use super::headers::{line_is_control_body_header, starts_header_word};
 use super::indentation::LineKind;
 use super::labels;
 use super::line_scan;
@@ -177,6 +177,9 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line_kind != super::LineKind::Normal
             || line.trim_start().starts_with(['{', '}', '#'])
+            || ["do", "if", "for", "while", "switch"]
+                .iter()
+                .any(|word| starts_header_word(line.trim_start(), word))
             || self
                 .frame_stack
                 .active_brace()

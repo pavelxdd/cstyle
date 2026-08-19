@@ -264,11 +264,9 @@ impl FormatEngine<'_> {
         line: &str,
         layout: &LineLayout,
         restore_objc_message_align: Option<usize>,
-        next_sibling_statement_indent_spaces: Option<usize>,
     ) -> PostEmissionLayout {
         PostEmissionLayout {
             restore_objc_message_align,
-            next_sibling_statement_indent_spaces,
             split_condition_body_indent_spaces: self
                 .split_else_condition_body_indent_spaces(line, layout.line_kind),
             ternary_call_clear_indent_spaces: self
@@ -288,12 +286,6 @@ impl FormatEngine<'_> {
         let line_kind = layout.line_kind;
         self.restore_objc_message_alignment(post_emission.restore_objc_message_align);
         self.record_preprocessor_branch_body_indent(line, emitted_indent_spaces);
-        if let Some(spaces) = post_emission.next_sibling_statement_indent_spaces
-            && line.trim_end().ends_with(';')
-        {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(spaces);
-        }
         if line_kind == LineKind::Normal
             && self.options.indent_style == IndentStyle::Tabs
             && line.trim_end().ends_with('{')

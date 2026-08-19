@@ -1881,3 +1881,334 @@ fn trivial_copy_paths_preserve_non_whitespace_tokens() {
         assert_eq!(non_whitespace(&actual), non_whitespace(source), "{source}");
     }
 }
+
+const TEST_SAMPLE_OPTIONS: &[&str] = &[
+    "--style=1tbs",
+    "--mode=c",
+    "--lineend=linux",
+    "--convert-tabs",
+    "--indent=spaces=4",
+    "--indent-switches",
+    "--indent-preprocessor",
+    "--indent-preproc-define",
+    "--add-braces",
+    "--pad-oper",
+    "--pad-comma",
+    "--pad-header",
+    "--unpad-paren",
+    "--break-one-line-headers",
+    "--break-after-logical",
+    "--align-pointer=name",
+    "--attach-closing-while",
+    "--attach-return-type",
+    "--attach-return-type-decl",
+    "--min-conditional-indent=0",
+    "--max-continuation-indent=80",
+    "--max-code-length=109",
+];
+
+#[test]
+fn return_ternary_after_multiline_function_head_aligns_to_value_column() {
+    check(
+        "static enum result choose(\n    enum result value\n)\n{\n    return value == ZERO ? ONE :\n    TWO;\n}\n",
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--indent=spaces=4",
+            "--pad-oper",
+            "--break-after-logical",
+        ],
+        "static enum result choose(\n    enum result value\n)\n{\n    return value == ZERO ? ONE :\n           TWO;\n}\n",
+    );
+}
+
+#[test]
+fn statement_braces_attach_after_multiline_parameter_function() {
+    check(
+        "static bool choose(\n    enum target target,\n    enum field *field\n)\n{\n    if (field == nullptr)\n    {\n        return false;\n    }\n    switch (target)\n    {\n    case ZERO:\n        return true;\n    default:\n        return false;\n    }\n}\n",
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--indent=spaces=4",
+        ],
+        "static bool choose(\n    enum target target,\n    enum field *field\n)\n{\n    if (field == nullptr) {\n        return false;\n    }\n    switch (target) {\n    case ZERO:\n        return true;\n    default:\n        return false;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn bracket_continuation_aligns_to_opening_bracket_context() {
+    check(
+        "void f(void)\n{\n    uint8_t value = table[\n                    index + 1u\n                ];\n    use(value);\n}\n",
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--indent=spaces=4",
+            "--pad-oper",
+        ],
+        "void f(void)\n{\n    uint8_t value = table[\n                            index + 1u\n                         ];\n    use(value);\n}\n",
+    );
+}
+
+#[test]
+fn initializer_member_ternary_arm_aligns_to_value_column() {
+    check(
+        "struct command\n{\n    uint8_t sequence;\n    uint8_t measure;\n};\nvoid f(struct command *value, uint8_t uses_measure, uint8_t measure_sequence)\n{\n    *value = (struct command) {\n        .sequence = uses_measure ?\n                  measure_sequence : 0u,\n        .measure = 1u,\n    };\n}\n",
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--indent=spaces=4",
+            "--pad-oper",
+            "--break-after-logical",
+        ],
+        "struct command {\n    uint8_t sequence;\n    uint8_t measure;\n};\nvoid f(struct command *value, uint8_t uses_measure, uint8_t measure_sequence)\n{\n    *value = (struct command) {\n        .sequence = uses_measure ?\n                    measure_sequence : 0u,\n        .measure = 1u,\n    };\n}\n",
+    );
+}
+
+#[test]
+fn ternary_arm_after_call_question_line_keeps_column() {
+    check(
+        "void f(void)\n{\n    const struct clock_value time = (view != nullptr &&\n                                     view->clock.valid &&\n                                     view->clock.rtc_valid &&\n                                     clock_value_valid(&view->clock.time)) ?\n                                     view->clock.time : default_time;\n    use(time);\n}\n",
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--indent=spaces=4",
+            "--pad-oper",
+            "--break-after-logical",
+        ],
+        "void f(void)\n{\n    const struct clock_value time = (view != nullptr &&\n                                     view->clock.valid &&\n                                     view->clock.rtc_valid &&\n                                     clock_value_valid(&view->clock.time)) ?\n                                     view->clock.time : default_time;\n    use(time);\n}\n",
+    );
+}
+
+#[test]
+fn pad_oper_keeps_right_padding_for_macro_like_operands_on_continuation_lines() {
+    check(
+        "static bool check(uint32_t count, uint32_t mask, struct Item item)\n{\n    const size_t scaled =\n        (size_t)count * MACRO_SCALE;\n    const bool ready =\n        MACRO_READY && item.value == MACRO_VALUE;\n    const uint32_t bits =\n        mask ^ MACRO_MASK;\n    const uint32_t flags =\n        mask & MACRO_FLAGS;\n    return ready;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static bool check(uint32_t count, uint32_t mask, struct Item item)\n{\n    const size_t scaled =\n        (size_t)count * MACRO_SCALE;\n    const bool ready =\n        MACRO_READY && item.value == MACRO_VALUE;\n    const uint32_t bits =\n        mask ^ MACRO_MASK;\n    const uint32_t flags =\n        mask & MACRO_FLAGS;\n    return ready;\n}\n",
+    );
+}
+
+#[test]
+fn pad_oper_keeps_star_padding_in_enum_value_continuation_lines() {
+    check(
+        "enum Offset {\n    PAYLOAD_OFFSET =\n        PREFIX_SIZE +\n        PAYLOAD_CAPACITY * PAYLOAD_SIZE,\n    PAYLOAD_END,\n};\n",
+        TEST_SAMPLE_OPTIONS,
+        "enum Offset {\n    PAYLOAD_OFFSET =\n        PREFIX_SIZE +\n        PAYLOAD_CAPACITY * PAYLOAD_SIZE,\n    PAYLOAD_END,\n};\n",
+    );
+}
+
+#[test]
+fn pad_oper_keeps_xor_padding_in_return_continuation_lines() {
+    check(
+        "static uint32_t check_value(void)\n{\n    return magic ^ version ^ saved ^\n           status ^ PAYLOAD_CHECK;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static uint32_t check_value(void)\n{\n    return magic ^ version ^ saved ^\n           status ^ PAYLOAD_CHECK;\n}\n",
+    );
+}
+
+#[test]
+fn pad_oper_keeps_logical_padding_after_comparison_continuation_lines() {
+    check(
+        "static bool check_value(void)\n{\n    const bool clear =\n        decode(record, model, &candidate) ==\n        RESULT_READY && candidate.kind == KIND_CLEAR;\n    const bool ready =\n        flag_a ||\n        flag_b && item.active;\n    return clear && ready;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static bool check_value(void)\n{\n    const bool clear =\n        decode(record, model, &candidate) ==\n        RESULT_READY && candidate.kind == KIND_CLEAR;\n    const bool ready =\n        flag_a ||\n        flag_b && item.active;\n    return clear && ready;\n}\n",
+    );
+}
+
+#[test]
+fn attribute_declaration_does_not_leak_indent_onto_following_declaration() {
+    check(
+        "#define SAMPLE_OPTION 1\n\nstatic int check_value(void)\n{\n    return SAMPLE_OPTION;\n}\n\n[[noreturn]] void finish_task(void);\n\nstatic void begin_task(void);\n",
+        TEST_SAMPLE_OPTIONS,
+        "#define SAMPLE_OPTION 1\n\nstatic int check_value(void)\n{\n    return SAMPLE_OPTION;\n}\n\n[[noreturn]] void finish_task(void);\n\nstatic void begin_task(void);\n",
+    );
+}
+
+#[test]
+fn call_continuation_after_switch_keeps_assignment_indent() {
+    let input = "static void handle(int kind)\n{\n    switch (kind) {\n        case 1:\n            recovery_fail();\n            return;\n        default:\n            break;\n    }\n    const enum clear_start_status clear_status =\n        stage_clear_start(\n            &app.reset_transaction,\n            ITEM_ID\n        );\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn call_argument_after_switch_keeps_statement_indent() {
+    let input = "static void handle(int kind)\n{\n    switch (kind) {\n        case 1:\n            recovery_fail();\n            return;\n        default:\n            break;\n    }\n    decode(\n        first_block,\n        SOURCE_A\n    );\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn compound_literal_call_argument_uses_statement_indent() {
+    let input = "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn compound_literal_call_argument_reindents_from_argument_column() {
+    check(
+        "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n               (struct call_case) {\n                   .first_active = true,\n                   .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
+    );
+}
+
+#[test]
+fn float_literal_multiplication_keeps_operator_padding() {
+    check(
+        "void test(void)\n{\n    const double base = a0 + alpha * db +\n                        beta * 0.1 * db2 +\n                        gamma * 0.001 * db3 +\n                        delta * 0.0001 * db4 +\n                        epsilon * 0.000001 * db5;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "void test(void)\n{\n    const double base = a0 + alpha * db +\n                        beta * 0.1 * db2 +\n                        gamma * 0.001 * db3 +\n                        delta * 0.0001 * db4 +\n                        epsilon * 0.000001 * db5;\n}\n",
+    );
+}
+
+#[test]
+fn nested_struct_in_union_inside_struct_keeps_closing_brace_indent() {
+    check(
+        "struct Item {\n    int id;\n    union {\n        struct {\n            int a;\n        } alpha;\n        struct {\n            int b;\n        } beta;\n    } value;\n};\n",
+        TEST_SAMPLE_OPTIONS,
+        "struct Item {\n    int id;\n    union {\n        struct {\n            int a;\n        } alpha;\n        struct {\n            int b;\n        } beta;\n    } value;\n};\n",
+    );
+}
+
+#[test]
+fn nested_call_on_condition_continuation_aligns_closing_paren() {
+    check(
+        "bool test(void)\n{\n    if (first != COMMIT ||\n        last != COMMIT ||\n        check != value_check(\n            magic,\n            status\n        )) {\n        return false;\n    }\n    return true;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "bool test(void)\n{\n    if (first != COMMIT ||\n        last != COMMIT ||\n        check != value_check(\n            magic,\n            status\n        )) {\n        return false;\n    }\n    return true;\n}\n",
+    );
+}
+
+#[test]
+fn multiline_call_inside_if_condition_indents_body_properly() {
+    check(
+        "void test(void)\n{\n    if (call(\n            payload, &settings\n        ) != RESULT_OK) {\n        finish(RESULT_INVALID);\n        return;\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "void test(void)\n{\n    if (call(\n            payload, &settings\n        ) != RESULT_OK) {\n        finish(RESULT_INVALID);\n        return;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn multiline_negated_call_in_if_condition_aligns_closing_paren_and_body() {
+    check(
+        "static int test(uint32_t now, uint32_t started_at, uint32_t interval)\n{\n    if (!elapsed_at_least(\n            now, started_at, interval\n        )) {\n        return IDLE;\n    }\n    return BUSY;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static int test(uint32_t now, uint32_t started_at, uint32_t interval)\n{\n    if (!elapsed_at_least(\n            now, started_at, interval\n        )) {\n        return IDLE;\n    }\n    return BUSY;\n}\n",
+    );
+}
+
+#[test]
+fn multiline_negated_call_in_else_if_condition_aligns_closing_paren_and_body() {
+    check(
+        "static void test(const struct settings *previous)\n{\n    if (previous->sequence == 0u) {\n        previous->sequence = 1u;\n    } else if (!values_equal(\n                   previous, &current\n               )) {\n        previous->sequence = next_value(\n                                 previous->sequence\n                             );\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static void test(const struct settings *previous)\n{\n    if (previous->sequence == 0u) {\n        previous->sequence = 1u;\n    } else if (!values_equal(\n                   previous, &current\n               )) {\n        previous->sequence = next_value(\n                                 previous->sequence\n                             );\n    }\n}\n",
+    );
+}
+
+#[test]
+fn struct_initializer_inside_switch_case_keeps_closing_brace_indent() {
+    check(
+        "bool test(int kind)\n{\n    switch (kind) {\n        case 1:\n            struct Info x = {\n                .field = 3u,\n                .flag = false,\n            };\n            return true;\n        default:\n            return false;\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "bool test(int kind)\n{\n    switch (kind) {\n        case 1:\n            struct Info x = {\n                .field = 3u,\n                .flag = false,\n            };\n            return true;\n        default:\n            return false;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn pointer_declaration_after_case_label_keeps_name_alignment() {
+    let input = "void test(int kind)\n{\n    switch (kind) {\n        case 1u:\n            Foo *value = call();\n            use(value);\n            break;\n        default:\n            break;\n    }\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn pointer_declaration_after_question_char_case_label_keeps_name_alignment() {
+    let input = "void test(int kind)\n{\n    switch (kind) {\n        case '?':\n            Foo *value = call();\n            use(value);\n            break;\n        default:\n            break;\n    }\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn pointer_declaration_after_access_specifier_keeps_name_alignment() {
+    let input = "class Holder {\npublic:\n    Foo *first;\n    Bar *second;\n};\n";
+    check(
+        input,
+        TEST_SAMPLE_OPTIONS,
+        "class Holder\n{\npublic:\n    Foo *first;\n    Bar *second;\n};\n",
+    );
+}
+
+#[test]
+fn digit_suffix_type_pointer_declaration_keeps_name_alignment() {
+    let input = "void test(void)\n{\n    int64 *first = 0;\n    u32 *second = 0;\n    use(first, second);\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn typedef_pointer_with_digit_suffix_type_keeps_name_alignment() {
+    let input = "typedef int64 *int64_ptr;\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn digit_suffix_word_multiplication_keeps_operator_padding() {
+    let input = "void test(void)\n{\n    return base2 * scale2;\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn ternary_arm_multiplies_keep_operator_padding() {
+    let input = "void test(void)\n{\n    result = ready ?\n             first * second :\n             third * fourth;\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn split_ternary_single_word_arm_multiplies_keep_operator_padding() {
+    let input = "void test(void)\n{\n    result = ready ?\n             first :\n             second * third;\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn comparison_operator_continuation_multiplies_keep_operator_padding() {
+    let input = "void test(void)\n{\n    value = a >\n            b * c;\n    other = a >>\n            b * c;\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn template_header_close_keeps_following_pointer_declaration() {
+    let input = "template <typename T>\nT *value = nullptr;\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn ternary_constant_in_case_label_keeps_case_body_indent() {
+    check(
+        "void test(int kind)\n{\n    switch (kind) {\n        case 1 ? 2 : 3:\n            call();\n            break;\n        default:\n            break;\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "void test(int kind)\n{\n    switch (kind) {\n        case 1?2 : 3:\n            call();\n            break;\n        default:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn ternary_constant_in_nested_case_label_keeps_case_body_indent() {
+    check(
+        "void test(int kind)\n{\n    switch (kind) {\n        case 1:\n        case 2 ? 3 : 4:\n            call();\n            break;\n        default:\n            break;\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "void test(int kind)\n{\n    switch (kind) {\n        case 1:\n        case 2?3 : 4:\n            call();\n            break;\n        default:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn completed_ternary_statement_then_statement_keeps_case_body_indent() {
+    let input = "void test(int kind)\n{\n    switch (kind) {\n        case 1:\n            value = ready ? first : second;\n            next();\n            break;\n        default:\n            break;\n    }\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}
+
+#[test]
+fn split_ternary_false_arm_in_case_block_keeps_continuation_column() {
+    let input = "void test(int kind)\n{\n    switch (kind) {\n        case 1:\n            value = a ? b :\n                    c;\n            next();\n            break;\n        default:\n            break;\n    }\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, input);
+}

@@ -9,9 +9,7 @@ use super::headers::is_braceless_header_line;
 use super::indentation::LineKind;
 
 use super::language::is_macro_like_word;
-use super::line_scan::{
-    has_unmatched_open_brace, trailing_comment_split_limit, unmatched_open_paren_column,
-};
+use super::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
 use super::operators::{starts_ternary_arm, starts_with_chain_operator};
 use super::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 
@@ -337,20 +335,6 @@ impl FormatEngine<'_> {
             return None;
         }
         let normal_spaces = normal_indent * self.options.indent_width;
-        let call_argument_spaces = if line.trim_start().starts_with('(')
-            && self
-                .output
-                .iter()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|previous| {
-                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                    code.ends_with(',') && unmatched_open_paren_column(code).is_none()
-                }) {
-            exact_indent_spaces.filter(|spaces| *spaces > normal_spaces)
-        } else {
-            None
-        };
         let line_indent_spaces = if self.in_initializer_brace()
             || self.in_aggregate_declaration_brace()
         {
@@ -385,13 +369,9 @@ impl FormatEngine<'_> {
         }) {
             exact_indent_spaces.unwrap_or(indent * self.options.indent_width)
         } else {
-            call_argument_spaces.unwrap_or(normal_spaces)
-        };
-        let brace_indent_spaces = if call_argument_spaces == Some(line_indent_spaces) {
             normal_spaces
-        } else {
-            line_indent_spaces
         };
+        let brace_indent_spaces = line_indent_spaces;
         Some(CompoundLiteralOpeningLayout {
             line_indent_spaces,
             brace_indent_spaces,

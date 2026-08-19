@@ -100,16 +100,11 @@ impl FormatEngine<'_> {
         let ContextualLineLayout {
             layout,
             output_spaces,
-            next_sibling_statement_indent_spaces,
             ..
         } = contextual_layout;
         let layout = self.apply_brace_header_case_and_initializer_correction_layout(line, layout);
-        let post_emission = self.deferred_post_emission_layout(
-            line,
-            &layout,
-            restore_objc_message_align,
-            next_sibling_statement_indent_spaces,
-        );
+        let post_emission =
+            self.deferred_post_emission_layout(line, &layout, restore_objc_message_align);
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
         let emitted_indent_spaces = self.publish_formatted_line_layout(line, &layout);

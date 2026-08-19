@@ -15,6 +15,7 @@ use super::literals::starts_string_literal_token;
 use super::operators::head_ends_binary_operator;
 use super::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use super::rewrite::is_add_braces_header;
+use super::switch_cases::{is_case_label_start, is_default_label_start};
 use super::token::Token;
 use crate::config::BraceStyle;
 use crate::source::lex::{is_identifier_continue, leading_identifier};
@@ -353,6 +354,9 @@ impl FormatEngine<'_> {
         if !line.trim_start().starts_with(')') {
             return None;
         }
+        let mut close_line_pending = line_paren_imbalance(line.trim_end()).0;
+        let mut intervening_closes = 0usize;
+        let mut candidate = None;
         for previous in self
             .output
             .iter()
@@ -368,55 +372,85 @@ impl FormatEngine<'_> {
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
-            if trimmed == "(" && unmatched_open_paren_column(code).is_some() {
+            let (closes, mut opens) = line_paren_imbalance(code);
+            if opens.is_empty() {
+                intervening_closes += closes;
+                continue;
+            }
+            let opens_total = opens.len();
+            let code_chars = code.chars().collect::<Vec<_>>();
+            let open_column = visual_column_at(&code_chars, opens[0], self.options.tab_width);
+            let is_header = starts_header_word(trimmed, "if")
+                || starts_header_word(trimmed, "while")
+                || starts_header_word(trimmed, "for")
+                || starts_header_word(trimmed, "do")
+                || trimmed.starts_with("else if")
+                || trimmed.starts_with("} else");
+            let matched_by_intervening = intervening_closes.min(opens_total);
+            for _ in 0..matched_by_intervening {
+                opens.pop();
+            }
+            intervening_closes -= matched_by_intervening;
+            let matched_by_close_line = close_line_pending.min(opens.len());
+            if matched_by_close_line > 0 {
+                if !is_header {
+                    candidate = Some(leading_visual_width(previous, self.options.tab_width));
+                }
+                for _ in 0..matched_by_close_line {
+                    opens.pop();
+                }
+                close_line_pending -= matched_by_close_line;
+            }
+            if !is_header {
+                intervening_closes += closes;
+                continue;
+            }
+            if self.split_else_body_indent_active()
+                && !code.ends_with('(')
+                && !(trimmed.starts_with("else if")
+                    || trimmed.starts_with("} else if")
+                    || trimmed.starts_with("}else if"))
+            {
+                let header_indent = leading_visual_width(previous, self.options.tab_width);
+                let opens_all = line_paren_imbalance(code).1;
+                let starts_nested_group = trimmed
+                    .strip_prefix("else if")
+                    .or_else(|| trimmed.strip_prefix("if"))
+                    .or_else(|| trimmed.strip_prefix("while"))
+                    .or_else(|| trimmed.strip_prefix("for"))
+                    .or_else(|| trimmed.strip_prefix("switch"))
+                    .is_some_and(|tail| tail.trim_start().starts_with("( ("));
+                let guarded_header = self
+                    .output
+                    .iter()
+                    .rev()
+                    .skip_while(|line| line.as_str() != previous.as_str())
+                    .skip(1)
+                    .find(|line| !line.trim().is_empty())
+                    .is_some_and(|line| preprocessor_directive(line.trim_start()).is_some());
+                return Some(
+                    if opens_all.len() > 1 && starts_nested_group && !guarded_header {
+                        header_indent
+                    } else {
+                        opens_all.first().map_or(header_indent, |&column| {
+                            visual_column_at(&code_chars, column, self.options.tab_width)
+                        })
+                    },
+                );
+            }
+            if let Some(spaces) = candidate {
+                return Some(spaces);
+            }
+            if matched_by_close_line == 0 {
+                return None;
+            }
+            if opens_total > 1 {
+                return Some(open_column + 1);
+            }
+            if code.ends_with('(') {
                 return Some(leading_visual_width(previous, self.options.tab_width));
             }
-            if let Some(open) = unmatched_open_paren_column(code)
-                && (starts_header_word(trimmed, "if")
-                    || starts_header_word(trimmed, "while")
-                    || starts_header_word(trimmed, "for")
-                    || starts_header_word(trimmed, "do")
-                    || trimmed.starts_with("else if")
-                    || trimmed.starts_with("} else"))
-            {
-                let code_chars = code.chars().collect::<Vec<_>>();
-                let open_column = visual_column_at(&code_chars, open, self.options.tab_width);
-                if trimmed.starts_with("else if")
-                    || trimmed.starts_with("} else if")
-                    || trimmed.starts_with("}else if")
-                {
-                    return Some(open_column);
-                }
-                let header_indent = leading_visual_width(previous, self.options.tab_width);
-                if self.split_else_body_indent_active() {
-                    let opens = line_paren_imbalance(code).1;
-                    let starts_nested_group = trimmed
-                        .strip_prefix("else if")
-                        .or_else(|| trimmed.strip_prefix("if"))
-                        .or_else(|| trimmed.strip_prefix("while"))
-                        .or_else(|| trimmed.strip_prefix("for"))
-                        .or_else(|| trimmed.strip_prefix("switch"))
-                        .is_some_and(|tail| tail.trim_start().starts_with("( ("));
-                    let guarded_header = self
-                        .output
-                        .iter()
-                        .rev()
-                        .skip_while(|line| line.as_str() != previous.as_str())
-                        .skip(1)
-                        .find(|line| !line.trim().is_empty())
-                        .is_some_and(|line| preprocessor_directive(line.trim_start()).is_some());
-                    return Some(
-                        if opens.len() > 1 && starts_nested_group && !guarded_header {
-                            header_indent
-                        } else {
-                            opens.first().map_or(open_column, |&column| {
-                                visual_column_at(&code_chars, column, self.options.tab_width)
-                            })
-                        },
-                    );
-                }
-                return Some(open_column.max(header_indent + self.options.indent_width / 2));
-            }
+            return Some(open_column);
         }
         None
     }
@@ -655,29 +689,20 @@ impl FormatEngine<'_> {
         if !previous_code.trim_start().starts_with(')') || !previous_code.ends_with('{') {
             return None;
         }
-        let follows_multiline_header = self
-            .output
-            .iter()
-            .rev()
-            .skip(1)
-            .take(16)
-            .find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                let trimmed = code.trim_start();
-                unmatched_open_paren_column(code).is_some().then_some(
-                    (starts_header_word(trimmed, "if")
-                        || starts_header_word(trimmed, "for")
-                        || starts_header_word(trimmed, "while")
-                        || starts_header_word(trimmed, "switch"))
-                        && !trimmed.starts_with("else if")
-                        && !trimmed.starts_with("} else if")
-                        && !trimmed.starts_with("}else if"),
-                )
-            })
-            .unwrap_or(false);
-        follows_multiline_header.then(|| {
-            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width / 2
-        })
+        let header_indent = self.output.iter().rev().skip(1).take(16).find_map(|line| {
+            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let trimmed = code.trim_start();
+            let is_plain_multiline_header = unmatched_open_paren_column(code).is_some()
+                && (starts_header_word(trimmed, "if")
+                    || starts_header_word(trimmed, "for")
+                    || starts_header_word(trimmed, "while")
+                    || starts_header_word(trimmed, "switch"))
+                && !trimmed.starts_with("else if")
+                && !trimmed.starts_with("} else if")
+                && !trimmed.starts_with("}else if");
+            is_plain_multiline_header.then(|| leading_visual_width(line, self.options.tab_width))
+        })?;
+        Some(header_indent + self.options.indent_width)
     }
 
     pub(super) fn separated_else_header_body_indent_floor(
@@ -1257,6 +1282,9 @@ impl FormatEngine<'_> {
         };
         if let Some(header) = header {
             self.command_state.current_header = Some(header.to_string());
+            if matches!(header, "case" | "default") {
+                self.command_state.case_label_colon_emitted = false;
+            }
             self.command_state.header_broken_before_comment = false;
             self.command_state.preprocessor_after_header = false;
             self.record_header_frame(header);
@@ -1343,6 +1371,21 @@ impl FormatEngine<'_> {
             .command_state
             .current_header
             .take()
+            .filter(|header| {
+                if !matches!(header.as_str(), "case" | "default") {
+                    return true;
+                }
+                let current = self.current.trim();
+                is_case_label_start(current)
+                    || is_default_label_start(current)
+                    || (self.current_is_blank()
+                        && self.output.last_non_empty_line().is_some_and(|line| {
+                            let line = line.trim();
+                            is_case_label_start(line) || is_default_label_start(line)
+                        }))
+                    || (self.command_state.case_label_colon_emitted
+                        && self.command_state.previous_non_ws_char == Some(':'))
+            })
             .or_else(|| {
                 let word = leading_identifier(self.current.trim_start());
                 (self.is_header(word)

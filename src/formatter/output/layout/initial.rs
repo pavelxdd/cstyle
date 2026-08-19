@@ -697,7 +697,9 @@ impl FormatEngine<'_> {
                     let trimmed = line.trim_start();
                     trimmed == "}" || trimmed.starts_with("} ")
                 }))
-                || (previous_code.trim_start().starts_with("} ")
+                || (self.state.indent() == 0
+                    && self.stack_state.brace_type_stack.is_empty()
+                    && previous_code.trim_start().starts_with("} ")
                     && !previous_code.ends_with('{')
                     && !previous_code.trim_start().starts_with("} while")
                     && !previous_code.trim_start().starts_with("} else")
@@ -718,6 +720,7 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
                 && previous_code.trim_start().starts_with('[')
+                && !previous_code.trim_start().starts_with("[[")
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2
                 && self

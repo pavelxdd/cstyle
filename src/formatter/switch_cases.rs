@@ -1791,10 +1791,14 @@ impl FormatEngine<'_> {
         has_owned_continuation: bool,
         exact_indent_spaces: Option<usize>,
     ) -> Option<CaseBlockBodyLayout> {
+        let previous_line = self.output.iter().rposition(|line| !line.trim().is_empty());
+        let follows_ternary_arm = previous_line
+            .is_some_and(|previous_line| self.frame_stack.line_ended_open_ternary(previous_line));
         if line_kind != LineKind::Normal
             || !uses_normal_indent
             || closes_outer_delimiter
             || has_owned_continuation
+            || follows_ternary_arm
             || line.trim_start().starts_with([')', ']', '}'])
         {
             return None;

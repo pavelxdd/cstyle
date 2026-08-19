@@ -232,7 +232,6 @@ impl FormatEngine<'_> {
             layout,
             output_spaces,
             split_else_state_active,
-            next_sibling_statement_indent_spaces: None,
         }
     }
 }
@@ -1990,52 +1989,6 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(previous_indent);
             }
         }
-        if layout.line_kind == LineKind::Normal
-            && !line.trim_start().starts_with(['#', '{', '}'])
-            && let Some(previous_index) =
-                self.output.iter().rposition(|line| !line.trim().is_empty())
-            && !self.output[previous_index]
-                .trim_start()
-                .starts_with(['#', '{', '}'])
-            && !self.output[previous_index]
-                .trim_start()
-                .starts_with("case ")
-            && !self.output[previous_index]
-                .trim_start()
-                .starts_with("default:")
-            && let previous_code = self.output.code(previous_index)
-            && !previous_code.ends_with('{')
-            && !head_ends_binary_operator(previous_code)
-            && let Some(close_index) = self.output[..previous_index]
-                .iter()
-                .rposition(|line| !line.trim().is_empty())
-            && self.output[close_index].trim() == "}"
-        {
-            let previous_indent =
-                leading_visual_width(&self.output[previous_index], self.options.tab_width);
-            let close_indent =
-                leading_visual_width(&self.output[close_index], self.options.tab_width);
-            let mut depth = 1usize;
-            let mut switch_opener = false;
-            for index in (0..close_index).rev() {
-                let meta = self.output.brace_meta(index);
-                depth += meta.closes;
-                if meta.opens >= depth {
-                    switch_opener = self.output.code_trimmed(index).starts_with("switch");
-                    break;
-                }
-                depth = depth.saturating_sub(meta.opens);
-            }
-            if previous_indent == close_indent
-                && switch_opener
-                && layout
-                    .exact_indent_spaces
-                    .unwrap_or(layout.indent * self.options.indent_width)
-                    > previous_indent
-            {
-                layout.exact_indent_spaces = Some(previous_indent);
-            }
-        }
         if self.options.brace_style == BraceStyle::None
             && !line.trim_start().starts_with(['#', '}'])
             && self.line_adjuster.next_line_case_unindent_depth() > 0
@@ -2243,45 +2196,16 @@ impl FormatEngine<'_> {
     ) -> ContextualLineLayout {
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
-        if let Some(previous) = self
-            .output
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-        {
-            let previous_spaces = leading_visual_width(previous, self.options.tab_width);
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        if self.output.iter().rev().any(|line| !line.trim().is_empty()) {
             if let Some(call_layout) = self.string_call_continuation_layout(line) {
                 layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
                     self.continuation_indent.clear_continuation_after_line = Some(spaces);
                 }
-            } else if layout.line_kind == LineKind::Normal
-                && !line.trim_start().starts_with(['{', '}', '#'])
-                && previous_code.trim_start().starts_with(')')
-                && previous_code.ends_with('{')
-                && self
-                    .output
-                    .iter()
-                    .rev()
-                    .skip(1)
-                    .take(16)
-                    .find_map(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
-                        let trimmed = code.trim_start();
-                        unmatched_open_paren_column(code).is_some().then_some(
-                            (starts_header_word(trimmed, "if")
-                                || starts_header_word(trimmed, "for")
-                                || starts_header_word(trimmed, "while")
-                                || starts_header_word(trimmed, "switch"))
-                                && !trimmed.starts_with("else if")
-                                && !trimmed.starts_with("} else if")
-                                && !trimmed.starts_with("}else if"),
-                        )
-                    })
-                    .unwrap_or(false)
+            } else if let Some(spaces) =
+                self.multiline_control_header_body_indent_spaces(line, layout.line_kind)
             {
-                layout.exact_indent_spaces = Some(previous_spaces + self.options.indent_width / 2);
+                layout.exact_indent_spaces = Some(spaces);
             }
         }
         if line.trim() == "{"
@@ -3208,55 +3132,6 @@ impl FormatEngine<'_> {
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
-        if layout.exact_indent_spaces.is_none()
-            && layout.line_kind == LineKind::Normal
-            && self.output.may_have_quote()
-            && line
-                .trim_start()
-                .chars()
-                .next()
-                .is_some_and(is_identifier_start)
-            && !line.trim_end().ends_with(':')
-        {
-            let output_spaces = layout.indent * self.options.indent_width;
-            let previous_statement_indent =
-                self.output
-                    .last_non_empty_index()
-                    .and_then(|previous_index| {
-                        let previous_code = self.output.code(previous_index);
-                        if !previous_code.trim_end().ends_with(';') {
-                            return None;
-                        }
-                        for index in (0..previous_index).rev().take(12) {
-                            let code = self.output.code(index).trim_end();
-                            if code.ends_with('{') || code.ends_with('}') {
-                                break;
-                            }
-                            if unmatched_open_paren_column(code).is_some() {
-                                let trimmed = code.trim_start();
-                                if line_is_control_body_header(trimmed)
-                                    || starts_header_word(trimmed, "if")
-                                    || starts_header_word(trimmed, "for")
-                                    || starts_header_word(trimmed, "while")
-                                    || starts_header_word(trimmed, "switch")
-                                {
-                                    break;
-                                }
-                                return Some(self.output.lead_width(index, self.options.tab_width));
-                            }
-                            if code.ends_with(';') {
-                                break;
-                            }
-                        }
-                        None
-                    });
-            if let Some(spaces) = previous_statement_indent
-                && spaces > output_spaces
-            {
-                layout.exact_indent_spaces = Some(spaces);
-                contextual.next_sibling_statement_indent_spaces = Some(spaces);
-            }
-        }
         if layout.exact_indent_spaces.is_none()
             && let Some(spaces) =
                 self.preprocessor_directive_closing_indent_spaces(line, layout.indent)

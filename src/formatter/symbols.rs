@@ -456,6 +456,15 @@ impl FormatEngine<'_> {
         if self.current.trim().is_empty()
             && let Some(spaces) = self.stack_state.current_paren_indent_spaces()
         {
+            let spaces = if self.header_paren.depth.is_some()
+                || self.current_is_conditional_header_continuation()
+            {
+                let min_spaces = self.continuation_base_indent() * self.options.indent_width
+                    + self.options.continuation_indent * self.options.indent_width;
+                spaces.max(min_spaces)
+            } else {
+                spaces
+            };
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
@@ -797,6 +806,7 @@ impl FormatEngine<'_> {
             for _ in 0..closed_questions {
                 self.frame_stack.pop_active_ternary();
             }
+            self.frame_stack.pop_completed_ternaries();
             self.continuation_indent.logical_chain_indent_spaces = None;
             self.multi_declarator_indent_spaces = None;
             self.command_state.current_header = None;
@@ -1134,6 +1144,15 @@ impl FormatEngine<'_> {
             && !is_objc_colon
             && !is_objc_interface_colon
             && !aligned_continuation_colon;
+        let case_label_colon = matches!(
+            self.command_state.current_header.as_deref(),
+            Some("case" | "default")
+        ) && !self.command_state.case_label_colon_emitted
+            && !is_ternary
+            && self.stack_state.paren_depth == 0
+            && self.frame_stack.bracket_depth() == 0
+            && !matches!(next, Some(Token::Symbol(':')));
+        self.command_state.case_label_colon_emitted = case_label_colon;
         let pad_off = !self.options.pad_operators || self.line_state.operator_padding_disabled;
         let in_objc_message = has_unclosed_delimiter_after(self.current.trim_end(), "[", "]");
         let is_objc_method_def_colon = is_objc_colon

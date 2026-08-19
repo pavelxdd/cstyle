@@ -2,13 +2,11 @@ use super::FormatEngine;
 use super::indentation::LineKind;
 use super::initializer_braces::initializer_sibling_uses_previous_indent;
 use super::labels::is_attached_user_label;
-use super::language::is_macro_like_word;
 use super::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
 use super::literals::starts_string_literal_token;
 use super::operators::{head_ends_binary_operator, starts_ternary_arm, starts_with_chain_operator};
 use super::token::{Token, next_non_whitespace};
 use crate::config::MinConditionalIndent;
-use crate::source::lex::leading_identifier;
 
 pub(super) fn source_indented_macro_row(
     tokens: &[Token],
@@ -154,9 +152,6 @@ impl FormatEngine<'_> {
             }
             return Some(output_source);
         }
-        if self.macro_continuation_keeps_source_indent(trimmed) {
-            return Some(output_source);
-        }
         None
     }
 
@@ -191,19 +186,5 @@ impl FormatEngine<'_> {
             || head_ends_binary_operator(previous_code)
             || self.line_follows_logical_operator()
             || self.stack_state.paren_depth > 0
-    }
-
-    fn macro_continuation_keeps_source_indent(&self, trimmed: &str) -> bool {
-        if !is_macro_like_word(leading_identifier(trimmed)) {
-            return false;
-        }
-        self.output
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-            .is_some_and(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                code.ends_with(',') || code.ends_with('|') || trimmed.ends_with('|')
-            })
     }
 }

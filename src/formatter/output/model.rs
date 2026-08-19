@@ -23,7 +23,6 @@ pub(super) struct LineLayout {
 
 pub(super) struct PostEmissionLayout {
     pub(super) restore_objc_message_align: Option<usize>,
-    pub(super) next_sibling_statement_indent_spaces: Option<usize>,
     pub(super) split_condition_body_indent_spaces: Option<usize>,
     pub(super) ternary_call_clear_indent_spaces: Option<usize>,
     pub(super) else_while_brace: bool,
@@ -39,7 +38,6 @@ pub(super) struct ContextualLineLayout {
     pub(super) layout: LineLayout,
     pub(super) output_spaces: usize,
     pub(super) split_else_state_active: bool,
-    pub(super) next_sibling_statement_indent_spaces: Option<usize>,
 }
 
 pub(super) enum LineRoute<T> {

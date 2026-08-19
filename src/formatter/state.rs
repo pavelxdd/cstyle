@@ -50,6 +50,7 @@ pub(super) struct TokenInputState {
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(super) struct CommandState {
     pub(super) current_header: Option<String>,
+    pub(super) case_label_colon_emitted: bool,
     pub(super) header_broken_before_comment: bool,
     pub(super) preprocessor_after_header: bool,
     pub(super) pending_block_word: Option<String>,

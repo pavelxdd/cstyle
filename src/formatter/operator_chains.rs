@@ -449,6 +449,10 @@ impl FormatEngine<'_> {
             self.frame_stack
                 .mark_last_ternary_colon_output_line(output_line_index);
         }
+        if self.frame_stack.has_open_ternary() {
+            self.frame_stack
+                .mark_line_ended_open_ternary(output_line_index);
+        }
     }
 
     pub(super) fn observe_operator_chain_output_line(

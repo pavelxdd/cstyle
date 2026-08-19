@@ -117,7 +117,6 @@ pub(super) struct OutputLineHints {
     has_hash: bool,
     has_slash: bool,
     has_question: bool,
-    has_quote: bool,
     starts_star: bool,
 }
 
@@ -134,7 +133,6 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
             b'#' => hints.has_hash = true,
             b'/' => hints.has_slash = true,
             b'?' => hints.has_question = true,
-            b'"' => hints.has_quote = true,
             b'e' if bytes[index..].starts_with(b"else") => hints.has_else = true,
             _ => {}
         }
@@ -153,7 +151,6 @@ pub(super) struct OutputBuffer {
     may_have_hash: bool,
     may_have_comment: bool,
     may_have_question: bool,
-    may_have_quote: bool,
     last_non_empty_index: Cell<Option<usize>>,
     last_non_empty_dirty: Cell<bool>,
 }
@@ -168,7 +165,6 @@ impl OutputBuffer {
         self.may_have_hash |= hints.has_hash;
         self.may_have_comment |= hints.has_slash || hints.starts_star;
         self.may_have_question |= hints.has_question;
-        self.may_have_quote |= hints.has_quote;
     }
 
     pub(super) fn push(&mut self, line: String) {
@@ -217,7 +213,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_quote = true;
             self.last_non_empty_dirty.set(true);
         }
         self.lines.last_mut()
@@ -231,7 +226,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_quote = true;
             self.last_non_empty_dirty.set(true);
         }
         self.lines.get_mut(index)
@@ -265,7 +259,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_quote = true;
             self.last_non_empty_dirty.set(true);
         }
         &mut self.lines[range]
@@ -348,10 +341,6 @@ impl OutputBuffer {
 
     pub(super) fn may_have_question(&self) -> bool {
         self.may_have_question
-    }
-
-    pub(super) fn may_have_quote(&self) -> bool {
-        self.may_have_quote
     }
 }
 

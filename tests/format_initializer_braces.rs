@@ -2670,7 +2670,7 @@ fn nested_array_compound_literal_body_elements_use_body_indent() {
             "void f(void)\n{\n  call (a,\n        (float [4]) { 1, 1, 1, 1 },\n        (ColorId[4]) {\n    { 0, 0, 0, 0.75 },\n    { 0, 0, 0, 0.75 },\n  });\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    call (a,\n          (float [4]) { 1, 1, 1, 1 },\n          (ColorId[4]) {\n        { 0, 0, 0, 0.75 },\n        { 0, 0, 0, 0.75 },\n    });\n}\n",
+        "void f(void)\n{\n    call (a,\n          (float [4]) { 1, 1, 1, 1 },\n    (ColorId[4]) {\n        { 0, 0, 0, 0.75 },\n        { 0, 0, 0, 0.75 },\n    });\n}\n",
     );
 }
 
