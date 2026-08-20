@@ -1908,6 +1908,54 @@ const TEST_SAMPLE_OPTIONS: &[&str] = &[
 ];
 
 #[test]
+fn logical_call_chain_in_return_keeps_operand_continuation_indent() {
+    let expected = "static bool repro(void)\n{\n    if (condition) {\n        return first_call(\n                   one, two, three\n               ) &&\n               second_call(\n                   four, five, six\n               ) &&\n               third_call(seven);\n    }\n    return false;\n}\n";
+    check(expected, TEST_SAMPLE_OPTIONS, expected);
+
+    let mut options = FormatOptions::default();
+    let args: Vec<String> = TEST_SAMPLE_OPTIONS
+        .iter()
+        .map(|arg| (*arg).to_string())
+        .collect();
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let once =
+        String::from_utf8(format_bytes(expected.as_bytes(), &options).expect("format bytes"))
+            .expect("utf8");
+    let twice = String::from_utf8(format_bytes(once.as_bytes(), &options).expect("format bytes"))
+        .expect("utf8");
+
+    assert_eq!(twice, once);
+    assert!(once.lines().all(|line| line.len() <= 109));
+}
+
+#[test]
+fn logical_call_chain_in_assignment_keeps_operand_continuation_indent() {
+    check(
+        "static bool repro(void)\n{\n    bool result;\n    result = first_call(\n                 one, two, three\n             ) ||\n             second_call(\n                 four, five, six\n             ) ||\n             third_call(seven);\n    return result;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static bool repro(void)\n{\n    bool result;\n    result = first_call(\n                 one, two, three\n             ) ||\n             second_call(\n                 four, five, six\n             ) ||\n             third_call(seven);\n    return result;\n}\n",
+    );
+}
+
+#[test]
+fn logical_call_chain_in_control_condition_keeps_operand_continuation_indent() {
+    check(
+        "static bool repro(void)\n{\n    if (first_call(\n            one, two, three\n        ) &&\n        second_call(\n            four, five, six\n        ) &&\n        third_call(seven)) {\n        return true;\n    }\n    return false;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static bool repro(void)\n{\n    if (first_call(\n            one, two, three\n        ) &&\n        second_call(\n            four, five, six\n        ) &&\n        third_call(seven)) {\n        return true;\n    }\n    return false;\n}\n",
+    );
+}
+
+#[test]
+fn logical_call_chain_with_comment_keeps_operand_continuation_indent() {
+    check(
+        "static bool repro(void)\n{\n    if (condition) {\n        return first_call(\n                   one, two, three\n               ) &&\n               /* next operand */\n               second_call(\n                   four, five, six\n               ) &&\n               third_call(seven);\n    }\n    return false;\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "static bool repro(void)\n{\n    if (condition) {\n        return first_call(\n                   one, two, three\n               ) &&\n               /* next operand */\n               second_call(\n                   four, five, six\n               ) &&\n               third_call(seven);\n    }\n    return false;\n}\n",
+    );
+}
+
+#[test]
 fn return_ternary_after_multiline_function_head_aligns_to_value_column() {
     check(
         "static enum result choose(\n    enum result value\n)\n{\n    return value == ZERO ? ONE :\n    TWO;\n}\n",

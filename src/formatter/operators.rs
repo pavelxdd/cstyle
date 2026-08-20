@@ -1082,6 +1082,15 @@ impl FormatEngine<'_> {
     }
 
     fn record_logical_operator_frame(&mut self, operator: &str) {
+        if self.current.trim() == ")"
+            && let Some(spaces) = self
+                .frame_stack
+                .take_line_closed_call_logical_operand_indent(self.output.len())
+        {
+            self.continuation_indent.next_line_indent = None;
+            self.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
+        }
         let logical_operator = match operator {
             "&&" => LogicalOperator::And,
             "||" => LogicalOperator::Or,

@@ -209,6 +209,8 @@ pub(super) struct BraceFrame {
 pub(super) struct CallFrame {
     pub(super) first_argument_column: Option<usize>,
     pub(super) next_argument_index: usize,
+    pub(super) logical_operand_indent_column: usize,
+    pub(super) logical_operand_indent_tracks_opener: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -285,6 +287,7 @@ pub(super) struct FrameStack {
     closed_delimiter_frames: Vec<ClosedDelimiterFrame>,
     line_closed_delimiter_continuation_indent: Option<usize>,
     line_closed_delimiter_line_indent_spaces: Option<usize>,
+    line_closed_call_logical_operand_indent: Option<(usize, usize)>,
     line_closed_lambda_parameter_list: bool,
     line_closed_brackets: Vec<BracketFrame>,
     closed_brace_frames: Vec<BraceFrame>,
@@ -317,6 +320,12 @@ impl FrameStack {
         {
             self.line_closed_delimiter_continuation_indent = entry.frame.continuation_indent_column;
             self.line_closed_delimiter_line_indent_spaces = Some(entry.frame.line_indent_spaces);
+        }
+        if entry.frame.opener_output_line < current_output_line
+            && let Some(call) = entry.frame.call.as_ref()
+        {
+            self.line_closed_call_logical_operand_indent =
+                Some((current_output_line, call.logical_operand_indent_column));
         }
         self.line_closed_lambda_parameter_list |= entry.frame.lambda_parameter_list;
         if !self.stream_frames.is_empty() || !self.string_continuation_frames.is_empty() {
@@ -388,6 +397,15 @@ impl FrameStack {
     pub(super) fn take_line_closed_delimiter_continuation_indent(&mut self) -> Option<usize> {
         self.line_closed_delimiter_line_indent_spaces = None;
         self.line_closed_delimiter_continuation_indent.take()
+    }
+
+    pub(super) fn take_line_closed_call_logical_operand_indent(
+        &mut self,
+        output_line: usize,
+    ) -> Option<usize> {
+        self.line_closed_call_logical_operand_indent
+            .take()
+            .and_then(|(line, indent)| (line == output_line).then_some(indent))
     }
 
     pub(super) fn take_line_closed_lambda_parameter_list(&mut self) -> bool {
@@ -806,6 +824,15 @@ impl FrameStack {
                     *column =
                         shift_column_for_indent(*column, frame.line_indent_spaces, indent_spaces);
                 }
+                if let Some(call) = frame.call.as_mut()
+                    && call.logical_operand_indent_tracks_opener
+                {
+                    call.logical_operand_indent_column = shift_column_for_indent(
+                        call.logical_operand_indent_column,
+                        frame.line_indent_spaces,
+                        indent_spaces,
+                    );
+                }
                 frame.line_indent_spaces = indent_spaces;
             }
         }
@@ -951,6 +978,8 @@ mod tests {
             call: Some(CallFrame {
                 first_argument_column: Some(12),
                 next_argument_index: 0,
+                logical_operand_indent_column: 8,
+                logical_operand_indent_tracks_opener: true,
             }),
         });
 
@@ -963,6 +992,13 @@ mod tests {
                 .as_ref()
                 .and_then(|call| call.first_argument_column),
             Some(12)
+        );
+        assert_eq!(
+            delimiter
+                .call
+                .as_ref()
+                .map(|call| call.logical_operand_indent_column),
+            Some(8)
         );
     }
 

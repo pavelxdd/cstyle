@@ -387,17 +387,27 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        let call_frame = paren_role.is_call_like().then(|| CallFrame {
-            first_argument_column: (!matches!(next, Some(Token::Symbol(')')))).then(|| {
-                let after_open_column = opener_output_column + 1;
-                after_open_column
-                    + visual_width_from(
-                        &self.current[opener_byte + 1..],
-                        after_open_column,
-                        self.options.tab_width,
-                    )
-            }),
-            next_argument_index: 0,
+        let call_frame = paren_role.is_call_like().then(|| {
+            let logical_chain_indent = self.continuation_indent.logical_chain_indent_spaces;
+            let logical_operand_indent_column = logical_chain_indent
+                .or_else(|| self.return_continuation_indent_spaces())
+                .or_else(|| self.assignment_continuation_indent_spaces())
+                .or_else(|| self.stack_state.current_continuation_indent_spaces())
+                .unwrap_or(opener_line_indent);
+            CallFrame {
+                first_argument_column: (!matches!(next, Some(Token::Symbol(')')))).then(|| {
+                    let after_open_column = opener_output_column + 1;
+                    after_open_column
+                        + visual_width_from(
+                            &self.current[opener_byte + 1..],
+                            after_open_column,
+                            self.options.tab_width,
+                        )
+                }),
+                next_argument_index: 0,
+                logical_operand_indent_column,
+                logical_operand_indent_tracks_opener: logical_chain_indent.is_none(),
+            }
         });
         self.command_state.observe_char('(');
         self.stack_state.enter_paren(
