@@ -1,5 +1,5 @@
 use super::args::{ConfigSelection, ProjectConfigSelection};
-use crate::config::{self, FormatOptions};
+use crate::config::{self, ConfigFileOptions};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
@@ -11,16 +11,16 @@ const ASTYLE_PROJECT_OPTIONS_ENV: &str = "ARTISTIC_STYLE_PROJECT_OPTIONS";
 pub(super) fn load_selected_config(
     selection: &ConfigSelection,
     get_env: &impl Fn(&'static str) -> Option<OsString>,
-) -> Result<FormatOptions, config::ConfigError> {
+) -> Result<ConfigFileOptions, config::ConfigError> {
     match selection {
         ConfigSelection::Auto => load_auto_config(get_env),
-        ConfigSelection::File(path) => config::load_from_file(path),
-        ConfigSelection::None => Ok(FormatOptions::default()),
+        ConfigSelection::File(path) => config::load_config_file(path),
+        ConfigSelection::None => Ok(ConfigFileOptions::default()),
     }
 }
 
 pub(super) fn apply_selected_project_config(
-    options: &mut FormatOptions,
+    options: &mut ConfigFileOptions,
     selection: &ProjectConfigSelection,
     paths: &[PathBuf],
     stdin_path: Option<&Path>,
@@ -36,7 +36,7 @@ pub(super) fn apply_selected_project_config(
                 if name == OsStr::new("none") {
                     return Ok(());
                 }
-                config::apply_project_file(
+                config::apply_project_config_file(
                     options,
                     &name,
                     project_start_dir(paths, stdin_path),
@@ -46,31 +46,34 @@ pub(super) fn apply_selected_project_config(
                 Ok(())
             }
         }
-        ProjectConfigSelection::FileName(name) => {
-            config::apply_project_file(options, name, project_start_dir(paths, stdin_path), true)
-        }
+        ProjectConfigSelection::FileName(name) => config::apply_project_config_file(
+            options,
+            name,
+            project_start_dir(paths, stdin_path),
+            true,
+        ),
         ProjectConfigSelection::None => Ok(()),
     }
 }
 
 fn load_auto_config(
     get_env: &impl Fn(&'static str) -> Option<OsString>,
-) -> Result<FormatOptions, config::ConfigError> {
+) -> Result<ConfigFileOptions, config::ConfigError> {
     if let Some(path) = env_fallback(get_env, CSTYLE_OPTIONS_ENV, ASTYLE_OPTIONS_ENV) {
-        return config::load_from_file(&PathBuf::from(path));
+        return config::load_config_file(&PathBuf::from(path));
     }
     for name in [config::CONFIG_FILE_NAME, config::ASTYLE_CONFIG_FILE_NAME] {
-        if let Some(options) = config::load_optional_file(Path::new(name))? {
+        if let Some(options) = config::load_optional_config_file(Path::new(name))? {
             return Ok(options);
         }
     }
     if let Some(home) = get_env("HOME") {
         let path = PathBuf::from(home).join(config::ASTYLE_CONFIG_FILE_NAME);
-        if let Some(options) = config::load_optional_file(&path)? {
+        if let Some(options) = config::load_optional_config_file(&path)? {
             return Ok(options);
         }
     }
-    Ok(FormatOptions::default())
+    Ok(ConfigFileOptions::default())
 }
 
 fn env_fallback(
@@ -148,7 +151,7 @@ mod tests {
 
         let options = load_auto_config(&get_env).expect("load home legacy rc");
 
-        assert_eq!(options.indent_width, 6);
+        assert_eq!(options.format.indent_width, 6);
         fs::remove_dir_all(dir).expect("remove home options dir");
     }
 
@@ -167,7 +170,7 @@ mod tests {
         let options =
             load_selected_config(&ConfigSelection::Auto, &get_env).expect("load fallback options");
 
-        assert_eq!(options.indent_width, 5);
+        assert_eq!(options.format.indent_width, 5);
         fs::remove_dir_all(dir).expect("remove env dir");
     }
 
@@ -187,7 +190,7 @@ mod tests {
 
         let options = load_selected_config(&ConfigSelection::Auto, &get_env).unwrap();
 
-        assert_eq!(options.indent_width, 3);
+        assert_eq!(options.format.indent_width, 3);
         fs::remove_dir_all(dir).expect("remove env dir");
     }
 
@@ -204,7 +207,7 @@ mod tests {
 
         let options = load_selected_config(&ConfigSelection::Auto, &get_env).unwrap();
 
-        assert_eq!(options.indent_width, 5);
+        assert_eq!(options.format.indent_width, 5);
         fs::remove_dir_all(dir).expect("remove env dir");
     }
 
@@ -222,7 +225,7 @@ mod tests {
             ASTYLE_PROJECT_OPTIONS_ENV => Some(OsString::from("legacy-project.rc")),
             _ => None,
         };
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::Auto,
@@ -232,7 +235,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(options.indent_width, 6);
+        assert_eq!(options.format.indent_width, 6);
         fs::remove_dir_all(dir).expect("remove project dir");
     }
 
@@ -247,7 +250,7 @@ mod tests {
             ASTYLE_PROJECT_OPTIONS_ENV => Some(OsString::from("legacy-project.rc")),
             _ => None,
         };
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::Auto,
@@ -257,7 +260,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(options.indent_width, 7);
+        assert_eq!(options.format.indent_width, 7);
         fs::remove_dir_all(dir).expect("remove project dir");
     }
 
@@ -270,7 +273,7 @@ mod tests {
             CSTYLE_PROJECT_OPTIONS_ENV => Some(OsString::from("project.rc")),
             _ => None,
         };
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::None,
@@ -280,7 +283,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(options, FormatOptions::default());
+        assert_eq!(options, ConfigFileOptions::default());
         fs::remove_dir_all(dir).expect("remove project dir");
     }
 
@@ -289,7 +292,7 @@ mod tests {
         let dir = temp_path("missing-project");
         fs::create_dir_all(&dir).expect("create project dir");
         let get_env = |_name| None;
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         let error = apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::FileName(OsString::from("missing.rc")),
@@ -313,7 +316,7 @@ mod tests {
         fs::create_dir_all(&child).expect("create project dirs");
         fs::write(dir.join("project.rc"), "indent=spaces=6\n").expect("write project rc");
         let get_env = |_name| None;
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::FileName(OsString::from("project.rc")),
@@ -323,7 +326,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(options.indent_width, 6);
+        assert_eq!(options.format.indent_width, 6);
         fs::remove_dir_all(dir).expect("remove project dir");
     }
 
@@ -334,7 +337,7 @@ mod tests {
         fs::create_dir_all(&child).expect("create project dirs");
         fs::write(dir.join("_astylerc"), "indent=spaces=8\n").expect("write legacy project rc");
         let get_env = |_name| None;
-        let mut options = FormatOptions::default();
+        let mut options = ConfigFileOptions::default();
         apply_selected_project_config(
             &mut options,
             &ProjectConfigSelection::FileName(OsString::from(".astylerc")),
@@ -344,7 +347,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(options.indent_width, 8);
+        assert_eq!(options.format.indent_width, 8);
         fs::remove_dir_all(dir).expect("remove project dir");
     }
 }

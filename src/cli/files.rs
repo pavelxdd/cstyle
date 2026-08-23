@@ -101,7 +101,7 @@ fn format_file(
         path,
         options,
         &cstyle_io::FileFormatOptions {
-            backup_suffix: console.backup_suffix.clone(),
+            backup_suffix: console.backup_suffix.as_deref().map(str::to_owned),
             dry_run: console.dry_run,
             preserve_date: console.preserve_date,
         },
@@ -292,7 +292,7 @@ mod tests {
         fs::write(&source, "int source(){return 0;}\n").expect("write source");
         fs::write(&backup, "int backup(){return 0;}\n").expect("write backup");
         let console = ConsoleOptions {
-            backup_suffix: Some(".bak".to_string()),
+            backup_suffix: crate::config::BackupSuffix::Value(".bak".to_string()),
             ..ConsoleOptions::default()
         };
 
@@ -316,7 +316,7 @@ mod tests {
         let backup = dir.join("direct.c.bak");
         fs::write(&backup, "int backup(){return 0;}\n").expect("write backup");
         let console = ConsoleOptions {
-            backup_suffix: Some(".bak".to_string()),
+            backup_suffix: crate::config::BackupSuffix::Value(".bak".to_string()),
             ..ConsoleOptions::default()
         };
 

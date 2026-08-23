@@ -48,7 +48,9 @@ Run `cstyle --help` for the current option list.
 
 ## Configuration
 
-Put formatter defaults in `.cstylerc`.
+Put defaults in `.cstylerc`. Set `suffix=none` to disable backup files, or
+`suffix=.bak` to select a backup suffix. An explicit command-line suffix option
+overrides the config file.
 
 For projects that already have one, `.astylerc` is also read as a fallback.
 Environment defaults are read from `CSTYLE_OPTIONS` and `CSTYLE_PROJECT_OPTIONS`,

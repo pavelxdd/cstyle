@@ -34,7 +34,7 @@ pub(super) enum ProjectConfigSelection {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) struct ConsoleOptions {
-    pub(super) backup_suffix: Option<String>,
+    pub(super) backup_suffix: config::BackupSuffix,
     pub(super) recursive: bool,
     pub(super) dry_run: bool,
     pub(super) error_on_changes: bool,
@@ -51,7 +51,7 @@ pub(super) struct ConsoleOptions {
 impl Default for ConsoleOptions {
     fn default() -> Self {
         Self {
-            backup_suffix: Some(".orig".to_string()),
+            backup_suffix: config::BackupSuffix::default(),
             recursive: false,
             dry_run: false,
             error_on_changes: false,
@@ -143,11 +143,7 @@ fn parse_stdio_path_arg(option: &str, value: OsString) -> Result<PathBuf, CliErr
 }
 
 fn apply_suffix_arg(console: &mut ConsoleOptions, value: &str) {
-    if value == "none" {
-        console.backup_suffix = None;
-    } else if !value.is_empty() && console.backup_suffix.is_some() {
-        console.backup_suffix = Some(value.to_string());
-    }
+    console.backup_suffix.set(value);
 }
 
 fn apply_console_arg(console: &mut ConsoleOptions, arg: &str) -> bool {
@@ -175,7 +171,7 @@ fn apply_console_arg(console: &mut ConsoleOptions, arg: &str) -> bool {
 
 fn apply_console_option(console: &mut ConsoleOptions, option: &str) -> bool {
     match option {
-        "n" | "suffix=none" => console.backup_suffix = None,
+        "n" | "suffix=none" => apply_suffix_arg(console, "none"),
         "r" | "R" | "recursive" => console.recursive = true,
         "dry-run" => console.dry_run = true,
         "error-on-changes" => console.error_on_changes = true,
@@ -414,7 +410,7 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions {
-                    backup_suffix: None,
+                    backup_suffix: config::BackupSuffix::None,
                     recursive: true,
                     formatted_only: true,
                     ..ConsoleOptions::default()
@@ -447,7 +443,7 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions {
-                    backup_suffix: Some(".bak".to_string()),
+                    backup_suffix: config::BackupSuffix::Value(".bak".to_string()),
                     recursive: false,
                     dry_run: true,
                     error_on_changes: true,
@@ -594,6 +590,6 @@ mod tests {
         assert!(apply_console_arg(&mut console, "suffix=none"));
         assert!(apply_console_arg(&mut console, "suffix=.bak"));
 
-        assert_eq!(console.backup_suffix, None);
+        assert_eq!(console.backup_suffix, config::BackupSuffix::None);
     }
 }

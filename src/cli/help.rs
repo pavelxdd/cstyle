@@ -13,7 +13,7 @@ Usage:
 Utility and meta options:
   -h, -?, --help                     Print help
   -V, --version                      Print version
-  --options=PATH, --options=none     Read formatter-only options from PATH, or disable them
+  --options=PATH, --options=none     Read options from PATH, or disable them
   --project, --project=NAME          Read project formatter options
   --project=none                     Disable project formatter options
   --stdin=PATH                       Read stream input from PATH

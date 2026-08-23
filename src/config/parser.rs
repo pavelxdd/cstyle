@@ -1,6 +1,7 @@
 use super::{
-    ConfigError, FormatOptions, IndentStyle, LineBetweenMembers, LineEnding, MinConditionalIndent,
-    Mode, ObjCColonPad, PointerAlign, ReferenceAlign, StylePreset,
+    BackupSuffix, ConfigError, ConfigFileOptions, FormatOptions, IndentStyle, LineBetweenMembers,
+    LineEnding, MinConditionalIndent, Mode, ObjCColonPad, PointerAlign, ReferenceAlign,
+    StylePreset,
 };
 use crate::source::{lex, line_endings};
 use std::path::Path;
@@ -31,9 +32,7 @@ struct OptionToken {
 }
 
 pub(super) fn parse_source(path: &Path, source: &str) -> Result<FormatOptions, ConfigError> {
-    let mut options = FormatOptions::default();
-    apply_source(path, source, &mut options)?;
-    Ok(options)
+    parse_config_source(path, source).map(|options| options.format)
 }
 
 pub(super) fn apply_source(
@@ -41,16 +40,51 @@ pub(super) fn apply_source(
     source: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
+    let mut updated = ConfigFileOptions {
+        format: options.clone(),
+        ..ConfigFileOptions::default()
+    };
+    apply_config_source(path, source, &mut updated)?;
+    *options = updated.format;
+    Ok(())
+}
+
+pub(super) fn parse_config_source(
+    path: &Path,
+    source: &str,
+) -> Result<ConfigFileOptions, ConfigError> {
+    let mut options = ConfigFileOptions::default();
+    apply_config_source(path, source, &mut options)?;
+    Ok(options)
+}
+
+pub(super) fn apply_config_source(
+    path: &Path,
+    source: &str,
+    options: &mut ConfigFileOptions,
+) -> Result<(), ConfigError> {
     for token in import_option_tokens(source) {
+        if apply_backup_suffix_token(&token.text, &mut options.backup_suffix) {
+            continue;
+        }
         apply_option_token(
             path,
             token.line_number,
             &token.text,
-            options,
+            &mut options.format,
             OptionSource::Config,
         )?;
     }
     Ok(())
+}
+
+fn apply_backup_suffix_token(token: &str, backup_suffix: &mut BackupSuffix) -> bool {
+    let option = token.strip_prefix("--").unwrap_or(token);
+    let Some(value) = option.strip_prefix("suffix=") else {
+        return false;
+    };
+    backup_suffix.set(value);
+    true
 }
 
 fn import_option_tokens(source: &str) -> Vec<OptionToken> {
@@ -2220,8 +2254,6 @@ mod tests {
             "i",
             "ignore-exclude-errors-x",
             "xi",
-            "suffix=.bak",
-            "suffix=none",
             "n",
             "preserve-date",
             "Z",

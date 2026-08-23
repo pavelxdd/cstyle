@@ -1,5 +1,7 @@
-use super::parser::{apply_source, parse_source};
-use super::{ASTYLE_CONFIG_FILE_NAME, CONFIG_FILE_NAME, ConfigError, FormatOptions};
+use super::parser::{apply_config_source, apply_source, parse_config_source, parse_source};
+use super::{
+    ASTYLE_CONFIG_FILE_NAME, CONFIG_FILE_NAME, ConfigError, ConfigFileOptions, FormatOptions,
+};
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
@@ -31,24 +33,37 @@ pub fn load_from_dir(dir: &Path) -> Result<FormatOptions, ConfigError> {
 }
 
 pub fn load_from_file(path: &Path) -> Result<FormatOptions, ConfigError> {
-    let mut options = FormatOptions::default();
-    apply_file(&mut options, path)?;
-    Ok(options)
+    load_config_file(path).map(|options| options.format)
 }
 
-pub(crate) fn load_optional_file(path: &Path) -> Result<Option<FormatOptions>, ConfigError> {
+pub(crate) fn load_config_file(path: &Path) -> Result<ConfigFileOptions, ConfigError> {
+    let source = fs::read_to_string(path).map_err(|error| ConfigError::io(path, error))?;
+    parse_config_source(path, &source)
+}
+
+pub(crate) fn load_optional_config_file(
+    path: &Path,
+) -> Result<Option<ConfigFileOptions>, ConfigError> {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(ConfigError::io(path, error)),
     };
-    parse_source(path, &source).map(Some)
+    parse_config_source(path, &source).map(Some)
 }
 
 pub fn apply_file(options: &mut FormatOptions, path: &Path) -> Result<(), ConfigError> {
     let source = fs::read_to_string(path).map_err(|error| ConfigError::io(path, error))?;
     let mut updated = options.clone();
     apply_source(path, &source, &mut updated)?;
+    *options = updated;
+    Ok(())
+}
+
+fn apply_config_file(options: &mut ConfigFileOptions, path: &Path) -> Result<(), ConfigError> {
+    let source = fs::read_to_string(path).map_err(|error| ConfigError::io(path, error))?;
+    let mut updated = options.clone();
+    apply_config_source(path, &source, &mut updated)?;
     *options = updated;
     Ok(())
 }
@@ -62,6 +77,23 @@ pub fn apply_project_file(
     let name = name.as_ref();
     match find_project_file(name, start_dir)? {
         Some(path) => apply_file(options, &path),
+        None if required => Err(ConfigError::new(format!(
+            "cannot open project option file {}",
+            Path::new(name).display()
+        ))),
+        None => Ok(()),
+    }
+}
+
+pub(crate) fn apply_project_config_file(
+    options: &mut ConfigFileOptions,
+    name: impl AsRef<OsStr>,
+    start_dir: &Path,
+    required: bool,
+) -> Result<(), ConfigError> {
+    let name = name.as_ref();
+    match find_project_file(name, start_dir)? {
+        Some(path) => apply_config_file(options, &path),
         None if required => Err(ConfigError::new(format!(
             "cannot open project option file {}",
             Path::new(name).display()

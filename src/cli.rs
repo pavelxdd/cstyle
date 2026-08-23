@@ -78,7 +78,7 @@ fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), CliError> {
             paths,
             stdin_path,
             stdout_path,
-            console,
+            mut console,
         } => {
             let command_line_errors_to_stdout = console.errors_to_stdout;
             let mut options = option_sources::load_selected_config(&config, &env::var_os)
@@ -93,17 +93,22 @@ fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), CliError> {
             )
             .map_err(|error| CliError::new(format!("config error: {error}"), 2))
             .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
-            config::apply_command_line_args(&mut options, &option_args)
+            config::apply_command_line_args(&mut options.format, &option_args)
                 .map_err(|error| {
                     CliError::new(format!("option error: {error}. Try 'cstyle --help'."), 2)
                 })
                 .map_err(|error| error.with_stdout(console.errors_to_stdout))?;
+            console.backup_suffix.inherit(options.backup_suffix);
             if paths.is_empty() {
-                streams::format(stdin_path.as_deref(), stdout_path.as_deref(), &options)
+                streams::format(
+                    stdin_path.as_deref(),
+                    stdout_path.as_deref(),
+                    &options.format,
+                )
             } else {
                 files::format(
                     &paths,
-                    &options,
+                    &options.format,
                     console.recursive,
                     &console,
                     PROGRAM_NAME,
@@ -178,6 +183,104 @@ mod tests {
         );
         fs::remove_file(config_path).expect("remove options");
         fs::remove_file(source_path).expect("remove source");
+    }
+
+    #[test]
+    fn config_suffix_none_disables_backups() {
+        let config_path = temp_path("suffix-none.rc");
+        let source_path = temp_path("suffix-none.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".orig"
+        ));
+        fs::write(&config_path, "suffix=none\n").expect("write options");
+        fs::write(&source_path, "int main(){return 0;}\n").expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([config_arg, source_path.as_os_str().to_os_string()]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup_exists = backup_path.is_file();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup_exists {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with suffix=none config");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert!(!backup_exists);
+    }
+
+    #[test]
+    fn config_suffix_selects_backup_name() {
+        let config_path = temp_path("suffix-custom.rc");
+        let source_path = temp_path("suffix-custom.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".bak"
+        ));
+        let input = "int main(){return 0;}\n";
+        fs::write(&config_path, "suffix=.bak\n").expect("write options");
+        fs::write(&source_path, input).expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([config_arg, source_path.as_os_str().to_os_string()]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup = fs::read_to_string(&backup_path).ok();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup.is_some() {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with custom suffix config");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert_eq!(backup.as_deref(), Some(input));
+    }
+
+    #[test]
+    fn command_line_no_backup_overrides_config_suffix() {
+        let config_path = temp_path("suffix-override.rc");
+        let source_path = temp_path("suffix-override.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".bak"
+        ));
+        fs::write(&config_path, "suffix=.bak\n").expect("write options");
+        fs::write(&source_path, "int main(){return 0;}\n").expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([
+            config_arg,
+            OsString::from("-n"),
+            source_path.as_os_str().to_os_string(),
+        ]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup_exists = backup_path.is_file();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup_exists {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with command-line no-backup override");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert!(!backup_exists);
     }
 
     #[test]
