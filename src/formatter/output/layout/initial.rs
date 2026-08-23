@@ -709,11 +709,6 @@ impl FormatEngine<'_> {
                     && !previous_code.trim_start().starts_with("} *"))
             {
                 layout.exact_indent_spaces = Some(0);
-            } else if previous_code.trim_start().starts_with("}[") {
-                layout.exact_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width / 2,
-                );
             } else if line
                 .trim_start()
                 .chars()

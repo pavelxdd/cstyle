@@ -2096,6 +2096,15 @@ fn compound_literal_call_argument_uses_statement_indent() {
 }
 
 #[test]
+fn statement_after_subscripted_compound_literal_uses_block_indent() {
+    check(
+        "#include <stddef.h>\n\nvoid test(void)\n{\n    for (size_t index = 0u; index < 3u; ++index) {\n        const uint8_t action = (uint8_t[]) {\n            FIRST,\n            SECOND,\n            THIRD,\n        }[index];\n\n          const enum status step = call(action);\n        use(step);\n    }\n}\n",
+        TEST_SAMPLE_OPTIONS,
+        "#include <stddef.h>\n\nvoid test(void)\n{\n    for (size_t index = 0u; index < 3u; ++index) {\n        const uint8_t action = (uint8_t[]) {\n            FIRST,\n            SECOND,\n            THIRD,\n        }[index];\n\n        const enum status step = call(action);\n        use(step);\n    }\n}\n",
+    );
+}
+
+#[test]
 fn compound_literal_call_argument_reindents_from_argument_column() {
     check(
         "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n               (struct call_case) {\n                   .first_active = true,\n                   .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
