@@ -54,7 +54,7 @@ doc:
 test *args:
     CARGO_TARGET_DIR=target/test {{nextest}} {{args}}
 
-# Run one integration-test target; further arguments are passed to nextest
+# Run one integration-test target (format, cli, perf_bounded); further arguments go to nextest
 [group('test')]
 test-target target *args:
     CARGO_TARGET_DIR=target/test {{nextest}} --test {{target}} {{args}}
