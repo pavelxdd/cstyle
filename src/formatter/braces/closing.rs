@@ -306,7 +306,44 @@ impl FormatEngine<'_> {
         if unmatched_closing_brace {
             self.unmatched_closing_brace_recovery = true;
         }
-        let closing_frame_indent = self.layout.frame_stack.active_brace().and_then(|frame| {
+        let closing_frame_indent = self.closing_brace_sibling_indent_column();
+        self.exit_brace_state();
+        if self.layout.indentation.brace_block_depth() == 0 {
+            self.extern_c_guard = ExternCGuard::Idle;
+        }
+        if self.layout.nesting.last_closed_brace_header.is_some() {
+            self.layout.command_state.pre_brace_header_stack.pop();
+        }
+        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.set_indent_after_closing_brace(next, unmatched_closing_brace, closing_frame_indent);
+        self.preprocessor.split_else.closing_brace_has_else =
+            matches!(next, Some(Token::Word(word)) if word == "else");
+        self.mark_closed_brace_output_position();
+        self.current.push('}');
+        self.layout.command_state.observe_char('}');
+        self.layout.compound_literal.just_closed =
+            self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
+        let move_one_line_block_comment = self.options.break_one_line_blocks
+            && self.layout.line_state.is_one_line_block
+            && !matches!(
+                self.layout.nesting.last_closed_brace_type,
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
+            )
+            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'));
+        if move_one_line_block_comment {
+            self.move_one_line_block_comment_after_brace(next, &whitespace_before_brace);
+        }
+        self.finish_line_after_closing_brace(
+            next,
+            next_is_adjacent,
+            unmatched_closing_brace,
+            closing_lambda_body,
+            move_one_line_block_comment,
+        );
+    }
+
+    fn closing_brace_sibling_indent_column(&self) -> Option<usize> {
+        self.layout.frame_stack.active_brace().and_then(|frame| {
             if self.options.brace_style == BraceStyle::Horstmann {
                 return None;
             }
@@ -326,15 +363,15 @@ impl FormatEngine<'_> {
                             == frame.sibling_indent_column
                 })
                 .map(|_| frame.sibling_indent_column)
-        });
-        self.exit_brace_state();
-        if self.layout.indentation.brace_block_depth() == 0 {
-            self.extern_c_guard = ExternCGuard::Idle;
-        }
-        if self.layout.nesting.last_closed_brace_header.is_some() {
-            self.layout.command_state.pre_brace_header_stack.pop();
-        }
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        })
+    }
+
+    fn set_indent_after_closing_brace(
+        &mut self,
+        next: Option<&Token>,
+        unmatched_closing_brace: bool,
+        closing_frame_indent: Option<usize>,
+    ) {
         let should_indent_closing_brace = self
             .layout
             .nesting
@@ -378,22 +415,15 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(column);
         }
-        self.preprocessor.split_else.closing_brace_has_else =
-            matches!(next, Some(Token::Word(word)) if word == "else");
-        self.mark_closed_brace_output_position();
-        self.current.push('}');
-        self.layout.command_state.observe_char('}');
-        self.layout.compound_literal.just_closed =
-            self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
-        let move_one_line_block_comment = self.options.break_one_line_blocks
-            && self.layout.line_state.is_one_line_block
-            && !matches!(
-                self.layout.nesting.last_closed_brace_type,
-                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
-            )
-            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'));
+    }
+
+    fn move_one_line_block_comment_after_brace(
+        &mut self,
+        next: Option<&Token>,
+        whitespace_before_brace: &str,
+    ) {
         let mut moved_comment_tail = None;
-        if move_one_line_block_comment && let Some(Token::Comment(_, comment)) = next {
+        if let Some(Token::Comment(_, comment)) = next {
             let target_index = self
                 .output
                 .iter()
@@ -408,7 +438,7 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| self.output.len().checked_sub(1));
             if let Some(line) = target_index.and_then(|index| self.output.get_mut(index)) {
-                line.push_str(&whitespace_before_brace);
+                line.push_str(whitespace_before_brace);
                 line.push_str("   ");
                 line.push_str(comment.trim_end());
                 if self
@@ -424,6 +454,16 @@ impl FormatEngine<'_> {
         if let Some(tail) = moved_comment_tail {
             self.output.push(tail);
         }
+    }
+
+    fn finish_line_after_closing_brace(
+        &mut self,
+        next: Option<&Token>,
+        next_is_adjacent: bool,
+        unmatched_closing_brace: bool,
+        closing_lambda_body: bool,
+        move_one_line_block_comment: bool,
+    ) {
         let source_attached_statement_after_closing = matches!(next, Some(Token::Word(word)) if matches!(word.as_str(), "break" | "continue" | "return" | "goto"));
         let source_attached_word_after_closing = matches!(next, Some(Token::Word(word))
         if !(is_attachable_closing_header(word)
