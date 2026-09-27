@@ -7,7 +7,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    is_comment_line, preprocessor_directive, trailing_comment_split_limit,
+    advance_quoted_literal, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
 use crate::formatter::text::tabs;
@@ -112,14 +112,8 @@ pub(crate) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
             continue;
         }
 
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }

@@ -187,14 +187,8 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             column += ch.len_utf8();
             continue;
@@ -249,14 +243,8 @@ pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -303,14 +291,8 @@ pub(crate) fn line_has_brace(line: &str) -> bool {
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -359,14 +341,8 @@ pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
             continue;
         }
 
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             column += ch.len_utf8();
             continue;
@@ -424,14 +400,8 @@ pub(crate) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)>
             continue;
         }
 
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -483,14 +453,8 @@ pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
             index += 1;
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -655,6 +619,18 @@ pub(crate) fn preprocessor_directive(line: &str) -> Option<&str> {
         .find(|ch: char| !ch.is_ascii_alphabetic())
         .unwrap_or(rest.len());
     (end > 0).then(|| &rest[..end])
+}
+
+/// Advances a scan that is inside a quoted literal by one character: tracks
+/// backslash escapes and leaves the literal at its closing quote.
+pub(crate) fn advance_quoted_literal(ch: char, quote: &mut Option<char>, escaped: &mut bool) {
+    if *escaped {
+        *escaped = false;
+    } else if ch == '\\' {
+        *escaped = true;
+    } else if Some(ch) == *quote {
+        *quote = None;
+    }
 }
 
 #[cfg(test)]

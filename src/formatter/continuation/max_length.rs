@@ -10,8 +10,9 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    inline_brace_pair_range, trailing_comment_split_limit, trailing_comment_start,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, inline_brace_pair_range, trailing_comment_split_limit,
+    trailing_comment_start, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::head_ends_assignment_operator;
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
@@ -268,14 +269,8 @@ fn contains_unquoted_comparison_operator(line: &str) -> bool {
     let mut index = 0;
     while index < bytes.len() {
         let ch = bytes[index] as char;
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -296,14 +291,8 @@ fn contains_unquoted_plus(line: &str) -> bool {
     let mut quote = None;
     let mut escaped = false;
     for ch in line.chars() {
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             continue;
         }
         if matches!(ch, '"' | '\'') {
@@ -350,14 +339,8 @@ fn matching_close_paren(line: &str, open: usize) -> Option<usize> {
     let mut escaped = false;
     for (index, ch) in line[open..].char_indices() {
         let absolute = open + index;
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             continue;
         }
         if matches!(ch, '"' | '\'') {
@@ -895,14 +878,8 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         {
             break;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             continue;
         }
         if in_block_comment {
@@ -1079,14 +1056,8 @@ fn deferred_split_boundary(line: &str, width: usize) -> usize {
     let mut escaped = false;
     for (index, ch) in line.char_indices() {
         let in_quote = quote.is_some();
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
         } else if matches!(ch, '"' | '\'') {
             quote = Some(ch);
         }

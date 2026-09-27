@@ -15,9 +15,9 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
+    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_binary_operator, head_starts_binary_operator,
@@ -1832,14 +1832,8 @@ fn find_single_assignment_after(line: &str, start: usize) -> Option<usize> {
     let mut depth = 0i32;
     let mut chars = line.char_indices().peekable();
     while let Some((index, ch)) = chars.next() {
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             continue;
         }
         if ch == '"' || ch == '\'' {

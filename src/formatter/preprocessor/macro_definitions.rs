@@ -3,7 +3,7 @@ use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::{
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{
     is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
@@ -72,14 +72,8 @@ fn has_embedded_default_label(line: &str) -> bool {
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -142,14 +136,8 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -212,14 +200,8 @@ fn define_block_comment_state(line: &str, mut in_comment: bool, tab_width: usize
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -446,14 +428,8 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
@@ -511,14 +487,8 @@ fn update_define_expression_paren_anchors(line: &str, anchors: &mut Vec<usize>, 
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote_char {
-                quote = None;
-            }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
             index += 1;
             continue;
         }
