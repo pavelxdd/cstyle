@@ -699,7 +699,7 @@ impl FormatEngine<'_> {
         let mut result = None;
         if !self.options.indent_cases
             && self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
@@ -949,7 +949,7 @@ impl FormatEngine<'_> {
         }
         let trimmed_end = line.trim_end();
         let closes_enclosing_call = line_paren_imbalance(trimmed_end).0 > 0;
-        if self.stack_state.paren_depth == 0 && !closes_enclosing_call {
+        if self.nesting.paren_depth == 0 && !closes_enclosing_call {
             return None;
         }
         let trimmed = line.trim_start();
@@ -1319,7 +1319,7 @@ impl FormatEngine<'_> {
         };
         self.continuation_indent.next_line_indent = None;
         self.continuation_indent.next_line_indent_spaces = Some(spaces);
-        self.stack_state.clear_continuation_indents();
+        self.nesting.clear_continuation_indents();
     }
 
     fn recent_call_argument_indent_spaces(&self) -> Option<usize> {

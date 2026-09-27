@@ -8,15 +8,16 @@ use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment
 use crate::formatter::constructs::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
 };
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive, preprocessor_directive,
 };
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, trailing_comment_split_limit,
@@ -41,7 +42,7 @@ impl FormatEngine<'_> {
             line,
             &self.options.access_labels,
             labels::ClassificationContext {
-                enclosing_brace: self.stack_state.brace_type_stack.last().copied(),
+                enclosing_brace: self.nesting.brace_type_stack.last().copied(),
                 in_initializer: self.in_initializer_brace()
                     || self.current_inline_array_column().is_some(),
                 in_ternary: self.line_state.ternary_colon
@@ -63,7 +64,7 @@ impl FormatEngine<'_> {
             } else {
                 0
             };
-        let normal_indent = self.state.line_indent(line_kind, self.options)
+        let normal_indent = self.indentation.line_indent(line_kind, self.options)
             + self.case_body_indent_extra(line_kind)
             + self.case_preproc_body_indent_extra(line_kind, line)
             + split_else_extra
@@ -95,8 +96,8 @@ impl FormatEngine<'_> {
         let class_label_indent = labels::class_scope_indent(
             line_kind,
             line,
-            self.stack_state.brace_type_stack.last().copied(),
-            self.state.indent(),
+            self.nesting.brace_type_stack.last().copied(),
+            self.indentation.indent(),
             self.options,
         );
         let class_scope_label = class_label_indent.is_some();
@@ -162,9 +163,9 @@ impl FormatEngine<'_> {
             let level = next_line_indent
                 .map(|level| {
                     let included_base_indent = if line.trim_start().starts_with("else") {
-                        self.state.indent()
+                        self.indentation.indent()
                     } else {
-                        self.state.indent() + 1
+                        self.indentation.indent() + 1
                     };
                     split_else_line_start.adjust_pending_level(level, included_base_indent)
                         + else_if_break_extra
@@ -192,7 +193,7 @@ impl FormatEngine<'_> {
                     && let Some(open) = unmatched_open_paren_column(previous_code)
                 {
                     spaces = Some(open + 1);
-                } else if self.state.indent() == 0
+                } else if self.indentation.indent() == 0
                     && self.token_input.token_source_line_indent == 0
                     && previous_code.trim_start().starts_with('#')
                     && line
@@ -412,11 +413,13 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.else_indent_from_previous_if(line, layout.line_kind) {
             layout.indent = spaces / self.options.indent_width;
             layout.exact_indent_spaces = Some(spaces);
-            while let Some((base, delta)) = self.state.last_braceless_block() {
-                if self.state.indent() <= layout.indent + 1 || self.state.indent() != base + delta {
+            while let Some((base, delta)) = self.indentation.last_braceless_block() {
+                if self.indentation.indent() <= layout.indent + 1
+                    || self.indentation.indent() != base + delta
+                {
                     break;
                 }
-                self.state.exit_braceless_block();
+                self.indentation.exit_braceless_block();
             }
         }
         if let Some(spaces) = self.detached_else_nested_header_indent_spaces(line, layout.line_kind)
@@ -688,8 +691,8 @@ impl FormatEngine<'_> {
                     let trimmed = line.trim_start();
                     trimmed == "}" || trimmed.starts_with("} ")
                 }))
-                || (self.state.indent() == 0
-                    && self.stack_state.brace_type_stack.is_empty()
+                || (self.indentation.indent() == 0
+                    && self.nesting.brace_type_stack.is_empty()
                     && previous_code.trim_start().starts_with("} ")
                     && !previous_code.ends_with('{')
                     && !previous_code.trim_start().starts_with("} while")
@@ -837,7 +840,7 @@ impl FormatEngine<'_> {
                 .chars()
                 .next()
                 .is_some_and(is_identifier_start)
-            && self.stack_state.brace_type_stack.is_empty()
+            && self.nesting.brace_type_stack.is_empty()
             && let Some(previous) = self.output.last_non_empty_line()
             && previous[..trailing_comment_split_limit(previous)].trim() == "};"
         {
@@ -1271,8 +1274,8 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if previous_code.ends_with('{') && previous_code.trim() != "{" {
                 let namespace_parent = matches!(
-                    self.stack_state.brace_type_stack.last(),
-                    Some(FormatterBraceType::Namespace)
+                    self.nesting.brace_type_stack.last(),
+                    Some(BraceType::Namespace)
                 ) && !self.options.indent_namespaces;
                 let extra = if namespace_parent {
                     0
@@ -1325,7 +1328,7 @@ impl FormatEngine<'_> {
                     .find(|line| !line.trim().is_empty())
             {
                 let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                if self.stack_state.paren_depth == 0
+                if self.nesting.paren_depth == 0
                     && previous_code.ends_with(',')
                     && previous_code.contains('{')
                     && !line.trim_start().starts_with('}')
@@ -1362,7 +1365,7 @@ impl FormatEngine<'_> {
                             spaces
                         },
                     );
-                } else if self.stack_state.paren_depth == 0
+                } else if self.nesting.paren_depth == 0
                     && (previous_code.ends_with(',')
                         || (previous_code.contains('{') && previous.len() != previous_code.len()))
                 {
@@ -1382,7 +1385,7 @@ impl FormatEngine<'_> {
                         let code = previous[..trailing_comment_split_limit(previous)].trim_end();
                         code.ends_with(';') && unmatched_open_paren_column(code).is_none()
                     });
-            if (self.state.statement_depth() > 0 || self.stack_state.paren_depth > 0)
+            if (self.indentation.statement_depth() > 0 || self.nesting.paren_depth > 0)
                 && self.token_input.token_source_line_indent > current_spaces
                 && !block_comment_after_statement
             {
@@ -1506,7 +1509,7 @@ impl FormatEngine<'_> {
         {
             return LineRoute::Published;
         }
-        if self.stack_state.paren_depth == 0
+        if self.nesting.paren_depth == 0
             && !self.in_initializer_brace()
             && line.trim_start().starts_with('"')
             && let Some(previous) = self.output.last_non_empty_line()

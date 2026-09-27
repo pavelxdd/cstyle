@@ -17,7 +17,7 @@ use crate::formatter::continuation::call_arguments::{
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
 use crate::formatter::preprocessor::preprocessor_directive;
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -365,7 +365,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = labels::access_label_body_indent_spaces(
                 line,
                 previous,
-                self.stack_state.brace_type_stack.last().copied(),
+                self.nesting.brace_type_stack.last().copied(),
                 self.options,
             ) {
                 layout.exact_indent_spaces = Some(spaces);
@@ -646,7 +646,8 @@ impl FormatEngine<'_> {
                     .next()
                     .is_some_and(is_identifier_start)
             {
-                layout.exact_indent_spaces = Some(self.state.indent() * self.options.indent_width);
+                layout.exact_indent_spaces =
+                    Some(self.indentation.indent() * self.options.indent_width);
             }
             if previous_code.trim_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
@@ -658,7 +659,8 @@ impl FormatEngine<'_> {
                     .next()
                     .is_some_and(is_identifier_start)
             {
-                layout.exact_indent_spaces = Some(self.state.indent() * self.options.indent_width);
+                layout.exact_indent_spaces =
+                    Some(self.indentation.indent() * self.options.indent_width);
             }
             if let Some(spaces) = self.scoped_ternary_continuation_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
@@ -1905,7 +1907,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = labels::current_line_indent_spaces(
             layout.line_kind,
             line,
-            self.stack_state.brace_type_stack.last().copied(),
+            self.nesting.brace_type_stack.last().copied(),
             self.options,
         ) {
             layout.exact_indent_spaces = Some(spaces);
@@ -1952,7 +1954,7 @@ impl FormatEngine<'_> {
             && !open_trimmed.starts_with("case ")
             && !open_trimmed.starts_with("default:")
             && !matches!(
-                self.stack_state.last_closed_brace_header.as_deref(),
+                self.nesting.last_closed_brace_header.as_deref(),
                 Some("case" | "default")
             )
             && layout
@@ -1965,7 +1967,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && line.trim() != "break;"
             && !line.trim_start().starts_with(['#', '{', '}'])
-            && self.stack_state.last_closed_brace_header.as_deref() == Some("switch")
+            && self.nesting.last_closed_brace_header.as_deref() == Some("switch")
             && let Some(previous) = self.output.last_non_empty_line()
             && previous.trim() == "}"
         {
@@ -2612,8 +2614,8 @@ impl FormatEngine<'_> {
                     layout.exact_indent_spaces = Some(target);
                 }
             } else if matches!(
-                self.stack_state.last_closed_brace_type,
-                Some(FormatterBraceType::CompoundLiteral)
+                self.nesting.last_closed_brace_type,
+                Some(BraceType::CompoundLiteral)
             ) && previous_trimmed.starts_with('}')
                 && previous_code.ends_with(')')
                 && line
@@ -2673,7 +2675,7 @@ impl FormatEngine<'_> {
                         .input_continuation_indent
                         .map(|indent| indent.columns(self.options.indent_width))
                         .or(replay.closed_delimiter_continuation_indent)
-                        .or_else(|| self.stack_state.current_continuation_indent_spaces())
+                        .or_else(|| self.nesting.current_continuation_indent_spaces())
                 } else {
                     replay
                         .closed_delimiter_continuation_indent
@@ -2682,7 +2684,7 @@ impl FormatEngine<'_> {
                                 .input_continuation_indent
                                 .map(|indent| indent.columns(self.options.indent_width))
                         })
-                        .or_else(|| self.stack_state.current_continuation_indent_spaces())
+                        .or_else(|| self.nesting.current_continuation_indent_spaces())
                 }
             {
                 layout.exact_indent_spaces = Some(spaces);
@@ -2853,7 +2855,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && case_unindent > 0
             && line_in_case_control_block
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && !line.trim_start().starts_with("else")
             && !line_is_control_body_header(line.trim_start())
             && (line
@@ -3072,7 +3074,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(");")
             && !self.options.indent_cases
             && self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
@@ -3093,7 +3095,7 @@ impl FormatEngine<'_> {
             && let Some(spaces) = self.active_initializer_brace_indent_spaces(line, false)
         {
             layout.exact_indent_spaces =
-                Some(spaces.max(self.state.indent() * self.options.indent_width));
+                Some(spaces.max(self.indentation.indent() * self.options.indent_width));
         }
         contextual
     }
@@ -3196,7 +3198,7 @@ impl FormatEngine<'_> {
         if layout.exact_indent_spaces.is_none()
             && self.options.brace_style == BraceStyle::Allman
             && layout.line_kind == LineKind::Normal
-            && self.state.indent() == 0
+            && self.indentation.indent() == 0
             && layout.indent > layout.normal_indent
             && self.token_input.token_source_line_indent == 0
             && self

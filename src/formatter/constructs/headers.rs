@@ -932,7 +932,8 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_line()?;
-        (previous.trim_end().ends_with(';') && previous.contains('}')).then(|| self.state.indent())
+        (previous.trim_end().ends_with(';') && previous.contains('}'))
+            .then(|| self.indentation.indent())
     }
 
     pub(crate) fn else_after_closed_nested_header_indent_spaces(
@@ -1182,7 +1183,7 @@ impl FormatEngine<'_> {
                 .trim()
                 .strip_prefix('}')
                 .is_some_and(|rest| rest.trim().is_empty()))
-        .then(|| self.state.indent() * self.options.indent_width);
+        .then(|| self.indentation.indent() * self.options.indent_width);
         let starts_output_line = self.token_input.token_begins_source_line
             || (self.current_is_blank() && self.previous_was_newline);
         let keeps_return_continuation_column = self.options.brace_style == BraceStyle::Whitesmith
@@ -1292,7 +1293,7 @@ impl FormatEngine<'_> {
             self.observe_block_spacing_header(header);
         }
         if (language::BLOCK_WORDS.contains(&word) || language::PRE_BLOCK_WORDS.contains(&word))
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && self.block_word_is_recognized(word, next)
             && !(matches!(word, "class" | "struct")
                 && self.command_state.pending_block_word.as_deref() == Some("enum"))
@@ -2035,20 +2036,20 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn match_closing_while_to_braceless_do(&mut self) {
-        while let Some((base, delta)) = self.state.last_braceless_block()
-            && self.state.indent() == base + delta
+        while let Some((base, delta)) = self.indentation.last_braceless_block()
+            && self.indentation.indent() == base + delta
             && !self.braceless_header_accepts_while(base)
         {
-            self.state.exit_braceless_block();
+            self.indentation.exit_braceless_block();
         }
-        if let Some((base, delta)) = self.state.last_braceless_block()
-            && self.state.indent() == base + delta
+        if let Some((base, delta)) = self.indentation.last_braceless_block()
+            && self.indentation.indent() == base + delta
             && self.braceless_header_accepts_while(base)
         {
             self.continuation_indent.next_line_indent =
                 Some(base + self.line_adjuster.total_case_unindent_depth());
             self.continuation_indent.next_line_indent_spaces = None;
-            self.state.exit_braceless_block();
+            self.indentation.exit_braceless_block();
             if self
                 .frame_stack
                 .active_braceless_header()

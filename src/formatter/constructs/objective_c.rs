@@ -1,7 +1,7 @@
 use crate::config::ObjCColonPad;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
-use crate::formatter::state::ContinuationIndent;
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
@@ -497,7 +497,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn is_objc_method_line(&self) -> bool {
-        if self.stack_state.paren_depth > 0 {
+        if self.nesting.paren_depth > 0 {
             return false;
         }
         let line = self.current.trim_start();
@@ -526,9 +526,9 @@ impl FormatEngine<'_> {
         start: usize,
     ) -> Option<usize> {
         let base =
-            ContinuationIndent::Level(self.state.indent()).columns(self.options.indent_width);
-        let cont_indent =
-            ContinuationIndent::Level(self.state.indent() + 1).columns(self.options.indent_width);
+            ContinuationIndent::Level(self.indentation.indent()).columns(self.options.indent_width);
+        let cont_indent = ContinuationIndent::Level(self.indentation.indent() + 1)
+            .columns(self.options.indent_width);
 
         let mut line_colons: Vec<Option<usize>> = Vec::new();
         let mut column = 0usize;

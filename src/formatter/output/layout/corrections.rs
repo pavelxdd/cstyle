@@ -77,7 +77,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| previous.trim() == "{")
             && let Some(frame) = self.frame_stack.active_brace().filter(|frame| {
                 frame.semantic_kind == BraceSemanticKind::Definition
-                    && self.stack_state.brace_type_stack.last() == Some(&frame.formatter_type)
+                    && self.nesting.brace_type_stack.last() == Some(&frame.brace_type)
             })
         {
             exact_indent_spaces = Some(frame.sibling_indent_column);

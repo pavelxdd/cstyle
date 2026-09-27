@@ -53,14 +53,14 @@ impl FormatEngine<'_> {
             return true;
         }
         if current.starts_with("%typemap") && current.contains('{') && !current.contains('}') {
-            let spaces =
-                self.state.line_indent(LineKind::Normal, self.options) * self.options.indent_width;
+            let spaces = self.indentation.line_indent(LineKind::Normal, self.options)
+                * self.options.indent_width;
             self.swig.pending_typemap_line = Some((current.trim_end().to_string(), spaces));
             return true;
         }
         if current.starts_with("%pythoncode") && current.ends_with('{') {
-            let spaces =
-                self.state.line_indent(LineKind::Normal, self.options) * self.options.indent_width;
+            let spaces = self.indentation.line_indent(LineKind::Normal, self.options)
+                * self.options.indent_width;
             self.swig.pythoncode_indent_spaces = Some(spaces);
             self.push_output_line_spaces(current, 0, spaces);
             return true;

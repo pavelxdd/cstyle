@@ -1,11 +1,11 @@
 use crate::config::IndentStyle;
 use crate::formatter::braces::classification::line_opens_lambda_block;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::buffer;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
-use crate::formatter::state::ContinuationIndent;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
@@ -300,7 +300,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = post_emission.ternary_call_clear_indent_spaces {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(spaces);
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
         }
         self.observe_split_else_logical_statement_indent(line, line_kind);
         self.restore_split_else_call_argument_indent_after_emission(line, line_kind);

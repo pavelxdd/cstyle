@@ -825,7 +825,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = labels::access_label_body_indent_spaces(
                 line,
                 previous,
-                self.stack_state.brace_type_stack.last().copied(),
+                self.nesting.brace_type_stack.last().copied(),
                 self.options,
             ) {
                 return Some(spaces);
@@ -1323,7 +1323,7 @@ impl FormatEngine<'_> {
             {
                 let previous_indent = leading_visual_width(previous, tab_width);
                 let head = previous_code[..open].trim_start();
-                if previous_indent > self.state.indent() * width && is_macro_like_word(head) {
+                if previous_indent > self.indentation.indent() * width && is_macro_like_word(head) {
                     return Some(previous_indent + width * 2);
                 }
             }
@@ -1501,7 +1501,7 @@ impl FormatEngine<'_> {
                     && !is_lambda_body_header(current)
                     && (current.starts_with(['*', '&', '+', '-'])
                         || starts_with_chain_operator(current)
-                        || self.stack_state.paren_depth > 0
+                        || self.nesting.paren_depth > 0
                         || after_initializer_comment)
                     && !(starts_with_chain_operator(current) && current.trim_end().ends_with('{'))
                 {

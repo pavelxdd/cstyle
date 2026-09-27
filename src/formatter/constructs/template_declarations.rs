@@ -269,7 +269,7 @@ impl FormatEngine<'_> {
             self.template_declaration.angle_depth += angle_delta;
             if self.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
                 self.template_declaration = TemplateDeclarationState::default();
-                self.stack_state.clear_continuation_indents();
+                self.nesting.clear_continuation_indents();
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = None;
             }

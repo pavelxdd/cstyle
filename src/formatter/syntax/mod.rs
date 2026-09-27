@@ -1,7 +1,6 @@
 use crate::formatter::lexer::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
 };
-use crate::formatter::state::TemplateAngle;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -919,6 +918,13 @@ impl SyntaxRoles {
             .copied()
             .unwrap_or(false)
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum TemplateAngle {
+    None,
+    Open,
+    Close(usize),
 }
 
 #[cfg(test)]

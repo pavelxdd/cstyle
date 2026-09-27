@@ -1,6 +1,6 @@
 use crate::formatter::braces::classification::is_lambda_capture_header;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::state::ContinuationIndent;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::scoped_name_is_constructor;
@@ -500,7 +500,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
-        if self.stack_state.paren_depth > 0
+        if self.nesting.paren_depth > 0
             && previous_code.ends_with(',')
             && line_paren_imbalance(previous_code).0 == 0
         {
@@ -514,7 +514,7 @@ impl FormatEngine<'_> {
         line: &str,
     ) -> Option<usize> {
         let trimmed = line.trim_start();
-        if trimmed.is_empty() || !trimmed.starts_with(',') || self.stack_state.paren_depth > 0 {
+        if trimmed.is_empty() || !trimmed.starts_with(',') || self.nesting.paren_depth > 0 {
             return None;
         }
         if !self

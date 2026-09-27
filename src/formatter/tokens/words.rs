@@ -7,7 +7,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, trailing_comment_split_limit,
@@ -56,18 +56,18 @@ impl FormatEngine<'_> {
             self.previous_was_newline = true;
         }
         if self.current.trim().is_empty()
-            && self.stack_state.has_question_in_current_brace()
+            && self.nesting.has_question_in_current_brace()
             && matches!(
                 word,
                 "break" | "case" | "co_return" | "continue" | "default" | "goto" | "return"
             )
         {
-            let closed_questions = self.stack_state.truncate_questions_to_brace_scope();
+            let closed_questions = self.nesting.truncate_questions_to_brace_scope();
             for _ in 0..closed_questions {
                 self.frame_stack.pop_active_ternary();
             }
-            self.state.clear_continuation_indents();
-            self.stack_state.clear_continuation_indents();
+            self.indentation.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
         }
         let previous_non_ws_char = self.command_state.previous_non_ws_char;
         let mut previous_header = self.command_state.current_header.clone();
@@ -85,7 +85,7 @@ impl FormatEngine<'_> {
         }
         if self.is_header(word)
             && word != "else"
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && self.current_is_blank()
             && let Some(frame) = self.frame_stack.active_header()
             && !self.frame_stack.active_brace().is_some_and(|brace| {
@@ -113,7 +113,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|header| self.is_add_braces_header(header))
             && !matches!(previous_header.as_deref(), Some("else") if word == "if")
             && !previous_header.as_deref().is_some_and(is_defer_header)
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && !self.current_is_blank()
         {
             let nested_parent_indent = self.inline_nested_header_braceless_bias;
@@ -129,12 +129,12 @@ impl FormatEngine<'_> {
                                 / self.options.indent_width
                                 + 1
                         } else {
-                            self.state.indent()
+                            self.indentation.indent()
                         }
                     })
             });
             if previous_header.as_deref() == Some("if") && nested_parent_indent.is_none() {
-                header_indent = header_indent.min(self.state.indent());
+                header_indent = header_indent.min(self.indentation.indent());
             }
             self.inline_nested_header_braceless_bias = Some(header_indent + 1);
             self.frame_stack
@@ -152,14 +152,14 @@ impl FormatEngine<'_> {
                     .ends_with(';')
             })
         {
-            while let Some((base, delta)) = self.state.last_braceless_block()
-                && self.state.indent() == base + delta
+            while let Some((base, delta)) = self.indentation.last_braceless_block()
+                && self.indentation.indent() == base + delta
                 && !self.braceless_header_accepts_else(base)
             {
-                self.state.exit_braceless_block();
+                self.indentation.exit_braceless_block();
             }
-            if let Some((base, delta)) = self.state.last_braceless_block()
-                && self.state.indent() == base + delta
+            if let Some((base, delta)) = self.indentation.last_braceless_block()
+                && self.indentation.indent() == base + delta
             {
                 self.continuation_indent.next_line_indent =
                     Some(base + self.line_adjuster.total_case_unindent_depth());
@@ -245,14 +245,14 @@ impl FormatEngine<'_> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
-            && self.stack_state.last_closed_brace_header.as_deref() == Some("if")
+            && self.nesting.last_closed_brace_header.as_deref() == Some("if")
             && self.output.last().is_some_and(|line| {
                 line[..trailing_comment_split_limit(line)]
                     .trim_end()
                     .ends_with('}')
             })
-            && let Some((base, delta)) = self.state.last_braceless_block()
-            && self.state.indent() == base + delta
+            && let Some((base, delta)) = self.indentation.last_braceless_block()
+            && self.indentation.indent() == base + delta
         {
             self.continuation_indent.next_line_indent =
                 Some(base + self.line_adjuster.total_case_unindent_depth());
@@ -273,7 +273,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
-            ) && self.stack_state.last_closed_brace_header.as_deref() == Some("do")
+            ) && self.nesting.last_closed_brace_header.as_deref() == Some("do")
                 && let Some(previous) = self.output.last()
                 && previous[..trailing_comment_split_limit(previous)].trim() == "}"
             {
@@ -302,7 +302,7 @@ impl FormatEngine<'_> {
             && contains_one_line_block(self.current.trim())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
                 || (word == "while"
-                    && self.stack_state.last_closed_brace_header.as_deref() == Some("do")))
+                    && self.nesting.last_closed_brace_header.as_deref() == Some("do")))
         {
             self.finish_line();
         }
@@ -310,16 +310,11 @@ impl FormatEngine<'_> {
         let closing_header_after_brace = previous_non_ws_char == Some('}')
             && (is_attachable_closing_header(word)
                 || (word == "while"
-                    && self.stack_state.last_closed_brace_header.as_deref() == Some("do")));
+                    && self.nesting.last_closed_brace_header.as_deref() == Some("do")));
         let aggregate_declarator_after_brace = previous_non_ws_char == Some('}')
             && matches!(
-                self.stack_state.last_closed_brace_type,
-                Some(
-                    FormatterBraceType::Struct
-                        | FormatterBraceType::Union
-                        | FormatterBraceType::Enum
-                        | FormatterBraceType::Class
-                )
+                self.nesting.last_closed_brace_type,
+                Some(BraceType::Struct | BraceType::Union | BraceType::Enum | BraceType::Class)
             );
         let is_word_operator = matches!(word, "and" | "or");
         let current_ends_pointer_operator = self.current.trim_end().ends_with(['*', '&', '^']);

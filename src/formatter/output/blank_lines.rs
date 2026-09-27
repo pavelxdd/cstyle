@@ -1,7 +1,7 @@
 use crate::config::BraceStyle;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
 impl FormatEngine<'_> {
@@ -59,25 +59,25 @@ impl FormatEngine<'_> {
     fn should_delete_input_empty_line(&self) -> bool {
         self.options.delete_empty_lines
             && !self.output.is_empty()
-            && !self.stack_state.brace_type_stack.is_empty()
+            && !self.nesting.brace_type_stack.is_empty()
             && !self.preserve_block_spacing_comment_blank
             && !self.in_empty_line_protected_context()
     }
 
     fn in_empty_line_protected_context(&self) -> bool {
-        !self.stack_state.brace_type_stack.is_empty()
-            && self.stack_state.brace_type_stack.iter().all(|brace_type| {
+        !self.nesting.brace_type_stack.is_empty()
+            && self.nesting.brace_type_stack.iter().all(|brace_type| {
                 matches!(
                     brace_type,
-                    FormatterBraceType::Extern
-                        | FormatterBraceType::Namespace
-                        | FormatterBraceType::Class
-                        | FormatterBraceType::Interface
-                        | FormatterBraceType::Struct
-                        | FormatterBraceType::Union
-                        | FormatterBraceType::Enum
-                        | FormatterBraceType::Array
-                        | FormatterBraceType::CompoundLiteral
+                    BraceType::Extern
+                        | BraceType::Namespace
+                        | BraceType::Class
+                        | BraceType::Interface
+                        | BraceType::Struct
+                        | BraceType::Union
+                        | BraceType::Enum
+                        | BraceType::Array
+                        | BraceType::CompoundLiteral
                 )
             })
     }

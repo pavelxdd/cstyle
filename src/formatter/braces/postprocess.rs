@@ -59,7 +59,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let spaces = self.state.indent() * self.options.indent_width;
+        let spaces = self.indentation.indent() * self.options.indent_width;
         (spaces == self.token_input.input_source_indent).then_some(spaces)
     }
 
@@ -148,7 +148,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        let base = self.state.line_indent(LineKind::Normal, self.options);
+        let base = self.indentation.line_indent(LineKind::Normal, self.options);
         let indent = if self.options.brace_style == BraceStyle::Vtk && base == 0 {
             base
         } else {
@@ -184,7 +184,7 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
         ) {
-            let base = self.state.line_indent(LineKind::Normal, self.options);
+            let base = self.indentation.line_indent(LineKind::Normal, self.options);
             self.push_output_line("{", base + 1);
         } else {
             self.finish_line_text("{");
@@ -217,7 +217,7 @@ impl FormatEngine<'_> {
         }
         let head = line[..open].trim_end();
         let body = line[open + 1..close].trim();
-        let base = self.state.line_indent(LineKind::Normal, self.options);
+        let base = self.indentation.line_indent(LineKind::Normal, self.options);
         if self.options.brace_style == BraceStyle::Horstmann {
             self.push_output_line(head, base);
             if !body.is_empty() {

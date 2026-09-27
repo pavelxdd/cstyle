@@ -1071,11 +1071,11 @@ impl FormatEngine<'_> {
             && !line.trim_start().starts_with(['#', '{', '}'])
             && line.trim() != "break;"
             && self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
-            && self.stack_state.last_closed_brace_header.as_deref() != Some("switch")
+            && self.nesting.last_closed_brace_header.as_deref() != Some("switch")
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
@@ -1087,13 +1087,13 @@ impl FormatEngine<'_> {
             let trimmed = code.trim_start();
             trimmed.starts_with("case ") || trimmed.starts_with("default:")
         });
-        let closes_switch = self.stack_state.last_closed_brace_header.as_deref() == Some("switch")
+        let closes_switch = self.nesting.last_closed_brace_header.as_deref() == Some("switch")
             || self
                 .output
                 .current_closing_brace_open(self.options.tab_width)
                 .is_some_and(|(_, _, trimmed)| starts_header_word(trimmed, "switch"));
         if closes_switch
-            || self.stack_state.last_closed_brace_header.as_deref() != Some("switch")
+            || self.nesting.last_closed_brace_header.as_deref() != Some("switch")
                 && nearest_case.is_some_and(|line| {
                     line[..trailing_comment_split_limit(line)]
                         .trim_end()
@@ -1102,7 +1102,7 @@ impl FormatEngine<'_> {
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
-        if self.stack_state.last_closed_brace_header.as_deref() != Some("switch")
+        if self.nesting.last_closed_brace_header.as_deref() != Some("switch")
             && nearest_case.is_some_and(|line| {
                 !line[..trailing_comment_split_limit(line)]
                     .trim_end()
@@ -1224,7 +1224,7 @@ impl FormatEngine<'_> {
             || line.trim_start().starts_with(['#', '{', '}', '/'])
             || self.line_adjuster.total_case_unindent_depth() == 0
             || self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .last()
                 .is_none_or(|header| header.as_deref() != Some("case"))
@@ -1276,7 +1276,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn has_case_body_at_current_depth(&self) -> bool {
-        let current = self.stack_state.brace_header_stack.len();
+        let current = self.nesting.brace_header_stack.len();
         self.switch_case_layout.body_brace_depths.contains(&current)
     }
 
@@ -1290,7 +1290,7 @@ impl FormatEngine<'_> {
         }
         self.switch_case_layout
             .unindent_brace_depths
-            .push(self.stack_state.brace_header_stack.len());
+            .push(self.nesting.brace_header_stack.len());
         self.switch_case_layout.pending_label_brace = false;
     }
 
@@ -1299,11 +1299,11 @@ impl FormatEngine<'_> {
             .switch_case_layout
             .unindent_brace_depths
             .last()
-            .is_some_and(|depth| *depth == self.stack_state.brace_header_stack.len());
+            .is_some_and(|depth| *depth == self.nesting.brace_header_stack.len());
     }
 
     pub(crate) fn clear_case_body_indent_if_past_switch(&mut self) {
-        let current = self.stack_state.brace_header_stack.len();
+        let current = self.nesting.brace_header_stack.len();
         while self
             .switch_case_layout
             .body_brace_depths
@@ -1337,7 +1337,7 @@ impl FormatEngine<'_> {
         if !self.options.indent_switches {
             return 0;
         }
-        let current = self.stack_state.brace_header_stack.len();
+        let current = self.nesting.brace_header_stack.len();
         match line_kind {
             LineKind::Normal if self.options.brace_style == BraceStyle::Whitesmith => self
                 .switch_case_layout
@@ -1374,7 +1374,7 @@ impl FormatEngine<'_> {
         {
             return 0;
         }
-        let current = self.stack_state.brace_header_stack.len();
+        let current = self.nesting.brace_header_stack.len();
         self.switch_case_layout
             .preprocessor_brace_depths
             .iter()
@@ -1601,16 +1601,16 @@ impl FormatEngine<'_> {
             return None;
         }
         if line.trim() == "}" {
-            return Some(self.state.indent() * self.options.indent_width);
+            return Some(self.indentation.indent() * self.options.indent_width);
         }
 
         let trimmed = line.trim_start();
         let after_brace = trimmed.strip_prefix("} ")?.trim_start();
         let indent =
             if starts_header_word(after_brace, "case") || after_brace.starts_with("default:") {
-                self.state.indent().saturating_sub(1)
+                self.indentation.indent().saturating_sub(1)
             } else {
-                self.state.indent() + 1
+                self.indentation.indent() + 1
             };
         Some(indent * self.options.indent_width)
     }
@@ -1718,7 +1718,10 @@ impl FormatEngine<'_> {
         }
         let case_unindent_depth = self.line_adjuster.total_case_unindent_depth();
         (case_unindent_depth > 0).then_some(
-            self.state.indent().saturating_sub(case_unindent_depth) * self.options.indent_width,
+            self.indentation
+                .indent()
+                .saturating_sub(case_unindent_depth)
+                * self.options.indent_width,
         )
     }
 
@@ -1895,7 +1898,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind) {
         if line_kind == LineKind::SwitchLabel {
-            let current = self.stack_state.brace_header_stack.len();
+            let current = self.nesting.brace_header_stack.len();
             if self.switch_case_layout.body_brace_depths.last() != Some(&current) {
                 self.switch_case_layout.body_brace_depths.push(current);
             }
@@ -1918,7 +1921,7 @@ impl FormatEngine<'_> {
             .switch_case_layout
             .unindent_brace_depths
             .last()
-            .is_some_and(|depth| self.stack_state.brace_header_stack.len() < *depth)
+            .is_some_and(|depth| self.nesting.brace_header_stack.len() < *depth)
         {
             self.switch_case_layout.unindent_brace_depths.pop();
         }
@@ -1928,7 +1931,7 @@ impl FormatEngine<'_> {
             if code.ends_with('{') {
                 self.switch_case_layout
                     .unindent_brace_depths
-                    .push(self.stack_state.brace_header_stack.len());
+                    .push(self.nesting.brace_header_stack.len());
                 self.switch_case_layout.pending_label_brace = false;
             } else {
                 self.switch_case_layout.pending_label_brace = true;
@@ -1939,7 +1942,7 @@ impl FormatEngine<'_> {
         if line_kind == LineKind::Normal && !line.trim().is_empty() {
             let trimmed = line.trim_start();
             if self.switch_case_layout.pending_label_brace && trimmed.starts_with('{') {
-                let current = self.stack_state.brace_header_stack.len();
+                let current = self.nesting.brace_header_stack.len();
                 self.switch_case_layout
                     .unindent_brace_depths
                     .push(current + 1);
@@ -1973,7 +1976,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(['#', '{', '}', '/'])
             || find_case_colon(line).is_some()
             || self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .last()
                 .is_none_or(|header| header.as_deref() != Some("case"))

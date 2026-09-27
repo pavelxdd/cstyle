@@ -5,7 +5,7 @@ use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
-use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
@@ -129,12 +129,12 @@ impl FormatEngine<'_> {
         }
         let previous_word = trailing_word(&self.current);
         if (self.command_state.current_header.is_some() && previous_word != language::AUTO)
-            || (self.stack_state.paren_depth > 0
+            || (self.nesting.paren_depth > 0
                 && self
-                    .stack_state
+                    .nesting
                     .brace_type_stack
                     .last()
-                    .is_some_and(|brace_type| *brace_type == FormatterBraceType::Command))
+                    .is_some_and(|brace_type| *brace_type == BraceType::Command))
         {
             return false;
         }
@@ -219,13 +219,13 @@ impl FormatEngine<'_> {
         }
         if self.current.trim_end().ends_with('}')
             && matches!(
-                self.stack_state.last_closed_brace_type,
+                self.nesting.last_closed_brace_type,
                 Some(
-                    FormatterBraceType::Class
-                        | FormatterBraceType::Struct
-                        | FormatterBraceType::Union
-                        | FormatterBraceType::Enum
-                        | FormatterBraceType::Interface
+                    BraceType::Class
+                        | BraceType::Struct
+                        | BraceType::Union
+                        | BraceType::Enum
+                        | BraceType::Interface
                 )
             )
             && matches!(next, Some(Token::Word(_)) | Some(Token::Symbol('(')))
@@ -251,7 +251,7 @@ impl FormatEngine<'_> {
                 if self.current.trim().is_empty() {
                     return self.is_function_declaration_parameter_continuation();
                 }
-                if self.stack_state.paren_depth > 0
+                if self.nesting.paren_depth > 0
                     && !self.current_paren_context_is_declaration()
                     && !self.current_in_objc_method_type_group()
                     && !self.is_function_declaration_parameter_continuation()
@@ -313,7 +313,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.stack_state.paren_depth > 0
+        if self.nesting.paren_depth > 0
             && matches!(next, Some(Token::Word(_)))
             && trailing_word(&self.current)
                 .chars()
@@ -356,7 +356,7 @@ impl FormatEngine<'_> {
             return false;
         }
         if operator == "&"
-            && self.stack_state.paren_depth > 0
+            && self.nesting.paren_depth > 0
             && matches!(next, Some(Token::Word(_)))
             && !self.current_paren_context_is_declaration()
             && !is_pointer_type_word(trailing_word(&self.current))
@@ -504,7 +504,7 @@ impl FormatEngine<'_> {
         if segment.is_empty() || !is_pointer_declaration_segment(segment) {
             return false;
         }
-        if self.stack_state.paren_depth == 0 {
+        if self.nesting.paren_depth == 0 {
             return true;
         }
         self.current_paren_context_is_declaration()
@@ -612,7 +612,7 @@ impl FormatEngine<'_> {
         }
         if return_type.is_empty() {
             return self
-                .stack_state
+                .nesting
                 .brace_type_stack
                 .last()
                 .is_some_and(|brace_type| is_class_like_brace_type(*brace_type));

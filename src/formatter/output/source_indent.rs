@@ -189,6 +189,6 @@ impl FormatEngine<'_> {
         previous_code.ends_with(['(', '[', '=', '?', '\\'])
             || head_ends_binary_operator(previous_code)
             || self.line_follows_logical_operator()
-            || self.stack_state.paren_depth > 0
+            || self.nesting.paren_depth > 0
     }
 }

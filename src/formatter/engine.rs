@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::braces::rewrite::{
     add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
     remove_cross_line_statement_braces,
@@ -9,6 +10,7 @@ use crate::formatter::constructs::swig::SwigState;
 use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
 use crate::formatter::constructs::{headers, labels, objective_c, switch_cases};
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::max_length::MaxLengthLineState;
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
@@ -26,9 +28,9 @@ use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::{IndentationState, LineKind};
 use crate::formatter::state::next_line;
 use crate::formatter::state::{
-    CommandState, ContinuationIndent, FormatterLineState, FormatterStackState, InlineArrayState,
-    PreviousToken, RunInState, TemplateAngle, TokenInputState,
+    CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState,
 };
+use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{is_numeric_variable_word, is_type_like_pointer_word};
 use crate::formatter::syntax::{OperatorRole, SyntaxRoles, classify_syntax, template_angle_role};
 use crate::formatter::text::columns;
@@ -70,7 +72,7 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) current: CurrentLine,
     pub(crate) line_brace_match_start: usize,
     pub(crate) line_brace_matches: Vec<Option<usize>>,
-    pub(crate) state: IndentationState,
+    pub(crate) indentation: IndentationState,
     pub(crate) previous: PreviousToken,
     pub(crate) previous_was_newline: bool,
     pub(crate) previous_was_template_close: bool,
@@ -118,9 +120,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) token_input: TokenInputState,
     pub(crate) pointer_run: pointers::PointerRunState,
     pub(crate) command_state: CommandState,
-    pub(crate) stack_state: FormatterStackState,
+    pub(crate) nesting: NestingState,
     pub(crate) frame_stack: FrameStack,
-    pub(crate) line_state: FormatterLineState,
+    pub(crate) line_state: LineState,
     pub(crate) run_in_state: RunInState,
     pub(crate) preprocessor: preprocessor::PreprocessorState,
     pub(crate) access_modified_braces: HashSet<usize>,
@@ -140,7 +142,7 @@ impl<'a> FormatEngine<'a> {
             current: CurrentLine::default(),
             line_brace_match_start: 0,
             line_brace_matches: Vec::new(),
-            state: IndentationState::default(),
+            indentation: IndentationState::default(),
             previous: PreviousToken::None,
             previous_was_newline: false,
             previous_was_template_close: false,
@@ -188,9 +190,9 @@ impl<'a> FormatEngine<'a> {
             token_input: TokenInputState::default(),
             pointer_run: pointers::PointerRunState::default(),
             command_state: CommandState::default(),
-            stack_state: FormatterStackState::default(),
+            nesting: NestingState::default(),
             frame_stack: FrameStack::default(),
-            line_state: FormatterLineState::default(),
+            line_state: LineState::default(),
             run_in_state: RunInState::default(),
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: HashSet::new(),
@@ -531,15 +533,15 @@ impl<'a> FormatEngine<'a> {
             self.prepare_split_class_head_continuation();
             if self.token_input.token_begins_source_line
                 && self.current.is_empty()
-                && self.stack_state.paren_depth == 0
+                && self.nesting.paren_depth == 0
                 && source_column
                     > ContinuationIndent::Level(
-                        self.state.indent() + self.case_body_indent_extra(LineKind::Normal),
+                        self.indentation.indent() + self.case_body_indent_extra(LineKind::Normal),
                     )
                     .columns(self.options.indent_width)
                 && source_indented_macro_row(tokens, line.start, line.end, index)
                 && matches!(
-                    self.stack_state.brace_header_stack.last(),
+                    self.nesting.brace_header_stack.last(),
                     Some(Some(header)) if header == "switch"
                 )
                 && !matches!(
@@ -675,7 +677,8 @@ impl<'a> FormatEngine<'a> {
                         })
                         .map(|line| columns::leading_visual_width(line, self.options.tab_width))
                         .unwrap_or_else(|| {
-                            self.state.line_indent(LineKind::SwitchLabel, self.options)
+                            self.indentation
+                                .line_indent(LineKind::SwitchLabel, self.options)
                                 * self.options.indent_width
                         });
                     self.continuation_indent.next_line_indent = None;
@@ -760,7 +763,7 @@ impl<'a> FormatEngine<'a> {
         let case_body_spaces = columns::leading_visual_width(case_line, self.options.tab_width)
             + self.options.indent_width * 2;
         self.finish_line();
-        self.push_output_line_spaces(trimmed, self.state.indent(), case_body_spaces);
+        self.push_output_line_spaces(trimmed, self.indentation.indent(), case_body_spaces);
         self.previous = PreviousToken::None;
         self.previous_was_newline = true;
         true
@@ -1222,8 +1225,8 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.current.trim().is_empty() {
             if self.next_line.leads_with_class_init || self.next_line.leads_with_class_base {
-                self.stack_state.clear_continuation_indents();
-                self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+                self.nesting.clear_continuation_indents();
+                self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
                 self.continuation_indent.next_line_indent_spaces = None;
                 if self.next_line.leads_with_class_base {
                     self.in_class_base_clause = true;
@@ -1255,18 +1258,18 @@ impl<'a> FormatEngine<'a> {
             self.literal_line.unterminated_literal_line = false;
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_init {
-            let header_indent = self.state.indent();
+            let header_indent = self.indentation.indent();
             let follows_function_try = self.class_initializer_follows_function_try();
             self.finish_line();
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.continuation_indent.next_line_indent =
                 Some(header_indent + usize::from(!follows_function_try));
             self.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_base {
-            let header_indent = self.state.indent();
+            let header_indent = self.indentation.indent();
             self.finish_line();
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.continuation_indent.next_line_indent = Some(header_indent + 1);
             self.continuation_indent.next_line_indent_spaces = None;
             self.in_class_base_clause = true;
@@ -1277,8 +1280,8 @@ impl<'a> FormatEngine<'a> {
             self.continuation_indent.next_line_indent_spaces = Some(1);
             self.previous_was_newline = true;
         } else if let Some(column) = self.current_inline_array_column()
-            && self.state.statement_depth() == 0
-            && self.stack_state.paren_depth == 0
+            && self.indentation.statement_depth() == 0
+            && self.nesting.paren_depth == 0
             && line_ends_with_comment(&self.current)
             && self.current[..self.current_trailing_comment_split_limit()]
                 .trim_end()
@@ -1289,17 +1292,17 @@ impl<'a> FormatEngine<'a> {
             self.continuation_indent.next_line_indent_spaces = Some(column);
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_comma
-            && self.state.statement_depth() > 0
+            && self.indentation.statement_depth() > 0
             && self.current.trim_start().starts_with(',')
         {
             let spaces = self.current_line_indent_spaces();
             self.finish_line();
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(spaces);
             self.previous_was_newline = true;
         } else if matches!(self.previous, PreviousToken::Comma)
-            && self.state.statement_depth() == 0
+            && self.indentation.statement_depth() == 0
             && (self.in_initializer_brace()
                 || self.innermost_init_block_brace()
                 || self.in_enum_declaration_brace()
@@ -1328,18 +1331,18 @@ impl<'a> FormatEngine<'a> {
             if clear_enum_continuation {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = None;
-                self.stack_state.clear_continuation_indents();
+                self.nesting.clear_continuation_indents();
             } else if let Some(column) = direct_list_sibling_column {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = Some(column);
-                self.stack_state.clear_continuation_indents();
+                self.nesting.clear_continuation_indents();
             } else if let Some(column) = inline_column {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = Some(column);
             }
             self.previous_was_newline = true;
         } else if matches!(self.previous, PreviousToken::Comma)
-            && self.state.statement_depth() == 0
+            && self.indentation.statement_depth() == 0
             && self.multi_declarator_indent_spaces.is_some()
             && !self.in_initializer_brace()
             && !self.in_aggregate_declaration_brace()
@@ -1357,7 +1360,7 @@ impl<'a> FormatEngine<'a> {
         {
             self.finish_line();
             if self.newline_breaks_statement {
-                self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+                self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
                 self.continuation_indent.next_line_indent_spaces = None;
                 self.objc.method_continuation = true;
             } else {
@@ -1365,7 +1368,7 @@ impl<'a> FormatEngine<'a> {
             }
             self.previous_was_newline = true;
         } else if self.current.trim_end().ends_with('\\')
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
         {
@@ -1381,7 +1384,7 @@ impl<'a> FormatEngine<'a> {
                 .is_some_and(|frame| frame.function_try)
         {
             self.finish_line();
-            self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+            self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
             self.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
@@ -1412,7 +1415,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = None;
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.previous_was_newline = true;
         } else if self.current_initializer_member_before_closing_brace() {
             self.finish_line();
@@ -1421,8 +1424,8 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(0);
-            self.state.clear_continuation_indents();
-            self.stack_state.clear_continuation_indents();
+            self.indentation.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.frame_stack.clear_stream_frames();
             self.frame_stack.clear_logical_frames();
             self.continuation_indent.logical_chain_indent_spaces = None;
@@ -1436,9 +1439,9 @@ impl<'a> FormatEngine<'a> {
                 .is_some();
             let after_compound_literal_comma =
                 std::mem::take(&mut self.compound_literal.after_comma)
-                    && self.compound_literal.arg_paren_depth == Some(self.stack_state.paren_depth)
+                    && self.compound_literal.arg_paren_depth == Some(self.nesting.paren_depth)
                     && self.compound_literal.arg_brace_depth
-                        == Some(self.stack_state.brace_header_stack.len());
+                        == Some(self.nesting.brace_header_stack.len());
             let has_macro_call_argument_continuation =
                 matches!(self.previous, PreviousToken::Comma)
                     && !after_compound_literal_comma
@@ -1534,7 +1537,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = None;
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
             .trim_end()
@@ -1555,7 +1558,7 @@ impl<'a> FormatEngine<'a> {
         {
             let bare_return = self.current.trim() == "return";
             let incomplete_control_header = self.incomplete_control_header();
-            let header_indent = self.state.indent();
+            let header_indent = self.indentation.indent();
             self.finish_line();
             if bare_return {
                 self.continuation_indent.next_line_indent = Some(header_indent + 1);

@@ -3,13 +3,14 @@ use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_add_braces_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive};
 use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{ContinuationIndent, FormatterBraceType, PreviousToken};
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
@@ -101,11 +102,11 @@ impl FormatEngine<'_> {
             return line;
         }
         let target = self
-            .stack_state
+            .nesting
             .current_continuation_indent_spaces()
             .or_else(|| self.active_body_comment_indent_spaces())
             .unwrap_or_else(|| {
-                (self.state.line_indent(LineKind::Normal, self.options)
+                (self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width
             });
@@ -334,7 +335,7 @@ impl FormatEngine<'_> {
             .is_some_and(|(_, after)| after.trim_end().ends_with(';'))
         {
             self.continuation_indent.next_line_indent_spaces = None;
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
         }
         if !trimmed.trim().is_empty() {
             let closes_standalone_block_comment = trimmed.trim_start().starts_with("*/");
@@ -407,7 +408,7 @@ impl FormatEngine<'_> {
             return false;
         }
         let last = self.output[end - 1].trim_start();
-        let mut indent = (self.state.line_indent(line_kind, self.options)
+        let mut indent = (self.indentation.line_indent(line_kind, self.options)
             + self.case_body_indent_extra(line_kind))
         .saturating_sub(self.line_adjuster.pending_case_unindent());
         if last.starts_with("//") {
@@ -444,7 +445,7 @@ impl FormatEngine<'_> {
                 return false;
             }
             let preserve_relative = if line_kind == LineKind::SwitchLabel && last.starts_with('}') {
-                indent = self.state.indent();
+                indent = self.indentation.indent();
                 false
             } else {
                 true
@@ -512,14 +513,14 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
         let frame = self.frame_stack.active_brace()?;
-        let body_column = if frame.formatter_type == FormatterBraceType::Namespace
+        let body_column = if frame.brace_type == BraceType::Namespace
             && (!self.options.indent_namespaces
                 || self.options.brace_style == BraceStyle::Whitesmith)
         {
             frame.sibling_indent_column
         } else if frame.semantic_kind == BraceSemanticKind::Aggregate || frame.case_block {
             frame.body_indent_column.max(
-                (self.state.line_indent(LineKind::Normal, self.options)
+                (self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width,
             )
@@ -643,11 +644,11 @@ impl FormatEngine<'_> {
                 trimmed.starts_with("case ") || trimmed.starts_with("default:")
             })
             && self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("switch")))
-        .then(|| self.state.indent().saturating_sub(1) * self.options.indent_width);
+        .then(|| self.indentation.indent().saturating_sub(1) * self.options.indent_width);
         let case_block_comment_indent = switch_label_block_comment_indent.or_else(|| {
             (kind == CommentKind::Block
                 && self.current.trim().is_empty()
@@ -658,7 +659,7 @@ impl FormatEngine<'_> {
                     .find(|line| !line.trim().is_empty())
                     .is_some_and(|line| line.trim() == "}")
                 && self
-                    .stack_state
+                    .nesting
                     .brace_header_stack
                     .iter()
                     .any(|header| header.as_deref() == Some("switch")))
@@ -680,10 +681,11 @@ impl FormatEngine<'_> {
                     .map(|line| leading_visual_width(line, self.options.tab_width))
                     .unwrap_or(0);
                 if after_blank {
-                    let base = self.state.indent().saturating_sub(1) * self.options.indent_width;
+                    let base =
+                        self.indentation.indent().saturating_sub(1) * self.options.indent_width;
                     base.max(previous_indent)
                 } else {
-                    (self.state.indent() * self.options.indent_width).max(previous_indent)
+                    (self.indentation.indent() * self.options.indent_width).max(previous_indent)
                 }
             })
         });
@@ -734,7 +736,7 @@ impl FormatEngine<'_> {
             (labels::line_kind(code, &self.options.access_labels) == LineKind::Label
                 && !labels::is_access_label_start(label, &self.options.access_labels))
             .then(|| {
-                (self.state.line_indent(LineKind::Normal, self.options)
+                (self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width
             })
@@ -847,9 +849,10 @@ impl FormatEngine<'_> {
                                     || trimmed.starts_with("else if"))
                         });
                     let previous_indent = leading_visual_width(line, self.options.tab_width);
-                    let body_indent = (self.state.line_indent(LineKind::Normal, self.options)
-                        + self.case_body_indent_extra(LineKind::Normal))
-                        * self.options.indent_width;
+                    let body_indent =
+                        (self.indentation.line_indent(LineKind::Normal, self.options)
+                            + self.case_body_indent_extra(LineKind::Normal))
+                            * self.options.indent_width;
                     (code.ends_with(';')
                         && unmatched_open_paren_column(code).is_none()
                         && !after_braceless_header
@@ -859,15 +862,16 @@ impl FormatEngine<'_> {
                 let previous_operator_indent = previous_line.and_then(|line| {
                     let head = line.trim_end();
                     (head_ends_binary_operator(head) || head_ends_assignment_operator(head))
-                        .then(|| self.stack_state.current_continuation_indent_spaces())
+                        .then(|| self.nesting.current_continuation_indent_spaces())
                         .flatten()
                 });
                 let previous_opening_body_indent = previous_line.and_then(|line| {
                     let code = line[..trailing_comment_split_limit(line)].trim_end();
                     code.ends_with('{').then(|| {
-                        let body_indent = (self.state.line_indent(LineKind::Normal, self.options)
-                            + self.case_body_indent_extra(LineKind::Normal))
-                            * self.options.indent_width;
+                        let body_indent =
+                            (self.indentation.line_indent(LineKind::Normal, self.options)
+                                + self.case_body_indent_extra(LineKind::Normal))
+                                * self.options.indent_width;
                         let trimmed = code.trim_start();
                         if comment_starts_header_word(trimmed, "if")
                             || comment_starts_header_word(trimmed, "for")
@@ -888,7 +892,7 @@ impl FormatEngine<'_> {
                 });
                 let previous_paren_indent = previous_line.and_then(|line| {
                     unmatched_open_paren_column(line.trim_end()).map(|column| {
-                        self.stack_state
+                        self.nesting
                             .current_continuation_indent_spaces()
                             .unwrap_or(column + 1)
                     })
@@ -898,10 +902,10 @@ impl FormatEngine<'_> {
                     .or(previous_opening_body_indent)
                     .or(previous_paren_indent)
                     .or(definition_header_comment_indent)
-                    .or_else(|| self.stack_state.current_continuation_indent_spaces())
+                    .or_else(|| self.nesting.current_continuation_indent_spaces())
                     .or_else(|| self.active_body_comment_indent_spaces())
                     .or_else(|| {
-                        (self.state.statement_depth() > 0)
+                        (self.indentation.statement_depth() > 0)
                             .then(|| self.current_line_indent_spaces())
                     })
                     .or_else(|| {
@@ -911,11 +915,8 @@ impl FormatEngine<'_> {
                                 let leading = leading_visual_width(line, self.options.tab_width);
                                 if !self.options.indent_namespaces
                                     && matches!(
-                                        self.stack_state.brace_type_stack.last(),
-                                        Some(
-                                            FormatterBraceType::Namespace
-                                                | FormatterBraceType::Extern
-                                        )
+                                        self.nesting.brace_type_stack.last(),
+                                        Some(BraceType::Namespace | BraceType::Extern)
                                     )
                                 {
                                     leading
@@ -928,8 +929,8 @@ impl FormatEngine<'_> {
                     .or_else(|| {
                         (self.token_input.token_begins_source_line
                             && self.token_input.token_source_column > 0
-                            && self.state.indent() > 0)
-                            .then(|| self.state.indent() * self.options.indent_width)
+                            && self.indentation.indent() > 0)
+                            .then(|| self.indentation.indent() * self.options.indent_width)
                     })
             });
         let lambda_parameter_comment_indent = (kind == CommentKind::Block
@@ -972,7 +973,7 @@ impl FormatEngine<'_> {
 
         if self.should_break_header_before_comment() {
             self.finish_line();
-            self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+            self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
             self.continuation_indent.next_line_indent_spaces = None;
             self.command_state.header_broken_before_comment = true;
         }
@@ -996,15 +997,13 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Block
             && self.current.trim_end().ends_with('{')
             && self
-                .stack_state
+                .nesting
                 .brace_type_stack
                 .last()
                 .is_some_and(|brace_type| {
                     matches!(
                         brace_type,
-                        FormatterBraceType::Command
-                            | FormatterBraceType::Definition
-                            | FormatterBraceType::NonStatement
+                        BraceType::Command | BraceType::Definition | BraceType::NonStatement
                     )
                 })
             && !self
@@ -1064,7 +1063,7 @@ impl FormatEngine<'_> {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = None;
             self.current_is_preindented = true;
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
         }
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
@@ -1183,7 +1182,7 @@ impl FormatEngine<'_> {
             if preprocessor_directive(previous_code.trim_start())
                 .is_some_and(|directive| directive == "else" || directive.starts_with("elif"))
             {
-                let spaces = (self.state.line_indent(LineKind::Normal, self.options)
+                let spaces = (self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width;
                 self.current.push_str(&" ".repeat(spaces));
@@ -1231,7 +1230,7 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
-            && (self.state.line_indent(LineKind::Normal, self.options)
+            && (self.indentation.line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal))
                 == 0
             && self
@@ -1308,7 +1307,7 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if previous_code.ends_with(',') {
                 let spaces = leading_visual_width(previous, self.options.tab_width);
-                let structural_level = self.state.line_indent(LineKind::Normal, self.options)
+                let structural_level = self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal);
                 let prefix = self
                     .options
@@ -1465,7 +1464,7 @@ impl FormatEngine<'_> {
                 let structural_level = if follows_objc_interface {
                     1
                 } else {
-                    self.state.line_indent(LineKind::Normal, self.options)
+                    self.indentation.line_indent(LineKind::Normal, self.options)
                         + self.case_body_indent_extra(LineKind::Normal)
                 };
                 let prefix = self
@@ -1493,7 +1492,7 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Line
             && standalone_line_comment
             && (self.line_state.column1_line_comment
-                || self.state.current_preproc_indent().is_some())
+                || self.indentation.current_preproc_indent().is_some())
             && self.options.indent_col1_comments
             && line_comment_continuation_indent.is_none()
             && line_comment_stream_chain_indent.is_none()
@@ -1508,7 +1507,7 @@ impl FormatEngine<'_> {
             let preprocessor_indent = self
                 .split_else_preprocessor_branch_body_indent_spaces()
                 .or_else(|| {
-                    self.state.current_preproc_indent().map(|indent| {
+                    self.indentation.current_preproc_indent().map(|indent| {
                         indent
                             .spaces
                             .unwrap_or(indent.level * self.options.indent_width)
@@ -1551,7 +1550,7 @@ impl FormatEngine<'_> {
             && self.token_input.token_begins_source_line
             && self.token_input.token_source_column == 0
             && !self.options.indent_col1_comments
-            && self.state.current_preproc_indent().is_some()
+            && self.indentation.current_preproc_indent().is_some()
             && self.preprocessor_region(false) == PreprocessorRegion::TopLevel
         {
             self.clear_current();
@@ -1593,7 +1592,7 @@ impl FormatEngine<'_> {
             self.current_is_preindented = true;
         }
         if let Some(spaces) = ternary_branch_comment_indent_spaces {
-            let structural_level = self.state.line_indent(LineKind::Normal, self.options)
+            let structural_level = self.indentation.line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal);
             let prefix = self
                 .options
@@ -1647,7 +1646,7 @@ impl FormatEngine<'_> {
                 }
                 if let Some(spaces) = open_paren_comment_indent {
                     self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
-                    self.stack_state.push_continuation_indent_spaces_raw(spaces);
+                    self.nesting.push_continuation_indent_spaces_raw(spaces);
                 }
             } else {
                 self.emit_trailing_source_space();
@@ -1673,7 +1672,7 @@ impl FormatEngine<'_> {
             }
         }
         if function_try_initializer_comment {
-            self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+            self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
             self.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         }
@@ -1750,7 +1749,7 @@ impl FormatEngine<'_> {
             return Some(previous_indent + self.options.indent_width);
         }
         if let Some(spaces) = self
-            .stack_state
+            .nesting
             .current_continuation_indent_spaces()
             .filter(|spaces| *spaces > previous_indent)
         {
@@ -1826,7 +1825,7 @@ impl FormatEngine<'_> {
         self.current.push_str(first.trim_end());
         self.finish_line();
         for line in lines {
-            self.push_output_line(line.trim(), self.state.indent());
+            self.push_output_line(line.trim(), self.indentation.indent());
         }
         self.previous = PreviousToken::Other;
         self.previous_was_newline = false;
@@ -1886,7 +1885,7 @@ impl FormatEngine<'_> {
             }
             if let Some(spaces) = open_paren_comment_indent {
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
-                self.stack_state.push_continuation_indent_spaces_raw(spaces);
+                self.nesting.push_continuation_indent_spaces_raw(spaces);
             }
             self.previous = PreviousToken::Other;
             return;
@@ -1901,13 +1900,13 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && !self.options.indent_namespaces
             && matches!(
-                self.stack_state.brace_type_stack.last(),
-                Some(FormatterBraceType::Namespace | FormatterBraceType::Extern)
+                self.nesting.brace_type_stack.last(),
+                Some(BraceType::Namespace | BraceType::Extern)
             )
             && self.output.last().is_some_and(|line| line.trim() == "{");
         let case_comment_unindent = if !self.options.indent_switches
             && self
-                .stack_state
+                .nesting
                 .brace_header_stack
                 .last()
                 .is_some_and(|header| header.as_deref() == Some("case"))
@@ -2015,7 +2014,7 @@ impl FormatEngine<'_> {
             }
         }
         if self
-            .stack_state
+            .nesting
             .brace_header_stack
             .last()
             .is_some_and(|header| header.as_deref() == Some("case"))
@@ -2026,7 +2025,7 @@ impl FormatEngine<'_> {
             }
         }
         if self
-            .stack_state
+            .nesting
             .brace_header_stack
             .last()
             .is_some_and(|header| header.as_deref() == Some("case"))
@@ -2059,11 +2058,9 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && self.command_state.current_header.is_none()
             && !self.options.remove_braces
-            && match self.stack_state.brace_type_stack.last() {
-                Some(FormatterBraceType::Command) => {
-                    self.options.brace_style == BraceStyle::OneTrueBrace
-                }
-                Some(FormatterBraceType::Array | FormatterBraceType::Init) => true,
+            && match self.nesting.brace_type_stack.last() {
+                Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
+                Some(BraceType::Array | BraceType::Init) => true,
                 _ => false,
             }
             && self.output.last().is_some_and(|line| line.trim() == "{");
@@ -2141,12 +2138,12 @@ impl FormatEngine<'_> {
                         };
                         let indent = if self.options.indent_classes
                             && matches!(
-                                self.stack_state.brace_type_stack.last(),
-                                Some(FormatterBraceType::Class)
+                                self.nesting.brace_type_stack.last(),
+                                Some(BraceType::Class)
                             ) {
-                            self.state.indent().saturating_sub(1)
+                            self.indentation.indent().saturating_sub(1)
                         } else {
-                            self.state.indent()
+                            self.indentation.indent()
                         };
                         let merged_comment_col = self.frame_stack.active_brace().map_or_else(
                             || ContinuationIndent::Level(indent).columns(self.options.indent_width),
@@ -2219,10 +2216,7 @@ impl FormatEngine<'_> {
     }
 
     fn enum_value_comment_continuation_indent_spaces(&self) -> Option<usize> {
-        if !matches!(
-            self.stack_state.brace_type_stack.last(),
-            Some(FormatterBraceType::Enum)
-        ) {
+        if !matches!(self.nesting.brace_type_stack.last(), Some(BraceType::Enum)) {
             return None;
         }
         let previous = self.output.last().filter(|line| !line.trim().is_empty())?;

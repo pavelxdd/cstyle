@@ -60,11 +60,11 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.stack_state.paren_depth > 0 || self.state.statement_depth() > 0 {
+        if self.nesting.paren_depth > 0 || self.indentation.statement_depth() > 0 {
             return false;
         }
         self.finish_line();
-        let indent = self.state.indent() + self.case_body_indent_extra(LineKind::Normal);
+        let indent = self.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
         let exact_indent_spaces = self.previous_pre_adjust_line.as_ref().and_then(|previous| {
             headers::line_is_control_body_header(previous.trim_start()).then(|| {
                 columns::leading_visual_width(previous, self.options.tab_width)
@@ -72,7 +72,7 @@ impl FormatEngine<'_> {
             })
         });
         if let Some(spaces) = exact_indent_spaces {
-            self.push_output_line_spaces(trimmed, self.state.indent(), spaces);
+            self.push_output_line_spaces(trimmed, self.indentation.indent(), spaces);
         } else {
             self.push_output_line(trimmed, indent);
         }

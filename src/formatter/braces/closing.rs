@@ -11,7 +11,7 @@ use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     line_brace_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
@@ -72,7 +72,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn unmatched_closing_brace_indent_spaces(&self, line: &str) -> Option<usize> {
-        (line.trim() == "}" && self.stack_state.last_closed_brace_type.is_none()).then_some(0)
+        (line.trim() == "}" && self.nesting.last_closed_brace_type.is_none()).then_some(0)
     }
 
     fn isolated_opening_brace_indent_from_output(&self) -> Option<usize> {
@@ -90,7 +90,9 @@ impl FormatEngine<'_> {
             if meta.opens > depth {
                 return match meta.open_shape {
                     OpenBraceShape::Isolated => Some(self.output.lead_width(index, tab_width)),
-                    OpenBraceShape::Label => Some(self.state.indent() * self.options.indent_width),
+                    OpenBraceShape::Label => {
+                        Some(self.indentation.indent() * self.options.indent_width)
+                    }
                     OpenBraceShape::Other => None,
                 };
             }
@@ -276,7 +278,7 @@ impl FormatEngine<'_> {
             }
         }
         if self.options.brace_style == BraceStyle::Whitesmith
-            && self.stack_state.brace_type_stack.is_empty()
+            && self.nesting.brace_type_stack.is_empty()
             && !self.current_is_blank()
             && next_is_adjacent
             && matches!(next, Some(Token::Word(_) | Token::Number(_)))
@@ -295,7 +297,7 @@ impl FormatEngine<'_> {
         self.pending_braceless_block_bias = None;
         self.inline_nested_header_braceless_bias = None;
         self.prepare_case_closing_brace();
-        let unmatched_closing_brace = self.stack_state.brace_type_stack.is_empty();
+        let unmatched_closing_brace = self.nesting.brace_type_stack.is_empty();
         if unmatched_closing_brace {
             self.unmatched_closing_brace_recovery = true;
         }
@@ -304,10 +306,8 @@ impl FormatEngine<'_> {
                 return None;
             }
             if !matches!(
-                frame.formatter_type,
-                FormatterBraceType::Command
-                    | FormatterBraceType::Definition
-                    | FormatterBraceType::NonStatement
+                frame.brace_type,
+                BraceType::Command | BraceType::Definition | BraceType::NonStatement
             ) {
                 return None;
             }
@@ -323,15 +323,15 @@ impl FormatEngine<'_> {
                 .map(|_| frame.sibling_indent_column)
         });
         self.exit_brace_state();
-        if self.state.brace_block_depth() == 0 {
+        if self.indentation.brace_block_depth() == 0 {
             self.cpp_extern_c_brace = 0;
         }
-        if self.stack_state.last_closed_brace_header.is_some() {
+        if self.nesting.last_closed_brace_header.is_some() {
             self.command_state.pre_brace_header_stack.pop();
         }
         self.continuation_indent.next_line_indent_spaces = None;
         let should_indent_closing_brace = self
-            .stack_state
+            .nesting
             .last_closed_brace_type
             .is_some_and(|brace_type| self.should_indent_brace_line(brace_type));
         let closing_brace_is_lambda = matches!(
@@ -343,19 +343,20 @@ impl FormatEngine<'_> {
             .rev()
             .take(4)
             .any(|line| is_lambda_body_header(line.trim_end()));
-        if should_indent_closing_brace || self.stack_state.last_closed_brace_extra_indent > 0 {
+        if should_indent_closing_brace || self.nesting.last_closed_brace_extra_indent > 0 {
             if closing_brace_is_lambda && matches!(next, Some(Token::Symbol(';' | ','))) {
-                self.continuation_indent.next_line_indent = Some(self.state.indent());
+                self.continuation_indent.next_line_indent = Some(self.indentation.indent());
             } else {
-                self.continuation_indent.next_line_indent =
-                    Some(self.state.indent() + 1 + self.case_body_indent_extra(LineKind::Normal));
+                self.continuation_indent.next_line_indent = Some(
+                    self.indentation.indent() + 1 + self.case_body_indent_extra(LineKind::Normal),
+                );
             }
             self.continuation_indent.next_line_indent_spaces = None;
         } else if matches!(next, Some(Token::Symbol(';'))) {
             self.continuation_indent.next_line_indent =
-                Some(self.state.indent() + self.case_body_indent_extra(LineKind::Normal));
+                Some(self.indentation.indent() + self.case_body_indent_extra(LineKind::Normal));
         } else if matches!(next, Some(Token::Symbol(','))) {
-            self.continuation_indent.next_line_indent = Some(self.state.indent());
+            self.continuation_indent.next_line_indent = Some(self.indentation.indent());
         } else {
             self.continuation_indent.next_line_indent = None;
         }
@@ -372,16 +373,12 @@ impl FormatEngine<'_> {
         self.current.push('}');
         self.command_state.observe_char('}');
         self.compound_literal.just_closed =
-            self.stack_state.last_closed_brace_type == Some(FormatterBraceType::CompoundLiteral);
+            self.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
         let move_one_line_block_comment = self.options.break_one_line_blocks
             && self.line_state.is_one_line_block
             && !matches!(
-                self.stack_state.last_closed_brace_type,
-                Some(
-                    FormatterBraceType::Array
-                        | FormatterBraceType::CompoundLiteral
-                        | FormatterBraceType::Init
-                )
+                self.nesting.last_closed_brace_type,
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
             )
             && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'));
         let mut moved_comment_tail = None;
@@ -432,17 +429,16 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_none_or(|whitespace| !whitespace.contains('\n')))
             && !matches!(
-                self.stack_state.last_closed_brace_header.as_deref(),
+                self.nesting.last_closed_brace_header.as_deref(),
                 Some("if" | "for" | "switch" | "while" | "else" | "try" | "catch")
             )
             && !source_attached_statement_after_closing;
         let source_attached_closing = self.options.brace_style == BraceStyle::None
             && self.token_input.token_begins_source_line
             && !source_attached_statement_after_closing
-            && !(self.stack_state.last_closed_brace_type
-                == Some(FormatterBraceType::CompoundLiteral)
+            && !(self.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral)
                 && matches!(next, Some(Token::Symbol('('))))
-            && !(self.stack_state.last_closed_brace_breaks_before_call
+            && !(self.nesting.last_closed_brace_breaks_before_call
                 && matches!(next, Some(Token::Symbol('('))))
             && !matches!(
                 next,
@@ -487,7 +483,7 @@ impl FormatEngine<'_> {
                 && matches!(next, Some(Token::Word(word))
                     if !(is_attachable_closing_header(word)
                         || word == "while"
-                            && self.stack_state.last_closed_brace_header.as_deref() == Some("do"))))
+                            && self.nesting.last_closed_brace_header.as_deref() == Some("do"))))
         {
             self.ensure_space();
         } else if !matches!(
@@ -500,18 +496,18 @@ impl FormatEngine<'_> {
         if unmatched_closing_brace {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(0);
-            self.state.clear_continuation_indents();
-            self.stack_state.clear_continuation_indents();
+            self.indentation.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.frame_stack.clear_stream_frames();
             self.frame_stack.clear_logical_frames();
             self.continuation_indent.logical_chain_indent_spaces = None;
         }
         self.observe_block_spacing_close_brace();
-        if let Some((base, delta)) = self.state.last_braceless_block()
-            && self.state.indent() == base + delta
+        if let Some((base, delta)) = self.indentation.last_braceless_block()
+            && self.indentation.indent() == base + delta
             && !self.braceless_body_continues(next)
         {
-            self.state.exit_braceless_block();
+            self.indentation.exit_braceless_block();
         }
         self.previous = PreviousToken::Other;
     }
@@ -520,7 +516,7 @@ impl FormatEngine<'_> {
         match next {
             Some(Token::Word(word)) if word == "else" || word == "catch" => true,
             Some(Token::Word(word)) if word == "while" => {
-                self.stack_state.last_closed_brace_header.as_deref() == Some("do")
+                self.nesting.last_closed_brace_header.as_deref() == Some("do")
             }
             _ => false,
         }
@@ -533,7 +529,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn unwind_else_if_break_depths(&mut self) {
-        let depth = self.state.indent();
+        let depth = self.indentation.indent();
         while self
             .else_if_break_depths
             .last()
@@ -545,7 +541,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn should_attach_closing_header(&self, next: Option<&Token>) -> bool {
         if matches!(next, Some(Token::Word(word)) if word == "while")
-            && self.stack_state.last_closed_brace_header.as_deref() == Some("do")
+            && self.nesting.last_closed_brace_header.as_deref() == Some("do")
         {
             if self.options.attach_closing_while {
                 return true;
@@ -592,7 +588,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn try_attach_leading_closing_header(&mut self, word: &str) -> bool {
         let is_do_while =
-            word == "while" && self.stack_state.last_closed_brace_header.as_deref() == Some("do");
+            word == "while" && self.nesting.last_closed_brace_header.as_deref() == Some("do");
         let allowed = if is_do_while {
             self.options.attach_closing_while
                 || (self.is_attached_closing_header_style()
@@ -638,7 +634,7 @@ impl FormatEngine<'_> {
     pub(crate) fn split_else_body_closing_indent_spaces(&self, line: &str) -> Option<usize> {
         (self.preprocessor.split_else.extra_indent
             && line.trim() == "}"
-            && self.state.indent() <= self.preprocessor.split_else.brace_indent)
+            && self.indentation.indent() <= self.preprocessor.split_else.brace_indent)
             .then(|| {
                 (self.preprocessor.split_else.brace_indent
                     + self.preprocessor.split_else.extra_levels)
@@ -674,7 +670,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         (line.trim() == "}"
             && self.options.brace_style != BraceStyle::Ratliff
-            && self.state.indent() == 1
+            && self.indentation.indent() == 1
             && self.line_adjuster.total_case_unindent_depth() == 0
             && current_spaces.is_some_and(|spaces| spaces > output_spaces)
             && self
@@ -692,7 +688,7 @@ impl FormatEngine<'_> {
         output_spaces: usize,
     ) -> Option<usize> {
         (line.trim() == "}"
-            && self.state.indent() == 0
+            && self.indentation.indent() == 0
             && current_spaces.is_some_and(|spaces| spaces > output_spaces)
             && self
                 .output
@@ -709,7 +705,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         (line.trim() == "}"
             && self.options.brace_style != BraceStyle::Ratliff
-            && self.state.indent() == 1
+            && self.indentation.indent() == 1
             && self.line_adjuster.total_case_unindent_depth() == 0
             && current_spaces.is_some_and(|spaces| spaces > output_spaces)
             && self
@@ -1182,13 +1178,13 @@ impl FormatEngine<'_> {
 
     fn should_attach_post_closing_declaration(&self, next: Option<&Token>) -> bool {
         matches!(
-            self.stack_state.last_closed_brace_type,
+            self.nesting.last_closed_brace_type,
             Some(
-                FormatterBraceType::Class
-                    | FormatterBraceType::Interface
-                    | FormatterBraceType::Struct
-                    | FormatterBraceType::Union
-                    | FormatterBraceType::Enum,
+                BraceType::Class
+                    | BraceType::Interface
+                    | BraceType::Struct
+                    | BraceType::Union
+                    | BraceType::Enum,
             )
         ) && match next {
             Some(Token::Word(_)) | Some(Token::Symbol('[')) => true,

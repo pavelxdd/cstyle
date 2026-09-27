@@ -12,9 +12,7 @@ use crate::formatter::output::member_spacing::MemberSpacingBoundary;
 use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
 use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::IndentationState;
-use crate::formatter::state::{
-    CommandState, FormatterLineState, FormatterStackState, PreviousToken, RunInState,
-};
+use crate::formatter::state::{CommandState, LineState, NestingState, PreviousToken, RunInState};
 use crate::formatter::syntax::SyntaxRoles;
 use crate::formatter::tokens::literals::LiteralLineState;
 use std::collections::VecDeque;
@@ -22,11 +20,11 @@ use std::collections::VecDeque;
 /// The subset of engine state that formatting after a disabled region depends on.
 #[derive(Debug, Clone)]
 struct DisabledFormattingSnapshot {
-    state: IndentationState,
+    indentation: IndentationState,
     command_state: CommandState,
-    stack_state: FormatterStackState,
+    nesting: NestingState,
     frame_stack: FrameStack,
-    line_state: FormatterLineState,
+    line_state: LineState,
     run_in_state: RunInState,
     branch_stack: Vec<PreprocessorBranchState>,
     indented_block_stack: Vec<bool>,
@@ -57,9 +55,9 @@ struct DisabledFormattingSnapshot {
 impl DisabledFormattingSnapshot {
     fn capture(engine: &FormatEngine<'_>) -> Self {
         Self {
-            state: engine.state.clone(),
+            indentation: engine.indentation.clone(),
             command_state: engine.command_state.clone(),
-            stack_state: engine.stack_state.clone(),
+            nesting: engine.nesting.clone(),
             frame_stack: engine.frame_stack.clone(),
             line_state: engine.line_state.clone(),
             run_in_state: engine.run_in_state.clone(),
@@ -91,9 +89,9 @@ impl DisabledFormattingSnapshot {
     }
 
     fn apply_to(&self, engine: &mut FormatEngine<'_>) {
-        engine.state = self.state.clone();
+        engine.indentation = self.indentation.clone();
         engine.command_state = self.command_state.clone();
-        engine.stack_state = self.stack_state.clone();
+        engine.nesting = self.nesting.clone();
         engine.frame_stack = self.frame_stack.clone();
         engine.line_state = self.line_state.clone();
         engine.run_in_state = self.run_in_state.clone();

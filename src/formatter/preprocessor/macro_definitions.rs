@@ -578,7 +578,7 @@ impl FormatEngine<'_> {
         }
         self.continuation_indent.next_line_indent = None;
         self.continuation_indent.next_line_indent_spaces = None;
-        self.stack_state.clear_continuation_indents();
+        self.nesting.clear_continuation_indents();
         operator_chains::clear_operator_chain_state(
             &mut self.frame_stack,
             &mut self.continuation_indent.logical_chain_indent_spaces,

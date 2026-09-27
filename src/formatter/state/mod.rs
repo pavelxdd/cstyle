@@ -3,39 +3,6 @@ pub(crate) mod frame;
 pub(crate) mod indentation;
 pub(crate) mod next_line;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum ContinuationIndent {
-    Level(usize),
-    Spaces(usize),
-}
-
-impl ContinuationIndent {
-    pub(crate) fn columns(self, indent_width: usize) -> usize {
-        match self {
-            Self::Level(level) => level * indent_width,
-            Self::Spaces(columns) => columns,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) struct InlineArrayFrame {
-    pub(crate) depth: usize,
-    pub(crate) body_column: usize,
-    pub(crate) brace_column: usize,
-    pub(crate) output_line: usize,
-    pub(crate) aggregate_assignment: bool,
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(crate) struct InlineArrayState {
-    pub(crate) initializer_designator_bracket_depth: usize,
-    pub(crate) frames: Vec<InlineArrayFrame>,
-    pub(crate) current_closed_body_column: Option<(usize, bool)>,
-    pub(crate) aggregate_braces: Vec<bool>,
-    pub(crate) nested_brace_arrays: std::collections::HashSet<usize>,
-}
-
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct TokenInputState {
     pub(crate) previous_input_was_adjacent: bool,
@@ -78,7 +45,7 @@ impl CommandState {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum FormatterBraceType {
+pub(crate) enum BraceType {
     Command,
     NonStatement,
     Extern,
@@ -96,7 +63,7 @@ pub(crate) enum FormatterBraceType {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(crate) struct FormatterStackState {
+pub(crate) struct NestingState {
     pub(crate) paren_depth: usize,
     pub(crate) paren_indent_spaces_stack: Vec<usize>,
     pub(crate) inline_brace_call_paren_stack: Vec<bool>,
@@ -105,12 +72,12 @@ pub(crate) struct FormatterStackState {
     pub(crate) continuation_indent_checkpoint_stack: Vec<usize>,
     brace_scope_depth_stack: Vec<ScopeDepth>,
     pub(crate) brace_header_stack: Vec<Option<String>>,
-    pub(crate) brace_type_stack: Vec<FormatterBraceType>,
+    pub(crate) brace_type_stack: Vec<BraceType>,
     pub(crate) brace_extra_indent_stack: Vec<usize>,
     pub(crate) brace_break_before_call_stack: Vec<bool>,
     pub(crate) question_depth: usize,
     pub(crate) last_closed_brace_header: Option<String>,
-    pub(crate) last_closed_brace_type: Option<FormatterBraceType>,
+    pub(crate) last_closed_brace_type: Option<BraceType>,
     pub(crate) last_closed_brace_extra_indent: usize,
     pub(crate) last_closed_brace_breaks_before_call: bool,
 }
@@ -127,7 +94,7 @@ pub(crate) struct ScopeRecovery {
     pub(crate) questions: usize,
 }
 
-impl FormatterStackState {
+impl NestingState {
     pub(crate) fn enter_paren(
         &mut self,
         indent_spaces: usize,
@@ -228,7 +195,7 @@ impl FormatterStackState {
     pub(crate) fn enter_brace(
         &mut self,
         header: Option<String>,
-        brace_type: FormatterBraceType,
+        brace_type: BraceType,
         extra_indent: usize,
     ) {
         self.brace_scope_depth_stack.push(ScopeDepth {
@@ -304,7 +271,7 @@ impl FormatterStackState {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(crate) struct FormatterLineState {
+pub(crate) struct LineState {
     pub(crate) passed_semicolon: bool,
     pub(crate) passed_colon: bool,
     pub(crate) is_multi_statement_line: bool,
@@ -324,13 +291,6 @@ pub(crate) struct FormatterLineState {
 pub(crate) struct RunInState {
     pub(crate) current_run_in_indent: Option<usize>,
     pub(crate) adjuster_observed_line_count: usize,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum TemplateAngle {
-    None,
-    Open,
-    Close(usize),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -362,8 +322,8 @@ mod tests {
 
     #[test]
     fn brace_exit_truncates_unclosed_question_state() {
-        let mut state = FormatterStackState::default();
-        state.enter_brace(None, FormatterBraceType::Command, 0);
+        let mut state = NestingState::default();
+        state.enter_brace(None, BraceType::Command, 0);
         state.enter_question();
 
         let recovery = state.exit_brace();
@@ -374,8 +334,8 @@ mod tests {
 
     #[test]
     fn brace_exit_truncates_all_unclosed_paren_state() {
-        let mut state = FormatterStackState::default();
-        state.enter_brace(None, FormatterBraceType::Command, 0);
+        let mut state = NestingState::default();
+        state.enter_brace(None, BraceType::Command, 0);
         state.enter_paren(8, true, Some(4));
 
         let recovery = state.exit_brace();

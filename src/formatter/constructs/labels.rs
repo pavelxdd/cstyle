@@ -2,11 +2,12 @@ use crate::config::{FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::raw_strings;
 use crate::formatter::output::buffer::OpenBraceShape;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
@@ -26,7 +27,7 @@ pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
 
 #[derive(Clone, Copy)]
 pub(crate) struct ClassificationContext<'a> {
-    pub(crate) enclosing_brace: Option<FormatterBraceType>,
+    pub(crate) enclosing_brace: Option<BraceType>,
     pub(crate) in_initializer: bool,
     pub(crate) in_ternary: bool,
     pub(crate) previous_line: Option<&'a str>,
@@ -74,7 +75,7 @@ pub(crate) fn reconcile_line_kind(
 pub(crate) fn class_scope_indent(
     kind: LineKind,
     line: &str,
-    enclosing_brace: Option<FormatterBraceType>,
+    enclosing_brace: Option<BraceType>,
     current_indent: usize,
     options: &FormatOptions,
 ) -> Option<ContinuationIndent> {
@@ -84,10 +85,7 @@ pub(crate) fn class_scope_indent(
     if options.indent_modifiers
         && !options.indent_classes
         && starts_access_label(line, &options.access_labels)
-        && matches!(
-            enclosing_brace,
-            Some(FormatterBraceType::Class | FormatterBraceType::Struct)
-        )
+        && matches!(enclosing_brace, Some(BraceType::Class | BraceType::Struct))
     {
         let base_indent = current_indent.saturating_sub(1) * options.indent_width;
         return Some(ContinuationIndent::Spaces(
@@ -111,7 +109,7 @@ pub(crate) fn candidate_line_indent_spaces(
 pub(crate) fn current_line_indent_spaces(
     kind: LineKind,
     line: &str,
-    enclosing_brace: Option<FormatterBraceType>,
+    enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
     if options.indent_labels {
@@ -150,7 +148,7 @@ pub(crate) fn default_line_layout(
 pub(crate) fn access_label_body_indent_spaces(
     line: &str,
     previous: &str,
-    enclosing_brace: Option<FormatterBraceType>,
+    enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
     let current = line.trim_start();
@@ -163,10 +161,8 @@ pub(crate) fn access_label_body_indent_spaces(
     {
         return None;
     }
-    let modifier_indent_applies = matches!(
-        enclosing_brace,
-        Some(FormatterBraceType::Class | FormatterBraceType::Struct)
-    );
+    let modifier_indent_applies =
+        matches!(enclosing_brace, Some(BraceType::Class | BraceType::Struct));
     let delta = if options.indent_modifiers && !options.indent_classes && modifier_indent_applies {
         options.indent_width / 2
     } else {
@@ -391,7 +387,7 @@ impl FormatEngine<'_> {
         let mut next_spaces = line_indent_spaces + self.options.indent_width;
         if kind == LineKind::Label && !starts_access_label(line, &self.options.access_labels) {
             next_spaces = next_spaces.max(
-                (self.state.line_indent(LineKind::Normal, self.options)
+                (self.indentation.line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width,
             );

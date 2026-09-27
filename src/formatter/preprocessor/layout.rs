@@ -193,7 +193,7 @@ impl FormatEngine<'_> {
         if !current.chars().next().is_some_and(is_identifier_start)
             || self.preprocessor.split_else.extra_indent
             || self.preprocessor.split_else.pending_body
-            || self.state.indent() != 0
+            || self.indentation.indent() != 0
             || self.token_input.token_source_line_indent != 0
         {
             return None;
@@ -672,7 +672,7 @@ impl FormatEngine<'_> {
         }
         let trimmed = line.trim();
         if self.preprocessor.split_else.extra_indent
-            && self.state.indent() == 0
+            && self.indentation.indent() == 0
             && !trimmed.is_empty()
             && !trimmed.starts_with('#')
             && !trimmed.starts_with("else")
@@ -699,16 +699,16 @@ impl FormatEngine<'_> {
                 self.preprocessor.split_else.pending_body = false;
                 self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
             } else if !trimmed.is_empty() {
-                if let Some((base, delta)) = self.state.last_braceless_block()
-                    && base + delta == self.state.indent()
+                if let Some((base, delta)) = self.indentation.last_braceless_block()
+                    && base + delta == self.indentation.indent()
                 {
-                    self.state.exit_braceless_block();
+                    self.indentation.exit_braceless_block();
                 }
                 self.preprocessor.split_else.extra_indent = true;
                 self.preprocessor.split_else.extra_levels += 1;
                 self.preprocessor.split_else.pending_body = false;
                 self.preprocessor.split_else.body_braceless = trimmed.starts_with("//");
-                self.preprocessor.split_else.brace_indent = self.state.indent();
+                self.preprocessor.split_else.brace_indent = self.indentation.indent();
             }
         }
     }
@@ -1095,12 +1095,12 @@ impl FormatEngine<'_> {
             .skip(1)
             .find(|line| !line.trim().is_empty())
             .is_some_and(|previous| previous.trim() == "else");
-        let closes_by_brace =
-            line.trim() == "}" && self.state.indent() <= self.preprocessor.split_else.brace_indent;
+        let closes_by_brace = line.trim() == "}"
+            && self.indentation.indent() <= self.preprocessor.split_else.brace_indent;
         let closes_by_statement = line.ends_with(';')
             && !starts_string_literal_token(line.trim_start())
             && (self.preprocessor.split_else.body_braceless
-                || (self.state.indent() <= self.preprocessor.split_else.brace_indent
+                || (self.indentation.indent() <= self.preprocessor.split_else.brace_indent
                     && previous_line_is_else
                     && output_spaces <= body_indent_limit));
         if closes_by_brace {

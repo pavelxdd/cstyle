@@ -1,4 +1,4 @@
-use crate::formatter::state::ContinuationIndent;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::state::indentation::LineKind;
 
 pub(crate) struct LineReplayLayout {

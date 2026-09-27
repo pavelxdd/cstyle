@@ -1,4 +1,5 @@
 use crate::formatter::braces::compound_literals::CompoundLiteralState;
+use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::constructs::headers::HeaderParenState;
 use crate::formatter::constructs::objective_c::ObjectiveCLineState;
 use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
@@ -11,8 +12,7 @@ use crate::formatter::output::member_spacing::MemberSpacingBoundary;
 use crate::formatter::state::frame::{BraceSemanticKind, FrameStack, ParenRole};
 use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
-    CommandState, FormatterBraceType, FormatterLineState, FormatterStackState, InlineArrayState,
-    PreviousToken, RunInState,
+    BraceType, CommandState, LineState, NestingState, PreviousToken, RunInState,
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::line_comment_split_limit;
@@ -102,11 +102,11 @@ impl PreprocessorSplitElseState {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct PreprocessorBranchState {
-    pub(crate) state: IndentationState,
+    pub(crate) indentation: IndentationState,
     pub(crate) command_state: CommandState,
-    pub(crate) stack_state: FormatterStackState,
+    pub(crate) nesting: NestingState,
     pub(crate) frame_stack: FrameStack,
-    pub(crate) line_state: FormatterLineState,
+    pub(crate) line_state: LineState,
     pub(crate) run_in_state: RunInState,
     pub(crate) line_adjuster: line_adjust::LineAdjuster,
     pub(crate) previous_pre_adjust_line: Option<String>,
@@ -155,7 +155,7 @@ pub(crate) enum PreprocessorRegion {
 impl FormatEngine<'_> {
     pub(crate) fn preprocessor_region(&self, in_macro_body: bool) -> PreprocessorRegion {
         let region = Self::preprocessor_region_from_brace_stack(
-            &self.stack_state.brace_type_stack,
+            &self.nesting.brace_type_stack,
             in_macro_body,
         );
         if region == PreprocessorRegion::TopLevel
@@ -171,7 +171,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn preprocessor_region_from_brace_stack(
-        brace_type_stack: &[FormatterBraceType],
+        brace_type_stack: &[BraceType],
         in_macro_body: bool,
     ) -> PreprocessorRegion {
         if in_macro_body {
@@ -179,17 +179,12 @@ impl FormatEngine<'_> {
         }
         match brace_type_stack.last().copied() {
             None => PreprocessorRegion::TopLevel,
-            Some(FormatterBraceType::Namespace) => PreprocessorRegion::Namespace,
-            Some(FormatterBraceType::Command | FormatterBraceType::Definition) => {
-                PreprocessorRegion::Block
-            }
+            Some(BraceType::Namespace) => PreprocessorRegion::Namespace,
+            Some(BraceType::Command | BraceType::Definition) => PreprocessorRegion::Block,
             Some(
-                FormatterBraceType::Class
-                | FormatterBraceType::Interface
-                | FormatterBraceType::Struct
-                | FormatterBraceType::Union,
+                BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union,
             ) => PreprocessorRegion::FieldDeclarationList,
-            Some(FormatterBraceType::Enum) => PreprocessorRegion::EnumList,
+            Some(BraceType::Enum) => PreprocessorRegion::EnumList,
             Some(_) => PreprocessorRegion::Unknown,
         }
     }
@@ -199,7 +194,7 @@ impl FormatEngine<'_> {
         region: PreprocessorRegion,
     ) -> bool {
         match region {
-            PreprocessorRegion::TopLevel => self.state.indent() == 0,
+            PreprocessorRegion::TopLevel => self.indentation.indent() == 0,
             PreprocessorRegion::Namespace => !self.options.indent_namespaces,
             _ => false,
         }
@@ -572,10 +567,10 @@ impl FormatEngine<'_> {
             self.inline_nested_header_braceless_bias = None;
             self.else_if_break_depths.clear();
             self.preprocessor.split_else.reset();
-            if let Some((base, delta)) = self.state.last_braceless_block()
-                && base + delta == self.state.indent()
+            if let Some((base, delta)) = self.indentation.last_braceless_block()
+                && base + delta == self.indentation.indent()
             {
-                self.state.exit_braceless_block();
+                self.indentation.exit_braceless_block();
             }
         } else if self.command_state.current_header.is_some()
             && directive.is_some_and(is_known_preprocessor_directive)
@@ -721,7 +716,7 @@ impl FormatEngine<'_> {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = None;
             }
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             self.frame_stack.clear_stream_frames();
             self.frame_stack.clear_logical_frames();
             self.continuation_indent.logical_chain_indent_spaces = None;
@@ -790,7 +785,7 @@ impl FormatEngine<'_> {
 
         let directive = preprocessor_directive(line)?;
         if is_always_indented_preprocessor_line(line, directive) {
-            return Some(PreprocessorLineIndent::Level(self.state.indent()));
+            return Some(PreprocessorLineIndent::Level(self.indentation.indent()));
         }
         if self.line_adjuster.is_in_macro_block() {
             return None;
@@ -812,13 +807,13 @@ impl FormatEngine<'_> {
             match directive {
                 "if" | "ifdef" | "ifndef" => {
                     if self.preprocessor.indented_block_stack.last() == Some(&true) {
-                        return Some(PreprocessorLineIndent::Level(self.state.indent()));
+                        return Some(PreprocessorLineIndent::Level(self.indentation.indent()));
                     }
                 }
                 _ => {
                     if self.preprocessor.indented_block_stack.last() == Some(&true) {
                         return Some(PreprocessorLineIndent::Level(
-                            self.state.indent().saturating_sub(1),
+                            self.indentation.indent().saturating_sub(1),
                         ));
                     }
                 }
@@ -826,7 +821,7 @@ impl FormatEngine<'_> {
         }
         if self.options.indent_preproc_conditional && is_conditional_preprocessor(directive) {
             if matches!(directive, "if" | "ifdef" | "ifndef")
-                || self.state.current_preproc_indent().is_some()
+                || self.indentation.current_preproc_indent().is_some()
             {
                 return Some(self.current_preprocessor_indent());
             }
@@ -840,10 +835,10 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(|&indented| indented)
         {
-            return Some(PreprocessorLineIndent::Level(self.state.indent()));
+            return Some(PreprocessorLineIndent::Level(self.indentation.indent()));
         }
         if line.trim_start().matches('#').count() > 1
-            && self.state.indent() > 0
+            && self.indentation.indent() > 0
             && self
                 .output
                 .iter()
@@ -851,7 +846,7 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| line.trim() == ";")
         {
-            return Some(PreprocessorLineIndent::Level(self.state.indent()));
+            return Some(PreprocessorLineIndent::Level(self.indentation.indent()));
         }
         None
     }
@@ -865,11 +860,11 @@ impl FormatEngine<'_> {
         }
         if let Some(case_label_column) = self.active_case_label_indent_spaces() {
             return PreprocessorLineIndent::Exact {
-                structural_level: self.state.indent() + 1,
+                structural_level: self.indentation.indent() + 1,
                 spaces: case_label_column + self.options.indent_width,
             };
         }
-        if let Some(indent) = self.state.current_preproc_indent() {
+        if let Some(indent) = self.indentation.current_preproc_indent() {
             if let Some(spaces) = indent.spaces {
                 return PreprocessorLineIndent::Exact {
                     structural_level: indent.level,
@@ -880,11 +875,11 @@ impl FormatEngine<'_> {
         }
         if let Some(spaces) = self.continuation_indent.next_line_indent_spaces {
             PreprocessorLineIndent::Exact {
-                structural_level: self.state.indent(),
+                structural_level: self.indentation.indent(),
                 spaces,
             }
         } else {
-            PreprocessorLineIndent::Level(self.state.indent())
+            PreprocessorLineIndent::Level(self.indentation.indent())
         }
     }
 
@@ -899,14 +894,14 @@ impl FormatEngine<'_> {
                 let should_indent_block =
                     opening_indentable.unwrap_or_else(|| self.should_indent_preprocessor_block());
                 if should_indent_block {
-                    self.state.enter_block();
+                    self.indentation.enter_block();
                     if let Some(spaces) = self.continuation_indent.next_line_indent_spaces.as_mut()
                     {
                         *spaces += self.options.indent_width;
                     }
                 }
-                self.state.push_preproc_indent(
-                    self.state.indent(),
+                self.indentation.push_preproc_indent(
+                    self.indentation.indent(),
                     self.continuation_indent.next_line_indent_spaces,
                 );
                 self.preprocessor
@@ -924,9 +919,9 @@ impl FormatEngine<'_> {
             }
             Some("endif") => {
                 self.preprocessor.branch_stack.pop();
-                self.state.pop_preproc_indent();
+                self.indentation.pop_preproc_indent();
                 if self.preprocessor.indented_block_stack.pop() == Some(true) {
-                    self.state.exit_block();
+                    self.indentation.exit_block();
                     if let Some(spaces) = self.continuation_indent.next_line_indent_spaces.as_mut()
                     {
                         *spaces = spaces.saturating_sub(self.options.indent_width);
@@ -944,10 +939,10 @@ impl FormatEngine<'_> {
             self.inline_nested_header_braceless_bias = None;
             self.else_if_break_depths.clear();
             self.preprocessor.split_else.reset();
-            if let Some((base, delta)) = self.state.last_braceless_block()
-                && base + delta == self.state.indent()
+            if let Some((base, delta)) = self.indentation.last_braceless_block()
+                && base + delta == self.indentation.indent()
             {
-                self.state.exit_braceless_block();
+                self.indentation.exit_braceless_block();
             }
         }
     }
@@ -969,9 +964,9 @@ impl FormatEngine<'_> {
 
     pub(crate) fn branch_snapshot(&self) -> PreprocessorBranchState {
         PreprocessorBranchState {
-            state: self.state.clone(),
+            indentation: self.indentation.clone(),
             command_state: self.command_state.clone(),
-            stack_state: self.stack_state.clone(),
+            nesting: self.nesting.clone(),
             frame_stack: self.frame_stack.clone(),
             line_state: self.line_state.clone(),
             run_in_state: self.run_in_state.clone(),
@@ -1003,9 +998,9 @@ impl FormatEngine<'_> {
     pub(crate) fn restore_branch_snapshot(&mut self, snapshot: PreprocessorBranchState) {
         let active_split_else = self.preprocessor.split_else;
         let PreprocessorBranchState {
-            state,
+            indentation,
             command_state,
-            stack_state,
+            nesting,
             frame_stack,
             line_state,
             run_in_state,
@@ -1032,9 +1027,9 @@ impl FormatEngine<'_> {
             pending_extern,
             cpp_extern_c_brace,
         } = snapshot;
-        self.state = state;
+        self.indentation = indentation;
         self.command_state = command_state;
-        self.stack_state = stack_state;
+        self.nesting = nesting;
         self.frame_stack = frame_stack;
         self.line_state = line_state;
         self.run_in_state = run_in_state;
@@ -1064,12 +1059,12 @@ impl FormatEngine<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FormatEngine, FormatterBraceType, PreprocessorRegion};
+    use super::{BraceType, FormatEngine, PreprocessorRegion};
     use crate::config::FormatOptions;
 
     #[test]
     fn classifies_regions_from_brace_ownership() {
-        use FormatterBraceType::{Array, Command, Definition, Enum, Namespace, Struct};
+        use BraceType::{Array, Command, Definition, Enum, Namespace, Struct};
         use PreprocessorRegion::{
             Block, EnumList, FieldDeclarationList, MacroBody, Namespace as NamespaceRegion,
             TopLevel, Unknown,
@@ -1102,9 +1097,9 @@ mod tests {
 
         assert!(formatter.preprocessor_region_allows_block_indent(PreprocessorRegion::TopLevel));
         formatter
-            .stack_state
+            .nesting
             .brace_type_stack
-            .push(FormatterBraceType::Definition);
+            .push(BraceType::Definition);
         assert!(!formatter.preprocessor_region_allows_block_indent(PreprocessorRegion::Block));
         assert!(!formatter.preprocessor_region_allows_block_indent(PreprocessorRegion::Unknown));
     }

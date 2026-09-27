@@ -1,12 +1,13 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use crate::config::{BraceStyle, FormatOptions, PointerAlign};
+use crate::formatter::braces::initializers::InlineArrayFrame;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::format;
 use crate::formatter::lexer::{Token, tokenize};
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::state::{FormatterBraceType, InlineArrayFrame};
 use crate::formatter::syntax::OperatorRole;
 
 fn fixture(lines: &[&str]) -> String {
@@ -94,8 +95,8 @@ fn extern_c_state_does_not_leak_past_statements() {
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
     assert_eq!(
-        formatter.stack_state.last_closed_brace_type,
-        Some(FormatterBraceType::Extern)
+        formatter.nesting.last_closed_brace_type,
+        Some(BraceType::Extern)
     );
     assert!(!formatter.pending_extern);
 }
@@ -104,7 +105,7 @@ fn extern_c_state_does_not_leak_past_statements() {
 fn records_paren_brace_and_question_stacks() {
     let tokens = tokenize(&fixture(&["if((a ? b : c)){x=(y+z);}"]));
     let options = FormatOptions::default();
-    let state = FormatEngine::new(&options).format_into(&tokens).stack_state;
+    let state = FormatEngine::new(&options).format_into(&tokens).nesting;
 
     assert_eq!(state.paren_depth, 0);
     assert!(state.brace_header_stack.is_empty());
@@ -156,7 +157,7 @@ fn restores_continuation_checkpoints_after_nested_scopes_and_semicolons() {
     let options = FormatOptions::default();
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
-    assert_eq!(formatter.state.continuation_stack_depth(), 0);
+    assert_eq!(formatter.indentation.continuation_stack_depth(), 0);
     let expected = fixture(&[
         "int f() {",
         "    return sum(a[",
@@ -194,7 +195,7 @@ fn inline_open_brace_runs_keep_parallel_scope_depths() {
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
     assert_eq!(
-        formatter.stack_state.brace_type_stack.len(),
+        formatter.nesting.brace_type_stack.len(),
         formatter.frame_stack.brace_depth()
     );
 }
@@ -205,7 +206,7 @@ fn brace_exit_truncates_unclosed_ternary_frame() {
     let options = FormatOptions::default();
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
-    assert_eq!(formatter.stack_state.question_depth, 0);
+    assert_eq!(formatter.nesting.question_depth, 0);
     assert!(formatter.frame_stack.active_ternary().is_none());
 }
 

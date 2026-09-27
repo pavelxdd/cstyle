@@ -1,9 +1,10 @@
 use crate::config::BraceStyle;
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::constructs::headers::is_conditional_header_line;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
-use crate::formatter::state::{ContinuationIndent, TemplateAngle};
+use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     function_name_start, scoped_name_is_constructor, template_angle_role,
@@ -129,7 +130,7 @@ impl FormatEngine<'_> {
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
             .unwrap_or(split_indent);
         if brace_row_layout.attaches_lisp_closer {
-            next_indent = ContinuationIndent::Level(self.state.indent());
+            next_indent = ContinuationIndent::Level(self.indentation.indent());
         }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);

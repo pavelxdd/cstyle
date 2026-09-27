@@ -178,7 +178,7 @@ impl FormatEngine<'_> {
         });
         if line_kind == LineKind::Normal
             && !current.starts_with("::")
-            && self.stack_state.paren_depth == 0
+            && self.nesting.paren_depth == 0
             && previous_code.contains('?')
             && !previous_code.contains('<')
             && find_assignment_operator(previous_code).is_none()
@@ -279,7 +279,7 @@ impl FormatEngine<'_> {
         (previous_code.contains('?')
             && previous_code.contains("::")
             && unmatched_open_paren_column(previous_code).is_none())
-        .then(|| self.state.indent() * self.options.indent_width)
+        .then(|| self.indentation.indent() * self.options.indent_width)
     }
 
     pub(crate) fn allman_operator_or_preprocessor_indent_spaces(
@@ -335,12 +335,12 @@ impl FormatEngine<'_> {
             && !previous_trimmed.starts_with("return ")
         {
             let mut spaces = normal_indent * self.options.indent_width;
-            if self.state.indent() > 1
+            if self.indentation.indent() > 1
                 && previous_code.contains("#else")
                 && !current_starts_operator
             {
                 spaces = spaces.saturating_sub(self.options.indent_width);
-            } else if self.state.indent() > 1
+            } else if self.indentation.indent() > 1
                 && previous_starts_operator
                 && current.chars().next().is_some_and(is_identifier_start)
             {
@@ -1248,7 +1248,7 @@ impl FormatEngine<'_> {
         if (current.starts_with(": ") || current == ":")
             && previous_code.contains('?')
             && !previous_code.trim_start().starts_with("return ")
-            && (self.stack_state.paren_depth > 0
+            && (self.nesting.paren_depth > 0
                 || self
                     .output
                     .iter()
@@ -1637,12 +1637,7 @@ impl FormatEngine<'_> {
             if previous_indent <= current_indent {
                 return None;
             }
-            if paren_balance == -1
-                && self
-                    .stack_state
-                    .current_continuation_indent_spaces()
-                    .is_none()
-            {
+            if paren_balance == -1 && self.nesting.current_continuation_indent_spaces().is_none() {
                 return None;
             }
             if paren_balance == -1 && !trimmed.starts_with("(!") {
@@ -1695,7 +1690,7 @@ impl FormatEngine<'_> {
             if code.starts_with("return ") {
                 let return_indent = leading_visual_width(previous, self.options.tab_width);
                 let inside_switch = self
-                    .stack_state
+                    .nesting
                     .brace_header_stack
                     .iter()
                     .any(|header| header.as_deref() == Some("switch"));
@@ -2412,7 +2407,7 @@ impl FormatEngine<'_> {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces =
                 Some(leading_visual_width(statement, self.options.tab_width));
-            self.stack_state.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
         }
     }
 }

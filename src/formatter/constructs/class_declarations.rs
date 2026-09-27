@@ -65,7 +65,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn current_opens_class_base_clause(&self) -> bool {
-        if self.stack_state.has_question_in_current_brace() {
+        if self.nesting.has_question_in_current_brace() {
             return false;
         }
         if self.code_opens_class_base_clause(self.current.trim_end()) {
@@ -112,7 +112,7 @@ impl FormatEngine<'_> {
         if self.current_opens_class_base_clause() {
             return true;
         }
-        if self.stack_state.has_question_in_current_brace()
+        if self.nesting.has_question_in_current_brace()
             || !self.current[..self.current_trailing_comment_split_limit()]
                 .trim()
                 .is_empty()
@@ -183,15 +183,15 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        self.continuation_indent.next_line_indent = Some(self.state.indent() + 1);
+        self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
         self.continuation_indent.next_line_indent_spaces = None;
         self.split_class_export_pending_base = true;
     }
 
     pub(crate) fn finish_split_class_head_line(&mut self) {
-        let header_indent = self.state.indent();
+        let header_indent = self.indentation.indent();
         self.finish_line();
-        self.stack_state.clear_continuation_indents();
+        self.nesting.clear_continuation_indents();
         self.continuation_indent.next_line_indent = Some(header_indent + 1);
         self.continuation_indent.next_line_indent_spaces = None;
         self.split_class_export_pending_base = true;

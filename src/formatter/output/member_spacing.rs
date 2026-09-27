@@ -1,7 +1,7 @@
 use crate::config::LineBetweenMembers;
 use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum MemberSpacingBoundary {
@@ -79,19 +79,18 @@ impl FormatEngine<'_> {
             return;
         }
         if trimmed.starts_with('}') {
-            self.pending_member_spacing = if self.stack_state.last_closed_brace_type
-                == Some(FormatterBraceType::Definition)
-            {
-                if self.in_member_container() {
-                    Some(MemberSpacingBoundary::Member)
-                } else if self.stack_state.brace_type_stack.is_empty() {
-                    Some(MemberSpacingBoundary::TopFunction)
+            self.pending_member_spacing =
+                if self.nesting.last_closed_brace_type == Some(BraceType::Definition) {
+                    if self.in_member_container() {
+                        Some(MemberSpacingBoundary::Member)
+                    } else if self.nesting.brace_type_stack.is_empty() {
+                        Some(MemberSpacingBoundary::TopFunction)
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
             return;
         }
         if self.line_clears_pending_member_spacing(line) {
@@ -125,7 +124,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.pending_member_spacing == Some(MemberSpacingBoundary::TopFunction)
-            && self.stack_state.brace_type_stack.is_empty()
+            && self.nesting.brace_type_stack.is_empty()
             && looks_like_function_header(trimmed)
         {
             return Some(MemberSpacingBoundary::TopFunction);
@@ -142,13 +141,10 @@ impl FormatEngine<'_> {
     }
 
     fn in_member_container(&self) -> bool {
-        self.stack_state.brace_type_stack.iter().any(|brace_type| {
+        self.nesting.brace_type_stack.iter().any(|brace_type| {
             matches!(
                 brace_type,
-                FormatterBraceType::Class
-                    | FormatterBraceType::Interface
-                    | FormatterBraceType::Struct
-                    | FormatterBraceType::Union
+                BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union
             )
         })
     }

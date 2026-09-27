@@ -485,7 +485,8 @@ impl FormatEngine<'_> {
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if previous_code.trim_start().starts_with("#if") && previous_code.contains("->") {
-                layout.exact_indent_spaces = Some(self.state.indent() * self.options.indent_width);
+                layout.exact_indent_spaces =
+                    Some(self.indentation.indent() * self.options.indent_width);
             }
         }
         if layout.line_kind == LineKind::Normal

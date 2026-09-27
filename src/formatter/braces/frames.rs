@@ -2,7 +2,7 @@ use crate::config::BraceStyle;
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -30,32 +30,32 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
 impl FormatEngine<'_> {
     fn brace_semantic_kind(
         &self,
-        brace_type: FormatterBraceType,
+        brace_type: BraceType,
         opens_lambda_body: bool,
     ) -> BraceSemanticKind {
         if opens_lambda_body {
             return BraceSemanticKind::Lambda;
         }
-        if brace_type == FormatterBraceType::Command
+        if brace_type == BraceType::Command
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
             return BraceSemanticKind::Array;
         }
         match brace_type {
-            FormatterBraceType::Command => BraceSemanticKind::Command,
-            FormatterBraceType::Definition => BraceSemanticKind::Definition,
-            FormatterBraceType::Array => BraceSemanticKind::Array,
-            FormatterBraceType::CompoundLiteral => BraceSemanticKind::CompoundLiteral,
-            FormatterBraceType::Init => BraceSemanticKind::Initializer,
-            FormatterBraceType::DeferArray => BraceSemanticKind::DeferArray,
-            FormatterBraceType::Class
-            | FormatterBraceType::Interface
-            | FormatterBraceType::Struct
-            | FormatterBraceType::Union
-            | FormatterBraceType::Enum => BraceSemanticKind::Aggregate,
-            FormatterBraceType::Namespace => BraceSemanticKind::Namespace,
-            FormatterBraceType::Extern => BraceSemanticKind::Extern,
-            FormatterBraceType::NonStatement => BraceSemanticKind::NonStatement,
+            BraceType::Command => BraceSemanticKind::Command,
+            BraceType::Definition => BraceSemanticKind::Definition,
+            BraceType::Array => BraceSemanticKind::Array,
+            BraceType::CompoundLiteral => BraceSemanticKind::CompoundLiteral,
+            BraceType::Init => BraceSemanticKind::Initializer,
+            BraceType::DeferArray => BraceSemanticKind::DeferArray,
+            BraceType::Class
+            | BraceType::Interface
+            | BraceType::Struct
+            | BraceType::Union
+            | BraceType::Enum => BraceSemanticKind::Aggregate,
+            BraceType::Namespace => BraceSemanticKind::Namespace,
+            BraceType::Extern => BraceSemanticKind::Extern,
+            BraceType::NonStatement => BraceSemanticKind::NonStatement,
         }
     }
 
@@ -90,7 +90,7 @@ impl FormatEngine<'_> {
     pub(crate) fn push_brace_frame(
         &mut self,
         brace_header: Option<&String>,
-        brace_type: FormatterBraceType,
+        brace_type: BraceType,
         opens_lambda_body: bool,
         lambda_header_indent: Option<usize>,
         class_base: bool,
@@ -127,7 +127,7 @@ impl FormatEngine<'_> {
                 .map_or(current_line_indent, |frame| frame.line_indent_spaces)
         } else if let Some(lambda_header_indent) = lambda_header_indent {
             lambda_header_indent
-        } else if brace_type == FormatterBraceType::Definition {
+        } else if brace_type == BraceType::Definition {
             self.output_objc_method_header_indent_spaces()
                 .or_else(|| self.split_definition_header_indent_spaces())
                 .unwrap_or(current_line_indent)
@@ -201,7 +201,7 @@ impl FormatEngine<'_> {
                 .filter(|frame| frame.header == *header)
         });
         let label_owner_column = label_block.then(|| {
-            (self.state.line_indent(LineKind::Normal, self.options)
+            (self.indentation.line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal))
                 * self.options.indent_width
         });
@@ -209,7 +209,8 @@ impl FormatEngine<'_> {
             case_label_token_offset(&self.current, header)
                 .map(|offset| {
                     let base = if self.preprocessor.split_else.extra_levels == 0 {
-                        self.state.line_indent(LineKind::SwitchLabel, self.options)
+                        self.indentation
+                            .line_indent(LineKind::SwitchLabel, self.options)
                             * self.options.indent_width
                     } else {
                         let owner_depth = 1 + self
@@ -269,7 +270,7 @@ impl FormatEngine<'_> {
         };
         self.frame_stack.push_brace(BraceFrame {
             semantic_kind,
-            formatter_type: brace_type,
+            brace_type,
             header: if label_block {
                 None
             } else {
@@ -358,10 +359,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn exit_brace_state(&mut self) {
-        let closes_scope = self.stack_state.has_active_brace_scope();
-        self.state.exit_block();
+        let closes_scope = self.nesting.has_active_brace_scope();
+        self.indentation.exit_block();
         if closes_scope {
-            let bracket_depth = self.state.bracket_depth();
+            let bracket_depth = self.indentation.bracket_depth();
             self.inline_array.initializer_designator_bracket_depth = 0;
             self.frame_stack.truncate_brackets(bracket_depth);
             self.objc.message_active = self.frame_stack.has_objc_alignment_bracket();
@@ -370,7 +371,7 @@ impl FormatEngine<'_> {
                 self.objc.message_align = None;
             }
         }
-        let recovery = self.stack_state.exit_brace();
+        let recovery = self.nesting.exit_brace();
         for _ in 0..recovery.parens {
             self.frame_stack.pop_delimiter(self.output.len());
         }

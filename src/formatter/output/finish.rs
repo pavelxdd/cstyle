@@ -61,7 +61,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|(_, after)| after.trim_end().ends_with(';'))
             {
                 self.continuation_indent.next_line_indent_spaces = None;
-                self.stack_state.clear_continuation_indents();
+                self.nesting.clear_continuation_indents();
             }
             if !trimmed.trim().is_empty() {
                 self.push_raw_comment_output_line(trimmed);
@@ -177,7 +177,7 @@ impl FormatEngine<'_> {
                         } else {
                             output_indent
                         });
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_stream_frames_and_logical_indent(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -185,7 +185,7 @@ impl FormatEngine<'_> {
                 } else if starts_post_closing_declaration(output_code) {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -194,7 +194,7 @@ impl FormatEngine<'_> {
                 if output_code.trim_start().starts_with("else,") {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces = Some(0);
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -203,7 +203,7 @@ impl FormatEngine<'_> {
                 if output_code.trim_start().starts_with("#define") && !output_code.ends_with('\\') {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces = None;
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -224,7 +224,7 @@ impl FormatEngine<'_> {
                 if output_code.trim() == "?" {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                 }
                 if output_code.trim() == "catch"
                     && self.output[..output_line_index]
@@ -239,7 +239,7 @@ impl FormatEngine<'_> {
                 {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.stack_state.clear_continuation_indents();
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -248,8 +248,8 @@ impl FormatEngine<'_> {
                 if output_code.ends_with("; catch") {
                     self.continuation_indent.next_line_indent = None;
                     self.continuation_indent.next_line_indent_spaces =
-                        Some(self.state.indent() * self.options.indent_width);
-                    self.stack_state.clear_continuation_indents();
+                        Some(self.indentation.indent() * self.options.indent_width);
+                    self.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
                         &mut self.frame_stack,
                         &mut self.continuation_indent.logical_chain_indent_spaces,
@@ -298,7 +298,7 @@ impl FormatEngine<'_> {
             {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = Some(spaces);
-                self.stack_state.clear_continuation_indents();
+                self.nesting.clear_continuation_indents();
             }
             if case_label_with_comment && let Some(previous) = self.output.last() {
                 self.continuation_indent.next_line_indent = None;
@@ -311,8 +311,8 @@ impl FormatEngine<'_> {
         if self.unmatched_closing_brace_recovery {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces = Some(0);
-            self.state.clear_continuation_indents();
-            self.stack_state.clear_continuation_indents();
+            self.indentation.clear_continuation_indents();
+            self.nesting.clear_continuation_indents();
             operator_chains::clear_operator_chain_state(
                 &mut self.frame_stack,
                 &mut self.continuation_indent.logical_chain_indent_spaces,

@@ -2,7 +2,8 @@ use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
-use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
+use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
@@ -312,10 +313,10 @@ impl FormatEngine<'_> {
                     })?
                 });
             if let Some(spaces) = chain_spaces {
-                let spaces = if persisted_chain.is_some() && self.stack_state.paren_depth == 0 {
+                let spaces = if persisted_chain.is_some() && self.nesting.paren_depth == 0 {
                     spaces
                 } else {
-                    match self.stack_state.current_continuation_indent_spaces() {
+                    match self.nesting.current_continuation_indent_spaces() {
                         Some(paren) if paren < spaces => paren,
                         _ => spaces,
                     }
@@ -323,7 +324,7 @@ impl FormatEngine<'_> {
                 self.continuation_indent.next_line_indent = None;
                 self.continuation_indent.next_line_indent_spaces = Some(spaces);
                 self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
-            } else if self.stack_state.paren_depth == 0
+            } else if self.nesting.paren_depth == 0
                 && let Some(spaces) = self.continuation_indent.next_line_indent_spaces
             {
                 self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
@@ -341,7 +342,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && self.continuation_indent.next_line_indent.is_none()
             && self.continuation_indent.next_line_indent_spaces.is_none()
-            && self.state.statement_depth() == 0
+            && self.indentation.statement_depth() == 0
             && !self.in_initializer_brace()
             && self.has_continuable_previous_statement()
             && self
@@ -455,7 +456,7 @@ impl FormatEngine<'_> {
         {
             self.continuation_indent.next_line_indent = None;
             self.continuation_indent.next_line_indent_spaces =
-                Some(self.state.indent() * self.options.indent_width);
+                Some(self.indentation.indent() * self.options.indent_width);
             self.continuation_indent.logical_chain_indent_spaces = None;
         } else if self.current.trim().is_empty()
             && is_leading_continuation_operator(operator)
@@ -472,7 +473,7 @@ impl FormatEngine<'_> {
                     leading_visual_width(line, self.options.tab_width) / self.options.indent_width
                         + 1
                 })
-                .unwrap_or_else(|| self.state.indent() + 1);
+                .unwrap_or_else(|| self.indentation.indent() + 1);
             if self
                 .continuation_indent
                 .next_line_indent
@@ -537,7 +538,7 @@ impl FormatEngine<'_> {
             "!" | "~" => self.push_unary_prefix(operator),
             "+" | "-"
                 if self.current.trim().is_empty()
-                    && self.state.statement_depth() > 0
+                    && self.indentation.statement_depth() > 0
                     && self.options.pad_operators
                     && self.line_start_sign_is_unary(next) =>
             {
@@ -545,7 +546,7 @@ impl FormatEngine<'_> {
             }
             "+" | "-"
                 if self.current.trim().is_empty()
-                    && self.state.statement_depth() > 0
+                    && self.indentation.statement_depth() > 0
                     && self.options.pad_operators =>
             {
                 self.current.push_str(operator);
@@ -604,7 +605,7 @@ impl FormatEngine<'_> {
                 self.push_binary_operator(operator);
             }
             "*" if operator_role != OperatorRole::PointerDeclarator
-                && self.stack_state.paren_depth > 0
+                && self.nesting.paren_depth > 0
                 && matches!(next, Some(Token::Word(_)))
                 && self.current_paren_is_expression_context()
                 && !self.current_paren_context_is_declaration()
@@ -671,7 +672,7 @@ impl FormatEngine<'_> {
             "&" if operator_role == OperatorRole::PointerDeclarator
                 && !self.current_ends_cast()
                 && !self.current_ends_pointer_cast()
-                && (self.stack_state.paren_depth == 0
+                && (self.nesting.paren_depth == 0
                     || !self.current_paren_started_by_expression_keyword()) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
@@ -712,7 +713,7 @@ impl FormatEngine<'_> {
             {
                 self.push_binary_operator(operator);
             }
-            "&" if self.stack_state.paren_depth > 0
+            "&" if self.nesting.paren_depth > 0
                 && matches!(
                     self.previous,
                     PreviousToken::Word
@@ -741,7 +742,7 @@ impl FormatEngine<'_> {
             "*" if self.current_ends_sizeof_pointer_expr() => {
                 self.push_binary_operator(operator);
             }
-            "&" if self.stack_state.paren_depth > 0
+            "&" if self.nesting.paren_depth > 0
                 && self.current_paren_started_by_expression_keyword()
                 && !self.is_unary_pointer_operator()
                 && !self.is_pointer_like(operator, next, next_is_adjacent, following_operator) =>
@@ -760,14 +761,10 @@ impl FormatEngine<'_> {
             "&" | "*" if self.current_ends_pointer_cast() => self.push_unary_prefix(operator),
             "&" if self.current_ends_cast()
                 && !matches!(next, Some(Token::Symbol('(')))
-                && self.stack_state.paren_depth == 0
+                && self.nesting.paren_depth == 0
                 && matches!(
-                    self.stack_state.brace_type_stack.last(),
-                    Some(
-                        FormatterBraceType::Array
-                            | FormatterBraceType::Init
-                            | FormatterBraceType::DeferArray
-                    )
+                    self.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Init | BraceType::DeferArray)
                 ) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
@@ -790,7 +787,7 @@ impl FormatEngine<'_> {
             "&" | "*"
                 if self.current_ends_cast()
                     && self.options.pad_operators
-                    && self.stack_state.paren_depth > 0 =>
+                    && self.nesting.paren_depth > 0 =>
             {
                 self.push_unary_prefix(operator);
             }
@@ -1048,7 +1045,7 @@ impl FormatEngine<'_> {
         } else if self.options.pad_parens_outside
             && self.previous == PreviousToken::CloseParen
             && self.current_ends_cast()
-            && self.stack_state.paren_depth > 0
+            && self.nesting.paren_depth > 0
         {
             self.emit_source_space_or_ensure();
         } else if self.previous == PreviousToken::Comma {

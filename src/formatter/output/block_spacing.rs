@@ -1,7 +1,7 @@
 use crate::config::BraceStyle;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 use crate::source::lex::leading_identifier;
 
 #[derive(Default)]
@@ -26,7 +26,7 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        if word == "while" && self.stack_state.last_closed_brace_header.as_deref() == Some("do") {
+        if word == "while" && self.nesting.last_closed_brace_header.as_deref() == Some("do") {
             self.clear_block_spacing_blanks();
             return;
         }
@@ -63,7 +63,7 @@ impl FormatEngine<'_> {
         };
         let previous = previous.trim_start();
         if previous.is_empty()
-            || self.state.indent() == 0
+            || self.indentation.indent() == 0
             || (self.command_state.previous_command_char == Some('{') && !previous.starts_with('#'))
         {
             return;
@@ -105,7 +105,7 @@ impl FormatEngine<'_> {
     pub(crate) fn observe_block_spacing_semicolon(&mut self) {
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
-            || self.stack_state.paren_depth > 0
+            || self.nesting.paren_depth > 0
         {
             return;
         }
@@ -134,11 +134,11 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn observe_block_spacing_one_line_block(&mut self, brace_type: FormatterBraceType) {
+    pub(crate) fn observe_block_spacing_one_line_block(&mut self, brace_type: BraceType) {
         if !self.options.break_blocks {
             return;
         }
-        self.block_spacing.pending_one_line_block = brace_type == FormatterBraceType::Command;
+        self.block_spacing.pending_one_line_block = brace_type == BraceType::Command;
         self.clear_block_spacing_header();
     }
 
@@ -158,9 +158,8 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return;
         }
-        let closed_header = self.stack_state.last_closed_brace_header.as_deref();
-        let closed_command_header = self.stack_state.last_closed_brace_type
-            == Some(FormatterBraceType::Command)
+        let closed_header = self.nesting.last_closed_brace_header.as_deref();
+        let closed_command_header = self.nesting.last_closed_brace_type == Some(BraceType::Command)
             || closed_header.is_some_and(|header| {
                 is_break_blocks_opening_header(header) || is_break_blocks_closing_header(header)
             });

@@ -1,4 +1,4 @@
-use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::BraceType;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct FrameId(usize);
@@ -192,7 +192,7 @@ pub(crate) enum BraceSemanticKind {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct BraceFrame {
     pub(crate) semantic_kind: BraceSemanticKind,
-    pub(crate) formatter_type: FormatterBraceType,
+    pub(crate) brace_type: BraceType,
     pub(crate) header: Option<String>,
     pub(crate) label_block: bool,
     pub(crate) case_block: bool,
@@ -952,7 +952,7 @@ impl FrameStack {
 
 #[cfg(test)]
 mod tests {
-    use super::FormatterBraceType;
+    use super::BraceType;
     use super::*;
 
     fn delimiter_frame() -> DelimiterFrame {
@@ -1187,7 +1187,7 @@ mod tests {
         let mut stack = FrameStack::default();
         stack.push_brace(BraceFrame {
             semantic_kind: BraceSemanticKind::Lambda,
-            formatter_type: FormatterBraceType::Command,
+            brace_type: BraceType::Command,
             header: None,
             label_block: false,
             case_block: false,
@@ -1204,7 +1204,7 @@ mod tests {
 
         let frame = stack.active_brace().expect("brace");
         assert_eq!(frame.semantic_kind, BraceSemanticKind::Lambda);
-        assert_eq!(frame.formatter_type, FormatterBraceType::Command);
+        assert_eq!(frame.brace_type, BraceType::Command);
         assert_eq!(frame.header_indent_column, 7);
         stack.pop_brace();
         stack.mark_last_closed_brace_output_position(3);
