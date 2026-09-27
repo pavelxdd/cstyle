@@ -835,7 +835,10 @@ fn add_braces_attaches_open_brace_to_separated_header() {
     let mut options = FormatOptions::default();
     options.add_braces = true;
 
-    assert_eq!(format_exact("if(b)\nx;\n", &options), "if(b) {\n    x;\n}\n");
+    assert_eq!(
+        format_exact("if(b)\nx;\n", &options),
+        "if(b) {\n    x;\n}\n"
+    );
     assert_eq!(
         format_exact("while(a)\nx;\n", &options),
         "while(a) {\n    x;\n}\n",

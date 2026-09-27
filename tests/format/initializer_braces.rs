@@ -3609,7 +3609,10 @@ fn operator_empty_block_continues_expression() {
 fn expression_brace_hash_body_is_not_hoisted() {
     let options = FormatOptions::default();
 
-    assert_eq!(format_exact("x % {#endif} y\n", &options), "x % {#endif} y\n",);
+    assert_eq!(
+        format_exact("x % {#endif} y\n", &options),
+        "x % {#endif} y\n",
+    );
     assert_eq!(format_exact("x={#endif}\n", &options), "x= {#endif}\n");
 }
 

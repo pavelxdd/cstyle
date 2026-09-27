@@ -1,5 +1,5 @@
-use super::CliError;
 use crate::api;
+use crate::cli::CliError;
 use crate::config::FormatOptions;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};

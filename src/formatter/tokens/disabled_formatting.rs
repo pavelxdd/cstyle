@@ -1,7 +1,6 @@
 //! State carried across a *INDENT-OFF* ... *INDENT-ON* region.
 
-use crate::formatter::engine::LayoutState;
-use crate::formatter::engine::{FormatEngine, TokenPushContext};
+use crate::formatter::engine::{FormatEngine, LayoutState, TokenPushContext};
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
 use crate::formatter::syntax::SyntaxRoles;

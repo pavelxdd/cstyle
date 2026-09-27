@@ -4,10 +4,9 @@ use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
-use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
-    function_name_start, scoped_name_is_constructor, template_angle_role,
+    TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{

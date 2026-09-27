@@ -1086,7 +1086,10 @@ fn close_templates_collapses_adjacent_closing_angles() {
 fn close_templates_leaves_separated_closing_angles_untouched() {
     let mut options = FormatOptions::default();
     options.close_templates = true;
-    assert_eq!(format_exact("int x = a >> b;\n", &options), "int x = a >> b;\n");
+    assert_eq!(
+        format_exact("int x = a >> b;\n", &options),
+        "int x = a >> b;\n"
+    );
     assert_eq!(
         format_exact("vector< int > a;\n", &options),
         "vector< int > a;\n"
@@ -1874,7 +1877,10 @@ fn pad_parens_inside_spaces_global_scope_operand() {
     let mut options = FormatOptions::default();
     options.pad_parens_inside = true;
 
-    assert_eq!(format_exact("call(::value);\n", &options), "call( ::value );\n");
+    assert_eq!(
+        format_exact("call(::value);\n", &options),
+        "call( ::value );\n"
+    );
 
     options.pad_parens_inside = false;
     options.pad_commas = true;
@@ -1902,7 +1908,10 @@ fn unpad_parens_removes_opening_gap_before_block_comment_and_global_scope() {
         format_exact("call(  /* note */ value);\n", &options),
         "call(/* note */ value);\n"
     );
-    assert_eq!(format_exact("call(  ::value);\n", &options), "call(::value);\n");
+    assert_eq!(
+        format_exact("call(  ::value);\n", &options),
+        "call(::value);\n"
+    );
 }
 
 #[test]
@@ -2011,11 +2020,17 @@ fn paren_padding_preserves_block_continuation_indent_after_line_comment() {
 
     let mut options = FormatOptions::default();
     options.pad_parens_inside = true;
-    assert_eq!(format_exact(source, &options), "long_name( // note\n    a );\n");
+    assert_eq!(
+        format_exact(source, &options),
+        "long_name( // note\n    a );\n"
+    );
 
     options.pad_parens_inside = false;
     options.pad_parens_outside = true;
-    assert_eq!(format_exact(source, &options), "long_name ( // note\n    a);\n");
+    assert_eq!(
+        format_exact(source, &options),
+        "long_name ( // note\n    a);\n"
+    );
 }
 
 #[test]
@@ -2411,7 +2426,10 @@ fn prefix_caret_after_assignment_is_not_padded() {
     let mut options = FormatOptions::default();
     options.pad_operators = true;
 
-    assert_eq!(format_exact("auto r=^^int;\n", &options), "auto r = ^^int;\n");
+    assert_eq!(
+        format_exact("auto r=^^int;\n", &options),
+        "auto r = ^^int;\n"
+    );
     assert_eq!(format_exact("auto r=^x;\n", &options), "auto r = ^x;\n");
     assert_eq!(format_exact("int b=a^c;\n", &options), "int b = a ^ c;\n");
 }
@@ -2421,7 +2439,10 @@ fn spaceship_operator_is_padded_as_one_operator() {
     let mut options = FormatOptions::default();
     options.pad_operators = true;
 
-    assert_eq!(format_exact("auto x=a<=>b;\n", &options), "auto x = a <=> b;\n",);
+    assert_eq!(
+        format_exact("auto x=a<=>b;\n", &options),
+        "auto x = a <=> b;\n",
+    );
     assert_eq!(
         format_exact("bool f(int a,int b){return a<=>b<0;}\n", &options),
         "bool f(int a, int b) {\n    return a <=> b < 0;\n}\n",
@@ -2880,7 +2901,10 @@ fn pad_oper_keeps_dollar_sign_extension_identifier_intact() {
     let mut options = FormatOptions::default();
     options.pad_operators = true;
 
-    assert_eq!(format_exact("int $value=1;\n", &options), "int $value = 1;\n",);
+    assert_eq!(
+        format_exact("int $value=1;\n", &options),
+        "int $value = 1;\n",
+    );
 }
 
 #[test]

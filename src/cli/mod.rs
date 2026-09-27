@@ -1,8 +1,8 @@
+use crate::cli::args::Command;
 use crate::config;
-use std::env;
 use std::ffi::OsString;
-use std::fmt;
 use std::io::{self, Write};
+use std::{env, fmt};
 
 mod args;
 mod files;
@@ -11,8 +11,6 @@ mod in_place;
 mod option_sources;
 mod streams;
 mod targets;
-
-use args::Command;
 
 const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 const DISPLAY_NAME: &str = "CStyle";

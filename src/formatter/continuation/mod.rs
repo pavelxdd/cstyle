@@ -7,10 +7,9 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
-    assignment_declarator_offset, function_head_has_assignment, function_name_start,
+    assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{

@@ -1566,7 +1566,10 @@ fn pointer_and_reference_align_preserve_line_terminal_type_side_gaps() {
     assert_eq!(format_exact(source, &options), expected);
 
     options.reference_align = ReferenceAlign::Name;
-    assert_eq!(format_exact("Last && \nend;\n", &options), "Last &&\nend;\n");
+    assert_eq!(
+        format_exact("Last && \nend;\n", &options),
+        "Last &&\nend;\n"
+    );
 }
 
 #[test]
@@ -2290,12 +2293,18 @@ fn pointer_and_reference_align_modes_format_referenced_member_data_pointers() {
     let mut type_options = FormatOptions::default();
     type_options.pointer_align = PointerAlign::Type;
     type_options.reference_align = ReferenceAlign::Type;
-    assert_eq!(format_exact(source, &type_options), "Item Owner::*& value;\n");
+    assert_eq!(
+        format_exact(source, &type_options),
+        "Item Owner::*& value;\n"
+    );
 
     let mut middle_options = FormatOptions::default();
     middle_options.pointer_align = PointerAlign::Middle;
     middle_options.reference_align = ReferenceAlign::Middle;
-    assert_eq!(format_exact(source, &middle_options), "Item Owner::*& value;\n");
+    assert_eq!(
+        format_exact(source, &middle_options),
+        "Item Owner::*& value;\n"
+    );
 
     let mut middle_none = FormatOptions::default();
     middle_none.pointer_align = PointerAlign::Middle;
@@ -2305,12 +2314,18 @@ fn pointer_and_reference_align_modes_format_referenced_member_data_pointers() {
     let mut middle_name = FormatOptions::default();
     middle_name.pointer_align = PointerAlign::Middle;
     middle_name.reference_align = ReferenceAlign::Name;
-    assert_eq!(format_exact(source, &middle_name), "Item Owner::* &value;\n");
+    assert_eq!(
+        format_exact(source, &middle_name),
+        "Item Owner::* &value;\n"
+    );
 
     let mut name_options = FormatOptions::default();
     name_options.pointer_align = PointerAlign::Name;
     name_options.reference_align = ReferenceAlign::Name;
-    assert_eq!(format_exact(source, &name_options), "Item Owner::*&value;\n");
+    assert_eq!(
+        format_exact(source, &name_options),
+        "Item Owner::*&value;\n"
+    );
 }
 
 #[test]
@@ -2413,7 +2428,10 @@ fn pointer_align_modes_keep_multilevel_groups_intact_in_later_declarators() {
 
     let mut type_options = FormatOptions::default();
     type_options.pointer_align = PointerAlign::Type;
-    assert_eq!(format_exact(source, &type_options), "Item* first, ** second;\n");
+    assert_eq!(
+        format_exact(source, &type_options),
+        "Item* first, ** second;\n"
+    );
 
     let mut middle_options = FormatOptions::default();
     middle_options.pointer_align = PointerAlign::Middle;
@@ -2424,7 +2442,10 @@ fn pointer_align_modes_keep_multilevel_groups_intact_in_later_declarators() {
 
     let mut name_options = FormatOptions::default();
     name_options.pointer_align = PointerAlign::Name;
-    assert_eq!(format_exact(source, &name_options), "Item *first, **second;\n");
+    assert_eq!(
+        format_exact(source, &name_options),
+        "Item *first, **second;\n"
+    );
     // Declarator position does not split an adjacent pointer group.
 }
 
@@ -2753,7 +2774,10 @@ fn reference_align_modes_keep_conversion_operator_parentheses_attached() {
 
     let mut middle_options = FormatOptions::default();
     middle_options.reference_align = ReferenceAlign::Middle;
-    assert_eq!(format_exact(source, &middle_options), "operator Item &&();\n");
+    assert_eq!(
+        format_exact(source, &middle_options),
+        "operator Item &&();\n"
+    );
 
     let mut name_options = FormatOptions::default();
     name_options.reference_align = ReferenceAlign::Name;
@@ -2993,7 +3017,10 @@ fn reference_align_middle_does_not_reclassify_logical_and_before_dereference() {
     let mut options = FormatOptions::default();
     options.reference_align = ReferenceAlign::Middle;
 
-    assert_eq!(format_exact("value&&*other;\n", &options), "value&&*other;\n");
+    assert_eq!(
+        format_exact("value&&*other;\n", &options),
+        "value&&*other;\n"
+    );
 }
 
 #[test]

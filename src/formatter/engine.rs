@@ -21,24 +21,22 @@ use crate::formatter::output::member_spacing::MemberSpacingBoundary;
 use crate::formatter::output::source_indent::source_indented_macro_row;
 use crate::formatter::output::{buffer, line_adjust};
 use crate::formatter::preprocessor::backslash_bodies::BackslashBodyState;
-use crate::formatter::preprocessor::macro_invocations;
-use crate::formatter::preprocessor::preprocessor_block_indentability;
+use crate::formatter::preprocessor::{macro_invocations, preprocessor_block_indentability};
 use crate::formatter::state::current_line::CurrentLine;
 use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::{IndentationState, LineKind};
-use crate::formatter::state::next_line;
 use crate::formatter::state::{
-    CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState,
+    CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState, next_line,
 };
-use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{is_numeric_variable_word, is_type_like_pointer_word};
-use crate::formatter::syntax::{OperatorRole, SyntaxRoles, classify_syntax, template_angle_role};
+use crate::formatter::syntax::{
+    OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
+};
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::formatter::tokens::comments::CommentState;
-use crate::formatter::tokens::comments::trailing_comment_columns;
+use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{continuation, preprocessor, syntax};

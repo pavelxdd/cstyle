@@ -2,8 +2,7 @@ use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
-use crate::formatter::syntax::language;
-use crate::formatter::syntax::scoped_name_is_constructor;
+use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,

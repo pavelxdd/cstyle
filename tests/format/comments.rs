@@ -3967,8 +3967,14 @@ fn trailing_block_comment_preserves_absent_source_gap() {
 fn inline_block_trailing_line_comment_keeps_single_space() {
     let options = FormatOptions::default();
 
-    assert_eq!(format_exact("void g(){}//c\n", &options), "void g() {} //c\n");
-    assert_eq!(format_exact("class C{};//c\n", &options), "class C {}; //c\n");
+    assert_eq!(
+        format_exact("void g(){}//c\n", &options),
+        "void g() {} //c\n"
+    );
+    assert_eq!(
+        format_exact("class C{};//c\n", &options),
+        "class C {}; //c\n"
+    );
     assert_eq!(format_exact("x{}//c\n", &options), "x{}//c\n");
 }
 
@@ -4009,7 +4015,10 @@ fn horstmann_run_in_brace_aligns_trailing_comment_after_operator_pad() {
     let args = ["--style=horstmann", "--pad-oper"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
 
-    assert_eq!(format_exact("{   x=1;// c\n", &options), "{   x = 1; // c\n",);
+    assert_eq!(
+        format_exact("{   x=1;// c\n", &options),
+        "{   x = 1; // c\n",
+    );
 }
 
 #[test]

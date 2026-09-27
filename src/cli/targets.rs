@@ -1,9 +1,8 @@
-use super::CliError;
+use crate::cli::CliError;
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 fn mark_matching_excludes(path: &Path, excludes: &[String], matched: &mut [bool]) -> bool {
     let mut excluded = false;

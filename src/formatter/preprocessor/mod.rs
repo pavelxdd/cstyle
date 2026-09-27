@@ -1,7 +1,6 @@
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::constructs::headers::HeaderParenState;
-use crate::formatter::engine::FormatEngine;
-use crate::formatter::engine::LayoutState;
+use crate::formatter::engine::{FormatEngine, LayoutState};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::{BraceType, PreviousToken};

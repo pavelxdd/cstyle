@@ -1,8 +1,7 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::raw_strings;
-use crate::formatter::lexer::{Token, token_text};
+use crate::formatter::lexer::{Token, raw_strings, token_text};
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;

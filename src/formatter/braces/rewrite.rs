@@ -16,10 +16,8 @@ use crate::formatter::preprocessor::{
 };
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::syntax::TemplateAngle;
-use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
-use crate::formatter::syntax::template_angle_role;
+use crate::formatter::syntax::{TemplateAngle, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,

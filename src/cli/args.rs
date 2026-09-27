@@ -1,4 +1,4 @@
-use super::CliError;
+use crate::cli::CliError;
 use crate::config;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;

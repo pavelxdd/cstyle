@@ -1,6 +1,6 @@
-use super::args::{ConsoleOptions, ExcludeErrorMode};
-use super::in_place::{InPlaceOptions, format_file_in_place};
-use super::{CliError, targets};
+use crate::cli::args::{ConsoleOptions, ExcludeErrorMode};
+use crate::cli::in_place::{InPlaceOptions, format_file_in_place};
+use crate::cli::{CliError, targets};
 use crate::config::FormatOptions;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

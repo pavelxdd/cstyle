@@ -1928,5 +1928,8 @@ fn backslash_continuation_keeps_brace_inline_without_close() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
 
-    assert_eq!(format_exact("alpha \\{beta\n", &options), "alpha \\ {beta\n",);
+    assert_eq!(
+        format_exact("alpha \\{beta\n", &options),
+        "alpha \\ {beta\n",
+    );
 }

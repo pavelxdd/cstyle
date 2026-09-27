@@ -6,12 +6,11 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
 use crate::formatter::syntax::{
-    function_head_has_assignment, function_name_start, scoped_name_is_constructor,
+    function_head_has_assignment, function_name_start, language, scoped_name_is_constructor,
 };
 use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::{

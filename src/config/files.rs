@@ -1,12 +1,10 @@
-use super::parser::{apply_config_source, apply_source, parse_config_source, parse_source};
-use super::{
+use crate::config::parser::{apply_config_source, apply_source, parse_config_source, parse_source};
+use crate::config::{
     ASTYLE_CONFIG_FILE_NAME, CONFIG_FILE_NAME, ConfigError, ConfigFileOptions, FormatOptions,
 };
-use std::env;
 use std::ffi::OsStr;
-use std::fs;
-use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::{env, fs, io};
 
 pub fn load_from_current_dir() -> Result<FormatOptions, ConfigError> {
     let current_dir = env::current_dir()

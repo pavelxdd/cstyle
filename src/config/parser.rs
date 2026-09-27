@@ -1,4 +1,4 @@
-use super::{
+use crate::config::{
     BackupSuffix, ConfigError, ConfigFileOptions, FormatOptions, IndentStyle, LineBetweenMembers,
     LineEnding, MinConditionalIndent, Mode, ObjCColonPad, PointerAlign, ReferenceAlign,
     StylePreset,

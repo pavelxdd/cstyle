@@ -3,11 +3,10 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::syntax::TemplateAngle;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
-use crate::formatter::syntax::{OperatorRole, function_name_start};
+use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,

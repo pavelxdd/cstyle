@@ -1,4 +1,4 @@
-use super::CliError;
+use crate::cli::CliError;
 use std::io::{self, Write};
 
 pub(super) fn print(display: &str) -> Result<(), CliError> {

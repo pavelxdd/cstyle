@@ -8,8 +8,7 @@ use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment
 use crate::formatter::constructs::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
 };
-use crate::formatter::continuation::ContinuationIndent;
-use crate::formatter::continuation::operator_chains;
+use crate::formatter::continuation::{ContinuationIndent, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::{
