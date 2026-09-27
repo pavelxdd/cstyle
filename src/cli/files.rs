@@ -1,7 +1,7 @@
 use super::args::{ConsoleOptions, ExcludeErrorMode};
+use super::in_place::{InPlaceOptions, format_file_in_place};
 use super::{CliError, targets};
 use crate::config::FormatOptions;
-use crate::io as cstyle_io;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -97,16 +97,15 @@ fn format_file(
     options: &FormatOptions,
     console: &ConsoleOptions,
 ) -> Result<bool, CliError> {
-    cstyle_io::format_path_with_options(
+    format_file_in_place(
         path,
         options,
-        &cstyle_io::FileFormatOptions {
+        &InPlaceOptions {
             backup_suffix: console.backup_suffix.as_deref().map(str::to_owned),
             dry_run: console.dry_run,
             preserve_date: console.preserve_date,
         },
     )
-    .map(|result| result.changed)
     .map_err(|error| CliError::new(format!("failed to format {}: {error}", path.display()), 1))
 }
 

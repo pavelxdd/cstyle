@@ -7,6 +7,7 @@ use std::io::{self, Write};
 mod args;
 mod files;
 mod help;
+mod in_place;
 mod option_sources;
 mod streams;
 mod targets;

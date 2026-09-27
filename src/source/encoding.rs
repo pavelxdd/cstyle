@@ -1,5 +1,3 @@
-use crate::config::{FormatOptions, LineEnding};
-use crate::formatter::format_c;
 use crate::source::line_endings::{ObservedLineEnding, preferred_line_ending};
 use std::io;
 
@@ -13,7 +11,7 @@ enum TextEncoding {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct DecodedSource {
+pub(crate) struct DecodedSource {
     text: String,
     encoding: TextEncoding,
     had_final_line_break: bool,
@@ -21,7 +19,7 @@ pub(super) struct DecodedSource {
 }
 
 impl DecodedSource {
-    pub(super) fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
         if bytes.starts_with(&[0x00, 0x00, 0xFE, 0xFF])
             || bytes.starts_with(&[0xFF, 0xFE, 0x00, 0x00])
         {
@@ -56,32 +54,22 @@ impl DecodedSource {
         })
     }
 
-    pub(super) fn format(&self, options: &FormatOptions) -> Vec<u8> {
-        let options = effective_line_ending_options(options, self.observed_line_ending);
-        let mut output = format_c(&self.text, &options);
-        if !self.had_final_line_break {
-            let line_break = options.line_break();
-            if output.ends_with(line_break) {
-                output.truncate(output.len() - line_break.len());
-            }
-        }
-        encode_output(&output, self.encoding)
+    pub(crate) fn text(&self) -> &str {
+        &self.text
     }
-}
 
-fn effective_line_ending_options(
-    options: &FormatOptions,
-    observed_line_ending: ObservedLineEnding,
-) -> FormatOptions {
-    let mut options = options.clone();
-    if options.line_ending == LineEnding::Preserve {
-        options.line_ending = match observed_line_ending {
-            ObservedLineEnding::CrLf => LineEnding::Crlf,
-            ObservedLineEnding::Cr => LineEnding::Cr,
-            ObservedLineEnding::None | ObservedLineEnding::Lf => LineEnding::Lf,
-        };
+    pub(crate) fn had_final_line_break(&self) -> bool {
+        self.had_final_line_break
     }
-    options
+
+    pub(crate) fn observed_line_ending(&self) -> ObservedLineEnding {
+        self.observed_line_ending
+    }
+
+    /// Encodes `text` with the byte encoding detected in the input.
+    pub(crate) fn encode(&self, text: &str) -> Vec<u8> {
+        encode_output(text, self.encoding)
+    }
 }
 
 fn decode_utf8(bytes: &[u8]) -> io::Result<String> {
