@@ -1,5 +1,5 @@
+use crate::formatter::constructs::headers;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::SyntaxRole;

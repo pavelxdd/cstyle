@@ -1,21 +1,21 @@
 //! State carried across a *INDENT-OFF* ... *INDENT-ON* region.
 
 use crate::formatter::braces::compound_literals::CompoundLiteralState;
+use crate::formatter::constructs::objective_c::ObjectiveCLineState;
+use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust::LineAdjuster;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
-use crate::formatter::objective_c::ObjectiveCLineState;
 use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
 use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
     CommandState, FormatterLineState, FormatterStackState, PreviousToken, RunInState,
 };
-use crate::formatter::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::syntax::SyntaxRoles;
-use crate::formatter::template_declarations::TemplateDeclarationState;
 use crate::formatter::tokens::literals::LiteralLineState;
 use std::collections::VecDeque;
 

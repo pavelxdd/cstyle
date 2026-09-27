@@ -1,12 +1,12 @@
 use crate::config::BraceStyle;
-use crate::formatter::assembly::is_asm_block_header;
 use crate::formatter::braces::rewrite::is_add_braces_header;
+use crate::formatter::constructs::assembly::is_asm_block_header;
+use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::state::frame::{BraceSemanticKind, HeaderFrame};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{

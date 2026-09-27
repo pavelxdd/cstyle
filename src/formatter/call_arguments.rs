@@ -4,8 +4,8 @@ use crate::formatter::braces::classification::{
     line_opens_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
 use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;

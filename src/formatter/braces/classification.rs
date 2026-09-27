@@ -1,8 +1,8 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::rewrite::is_defer_header;
+use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::is_conditional_header_line;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
 use crate::formatter::state::FormatterBraceType;

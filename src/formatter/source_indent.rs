@@ -1,7 +1,7 @@
 use crate::config::MinConditionalIndent;
 use crate::formatter::braces::initializers::initializer_sibling_uses_previous_indent;
+use crate::formatter::constructs::labels::is_attached_user_label;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::labels::is_attached_user_label;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::line_scan::{

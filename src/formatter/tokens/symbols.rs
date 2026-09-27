@@ -1,7 +1,7 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
 use crate::formatter::braces::classification::is_class_like_brace_type;
+use crate::formatter::constructs::labels;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::labels;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{

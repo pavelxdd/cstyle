@@ -2,14 +2,14 @@ use crate::config::{BraceStyle, PointerAlign, ReferenceAlign};
 use crate::formatter::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_add_braces_header;
+use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::labels;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive};
 use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType, PreviousToken};
-use crate::formatter::switch_cases::find_case_colon;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,

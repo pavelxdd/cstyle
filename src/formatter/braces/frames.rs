@@ -1,6 +1,6 @@
 use crate::config::BraceStyle;
+use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::labels;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::state::FormatterBraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};

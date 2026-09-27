@@ -1,6 +1,6 @@
 use crate::config::LineBetweenMembers;
+use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::labels::is_standard_access_label;
 use crate::formatter::state::FormatterBraceType;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

@@ -1,6 +1,6 @@
+use crate::formatter::constructs::labels::is_label_start;
+use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::labels::is_label_start;
-use crate::formatter::switch_cases;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};

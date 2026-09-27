@@ -1,11 +1,11 @@
 use crate::formatter::braces::closing::starts_post_closing_declaration;
+use crate::formatter::constructs::switch_cases::{
+    case_label_with_trailing_comment, split_switch_label_statement,
+};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::operator_chains;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::PreviousToken;
-use crate::formatter::switch_cases::{
-    case_label_with_trailing_comment, split_switch_label_statement,
-};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, line_comment_split_limit, trailing_comment_split_limit,

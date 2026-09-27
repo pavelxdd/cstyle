@@ -1,43 +1,34 @@
 use crate::config::FormatOptions;
 use crate::formatter::braces::postprocess::postprocess_brace_style;
+use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, tokenize};
 use crate::formatter::text::tabs;
 use crate::source::line_endings;
 
-mod assembly;
 mod backslash_bodies;
 mod blank_lines;
 mod block_spacing;
 mod braces;
 mod buffer;
 mod call_arguments;
-mod class_declarations;
-mod constructor_initializers;
+mod constructs;
 mod continuation;
 mod engine;
-mod headers;
-mod labels;
 mod lexer;
 mod line_adjust;
 mod macro_definitions;
 mod macro_invocations;
 mod max_length;
 mod member_spacing;
-mod objective_c;
 mod operator_chains;
 mod output;
 mod preprocessor;
-mod return_types;
 mod source_indent;
 mod state;
-mod swig;
-mod switch_cases;
 mod syntax;
-mod template_declarations;
 mod text;
 mod tokens;
-mod typedefs;
 
 #[cfg(test)]
 mod tests;

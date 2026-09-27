@@ -1,7 +1,7 @@
 use crate::config::{FormatOptions, IndentStyle};
-use crate::formatter::labels;
+use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::text::tabs;
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -1,11 +1,11 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_class_like_brace_type;
+use crate::formatter::constructs::return_types::is_return_type_line;
+use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::return_types::is_return_type_line;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
-use crate::formatter::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,

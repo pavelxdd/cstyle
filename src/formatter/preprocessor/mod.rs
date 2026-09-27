@@ -1,19 +1,19 @@
 use crate::formatter::braces::compound_literals::CompoundLiteralState;
+use crate::formatter::constructs::headers::HeaderParenState;
+use crate::formatter::constructs::objective_c::ObjectiveCLineState;
+use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::HeaderParenState;
 use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
-use crate::formatter::objective_c::ObjectiveCLineState;
 use crate::formatter::state::frame::{BraceSemanticKind, FrameStack, ParenRole};
 use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
     CommandState, FormatterBraceType, FormatterLineState, FormatterStackState, InlineArrayState,
     PreviousToken, RunInState,
 };
-use crate::formatter::switch_cases::SwitchCaseLayoutState;
-use crate::formatter::template_declarations::TemplateDeclarationState;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::line_comment_split_limit;
 use crate::formatter::tokens::literals::LiteralLineState;

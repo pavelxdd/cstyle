@@ -1,13 +1,13 @@
 use crate::config::{BraceStyle, PointerAlign};
 use crate::formatter::braces::classification::contains_one_line_block;
 use crate::formatter::braces::rewrite::is_defer_header;
+use crate::formatter::constructs::headers::is_attachable_closing_header;
+use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::is_attachable_closing_header;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
-use crate::formatter::switch_cases;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, trailing_comment_split_limit,

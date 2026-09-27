@@ -1,9 +1,15 @@
 use crate::config::BraceStyle;
 use crate::formatter::braces::classification::line_opens_lambda_block;
-use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::{
+use crate::formatter::constructs::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
+use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
+use crate::formatter::constructs::template_declarations::{
+    template_continuation_indent_spaces, template_declaration_line_complete,
+};
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::operator_chains;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive, preprocessor_directive,
@@ -11,10 +17,6 @@ use crate::formatter::preprocessor::{
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
-use crate::formatter::switch_cases::case_label_with_trailing_comment;
-use crate::formatter::template_declarations::{
-    template_continuation_indent_spaces, template_declaration_line_complete,
-};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, trailing_comment_split_limit,
@@ -25,7 +27,6 @@ use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_binary_operator, is_prefix_increment_statement,
     starts_prefix_increment,
 };
-use crate::formatter::{labels, operator_chains};
 use crate::source::lex::{is_identifier_start, trailing_word};
 
 impl FormatEngine<'_> {

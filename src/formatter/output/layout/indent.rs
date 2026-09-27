@@ -4,13 +4,14 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::call_arguments::callee_name_start_before_open;
-use crate::formatter::constructor_initializers::has_inline_constructor_initializer_colon;
-use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::{
+use crate::formatter::constructs::constructor_initializers::has_inline_constructor_initializer_colon;
+use crate::formatter::constructs::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
+use crate::formatter::constructs::objective_c::objc_message_following_keyword_column;
+use crate::formatter::constructs::{labels, switch_cases};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::line_adjust::macro_call_starts_with;
-use crate::formatter::objective_c::objc_message_following_keyword_column;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -28,7 +29,6 @@ use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
     trailing_binary_operator_column,
 };
-use crate::formatter::{labels, switch_cases};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {

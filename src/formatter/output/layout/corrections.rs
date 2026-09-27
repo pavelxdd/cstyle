@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, IndentStyle};
-use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::{
+use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::labels;
+use crate::formatter::constructs::labels;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::frame::BraceSemanticKind;

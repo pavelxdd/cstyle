@@ -7,11 +7,11 @@ use crate::formatter::braces::classification::{
     line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::constructs::labels;
+use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
-use crate::formatter::labels;
 use crate::formatter::lexer::{CommentKind, Token};
-use crate::formatter::return_types::is_parameter_return_type_prefix;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{

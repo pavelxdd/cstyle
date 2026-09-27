@@ -6,7 +6,11 @@ use crate::formatter::braces::rewrite::{
     remove_cross_line_statement_braces,
 };
 use crate::formatter::braces::{compound_literals, initializers};
-use crate::formatter::class_declarations::is_split_export_head;
+use crate::formatter::constructs::class_declarations::is_split_export_head;
+use crate::formatter::constructs::swig::SwigState;
+use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
+use crate::formatter::constructs::{headers, labels, objective_c, switch_cases};
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
@@ -23,11 +27,8 @@ use crate::formatter::state::{
     CommandState, ContinuationIndent, FormatterLineState, FormatterStackState, InlineArrayState,
     PreviousToken, RunInState, TemplateAngle, TokenInputState,
 };
-use crate::formatter::swig::SwigState;
-use crate::formatter::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::syntax::language::{is_numeric_variable_word, is_type_like_pointer_word};
 use crate::formatter::syntax::{OperatorRole, SyntaxRoles, classify_syntax, template_angle_role};
-use crate::formatter::template_declarations::TemplateDeclarationState;
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
@@ -36,8 +37,7 @@ use crate::formatter::tokens::comments::trailing_comment_columns;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{
-    buffer, continuation, headers, labels, line_adjust, macro_invocations, objective_c,
-    preprocessor, switch_cases, syntax,
+    buffer, continuation, line_adjust, macro_invocations, preprocessor, syntax,
 };
 use crate::source::lex::{is_identifier_continue, trailing_word};
 use std::collections::HashSet;
