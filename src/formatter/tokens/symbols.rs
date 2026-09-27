@@ -88,6 +88,25 @@ fn is_single_lvalue_assignment(line: &str) -> bool {
     false
 }
 
+/// What a `:` token is, decided from the current line and the token that follows.
+#[derive(Clone, Copy)]
+struct ColonKind {
+    asm_operand: bool,
+    class_initializer: bool,
+    function_try_initializer: bool,
+    objc_selector: bool,
+    objc_interface: bool,
+    enum_underlying_type: bool,
+    class_base: bool,
+    bit_field: bool,
+    range_for: bool,
+    aligned_continuation: bool,
+    label: bool,
+    ternary: bool,
+    objc_method_definition: bool,
+    role: ColonRole,
+}
+
 impl FormatEngine<'_> {
     pub(crate) fn push_symbol(&mut self, symbol: char, context: TokenPushContext<'_>) {
         let TokenPushContext {
@@ -1118,63 +1137,22 @@ impl FormatEngine<'_> {
         {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
-        let is_asm_operand_colon = self.is_asm_operand_colon();
-        let is_class_initializer = !is_asm_operand_colon
-            && (self.is_class_initializer_colon()
-                || (self.current.trim().is_empty() && self.colon_leads_class_initializer()));
-        let function_try_initializer =
-            is_class_initializer && self.class_initializer_follows_function_try();
-        let is_objc_colon = self.is_objc_selector_or_message_colon();
-        let is_objc_interface_colon = self.current.trim_start().starts_with("@interface ");
-        let is_enum_underlying_type = self.is_enum_underlying_type_colon();
-        let is_class_base = !is_asm_operand_colon
-            && !is_objc_colon
-            && !is_objc_interface_colon
-            && self.colon_leads_class_base_clause();
-        let is_bit_field = !is_asm_operand_colon
-            && !is_class_initializer
-            && !is_enum_underlying_type
-            && self.is_bit_field_colon(next);
-        let has_question = self.layout.nesting.has_question_in_current_brace();
-        let is_range_for = !has_question && self.is_range_for_colon();
-        let label_text = self
-            .current
-            .trim()
-            .rsplit(['{', ';'])
-            .next()
-            .unwrap_or_default()
-            .trim();
-        let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
-        let access_label_candidate =
-            labels::is_access_label_start(label_text, &self.options.access_labels);
-        let aligned_continuation_colon = !has_question
-            && !is_range_for
-            && !access_label_candidate
-            && (is_asm_operand_colon || find_assignment_operator(&self.current).is_none())
-            && (self
-                .layout
-                .continuation_indent
-                .next_line_indent_spaces
-                .is_some()
-                || self.in_initializer_brace()
-                || self.current_inline_array_column().is_some());
-        let is_label = !has_question
-            && !is_objc_colon
-            && !is_bit_field
-            && !is_class_base
-            && !is_enum_underlying_type
-            && !is_range_for
-            && !aligned_continuation_colon
-            && label_candidate;
-        let is_ternary = has_question
-            && !is_label
-            && !is_bit_field
-            && !is_class_initializer
-            && !is_class_base
-            && !is_enum_underlying_type
-            && !is_objc_colon
-            && !is_objc_interface_colon
-            && !aligned_continuation_colon;
+        let ColonKind {
+            asm_operand: is_asm_operand_colon,
+            class_initializer: is_class_initializer,
+            function_try_initializer,
+            objc_selector: is_objc_colon,
+            objc_interface: is_objc_interface_colon,
+            enum_underlying_type: is_enum_underlying_type,
+            class_base: is_class_base,
+            bit_field: is_bit_field,
+            range_for: is_range_for,
+            aligned_continuation: aligned_continuation_colon,
+            label: is_label,
+            ternary: is_ternary,
+            objc_method_definition: is_objc_method_def_colon,
+            role: colon_role,
+        } = self.classify_colon(next);
         let case_label_colon = matches!(
             self.layout.command_state.current_header.as_deref(),
             Some("case" | "default")
@@ -1186,37 +1164,8 @@ impl FormatEngine<'_> {
         self.layout.command_state.case_label_colon_emitted = case_label_colon;
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
-        let in_objc_message = has_unclosed_delimiter_after(self.current.trim_end(), "[", "]");
-        let is_objc_method_def_colon = is_objc_colon
-            && !in_objc_message
-            && (self.is_objc_method_line() || self.layout.objc.method_continuation);
         let colon_mode = self.options.pad_method_colon;
         let next_is_close_paren = matches!(next, Some(Token::Symbol(')')));
-        let colon_role = if is_ternary {
-            ColonRole::Ternary
-        } else if is_label {
-            ColonRole::Label
-        } else if is_class_initializer {
-            ColonRole::ClassInitializer
-        } else if is_class_base {
-            ColonRole::ClassBase
-        } else if is_enum_underlying_type {
-            ColonRole::EnumUnderlyingType
-        } else if is_range_for {
-            ColonRole::RangeFor
-        } else if is_bit_field {
-            ColonRole::BitField
-        } else if is_objc_colon {
-            ColonRole::ObjCSelector
-        } else if is_objc_interface_colon {
-            ColonRole::ObjCInterface
-        } else if is_asm_operand_colon {
-            ColonRole::AsmOperand
-        } else if aligned_continuation_colon {
-            ColonRole::AlignedContinuation
-        } else {
-            ColonRole::Other
-        };
         if is_objc_interface_colon {
             self.ensure_space();
         } else if is_objc_colon {
@@ -1414,6 +1363,111 @@ impl FormatEngine<'_> {
             }
         } else if (is_ternary || is_bit_field || is_range_for) && pad_off {
             self.emit_trailing_source_space();
+        }
+    }
+
+    fn classify_colon(&self, next: Option<&Token>) -> ColonKind {
+        let is_asm_operand_colon = self.is_asm_operand_colon();
+        let is_class_initializer = !is_asm_operand_colon
+            && (self.is_class_initializer_colon()
+                || (self.current.trim().is_empty() && self.colon_leads_class_initializer()));
+        let function_try_initializer =
+            is_class_initializer && self.class_initializer_follows_function_try();
+        let is_objc_colon = self.is_objc_selector_or_message_colon();
+        let is_objc_interface_colon = self.current.trim_start().starts_with("@interface ");
+        let is_enum_underlying_type = self.is_enum_underlying_type_colon();
+        let is_class_base = !is_asm_operand_colon
+            && !is_objc_colon
+            && !is_objc_interface_colon
+            && self.colon_leads_class_base_clause();
+        let is_bit_field = !is_asm_operand_colon
+            && !is_class_initializer
+            && !is_enum_underlying_type
+            && self.is_bit_field_colon(next);
+        let has_question = self.layout.nesting.has_question_in_current_brace();
+        let is_range_for = !has_question && self.is_range_for_colon();
+        let label_text = self
+            .current
+            .trim()
+            .rsplit(['{', ';'])
+            .next()
+            .unwrap_or_default()
+            .trim();
+        let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
+        let access_label_candidate =
+            labels::is_access_label_start(label_text, &self.options.access_labels);
+        let aligned_continuation_colon = !has_question
+            && !is_range_for
+            && !access_label_candidate
+            && (is_asm_operand_colon || find_assignment_operator(&self.current).is_none())
+            && (self
+                .layout
+                .continuation_indent
+                .next_line_indent_spaces
+                .is_some()
+                || self.in_initializer_brace()
+                || self.current_inline_array_column().is_some());
+        let is_label = !has_question
+            && !is_objc_colon
+            && !is_bit_field
+            && !is_class_base
+            && !is_enum_underlying_type
+            && !is_range_for
+            && !aligned_continuation_colon
+            && label_candidate;
+        let is_ternary = has_question
+            && !is_label
+            && !is_bit_field
+            && !is_class_initializer
+            && !is_class_base
+            && !is_enum_underlying_type
+            && !is_objc_colon
+            && !is_objc_interface_colon
+            && !aligned_continuation_colon;
+        let in_objc_message = has_unclosed_delimiter_after(self.current.trim_end(), "[", "]");
+        let is_objc_method_def_colon = is_objc_colon
+            && !in_objc_message
+            && (self.is_objc_method_line() || self.layout.objc.method_continuation);
+        let colon_role = if is_ternary {
+            ColonRole::Ternary
+        } else if is_label {
+            ColonRole::Label
+        } else if is_class_initializer {
+            ColonRole::ClassInitializer
+        } else if is_class_base {
+            ColonRole::ClassBase
+        } else if is_enum_underlying_type {
+            ColonRole::EnumUnderlyingType
+        } else if is_range_for {
+            ColonRole::RangeFor
+        } else if is_bit_field {
+            ColonRole::BitField
+        } else if is_objc_colon {
+            ColonRole::ObjCSelector
+        } else if is_objc_interface_colon {
+            ColonRole::ObjCInterface
+        } else if is_asm_operand_colon {
+            ColonRole::AsmOperand
+        } else if aligned_continuation_colon {
+            ColonRole::AlignedContinuation
+        } else {
+            ColonRole::Other
+        };
+        ColonKind {
+            asm_operand: is_asm_operand_colon,
+            class_initializer: is_class_initializer,
+            function_try_initializer,
+            objc_selector: is_objc_colon,
+            objc_interface: is_objc_interface_colon,
+            enum_underlying_type: is_enum_underlying_type,
+            class_base: is_class_base,
+            bit_field: is_bit_field,
+            range_for: is_range_for,
+            aligned_continuation: aligned_continuation_colon,
+            label: is_label,
+            ternary: is_ternary,
+            objc_method_definition: is_objc_method_def_colon,
+            role: colon_role,
         }
     }
 
