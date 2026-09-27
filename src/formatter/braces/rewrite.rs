@@ -687,7 +687,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(crate) fn is_after_preprocessor_split_else(&self) -> bool {
+    fn is_after_preprocessor_split_else(&self) -> bool {
         self.preprocessor.split_else.pending_body && self.preprocessor.split_else.after_line
     }
 
@@ -1287,7 +1287,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(crate) fn try_push_one_line_preprocessor_block(
+    fn try_push_one_line_preprocessor_block(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -1343,7 +1343,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(crate) fn push_attached_one_line_block(
+    fn push_attached_one_line_block(
         &mut self,
         tokens: &[Token],
         brace_type: BraceType,
@@ -1485,7 +1485,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn is_nested_designated_init_field(&self) -> bool {
+    pub(super) fn is_nested_designated_init_field(&self) -> bool {
         self.layout.command_state.previous_command_char == Some('=')
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
@@ -1498,7 +1498,7 @@ impl FormatEngine<'_> {
             )
     }
 
-    pub(crate) fn should_space_before_one_line_block(&self, brace_type: BraceType) -> bool {
+    fn should_space_before_one_line_block(&self, brace_type: BraceType) -> bool {
         if self.layout.command_state.previous_command_char == Some('(') {
             return self.options.pad_parens_inside;
         }
@@ -1519,7 +1519,7 @@ impl FormatEngine<'_> {
                 .is_some_and(is_identifier_continue)
     }
 
-    pub(crate) fn push_inline_open_brace(&mut self) {
+    pub(super) fn push_inline_open_brace(&mut self) {
         let inside_aggregate = self.inline_array.aggregate_braces.last() == Some(&true);
         let is_aggregate = self.inline_open_brace_is_aggregate();
         self.inline_array.aggregate_braces.push(is_aggregate);
@@ -1569,7 +1569,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn inline_open_brace_is_aggregate(&self) -> bool {
+    fn inline_open_brace_is_aggregate(&self) -> bool {
         if self.current.trim_end().ends_with('@') {
             return true;
         }
@@ -1592,7 +1592,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
+    pub(super) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
         let is_aggregate = self.inline_array.aggregate_braces.pop().unwrap_or(false);
         let closes_compound_literal = is_aggregate
             && self
@@ -1634,7 +1634,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn push_replayed_statement(
+    fn push_replayed_statement(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -2484,7 +2484,7 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
         .collect::<Vec<_>>()
 }
 
-pub(crate) fn attach_closing_brace_mode(options: &FormatOptions) -> bool {
+fn attach_closing_brace_mode(options: &FormatOptions) -> bool {
     matches!(options.brace_style, BraceStyle::Pico | BraceStyle::Lisp)
 }
 

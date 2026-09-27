@@ -22,9 +22,9 @@ pub(crate) struct LineLayout {
     pub(crate) else_while_brace: bool,
 }
 
-pub(crate) struct PostEmissionLayout {
+pub(super) struct PostEmissionLayout {
     pub(crate) restore_objc_message_align: Option<usize>,
-    pub(crate) split_condition_body_indent_spaces: Option<usize>,
+    pub(super) split_condition_body_indent_spaces: Option<usize>,
     pub(crate) ternary_call_clear_indent_spaces: Option<usize>,
     pub(crate) else_while_brace: bool,
 }

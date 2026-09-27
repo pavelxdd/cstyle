@@ -31,7 +31,7 @@ pub(crate) struct PointerRunState {
     pub(crate) followed_by_comment: bool,
     pub(crate) star_count: usize,
     pub(crate) gap_before_column: Option<usize>,
-    pub(crate) skip_adjacent_pointer_operators: usize,
+    pub(super) skip_adjacent_pointer_operators: usize,
     pub(crate) template_close_before_current: bool,
 }
 
@@ -74,7 +74,7 @@ impl FormatEngine<'_> {
         });
     }
 
-    pub(crate) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
+    pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
         if self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
@@ -146,7 +146,7 @@ impl FormatEngine<'_> {
             || self.looks_like_pointer_declaration_context()
     }
 
-    pub(crate) fn is_pointer_like(
+    pub(super) fn is_pointer_like(
         &self,
         operator: &str,
         next: Option<&Token>,
@@ -433,7 +433,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn current_ends_named_cast_type_argument(&self) -> bool {
+    fn current_ends_named_cast_type_argument(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('<') else {
             return false;
@@ -447,7 +447,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn current_ends_type_group(&self) -> bool {
+    fn current_ends_type_group(&self) -> bool {
         let current = self.current.trim_end();
         let Some((open, close)) = trailing_matching_parens(current) else {
             return false;
@@ -525,7 +525,7 @@ impl FormatEngine<'_> {
                 .any(|word| is_pointer_type_word(word) && !is_macro_like_word(word))
     }
 
-    pub(crate) fn is_function_declaration_parameter_continuation(&self) -> bool {
+    pub(super) fn is_function_declaration_parameter_continuation(&self) -> bool {
         for line in self.output.iter().rev().take(8) {
             let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
@@ -551,14 +551,14 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn is_function_pointer_parameter_continuation(&self) -> bool {
+    fn is_function_pointer_parameter_continuation(&self) -> bool {
         self.output.iter().rev().take(4).any(|line| {
             let trimmed = line.trim_end();
             trimmed.contains("(*") && !trimmed.ends_with(';') && !trimmed.ends_with('}')
         })
     }
 
-    pub(crate) fn current_paren_context_is_declaration(&self) -> bool {
+    pub(super) fn current_paren_context_is_declaration(&self) -> bool {
         if self.current_paren_is_lambda_parameter_list() {
             return true;
         }
@@ -592,7 +592,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn paren_head_is_declaration(&self, before: &str) -> bool {
+    pub(super) fn paren_head_is_declaration(&self, before: &str) -> bool {
         if before.is_empty() || before.contains('?') || function_head_has_assignment(before) {
             return false;
         }
@@ -699,7 +699,7 @@ impl FormatEngine<'_> {
         !prefix.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, ')' | ']'))
     }
 
-    pub(crate) fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {
+    fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {
         if !is_pointer_declaration_segment(segment) {
             return false;
         }
@@ -712,7 +712,7 @@ impl FormatEngine<'_> {
             && scoped_name_is_constructor(before)
     }
 
-    pub(crate) fn current_paren_context_has_attached_return_type(&self) -> bool {
+    pub(super) fn current_paren_context_has_attached_return_type(&self) -> bool {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
@@ -731,7 +731,7 @@ impl FormatEngine<'_> {
             .is_some_and(|line| is_return_type_line(line.trim()))
     }
 
-    pub(crate) fn push_pointer_run(
+    pub(super) fn push_pointer_run(
         &mut self,
         operator: &str,
         next: Option<&Token>,
@@ -766,7 +766,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn push_pointer_or_reference(
+    pub(super) fn push_pointer_or_reference(
         &mut self,
         operator: &str,
         next: Option<&Token>,
@@ -1150,7 +1150,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn function_pointer_parameter_keeps_space_before_name_group(&self) -> bool {
+    pub(super) fn function_pointer_parameter_keeps_space_before_name_group(&self) -> bool {
         if !self.current_paren_context_is_declaration()
             && !self.is_function_declaration_parameter_continuation()
         {
@@ -1228,7 +1228,7 @@ impl FormatEngine<'_> {
         (" ".repeat(before_pad), " ".repeat(gap - before_pad))
     }
 
-    pub(crate) fn consolidated_pointer_gap(&self) -> String {
+    fn consolidated_pointer_gap(&self) -> String {
         let before = self
             .token_input
             .previous_input_whitespace
@@ -1257,7 +1257,7 @@ impl FormatEngine<'_> {
         format!("{before}{after}")
     }
 
-    pub(crate) fn is_unary_pointer_operator(&self) -> bool {
+    pub(super) fn is_unary_pointer_operator(&self) -> bool {
         if self.current.trim().is_empty()
             && self.token_input.token_begins_source_line
             && self.layout.previous == PreviousToken::CloseParen
@@ -1312,7 +1312,7 @@ impl FormatEngine<'_> {
             && current[..open].rfind(':').is_some_and(|colon| colon < open)
     }
 
-    pub(crate) fn current_in_parenthesized_type_operand(&self) -> bool {
+    pub(super) fn current_in_parenthesized_type_operand(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('(') else {
             return false;
@@ -1328,7 +1328,7 @@ impl FormatEngine<'_> {
         is_pointer_declaration_segment(current[open + 1..].trim())
     }
 
-    pub(crate) fn current_in_cast_type_group(&self) -> bool {
+    pub(super) fn current_in_cast_type_group(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('(') else {
             return false;
@@ -1482,7 +1482,7 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
     ) && !language::is_header(first)
 }
 
-pub(crate) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
+pub(super) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
     if operator.starts_with('&') {
         match options.reference_align {
             ReferenceAlign::None => PointerAlign::None,

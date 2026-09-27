@@ -534,7 +534,7 @@ impl FormatEngine<'_> {
         );
     }
 
-    pub(crate) fn push_multiline_define(&mut self, parts: &[&str]) {
+    pub(super) fn push_multiline_define(&mut self, parts: &[&str]) {
         let Some((first, body_parts)) = parts.split_first() else {
             return;
         };

@@ -36,7 +36,7 @@ use crate::formatter::tokens::operators::{
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {
-    pub(crate) fn member_init_continuation_extra(&self, line_kind: LineKind, line: &str) -> usize {
+    pub(super) fn member_init_continuation_extra(&self, line_kind: LineKind, line: &str) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
         }
@@ -93,7 +93,7 @@ impl FormatEngine<'_> {
         0
     }
 
-    pub(crate) fn string_literal_continuation_after_layout_indent_spaces(
+    pub(super) fn string_literal_continuation_after_layout_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -294,7 +294,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
+    pub(super) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
         let previous = self.output.last()?;
         let trimmed = previous.trim_end();
         if !head_ends_binary_operator(trimmed) || unmatched_open_bracket_column(trimmed).is_none() {
@@ -314,7 +314,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(crate) fn function_parameter_continuation_indent_spaces(
+    pub(super) fn function_parameter_continuation_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -534,7 +534,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
+    pub(super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
         let previous = self
             .output
             .iter()
@@ -569,7 +569,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn asm_colon_line_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(super) fn asm_colon_line_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line.trim_start().starts_with(':') {
             return None;
         }
@@ -592,7 +592,7 @@ impl FormatEngine<'_> {
         saw_asm.then_some(colon_spaces).flatten()
     }
 
-    pub(crate) fn contextual_line_indent_spaces(
+    pub(super) fn contextual_line_indent_spaces(
         &self,
         line: &str,
         indent: usize,

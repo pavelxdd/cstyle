@@ -307,7 +307,7 @@ impl FormatEngine<'_> {
         .then_some(leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(crate) fn split_else_case_comma_argument_indent_spaces(
+    fn split_else_case_comma_argument_indent_spaces(
         &self,
         line: &str,
         split_else_context: bool,
@@ -1793,7 +1793,7 @@ impl FormatEngine<'_> {
         (previous_indent > base + self.options.indent_width).then_some(previous_indent)
     }
 
-    pub(crate) fn split_new_call_paren_indent_spaces(&self) -> Option<usize> {
+    fn split_new_call_paren_indent_spaces(&self) -> Option<usize> {
         if let Some(previous) = self
             .output
             .iter()

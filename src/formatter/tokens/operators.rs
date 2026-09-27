@@ -970,10 +970,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn should_attach_sizeof_after_standalone_call_argument(
-        &self,
-        next: Option<&Token>,
-    ) -> bool {
+    fn should_attach_sizeof_after_standalone_call_argument(&self, next: Option<&Token>) -> bool {
         if !matches!(next, Some(Token::Word(word)) if word == "sizeof")
             || !self.current.trim_end().ends_with(')')
             || !self.current.trim_start().starts_with('(')
@@ -1003,12 +1000,12 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn is_trailing_return_arrow(&self) -> bool {
+    fn is_trailing_return_arrow(&self) -> bool {
         let current = self.current.trim_end();
         current.starts_with("auto ") && current.ends_with(')')
     }
 
-    pub(crate) fn is_prefix_increment_or_decrement(&self) -> bool {
+    fn is_prefix_increment_or_decrement(&self) -> bool {
         !matches!(
             self.layout.previous,
             PreviousToken::Word
@@ -1018,11 +1015,11 @@ impl FormatEngine<'_> {
         ) || trailing_word(&self.current) == "return"
     }
 
-    pub(crate) fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {
+    fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {
         matches!(next, Some(Token::Number(_))) && self.current_ends_numeric_cast()
     }
 
-    pub(crate) fn is_sizeof_typedef_unary_sign(&self, next: Option<&Token>) -> bool {
+    fn is_sizeof_typedef_unary_sign(&self, next: Option<&Token>) -> bool {
         if !matches!(next, Some(Token::Number(_))) {
             return false;
         }
@@ -1039,7 +1036,7 @@ impl FormatEngine<'_> {
         is_pointer_type_word(trailing_word(&current[open + 1..current.len() - 1]))
     }
 
-    pub(crate) fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
+    fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
         if !matches!(
             next,
             Some(Token::Word(_) | Token::Number(_) | Token::Symbol('('))
@@ -1058,7 +1055,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(crate) fn is_unary_sign(&self) -> bool {
+    fn is_unary_sign(&self) -> bool {
         matches!(
             self.layout.previous,
             PreviousToken::None
@@ -1070,7 +1067,7 @@ impl FormatEngine<'_> {
             || matches!(trailing_word(&self.current), "return" | "case")
     }
 
-    pub(crate) fn current_ends_prefix_increment_or_decrement(&self) -> bool {
+    fn current_ends_prefix_increment_or_decrement(&self) -> bool {
         let current = self.current.trim_end();
         let Some(before) = current
             .strip_suffix("++")
@@ -1085,12 +1082,12 @@ impl FormatEngine<'_> {
             || head_ends_binary_operator(before)
     }
 
-    pub(crate) fn current_ends_postfix_increment_or_decrement(&self) -> bool {
+    fn current_ends_postfix_increment_or_decrement(&self) -> bool {
         let current = self.current.trim_end();
         current.ends_with("++") || current.ends_with("--")
     }
 
-    pub(crate) fn is_in_case_label_expression(&self) -> bool {
+    pub(super) fn is_in_case_label_expression(&self) -> bool {
         let current = self.current.trim_start();
         current
             .strip_prefix("case")
@@ -1099,7 +1096,7 @@ impl FormatEngine<'_> {
             && !current.contains(':')
     }
 
-    pub(crate) fn push_unary_prefix(&mut self, operator: &str) {
+    fn push_unary_prefix(&mut self, operator: &str) {
         let word = trailing_word(&self.current);
         let after_return = word == "return";
         let after_return_or_case = after_return || matches!(word, "case" | "do");

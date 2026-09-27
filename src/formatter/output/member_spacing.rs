@@ -71,7 +71,7 @@ impl FormatEngine<'_> {
         self.layout.pending_member_spacing = None;
     }
 
-    pub(crate) fn observe_member_spacing_boundary(&mut self, line: &str) {
+    pub(super) fn observe_member_spacing_boundary(&mut self, line: &str) {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }

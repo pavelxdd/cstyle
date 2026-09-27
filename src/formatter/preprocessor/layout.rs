@@ -98,7 +98,7 @@ impl SplitElseLineStart {
     }
 }
 
-pub(crate) fn embedded_branch_separator(code: &str) -> bool {
+fn embedded_branch_separator(code: &str) -> bool {
     let trimmed = code.trim_start();
     if trimmed.starts_with('#') || code.contains("#if") {
         return false;
@@ -655,7 +655,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn clear_preprocessor_split_else_indent(&mut self) {
+    fn clear_preprocessor_split_else_indent(&mut self) {
         if self
             .layout
             .frame_stack
@@ -667,7 +667,7 @@ impl FormatEngine<'_> {
         self.preprocessor.split_else.reset();
     }
 
-    pub(crate) fn update_preprocessor_split_else_state(&mut self, line: &str, line_kind: LineKind) {
+    fn update_preprocessor_split_else_state(&mut self, line: &str, line_kind: LineKind) {
         if line_kind != LineKind::Normal {
             return;
         }

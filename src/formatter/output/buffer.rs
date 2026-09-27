@@ -19,9 +19,9 @@ pub(crate) struct LineBraceMeta {
     pub(crate) closes: usize,
     pub(crate) opens: usize,
     pub(crate) open_shape: OpenBraceShape,
-    pub(crate) trim_start_byte: usize,
-    pub(crate) trim_end_byte: usize,
-    pub(crate) code_end_byte: usize,
+    trim_start_byte: usize,
+    trim_end_byte: usize,
+    code_end_byte: usize,
     pub(crate) paren_closes: usize,
     pub(crate) paren_open_count: usize,
     pub(crate) paren_last_open_column: Option<usize>,
@@ -110,7 +110,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
 }
 
 #[derive(Clone, Copy, Default)]
-pub(crate) struct OutputLineHints {
+pub(super) struct OutputLineHints {
     has_colon: bool,
     has_else: bool,
     has_hash: bool,
@@ -119,7 +119,7 @@ pub(crate) struct OutputLineHints {
     starts_star: bool,
 }
 
-pub(crate) fn output_line_hints(line: &str) -> OutputLineHints {
+pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
     let bytes = line.as_bytes();
     let mut hints = OutputLineHints::default();
     let mut first_non_space = None;
@@ -171,7 +171,7 @@ impl OutputBuffer {
         self.push_with_hints(line, hints);
     }
 
-    pub(crate) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
+    pub(super) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
         self.record_hints(&line, hints);
         let index = self.lines.len();
         if !line.trim().is_empty() {
@@ -182,7 +182,7 @@ impl OutputBuffer {
         self.meta.push(OnceCell::new());
     }
 
-    pub(crate) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
+    pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
         let suffix = line.get(structural_start..).unwrap_or("");
         self.record_hints(suffix, output_line_hints(suffix));
         let meta = compute_raw_literal_line_meta(&line, structural_start);

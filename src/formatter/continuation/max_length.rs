@@ -42,7 +42,7 @@ impl MaxLengthLineState {
         self.suffix_width = width;
     }
 
-    pub(crate) fn objc_message_indent_spaces(&self) -> Option<usize> {
+    fn objc_message_indent_spaces(&self) -> Option<usize> {
         self.objc_message_indent_spaces
     }
 
@@ -378,7 +378,7 @@ fn line_has_constructor_initializer(line: &str) -> bool {
         && line[close + 1..].trim_start().starts_with(':')
 }
 
-pub(crate) fn lambda_parameter_continuation_indent(
+pub(super) fn lambda_parameter_continuation_indent(
     line: &str,
     base_indent_width: usize,
     indent_width: usize,

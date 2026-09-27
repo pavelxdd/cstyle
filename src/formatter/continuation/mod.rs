@@ -223,7 +223,7 @@ impl FormatEngine<'_> {
             && self.current.trim_start().starts_with('.')
     }
 
-    pub(crate) fn line_ends_with_bare_angle_operator(&self) -> bool {
+    fn line_ends_with_bare_angle_operator(&self) -> bool {
         if self.current.trim_start().starts_with("template") {
             return false;
         }
@@ -232,7 +232,7 @@ impl FormatEngine<'_> {
             || (trimmed.ends_with('>') && !trimmed.ends_with(">>") && !trimmed.ends_with("->"))
     }
 
-    pub(crate) fn current_ends_with_pointer_declarator(&self) -> bool {
+    fn current_ends_with_pointer_declarator(&self) -> bool {
         let trimmed = self.current.trim_end();
         if trimmed.ends_with("||") {
             return false;
@@ -334,7 +334,7 @@ impl FormatEngine<'_> {
             || self.current.trim_end().ends_with(" :")
     }
 
-    pub(crate) fn current_looks_like_split_function_head(&self) -> bool {
+    fn current_looks_like_split_function_head(&self) -> bool {
         let line = self.current.trim_end();
         if line.is_empty() || function_head_has_assignment(line) || is_header(self.options, line) {
             return false;
@@ -617,7 +617,7 @@ impl FormatEngine<'_> {
             .map(|delimiter| delimiter.opener_output_column + 1 + unindent)
     }
 
-    pub(crate) fn union_return_parameter_continuation_indent_spaces(
+    fn union_return_parameter_continuation_indent_spaces(
         &self,
         line_indent_spaces: usize,
     ) -> Option<usize> {
@@ -644,7 +644,7 @@ impl FormatEngine<'_> {
             )
     }
 
-    pub(crate) fn has_active_continuation_indent(&self) -> bool {
+    fn has_active_continuation_indent(&self) -> bool {
         self.layout
             .nesting
             .current_continuation_indent_spaces()
@@ -1080,7 +1080,7 @@ impl FormatEngine<'_> {
         Some(self.continuation_base_indent() * self.options.indent_width + column + 3)
     }
 
-    pub(crate) fn aligned_after_paren_indent_spaces(&self) -> Option<usize> {
+    fn aligned_after_paren_indent_spaces(&self) -> Option<usize> {
         let base_spaces = self
             .layout
             .continuation_indent
@@ -1120,10 +1120,7 @@ impl FormatEngine<'_> {
         Some(spaces)
     }
 
-    pub(crate) fn attached_return_type_indent_delta(
-        &self,
-        current_indent_spaces: usize,
-    ) -> Option<usize> {
+    fn attached_return_type_indent_delta(&self, current_indent_spaces: usize) -> Option<usize> {
         if !self.options.attach_return_type && !self.options.attach_return_type_decl {
             return None;
         }
@@ -1151,10 +1148,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn trailing_open_paren_continuation_indent_spaces(
-        &self,
-        base_spaces: usize,
-    ) -> Option<usize> {
+    fn trailing_open_paren_continuation_indent_spaces(&self, base_spaces: usize) -> Option<usize> {
         let columns = unmatched_open_paren_columns(&self.current);
         let trailing_column = *columns.last()?;
         if self.current.trim_end().chars().count() != trailing_column + 1 {
@@ -1321,7 +1315,7 @@ impl FormatEngine<'_> {
         (matches_operator && frame.operator_starts_output_line).then_some(frame.line_indent_spaces)
     }
 
-    pub(crate) fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
+    fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
         if self.layout.indentation.statement_depth() != 0
             || self.layout.in_class_base_clause
             || self.in_enum_declaration_brace()
@@ -1372,7 +1366,7 @@ impl FormatEngine<'_> {
         Some(prefix_len + declaration_comma_continuation_column(line.trim_start()))
     }
 
-    pub(crate) fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {
+    fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {
         if !self.current.trim_start().starts_with(':') {
             return None;
         }
@@ -1387,7 +1381,7 @@ impl FormatEngine<'_> {
         saw_asm.then_some(self.current_line_indent_spaces())
     }
 
-    pub(crate) fn chained_ternary_continuation_indent_spaces(&self) -> Option<usize> {
+    fn chained_ternary_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         let current_indent = self.current_line_indent_spaces();
         let base_indent = self.continuation_base_indent() * self.options.indent_width;
@@ -1395,7 +1389,7 @@ impl FormatEngine<'_> {
             .then_some(current_indent)
     }
 
-    pub(crate) fn split_aggregate_declaration_name_indent_spaces(&self) -> Option<usize> {
+    fn split_aggregate_declaration_name_indent_spaces(&self) -> Option<usize> {
         if !self.newline_breaks_statement
             || self.next_line.word_followed_by_open_paren
             || self.layout.indentation.statement_depth() != 0
@@ -1424,7 +1418,7 @@ impl FormatEngine<'_> {
             .then_some(self.current_line_indent_spaces() + self.options.indent_width)
     }
 
-    pub(crate) fn run_in_enum_assignment_continuation_spaces(&self) -> Option<usize> {
+    fn run_in_enum_assignment_continuation_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         let trimmed = line.trim_start();
         let after_brace = trimmed.find('{')? + 1;
@@ -1507,7 +1501,7 @@ impl FormatEngine<'_> {
         Some(self.current_line_indent_spaces() + trailing_binary_operator_column(line)?)
     }
 
-    pub(crate) fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
+    fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         if self.layout.nesting.paren_depth == 0 || !head_ends_binary_operator(line) {
             return None;
@@ -1560,7 +1554,7 @@ impl FormatEngine<'_> {
         Some(base + visual_width_from(&code[..value_offset], base, self.options.tab_width))
     }
 
-    pub(crate) fn assignment_rhs_continuation_column(&self) -> Option<usize> {
+    fn assignment_rhs_continuation_column(&self) -> Option<usize> {
         if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
             return None;
         }
@@ -1593,7 +1587,7 @@ impl FormatEngine<'_> {
         Some(base + visual_width_from(&code[..value_offset], base, self.options.tab_width))
     }
 
-    pub(crate) fn return_operator_continuation_indent_spaces(&self) -> Option<usize> {
+    fn return_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         (head_ends_binary_operator(line)).then(|| self.return_continuation_indent_spaces())?
     }
@@ -1617,11 +1611,11 @@ impl FormatEngine<'_> {
         Some(base + (line.len() - trimmed.len()) + return_value_column_offset(trimmed))
     }
 
-    pub(crate) fn is_stream_continuation_break(&self) -> bool {
+    fn is_stream_continuation_break(&self) -> bool {
         self.stream_operator_indent_spaces().is_some()
     }
 
-    pub(crate) fn stream_operator_indent_spaces(&self) -> Option<usize> {
+    fn stream_operator_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         if line.ends_with("*/") && !line.contains("/*") {
             return None;
@@ -1699,7 +1693,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn is_min_conditional_continuation(&self) -> bool {
+    fn is_min_conditional_continuation(&self) -> bool {
         if self.current_is_conditional_header_continuation() {
             return true;
         }
@@ -1707,7 +1701,7 @@ impl FormatEngine<'_> {
         line.ends_with('?') || line.ends_with(" :")
     }
 
-    pub(crate) fn current_is_operator_led_continuation(&self) -> bool {
+    fn current_is_operator_led_continuation(&self) -> bool {
         if self.layout.indentation.statement_depth() != 0
             || self.layout.command_state.current_header.is_some()
         {

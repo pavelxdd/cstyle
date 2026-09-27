@@ -578,7 +578,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn unwind_else_if_break_depths(&mut self) {
+    fn unwind_else_if_break_depths(&mut self) {
         let depth = self.layout.indentation.indent();
         while self
             .layout
@@ -590,7 +590,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn should_attach_closing_header(&self, next: Option<&Token>) -> bool {
+    pub(super) fn should_attach_closing_header(&self, next: Option<&Token>) -> bool {
         if matches!(next, Some(Token::Word(word)) if word == "while")
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
         {
@@ -1230,7 +1230,7 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(crate) fn is_attached_closing_header_style(options: &FormatOptions) -> bool {
+pub(super) fn is_attached_closing_header_style(options: &FormatOptions) -> bool {
     matches!(
         options.brace_style,
         BraceStyle::Attach | BraceStyle::OneTrueBrace | BraceStyle::Ratliff

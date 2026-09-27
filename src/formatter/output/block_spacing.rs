@@ -80,7 +80,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn should_preserve_block_spacing_comment_blank(
+    pub(super) fn should_preserve_block_spacing_comment_blank(
         &self,
         tokens: &[Token],
         following_index: Option<usize>,
@@ -124,7 +124,7 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(crate) fn observe_finished_block_spacing_line(&mut self) {
+    pub(super) fn observe_finished_block_spacing_line(&mut self) {
         if !self.options.break_blocks {
             return;
         }
@@ -261,7 +261,7 @@ pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
     )
 }
 
-pub(crate) fn is_standard_break_blocks_opening_header(word: &str) -> bool {
+fn is_standard_break_blocks_opening_header(word: &str) -> bool {
     matches!(
         word,
         "if" | "for" | "while" | "switch" | "do" | "try" | "__try" | "case" | "default"

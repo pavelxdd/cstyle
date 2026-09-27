@@ -1563,7 +1563,7 @@ impl FormatEngine<'_> {
         word_count >= 2 || (next_is_number && word_count >= 1)
     }
 
-    pub(crate) fn is_class_initializer_colon(&self) -> bool {
+    fn is_class_initializer_colon(&self) -> bool {
         let code = &self.current[..self.current_trailing_comment_split_limit()];
         self.code_is_class_initializer_signature(code.trim_end())
     }

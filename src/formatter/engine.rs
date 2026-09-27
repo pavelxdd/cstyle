@@ -57,11 +57,11 @@ pub(crate) struct TokenPushContext<'a> {
     pub(crate) following_closing_braces: usize,
 }
 
-pub(crate) struct LineSourceColumns {
+struct LineSourceColumns {
     pub(crate) prefix: Vec<usize>,
-    pub(crate) non_ws_prefix: Vec<usize>,
-    pub(crate) first_non_ws: Option<usize>,
-    pub(crate) first_non_ws_is_brace: bool,
+    non_ws_prefix: Vec<usize>,
+    first_non_ws: Option<usize>,
+    first_non_ws_is_brace: bool,
     pub(crate) leading_indent: usize,
 }
 
@@ -97,8 +97,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) output: buffer::OutputBuffer,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
-    pub(crate) line_brace_match_start: usize,
-    pub(crate) line_brace_matches: Vec<Option<usize>>,
+    line_brace_match_start: usize,
+    line_brace_matches: Vec<Option<usize>>,
     pub(crate) previous_was_newline: bool,
     pub(crate) previous_was_template_close: bool,
     pub(crate) newline_breaks_statement: bool,

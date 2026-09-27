@@ -87,7 +87,7 @@ pub(crate) fn is_default_label_start(line: &str) -> bool {
     })
 }
 
-pub(crate) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
+fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     let chars = line.char_indices().collect::<Vec<_>>();
     let code_chars = line.chars().collect::<Vec<_>>();
     let mut index = chars.partition_point(|(byte_index, _)| *byte_index < start);
@@ -163,7 +163,7 @@ pub(crate) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     None
 }
 
-pub(crate) fn is_one_line_block_reached(line: &str, start: usize) -> bool {
+fn is_one_line_block_reached(line: &str, start: usize) -> bool {
     let braces = code_delimiters(line, start);
     let Some(open) = braces.iter().position(|(_, ch)| *ch == '{') else {
         return false;
@@ -172,7 +172,7 @@ pub(crate) fn is_one_line_block_reached(line: &str, start: usize) -> bool {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(crate) struct CodeDelimiterState {
+struct CodeDelimiterState {
     in_block_comment: bool,
     quote: Option<char>,
     escaped: bool,
@@ -183,7 +183,7 @@ fn code_delimiters(line: &str, start: usize) -> Vec<(usize, char)> {
     code_delimiters_stateful(line, start, &mut CodeDelimiterState::default())
 }
 
-pub(crate) fn code_delimiters_stateful(
+fn code_delimiters_stateful(
     line: &str,
     start: usize,
     state: &mut CodeDelimiterState,
@@ -793,7 +793,7 @@ fn char_index_after_byte(chars: &[(usize, char)], byte_index: usize) -> usize {
     chars.partition_point(|(index, _)| *index <= byte_index)
 }
 
-pub(crate) fn starts_inline_case_statement(line: &str) -> bool {
+fn starts_inline_case_statement(line: &str) -> bool {
     let line = line.trim_start();
     if !(starts_header_word(line, "case") || starts_header_word(line, "default")) {
         return false;
@@ -829,7 +829,7 @@ pub(crate) fn starts_inline_case_statement(line: &str) -> bool {
     false
 }
 
-pub(crate) fn is_braced_switch_label_line(line: &str) -> bool {
+fn is_braced_switch_label_line(line: &str) -> bool {
     let code = line[..trailing_comment_split_limit(line)].trim_end();
     let trimmed = code.trim_start();
     code.ends_with('{') && (find_case_colon(trimmed).is_some() || trimmed == "default: {")
@@ -1242,7 +1242,7 @@ impl FormatEngine<'_> {
         self.layout.switch_case_layout.closing_line_needs_unindent
     }
 
-    pub(crate) fn has_case_body_at_current_depth(&self) -> bool {
+    fn has_case_body_at_current_depth(&self) -> bool {
         let current = self.layout.nesting.brace_header_stack.len();
         self.layout
             .switch_case_layout

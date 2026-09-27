@@ -459,7 +459,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn update_word_state(&mut self, word: &str, next: Option<&Token>) {
+    fn update_word_state(&mut self, word: &str, next: Option<&Token>) {
         match word {
             "extern" if matches!(next, Some(Token::StringLiteral(literal)) if literal == "\"C\"") =>
             {

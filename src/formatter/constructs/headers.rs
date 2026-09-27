@@ -1008,7 +1008,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn braceless_header_accepts_while(&self, base: usize) -> bool {
+    fn braceless_header_accepts_while(&self, base: usize) -> bool {
         if self
             .layout
             .frame_stack
@@ -1347,7 +1347,7 @@ impl FormatEngine<'_> {
         current.is_empty() || current.ends_with('}') || current.ends_with(')')
     }
 
-    pub(crate) fn block_word_is_recognized(&self, word: &str, next: Option<&Token>) -> bool {
+    fn block_word_is_recognized(&self, word: &str, next: Option<&Token>) -> bool {
         match word {
             "module" => {
                 self.layout.command_state.previous_non_ws_char != Some(')')

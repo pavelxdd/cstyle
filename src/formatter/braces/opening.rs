@@ -2360,7 +2360,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn emit_opening_brace_space(&mut self, brace_type: BraceType) {
+    pub(super) fn emit_opening_brace_space(&mut self, brace_type: BraceType) {
         if self.current_is_lambda_body_header() {
             self.emit_source_space_or_ensure();
             return;
@@ -2436,7 +2436,7 @@ impl FormatEngine<'_> {
             && self.control_paren_init_brace_indent_spaces().is_some()
     }
 
-    pub(crate) fn control_paren_init_brace_indent_spaces(&self) -> Option<usize> {
+    pub(super) fn control_paren_init_brace_indent_spaces(&self) -> Option<usize> {
         if self.layout.nesting.paren_depth == 0
             || !matches!(
                 self.options.brace_style,
@@ -2481,7 +2481,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn should_indent_brace_line(&self, brace_type: BraceType) -> bool {
+    pub(super) fn should_indent_brace_line(&self, brace_type: BraceType) -> bool {
         if self.options.brace_style == BraceStyle::Whitesmith {
             return brace_type != BraceType::Namespace || self.options.indent_namespaces;
         }

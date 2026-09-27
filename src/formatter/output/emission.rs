@@ -11,7 +11,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
 
 impl FormatEngine<'_> {
-    pub(crate) fn publish_formatted_line_layout(
+    pub(super) fn publish_formatted_line_layout(
         &mut self,
         line: &str,
         layout: &LineLayout,
@@ -205,7 +205,7 @@ impl FormatEngine<'_> {
         format!("{prefix}{}", line.trim_start_matches([' ', '\t']))
     }
 
-    pub(crate) fn publish_unadjusted_line(&mut self, line: String) {
+    pub(super) fn publish_unadjusted_line(&mut self, line: String) {
         self.layout.previous_pre_adjust_line = Some(line.clone());
         self.publish_ready_line(line);
     }
@@ -258,7 +258,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn deferred_post_emission_layout(
+    pub(super) fn deferred_post_emission_layout(
         &self,
         line: &str,
         layout: &LineLayout,
@@ -274,7 +274,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn apply_post_emission_state(
+    pub(super) fn apply_post_emission_state(
         &mut self,
         line: &str,
         layout: &LineLayout,

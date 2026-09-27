@@ -43,7 +43,7 @@ pub(crate) fn is_split_export_head(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn in_open_class_head(&self) -> bool {
+    fn in_open_class_head(&self) -> bool {
         for index in (0..self.output.len()).rev() {
             let trimmed = self.output.trimmed(index);
             if trimmed.is_empty() {

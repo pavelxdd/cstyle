@@ -14,7 +14,7 @@ pub(crate) fn template_declaration_line_complete(line: &str) -> bool {
     line.ends_with('>') && angle_depth(line) <= 0
 }
 
-pub(crate) fn angle_depth_delta(line: &str) -> isize {
+fn angle_depth_delta(line: &str) -> isize {
     line.chars().fold(0, |depth, ch| match ch {
         '<' => depth + 1,
         '>' => depth - 1,
@@ -119,7 +119,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn output_closes_multiline_template_declaration_before(&self, end: usize) -> bool {
+    pub(super) fn output_closes_multiline_template_declaration_before(&self, end: usize) -> bool {
         let lines: Vec<&str> = self.output[..end]
             .iter()
             .rev()

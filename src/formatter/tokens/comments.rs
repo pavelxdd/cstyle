@@ -440,7 +440,7 @@ impl FormatEngine<'_> {
         });
     }
 
-    pub(crate) fn reindent_trailing_comment(&mut self, line_kind: LineKind) -> bool {
+    pub(super) fn reindent_trailing_comment(&mut self, line_kind: LineKind) -> bool {
         let mut end = self.output.len();
         while end > 0 && self.output[end - 1].trim().is_empty() {
             end -= 1;
@@ -2750,7 +2750,7 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
 /// Comment placement decisions carried between tokens and lines.
 #[derive(Debug, Default)]
 pub(crate) struct CommentState {
-    pub(crate) run_in_comment_brace_lines: Vec<usize>,
+    run_in_comment_brace_lines: Vec<usize>,
     pub(crate) line_comment_starts_reordered_brace_body: bool,
     pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) next_comment_ends_line: bool,

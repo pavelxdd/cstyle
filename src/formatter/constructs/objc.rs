@@ -38,7 +38,7 @@ fn line_is_label_style_dictionary_key(line: &str) -> bool {
             .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
-pub(crate) fn objc_message_selector_indent_spaces(
+fn objc_message_selector_indent_spaces(
     line: &str,
     frame: &BracketFrame,
     tab_width: usize,
@@ -89,7 +89,7 @@ pub(crate) fn objc_message_selector_indent_spaces(
     None
 }
 
-pub(crate) fn objc_method_colon_position(line: &str) -> Option<usize> {
+fn objc_method_colon_position(line: &str) -> Option<usize> {
     let mut ternary = false;
     for (index, ch) in line.chars().enumerate() {
         match ch {

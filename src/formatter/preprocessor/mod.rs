@@ -97,7 +97,7 @@ pub(crate) struct PreprocessorBranchState {
     pub(crate) layout: LayoutState,
     pub(crate) first_body_indent_spaces: Option<usize>,
     pub(crate) restore_body_indent: bool,
-    pub(crate) preprocessor_split_else: PreprocessorSplitElseState,
+    preprocessor_split_else: PreprocessorSplitElseState,
     pub(crate) header_paren: HeaderParenState,
     pub(crate) inline_array: InlineArrayState,
     pub(crate) pending_extern: bool,
@@ -151,7 +151,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn preprocessor_region_from_brace_stack(
+    fn preprocessor_region_from_brace_stack(
         brace_type_stack: &[BraceType],
         in_macro_body: bool,
     ) -> PreprocessorRegion {
@@ -170,10 +170,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn preprocessor_region_allows_block_indent(
-        &self,
-        region: PreprocessorRegion,
-    ) -> bool {
+    fn preprocessor_region_allows_block_indent(&self, region: PreprocessorRegion) -> bool {
         match region {
             PreprocessorRegion::TopLevel => self.layout.indentation.indent() == 0,
             PreprocessorRegion::Namespace => !self.options.indent_namespaces,
@@ -331,7 +328,7 @@ fn preprocessor_block_followed_by_code(tokens: &[Token], start: usize) -> bool {
     })
 }
 
-pub(crate) fn collapse_pound_whitespace(line: &str) -> String {
+fn collapse_pound_whitespace(line: &str) -> String {
     let Some(rest) = line.strip_prefix('#') else {
         return line.to_string();
     };
@@ -427,14 +424,14 @@ pub(crate) fn is_known_preprocessor_directive(directive: &str) -> bool {
         )
 }
 
-pub(crate) fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
+fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
     matches!(directive, "region" | "endregion")
         || (directive == "pragma"
             && preprocessor_directive_argument(line)
                 .is_some_and(|argument| matches!(argument, "omp" | "region" | "endregion")))
 }
 
-pub(crate) fn is_bare_macro_invocation(trimmed: &str) -> bool {
+fn is_bare_macro_invocation(trimmed: &str) -> bool {
     !trimmed.is_empty()
         && trimmed.chars().any(|ch| ch.is_ascii_alphabetic())
         && trimmed
@@ -442,7 +439,7 @@ pub(crate) fn is_bare_macro_invocation(trimmed: &str) -> bool {
             .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
 }
 
-pub(crate) fn preprocessor_directive_argument(line: &str) -> Option<&str> {
+fn preprocessor_directive_argument(line: &str) -> Option<&str> {
     let mut parts = line.trim_start().strip_prefix('#')?.split_whitespace();
     parts.next()?;
     parts.next()
@@ -886,7 +883,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn update_preprocessor_state(
+    fn update_preprocessor_state(
         &mut self,
         line: &str,
         opening_indentable: Option<bool>,
@@ -957,7 +954,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn should_indent_preprocessor_block(&mut self) -> bool {
+    fn should_indent_preprocessor_block(&mut self) -> bool {
         let block_is_indentable = self
             .preprocessor
             .indentable_blocks

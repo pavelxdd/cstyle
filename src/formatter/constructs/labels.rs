@@ -461,7 +461,7 @@ pub(crate) fn is_standard_access_label(line: &str) -> bool {
     is_access_label(line, &[])
 }
 
-pub(crate) fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
+fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
     let trimmed = line.trim_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
@@ -487,7 +487,7 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
     rest.starts_with('{') && !rest.starts_with("::")
 }
 
-pub(crate) fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
+fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
     let trimmed = line[..trailing_comment_split_limit(line)].trim();
     let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trim_end();
     trimmed.ends_with(':')

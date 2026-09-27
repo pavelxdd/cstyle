@@ -373,7 +373,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn open_expanded_init_brace(
+    pub(super) fn open_expanded_init_brace(
         &mut self,
         brace_header: Option<String>,
         brace_type: BraceType,
@@ -392,7 +392,7 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
     }
 
-    pub(crate) fn open_multiline_attached_initializer_brace(
+    pub(super) fn open_multiline_attached_initializer_brace(
         &mut self,
         brace_header: Option<String>,
         brace_type: BraceType,
@@ -459,7 +459,7 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
     }
 
-    pub(crate) fn open_attached_range_for_init_brace(
+    pub(super) fn open_attached_range_for_init_brace(
         &mut self,
         brace_header: Option<String>,
         block_indent_extra: usize,
@@ -493,7 +493,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = true;
     }
 
-    pub(crate) fn open_range_for_init_brace(
+    pub(super) fn open_range_for_init_brace(
         &mut self,
         _brace_header: Option<String>,
         _brace_type: BraceType,
@@ -522,7 +522,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn open_inline_array_brace(
+    pub(super) fn open_inline_array_brace(
         &mut self,
         brace_header: Option<String>,
         brace_type: BraceType,
@@ -671,7 +671,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn close_inline_array_brace(&mut self) {
+    pub(super) fn close_inline_array_brace(&mut self) {
         if self.current_is_blank() {
             self.layout.frame_stack.clear_closed_braces();
         }
@@ -1238,7 +1238,7 @@ impl FormatEngine<'_> {
         aggregate_member.then_some(current_spaces + case_unindent_spaces)
     }
 
-    pub(crate) fn output_line_opens_initializer(&self, index: usize, code: &str) -> bool {
+    fn output_line_opens_initializer(&self, index: usize, code: &str) -> bool {
         let trimmed = code.trim();
         if code.contains("= {") || code.contains("({") || code.contains("{{") {
             return true;
@@ -1277,7 +1277,7 @@ pub(crate) struct InlineArrayState {
     pub(crate) initializer_designator_bracket_depth: usize,
     pub(crate) frames: Vec<InlineArrayFrame>,
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
-    pub(crate) aggregate_braces: Vec<bool>,
+    pub(super) aggregate_braces: Vec<bool>,
     pub(crate) nested_brace_arrays: std::collections::HashSet<usize>,
 }
 

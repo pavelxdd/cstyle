@@ -5,7 +5,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::LineReplayLayout;
 
 impl FormatEngine<'_> {
-    pub(crate) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
+    pub(super) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
         let input_continuation_indent = self
             .layout
             .continuation_indent

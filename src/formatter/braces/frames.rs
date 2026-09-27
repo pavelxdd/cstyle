@@ -89,7 +89,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn push_brace_frame(
+    pub(super) fn push_brace_frame(
         &mut self,
         brace_header: Option<&String>,
         brace_type: BraceType,
@@ -306,7 +306,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn update_current_brace_indent_from_last_output_line(&mut self) {
+    pub(super) fn update_current_brace_indent_from_last_output_line(&mut self) {
         let Some(line) = self.output.last() else {
             return;
         };
@@ -373,7 +373,7 @@ impl FormatEngine<'_> {
         self.update_current_brace_indent_columns(body, sibling);
     }
 
-    pub(crate) fn exit_brace_state(&mut self) {
+    pub(super) fn exit_brace_state(&mut self) {
         let closes_scope = self.layout.nesting.has_active_brace_scope();
         self.layout.indentation.exit_block();
         if closes_scope {
@@ -398,13 +398,13 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn mark_closed_brace_output_position(&mut self) {
+    pub(super) fn mark_closed_brace_output_position(&mut self) {
         self.layout
             .frame_stack
             .mark_last_closed_brace_output_position(self.output.len());
     }
 
-    pub(crate) fn current_open_brace_is_lambda_body(&self) -> bool {
+    pub(super) fn current_open_brace_is_lambda_body(&self) -> bool {
         self.layout
             .frame_stack
             .active_brace()

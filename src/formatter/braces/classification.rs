@@ -67,7 +67,7 @@ pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
     }
 }
 
-pub(crate) fn line_opens_parameterized_lambda_block(line: &str) -> bool {
+pub(super) fn line_opens_parameterized_lambda_block(line: &str) -> bool {
     if !line_opens_lambda_block(line) {
         return false;
     }
@@ -147,12 +147,12 @@ fn matching_open_index(text: &str, open: char, close: char) -> Option<usize> {
     None
 }
 
-pub(crate) fn is_namespace_or_module_block_header(line: &str) -> bool {
+pub(super) fn is_namespace_or_module_block_header(line: &str) -> bool {
     is_namespace_block_header(line) || line.trim_start().starts_with("module ")
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn classify_opening_brace(
+    pub(super) fn classify_opening_brace(
         &mut self,
         header: Option<&str>,
         pending_extern: bool,
@@ -321,7 +321,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn brace_opens_constructor_body(&self) -> bool {
+    fn brace_opens_constructor_body(&self) -> bool {
         if self.layout.command_state.previous_command_char != Some('}') {
             return false;
         }
@@ -341,7 +341,7 @@ impl FormatEngine<'_> {
         line_has_constructor_init_colon(self.current.trim())
     }
 
-    pub(crate) fn current_is_lambda_body_header(&self) -> bool {
+    pub(super) fn current_is_lambda_body_header(&self) -> bool {
         let head = self.current.trim_end();
         is_lambda_body_header(head)
             || head
@@ -349,7 +349,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|index| is_lambda_body_header(head[index..].trim_start()))
     }
 
-    pub(crate) fn current_ends_trailing_return_definition(&self) -> bool {
+    pub(super) fn current_ends_trailing_return_definition(&self) -> bool {
         let mut lines = Vec::new();
         for line in self
             .output
@@ -403,7 +403,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn current_ends_definition_header(&self) -> bool {
+    pub(super) fn current_ends_definition_header(&self) -> bool {
         let source = if self.current_is_blank() {
             match self.output.iter().rev().find(|line| {
                 let trimmed = line.trim_start();
@@ -418,7 +418,7 @@ impl FormatEngine<'_> {
         code_ends_definition_header(source)
     }
 
-    pub(crate) fn aggregate_header_ends_with_paren_group(&self) -> bool {
+    fn aggregate_header_ends_with_paren_group(&self) -> bool {
         let header = if self.current_is_blank() {
             self.output
                 .iter()
@@ -434,7 +434,7 @@ impl FormatEngine<'_> {
         trailing_matching_parens(trimmed).is_some_and(|(_, close)| close + 1 == trimmed.len())
     }
 
-    pub(crate) fn current_ends_compound_literal_type(&self) -> bool {
+    pub(super) fn current_ends_compound_literal_type(&self) -> bool {
         if self.current_is_blank() {
             return self
                 .output
@@ -456,7 +456,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(crate) fn previous_output_line_ends_with_declarator(&self) -> bool {
+    fn previous_output_line_ends_with_declarator(&self) -> bool {
         let Some(previous) = self.output.last().map(|line| line.trim_end()) else {
             return false;
         };
@@ -506,7 +506,7 @@ pub(crate) enum ExternCGuard {
     InsideBlock,
 }
 
-pub(crate) fn brace_indent_applies(brace_type: BraceType) -> bool {
+pub(super) fn brace_indent_applies(brace_type: BraceType) -> bool {
     matches!(
         brace_type,
         BraceType::Command
@@ -576,7 +576,7 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(crate) fn block_indent_extra(
+pub(super) fn block_indent_extra(
     header: Option<&str>,
     brace_type: BraceType,
     options: &FormatOptions,
@@ -649,7 +649,7 @@ pub(crate) fn lambda_header_has_trailing_return(line: &str) -> bool {
         .any(|(index, _)| line[..index].trim_end().ends_with(')'))
 }
 
-pub(crate) fn line_ends_lambda_parameter_list(line: &str) -> bool {
+pub(super) fn line_ends_lambda_parameter_list(line: &str) -> bool {
     let current = line.trim_end();
     let Some((open_pos, _)) = trailing_matching_parens(current) else {
         return false;

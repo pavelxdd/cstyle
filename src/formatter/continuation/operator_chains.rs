@@ -37,7 +37,7 @@ pub(crate) fn clear_operator_chain_frames(frame_stack: &mut FrameStack) {
     frame_stack.clear_logical_frames();
 }
 
-pub(crate) fn clear_logical_chain_indent(logical_chain_indent_spaces: &mut Option<usize>) {
+pub(super) fn clear_logical_chain_indent(logical_chain_indent_spaces: &mut Option<usize>) {
     *logical_chain_indent_spaces = None;
 }
 
@@ -1154,7 +1154,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn assignment_rhs_first_line_indent(
+    fn assignment_rhs_first_line_indent(
         &self,
         previous: &str,
         require_question: bool,
@@ -1552,7 +1552,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn previous_statement_is_braceless_ternary(&self) -> bool {
+    fn previous_statement_is_braceless_ternary(&self) -> bool {
         for raw in self.output.iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
@@ -1981,7 +1981,7 @@ impl FormatEngine<'_> {
         frame.colon_output_column
     }
 
-    pub(crate) fn ternary_arm_frame_indent_spaces(&self, current: &str) -> Option<usize> {
+    fn ternary_arm_frame_indent_spaces(&self, current: &str) -> Option<usize> {
         if current.starts_with('?') {
             let frame = self.layout.frame_stack.active_ternary()?;
             if frame.colon_role.is_some()
