@@ -1,6 +1,7 @@
 use crate::config::BraceStyle;
 use crate::formatter::braces::classification::{
-    contains_one_line_block, is_lambda_body_header, is_namespace_or_module_block_header,
+    ExternCGuard, contains_one_line_block, is_lambda_body_header,
+    is_namespace_or_module_block_header,
 };
 use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
@@ -328,7 +329,7 @@ impl FormatEngine<'_> {
         });
         self.exit_brace_state();
         if self.layout.indentation.brace_block_depth() == 0 {
-            self.cpp_extern_c_brace = 0;
+            self.extern_c_guard = ExternCGuard::Idle;
         }
         if self.layout.nesting.last_closed_brace_header.is_some() {
             self.layout.command_state.pre_brace_header_stack.pop();

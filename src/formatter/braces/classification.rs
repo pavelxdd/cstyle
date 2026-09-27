@@ -506,30 +506,46 @@ impl FormatEngine<'_> {
             && trailing_word(previous) != language::RETURN
     }
 
-    pub(crate) fn track_cpp_extern_c_brace(&mut self, token: &Token) {
+    pub(crate) fn track_extern_c_guard(&mut self, token: &Token) {
         match token {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => return,
             Token::Preprocessor(line) => {
-                if self.cpp_extern_c_brace == 0 && is_cplusplus_conditional(&line.text) {
-                    self.cpp_extern_c_brace = 1;
+                if self.extern_c_guard == ExternCGuard::Idle && is_cplusplus_conditional(&line.text)
+                {
+                    self.extern_c_guard = ExternCGuard::CplusplusConditional;
                 }
                 return;
             }
-            Token::Word(word) if word == "extern" && self.cpp_extern_c_brace == 1 => {
-                self.cpp_extern_c_brace = 2;
+            Token::Word(word)
+                if word == "extern"
+                    && self.extern_c_guard == ExternCGuard::CplusplusConditional =>
+            {
+                self.extern_c_guard = ExternCGuard::Extern;
                 return;
             }
-            Token::StringLiteral(literal) if literal == "\"C\"" && self.cpp_extern_c_brace == 2 => {
-                self.cpp_extern_c_brace = 3;
+            Token::StringLiteral(literal)
+                if literal == "\"C\"" && self.extern_c_guard == ExternCGuard::Extern =>
+            {
+                self.extern_c_guard = ExternCGuard::ExternC;
                 return;
             }
             Token::Symbol('{') => return,
             _ => {}
         }
-        if self.cpp_extern_c_brace == 3 {
-            self.cpp_extern_c_brace = 0;
+        if self.extern_c_guard == ExternCGuard::ExternC {
+            self.extern_c_guard = ExternCGuard::Idle;
         }
     }
+}
+
+/// Progress through a `#ifdef __cplusplus` / `extern "C" {` guard.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ExternCGuard {
+    Idle,
+    CplusplusConditional,
+    Extern,
+    ExternC,
+    InsideBlock,
 }
 
 pub(crate) fn brace_indent_applies(brace_type: BraceType) -> bool {

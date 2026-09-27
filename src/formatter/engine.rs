@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::braces::rewrite::{
     add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
@@ -126,7 +127,7 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) access_modified_braces: HashSet<usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) pending_extern: bool,
-    pub(crate) cpp_extern_c_brace: u8,
+    pub(crate) extern_c_guard: ExternCGuard,
 }
 
 impl<'a> FormatEngine<'a> {
@@ -189,7 +190,7 @@ impl<'a> FormatEngine<'a> {
             access_modified_braces: HashSet::new(),
             syntax_roles: SyntaxRoles::new(0),
             pending_extern: false,
-            cpp_extern_c_brace: 0,
+            extern_c_guard: ExternCGuard::Idle,
         }
     }
 
@@ -936,7 +937,7 @@ impl<'a> FormatEngine<'a> {
             self.header_paren.just_closed = false;
         }
 
-        self.track_cpp_extern_c_brace(token);
+        self.track_extern_c_guard(token);
 
         match token {
             Token::Word(word) => self.push_word(word, next),

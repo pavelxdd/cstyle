@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, IndentStyle, LineEnding};
 use crate::formatter::braces::classification::{
-    block_indent_extra, brace_indent_applies, is_lambda_body_header, is_lambda_capture_header,
-    is_namespace_or_module_block_header, lambda_header_has_trailing_return,
-    line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
-    line_opens_parameterized_lambda_block,
+    ExternCGuard, block_indent_extra, brace_indent_applies, is_lambda_body_header,
+    is_lambda_capture_header, is_namespace_or_module_block_header,
+    lambda_header_has_trailing_return, line_ends_lambda_parameter_list,
+    line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::InlineArrayFrame;
@@ -2070,9 +2070,10 @@ impl FormatEngine<'_> {
         if lambda_body_breaks_before_call {
             self.layout.nesting.mark_current_brace_break_before_call();
         }
-        let cpp_extern_c_block = brace_type == BraceType::Extern && self.cpp_extern_c_brace == 3;
+        let cpp_extern_c_block =
+            brace_type == BraceType::Extern && self.extern_c_guard == ExternCGuard::ExternC;
         if cpp_extern_c_block {
-            self.cpp_extern_c_brace = 4;
+            self.extern_c_guard = ExternCGuard::InsideBlock;
         }
         if let Some(opening_indent) = headerless_inline_command_column {
             self.layout.indentation.enter_block_without_indent(false);

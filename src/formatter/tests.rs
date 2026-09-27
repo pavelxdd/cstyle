@@ -1,6 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use crate::config::{BraceStyle, FormatOptions, PointerAlign};
+use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayFrame;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::format;
@@ -270,7 +271,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         aggregate_assignment: true,
     });
     formatter.pending_extern = true;
-    formatter.cpp_extern_c_brace = 3;
+    formatter.extern_c_guard = ExternCGuard::ExternC;
 
     let snapshot = formatter.branch_snapshot();
     formatter.layout.line_state.operator_padding_disabled = false;
@@ -291,7 +292,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
     formatter.inline_array.initializer_designator_bracket_depth = 0;
     formatter.inline_array.frames.clear();
     formatter.pending_extern = false;
-    formatter.cpp_extern_c_brace = 0;
+    formatter.extern_c_guard = ExternCGuard::Idle;
 
     formatter.restore_branch_snapshot(snapshot);
 
@@ -330,7 +331,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         }]
     );
     assert!(formatter.pending_extern);
-    assert_eq!(formatter.cpp_extern_c_brace, 3);
+    assert_eq!(formatter.extern_c_guard, ExternCGuard::ExternC);
 
     let snapshot = formatter.branch_snapshot();
     formatter.preprocessor.split_else.pending_body = false;

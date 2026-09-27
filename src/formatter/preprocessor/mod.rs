@@ -1,5 +1,6 @@
 //! Preprocessor directives, macro bodies, and backslash-continued lines.
 
+use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::constructs::headers::HeaderParenState;
 use crate::formatter::engine::{FormatEngine, LayoutState};
@@ -100,7 +101,7 @@ pub(crate) struct PreprocessorBranchState {
     pub(crate) header_paren: HeaderParenState,
     pub(crate) inline_array: InlineArrayState,
     pub(crate) pending_extern: bool,
-    pub(crate) cpp_extern_c_brace: u8,
+    pub(crate) extern_c_guard: ExternCGuard,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -956,7 +957,7 @@ impl FormatEngine<'_> {
             header_paren: self.header_paren.clone(),
             inline_array: self.inline_array.clone(),
             pending_extern: self.pending_extern,
-            cpp_extern_c_brace: self.cpp_extern_c_brace,
+            extern_c_guard: self.extern_c_guard,
         }
     }
 
@@ -970,7 +971,7 @@ impl FormatEngine<'_> {
             header_paren,
             inline_array,
             pending_extern,
-            cpp_extern_c_brace,
+            extern_c_guard,
         } = snapshot;
         self.layout = layout;
         self.preprocessor.split_else =
@@ -978,7 +979,7 @@ impl FormatEngine<'_> {
         self.header_paren = header_paren;
         self.inline_array = inline_array;
         self.pending_extern = pending_extern;
-        self.cpp_extern_c_brace = cpp_extern_c_brace;
+        self.extern_c_guard = extern_c_guard;
     }
 }
 
