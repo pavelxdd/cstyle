@@ -1,3 +1,5 @@
+//! Preprocessor directives, macro bodies, and backslash-continued lines.
+
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::constructs::headers::HeaderParenState;
 use crate::formatter::engine::{FormatEngine, LayoutState};

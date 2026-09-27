@@ -1,3 +1,5 @@
+//! Token roles decided before layout, and the C-family vocabulary they use.
+
 use crate::formatter::lexer::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
 };

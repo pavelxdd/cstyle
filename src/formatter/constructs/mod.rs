@@ -1,3 +1,5 @@
+//! Layout rules for specific language constructs.
+
 pub(crate) mod assembly;
 pub(crate) mod class_declarations;
 pub(crate) mod constructor_initializers;

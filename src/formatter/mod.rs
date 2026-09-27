@@ -1,3 +1,13 @@
+//! C, C++, and Objective-C formatter.
+//!
+//! [`format()`] normalizes line endings and tabs, tokenizes the source
+//! ([`lexer`]), and feeds the tokens through [`engine::FormatEngine`]. The
+//! engine classifies token roles ([`syntax`]), builds each output line with
+//! the per-token handlers ([`tokens`]) and the brace, construct,
+//! preprocessor, and continuation rules, and emits finished lines through
+//! [`output`]. Brace styles that reshape whole lines are applied last by
+//! [`braces::postprocess`].
+
 use crate::config::FormatOptions;
 use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;

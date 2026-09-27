@@ -1,3 +1,5 @@
+//! Splits normalized source text into tokens.
+
 use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};

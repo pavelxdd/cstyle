@@ -37,6 +37,18 @@ just check         # full release gate
 
 The release gate treats Rust, clippy, and rustdoc warnings as errors.
 
+Source layout:
+
+- `src/api.rs`: library entry points for text and encoded bytes.
+- `src/config/`: `FormatOptions`, option parsing, and config file lookup.
+- `src/source/`: input handling shared by the library: encodings, line
+  endings, and lexical helpers.
+- `src/formatter/`: the formatting engine; `formatter/mod.rs` documents its
+  pipeline and module groups.
+- `src/cli/`: the `cstyle` command-line front end.
+- `tests/format/`: formatting behavior; `tests/cli.rs`: binary behavior;
+  `tests/perf_bounded.rs`: bounded-runtime checks run by `just perf-bounded`.
+
 ## Usage
 
 ```sh

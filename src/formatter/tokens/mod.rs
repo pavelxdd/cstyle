@@ -1,3 +1,5 @@
+//! Per-token handlers that build the current output line.
+
 pub(crate) mod comments;
 pub(crate) mod disabled_formatting;
 pub(crate) mod literals;

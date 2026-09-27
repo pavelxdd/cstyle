@@ -1,3 +1,5 @@
+//! Engine state shared by several formatting concerns.
+
 pub(crate) mod current_line;
 pub(crate) mod frame;
 pub(crate) mod indentation;

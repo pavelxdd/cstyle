@@ -20,15 +20,14 @@ fn help_output() -> String {
 
 #[test]
 fn closed_stdout_is_reported_without_panicking() {
-    let mut child = Command::new(cstyle_binary())
+    let (reader, writer) = std::io::pipe().expect("create stdout pipe");
+    drop(reader);
+    let output = Command::new(cstyle_binary())
         .arg("--version")
-        .stdout(Stdio::piped())
+        .stdout(writer)
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .expect("run cstyle --version");
-    drop(child.stdout.take());
-
-    let output = child.wait_with_output().expect("wait for cstyle");
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert_eq!(output.status.code(), Some(1), "stderr: {stderr}");

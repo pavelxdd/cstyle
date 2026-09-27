@@ -1,3 +1,5 @@
+//! Indentation of continuation lines and maximum-length line splitting.
+
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::find_case_colon;

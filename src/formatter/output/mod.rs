@@ -1,3 +1,5 @@
+//! Line emission: indentation layout, vertical spacing, and the output buffer.
+
 mod blank_lines;
 pub(crate) mod block_spacing;
 pub(crate) mod buffer;

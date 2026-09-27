@@ -1,3 +1,5 @@
+//! Brace classification, placement, and brace-style rewrites.
+
 pub(crate) mod classification;
 pub(crate) mod closing;
 pub(crate) mod compound_literals;
