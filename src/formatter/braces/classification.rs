@@ -1,10 +1,10 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::rewrite::is_defer_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_conditional_header_line;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
-use crate::formatter::rewrite::is_defer_header;
 use crate::formatter::state::FormatterBraceType;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;

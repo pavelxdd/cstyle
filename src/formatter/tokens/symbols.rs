@@ -1,5 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
-use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::labels;
 use crate::formatter::lexer::Token;

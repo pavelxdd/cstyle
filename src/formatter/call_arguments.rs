@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     is_lambda_body_header, is_lambda_capture_header, lambda_header_has_trailing_return,
     line_opens_lambda_block,
 };
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;

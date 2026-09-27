@@ -1,4 +1,4 @@
-use crate::formatter::compound_literals::CompoundLiteralState;
+use crate::formatter::braces::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::HeaderParenState;

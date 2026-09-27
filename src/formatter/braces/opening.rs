@@ -1,12 +1,12 @@
 use crate::config::{BraceStyle, IndentStyle, LineEnding};
 use crate::formatter::block_spacing::is_break_blocks_closing_header;
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     block_indent_extra, brace_indent_applies, is_lambda_body_header, is_lambda_capture_header,
     is_namespace_or_module_block_header, lambda_header_has_trailing_return,
     line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
     line_opens_parameterized_lambda_block,
 };
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::labels;

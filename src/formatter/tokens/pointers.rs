@@ -1,5 +1,5 @@
 use crate::config::{PointerAlign, ReferenceAlign};
-use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::return_types::is_return_type_line;

@@ -1,5 +1,5 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{
     is_braceless_header_line, is_conditional_header_line, line_is_control_body_header,

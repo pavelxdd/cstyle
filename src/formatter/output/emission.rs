@@ -1,5 +1,5 @@
 use crate::config::IndentStyle;
-use crate::formatter::brace_classification::line_opens_lambda_block;
+use crate::formatter::braces::classification::line_opens_lambda_block;
 use crate::formatter::buffer;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::line_adjust::macro_call_starts_with;

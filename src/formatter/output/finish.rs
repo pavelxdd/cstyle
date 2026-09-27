@@ -1,4 +1,4 @@
-use crate::formatter::closing_braces::starts_post_closing_declaration;
+use crate::formatter::braces::closing::starts_post_closing_declaration;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::operator_chains;
 use crate::formatter::preprocessor::preprocessor_directive;

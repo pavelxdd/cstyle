@@ -1,9 +1,9 @@
 use crate::config::BraceStyle;
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     is_lambda_body_header, line_opens_lambda_block, line_opens_lambda_or_capture_only_block,
 };
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::call_arguments::callee_name_start_before_open;
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructor_initializers::has_inline_constructor_initializer_colon;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{

@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, PointerAlign};
-use crate::formatter::brace_classification::contains_one_line_block;
+use crate::formatter::braces::classification::contains_one_line_block;
+use crate::formatter::braces::rewrite::is_defer_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_attachable_closing_header;
 use crate::formatter::lexer::Token;
-use crate::formatter::rewrite::is_defer_header;
 use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};

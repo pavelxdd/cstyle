@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::brace_classification::is_lambda_capture_header;
+use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_conditional_header_line;
 use crate::formatter::lexer::{token_text, tokenize};

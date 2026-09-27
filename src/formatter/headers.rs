@@ -1,9 +1,9 @@
 use crate::config::BraceStyle;
 use crate::formatter::assembly::is_asm_block_header;
+use crate::formatter::braces::rewrite::is_add_braces_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
-use crate::formatter::rewrite::is_add_braces_header;
 use crate::formatter::state::frame::{BraceSemanticKind, HeaderFrame};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::switch_cases::{is_case_label_start, is_default_label_start};

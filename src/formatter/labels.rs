@@ -1,5 +1,5 @@
 use crate::config::{FormatOptions, IndentStyle};
-use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::starts_header_word;

@@ -1,6 +1,6 @@
 //! State carried across a *INDENT-OFF* ... *INDENT-ON* region.
 
-use crate::formatter::compound_literals::CompoundLiteralState;
+use crate::formatter::braces::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;

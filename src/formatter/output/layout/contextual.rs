@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, IndentStyle};
-use crate::formatter::brace_classification::line_opens_lambda_block;
+use crate::formatter::braces::classification::line_opens_lambda_block;
+use crate::formatter::braces::closing::starts_post_closing_declaration;
 use crate::formatter::call_arguments::{
     assignment_call_value_column, casted_assignment_value_column,
 };
-use crate::formatter::closing_braces::starts_post_closing_declaration;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, same_line_nested_header_extra,

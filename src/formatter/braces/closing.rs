@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     contains_one_line_block, is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::buffer::OpenBraceShape;

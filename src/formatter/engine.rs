@@ -1,6 +1,11 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::backslash_bodies::BackslashBodyState;
 use crate::formatter::block_spacing::BlockSpacingState;
+use crate::formatter::braces::rewrite::{
+    add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
+    remove_cross_line_statement_braces,
+};
+use crate::formatter::braces::{compound_literals, initializers};
 use crate::formatter::class_declarations::is_split_export_head;
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
@@ -9,10 +14,6 @@ use crate::formatter::lexer::{
 use crate::formatter::max_length::MaxLengthLineState;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
 use crate::formatter::preprocessor::preprocessor_block_indentability;
-use crate::formatter::rewrite::{
-    add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
-    remove_cross_line_statement_braces,
-};
 use crate::formatter::source_indent::source_indented_macro_row;
 use crate::formatter::state::current_line::CurrentLine;
 use crate::formatter::state::frame::FrameStack;
@@ -35,8 +36,8 @@ use crate::formatter::tokens::comments::trailing_comment_columns;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{
-    buffer, compound_literals, continuation, headers, initializer_braces, labels, line_adjust,
-    macro_invocations, objective_c, preprocessor, switch_cases, syntax,
+    buffer, continuation, headers, labels, line_adjust, macro_invocations, objective_c,
+    preprocessor, switch_cases, syntax,
 };
 use crate::source::lex::{is_identifier_continue, trailing_word};
 use std::collections::HashSet;
@@ -619,7 +620,7 @@ impl<'a> FormatEngine<'a> {
                         .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
             });
             let starts_initializer_designator =
-                initializer_braces::bracket_starts_initializer_designator(tokens, index, line.end);
+                initializers::bracket_starts_initializer_designator(tokens, index, line.end);
             let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
                 && self.inferred_definition_brace(tokens, index);
             let following_closing_braces = if matches!(tokens[index], Token::Symbol(';')) {
@@ -818,7 +819,7 @@ impl<'a> FormatEngine<'a> {
         }
         self.line_state.trailing_comment_columns = trailing_comment_columns;
         self.line_state.has_nested_designated_init_brace =
-            initializer_braces::has_nested_designated_init_brace(tokens);
+            initializers::has_nested_designated_init_brace(tokens);
 
         let mut statement_count = 0usize;
         let mut paren_depth = 0i32;

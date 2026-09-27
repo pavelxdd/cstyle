@@ -1,4 +1,4 @@
-use crate::formatter::brace_classification::is_lambda_capture_header;
+use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::ContinuationIndent;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};

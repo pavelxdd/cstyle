@@ -1,5 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::engine::FormatEngine;

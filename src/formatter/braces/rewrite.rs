@@ -1,12 +1,12 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::assembly::is_asm_block_header;
-use crate::formatter::brace_classification::{
+use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
     lambda_header_has_trailing_return,
 };
-use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::initializer_braces::bracket_starts_initializer_designator;
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
     next_non_whitespace, token_text,
