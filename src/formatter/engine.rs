@@ -440,247 +440,235 @@ impl<'a> FormatEngine<'a> {
                 continue;
             }
             if matches!(tokens[index], Token::Newline) {
-                let following_index = next_non_layout_token_index(tokens, index + 1);
-                let following = following_index.map(|i| &tokens[i]);
-                let after_following = following_index
-                    .and_then(|i| next_non_layout_token_index(tokens, i + 1))
-                    .map(|i| &tokens[i]);
-                if matches!(
-                    self.options.brace_style,
-                    BraceStyle::Pico | BraceStyle::Lisp
-                ) && matches!(following, Some(Token::Symbol('}')))
-                    && previous_non_whitespace(tokens, index, line.start).is_some()
-                    && let Some(Token::Whitespace(whitespace)) = tokens.get(index.wrapping_sub(1))
-                {
-                    if self.current_is_blank() {
-                        if let Some(previous) = self.output.last_mut()
-                            && !line_ends_with_comment(previous)
-                        {
-                            previous.truncate(previous.trim_end().len());
-                            previous.push_str(whitespace);
-                        }
-                    } else {
-                        self.trim_current_end_horizontal_space();
-                        self.current.push_str(whitespace);
-                        self.preserve_run_in_join_space = true;
-                    }
-                }
-                self.observe_blank_line_context(tokens, following_index);
-                self.newline_breaks_statement = Self::newline_following_token_breaks(following);
-                self.next_line.leads_with_assignment =
-                    matches!(following, Some(Token::Operator(operator)) if operator == "=");
-                self.next_line.leads_with_class_init =
-                    matches!(following, Some(Token::Symbol(':')))
-                        && self.colon_leads_class_initializer();
-                self.next_line.leads_with_class_base =
-                    matches!(following, Some(Token::Symbol(':')))
-                        && !self.colon_leads_class_initializer()
-                        && self.colon_leads_class_base_clause();
-                self.next_line.leads_with_comma = matches!(following, Some(Token::Symbol(',')));
-                self.next_line.leads_with_open_brace =
-                    matches!(following, Some(Token::Symbol('{')));
-                self.next_line.leads_with_close_brace =
-                    matches!(following, Some(Token::Symbol('}')));
-                self.next_line.leads_with_open_paren =
-                    matches!(following, Some(Token::Symbol('(')));
-                self.next_line.word_followed_by_open_paren = matches!(
-                    (following, after_following),
-                    (Some(Token::Word(_)), Some(Token::Symbol('(')))
-                );
-                self.next_line.leads_with_noexcept = matches!(
-                    (following, after_following),
-                    (Some(Token::Word(word)), Some(Token::Symbol('('))) if word == "noexcept"
-                );
+                self.observe_next_line_lead(tokens, index, line.start);
             }
-            let next_index = next_non_whitespace(tokens, index + 1, line.end);
-            let next = next_index.and_then(|next_index| tokens.get(next_index));
-            let next_is_adjacent = tokens
-                .get(index + 1)
-                .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
-            let following_operator =
-                following_operator_after_next_word(tokens, index + 1, line.end);
-            self.set_input_whitespace(tokens, index, line.start);
-            let offset = index - line.start;
-            self.token_input.token_begins_source_line = line_columns
-                .first_non_ws
-                .is_none_or(|first| first >= offset);
-            if self.options.align_method_colon
-                && self.layout.objc.colon_align.is_none()
-                && self.token_input.token_begins_source_line
-                && self.token_starts_objc_method_definition(tokens, index, line.end)
-            {
-                self.layout.objc.colon_align = self.compute_objc_method_colon_align(tokens, index);
-            }
-            let source_column = line_columns.prefix[offset];
-            let last_token_start = offset.checked_sub(1).map_or(0, |i| line_columns.prefix[i]);
-            let non_ws_count = line_columns.non_ws_prefix[offset];
-            let first_non_ws_is_brace = line_columns.first_non_ws_is_brace;
-            self.token_input.token_source_column = source_column;
-            self.token_input.token_source_line_indent = if non_ws_count == 0 {
-                source_column
-            } else {
-                line_columns.leading_indent
-            };
-            self.prepare_template_continuation_token_indent(source_column);
-            self.prepare_split_class_head_continuation();
-            if self.token_input.token_begins_source_line
-                && self.current.is_empty()
-                && self.layout.nesting.paren_depth == 0
-                && source_column
-                    > ContinuationIndent::Level(
-                        self.layout.indentation.indent()
-                            + self.case_body_indent_extra(LineKind::Normal),
-                    )
-                    .columns(self.options.indent_width)
-                && source_indented_macro_row(tokens, line.start, line.end, index)
-                && matches!(
-                    self.layout.nesting.brace_header_stack.last(),
-                    Some(Some(header)) if header == "switch"
-                )
-                && !matches!(
-                    self.layout.command_state.current_header.as_deref(),
-                    Some("case" | "default")
-                )
-                && !self
-                    .output
-                    .last()
-                    .is_some_and(|line| operators::head_ends_binary_operator(line.trim_end()))
-            {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(source_column);
-            }
-            self.pointer_run.gap_before_column =
-                Some(if self.token_input.previous_input_whitespace.is_some() {
-                    last_token_start
-                } else {
-                    source_column
-                });
-            self.token_input.token_line_opens_with_brace =
-                non_ws_count == 1 && first_non_ws_is_brace;
-            let no_token_after_comment = |start| {
-                next_non_whitespace(tokens, start, line.end)
-                    .is_none_or(|index| matches!(tokens.get(index), Some(Token::Newline)))
-            };
-            let token_followed_by_line_comment = next_index.is_some_and(|next_index| {
-                let direct_line_comment = matches!(
-                    tokens.get(next_index),
-                    Some(Token::Comment(CommentKind::Line, _))
-                ) && no_token_after_comment(next_index + 1);
-                let after_block_comment =
-                    matches!(
-                        tokens.get(next_index),
-                        Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n')
-                    ) && next_non_whitespace(tokens, next_index + 1, line.end).is_some_and(
-                        |after_block| {
-                            matches!(
-                                tokens.get(after_block),
-                                Some(Token::Comment(CommentKind::Line, _))
-                            ) && no_token_after_comment(after_block + 1)
-                        },
-                    );
-                direct_line_comment || after_block_comment
-            });
-            self.token_input.token_followed_by_line_comment_on_line =
-                token_followed_by_line_comment;
-            self.token_input.token_followed_by_final_line_comment = token_followed_by_line_comment
-                && !matches!(tokens.get(line.end.saturating_sub(1)), Some(Token::Newline));
-            self.token_input.has_next_meaningful_token =
-                next.is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
-            self.token_input.next_token_is_line_comment =
-                matches!(next, Some(Token::Comment(CommentKind::Line, _)));
-            if self.token_input.token_begins_source_line
-                && matches!(tokens[index], Token::Comment(_, _))
-            {
-                self.observe_block_spacing_comment(tokens, index);
-            }
-            let mut template_angle = template_angle_role(
-                tokens,
-                index,
-                tokens.len(),
-                self.layout.line_state.template_angle_depth,
-            );
-            if matches!(template_angle, TemplateAngle::None)
-                && self.template_continuation_active()
-                && matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<")
-                && next_index.is_some()
-                && !matches!(next, Some(Token::Operator(operator)) if operator == "=")
-                && previous_non_whitespace(tokens, index, line.start)
-                    .is_some_and(|previous| matches!(tokens.get(previous), Some(Token::Word(_))))
-            {
-                template_angle = TemplateAngle::Open;
-            }
-            self.comments.next_comment_ends_line = next_index.is_some_and(|comment_index| {
-                matches!(tokens.get(comment_index), Some(Token::Comment(_, _)))
-                    && next_non_whitespace(tokens, comment_index + 1, line.end)
-                        .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
-            });
-            let starts_initializer_designator =
-                initializers::bracket_starts_initializer_designator(tokens, index, line.end);
-            let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
-                && self.inferred_definition_brace(tokens, index);
-            let following_closing_braces = if matches!(tokens[index], Token::Symbol(';')) {
-                let mut cursor = index + 1;
-                let mut count = 0;
-                loop {
-                    while matches!(
-                        tokens.get(cursor),
-                        Some(Token::Whitespace(_) | Token::Newline)
-                    ) {
-                        cursor += 1;
-                    }
-                    if !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
-                        break;
-                    }
-                    count += 1;
-                    cursor += 1;
-                }
-                count
-            } else {
-                0
-            };
-            self.push_token(
-                &tokens[index],
-                TokenPushContext {
-                    next,
-                    next_is_adjacent,
-                    following_operator,
-                    template_angle,
-                    token_index: index,
-                    starts_initializer_designator,
-                    inferred_definition_brace,
-                    following_closing_braces,
-                },
-            );
+            let context = self.token_push_context(tokens, index, line, &line_columns);
+            self.push_token(&tokens[index], context);
             if let Some((colon_index, has_action)) = multiline_case_colon
                 && colon_index == index
             {
-                if let Some(byte_index) = self.current.rfind(':') {
-                    self.layout.line_adjuster.mark_case_label_colon(byte_index);
-                }
-                if has_action && self.options.break_one_line_statements {
-                    self.finish_line();
-                    let label_spaces = self
-                        .output
-                        .iter()
-                        .rev()
-                        .find(|line| {
-                            line.trim_start().strip_prefix("case").is_some_and(|rest| {
-                                rest.chars().next().is_some_and(char::is_whitespace)
-                            })
-                        })
-                        .map(|line| columns::leading_visual_width(line, self.options.tab_width))
-                        .unwrap_or_else(|| {
-                            self.layout
-                                .indentation
-                                .line_indent(LineKind::SwitchLabel, self.options)
-                                * self.options.indent_width
-                        });
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        Some(label_spaces + self.options.indent_width);
-                }
+                self.finish_multiline_case_label_colon(has_action);
             }
             index += 1;
+        }
+    }
+
+    /// Records how the next source line starts, before the newline token is pushed.
+    fn observe_next_line_lead(&mut self, tokens: &[Token], index: usize, line_start: usize) {
+        let following_index = next_non_layout_token_index(tokens, index + 1);
+        let following = following_index.map(|i| &tokens[i]);
+        let after_following = following_index
+            .and_then(|i| next_non_layout_token_index(tokens, i + 1))
+            .map(|i| &tokens[i]);
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && matches!(following, Some(Token::Symbol('}')))
+            && previous_non_whitespace(tokens, index, line_start).is_some()
+            && let Some(Token::Whitespace(whitespace)) = tokens.get(index.wrapping_sub(1))
+        {
+            if self.current_is_blank() {
+                if let Some(previous) = self.output.last_mut()
+                    && !line_ends_with_comment(previous)
+                {
+                    previous.truncate(previous.trim_end().len());
+                    previous.push_str(whitespace);
+                }
+            } else {
+                self.trim_current_end_horizontal_space();
+                self.current.push_str(whitespace);
+                self.preserve_run_in_join_space = true;
+            }
+        }
+        self.observe_blank_line_context(tokens, following_index);
+        self.newline_breaks_statement = Self::newline_following_token_breaks(following);
+        self.next_line.leads_with_assignment =
+            matches!(following, Some(Token::Operator(operator)) if operator == "=");
+        self.next_line.leads_with_class_init =
+            matches!(following, Some(Token::Symbol(':'))) && self.colon_leads_class_initializer();
+        self.next_line.leads_with_class_base = matches!(following, Some(Token::Symbol(':')))
+            && !self.colon_leads_class_initializer()
+            && self.colon_leads_class_base_clause();
+        self.next_line.leads_with_comma = matches!(following, Some(Token::Symbol(',')));
+        self.next_line.leads_with_open_brace = matches!(following, Some(Token::Symbol('{')));
+        self.next_line.leads_with_close_brace = matches!(following, Some(Token::Symbol('}')));
+        self.next_line.leads_with_open_paren = matches!(following, Some(Token::Symbol('(')));
+        self.next_line.word_followed_by_open_paren = matches!(
+            (following, after_following),
+            (Some(Token::Word(_)), Some(Token::Symbol('(')))
+        );
+        self.next_line.leads_with_noexcept = matches!(
+            (following, after_following),
+            (Some(Token::Word(word)), Some(Token::Symbol('('))) if word == "noexcept"
+        );
+    }
+
+    fn token_push_context<'t>(
+        &mut self,
+        tokens: &'t [Token],
+        index: usize,
+        line: TokenLine,
+        line_columns: &LineSourceColumns,
+    ) -> TokenPushContext<'t> {
+        let next_index = next_non_whitespace(tokens, index + 1, line.end);
+        let next = next_index.and_then(|next_index| tokens.get(next_index));
+        let next_is_adjacent = tokens
+            .get(index + 1)
+            .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
+        let following_operator = following_operator_after_next_word(tokens, index + 1, line.end);
+        self.set_input_whitespace(tokens, index, line.start);
+        let offset = index - line.start;
+        self.token_input.token_begins_source_line = line_columns
+            .first_non_ws
+            .is_none_or(|first| first >= offset);
+        if self.options.align_method_colon
+            && self.layout.objc.colon_align.is_none()
+            && self.token_input.token_begins_source_line
+            && self.token_starts_objc_method_definition(tokens, index, line.end)
+        {
+            self.layout.objc.colon_align = self.compute_objc_method_colon_align(tokens, index);
+        }
+        let source_column = line_columns.prefix[offset];
+        let last_token_start = offset.checked_sub(1).map_or(0, |i| line_columns.prefix[i]);
+        let non_ws_count = line_columns.non_ws_prefix[offset];
+        let first_non_ws_is_brace = line_columns.first_non_ws_is_brace;
+        self.token_input.token_source_column = source_column;
+        self.token_input.token_source_line_indent = if non_ws_count == 0 {
+            source_column
+        } else {
+            line_columns.leading_indent
+        };
+        self.prepare_template_continuation_token_indent(source_column);
+        self.prepare_split_class_head_continuation();
+        if self.token_input.token_begins_source_line
+            && self.current.is_empty()
+            && self.layout.nesting.paren_depth == 0
+            && source_column
+                > ContinuationIndent::Level(
+                    self.layout.indentation.indent()
+                        + self.case_body_indent_extra(LineKind::Normal),
+                )
+                .columns(self.options.indent_width)
+            && source_indented_macro_row(tokens, line.start, line.end, index)
+            && matches!(
+                self.layout.nesting.brace_header_stack.last(),
+                Some(Some(header)) if header == "switch"
+            )
+            && !matches!(
+                self.layout.command_state.current_header.as_deref(),
+                Some("case" | "default")
+            )
+            && !self
+                .output
+                .last()
+                .is_some_and(|line| operators::head_ends_binary_operator(line.trim_end()))
+        {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(source_column);
+        }
+        self.pointer_run.gap_before_column =
+            Some(if self.token_input.previous_input_whitespace.is_some() {
+                last_token_start
+            } else {
+                source_column
+            });
+        self.token_input.token_line_opens_with_brace = non_ws_count == 1 && first_non_ws_is_brace;
+        let no_token_after_comment = |start| {
+            next_non_whitespace(tokens, start, line.end)
+                .is_none_or(|index| matches!(tokens.get(index), Some(Token::Newline)))
+        };
+        let token_followed_by_line_comment = next_index.is_some_and(|next_index| {
+            let direct_line_comment = matches!(
+                tokens.get(next_index),
+                Some(Token::Comment(CommentKind::Line, _))
+            ) && no_token_after_comment(next_index + 1);
+            let after_block_comment = matches!(
+                tokens.get(next_index),
+                Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n')
+            ) && next_non_whitespace(tokens, next_index + 1, line.end)
+                .is_some_and(|after_block| {
+                    matches!(
+                        tokens.get(after_block),
+                        Some(Token::Comment(CommentKind::Line, _))
+                    ) && no_token_after_comment(after_block + 1)
+                });
+            direct_line_comment || after_block_comment
+        });
+        self.token_input.token_followed_by_line_comment_on_line = token_followed_by_line_comment;
+        self.token_input.token_followed_by_final_line_comment = token_followed_by_line_comment
+            && !matches!(tokens.get(line.end.saturating_sub(1)), Some(Token::Newline));
+        self.token_input.has_next_meaningful_token =
+            next.is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
+        self.token_input.next_token_is_line_comment =
+            matches!(next, Some(Token::Comment(CommentKind::Line, _)));
+        if self.token_input.token_begins_source_line
+            && matches!(tokens[index], Token::Comment(_, _))
+        {
+            self.observe_block_spacing_comment(tokens, index);
+        }
+        let mut template_angle = template_angle_role(
+            tokens,
+            index,
+            tokens.len(),
+            self.layout.line_state.template_angle_depth,
+        );
+        if matches!(template_angle, TemplateAngle::None)
+            && self.template_continuation_active()
+            && matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<")
+            && next_index.is_some()
+            && !matches!(next, Some(Token::Operator(operator)) if operator == "=")
+            && previous_non_whitespace(tokens, index, line.start)
+                .is_some_and(|previous| matches!(tokens.get(previous), Some(Token::Word(_))))
+        {
+            template_angle = TemplateAngle::Open;
+        }
+        self.comments.next_comment_ends_line = next_index.is_some_and(|comment_index| {
+            matches!(tokens.get(comment_index), Some(Token::Comment(_, _)))
+                && next_non_whitespace(tokens, comment_index + 1, line.end)
+                    .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
+        });
+        let starts_initializer_designator =
+            initializers::bracket_starts_initializer_designator(tokens, index, line.end);
+        let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
+            && self.inferred_definition_brace(tokens, index);
+        let following_closing_braces = closing_braces_after_semicolon(tokens, index);
+        TokenPushContext {
+            next,
+            next_is_adjacent,
+            following_operator,
+            template_angle,
+            token_index: index,
+            starts_initializer_designator,
+            inferred_definition_brace,
+            following_closing_braces,
+        }
+    }
+
+    fn finish_multiline_case_label_colon(&mut self, has_action: bool) {
+        if let Some(byte_index) = self.current.rfind(':') {
+            self.layout.line_adjuster.mark_case_label_colon(byte_index);
+        }
+        if has_action && self.options.break_one_line_statements {
+            self.finish_line();
+            let label_spaces = self
+                .output
+                .iter()
+                .rev()
+                .find(|line| {
+                    line.trim_start()
+                        .strip_prefix("case")
+                        .is_some_and(|rest| rest.chars().next().is_some_and(char::is_whitespace))
+                })
+                .map(|line| columns::leading_visual_width(line, self.options.tab_width))
+                .unwrap_or_else(|| {
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width
+                });
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(label_spaces + self.options.indent_width);
         }
     }
 
@@ -1191,18 +1179,7 @@ impl<'a> FormatEngine<'a> {
         self.layout.objc.post_method_colon = false;
         self.layout.objc.return_paren_depth = None;
         self.layout.objc.param_paren_depth = None;
-        if self.incomplete_control_header() && !self.next_line.leads_with_open_paren {
-            self.newline_breaks_statement = true;
-            if !self.next_line.leads_with_close_brace {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
-            }
-            self.layout.pending_braceless_block_bias = None;
-            self.layout.inline_nested_header_braceless_bias = None;
-            self.layout.command_state.current_header = None;
-            self.layout.command_state.preprocessor_after_header = false;
-            self.layout.frame_stack.clear_header();
-        }
+        self.end_incomplete_control_header_at_newline();
         if self.current_is_preindented && self.current.contains('\x0c') {
             self.finish_line();
             self.previous_was_newline = true;
@@ -1421,87 +1398,7 @@ impl<'a> FormatEngine<'a> {
         } else if self.is_continuation_break()
             && !(self.current_is_preindented && self.current.trim_end().ends_with("*/"))
         {
-            let is_logical_continuation = self.logical_continuation_indent_spaces().is_some();
-            let has_array_bound_operator_continuation = self
-                .array_bound_operator_continuation_indent_spaces()
-                .is_some();
-            let after_compound_literal_comma =
-                std::mem::take(&mut self.layout.compound_literal.after_comma)
-                    && self.layout.compound_literal.arg_paren_depth
-                        == Some(self.layout.nesting.paren_depth)
-                    && self.layout.compound_literal.arg_brace_depth
-                        == Some(self.layout.nesting.brace_header_stack.len());
-            let has_macro_call_argument_continuation =
-                matches!(self.layout.previous, PreviousToken::Comma)
-                    && !after_compound_literal_comma
-                    && self.macro_call_argument_indent_spaces().is_some();
-            let saved_indent = if after_compound_literal_comma {
-                Some(ContinuationIndent::Spaces(
-                    self.current_line_indent_spaces(),
-                ))
-            } else {
-                self.layout
-                    .continuation_indent
-                    .after_one_shot_continuation_indent
-                    .take()
-            };
-            let saved_indent =
-                if has_array_bound_operator_continuation || has_macro_call_argument_continuation {
-                    None
-                } else {
-                    saved_indent
-                };
-            let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
-            let one_shot_indent = saved_indent
-                .is_none()
-                .then(|| {
-                    (!has_array_bound_operator_continuation)
-                        .then(|| self.trailing_open_bracket_indent_spaces())
-                        .flatten()
-                })
-                .flatten();
-            if is_logical_continuation
-                && unmatched_open_paren_column(self.current.trim_end()).is_none()
-            {
-                self.layout.continuation_indent.logical_chain_indent_spaces =
-                    Some(indent.columns(self.options.indent_width));
-            }
-            let previous_before_line = self.layout.previous;
-            let clear_continuation_after_line = self
-                .layout
-                .continuation_indent
-                .clear_continuation_after_line
-                .is_some();
-            let case_label_with_comment =
-                switch_cases::case_label_with_trailing_comment(self.current.trim());
-            self.finish_line();
-            if matches!(
-                previous_before_line,
-                PreviousToken::Word
-                    | PreviousToken::Literal
-                    | PreviousToken::CloseParen
-                    | PreviousToken::CloseBracket
-            ) {
-                self.layout.previous = previous_before_line;
-            }
-            if !clear_continuation_after_line {
-                if let Some(spaces) = one_shot_indent {
-                    self.layout
-                        .continuation_indent
-                        .after_one_shot_continuation_indent = Some(indent);
-                    self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
-                } else {
-                    self.set_next_continuation_indent(indent);
-                }
-            }
-            if case_label_with_comment && let Some(previous) = self.output.last() {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(
-                    columns::leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
-                );
-            }
-            self.previous_was_newline = true;
+            self.finish_continuation_line_at_newline();
         } else if self.current.trim_end().ends_with(';')
             || self.current.trim_end().ends_with("*/")
             || macro_invocations::is_standalone_macro_invocation_line(self.current.trim())
@@ -1571,6 +1468,104 @@ impl<'a> FormatEngine<'a> {
             self.ensure_space();
             self.previous_was_newline = true;
         }
+    }
+
+    fn end_incomplete_control_header_at_newline(&mut self) {
+        if self.incomplete_control_header() && !self.next_line.leads_with_open_paren {
+            self.newline_breaks_statement = true;
+            if !self.next_line.leads_with_close_brace {
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+            }
+            self.layout.pending_braceless_block_bias = None;
+            self.layout.inline_nested_header_braceless_bias = None;
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            self.layout.frame_stack.clear_header();
+        }
+    }
+
+    fn finish_continuation_line_at_newline(&mut self) {
+        let is_logical_continuation = self.logical_continuation_indent_spaces().is_some();
+        let has_array_bound_operator_continuation = self
+            .array_bound_operator_continuation_indent_spaces()
+            .is_some();
+        let after_compound_literal_comma =
+            std::mem::take(&mut self.layout.compound_literal.after_comma)
+                && self.layout.compound_literal.arg_paren_depth
+                    == Some(self.layout.nesting.paren_depth)
+                && self.layout.compound_literal.arg_brace_depth
+                    == Some(self.layout.nesting.brace_header_stack.len());
+        let has_macro_call_argument_continuation =
+            matches!(self.layout.previous, PreviousToken::Comma)
+                && !after_compound_literal_comma
+                && self.macro_call_argument_indent_spaces().is_some();
+        let saved_indent = if after_compound_literal_comma {
+            Some(ContinuationIndent::Spaces(
+                self.current_line_indent_spaces(),
+            ))
+        } else {
+            self.layout
+                .continuation_indent
+                .after_one_shot_continuation_indent
+                .take()
+        };
+        let saved_indent =
+            if has_array_bound_operator_continuation || has_macro_call_argument_continuation {
+                None
+            } else {
+                saved_indent
+            };
+        let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
+        let one_shot_indent = saved_indent
+            .is_none()
+            .then(|| {
+                (!has_array_bound_operator_continuation)
+                    .then(|| self.trailing_open_bracket_indent_spaces())
+                    .flatten()
+            })
+            .flatten();
+        if is_logical_continuation && unmatched_open_paren_column(self.current.trim_end()).is_none()
+        {
+            self.layout.continuation_indent.logical_chain_indent_spaces =
+                Some(indent.columns(self.options.indent_width));
+        }
+        let previous_before_line = self.layout.previous;
+        let clear_continuation_after_line = self
+            .layout
+            .continuation_indent
+            .clear_continuation_after_line
+            .is_some();
+        let case_label_with_comment =
+            switch_cases::case_label_with_trailing_comment(self.current.trim());
+        self.finish_line();
+        if matches!(
+            previous_before_line,
+            PreviousToken::Word
+                | PreviousToken::Literal
+                | PreviousToken::CloseParen
+                | PreviousToken::CloseBracket
+        ) {
+            self.layout.previous = previous_before_line;
+        }
+        if !clear_continuation_after_line {
+            if let Some(spaces) = one_shot_indent {
+                self.layout
+                    .continuation_indent
+                    .after_one_shot_continuation_indent = Some(indent);
+                self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
+            } else {
+                self.set_next_continuation_indent(indent);
+            }
+        }
+        if case_label_with_comment && let Some(previous) = self.output.last() {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(
+                columns::leading_visual_width(previous, self.options.tab_width)
+                    + self.options.indent_width,
+            );
+        }
+        self.previous_was_newline = true;
     }
 
     pub(crate) fn current_initializer_member_before_closing_brace(&self) -> bool {
@@ -1669,4 +1664,27 @@ impl<'a> FormatEngine<'a> {
             }
         }
     }
+}
+
+/// Number of `}` tokens that directly follow the `;` at `index`, skipping layout.
+fn closing_braces_after_semicolon(tokens: &[Token], index: usize) -> usize {
+    if !matches!(tokens[index], Token::Symbol(';')) {
+        return 0;
+    }
+    let mut cursor = index + 1;
+    let mut count = 0;
+    loop {
+        while matches!(
+            tokens.get(cursor),
+            Some(Token::Whitespace(_) | Token::Newline)
+        ) {
+            cursor += 1;
+        }
+        if !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
+            break;
+        }
+        count += 1;
+        cursor += 1;
+    }
+    count
 }
