@@ -1,4 +1,4 @@
-use crate::cli::args::Command;
+use crate::cli::args::{Command, FormatCommand};
 use crate::config;
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -70,53 +70,47 @@ fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), CliError> {
         Command::Version => {
             writeln!(io::stdout().lock(), "{} {}", PROGRAM_NAME, VERSION).map_err(CliError::stdout)
         }
-        Command::Format {
-            config,
-            project_config,
-            option_args,
-            paths,
-            stdin_path,
-            stdout_path,
-            mut console,
-        } => {
-            let command_line_errors_to_stdout = console.errors_to_stdout;
-            let mut options = option_sources::load_selected_config(&config, &env::var_os)
-                .map_err(|error| CliError::new(format!("config error: {error}"), 2))
-                .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
-            option_sources::apply_selected_project_config(
-                &mut options,
-                &project_config,
-                &paths,
-                stdin_path.as_deref(),
-                &env::var_os,
-            )
-            .map_err(|error| CliError::new(format!("config error: {error}"), 2))
-            .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
-            config::apply_command_line_args(&mut options.format, &option_args)
-                .map_err(|error| {
-                    CliError::new(format!("option error: {error}. Try 'cstyle --help'."), 2)
-                })
-                .map_err(|error| error.with_stdout(console.errors_to_stdout))?;
-            console.backup_suffix.inherit(options.backup_suffix);
-            if paths.is_empty() {
-                streams::format(
-                    stdin_path.as_deref(),
-                    stdout_path.as_deref(),
-                    &options.format,
-                )
-            } else {
-                files::format(
-                    &paths,
-                    &options.format,
-                    console.recursive,
-                    &console,
-                    PROGRAM_NAME,
-                    VERSION,
-                )
-            }
-            .map_err(|error| error.with_stdout(console.errors_to_stdout))
-        }
+        Command::Format(command) => format_command(command),
     }
+}
+
+fn format_command(command: FormatCommand) -> Result<(), CliError> {
+    let FormatCommand {
+        config,
+        project_config,
+        option_args,
+        paths,
+        stdin_path,
+        stdout_path,
+        mut console,
+    } = command;
+    let command_line_errors_to_stdout = console.errors_to_stdout;
+    let mut options = option_sources::load_selected_config(&config, &env::var_os)
+        .map_err(|error| CliError::new(format!("config error: {error}"), 2))
+        .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
+    option_sources::apply_selected_project_config(
+        &mut options,
+        &project_config,
+        &paths,
+        stdin_path.as_deref(),
+        &env::var_os,
+    )
+    .map_err(|error| CliError::new(format!("config error: {error}"), 2))
+    .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
+    config::apply_command_line_args(&mut options.format, &option_args)
+        .map_err(|error| CliError::new(format!("option error: {error}. Try 'cstyle --help'."), 2))
+        .map_err(|error| error.with_stdout(console.errors_to_stdout))?;
+    console.backup_suffix.inherit(options.backup_suffix);
+    if paths.is_empty() {
+        streams::format(
+            stdin_path.as_deref(),
+            stdout_path.as_deref(),
+            &options.format,
+        )
+    } else {
+        files::format(&paths, &options.format, &console, PROGRAM_NAME, VERSION)
+    }
+    .map_err(|error| error.with_stdout(console.errors_to_stdout))
 }
 
 #[cfg(test)]

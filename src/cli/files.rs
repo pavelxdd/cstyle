@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 pub(super) fn format(
     paths: &[PathBuf],
     options: &FormatOptions,
-    recursive: bool,
     console: &ConsoleOptions,
     program_name: &str,
     version: &str,
@@ -16,7 +15,7 @@ pub(super) fn format(
     let mut matched_excludes = vec![false; console.excludes.len()];
     let expanded = targets::expand_target_paths_with_excludes(
         paths,
-        recursive,
+        console.recursive,
         console.accept_empty_list,
         console.backup_suffix.as_deref(),
         &console.excludes,
@@ -120,11 +119,14 @@ mod tests {
         recursive: bool,
         console: &ConsoleOptions,
     ) -> Result<(), CliError> {
+        let console = ConsoleOptions {
+            recursive,
+            ..console.clone()
+        };
         format(
             paths,
             &FormatOptions::default(),
-            recursive,
-            console,
+            &console,
             "cstyle",
             "test-version",
         )

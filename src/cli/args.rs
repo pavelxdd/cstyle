@@ -8,15 +8,18 @@ use std::path::PathBuf;
 pub(super) enum Command {
     Help,
     Version,
-    Format {
-        config: ConfigSelection,
-        project_config: ProjectConfigSelection,
-        option_args: Vec<String>,
-        paths: Vec<PathBuf>,
-        stdin_path: Option<PathBuf>,
-        stdout_path: Option<PathBuf>,
-        console: ConsoleOptions,
-    },
+    Format(FormatCommand),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct FormatCommand {
+    pub(super) config: ConfigSelection,
+    pub(super) project_config: ProjectConfigSelection,
+    pub(super) option_args: Vec<String>,
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) stdin_path: Option<PathBuf>,
+    pub(super) stdout_path: Option<PathBuf>,
+    pub(super) console: ConsoleOptions,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -265,7 +268,7 @@ pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command,
         }
     }
 
-    Ok(Command::Format {
+    Ok(Command::Format(FormatCommand {
         config,
         project_config,
         option_args,
@@ -273,7 +276,7 @@ pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command,
         stdin_path,
         stdout_path,
         console,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -302,7 +305,7 @@ mod tests {
         let mut option = b"--options=".to_vec();
         option.extend_from_slice(&value);
         let command = parse([OsString::from_vec(option)]).expect("parse options path");
-        let Command::Format { config, paths, .. } = command else {
+        let Command::Format(FormatCommand { config, paths, .. }) = command else {
             panic!("expected format command");
         };
 
@@ -322,11 +325,11 @@ mod tests {
         option.push(0xff);
         option.extend_from_slice(b".rc");
         let command = parse([OsString::from_vec(option)]).expect("parse project name");
-        let Command::Format {
+        let Command::Format(FormatCommand {
             project_config,
             paths,
             ..
-        } = command
+        }) = command
         else {
             panic!("expected format command");
         };
@@ -349,7 +352,7 @@ mod tests {
                 "input.c",
             ]))
             .unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::Auto,
                 option_args: vec![
@@ -361,7 +364,7 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions::default(),
-            }
+            })
         );
     }
 
@@ -369,12 +372,12 @@ mod tests {
     fn plain_file_names_that_resemble_options_remain_paths() {
         let command =
             parse(args(&["quiet", "suffix=.bak", "name=value.c"])).expect("parse file names");
-        let Command::Format {
+        let Command::Format(FormatCommand {
             option_args,
             paths,
             console,
             ..
-        } = command
+        }) = command
         else {
             panic!("expected format command");
         };
@@ -403,7 +406,7 @@ mod tests {
                 "*.h",
             ]))
             .unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::File(PathBuf::from(".astylerc")),
                 project_config: ProjectConfigSelection::Auto,
                 option_args: Vec::new(),
@@ -416,7 +419,7 @@ mod tests {
                     formatted_only: true,
                     ..ConsoleOptions::default()
                 },
-            }
+            })
         );
     }
 
@@ -436,7 +439,7 @@ mod tests {
                 "input.c",
             ]))
             .unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::Auto,
                 option_args: Vec::new(),
@@ -457,7 +460,7 @@ mod tests {
                     excludes: vec!["skip.c".to_string()],
                     exclude_errors: ExcludeErrorMode::Ignore,
                 },
-            }
+            })
         );
     }
 
@@ -465,7 +468,7 @@ mod tests {
     fn parses_stdio_redirect_options() {
         assert_eq!(
             parse(args(&["--stdin=input.c", "--stdout=output.c"])).unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::Auto,
                 option_args: Vec::new(),
@@ -473,7 +476,7 @@ mod tests {
                 stdin_path: Some(PathBuf::from("input.c")),
                 stdout_path: Some(PathBuf::from("output.c")),
                 console: ConsoleOptions::default(),
-            }
+            })
         );
     }
 
@@ -494,12 +497,12 @@ mod tests {
             OsString::from_vec(stdout_arg),
         ])
         .expect("parse stdio paths");
-        let Command::Format {
+        let Command::Format(FormatCommand {
             stdin_path,
             stdout_path,
             paths,
             ..
-        } = command
+        }) = command
         else {
             panic!("expected format command");
         };
@@ -513,7 +516,7 @@ mod tests {
     fn parses_project_options() {
         assert_eq!(
             parse(args(&["--project", "*.c"])).unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::FileName(OsString::from(".astylerc")),
                 option_args: Vec::new(),
@@ -521,11 +524,11 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions::default(),
-            }
+            })
         );
         assert_eq!(
             parse(args(&["--project=custom.rc", "*.c"])).unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::FileName(OsString::from("custom.rc")),
                 option_args: Vec::new(),
@@ -533,11 +536,11 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions::default(),
-            }
+            })
         );
         assert_eq!(
             parse(args(&["--project=none", "*.c"])).unwrap(),
-            Command::Format {
+            Command::Format(FormatCommand {
                 config: ConfigSelection::Auto,
                 project_config: ProjectConfigSelection::None,
                 option_args: Vec::new(),
@@ -545,7 +548,7 @@ mod tests {
                 stdin_path: None,
                 stdout_path: None,
                 console: ConsoleOptions::default(),
-            }
+            })
         );
     }
 
