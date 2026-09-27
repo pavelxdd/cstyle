@@ -1,12 +1,11 @@
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, FrameStack, ParenRole};
 use crate::formatter::headers::HeaderParenState;
 use crate::formatter::indentation::IndentationState;
+use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust;
-use crate::formatter::line_scan::line_comment_split_limit;
 use crate::formatter::literals::LiteralLineState;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
 use crate::formatter::objective_c::ObjectiveCLineState;
@@ -16,7 +15,8 @@ use crate::formatter::state::{
 };
 use crate::formatter::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::template_declarations::TemplateDeclarationState;
-use crate::formatter::token::Token;
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::line_comment_split_limit;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 use std::collections::VecDeque;
 

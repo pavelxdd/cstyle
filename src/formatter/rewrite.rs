@@ -4,25 +4,25 @@ use crate::formatter::brace_classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
     lambda_header_has_trailing_return,
 };
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::indentation::LineKind;
 use crate::formatter::initializer_braces::bracket_starts_initializer_designator;
-use crate::formatter::language;
-use crate::formatter::language::is_macro_like_word;
-use crate::formatter::line_scan::{
-    has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+use crate::formatter::lexer::{
+    CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
+    next_non_whitespace, token_text,
 };
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
 use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::template_angle_role;
-use crate::formatter::token::{
-    CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
-    next_non_whitespace, token_text,
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
+    has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
@@ -2474,7 +2474,7 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::formatter::token::tokenize;
+    use crate::formatter::lexer::tokenize;
 
     #[test]
     fn add_braces_keeps_braced_condition_interrupted_by_preprocessor() {

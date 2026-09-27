@@ -3,21 +3,21 @@ use crate::formatter::brace_classification::{
     contains_one_line_block, is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::buffer::OpenBraceShape;
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{
-    line_brace_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
-};
+use crate::formatter::lexer::Token;
 use crate::formatter::literals::starts_string_literal_token;
 use crate::formatter::operators::head_ends_binary_operator;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
-use crate::formatter::token::Token;
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
+    line_brace_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
+};
 
 pub(crate) fn starts_post_closing_declaration(line: &str) -> bool {
     let Some(tail) = line.trim_start().strip_prefix('}') else {

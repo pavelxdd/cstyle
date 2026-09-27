@@ -1,20 +1,20 @@
 use crate::config::BraceStyle;
 use crate::formatter::brace_classification::is_lambda_capture_header;
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_conditional_header_line;
-use crate::formatter::language::{self, is_non_type_keyword, is_pointer_type_word};
-use crate::formatter::line_scan::{
-    inline_brace_pair_range, trailing_comment_split_limit, trailing_comment_start,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
-};
+use crate::formatter::lexer::{token_text, tokenize};
 use crate::formatter::operators::head_ends_assignment_operator;
 use crate::formatter::pointers::is_pointer_declaration_segment;
 use crate::formatter::state::{ContinuationIndent, TemplateAngle};
+use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     function_name_start, scoped_name_is_constructor, template_angle_role,
 };
-use crate::formatter::token::{token_text, tokenize};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
+    inline_brace_pair_range, trailing_comment_split_limit, trailing_comment_start,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
 #[derive(Default)]

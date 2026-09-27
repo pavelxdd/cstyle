@@ -1,4 +1,4 @@
-use crate::formatter::token::{CommentKind, Token, token_text, tokenize};
+use crate::formatter::lexer::{CommentKind, Token, token_text, tokenize};
 use crate::source::lex::is_digit_separator;
 
 pub(crate) fn is_comment_line(line: &str) -> bool {

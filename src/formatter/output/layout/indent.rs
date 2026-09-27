@@ -3,7 +3,6 @@ use crate::formatter::brace_classification::{
     is_lambda_body_header, line_opens_lambda_block, line_opens_lambda_or_capture_only_block,
 };
 use crate::formatter::call_arguments::callee_name_start_before_open;
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructor_initializers::has_inline_constructor_initializer_colon;
 use crate::formatter::engine::FormatEngine;
@@ -11,13 +10,7 @@ use crate::formatter::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::indentation::LineKind;
-use crate::formatter::language::is_macro_like_word;
 use crate::formatter::line_adjust::macro_call_starts_with;
-use crate::formatter::line_scan::{
-    has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
-};
 use crate::formatter::literals::{
     first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
     starts_string_literal_token, string_literal_has_opening_context,
@@ -27,7 +20,15 @@ use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
     trailing_binary_operator_column,
 };
-use crate::formatter::{labels, language, switch_cases};
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
+};
+use crate::formatter::{labels, switch_cases};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {

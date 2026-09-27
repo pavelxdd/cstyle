@@ -1,10 +1,12 @@
 use crate::config::ObjCColonPad;
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BracketFrame, BracketRole};
-use crate::formatter::line_scan::{has_unclosed_delimiter_after, trailing_comment_split_limit};
+use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::ContinuationIndent;
-use crate::formatter::token::{Token, next_non_whitespace, token_text, tokenize};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    has_unclosed_delimiter_after, trailing_comment_split_limit,
+};
 use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

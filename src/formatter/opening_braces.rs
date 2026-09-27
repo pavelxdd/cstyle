@@ -6,24 +6,25 @@ use crate::formatter::brace_classification::{
     line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
     line_opens_parameterized_lambda_block,
 };
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{
-    is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit,
-};
+use crate::formatter::labels;
+use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::operators::head_ends_binary_operator;
 use crate::formatter::return_types::is_parameter_return_type_prefix;
 use crate::formatter::state::{
     ContinuationIndent, FormatterBraceType, InlineArrayFrame, PreviousToken,
 };
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
-use crate::formatter::token::{CommentKind, Token};
-use crate::formatter::{labels, line_scan};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan;
+use crate::formatter::text::line_scan::{
+    is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit,
+};
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
 
 fn is_semicolonless_call_line(line: &str) -> bool {

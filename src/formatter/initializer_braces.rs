@@ -1,20 +1,20 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::brace_classification::is_lambda_capture_header;
 use crate::formatter::brace_postprocess::horstmann_run_in_fill;
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::headers::is_braceless_header_line;
 use crate::formatter::indentation::LineKind;
-use crate::formatter::language::is_macro_like_word;
-use crate::formatter::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
+use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::operators::{starts_ternary_arm, starts_with_chain_operator};
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::state::{
     ContinuationIndent, FormatterBraceType, InlineArrayFrame, PreviousToken,
 };
-use crate::formatter::token::{Token, next_non_whitespace};
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
 use crate::source::lex::is_identifier_continue;
 
 pub(crate) struct CompoundLiteralOpeningLayout {

@@ -1,9 +1,10 @@
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::headers;
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::has_unclosed_delimiter_after;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::syntax::SyntaxRole;
-use crate::formatter::token::{Token, token_text};
-use crate::formatter::{columns, headers};
+use crate::formatter::text::columns;
+use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {

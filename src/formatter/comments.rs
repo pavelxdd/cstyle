@@ -1,17 +1,12 @@
 use crate::config::{BraceStyle, PointerAlign, ReferenceAlign};
 use crate::formatter::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::brace_postprocess::horstmann_run_in_fill;
-use crate::formatter::columns::{
-    drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
-};
 use crate::formatter::disabled_formatting::DisabledFormattingState;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{
-    is_comment_line, is_comment_only_line, line_ends_with_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column,
-};
+use crate::formatter::labels;
+use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::operators::{
     find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
     starts_with_chain_operator,
@@ -20,8 +15,14 @@ use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive}
 use crate::formatter::rewrite::is_add_braces_header;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType, PreviousToken};
 use crate::formatter::switch_cases::find_case_colon;
-use crate::formatter::token::{CommentKind, Token, token_char_len};
-use crate::formatter::{labels, language};
+use crate::formatter::syntax::language;
+use crate::formatter::text::columns::{
+    drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
+};
+use crate::formatter::text::line_scan::{
+    is_comment_line, is_comment_only_line, line_ends_with_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column,
+};
 
 fn comment_starts_header_word(line: &str, word: &str) -> bool {
     line.strip_prefix(word)

@@ -1,18 +1,18 @@
 use crate::config::{PointerAlign, ReferenceAlign};
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{LogicalFrame, LogicalOperator, StreamFrame};
-use crate::formatter::language::{
+use crate::formatter::lexer::Token;
+use crate::formatter::pointers::is_pointer_declaration_segment;
+use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
+use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
-use crate::formatter::line_scan::{
+use crate::formatter::syntax::{OperatorRole, function_name_start};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use crate::formatter::pointers::is_pointer_declaration_segment;
-use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
-use crate::formatter::syntax::{OperatorRole, function_name_start};
-use crate::formatter::token::Token;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 pub(crate) fn starts_ternary_arm(line: &str) -> bool {

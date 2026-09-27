@@ -1,7 +1,8 @@
 use crate::config::{FormatOptions, IndentStyle};
 use crate::formatter::indentation::LineKind;
+use crate::formatter::labels;
 use crate::formatter::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
-use crate::formatter::{labels, tabs};
+use crate::formatter::text::tabs;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LineAdjuster {

@@ -1,4 +1,4 @@
-use crate::formatter::columns::visual_width_from;
+use crate::formatter::text::columns::visual_width_from;
 use std::cell::Cell;
 use std::ops::Deref;
 

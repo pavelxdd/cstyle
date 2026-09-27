@@ -1,13 +1,13 @@
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::labels::is_label_start;
-use crate::formatter::language::{self, is_non_type_keyword, is_type_like_pointer_word};
-use crate::formatter::line_scan::{
+use crate::formatter::switch_cases;
+use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
+use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
     line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use crate::formatter::switch_cases;
-use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
 use crate::source::lex::{is_identifier_continue, leading_identifier};
 
 impl FormatEngine<'_> {

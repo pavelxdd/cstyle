@@ -2,16 +2,16 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_conditional_header_line;
-use crate::formatter::language;
-use crate::formatter::language::is_macro_like_word;
-use crate::formatter::line_scan::{
-    is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
-    unmatched_open_paren_column,
-};
+use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
 use crate::formatter::rewrite::is_defer_header;
 use crate::formatter::state::FormatterBraceType;
-use crate::formatter::token::Token;
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::line_scan::{
+    is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
+    unmatched_open_paren_column,
+};
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {

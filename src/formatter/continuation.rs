@@ -1,15 +1,10 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{ColonRole, LogicalOperator};
 use crate::formatter::indentation::LineKind;
-use crate::formatter::language::{is_leading_continuation_operator, is_macro_like_word};
-use crate::formatter::line_scan::{
-    is_comment_line, is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
-};
+use crate::formatter::lexer::Token;
 use crate::formatter::max_length::lambda_parameter_continuation_indent;
+use crate::formatter::operator_chains;
 use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, head_starts_binary_operator,
     starts_with_chain_operator, trailing_binary_operator_column,
@@ -18,11 +13,17 @@ use crate::formatter::pointers::is_pointer_declaration_segment;
 use crate::formatter::return_types::is_return_type_line;
 use crate::formatter::state::{ContinuationIndent, PreviousToken};
 use crate::formatter::switch_cases::find_case_colon;
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start,
 };
-use crate::formatter::token::Token;
-use crate::formatter::{language, operator_chains};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    is_comment_line, is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
+};
 use crate::source::lex::{is_identifier_continue, is_word_char};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

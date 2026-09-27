@@ -1,9 +1,9 @@
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::trailing_comment_split_limit;
+use crate::formatter::lexer::Token;
 use crate::formatter::syntax::signature_ends_with_parameter_list;
-use crate::formatter::token::Token;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) fn has_base_access_token(tokens: &[Token]) -> bool {

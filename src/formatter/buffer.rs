@@ -1,6 +1,6 @@
-use crate::formatter::columns::leading_visual_width;
-use crate::formatter::line_scan::{line_brace_imbalance, line_paren_imbalance};
-use crate::formatter::token::{Token, token_text, tokenize};
+use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{line_brace_imbalance, line_paren_imbalance};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell};

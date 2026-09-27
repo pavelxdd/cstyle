@@ -1,5 +1,5 @@
-use crate::formatter::language;
-use crate::formatter::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
+use crate::formatter::syntax::language;
+use crate::formatter::text::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::source::lex::{is_word_char, trailing_word};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

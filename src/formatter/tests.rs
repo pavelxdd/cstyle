@@ -5,9 +5,9 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::format;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::indentation::LineKind;
+use crate::formatter::lexer::{Token, tokenize};
 use crate::formatter::state::{FormatterBraceType, InlineArrayFrame};
 use crate::formatter::syntax::OperatorRole;
-use crate::formatter::token::{Token, tokenize};
 
 fn fixture(lines: &[&str]) -> String {
     lines.join("\n") + "\n"

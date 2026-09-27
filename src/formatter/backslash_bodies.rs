@@ -1,5 +1,5 @@
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::text::columns::leading_visual_width;
 
 pub(crate) struct BackslashBodyState {
     may_have_input: bool,

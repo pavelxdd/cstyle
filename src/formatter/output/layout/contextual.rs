@@ -4,7 +4,6 @@ use crate::formatter::call_arguments::{
     assignment_call_value_column, casted_assignment_value_column,
 };
 use crate::formatter::closing_braces::starts_post_closing_declaration;
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
@@ -13,11 +12,6 @@ use crate::formatter::headers::{
 };
 use crate::formatter::indentation::LineKind;
 use crate::formatter::labels;
-use crate::formatter::language::is_macro_like_word;
-use crate::formatter::line_scan::{
-    has_unmatched_open_brace, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
-};
 use crate::formatter::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::objective_c::objc_message_following_keyword_column;
 use crate::formatter::operators::{
@@ -28,8 +22,14 @@ use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineRepl
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::FormatterBraceType;
 use crate::formatter::switch_cases::case_label_with_trailing_comment;
+use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
+};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    has_unmatched_open_brace, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 

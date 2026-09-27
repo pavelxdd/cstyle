@@ -1,5 +1,4 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{
@@ -10,14 +9,15 @@ use crate::formatter::headers::{
     starts_header_word,
 };
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{
-    is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
-};
 use crate::formatter::literals::{starts_string_literal_token, string_literal_token_end};
 use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_ternary_arm,
     starts_with_chain_operator,
+};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::source::lex::is_identifier_start;
 

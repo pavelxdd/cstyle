@@ -1,15 +1,16 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{
+use crate::formatter::lexer::raw_strings;
+use crate::formatter::lexer::{Token, token_text};
+use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
-use crate::formatter::token::{Token, token_text};
-use crate::formatter::{raw_strings, tabs};
+use crate::formatter::text::tabs;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
 pub(crate) fn find_case_colon(line: &str) -> Option<usize> {

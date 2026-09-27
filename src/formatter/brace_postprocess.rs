@@ -2,12 +2,12 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::brace_classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
-use crate::formatter::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
+use crate::formatter::lexer::{self, Token};
 use crate::formatter::preprocessor::preprocessor_directive;
-use crate::formatter::token::{self, Token};
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
 use crate::formatter::{labels, switch_cases};
 
 pub(crate) struct MaxLengthBraceRowLayout {
@@ -109,7 +109,7 @@ impl FormatEngine<'_> {
             let run_in_width = format!("{brace}{fill}").len();
             let mut has_word_logical = false;
             let mut has_symbol_logical = false;
-            for token in token::tokenize(line) {
+            for token in lexer::tokenize(line) {
                 match token {
                     Token::Word(word) if matches!(word.as_str(), "and" | "or") => {
                         has_word_logical = true;
@@ -254,8 +254,8 @@ fn split_output_lines<'a>(output: &'a str, line_break: &str) -> Vec<&'a str> {
 fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
     let mut raw_lines = vec![false; split_output_lines(output, line_break).len()];
     let mut line_index = 0usize;
-    for token in token::tokenize(output) {
-        let text = token::token_text(&token);
+    for token in lexer::tokenize(output) {
+        let text = lexer::token_text(&token);
         let line_breaks = text.bytes().filter(|byte| *byte == b'\n').count();
         if matches!(&token, Token::StringLiteral(literal) if ["u8R\"", "LR\"", "uR\"", "UR\"", "R\""]
             .into_iter()

@@ -1,6 +1,8 @@
 use crate::formatter::assembly::AssemblyMacroLines;
-use crate::formatter::language;
+use crate::formatter::syntax::language;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
+
+pub(crate) mod raw_strings;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Token {

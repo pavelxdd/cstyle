@@ -3,12 +3,14 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::initializer_braces::initializer_sibling_uses_previous_indent;
 use crate::formatter::labels::is_attached_user_label;
-use crate::formatter::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
+use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::literals::starts_string_literal_token;
 use crate::formatter::operators::{
     head_ends_binary_operator, starts_ternary_arm, starts_with_chain_operator,
 };
-use crate::formatter::token::{Token, next_non_whitespace};
+use crate::formatter::text::line_scan::{
+    trailing_comment_split_limit, unmatched_open_paren_column,
+};
 
 pub(crate) fn source_indented_macro_row(
     tokens: &[Token],

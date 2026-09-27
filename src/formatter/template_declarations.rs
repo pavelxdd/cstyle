@@ -1,6 +1,8 @@
-use crate::formatter::columns::leading_visual_width;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
+    trailing_comment_split_limit, unmatched_open_paren_column,
+};
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct TemplateDeclarationState {

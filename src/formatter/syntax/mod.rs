@@ -1,14 +1,16 @@
-use crate::formatter::language::{
-    self, is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
+use crate::formatter::lexer::{
+    Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
 };
 use crate::formatter::state::TemplateAngle;
-use crate::formatter::token::{
-    Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
+use crate::formatter::syntax::language::{
+    is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, trailing_word,
 };
 use std::collections::HashSet;
+
+pub(crate) mod language;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum OperatorRole {
@@ -922,7 +924,7 @@ impl SyntaxRoles {
 #[cfg(test)]
 mod tests {
     use super::{OperatorRole, SyntaxRole, classify_syntax};
-    use crate::formatter::token::{Token, tokenize};
+    use crate::formatter::lexer::{Token, tokenize};
 
     fn operator_roles(source: &str, operator: &str) -> Vec<OperatorRole> {
         let tokens = tokenize(source);

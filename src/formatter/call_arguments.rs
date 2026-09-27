@@ -3,24 +3,24 @@ use crate::formatter::brace_classification::{
     is_lambda_body_header, is_lambda_capture_header, lambda_header_has_trailing_return,
     line_opens_lambda_block,
 };
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::CommaRole;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::indentation::LineKind;
-use crate::formatter::language;
-use crate::formatter::language::is_macro_like_word;
-use crate::formatter::line_scan::{
-    is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
-    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
-};
 use crate::formatter::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::operators::{
     find_assignment_operator, starts_ternary_arm, starts_with_chain_operator,
 };
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
+    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
+};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) struct SplitElseCallLineLayout {

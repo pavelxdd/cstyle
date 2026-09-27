@@ -1,14 +1,14 @@
 use crate::formatter::brace_classification::is_lambda_capture_header;
-use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
-use crate::formatter::language;
-use crate::formatter::line_scan::{
+use crate::formatter::state::ContinuationIndent;
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::scoped_name_is_constructor;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,
     trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use crate::formatter::state::ContinuationIndent;
-use crate::formatter::syntax::scoped_name_is_constructor;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) struct MaxLengthConstructorReplay {
