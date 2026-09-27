@@ -124,6 +124,14 @@ pub(crate) enum PreprocessorRegion {
     Unknown,
 }
 
+/// Per-directive facts that each physical line of a preprocessor directive uses.
+#[derive(Clone, Copy)]
+struct PreprocessorLineParts<'a> {
+    opaque_literal_line_ranges: &'a [(usize, usize)],
+    branch_separator_after_else: bool,
+    indent_continued_conditional: bool,
+}
+
 impl FormatEngine<'_> {
     pub(crate) fn preprocessor_region(&self, in_macro_body: bool) -> PreprocessorRegion {
         let region = Self::preprocessor_region_from_brace_stack(
@@ -477,7 +485,6 @@ impl FormatEngine<'_> {
         line: &str,
         opaque_literal_line_ranges: &[(usize, usize)],
     ) {
-        let source_indent = self.current.to_string();
         self.finish_line();
         let directive = line.lines().next().and_then(preprocessor_directive);
         let header_before_preprocessor = self
@@ -491,7 +498,6 @@ impl FormatEngine<'_> {
                     leading_visual_width(line, self.options.tab_width),
                 )
             });
-        let preserve_source_indent = false;
         let indent_continued_conditional = self.options.indent_preproc_conditional
             && directive.is_some_and(is_conditional_preprocessor);
         let branch_separator =
@@ -568,109 +574,16 @@ impl FormatEngine<'_> {
 
         let mut continued_line_comment = false;
         for (index, part) in parts.iter().enumerate() {
-            let line_is_continued_comment = continued_line_comment;
-            let is_opaque_literal_line = opaque_literal_line_ranges
-                .iter()
-                .any(|&(start, end)| start <= index && index <= end);
-            let is_opaque_literal_continuation = is_opaque_literal_line && index > 0;
-            let part = if is_opaque_literal_line {
-                *part
-            } else {
-                part.trim_end()
-            };
-            let directive = (!line_is_continued_comment && !is_opaque_literal_continuation)
-                .then(|| preprocessor_directive(part))
-                .flatten();
-            let part_known_directive = directive.is_some_and(is_known_preprocessor_directive);
-            let part_is_define = directive == Some("define");
-            let opening_indentable = if matches!(directive, Some("if" | "ifdef" | "ifndef")) {
-                Some(self.should_indent_preprocessor_block())
-            } else {
-                None
-            };
-            let in_indentable_block = match opening_indentable {
-                Some(indentable) => indentable,
-                None => self.preprocessor.indented_block_stack.last() == Some(&true),
-            };
-            let collapse =
-                self.options.indent_preproc_block && directive.is_some() && in_indentable_block;
-            if index == 0 && self.take_block_spacing_blank(part) {
-                self.push_empty_line();
-            }
-            let force_unindented_branch_separator = branch_separator_after_else && index == 0;
-            let indent = if force_unindented_branch_separator {
-                None
-            } else if index > 0 && indent_continued_conditional {
-                Some(self.current_preprocessor_indent())
-            } else if directive == Some("endif")
-                && self.preprocessor.branch_stack.is_empty()
-                && self.token_input.token_source_line_indent > 0
-            {
-                Some(PreprocessorLineIndent::Exact {
-                    structural_level: 0,
-                    spaces: self.token_input.token_source_line_indent,
-                })
-            } else {
-                self.preprocessor_line_indent(part, part_is_define, index)
-            };
-            let output_line = if let Some(indent) = indent {
-                let prefix = match indent {
-                    PreprocessorLineIndent::Level(level) => self.options.indent_prefix(level),
-                    PreprocessorLineIndent::Exact {
-                        structural_level,
-                        spaces,
-                    } => self
-                        .options
-                        .continuation_indent_prefix(structural_level, spaces),
-                };
-                let body = if collapse {
-                    collapse_pound_whitespace(part.trim_start())
-                } else {
-                    part.trim_start().to_string()
-                };
-                format!("{prefix}{body}")
-            } else if collapse {
-                let leading = &part[..part.len() - part.trim_start().len()];
-                format!("{leading}{}", collapse_pound_whitespace(part.trim_start()))
-            } else if force_unindented_branch_separator || line_is_continued_comment {
-                part.trim_start().to_string()
-            } else if preserve_source_indent && index == 0 {
-                format!("{source_indent}{part}")
-            } else if directive.is_some()
-                && (part_known_directive || self.token_input.token_source_line_indent == 0)
-            {
-                part.trim_start().to_string()
-            } else if directive.is_some() {
-                format!(
-                    "{}{}",
-                    " ".repeat(self.token_input.token_source_line_indent),
-                    part.trim_start()
-                )
-            } else {
-                part.to_string()
-            };
-            if is_opaque_literal_line {
-                let structural_start = output_line.len();
-                self.adjust_and_publish_raw_literal_line(output_line, structural_start);
-            } else {
-                self.adjust_and_publish_line(output_line);
-            }
-            if !line_is_continued_comment && !is_opaque_literal_continuation {
-                self.update_preprocessor_state(
-                    part,
-                    opening_indentable,
-                    index == 0 && branch_separator_after_else,
-                );
-            }
-            let line_ends_with_backslash = part.trim_end().ends_with('\\');
-            continued_line_comment = if line_is_continued_comment {
-                line_ends_with_backslash
-            } else if line_ends_with_backslash && !is_opaque_literal_line {
-                let comment_start = line_comment_split_limit(part);
-                comment_start < part.len() && part[comment_start..].trim_start().starts_with("//")
-            } else {
-                false
-            };
+            self.push_preprocessor_part(
+                index,
+                part,
+                &PreprocessorLineParts {
+                    opaque_literal_line_ranges,
+                    branch_separator_after_else,
+                    indent_continued_conditional,
+                },
+                &mut continued_line_comment,
+            );
         }
         if (is_define && !line.trim_end().ends_with('\\'))
             || (!is_define && directive.is_some() && parts.len() > 1)
@@ -718,6 +631,121 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
         self.preprocessor.last_output_was_preprocessor = true;
+    }
+
+    fn push_preprocessor_part(
+        &mut self,
+        index: usize,
+        part: &str,
+        parts: &PreprocessorLineParts<'_>,
+        continued_line_comment: &mut bool,
+    ) {
+        let PreprocessorLineParts {
+            opaque_literal_line_ranges,
+            branch_separator_after_else,
+            indent_continued_conditional,
+        } = *parts;
+        let line_is_continued_comment = *continued_line_comment;
+        let is_opaque_literal_line = opaque_literal_line_ranges
+            .iter()
+            .any(|&(start, end)| start <= index && index <= end);
+        let is_opaque_literal_continuation = is_opaque_literal_line && index > 0;
+        let part = if is_opaque_literal_line {
+            part
+        } else {
+            part.trim_end()
+        };
+        let directive = (!line_is_continued_comment && !is_opaque_literal_continuation)
+            .then(|| preprocessor_directive(part))
+            .flatten();
+        let part_known_directive = directive.is_some_and(is_known_preprocessor_directive);
+        let part_is_define = directive == Some("define");
+        let opening_indentable = if matches!(directive, Some("if" | "ifdef" | "ifndef")) {
+            Some(self.should_indent_preprocessor_block())
+        } else {
+            None
+        };
+        let in_indentable_block = match opening_indentable {
+            Some(indentable) => indentable,
+            None => self.preprocessor.indented_block_stack.last() == Some(&true),
+        };
+        let collapse =
+            self.options.indent_preproc_block && directive.is_some() && in_indentable_block;
+        if index == 0 && self.take_block_spacing_blank(part) {
+            self.push_empty_line();
+        }
+        let force_unindented_branch_separator = branch_separator_after_else && index == 0;
+        let indent = if force_unindented_branch_separator {
+            None
+        } else if index > 0 && indent_continued_conditional {
+            Some(self.current_preprocessor_indent())
+        } else if directive == Some("endif")
+            && self.preprocessor.branch_stack.is_empty()
+            && self.token_input.token_source_line_indent > 0
+        {
+            Some(PreprocessorLineIndent::Exact {
+                structural_level: 0,
+                spaces: self.token_input.token_source_line_indent,
+            })
+        } else {
+            self.preprocessor_line_indent(part, part_is_define, index)
+        };
+        let output_line = if let Some(indent) = indent {
+            let prefix = match indent {
+                PreprocessorLineIndent::Level(level) => self.options.indent_prefix(level),
+                PreprocessorLineIndent::Exact {
+                    structural_level,
+                    spaces,
+                } => self
+                    .options
+                    .continuation_indent_prefix(structural_level, spaces),
+            };
+            let body = if collapse {
+                collapse_pound_whitespace(part.trim_start())
+            } else {
+                part.trim_start().to_string()
+            };
+            format!("{prefix}{body}")
+        } else if collapse {
+            let leading = &part[..part.len() - part.trim_start().len()];
+            format!("{leading}{}", collapse_pound_whitespace(part.trim_start()))
+        } else if force_unindented_branch_separator
+            || line_is_continued_comment
+            || (directive.is_some()
+                && (part_known_directive || self.token_input.token_source_line_indent == 0))
+        {
+            part.trim_start().to_string()
+        } else if directive.is_some() {
+            format!(
+                "{}{}",
+                " ".repeat(self.token_input.token_source_line_indent),
+                part.trim_start()
+            )
+        } else {
+            part.to_string()
+        };
+        if is_opaque_literal_line {
+            let structural_start = output_line.len();
+            self.adjust_and_publish_raw_literal_line(output_line, structural_start);
+        } else {
+            self.adjust_and_publish_line(output_line);
+        }
+        if !line_is_continued_comment && !is_opaque_literal_continuation {
+            self.update_preprocessor_state(
+                part,
+                opening_indentable,
+                index == 0 && branch_separator_after_else,
+            );
+        }
+        let line_ends_with_backslash = part.trim_end().ends_with('\\');
+        *continued_line_comment = if line_is_continued_comment {
+            line_ends_with_backslash
+        } else if line_ends_with_backslash && !is_opaque_literal_line {
+            let comment_start = line_comment_split_limit(part);
+            comment_start < part.len() && part[comment_start..].trim_start().starts_with("//")
+        } else {
+            false
+        };
     }
 
     pub(crate) fn preprocessor_base_level(&self) -> usize {
