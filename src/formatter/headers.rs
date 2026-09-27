@@ -1118,7 +1118,8 @@ impl FormatEngine<'_> {
                 }
                 break;
             }
-            if !trimmed.ends_with(')') && !(is_header && saw_condition_closer) {
+            let closes_condition = trimmed.ends_with(')') || (is_header && saw_condition_closer);
+            if !closes_condition {
                 break;
             }
             if header_word_is(trimmed, "if") || trimmed.starts_with("else if") {
@@ -1263,7 +1264,7 @@ impl FormatEngine<'_> {
             .current
             .trim_end()
             .ends_with('@')
-            .then(|| match word {
+            .then_some(match word {
                 "autoreleasepool" => Some("autoreleasepool"),
                 "try" => Some("@try"),
                 "catch" => Some("@catch"),
@@ -1643,10 +1644,10 @@ impl FormatEngine<'_> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
-            || !self
+            || self
                 .output
                 .last_non_empty_line()
-                .is_some_and(|line| line.trim() == "}")
+                .is_none_or(|line| line.trim() != "}")
         {
             return None;
         }

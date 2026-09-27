@@ -1604,9 +1604,7 @@ impl FormatEngine<'_> {
     pub(super) fn return_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
         let trimmed = line.trim_start();
-        let Some(after_return) = trimmed.strip_prefix("return") else {
-            return None;
-        };
+        let after_return = trimmed.strip_prefix("return")?;
         if after_return
             .chars()
             .next()

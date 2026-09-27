@@ -85,7 +85,7 @@ impl FormatEngine<'_> {
     fn finish_ordinary_line(&mut self, line: &str) {
         if !line.is_empty() {
             let output_line_index = self.output.len();
-            let code = line[..trailing_comment_split_limit(&line)].trim_end();
+            let code = line[..trailing_comment_split_limit(line)].trim_end();
             let code_ends_with_brace = code.ends_with('}');
             self.frame_stack
                 .mark_last_closed_brace_line_end(output_line_index, code_ends_with_brace);
@@ -97,7 +97,7 @@ impl FormatEngine<'_> {
                 && !self.options.indent_col1_comments
                 && line.starts_with("//")
             {
-                if self.take_block_spacing_blank(&line) {
+                if self.take_block_spacing_blank(line) {
                     self.push_empty_line();
                 }
                 self.publish_unadjusted_line(line.to_string());
@@ -115,9 +115,9 @@ impl FormatEngine<'_> {
                 return;
             }
 
-            let case_label_with_comment = case_label_with_trailing_comment(&line);
+            let case_label_with_comment = case_label_with_trailing_comment(line);
             if self.options.break_one_line_statements
-                && let Some((label, statement)) = split_switch_label_statement(&line)
+                && let Some((label, statement)) = split_switch_label_statement(line)
             {
                 self.finish_line_text(&label);
                 if statement.trim_start().starts_with('#') {
@@ -144,7 +144,7 @@ impl FormatEngine<'_> {
                     self.finish_line_text(&statement);
                 }
             } else {
-                self.finish_line_text(&line);
+                self.finish_line_text(line);
             }
             if let Some(output_indent) = self.observe_operator_chain_output_line(output_line_index)
                 && let Some(output_line) = self.output.get(output_line_index)
@@ -153,7 +153,7 @@ impl FormatEngine<'_> {
                     .mark_delimiter_line_output_indent(output_line_index, output_indent);
                 let output_code =
                     output_line[..trailing_comment_split_limit(output_line)].trim_end();
-                let line_comment_limit = line_comment_split_limit(&line);
+                let line_comment_limit = line_comment_split_limit(line);
                 let code_before_line_comment = line[..line_comment_limit].trim_end();
                 let embedded_preprocessor = output_code.contains('#')
                     && !output_code.trim_start().starts_with('#')

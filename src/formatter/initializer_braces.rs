@@ -29,7 +29,7 @@ fn line_opens_typed_initializer(line: &str) -> bool {
         return false;
     };
     let before = code[..open].trim_end();
-    before.contains('<') && before.chars().next_back() == Some('>')
+    before.contains('<') && before.ends_with('>')
 }
 
 pub(super) fn initializer_sibling_uses_previous_indent(line: &str) -> bool {

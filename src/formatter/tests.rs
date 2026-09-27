@@ -16,7 +16,7 @@ fn fixture(lines: &[&str]) -> String {
 #[test]
 fn operator_path_can_read_token_indexed_roles_without_output_change() {
     let source = "x * f(1);\n";
-    let tokens = tokenize(&source);
+    let tokens = tokenize(source);
     let star_index = tokens
         .iter()
         .position(|token| matches!(token, Token::Operator(operator) if operator == "*"))

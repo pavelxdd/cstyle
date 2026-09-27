@@ -2395,21 +2395,6 @@ fn is_empty_one_line_block_tokens(tokens: &[Token]) -> bool {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::token::tokenize;
-    use super::*;
-
-    #[test]
-    fn add_braces_keeps_braced_condition_interrupted_by_preprocessor() {
-        let tokens = tokenize(
-            "void run(){if(alphaCondition&&\n#if ENABLED\nbetaCondition\n#endif\nzetaCondition){call();}}\n",
-        );
-
-        assert_eq!(add_cross_line_statement_braces(&tokens, true), tokens);
-    }
-}
-
 fn one_line_block_contains_case_label(tokens: &[Token]) -> bool {
     tokens.iter().enumerate().any(|(index, token)| match token {
         Token::Word(word) if word == "case" => true,
@@ -2486,4 +2471,19 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
         .iter()
         .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::token::tokenize;
+    use super::*;
+
+    #[test]
+    fn add_braces_keeps_braced_condition_interrupted_by_preprocessor() {
+        let tokens = tokenize(
+            "void run(){if(alphaCondition&&\n#if ENABLED\nbetaCondition\n#endif\nzetaCondition){call();}}\n",
+        );
+
+        assert_eq!(add_cross_line_statement_braces(&tokens, true), tokens);
+    }
 }

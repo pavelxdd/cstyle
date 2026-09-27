@@ -181,15 +181,13 @@ impl FormatEngine<'_> {
                     .find(|line| !line.trim().is_empty())
             {
                 let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                if self.in_enum_declaration_brace()
+                if (self.in_enum_declaration_brace()
                     && previous_code.ends_with(',')
-                    && previous.len() != previous_code.len()
-                {
-                    spaces = None;
-                } else if next_line_indent.is_some()
-                    && is_braceless_header_line(previous_code.trim_start())
-                    && !line.trim_start().starts_with(['#', '{', '}'])
-                    && !operator_chains::starts_operator_chain_continuation(line)
+                    && previous.len() != previous_code.len())
+                    || (next_line_indent.is_some()
+                        && is_braceless_header_line(previous_code.trim_start())
+                        && !line.trim_start().starts_with(['#', '{', '}'])
+                        && !operator_chains::starts_operator_chain_continuation(line))
                 {
                     spaces = None;
                 } else if previous_code.ends_with("},")
@@ -510,14 +508,9 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_non_empty_line()
         {
             let previous_trimmed = previous.trim_start();
-            if previous_trimmed.starts_with("} else if") && previous_trimmed.ends_with('{') {
-                layout.exact_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
-                        + self.line_adjuster.next_line_case_unindent_depth()
-                            * self.options.indent_width,
-                );
-            } else if previous_trimmed.ends_with("} else") {
+            if (previous_trimmed.starts_with("} else if") && previous_trimmed.ends_with('{'))
+                || previous_trimmed.ends_with("} else")
+            {
                 layout.exact_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width
@@ -936,12 +929,10 @@ impl FormatEngine<'_> {
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width,
                 );
-            } else if previous_code.ends_with(',') && previous_code.trim_start().starts_with('}') {
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width));
             } else if previous_code.ends_with(',')
-                && previous_code.contains("= new ")
-                && unmatched_open_paren_column(previous_code).is_none()
+                && (previous_code.trim_start().starts_with('}')
+                    || (previous_code.contains("= new ")
+                        && unmatched_open_paren_column(previous_code).is_none()))
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));

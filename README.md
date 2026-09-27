@@ -26,16 +26,16 @@ input encoding and line endings must be preserved.
 
 ## Development
 
+Project commands are `just` recipes; `just --list` shows all of them.
+
 ```sh
-just build-release
-just test
-just perf-bounded
-just package
-just doc
-just check
+just test          # nextest suite; extra arguments go to nextest
+just lint          # clippy on all targets
+just perf-bounded  # release-mode bounded-runtime suite
+just check         # full release gate
 ```
 
-The release check treats Rust and rustdoc warnings as errors.
+The release gate treats Rust, clippy, and rustdoc warnings as errors.
 
 ## Usage
 

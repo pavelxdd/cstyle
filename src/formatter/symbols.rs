@@ -13,7 +13,7 @@ use super::syntax::{
 };
 use super::token::Token;
 use super::{
-    FormatEngine, PreviousToken, is_pointer_type_word, is_type_like_pointer_word,
+    FormatEngine, PreviousToken, TokenPushContext, is_pointer_type_word, is_type_like_pointer_word,
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
@@ -85,16 +85,16 @@ fn is_single_lvalue_assignment(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn push_symbol(
-        &mut self,
-        symbol: char,
-        next: Option<&Token>,
-        next_is_adjacent: bool,
-        token_index: usize,
-        starts_initializer_designator: bool,
-        inferred_definition_brace: bool,
-        following_closing_braces: usize,
-    ) {
+    pub(super) fn push_symbol(&mut self, symbol: char, context: TokenPushContext<'_>) {
+        let TokenPushContext {
+            next,
+            next_is_adjacent,
+            token_index,
+            starts_initializer_designator,
+            inferred_definition_brace,
+            following_closing_braces,
+            ..
+        } = context;
         match symbol {
             '{' => self.push_open_brace(next, token_index, inferred_definition_brace),
             '}' => self.push_close_brace(next, next_is_adjacent),
@@ -632,6 +632,10 @@ impl FormatEngine<'_> {
             && (self.options.pad_commas || self.options.pad_operators)
             && self.token_input.previous_input_whitespace.is_none()
             && self.current.ends_with(' ');
+        let keeps_padded_operator_gap = self.previous == PreviousToken::Operator
+            && self.options.pad_operators
+            && self.token_input.previous_input_whitespace.is_none()
+            && self.current.ends_with(' ');
         if attaches_to_name_side {
             self.trim_current_end();
         } else if keeps_padded_objc_selector_gap {
@@ -642,10 +646,7 @@ impl FormatEngine<'_> {
             self.trim_current_end();
         } else if !keeps_aligned_declarator_gap
             && !keeps_padded_comma_gap
-            && !(self.previous == PreviousToken::Operator
-                && self.options.pad_operators
-                && self.token_input.previous_input_whitespace.is_none()
-                && self.current.ends_with(' '))
+            && !keeps_padded_operator_gap
         {
             self.emit_source_space();
         }
@@ -867,11 +868,7 @@ impl FormatEngine<'_> {
             } else {
                 self.trim_current_end();
             }
-            if !(matches!(next, Some(Token::Word(word)) if word == "else")
-                && !self.else_if_break_depths.is_empty())
-            {
-                self.unwind_else_if_break_depths();
-            }
+            self.unwind_else_if_break_depths_unless_else(next);
             self.pending_braceless_block_bias = None;
             self.inline_nested_header_braceless_bias = None;
             if self.preprocessor.split_else.body_braceless
@@ -1366,13 +1363,12 @@ impl FormatEngine<'_> {
                     self.emit_trailing_source_space();
                 }
             }
-        } else if (is_class_initializer
-            || (is_enum_underlying_type && pad_off)
-            || (is_class_base && pad_off))
-            && (!aligned_continuation_colon || is_asm_operand_colon)
+        } else if is_asm_operand_colon
+            || ((is_class_initializer
+                || (is_enum_underlying_type && pad_off)
+                || (is_class_base && pad_off))
+                && !aligned_continuation_colon)
         {
-            self.emit_trailing_source_space();
-        } else if is_asm_operand_colon {
             self.emit_trailing_source_space();
         } else if is_objc_colon {
             if colon_mode == ObjCColonPad::NoChange {

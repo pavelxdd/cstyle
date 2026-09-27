@@ -4,6 +4,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 #[derive(Debug, Eq, PartialEq)]
+#[expect(clippy::large_enum_variant, reason = "parsed once per process")]
 pub(super) enum Command {
     Help,
     Version,

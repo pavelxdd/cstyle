@@ -1846,24 +1846,16 @@ impl FormatEngine<'_> {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let trimmed = code.trim_start();
             if !line.trim_start().starts_with(['{', '}', '#'])
-                && code.ends_with('{')
-                && (starts_header_word(trimmed, "if")
-                    || starts_header_word(trimmed, "while")
-                    || starts_header_word(trimmed, "for")
-                    || starts_header_word(trimmed, "do")
-                    || trimmed.starts_with("else if")
-                    || trimmed.starts_with("} else"))
-            {
-                layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
-                        + self.line_adjuster.next_line_case_unindent_depth()
-                            * self.options.indent_width,
-                ));
-            } else if !line.trim_start().starts_with(['{', '}', '#'])
-                && !code.ends_with([';', '{', '}'])
-                && unmatched_open_paren_column(code).is_none()
-                && line_is_control_body_header(trimmed)
+                && ((code.ends_with('{')
+                    && (starts_header_word(trimmed, "if")
+                        || starts_header_word(trimmed, "while")
+                        || starts_header_word(trimmed, "for")
+                        || starts_header_word(trimmed, "do")
+                        || trimmed.starts_with("else if")
+                        || trimmed.starts_with("} else")))
+                    || (!code.ends_with([';', '{', '}'])
+                        && unmatched_open_paren_column(code).is_none()
+                        && line_is_control_body_header(trimmed)))
             {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(previous, self.options.tab_width)
@@ -2247,44 +2239,27 @@ impl FormatEngine<'_> {
             ) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if previous_code.ends_with(';')
-                && self.line_adjuster.total_case_unindent_depth() > 0
                 && current_spaces <= previous_indent
-                && self.output.iter().rev().skip(1).take(16).any(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    let trimmed = code.trim_start();
-                    code.ends_with('{')
-                        && leading_visual_width(line, self.options.tab_width)
-                            + self.options.indent_width
-                            == previous_indent
-                        && (starts_header_word(trimmed, "if")
-                            || starts_header_word(trimmed, "for")
-                            || starts_header_word(trimmed, "while")
-                            || trimmed.starts_with("else"))
-                })
-            {
-                layout.exact_indent_spaces = Some(
-                    previous_indent
-                        + self.line_adjuster.total_case_unindent_depth()
-                            * self.options.indent_width,
-                );
-            } else if previous_code.ends_with(';')
-                && starts_header_word(previous_trimmed, "if")
-                && current_spaces <= previous_indent
-            {
-                layout.exact_indent_spaces = Some(
-                    previous_indent
-                        + self.line_adjuster.total_case_unindent_depth()
-                            * self.options.indent_width,
-                );
-            } else if previous_code.ends_with(';')
-                && self.line_adjuster.total_case_unindent_depth() > 0
-                && current_spaces <= previous_indent
-                && (line_is_control_body_header(line.trim_start())
-                    || starts_header_word(line.trim_start(), "if")
-                    || starts_header_word(line.trim_start(), "while")
-                    || starts_header_word(line.trim_start(), "for")
-                    || starts_header_word(line.trim_start(), "switch")
-                    || is_comment_line(line.trim_start()))
+                && (starts_header_word(previous_trimmed, "if")
+                    || (self.line_adjuster.total_case_unindent_depth() > 0
+                        && (line_is_control_body_header(line.trim_start())
+                            || starts_header_word(line.trim_start(), "if")
+                            || starts_header_word(line.trim_start(), "while")
+                            || starts_header_word(line.trim_start(), "for")
+                            || starts_header_word(line.trim_start(), "switch")
+                            || is_comment_line(line.trim_start())
+                            || self.output.iter().rev().skip(1).take(16).any(|line| {
+                                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                                let trimmed = code.trim_start();
+                                code.ends_with('{')
+                                    && leading_visual_width(line, self.options.tab_width)
+                                        + self.options.indent_width
+                                        == previous_indent
+                                    && (starts_header_word(trimmed, "if")
+                                        || starts_header_word(trimmed, "for")
+                                        || starts_header_word(trimmed, "while")
+                                        || trimmed.starts_with("else"))
+                            }))))
             {
                 layout.exact_indent_spaces = Some(
                     previous_indent

@@ -495,11 +495,7 @@ impl FormatEngine<'_> {
             Some(Token::Symbol(';') | Token::Symbol(',') | Token::Symbol(')'))
         ) {
             self.finish_line();
-            if !(matches!(next, Some(Token::Word(word)) if word == "else")
-                && !self.else_if_break_depths.is_empty())
-            {
-                self.unwind_else_if_break_depths();
-            }
+            self.unwind_else_if_break_depths_unless_else(next);
         }
         if unmatched_closing_brace {
             self.continuation_indent.next_line_indent = None;
@@ -527,6 +523,12 @@ impl FormatEngine<'_> {
                 self.stack_state.last_closed_brace_header.as_deref() == Some("do")
             }
             _ => false,
+        }
+    }
+
+    pub(super) fn unwind_else_if_break_depths_unless_else(&mut self, next: Option<&Token>) {
+        if !matches!(next, Some(Token::Word(word)) if word == "else") {
+            self.unwind_else_if_break_depths();
         }
     }
 
@@ -1134,10 +1136,10 @@ impl FormatEngine<'_> {
         indent: usize,
     ) -> Option<usize> {
         if line.trim() != "}"
-            || !self
+            || self
                 .output
                 .last_non_empty_line()
-                .is_some_and(|previous| preprocessor_directive(previous.trim_start()).is_some())
+                .is_none_or(|previous| preprocessor_directive(previous.trim_start()).is_none())
         {
             return None;
         }

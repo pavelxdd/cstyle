@@ -1220,11 +1220,11 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '{', '}', '/'])
             || self.line_adjuster.total_case_unindent_depth() == 0
-            || !self
+            || self
                 .stack_state
                 .brace_header_stack
                 .last()
-                .is_some_and(|header| header.as_deref() == Some("case"))
+                .is_none_or(|header| header.as_deref() != Some("case"))
         {
             return None;
         }
@@ -1745,15 +1745,15 @@ impl FormatEngine<'_> {
             || line
                 .trim_start()
                 .starts_with(['#', '{', '}', '/', ')', ']'])
-            || !self
+            || self
                 .output
                 .last_non_empty_line()
-                .is_some_and(|previous| previous.trim() == "}")
+                .is_none_or(|previous| previous.trim() != "}")
             || !self.has_case_body_at_current_depth()
-            || !self
+            || self
                 .frame_stack
                 .last_closed_brace()
-                .is_some_and(|frame| !frame.case_block)
+                .is_none_or(|frame| frame.case_block)
         {
             return None;
         }
@@ -1969,11 +1969,11 @@ impl FormatEngine<'_> {
     pub(super) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
         if line.trim_start().starts_with(['#', '{', '}', '/'])
             || find_case_colon(line).is_some()
-            || !self
+            || self
                 .stack_state
                 .brace_header_stack
                 .last()
-                .is_some_and(|header| header.as_deref() == Some("case"))
+                .is_none_or(|header| header.as_deref() != Some("case"))
         {
             return None;
         }

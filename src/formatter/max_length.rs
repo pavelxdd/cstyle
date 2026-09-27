@@ -72,11 +72,11 @@ impl FormatEngine<'_> {
         let brace_row_layout =
             self.max_length_brace_row_layout(line, structural_level, base_indent_width, width);
         let first_width = brace_row_layout.first_width;
-        let suffix_width = line
-            .trim_end()
-            .ends_with(';')
-            .then_some(self.max_length_line.suffix_width())
-            .unwrap_or(0);
+        let suffix_width = if line.trim_end().ends_with(';') {
+            self.max_length_line.suffix_width()
+        } else {
+            0
+        };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
         let Some(split) = split_result(line, first_width, self.options.break_after_logical)
             .or_else(|| {
@@ -109,22 +109,21 @@ impl FormatEngine<'_> {
                 | BraceStyle::Gnu
                 | BraceStyle::Horstmann
         );
-        let mut next_indent = continuation_indent_for_split(
-            line,
-            &split.head,
-            &split,
+        let split_indent_inputs = SplitIndentInputs {
             base_indent_width,
-            configured_indent_width,
-            self.options.indent_width,
-            self.options.max_continuation_indent,
-            self.options.indent_after_parens,
-            current_line_owner,
-            self.options.continuation_indent * self.options.indent_width,
-            base_indent_width,
-            false,
+            limit_base_indent_width: configured_indent_width,
+            current_indent_width: base_indent_width,
+            indent_width: self.options.indent_width,
+            max_continuation_indent: self.options.max_continuation_indent,
+            configured_continuation_spaces: self.options.continuation_indent
+                * self.options.indent_width,
+            configured_indent: current_line_owner,
+            indent_after_parens: self.options.indent_after_parens,
+            following_split: false,
             break_lambda_parameters,
-        )
-        .unwrap_or(split_indent);
+        };
+        let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
+            .unwrap_or(split_indent);
         if brace_row_layout.attaches_lisp_closer {
             next_indent = ContinuationIndent::Level(self.state.indent());
         }
@@ -187,18 +186,13 @@ impl FormatEngine<'_> {
             };
             let mut following_indent = continuation_indent_for_split(
                 &tail,
-                &split.head,
                 &split,
-                base_indent_width,
-                configured_indent_width,
-                self.options.indent_width,
-                self.options.max_continuation_indent,
-                self.options.indent_after_parens,
-                next_indent,
-                self.options.continuation_indent * self.options.indent_width,
-                next_indent.columns(self.options.indent_width),
-                true,
-                break_lambda_parameters,
+                &SplitIndentInputs {
+                    current_indent_width: next_indent.columns(self.options.indent_width),
+                    configured_indent: next_indent,
+                    following_split: true,
+                    ..split_indent_inputs
+                },
             )
             .unwrap_or(next_indent);
             following_indent = self.advance_max_length_constructor_replay(
@@ -443,21 +437,38 @@ impl FormatEngine<'_> {
     }
 }
 
-fn continuation_indent_for_split(
-    line: &str,
-    head: &str,
-    split: &SplitResult,
+#[derive(Clone, Copy)]
+struct SplitIndentInputs {
     base_indent_width: usize,
     limit_base_indent_width: usize,
+    current_indent_width: usize,
     indent_width: usize,
     max_continuation_indent: usize,
-    indent_after_parens: bool,
-    configured_indent: ContinuationIndent,
     configured_continuation_spaces: usize,
-    current_indent_width: usize,
+    configured_indent: ContinuationIndent,
+    indent_after_parens: bool,
     following_split: bool,
     break_lambda_parameters: bool,
+}
+
+fn continuation_indent_for_split(
+    line: &str,
+    split: &SplitResult,
+    inputs: &SplitIndentInputs,
 ) -> Option<ContinuationIndent> {
+    let SplitIndentInputs {
+        base_indent_width,
+        indent_width,
+        max_continuation_indent,
+        configured_continuation_spaces,
+        current_indent_width,
+        configured_indent,
+        indent_after_parens,
+        following_split,
+        break_lambda_parameters,
+        ..
+    } = *inputs;
+    let head = split.head.as_str();
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
     if let Some(spaces) = lambda_parameter_continuation_indent(
         head,
@@ -528,17 +539,9 @@ fn continuation_indent_for_split(
     }
 
     let open_columns = unmatched_open_paren_columns(head);
-    if let Some(spaces) = nested_new_continuation_indent(
-        line,
-        &open_columns,
-        base_indent_width,
-        limit_base_indent_width,
-        current_indent_width,
-        indent_width,
-        max_continuation_indent,
-        configured_continuation_spaces,
-        head.trim_end().ends_with('('),
-    ) {
+    if let Some(spaces) =
+        nested_new_continuation_indent(line, &open_columns, inputs, head.trim_end().ends_with('('))
+    {
         return Some(ContinuationIndent::Spaces(spaces));
     }
     let all_openers_over_max = !open_columns.is_empty()
@@ -606,14 +609,18 @@ fn split_function_declaration_head(head: &str) -> bool {
 fn nested_new_continuation_indent(
     line: &str,
     open_columns: &[usize],
-    base_indent_width: usize,
-    limit_base_indent_width: usize,
-    current_indent_width: usize,
-    indent_width: usize,
-    max_continuation_indent: usize,
-    configured_continuation_spaces: usize,
+    inputs: &SplitIndentInputs,
     trailing_open_paren: bool,
 ) -> Option<usize> {
+    let SplitIndentInputs {
+        base_indent_width,
+        limit_base_indent_width,
+        current_indent_width,
+        indent_width,
+        max_continuation_indent,
+        configured_continuation_spaces,
+        ..
+    } = *inputs;
     let &deepest = open_columns.last()?;
     let has_new = line[..deepest].match_indices("new").any(|(index, _)| {
         let before = line[..index].chars().next_back();

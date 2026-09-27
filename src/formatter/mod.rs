@@ -917,9 +917,7 @@ impl<'a> FormatEngine<'a> {
             following_operator,
             template_angle,
             token_index,
-            starts_initializer_designator,
-            inferred_definition_brace,
-            following_closing_braces,
+            ..
         } = context;
         if self.formatting_disabled {
             self.push_disabled(token, next);
@@ -954,7 +952,9 @@ impl<'a> FormatEngine<'a> {
                 Token::Whitespace(_) => {}
                 Token::Newline => self.pad_close_paren_pending = false,
                 _ => {
-                    if !(self.options.unpad_parens && matches!(token, Token::Symbol(')')))
+                    let unpadded_close_paren =
+                        self.options.unpad_parens && matches!(token, Token::Symbol(')'));
+                    if !unpadded_close_paren
                         && !symbols::close_paren_out_suppressed(token)
                         && self
                             .token_input
@@ -1016,15 +1016,7 @@ impl<'a> FormatEngine<'a> {
                     token_index,
                 );
             }
-            Token::Symbol(symbol) => self.push_symbol(
-                *symbol,
-                next,
-                next_is_adjacent,
-                token_index,
-                starts_initializer_designator,
-                inferred_definition_brace,
-                following_closing_braces,
-            ),
+            Token::Symbol(symbol) => self.push_symbol(*symbol, context),
             Token::Whitespace(whitespace) => self.push_whitespace(whitespace),
             Token::Newline => self.push_newline(),
         }

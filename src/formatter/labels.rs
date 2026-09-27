@@ -116,12 +116,13 @@ pub(super) fn current_line_indent_spaces(
         return None;
     }
     let trimmed = line.trim_start();
+    let is_class_access_label = starts_access_label(line, &options.access_labels)
+        && enclosing_brace.is_some_and(is_class_like_brace_type);
     let is_unindented_label = kind == LineKind::Label
         && !trimmed.starts_with("case ")
         && !trimmed.starts_with("default:")
         && !trimmed.starts_with("else")
-        && !(starts_access_label(line, &options.access_labels)
-            && enclosing_brace.is_some_and(is_class_like_brace_type));
+        && !is_class_access_label;
     (is_unindented_label || is_attached_user_label(line)).then_some(0)
 }
 

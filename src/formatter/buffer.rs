@@ -50,7 +50,7 @@ fn structural_line(line: &str) -> Cow<'_, str> {
     for token in &tokens {
         let text = token_text(token);
         if is_raw_literal(token) || matches!(token, Token::Comment(_, _)) {
-            structural.extend(std::iter::repeat(' ').take(text.len()));
+            structural.extend(std::iter::repeat_n(' ', text.len()));
         } else {
             structural.push_str(&text);
         }

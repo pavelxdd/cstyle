@@ -296,7 +296,7 @@ fn java_keeps_comment_separated_array_initializer_brace_split() {
         "    \"second\",",
     );
 
-    assert_eq!(format_c(&source, &options), source);
+    assert_eq!(format_c(source, &options), source);
 }
 
 #[test]

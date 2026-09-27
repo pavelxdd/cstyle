@@ -199,11 +199,10 @@ impl FormatEngine<'_> {
                 self.emit_source_space();
             }
         } else if self.previous.needs_space_before_word() {
-            if quote == Some('"') {
-                self.emit_source_space();
-            } else if quote.is_none()
-                && literal.starts_with('.')
-                && matches!(self.previous, PreviousToken::Word | PreviousToken::Literal)
+            if quote == Some('"')
+                || (quote.is_none()
+                    && literal.starts_with('.')
+                    && matches!(self.previous, PreviousToken::Word | PreviousToken::Literal))
             {
                 self.emit_source_space();
             } else if matches!(self.previous, PreviousToken::Word | PreviousToken::Literal) {

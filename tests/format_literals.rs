@@ -21,7 +21,7 @@ fn unterminated_delimited_raw_string_uses_block_indent() {
 fn malformed_raw_string_opener_is_preserved() {
     let source = fixture!("void run()", "{", "    string value = R\"raw");
 
-    assert_eq!(format_c(&source, &FormatOptions::default()), source,);
+    assert_eq!(format_c(source, &FormatOptions::default()), source,);
 }
 
 #[test]

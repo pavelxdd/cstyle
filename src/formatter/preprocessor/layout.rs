@@ -859,8 +859,7 @@ impl FormatEngine<'_> {
         limit: usize,
         mut matches: impl FnMut(&str) -> bool,
     ) -> bool {
-        let mut checked = 0usize;
-        for index in (0..self.output.len()).rev() {
+        for (checked, index) in (0..self.output.len()).rev().enumerate() {
             let code = self.output.code(index);
             let trimmed = self.output.code_trimmed(index);
             if self.output.lead_width(index, self.options.tab_width) == 0
@@ -875,7 +874,6 @@ impl FormatEngine<'_> {
             if matches(trimmed) {
                 return true;
             }
-            checked += 1;
         }
         false
     }
@@ -1017,12 +1015,7 @@ impl FormatEngine<'_> {
             } else if branch_trimmed == "else"
                 || branch_trimmed.ends_with("} else")
                 || branch_trimmed.ends_with(" else")
-            {
-                return Some(
-                    leading_visual_width(branch, self.options.tab_width)
-                        + self.options.indent_width,
-                );
-            } else if is_braceless_header_line(branch_trimmed)
+                || is_braceless_header_line(branch_trimmed)
                 || starts_header_word(branch_trimmed, "if")
             {
                 return Some(
