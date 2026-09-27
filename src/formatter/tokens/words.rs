@@ -16,6 +16,17 @@ use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
     pub(crate) fn push_word(&mut self, word: &str, next: Option<&Token>) {
+        self.break_line_before_word(word);
+        let previous_non_ws_char = self.layout.command_state.previous_non_ws_char;
+        self.record_braceless_header_frames(word, next);
+        self.align_else_after_braceless_body(word);
+        self.align_while_after_do(word);
+        self.update_word_state(word, next);
+        self.update_command_word(word, next);
+        self.push_word_text(word, next, previous_non_ws_char);
+    }
+
+    fn break_line_before_word(&mut self, word: &str) {
         if self.options.break_one_line_headers
             && !self.one_line_block_mode
             && matches!(word, "else" | "while")
@@ -69,7 +80,9 @@ impl FormatEngine<'_> {
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
         }
-        let previous_non_ws_char = self.layout.command_state.previous_non_ws_char;
+    }
+
+    fn record_braceless_header_frames(&mut self, word: &str, next: Option<&Token>) {
         let mut previous_header = self.layout.command_state.current_header.clone();
         if previous_header
             .as_deref()
@@ -147,6 +160,9 @@ impl FormatEngine<'_> {
                     can_match_else: previous_header.as_deref() == Some("if"),
                 });
         }
+    }
+
+    fn align_else_after_braceless_body(&mut self, word: &str) {
         if word == "else"
             && self.current_is_blank()
             && self.output.last().is_some_and(|line| {
@@ -266,6 +282,9 @@ impl FormatEngine<'_> {
                 Some(base + self.layout.line_adjuster.total_case_unindent_depth());
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
+    }
+
+    fn align_while_after_do(&mut self, word: &str) {
         if word == "while" && self.current_is_blank() {
             if self.output.last().is_some_and(|line| {
                 line[..trailing_comment_split_limit(line)]
@@ -300,8 +319,14 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces = None;
             }
         }
-        self.update_word_state(word, next);
-        self.update_command_word(word, next);
+    }
+
+    fn push_word_text(
+        &mut self,
+        word: &str,
+        next: Option<&Token>,
+        previous_non_ws_char: Option<char>,
+    ) {
         if previous_non_ws_char == Some('}')
             && !self.one_line_block_mode
             && (self.options.break_one_line_statements
