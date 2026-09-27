@@ -902,198 +902,24 @@ impl FormatEngine<'_> {
 
         match align {
             PointerAlign::Type => {
-                if self.layout.previous == PreviousToken::Comma {
-                    if self
-                        .token_input
-                        .previous_input_whitespace
-                        .as_ref()
-                        .is_some_and(|whitespace| !whitespace.is_empty())
-                    {
-                        self.emit_source_space();
-                    } else if self.options.pad_commas || self.options.pad_operators {
-                        self.ensure_space();
-                    }
-                    self.current.push_str(operator);
-                    if let Some(gap) = self.pointer_run.trailing_ws.clone()
-                        && !gap.is_empty()
-                    {
-                        self.current.push_str(&gap);
-                    } else if !matches!(next, Some(Token::Symbol(')' | ','))) {
-                        self.ensure_space();
-                    }
-                } else {
-                    self.trim_current_end();
-                    self.current.push_str(operator);
-                    if self.pointer_run.next_is_name_like
-                        || self.pointer_run.followed_by_comment
-                        || matches!(
-                            next,
-                            Some(Token::Operator(operator)) if operator == "="
-                        )
-                        || matches!(next, Some(Token::Comment(_, _)))
-                    {
-                        let gap = self.consolidated_pointer_gap();
-                        self.current.push_str(&gap);
-                    } else if !matches!(next, Some(Token::Symbol(')' | ','))) {
-                        self.ensure_space();
-                    }
-                }
+                self.push_type_aligned_pointer(operator, next);
             }
             PointerAlign::Middle => {
-                let closes_unnamed_type = matches!(
+                self.push_middle_aligned_pointer(
+                    operator,
                     next,
-                    None | Some(Token::Newline) | Some(Token::Symbol(')' | ','))
-                ) || matches!(
-                    next,
-                    Some(Token::Operator(next_operator)) if next_operator.starts_with('>')
+                    followed_by_reference,
+                    is_after_scope_resolution,
                 );
-                if closes_unnamed_type {
-                    self.trim_current_end();
-                    self.ensure_space();
-                    self.current.push_str(operator);
-                    if let Some(gap) = self.pointer_run.trailing_ws.clone() {
-                        if self.options.convert_tabs && gap.contains('\t') {
-                            let after_column =
-                                self.token_input.token_source_column + self.pointer_run.star_count;
-                            let width = visual_width_from(
-                                &gap,
-                                after_column,
-                                self.options.tab_width.max(1),
-                            );
-                            self.current.push_str(&" ".repeat(width));
-                        } else {
-                            self.current.push_str(&gap);
-                        }
-                    }
-                } else if is_after_scope_resolution {
-                    if followed_by_reference {
-                        self.ensure_space();
-                    }
-                    self.current.push_str(operator);
-                    self.ensure_space();
-                } else if self.current.trim().is_empty()
-                    && self.token_input.token_begins_source_line
-                {
-                    self.current.push_str(operator);
-                    if !matches!(next, Some(Token::Symbol(')' | ','))) {
-                        self.ensure_space();
-                    }
-                } else {
-                    self.trim_current_end();
-                    let (before, after) = if matches!(next, Some(Token::Comment(_, _)))
-                        && !self.options.convert_tabs
-                    {
-                        let before = self
-                            .token_input
-                            .previous_input_whitespace
-                            .clone()
-                            .unwrap_or_default();
-                        let after = self.pointer_run.trailing_ws.clone().unwrap_or_default();
-                        (
-                            if before.is_empty() {
-                                " ".to_string()
-                            } else {
-                                before
-                            },
-                            if after.is_empty() {
-                                " ".to_string()
-                            } else {
-                                after
-                            },
-                        )
-                    } else {
-                        self.middle_pointer_gaps()
-                    };
-                    self.current.push_str(&before);
-                    self.current.push_str(operator);
-                    self.current.push_str(&after);
-                }
             }
             PointerAlign::Name => {
-                if matches!(next, Some(Token::Comment(_, _))) {
-                    self.emit_source_space_or_ensure();
-                } else if self.current.trim_end().ends_with('&')
-                    && (operator == "*"
-                        || operator == "&"
-                            && (!self.token_input.previous_input_was_adjacent
-                                || self
-                                    .token_input
-                                    .previous_input_whitespace
-                                    .as_ref()
-                                    .is_some_and(|whitespace| !whitespace.is_empty())))
-                {
-                    self.trim_current_end();
-                    self.ensure_space();
-                } else if matches!(
+                if self.push_name_aligned_pointer(
+                    operator,
                     next,
-                    Some(Token::Operator(next_operator)) if next_operator == "&"
-                ) && !self.current.trim_end().ends_with('(')
-                    && !is_after_scope_resolution
-                    && !self.looks_like_pointer_declaration_context()
-                {
-                    self.trim_current_end();
-                } else if (self.current.trim_end().ends_with('(') || is_after_scope_resolution)
-                    && followed_by_reference
-                {
-                    self.ensure_space();
-                } else if self.current.trim_end().ends_with(operator)
-                    && self
-                        .token_input
-                        .previous_input_whitespace
-                        .as_ref()
-                        .is_some_and(|whitespace| !whitespace.is_empty())
-                {
-                    self.trim_current_end();
-                    let gap = self.consolidated_pointer_gap();
-                    self.current.push_str(&gap);
-                } else if !is_after_scope_resolution
-                    && !self.current.ends_with('(')
-                    && !self.current.trim_end().ends_with('*')
-                    && !self.current.trim_end().ends_with('&')
-                    && !self.current.trim_end().ends_with('^')
-                {
-                    if matches!(next, Some(Token::Operator(next_operator)) if next_operator == "=")
-                    {
-                        self.trim_current_end();
-                        let gap = self.consolidated_pointer_gap();
-                        let before_len = gap.chars().count().saturating_sub(1).max(1);
-                        self.current.push_str(&" ".repeat(before_len));
-                        self.current.push_str(operator);
-                        self.ensure_space();
-                        return;
-                    } else if followed_by_reference && !self.pointer_run.reference_has_name {
-                        self.trim_current_end_horizontal_space();
-                    } else if self.pointer_run.next_is_name_like {
-                        self.trim_current_end();
-                        let gap = if matches!(next, Some(Token::Symbol('('))) {
-                            match self.token_input.previous_input_whitespace.as_deref() {
-                                Some(gap) if !gap.is_empty() => gap.to_string(),
-                                _ => " ".to_string(),
-                            }
-                        } else {
-                            self.consolidated_pointer_gap()
-                        };
-                        self.current.push_str(&gap);
-                    } else {
-                        self.ensure_space();
-                    }
-                }
-                self.current.push_str(operator);
-                if matches!(next, Some(Token::Comment(_, _))) {
-                    self.emit_trailing_source_space();
-                }
-                if matches!(next, Some(Token::Operator(next_operator)) if next_operator == operator)
-                {
-                    self.trim_current_end();
-                }
-                if matches!(next, Some(Token::Symbol('(')))
-                    && self.function_pointer_parameter_keeps_space_before_name_group()
-                {
-                    if self.function_pointer_parameter_name_group_uses_space() {
-                        self.ensure_space();
-                    } else {
-                        self.emit_trailing_source_space();
-                    }
+                    followed_by_reference,
+                    is_after_scope_resolution,
+                ) {
+                    return;
                 }
             }
             PointerAlign::None => {
@@ -1115,6 +941,209 @@ impl FormatEngine<'_> {
         if is_after_scope_resolution && !next_is_adjacent {
             self.ensure_space();
         }
+    }
+
+    fn push_type_aligned_pointer(&mut self, operator: &str, next: Option<&Token>) {
+        if self.layout.previous == PreviousToken::Comma {
+            if self
+                .token_input
+                .previous_input_whitespace
+                .as_ref()
+                .is_some_and(|whitespace| !whitespace.is_empty())
+            {
+                self.emit_source_space();
+            } else if self.options.pad_commas || self.options.pad_operators {
+                self.ensure_space();
+            }
+            self.current.push_str(operator);
+            if let Some(gap) = self.pointer_run.trailing_ws.clone()
+                && !gap.is_empty()
+            {
+                self.current.push_str(&gap);
+            } else if !matches!(next, Some(Token::Symbol(')' | ','))) {
+                self.ensure_space();
+            }
+        } else {
+            self.trim_current_end();
+            self.current.push_str(operator);
+            if self.pointer_run.next_is_name_like
+                || self.pointer_run.followed_by_comment
+                || matches!(
+                    next,
+                    Some(Token::Operator(operator)) if operator == "="
+                )
+                || matches!(next, Some(Token::Comment(_, _)))
+            {
+                let gap = self.consolidated_pointer_gap();
+                self.current.push_str(&gap);
+            } else if !matches!(next, Some(Token::Symbol(')' | ','))) {
+                self.ensure_space();
+            }
+        }
+    }
+
+    fn push_middle_aligned_pointer(
+        &mut self,
+        operator: &str,
+        next: Option<&Token>,
+        followed_by_reference: bool,
+        is_after_scope_resolution: bool,
+    ) {
+        let closes_unnamed_type = matches!(
+            next,
+            None | Some(Token::Newline) | Some(Token::Symbol(')' | ','))
+        ) || matches!(
+            next,
+            Some(Token::Operator(next_operator)) if next_operator.starts_with('>')
+        );
+        if closes_unnamed_type {
+            self.trim_current_end();
+            self.ensure_space();
+            self.current.push_str(operator);
+            if let Some(gap) = self.pointer_run.trailing_ws.clone() {
+                if self.options.convert_tabs && gap.contains('\t') {
+                    let after_column =
+                        self.token_input.token_source_column + self.pointer_run.star_count;
+                    let width =
+                        visual_width_from(&gap, after_column, self.options.tab_width.max(1));
+                    self.current.push_str(&" ".repeat(width));
+                } else {
+                    self.current.push_str(&gap);
+                }
+            }
+        } else if is_after_scope_resolution {
+            if followed_by_reference {
+                self.ensure_space();
+            }
+            self.current.push_str(operator);
+            self.ensure_space();
+        } else if self.current.trim().is_empty() && self.token_input.token_begins_source_line {
+            self.current.push_str(operator);
+            if !matches!(next, Some(Token::Symbol(')' | ','))) {
+                self.ensure_space();
+            }
+        } else {
+            self.trim_current_end();
+            let (before, after) =
+                if matches!(next, Some(Token::Comment(_, _))) && !self.options.convert_tabs {
+                    let before = self
+                        .token_input
+                        .previous_input_whitespace
+                        .clone()
+                        .unwrap_or_default();
+                    let after = self.pointer_run.trailing_ws.clone().unwrap_or_default();
+                    (
+                        if before.is_empty() {
+                            " ".to_string()
+                        } else {
+                            before
+                        },
+                        if after.is_empty() {
+                            " ".to_string()
+                        } else {
+                            after
+                        },
+                    )
+                } else {
+                    self.middle_pointer_gaps()
+                };
+            self.current.push_str(&before);
+            self.current.push_str(operator);
+            self.current.push_str(&after);
+        }
+    }
+
+    fn push_name_aligned_pointer(
+        &mut self,
+        operator: &str,
+        next: Option<&Token>,
+        followed_by_reference: bool,
+        is_after_scope_resolution: bool,
+    ) -> bool {
+        if matches!(next, Some(Token::Comment(_, _))) {
+            self.emit_source_space_or_ensure();
+        } else if self.current.trim_end().ends_with('&')
+            && (operator == "*"
+                || operator == "&"
+                    && (!self.token_input.previous_input_was_adjacent
+                        || self
+                            .token_input
+                            .previous_input_whitespace
+                            .as_ref()
+                            .is_some_and(|whitespace| !whitespace.is_empty())))
+        {
+            self.trim_current_end();
+            self.ensure_space();
+        } else if matches!(
+            next,
+            Some(Token::Operator(next_operator)) if next_operator == "&"
+        ) && !self.current.trim_end().ends_with('(')
+            && !is_after_scope_resolution
+            && !self.looks_like_pointer_declaration_context()
+        {
+            self.trim_current_end();
+        } else if (self.current.trim_end().ends_with('(') || is_after_scope_resolution)
+            && followed_by_reference
+        {
+            self.ensure_space();
+        } else if self.current.trim_end().ends_with(operator)
+            && self
+                .token_input
+                .previous_input_whitespace
+                .as_ref()
+                .is_some_and(|whitespace| !whitespace.is_empty())
+        {
+            self.trim_current_end();
+            let gap = self.consolidated_pointer_gap();
+            self.current.push_str(&gap);
+        } else if !is_after_scope_resolution
+            && !self.current.ends_with('(')
+            && !self.current.trim_end().ends_with('*')
+            && !self.current.trim_end().ends_with('&')
+            && !self.current.trim_end().ends_with('^')
+        {
+            if matches!(next, Some(Token::Operator(next_operator)) if next_operator == "=") {
+                self.trim_current_end();
+                let gap = self.consolidated_pointer_gap();
+                let before_len = gap.chars().count().saturating_sub(1).max(1);
+                self.current.push_str(&" ".repeat(before_len));
+                self.current.push_str(operator);
+                self.ensure_space();
+                return true;
+            } else if followed_by_reference && !self.pointer_run.reference_has_name {
+                self.trim_current_end_horizontal_space();
+            } else if self.pointer_run.next_is_name_like {
+                self.trim_current_end();
+                let gap = if matches!(next, Some(Token::Symbol('('))) {
+                    match self.token_input.previous_input_whitespace.as_deref() {
+                        Some(gap) if !gap.is_empty() => gap.to_string(),
+                        _ => " ".to_string(),
+                    }
+                } else {
+                    self.consolidated_pointer_gap()
+                };
+                self.current.push_str(&gap);
+            } else {
+                self.ensure_space();
+            }
+        }
+        self.current.push_str(operator);
+        if matches!(next, Some(Token::Comment(_, _))) {
+            self.emit_trailing_source_space();
+        }
+        if matches!(next, Some(Token::Operator(next_operator)) if next_operator == operator) {
+            self.trim_current_end();
+        }
+        if matches!(next, Some(Token::Symbol('(')))
+            && self.function_pointer_parameter_keeps_space_before_name_group()
+        {
+            if self.function_pointer_parameter_name_group_uses_space() {
+                self.ensure_space();
+            } else {
+                self.emit_trailing_source_space();
+            }
+        }
+        false
     }
 
     pub(crate) fn function_pointer_parameter_keeps_space_before_name_group(&self) -> bool {
