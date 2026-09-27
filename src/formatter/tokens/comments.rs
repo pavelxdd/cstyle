@@ -72,6 +72,17 @@ struct CommentIndents {
     lambda_parameter: Option<usize>,
 }
 
+/// How an own-line multi-line block comment is reindented, decided from its
+/// opening line.
+#[derive(Clone, Copy)]
+struct OwnLineBlockComment<'a> {
+    opener_prefix: &'a str,
+    opener_output_column: usize,
+    trim_amount: usize,
+    run_in_opener: bool,
+    unindented_namespace_run_in_comment: bool,
+}
+
 impl FormatEngine<'_> {
     pub(crate) fn schedule_run_in_comment_brace_merge(&mut self, brace_line: usize) {
         self.comments.run_in_comment_brace_lines.push(brace_line);
@@ -2034,49 +2045,7 @@ impl FormatEngine<'_> {
         let open_paren_comment_indent = (self.layout.previous == PreviousToken::OpenParen)
             .then(|| self.comment_after_open_paren_indent_spaces());
         if !self.current.trim().is_empty() {
-            let mut lines = comment.lines().peekable();
-            if let Some(first) = lines.next() {
-                if self.layout.previous == PreviousToken::OpenParen {
-                    if self.options.pad_parens_inside {
-                        self.pad_inside_paren_space();
-                    } else {
-                        self.emit_source_space();
-                    }
-                } else {
-                    self.pad_before_trailing_comment(CommentKind::Block, first);
-                }
-                let output_column =
-                    leading_visual_width(&self.current, self.options.tab_width.max(1));
-                self.record_comment_frame(CommentKind::Block, output_column, true);
-                self.current.push_str(first.trim_end());
-                if lines.peek().is_some() {
-                    self.finish_line();
-                }
-                let last_line_has_trailing_token = self.token_input.has_next_meaningful_token;
-                while let Some(line) = lines.next() {
-                    let shifted = if self.options.strip_comment_prefix {
-                        let opener_prefix = " ".repeat(self.current_line_indent_spaces());
-                        self.strip_block_comment_line(
-                            line,
-                            false,
-                            &opener_prefix,
-                            self.token_input.token_source_column,
-                        )
-                    } else {
-                        line.trim_end().to_string()
-                    };
-                    let is_last_line = lines.peek().is_none();
-                    let last_line_starts_with_star = line.trim_start().starts_with('*');
-                    let keep_line_open = is_last_line
-                        && (last_line_has_trailing_token || !last_line_starts_with_star);
-                    if keep_line_open {
-                        self.current.push_str(&shifted);
-                        self.current_is_preindented = true;
-                    } else {
-                        self.push_raw_comment_output_line(shifted);
-                    }
-                }
-            }
+            self.push_trailing_block_comment_lines(comment);
             self.attach_source_space_after_block_comment();
             if self.layout.command_state.current_header.is_none() {
                 self.layout.command_state.current_header = interrupted_header;
@@ -2268,6 +2237,86 @@ impl FormatEngine<'_> {
                 _ => false,
             }
             && self.output.last().is_some_and(|line| line.trim() == "{");
+        self.push_own_line_block_comment_lines(
+            comment,
+            &OwnLineBlockComment {
+                opener_prefix: &opener_prefix,
+                opener_output_column,
+                trim_amount,
+                run_in_opener,
+                unindented_namespace_run_in_comment,
+            },
+        );
+        if case_comment_unindent > 0 && self.current_is_preindented {
+            self.finish_line();
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(opener_output_column.saturating_sub(case_comment_unindent));
+        } else if case_comment_unindent > 0 {
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(opener_output_column.saturating_sub(case_comment_unindent));
+        }
+        self.attach_source_space_after_block_comment();
+        self.layout.previous = PreviousToken::Other;
+    }
+
+    fn push_trailing_block_comment_lines(&mut self, comment: &str) {
+        let mut lines = comment.lines().peekable();
+        if let Some(first) = lines.next() {
+            if self.layout.previous == PreviousToken::OpenParen {
+                if self.options.pad_parens_inside {
+                    self.pad_inside_paren_space();
+                } else {
+                    self.emit_source_space();
+                }
+            } else {
+                self.pad_before_trailing_comment(CommentKind::Block, first);
+            }
+            let output_column = leading_visual_width(&self.current, self.options.tab_width.max(1));
+            self.record_comment_frame(CommentKind::Block, output_column, true);
+            self.current.push_str(first.trim_end());
+            if lines.peek().is_some() {
+                self.finish_line();
+            }
+            let last_line_has_trailing_token = self.token_input.has_next_meaningful_token;
+            while let Some(line) = lines.next() {
+                let shifted = if self.options.strip_comment_prefix {
+                    let opener_prefix = " ".repeat(self.current_line_indent_spaces());
+                    self.strip_block_comment_line(
+                        line,
+                        false,
+                        &opener_prefix,
+                        self.token_input.token_source_column,
+                    )
+                } else {
+                    line.trim_end().to_string()
+                };
+                let is_last_line = lines.peek().is_none();
+                let last_line_starts_with_star = line.trim_start().starts_with('*');
+                let keep_line_open =
+                    is_last_line && (last_line_has_trailing_token || !last_line_starts_with_star);
+                if keep_line_open {
+                    self.current.push_str(&shifted);
+                    self.current_is_preindented = true;
+                } else {
+                    self.push_raw_comment_output_line(shifted);
+                }
+            }
+        }
+    }
+
+    fn push_own_line_block_comment_lines(
+        &mut self,
+        comment: &str,
+        layout: &OwnLineBlockComment<'_>,
+    ) {
+        let OwnLineBlockComment {
+            opener_prefix,
+            opener_output_column,
+            trim_amount,
+            run_in_opener,
+            unindented_namespace_run_in_comment,
+        } = *layout;
+        let tab_width = self.options.tab_width.max(1);
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
             if index == 0 && run_in_opener {
@@ -2284,7 +2333,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let formatted = if self.options.strip_comment_prefix {
-                self.strip_block_comment_line(line, index == 0, &opener_prefix, trim_amount)
+                self.strip_block_comment_line(line, index == 0, opener_prefix, trim_amount)
             } else if index == 0 {
                 format!("{opener_prefix}{}", line.trim_end())
             } else {
@@ -2387,16 +2436,6 @@ impl FormatEngine<'_> {
                 self.push_raw_comment_output_line(formatted);
             }
         }
-        if case_comment_unindent > 0 && self.current_is_preindented {
-            self.finish_line();
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_column.saturating_sub(case_comment_unindent));
-        } else if case_comment_unindent > 0 {
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_column.saturating_sub(case_comment_unindent));
-        }
-        self.attach_source_space_after_block_comment();
-        self.layout.previous = PreviousToken::Other;
     }
 
     fn attach_source_space_after_block_comment(&mut self) {
