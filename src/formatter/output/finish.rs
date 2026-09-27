@@ -24,9 +24,10 @@ impl FormatEngine<'_> {
 
     pub(crate) fn finish_line(&mut self) {
         let block_comment_close_paren_ends_declaration =
-            self.block_comment_close_paren_ends_declaration;
-        self.block_comment_close_paren_ends_declaration = false;
-        self.previous_block_comment_close_paren_ended_declaration = false;
+            self.comments.block_comment_close_paren_ends_declaration;
+        self.comments.block_comment_close_paren_ends_declaration = false;
+        self.comments
+            .previous_block_comment_close_paren_ended_declaration = false;
         let preserve_raw_literal_line_end = self.layout.literal_line.preserve_raw_literal_line_end;
         let preserve_run_in_join_space = self.preserve_run_in_join_space;
         if self.try_finish_multiline_literal_line() {
@@ -67,7 +68,8 @@ impl FormatEngine<'_> {
             if !trimmed.trim().is_empty() {
                 self.push_raw_comment_output_line(trimmed);
                 if block_comment_close_paren_ends_declaration {
-                    self.previous_block_comment_close_paren_ended_declaration = true;
+                    self.comments
+                        .previous_block_comment_close_paren_ended_declaration = true;
                 }
             }
             self.reset_after_finished_line();

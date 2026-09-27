@@ -37,6 +37,7 @@ use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::tokens::comments::CommentState;
 use crate::formatter::tokens::comments::trailing_comment_columns;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
@@ -100,15 +101,13 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_brace_matches: Vec<Option<usize>>,
     pub(crate) previous_was_newline: bool,
     pub(crate) previous_was_template_close: bool,
-    pub(crate) template_close_before_current: bool,
     pub(crate) newline_breaks_statement: bool,
     pub(crate) preserve_block_spacing_comment_blank: bool,
     pub(crate) next_line: next_line::NextLineState,
     pub(crate) multi_declarator_indent_spaces: Option<usize>,
     pub(crate) block_spacing: BlockSpacingState,
-    pub(crate) run_in_comment_brace_lines: Vec<usize>,
+    pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
-    pub(crate) formatting_disabled: bool,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
     pub(crate) unmatched_closing_brace_recovery: bool,
@@ -116,19 +115,12 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) one_line_block_mode: bool,
     pub(crate) inline_array: InlineArrayState,
     pub(crate) max_length_line: MaxLengthLineState,
-    pub(crate) skip_adjacent_pointer_operators: usize,
-    pub(crate) skip_next_attached_comment: bool,
-    pub(crate) line_comment_starts_reordered_brace_body: bool,
-    pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) backslash_body: BackslashBodyState,
     pub(crate) swig: SwigState,
     pub(crate) may_have_class_base_access: bool,
-    pub(crate) next_comment_ends_line: bool,
     pub(crate) space_after_cast: bool,
     pub(crate) pad_close_paren_pending: bool,
     pub(crate) header_paren: headers::HeaderParenState,
-    pub(crate) block_comment_close_paren_ends_declaration: bool,
-    pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
     pub(crate) current_line_has_class_initializer_colon: bool,
     pub(crate) token_input: TokenInputState,
     pub(crate) pointer_run: pointers::PointerRunState,
@@ -172,15 +164,13 @@ impl<'a> FormatEngine<'a> {
             line_brace_matches: Vec::new(),
             previous_was_newline: false,
             previous_was_template_close: false,
-            template_close_before_current: false,
             newline_breaks_statement: false,
             preserve_block_spacing_comment_blank: false,
             next_line: next_line::NextLineState::default(),
             multi_declarator_indent_spaces: None,
             block_spacing: BlockSpacingState::default(),
-            run_in_comment_brace_lines: Vec::new(),
+            comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
-            formatting_disabled: false,
             disabled_formatting: None,
             current_is_preindented: false,
             unmatched_closing_brace_recovery: false,
@@ -188,19 +178,12 @@ impl<'a> FormatEngine<'a> {
             one_line_block_mode: false,
             inline_array: InlineArrayState::default(),
             max_length_line: MaxLengthLineState::default(),
-            skip_adjacent_pointer_operators: 0,
-            skip_next_attached_comment: false,
-            line_comment_starts_reordered_brace_body: false,
-            reordered_brace_line_comment_gap: None,
             backslash_body: BackslashBodyState::default(),
             swig: SwigState::default(),
             may_have_class_base_access: true,
-            next_comment_ends_line: false,
             space_after_cast: false,
             pad_close_paren_pending: false,
             header_paren: headers::HeaderParenState::default(),
-            block_comment_close_paren_ends_declaration: false,
-            previous_block_comment_close_paren_ended_declaration: false,
             current_line_has_class_initializer_colon: false,
             token_input: TokenInputState::default(),
             pointer_run: pointers::PointerRunState::default(),
@@ -382,16 +365,17 @@ impl<'a> FormatEngine<'a> {
 
     fn format_line(&mut self, tokens: &[Token], line: TokenLine) {
         self.observe_input_line(&tokens[line.start..line.end]);
-        if !self.formatting_disabled && self.try_push_case_line_marker(tokens, line.start, line.end)
+        if !self.formatting_disabled()
+            && self.try_push_case_line_marker(tokens, line.start, line.end)
         {
             return;
         }
-        if !self.formatting_disabled
+        if !self.formatting_disabled()
             && self.try_push_generated_case_compact_action_line(tokens, line.start, line.end)
         {
             return;
         }
-        if !self.formatting_disabled
+        if !self.formatting_disabled()
             && self.try_push_raw_standalone_macro_line(tokens, line.start, line.end)
         {
             return;
@@ -414,7 +398,7 @@ impl<'a> FormatEngine<'a> {
                     line.end - line.start
                 );
             }
-            if self.formatting_disabled {
+            if self.formatting_disabled() {
                 let next = next_non_whitespace(tokens, index + 1, line.end)
                     .and_then(|next_index| tokens.get(next_index));
                 self.push_disabled(&tokens[index], next);
@@ -626,7 +610,7 @@ impl<'a> FormatEngine<'a> {
             {
                 template_angle = TemplateAngle::Open;
             }
-            self.next_comment_ends_line = next_index.is_some_and(|comment_index| {
+            self.comments.next_comment_ends_line = next_index.is_some_and(|comment_index| {
                 matches!(tokens.get(comment_index), Some(Token::Comment(_, _)))
                     && next_non_whitespace(tokens, comment_index + 1, line.end)
                         .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
@@ -879,7 +863,7 @@ impl<'a> FormatEngine<'a> {
             token_index,
             ..
         } = context;
-        if self.formatting_disabled {
+        if self.formatting_disabled() {
             self.push_disabled(token, next);
             return;
         }
@@ -899,8 +883,8 @@ impl<'a> FormatEngine<'a> {
             }
         }
 
-        if self.skip_next_attached_comment && matches!(token, Token::Comment(_, _)) {
-            self.skip_next_attached_comment = false;
+        if self.comments.skip_next_attached_comment && matches!(token, Token::Comment(_, _)) {
+            self.comments.skip_next_attached_comment = false;
             return;
         }
         if !matches!(token, Token::Whitespace(_) | Token::Newline) {
@@ -942,7 +926,7 @@ impl<'a> FormatEngine<'a> {
         }
 
         if !matches!(token, Token::Whitespace(_) | Token::Newline) {
-            self.template_close_before_current = self.previous_was_template_close;
+            self.pointer_run.template_close_before_current = self.previous_was_template_close;
             self.previous_was_template_close = false;
         }
 
@@ -1653,6 +1637,10 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    fn formatting_disabled(&self) -> bool {
+        self.disabled_formatting.is_some()
+    }
+
     fn push_disabled(&mut self, token: &Token, next: Option<&Token>) {
         let is_indent_on =
             matches!(token, Token::Comment(_, comment) if comment.contains("*INDENT-ON*"));
@@ -1683,7 +1671,6 @@ impl<'a> FormatEngine<'a> {
                 self.layout.previous_pre_adjust_line = self.output.last().cloned();
                 self.reset_block_spacing();
                 self.previous_was_newline = false;
-                self.formatting_disabled = false;
             }
             _ => self.push_disabled_raw_text(&token_text(token)),
         }

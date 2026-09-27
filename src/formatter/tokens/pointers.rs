@@ -31,6 +31,8 @@ pub(crate) struct PointerRunState {
     pub(crate) followed_by_comment: bool,
     pub(crate) star_count: usize,
     pub(crate) gap_before_column: Option<usize>,
+    pub(crate) skip_adjacent_pointer_operators: usize,
+    pub(crate) template_close_before_current: bool,
 }
 
 pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {
@@ -184,7 +186,9 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.template_close_before_current || self.pointer_in_template_type_context(next) {
+        if self.pointer_run.template_close_before_current
+            || self.pointer_in_template_type_context(next)
+        {
             return true;
         }
         if matches!(next, Some(Token::Symbol('['))) && self.looks_like_pointer_declaration_context()
@@ -751,7 +755,7 @@ impl FormatEngine<'_> {
             return;
         }
         if continues_sequence && self.pointer_run.star_count > 1 {
-            self.skip_adjacent_pointer_operators = self.pointer_run.star_count - 1;
+            self.pointer_run.skip_adjacent_pointer_operators = self.pointer_run.star_count - 1;
             let sequence = operator.repeat(self.pointer_run.star_count);
             self.push_pointer_or_reference(&sequence, next, next_is_adjacent);
         } else {

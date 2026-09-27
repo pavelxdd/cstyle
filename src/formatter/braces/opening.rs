@@ -639,7 +639,7 @@ impl FormatEngine<'_> {
             let gap = self.initializer_brace_line_comment_gap(&self.current);
             self.current.push_str(&gap);
             self.current.push_str(comment.trim_end());
-            self.skip_next_attached_comment = true;
+            self.comments.skip_next_attached_comment = true;
             return;
         }
         match self.token_input.next_input_whitespace.clone() {
@@ -661,7 +661,7 @@ impl FormatEngine<'_> {
             _ => self.ensure_space(),
         }
         self.current.push_str(comment.trim_end());
-        self.skip_next_attached_comment = true;
+        self.comments.skip_next_attached_comment = true;
     }
 
     fn reorder_brace_before_current_block_comment(&self) -> Option<String> {
@@ -1165,7 +1165,7 @@ impl FormatEngine<'_> {
             }
             if let Some(comment) = attached_line_comment {
                 self.current.push_str(comment.trim_end());
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             }
             self.finish_line();
             self.layout
@@ -1223,7 +1223,7 @@ impl FormatEngine<'_> {
         if brace_type == BraceType::CompoundLiteral
             && !self.current_is_blank()
             && !matches!(next, None | Some(Token::Newline))
-            && !self.next_comment_ends_line
+            && !self.comments.next_comment_ends_line
         {
             self.open_multiline_attached_initializer_brace(
                 brace_header,
@@ -1245,7 +1245,7 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && self.options.brace_style == BraceStyle::None
             && !matches!(next, None | Some(Token::Newline))
-            && !self.next_comment_ends_line
+            && !self.comments.next_comment_ends_line
         {
             let first_is_brace = matches!(next, Some(Token::Symbol('{')));
             self.open_inline_array_brace(
@@ -1285,7 +1285,7 @@ impl FormatEngine<'_> {
             && !self.current_is_blank()
             && !operator_led_broken_brace
             && !matches!(next, None | Some(Token::Newline))
-            && !self.next_comment_ends_line
+            && !self.comments.next_comment_ends_line
         {
             let first_is_brace = matches!(next, Some(Token::Symbol('{')));
             self.open_inline_array_brace(
@@ -1398,7 +1398,7 @@ impl FormatEngine<'_> {
             if let Some(Token::Comment(CommentKind::Line, comment)) = next {
                 line.push(' ');
                 line.push_str(comment.trim_end());
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             }
             self.layout.command_state.observe_char('{');
             self.adjust_and_publish_line(line);
@@ -1452,11 +1452,11 @@ impl FormatEngine<'_> {
                     line.push(' ');
                 }
                 line.push_str(comment.trim_end());
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             } else if matches!(next, Some(Token::Comment(CommentKind::Line, _)))
                 && line_comment_starts_body
             {
-                self.line_comment_starts_reordered_brace_body = true;
+                self.comments.line_comment_starts_reordered_brace_body = true;
             } else if self.options.brace_style == BraceStyle::OneTrueBrace
                 && brace_type == BraceType::Command
                 && self.token_input.token_followed_by_line_comment_on_line
@@ -1471,7 +1471,7 @@ impl FormatEngine<'_> {
                     line.push(' ');
                 }
                 line.push_str(comment.trim_end());
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             } else if attached_case_label_output_brace
                 && let Some(Token::Comment(CommentKind::Block, comment)) = next
                 && !comment.contains('\n')
@@ -1484,7 +1484,7 @@ impl FormatEngine<'_> {
                     line.push(' ');
                 }
                 line.push_str(comment.trim_end());
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             }
             if attached_case_label_output_brace {
                 let extra = self.layout.line_adjuster.total_case_unindent_depth()
@@ -1519,7 +1519,7 @@ impl FormatEngine<'_> {
             self.current.push(' ');
             self.current.push_str(&after_brace);
             self.current.push_str(comment.trim_end());
-            self.skip_next_attached_comment = true;
+            self.comments.skip_next_attached_comment = true;
             self.finish_line();
             self.current.push('{');
             self.layout.command_state.observe_char('{');
@@ -1566,12 +1566,12 @@ impl FormatEngine<'_> {
             {
                 if matches!(next, Some(Token::Comment(CommentKind::Line, _))) {
                     if self.token_input.token_begins_source_line {
-                        self.line_comment_starts_reordered_brace_body = true;
+                        self.comments.line_comment_starts_reordered_brace_body = true;
                     } else if let Some(gap) = self.token_input.previous_input_whitespace.clone()
                         && !gap.is_empty()
                         && !gap.contains('\n')
                     {
-                        self.reordered_brace_line_comment_gap = Some(gap);
+                        self.comments.reordered_brace_line_comment_gap = Some(gap);
                     }
                 }
                 self.current.replace(reordered);
@@ -1738,7 +1738,7 @@ impl FormatEngine<'_> {
                         self.current.push_str(&after_gap);
                     }
                     self.current.push_str(comment.trim_end());
-                    self.skip_next_attached_comment = true;
+                    self.comments.skip_next_attached_comment = true;
                 }
                 let objc_method_brace = self.is_objc_method_line()
                     || (brace_type == BraceType::Definition
@@ -1962,7 +1962,7 @@ impl FormatEngine<'_> {
                         }
                     }
                     self.current.push_str(comment.trim_end());
-                    self.skip_next_attached_comment = true;
+                    self.comments.skip_next_attached_comment = true;
                 }
                 if (!objc_method_brace && self.should_indent_brace_line(brace_type))
                     || block_indent_extra > 0

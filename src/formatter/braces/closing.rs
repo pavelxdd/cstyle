@@ -417,7 +417,7 @@ impl FormatEngine<'_> {
                 {
                     moved_comment_tail = split_return_call_with_comment(line);
                 }
-                self.skip_next_attached_comment = true;
+                self.comments.skip_next_attached_comment = true;
             }
         }
         if let Some(tail) = moved_comment_tail {

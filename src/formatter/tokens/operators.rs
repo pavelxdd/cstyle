@@ -370,10 +370,12 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
-        if self.skip_adjacent_pointer_operators > 0 && matches!(operator, "*" | "&" | "^") {
-            self.skip_adjacent_pointer_operators -= 1;
+        if self.pointer_run.skip_adjacent_pointer_operators > 0
+            && matches!(operator, "*" | "&" | "^")
+        {
+            self.pointer_run.skip_adjacent_pointer_operators -= 1;
             if self.resolved_pointer_align(operator) == PointerAlign::None
-                && self.skip_adjacent_pointer_operators == 0
+                && self.pointer_run.skip_adjacent_pointer_operators == 0
             {
                 self.emit_trailing_source_space();
             }
@@ -918,7 +920,7 @@ impl FormatEngine<'_> {
             && (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
             && !self.in_aggregate_declaration_brace()
         {
-            let rhs_next = if self.next_comment_ends_line {
+            let rhs_next = if self.comments.next_comment_ends_line {
                 None
             } else {
                 next

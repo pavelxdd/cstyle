@@ -510,7 +510,7 @@ impl FormatEngine<'_> {
             self.current.truncate(new_len);
             self.current.push_str("**");
         }
-        self.block_comment_close_paren_ends_declaration = self.current_is_preindented
+        self.comments.block_comment_close_paren_ends_declaration = self.current_is_preindented
             && self.current.trim_start().starts_with('*')
             && self.current.trim_end().ends_with("*/")
             && self.current_paren_context_is_declaration();
@@ -1548,9 +1548,12 @@ impl FormatEngine<'_> {
                 })
                 .is_some_and(|code| self.code_is_class_initializer_signature(code));
         }
-        let block_comment_close_paren_signature = self.block_comment_close_paren_ends_declaration
-            || (self.current.trim().is_empty()
-                && self.previous_block_comment_close_paren_ended_declaration);
+        let block_comment_close_paren_signature =
+            self.comments.block_comment_close_paren_ends_declaration
+                || (self.current.trim().is_empty()
+                    && self
+                        .comments
+                        .previous_block_comment_close_paren_ended_declaration);
         !self.layout.nesting.has_question_in_current_brace()
             && (signature_ends_with_parameter_list(code) || block_comment_close_paren_signature)
             && (self

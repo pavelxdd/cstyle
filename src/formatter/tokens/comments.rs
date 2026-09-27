@@ -56,11 +56,11 @@ pub(crate) fn line_comment_backslash_trailing_space(line: &str) -> bool {
 
 impl FormatEngine<'_> {
     pub(crate) fn schedule_run_in_comment_brace_merge(&mut self, brace_line: usize) {
-        self.run_in_comment_brace_lines.push(brace_line);
+        self.comments.run_in_comment_brace_lines.push(brace_line);
     }
 
     pub(crate) fn merge_run_in_comment_braces(&mut self) {
-        let mut indices = std::mem::take(&mut self.run_in_comment_brace_lines);
+        let mut indices = std::mem::take(&mut self.comments.run_in_comment_brace_lines);
         indices.sort_unstable();
         indices.dedup();
         for index in indices.into_iter().rev() {
@@ -360,7 +360,8 @@ impl FormatEngine<'_> {
             });
             self.push_raw_comment_output_line(trimmed);
             if close_paren_ends_declaration {
-                self.previous_block_comment_close_paren_ended_declaration = true;
+                self.comments
+                    .previous_block_comment_close_paren_ended_declaration = true;
             }
             if let Some(spaces) = next_indent {
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
@@ -589,12 +590,12 @@ impl FormatEngine<'_> {
             })
             .flatten();
         let line_comment_starts_reordered_brace_body =
-            kind == CommentKind::Line && self.line_comment_starts_reordered_brace_body;
+            kind == CommentKind::Line && self.comments.line_comment_starts_reordered_brace_body;
         if line_comment_starts_reordered_brace_body {
-            self.line_comment_starts_reordered_brace_body = false;
+            self.comments.line_comment_starts_reordered_brace_body = false;
         }
         let reordered_brace_line_comment_gap = if kind == CommentKind::Line {
-            self.reordered_brace_line_comment_gap.take()
+            self.comments.reordered_brace_line_comment_gap.take()
         } else {
             None
         };
@@ -998,7 +999,6 @@ impl FormatEngine<'_> {
             }
             self.current.push_str(comment.trim_end());
             self.disabled_formatting = Some(DisabledFormattingState::capture(self));
-            self.formatting_disabled = true;
             return;
         }
 
@@ -2642,4 +2642,16 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
         }
     }
     columns
+}
+
+/// Comment placement decisions carried between tokens and lines.
+#[derive(Debug, Default)]
+pub(crate) struct CommentState {
+    pub(crate) run_in_comment_brace_lines: Vec<usize>,
+    pub(crate) line_comment_starts_reordered_brace_body: bool,
+    pub(crate) reordered_brace_line_comment_gap: Option<String>,
+    pub(crate) next_comment_ends_line: bool,
+    pub(crate) skip_next_attached_comment: bool,
+    pub(crate) block_comment_close_paren_ends_declaration: bool,
+    pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
 }
