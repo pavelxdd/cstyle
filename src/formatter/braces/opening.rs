@@ -1,5 +1,4 @@
 use crate::config::{BraceStyle, IndentStyle, LineEnding};
-use crate::formatter::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::braces::classification::{
     block_indent_extra, brace_indent_applies, is_lambda_body_header, is_lambda_capture_header,
     is_namespace_or_module_block_header, lambda_header_has_trailing_return,
@@ -12,6 +11,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token};
+use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{

@@ -1,6 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::operator_chains;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,

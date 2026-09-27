@@ -6,8 +6,8 @@ use crate::formatter::constructs::template_declarations::TemplateDeclarationStat
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::line_adjust;
-use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::output::line_adjust;
+use crate::formatter::output::member_spacing::MemberSpacingBoundary;
 use crate::formatter::state::frame::{BraceSemanticKind, FrameStack, ParenRole};
 use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
@@ -30,7 +30,10 @@ pub(crate) struct PreprocessorState {
     pub(crate) last_output_was_preprocessor: bool,
 }
 
-pub(crate) mod layout;
+pub(crate) mod backslash_bodies;
+mod layout;
+mod macro_definitions;
+pub(crate) mod macro_invocations;
 
 pub(crate) fn indent_off_follows_code(tokens: &[Token]) -> bool {
     let mut seen_code = false;

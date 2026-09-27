@@ -2,12 +2,12 @@ use crate::config::BraceStyle;
 use crate::formatter::braces::classification::{
     contains_one_line_block, is_lambda_body_header, is_namespace_or_module_block_header,
 };
-use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
+use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;

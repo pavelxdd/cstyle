@@ -1,10 +1,9 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::find_case_colon;
+use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::max_length::lambda_parameter_continuation_indent;
-use crate::formatter::operator_chains;
 use crate::formatter::state::frame::{ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, PreviousToken};
@@ -25,6 +24,10 @@ use crate::formatter::tokens::operators::{
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_word_char};
+
+pub(crate) mod call_arguments;
+pub(crate) mod max_length;
+pub(crate) mod operator_chains;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct ContinuationIndentState {

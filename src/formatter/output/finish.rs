@@ -2,8 +2,8 @@ use crate::formatter::braces::closing::starts_post_closing_declaration;
 use crate::formatter::constructs::switch_cases::{
     case_label_with_trailing_comment, split_switch_label_statement,
 };
+use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::operator_chains;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::leading_visual_width;

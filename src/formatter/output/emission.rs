@@ -1,9 +1,9 @@
 use crate::config::IndentStyle;
 use crate::formatter::braces::classification::line_opens_lambda_block;
-use crate::formatter::buffer;
+use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::line_adjust::macro_call_starts_with;
-use crate::formatter::operator_chains::ReadyOperatorChainLine;
+use crate::formatter::output::buffer;
+use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::state::ContinuationIndent;
 use crate::formatter::state::indentation::LineKind;

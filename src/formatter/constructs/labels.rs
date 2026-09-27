@@ -1,10 +1,10 @@
 use crate::config::{FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::is_class_like_brace_type;
-use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::raw_strings;
+use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
 use crate::formatter::syntax::language;

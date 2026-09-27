@@ -1,6 +1,4 @@
 use crate::config::{BraceStyle, FormatOptions};
-use crate::formatter::backslash_bodies::BackslashBodyState;
-use crate::formatter::block_spacing::BlockSpacingState;
 use crate::formatter::braces::rewrite::{
     add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
     remove_cross_line_statement_braces,
@@ -11,14 +9,18 @@ use crate::formatter::constructs::swig::SwigState;
 use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
 use crate::formatter::constructs::{headers, labels, objective_c, switch_cases};
+use crate::formatter::continuation::max_length::MaxLengthLineState;
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
 };
-use crate::formatter::max_length::MaxLengthLineState;
-use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::output::block_spacing::BlockSpacingState;
+use crate::formatter::output::member_spacing::MemberSpacingBoundary;
+use crate::formatter::output::source_indent::source_indented_macro_row;
+use crate::formatter::output::{buffer, line_adjust};
+use crate::formatter::preprocessor::backslash_bodies::BackslashBodyState;
+use crate::formatter::preprocessor::macro_invocations;
 use crate::formatter::preprocessor::preprocessor_block_indentability;
-use crate::formatter::source_indent::source_indented_macro_row;
 use crate::formatter::state::current_line::CurrentLine;
 use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::{IndentationState, LineKind};
@@ -36,9 +38,7 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::tokens::comments::trailing_comment_columns;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
-use crate::formatter::{
-    buffer, continuation, line_adjust, macro_invocations, preprocessor, syntax,
-};
+use crate::formatter::{continuation, preprocessor, syntax};
 use crate::source::lex::{is_identifier_continue, trailing_word};
 use std::collections::HashSet;
 

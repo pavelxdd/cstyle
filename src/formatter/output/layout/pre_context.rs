@@ -1,4 +1,4 @@
-use crate::formatter::call_arguments::{
+use crate::formatter::continuation::call_arguments::{
     closing_braced_call_argument_indent_spaces, plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::engine::FormatEngine;

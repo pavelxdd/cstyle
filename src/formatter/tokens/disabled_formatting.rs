@@ -7,8 +7,8 @@ use crate::formatter::constructs::template_declarations::TemplateDeclarationStat
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
-use crate::formatter::line_adjust::LineAdjuster;
-use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::output::line_adjust::LineAdjuster;
+use crate::formatter::output::member_spacing::MemberSpacingBoundary;
 use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
 use crate::formatter::state::frame::FrameStack;
 use crate::formatter::state::indentation::IndentationState;
