@@ -112,16 +112,8 @@ fn format_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_path;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_path(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-cli-{stamp}-{name}"))
-    }
 
     fn format_paths(
         paths: &[PathBuf],

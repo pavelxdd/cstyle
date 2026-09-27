@@ -12,15 +12,15 @@ use crate::formatter::continuation::{ContinuationIndent, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::{
-    is_conditional_preprocessor, is_known_preprocessor_directive, preprocessor_directive,
+    is_conditional_preprocessor, is_known_preprocessor_directive,
 };
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, has_unmatched_open_brace, is_comment_line, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::{

@@ -649,6 +649,14 @@ fn line_comment_start(line: &str) -> Option<usize> {
     None
 }
 
+pub(crate) fn preprocessor_directive(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix('#')?.trim_start();
+    let end = rest
+        .find(|ch: char| !ch.is_ascii_alphabetic())
+        .unwrap_or(rest.len());
+    (end > 0).then(|| &rest[..end])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

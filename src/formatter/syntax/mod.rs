@@ -2,6 +2,7 @@
 
 use crate::formatter::lexer::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
+    previous_non_layout_token_index,
 };
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
@@ -416,7 +417,7 @@ fn classify_word_roles(tokens: &[Token], roles: &mut SyntaxRoles) {
         let Some(close) = matching_close_paren_index(tokens, open) else {
             continue;
         };
-        let previous = previous_token_skipping_layout(tokens, index);
+        let previous = previous_non_layout_token_index(tokens, index);
         let after = next_non_layout_token_index(tokens, close + 1);
         if function_declarator_word(tokens, previous, after) {
             roles.set_role(index, SyntaxRole::FunctionDeclarator);
@@ -454,7 +455,7 @@ fn function_declarator_word(
 
 fn operator_preceded_by_return_type(tokens: &[Token], operator: usize) -> bool {
     let mut cursor = operator;
-    while let Some(previous) = previous_token_skipping_layout(tokens, cursor) {
+    while let Some(previous) = previous_non_layout_token_index(tokens, cursor) {
         match tokens.get(previous) {
             Some(Token::Operator(operator)) if matches!(operator.as_str(), "*" | "&" | "::") => {
                 cursor = previous;
@@ -490,7 +491,7 @@ fn line_ends_after_token(tokens: &[Token], index: usize) -> bool {
 }
 
 fn classify_star_operator(tokens: &[Token], index: usize, roles: &SyntaxRoles) -> OperatorRole {
-    let previous = previous_token_skipping_layout(tokens, index);
+    let previous = previous_non_layout_token_index(tokens, index);
     let next = next_non_layout_token_index(tokens, index + 1);
     if star_is_binary_operator(tokens, previous, next, index, roles) {
         OperatorRole::BinaryOperator
@@ -504,7 +505,7 @@ fn classify_star_operator(tokens: &[Token], index: usize, roles: &SyntaxRoles) -
 }
 
 fn classify_ampersand_operator(tokens: &[Token], index: usize) -> OperatorRole {
-    let previous = previous_token_skipping_layout(tokens, index);
+    let previous = previous_non_layout_token_index(tokens, index);
     let next = next_non_layout_token_index(tokens, index + 1);
     if previous
         .and_then(|index| tokens.get(index))
@@ -576,7 +577,7 @@ fn star_is_pointer_declarator(
         return true;
     }
     if previous
-        .and_then(|index| previous_token_skipping_layout(tokens, index))
+        .and_then(|index| previous_non_layout_token_index(tokens, index))
         .and_then(|index| tokens.get(index))
         .is_some_and(|token| {
             matches!(token, Token::Operator(operator) if operator == "->")
@@ -595,7 +596,7 @@ fn star_is_pointer_declarator(
     match previous.and_then(|index| tokens.get(index)) {
         Some(token) if syntax_token_is_type_word(token) => true,
         Some(Token::Symbol('(')) => previous
-            .and_then(|open_index| previous_token_skipping_layout(tokens, open_index))
+            .and_then(|open_index| previous_non_layout_token_index(tokens, open_index))
             .and_then(|before_open| tokens.get(before_open))
             .is_some_and(syntax_token_is_type_word),
         _ => false,
@@ -806,7 +807,7 @@ fn following_token_is_symbol(tokens: &[Token], index: usize, symbol: char) -> bo
 }
 
 fn paren_range_is_expression(tokens: &[Token], open: usize, close: usize) -> bool {
-    if previous_token_skipping_layout(tokens, open)
+    if previous_non_layout_token_index(tokens, open)
         .and_then(|previous| tokens.get(previous))
         .is_some_and(|token| matches!(token, Token::Word(_)))
     {
@@ -878,12 +879,6 @@ fn syntax_token_allows_unary_after(token: &Token) -> bool {
         Token::Word(word) => is_non_type_keyword(word),
         _ => false,
     }
-}
-
-fn previous_token_skipping_layout(tokens: &[Token], before: usize) -> Option<usize> {
-    (0..before)
-        .rev()
-        .find(|index| !matches!(tokens[*index], Token::Whitespace(_) | Token::Newline))
 }
 
 impl SyntaxRoles {

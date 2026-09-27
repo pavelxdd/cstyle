@@ -16,15 +16,14 @@ use crate::formatter::continuation::call_arguments::{
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
-use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    has_unmatched_open_brace, is_comment_line, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::tokens::operators::{

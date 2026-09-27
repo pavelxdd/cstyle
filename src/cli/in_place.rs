@@ -128,8 +128,9 @@ mod tests {
 
     use super::*;
     use crate::config::LineEnding;
+    use crate::test_support::temp_path;
     use std::fs::File;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::UNIX_EPOCH;
 
     fn format_path(path: &Path, options: &FormatOptions) -> io::Result<()> {
         format_file_in_place(
@@ -159,14 +160,6 @@ mod tests {
             .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
             .collect::<Vec<_>>();
         String::from_utf16(&units).expect("UTF-16BE output")
-    }
-
-    fn temp_path(name: &str) -> std::path::PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-{stamp}-{name}"))
     }
 
     #[test]

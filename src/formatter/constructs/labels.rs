@@ -13,7 +13,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::source::lex::{is_identifier_continue, is_identifier_start};
+use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
 pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
     if find_case_colon(line).is_some() {
@@ -538,7 +538,7 @@ pub(crate) fn is_user_label_candidate(line: &str, access_labels: &[String]) -> b
         && unmatched_open_paren_column(before_colon).is_none()
         && !before_colon.ends_with(')')
         && !matches!(
-            first_word(before_colon),
+            leading_identifier(before_colon),
             "for" | "if" | "while" | "switch" | "catch" | "do" | "else"
         )
         && find_case_colon(trimmed).is_none()
@@ -652,13 +652,6 @@ fn is_scope_resolution_prefix(trimmed: &str) -> bool {
         && prefix
             .chars()
             .all(|ch| is_identifier_continue(ch) || matches!(ch, ':' | '<' | '>' | ',' | '~' | ' '))
-}
-
-fn first_word(line: &str) -> &str {
-    let end = line
-        .find(|ch: char| !is_identifier_continue(ch))
-        .unwrap_or(line.len());
-    &line[..end]
 }
 
 #[cfg(test)]

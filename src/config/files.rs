@@ -166,14 +166,10 @@ fn project_file_exists(path: &Path) -> Result<bool, ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use crate::test_support::temp_path;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        let dir = env::temp_dir().join(format!("cstyle-config-{stamp}-{name}"));
+        let dir = temp_path(name);
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }

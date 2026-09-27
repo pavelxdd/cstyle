@@ -1,13 +1,15 @@
 use crate::config::BraceStyle;
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
-use crate::formatter::text::line_scan::{is_comment_only_line, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
+};
 use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {

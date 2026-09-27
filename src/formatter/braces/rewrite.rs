@@ -9,7 +9,7 @@ use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
-    next_non_whitespace, token_text,
+    next_non_whitespace, previous_non_layout_token_index, token_text,
 };
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
@@ -1935,7 +1935,7 @@ fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
 }
 
 fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
-    let Some(previous) = previous_non_layout_token(tokens, open_index) else {
+    let Some(previous) = previous_non_layout_token_index(tokens, open_index) else {
         return false;
     };
     match tokens.get(previous) {
@@ -1949,13 +1949,16 @@ fn is_remove_braces_paren_header(tokens: &[Token], close_paren: usize) -> bool {
     let Some(open_paren) = matching_open_paren_global(tokens, close_paren) else {
         return false;
     };
-    previous_non_layout_token(tokens, open_paren).is_some_and(|header| match tokens.get(header) {
-        Some(Token::Word(word)) if matches!(word.as_str(), "if" | "for" | "while") => true,
-        Some(Token::Word(word)) if word == "constexpr" => previous_non_layout_token(tokens, header)
-            .is_some_and(
-                |index| matches!(tokens.get(index), Some(Token::Word(word)) if word == "if"),
-            ),
-        _ => false,
+    previous_non_layout_token_index(tokens, open_paren).is_some_and(|header| {
+        match tokens.get(header) {
+            Some(Token::Word(word)) if matches!(word.as_str(), "if" | "for" | "while") => true,
+            Some(Token::Word(word)) if word == "constexpr" => {
+                previous_non_layout_token_index(tokens, header).is_some_and(
+                    |index| matches!(tokens.get(index), Some(Token::Word(word)) if word == "if"),
+                )
+            }
+            _ => false,
+        }
     })
 }
 
@@ -2127,12 +2130,6 @@ fn next_statement_token(
         }
     }
     None
-}
-
-fn previous_non_layout_token(tokens: &[Token], before: usize) -> Option<usize> {
-    (0..before)
-        .rev()
-        .find(|index| !matches!(tokens[*index], Token::Whitespace(_) | Token::Newline))
 }
 
 fn initializer_brace_type(

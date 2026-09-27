@@ -7,7 +7,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
-use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive};
+use crate::formatter::preprocessor::PreprocessorRegion;
 use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
@@ -16,8 +16,8 @@ use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
 };
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_ends_with_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    is_comment_line, is_comment_only_line, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{

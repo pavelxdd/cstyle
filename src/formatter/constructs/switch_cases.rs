@@ -2,12 +2,13 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, raw_strings, token_text};
-use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+    is_comment_line, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::tabs;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
@@ -762,14 +763,6 @@ fn first_non_ws_byte(line: &str) -> Option<usize> {
     line.char_indices()
         .find(|(_, ch)| !matches!(ch, ' ' | '\t'))
         .map(|(index, _)| index)
-}
-
-fn leading_whitespace_len(line: &str) -> usize {
-    line.char_indices()
-        .take_while(|(_, ch)| matches!(ch, ' ' | '\t'))
-        .map(|(index, ch)| index + ch.len_utf8())
-        .last()
-        .unwrap_or(0)
 }
 
 fn has_windows_line_marker_after_line_comment(line: &str, byte_index: usize) -> bool {

@@ -7,7 +7,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::line_comment_split_limit;
+use crate::formatter::text::line_scan::{line_comment_split_limit, preprocessor_directive};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 use std::collections::VecDeque;
 
@@ -171,14 +171,6 @@ impl FormatEngine<'_> {
             _ => false,
         }
     }
-}
-
-pub(crate) fn preprocessor_directive(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix('#')?.trim_start();
-    let end = rest
-        .find(|ch: char| !ch.is_ascii_alphabetic())
-        .unwrap_or(rest.len());
-    (end > 0).then(|| &rest[..end])
 }
 
 pub(crate) fn output_has_active_preprocessor_branch(output: &[String]) -> bool {

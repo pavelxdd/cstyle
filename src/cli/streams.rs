@@ -136,16 +136,7 @@ fn same_file_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_path(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-cli-{stamp}-{name}"))
-    }
+    use crate::test_support::temp_path;
 
     #[test]
     fn rejects_same_stdio_input_and_output_path_without_truncating() {

@@ -1,4 +1,5 @@
 use crate::formatter::lexer::raw_strings;
+use crate::formatter::text::columns::leading_whitespace_len;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Converter {
@@ -68,14 +69,6 @@ pub(crate) fn force_tab_indent_to_spaces(line: &str, tab_width: usize) -> String
     }
     output.extend(chars);
     output
-}
-
-fn leading_whitespace_len(line: &str) -> usize {
-    line.char_indices()
-        .take_while(|(_, ch)| matches!(ch, ' ' | '\t'))
-        .map(|(index, ch)| index + ch.len_utf8())
-        .last()
-        .unwrap_or(0)
 }
 
 fn to_spaces_stateful(

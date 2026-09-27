@@ -2,6 +2,7 @@
 
 use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
+use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
 pub(crate) mod raw_strings;
@@ -48,7 +49,7 @@ fn hash_after_statement_opens_preprocessor(chars: &[char], line_start: usize, ha
     {
         return false;
     }
-    let Some(directive) = hash_line_directive(&line) else {
+    let Some(directive) = preprocessor_directive(&line) else {
         return false;
     };
     if !is_known_hash_directive(directive) {
@@ -87,18 +88,10 @@ fn has_unclosed_grouping(chars: &[char]) -> bool {
 }
 
 fn unknown_hash_line_has_brace_code(line: &str) -> bool {
-    let Some(directive) = hash_line_directive(line) else {
+    let Some(directive) = preprocessor_directive(line) else {
         return false;
     };
     !is_known_hash_directive(directive) && line.contains(['{', '}'])
-}
-
-fn hash_line_directive(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix('#')?.trim_start();
-    let end = rest
-        .find(|ch: char| !ch.is_ascii_alphabetic())
-        .unwrap_or(rest.len());
-    (end > 0).then(|| &rest[..end])
 }
 
 fn is_known_hash_directive(directive: &str) -> bool {
@@ -634,6 +627,12 @@ pub(crate) fn matching_close_paren_index(tokens: &[Token], open_paren: usize) ->
         }
     }
     None
+}
+
+pub(crate) fn previous_non_layout_token_index(tokens: &[Token], before: usize) -> Option<usize> {
+    (0..before)
+        .rev()
+        .find(|index| !matches!(tokens[*index], Token::Whitespace(_) | Token::Newline))
 }
 
 pub(crate) fn next_non_layout_token_index(tokens: &[Token], start: usize) -> Option<usize> {

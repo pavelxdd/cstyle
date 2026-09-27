@@ -8,13 +8,13 @@ use crate::formatter::constructs::headers::{
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::buffer::OpenBraceShape;
-use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    line_brace_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
+    line_brace_imbalance, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;

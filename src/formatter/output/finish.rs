@@ -4,11 +4,10 @@ use crate::formatter::constructs::switch_cases::{
 };
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    is_comment_line, line_comment_split_limit, trailing_comment_split_limit,
+    is_comment_line, line_comment_split_limit, preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
 use crate::formatter::tokens::literals::first_string_literal_start;

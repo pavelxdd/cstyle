@@ -41,6 +41,7 @@ pub(crate) fn drop_leading_columns(line: &str, drop: usize, tab_width: usize) ->
 }
 
 pub(crate) fn visual_column_at(chars: &[char], index: usize, tab_width: usize) -> usize {
+    let tab_width = tab_width.max(1);
     let mut column = 0;
     for &ch in &chars[..index] {
         if ch == '\t' {
@@ -50,4 +51,12 @@ pub(crate) fn visual_column_at(chars: &[char], index: usize, tab_width: usize) -
         }
     }
     column
+}
+
+pub(crate) fn leading_whitespace_len(line: &str) -> usize {
+    line.char_indices()
+        .take_while(|(_, ch)| matches!(ch, ' ' | '\t'))
+        .map(|(index, ch)| index + ch.len_utf8())
+        .last()
+        .unwrap_or(0)
 }

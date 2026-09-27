@@ -5,10 +5,11 @@ use crate::formatter::braces::classification::{
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
-use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
+};
 
 pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) first_width: usize,

@@ -1,11 +1,13 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
+use crate::source::lex::{
+    is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 enum DefineFrame {
@@ -30,23 +32,15 @@ struct DefineBodyLineInfo {
     has_embedded_default_label: bool,
 }
 
-fn define_body_first_word(line: &str) -> &str {
-    let trimmed = line.trim_start();
-    let end = trimmed
-        .find(|ch: char| !is_identifier_continue(ch))
-        .unwrap_or(trimmed.len());
-    &trimmed[..end]
-}
-
 fn is_define_header_keyword(line: &str) -> bool {
     matches!(
-        define_body_first_word(line),
+        leading_identifier(line),
         "if" | "else" | "for" | "while" | "do" | "switch"
     )
 }
 
 fn is_define_case_label(line: &str) -> bool {
-    let word = define_body_first_word(line);
+    let word = leading_identifier(line);
     if word != "case" && word != "default" {
         return false;
     }
@@ -195,7 +189,7 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         ends_semicolon,
         is_header,
         is_command_header,
-        is_switch_header: define_body_first_word(content) == "switch",
+        is_switch_header: leading_identifier(content) == "switch",
         has_embedded_default_label: has_embedded_default_label(content),
     }
 }
@@ -245,10 +239,7 @@ fn define_block_comment_state(line: &str, mut in_comment: bool, tab_width: usize
         }
         index += 1;
     }
-    (
-        in_comment,
-        visual_width_chars(&chars, open_column, tab_width),
-    )
+    (in_comment, visual_column_at(&chars, open_column, tab_width))
 }
 
 fn strip_define_backslash(line: &str) -> (&str, bool) {
@@ -436,17 +427,6 @@ fn define_run_in_designated_initializer_column(line: &str, tab_width: usize) -> 
         .map(|column| visual_width_from(&line[..column + 2], 0, tab_width))
 }
 
-fn visual_width_chars(chars: &[char], end: usize, tab_width: usize) -> usize {
-    let tab_width = tab_width.max(1);
-    chars[..end].iter().fold(0, |column, ch| {
-        if *ch == '\t' {
-            (column / tab_width + 1) * tab_width
-        } else {
-            column + 1
-        }
-    })
-}
-
 fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize> {
     let chars: Vec<char> = line.chars().collect();
     let mut index = 0usize;
@@ -503,7 +483,7 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
                         after += 1;
                     }
                     return (after < chars.len())
-                        .then(|| visual_width_chars(&chars, after, tab_width));
+                        .then(|| visual_column_at(&chars, after, tab_width));
                 }
             }
             _ => {}
@@ -556,7 +536,7 @@ fn update_define_expression_paren_anchors(line: &str, anchors: &mut Vec<usize>, 
             continue;
         }
         match ch {
-            '(' => anchors.push(visual_width_chars(&chars, index + 1, tab_width)),
+            '(' => anchors.push(visual_column_at(&chars, index + 1, tab_width)),
             ')' => {
                 anchors.pop();
             }

@@ -6,13 +6,15 @@ use crate::formatter::constructs::headers::is_braceless_header_line;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
-use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    has_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
+};
 use crate::formatter::tokens::operators::{starts_ternary_arm, starts_with_chain_operator};
 use crate::source::lex::is_identifier_continue;
 
