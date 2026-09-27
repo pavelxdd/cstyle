@@ -808,7 +808,7 @@ impl FormatEngine<'_> {
                             | BraceStyle::Pico
                     )))
         {
-            brace_type = BraceType::Init;
+            brace_type = BraceType::Initializer;
         }
         if self.current_is_blank()
             && brace_type == BraceType::Command
@@ -909,7 +909,10 @@ impl FormatEngine<'_> {
         }
         if matches!(
             brace_type,
-            BraceType::Array | BraceType::CompoundLiteral | BraceType::Init | BraceType::DeferArray
+            BraceType::Array
+                | BraceType::CompoundLiteral
+                | BraceType::Initializer
+                | BraceType::DeferArray
         ) {
             self.layout.nesting.clear_continuation_indents();
             if self.current_is_blank() {
@@ -1180,10 +1183,10 @@ impl FormatEngine<'_> {
             self.layout.previous = PreviousToken::Other;
             return;
         }
-        let init_run_in = brace_type == BraceType::Init && !self.is_objc_method_line();
+        let init_run_in = brace_type == BraceType::Initializer && !self.is_objc_method_line();
         let range_for_init_run_in = matches!(
             brace_type,
-            BraceType::Command | BraceType::Array | BraceType::Init
+            BraceType::Command | BraceType::Array | BraceType::Initializer
         ) && self.current.trim_start().starts_with("for (")
             && self.current.trim_end().ends_with(':')
             && matches!(
@@ -1208,7 +1211,7 @@ impl FormatEngine<'_> {
             && self.layout.line_state.has_nested_designated_init_brace
             && matches!(
                 brace_type,
-                BraceType::Init | BraceType::Array | BraceType::CompoundLiteral
+                BraceType::Initializer | BraceType::Array | BraceType::CompoundLiteral
             )
             && matches!(next, Some(Token::Symbol('.')))
             && self
@@ -1312,7 +1315,7 @@ impl FormatEngine<'_> {
             && matches!(
                 brace_type,
                 BraceType::Array
-                    | BraceType::Init
+                    | BraceType::Initializer
                     | BraceType::CompoundLiteral
                     | BraceType::Command
             )
@@ -1355,7 +1358,7 @@ impl FormatEngine<'_> {
         }
         if self.current_is_blank()
             && self.token_input.token_begins_source_line
-            && matches!(brace_type, BraceType::Array | BraceType::Init)
+            && matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && matches!(next, Some(Token::Symbol('{')))
             && self.options.brace_style == BraceStyle::None
         {
@@ -1625,7 +1628,7 @@ impl FormatEngine<'_> {
         } else {
             let source_attached_initializer_line = matches!(
                 brace_type,
-                BraceType::Array | BraceType::Init | BraceType::CompoundLiteral
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
             ) && matches!(next, Some(Token::Newline))
                 && !matches!(
                     self.options.brace_style,
@@ -1931,7 +1934,7 @@ impl FormatEngine<'_> {
                     && !self.options.remove_braces
                     && match brace_type {
                         BraceType::Command => self.options.brace_style == BraceStyle::OneTrueBrace,
-                        BraceType::Array | BraceType::Init => true,
+                        BraceType::Array | BraceType::Initializer => true,
                         _ => false,
                     };
                 let runin_comment = if attach_runin_comment {
@@ -2022,7 +2025,7 @@ impl FormatEngine<'_> {
                         && self.layout.line_state.is_one_line_block)
                         || matches!(
                             brace_type,
-                            BraceType::Array | BraceType::Init | BraceType::CompoundLiteral
+                            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
                         ))
                     && self.output.last().is_some_and(|line| line.trim() == "{")
                 {
@@ -2096,7 +2099,7 @@ impl FormatEngine<'_> {
                 matches!(
                     brace_type,
                     BraceType::Array
-                        | BraceType::Init
+                        | BraceType::Initializer
                         | BraceType::CompoundLiteral
                         | BraceType::DeferArray
                 ) && opens_double_brace,
@@ -2129,7 +2132,7 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        let init_after_declarator = brace_type == BraceType::Init
+        let init_after_declarator = brace_type == BraceType::Initializer
             && (self
                 .layout
                 .command_state
@@ -2179,7 +2182,10 @@ impl FormatEngine<'_> {
     ) -> bool {
         matches!(
             brace_type,
-            BraceType::Array | BraceType::Init | BraceType::CompoundLiteral | BraceType::Command
+            BraceType::Array
+                | BraceType::Initializer
+                | BraceType::CompoundLiteral
+                | BraceType::Command
         ) && matches!(next, None | Some(Token::Newline))
             && self.layout.nesting.paren_depth > 0
             && self.control_paren_init_brace_indent_spaces().is_some()
@@ -2206,7 +2212,10 @@ impl FormatEngine<'_> {
             BraceStyle::OneTrueBrace | BraceStyle::Attach
         ) && matches!(
             brace_type,
-            BraceType::Array | BraceType::Init | BraceType::CompoundLiteral | BraceType::Command
+            BraceType::Array
+                | BraceType::Initializer
+                | BraceType::CompoundLiteral
+                | BraceType::Command
         ) && self.token_input.token_begins_source_line
             && self.current_is_blank()
             && self.layout.nesting.paren_depth > 0
@@ -2232,11 +2241,14 @@ impl FormatEngine<'_> {
             return brace_type != BraceType::Namespace || self.options.indent_namespaces;
         }
         if self.options.brace_style == BraceStyle::Vtk
-            && matches!(brace_type, BraceType::Init | BraceType::CompoundLiteral)
+            && matches!(
+                brace_type,
+                BraceType::Initializer | BraceType::CompoundLiteral
+            )
         {
             return self.layout.indentation.indent() > 0;
         }
-        if self.options.brace_style == BraceStyle::Ratliff && brace_type == BraceType::Init {
+        if self.options.brace_style == BraceStyle::Ratliff && brace_type == BraceType::Initializer {
             return true;
         }
         if brace_type == BraceType::Namespace {
@@ -2299,7 +2311,7 @@ impl FormatEngine<'_> {
             return false;
         };
         let last = last.trim_end();
-        if matches!(brace_type, BraceType::Array | BraceType::Init)
+        if matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && last.ends_with('=')
             && matches!(
                 self.options.brace_style,
@@ -2454,7 +2466,7 @@ impl FormatEngine<'_> {
                 BraceType::Command
                     | BraceType::NonStatement
                     | BraceType::Definition
-                    | BraceType::Init
+                    | BraceType::Initializer
             )
             && self
                 .layout
@@ -2466,7 +2478,7 @@ impl FormatEngine<'_> {
         }
         if matches!(
             brace_type,
-            BraceType::Array | BraceType::CompoundLiteral | BraceType::Init
+            BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer
         ) && matches!(next, None | Some(Token::Newline))
         {
             let break_mode = matches!(
@@ -2489,7 +2501,7 @@ impl FormatEngine<'_> {
         }
         if matches!(
             brace_type,
-            BraceType::Array | BraceType::Init | BraceType::CompoundLiteral
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
         ) && matches!(
             self.options.brace_style,
             BraceStyle::Attach
@@ -2536,7 +2548,7 @@ impl FormatEngine<'_> {
             BraceStyle::None => !self.token_input.token_begins_source_line,
             BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp => !matches!(
                 brace_type,
-                BraceType::Array | BraceType::Init | BraceType::CompoundLiteral
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
             ),
             BraceStyle::OneTrueBrace => {
                 !matches!(
@@ -2547,7 +2559,7 @@ impl FormatEngine<'_> {
                         | BraceType::Class
                         | BraceType::Interface
                         | BraceType::Definition
-                        | BraceType::Init
+                        | BraceType::Initializer
                 ) && (brace_type != BraceType::Struct || self.options.attach_struct)
                     && (brace_type != BraceType::Enum || self.options.attach_enum)
             }
@@ -2556,7 +2568,7 @@ impl FormatEngine<'_> {
                 BraceType::Array
                     | BraceType::CompoundLiteral
                     | BraceType::Definition
-                    | BraceType::Init
+                    | BraceType::Initializer
             ),
             BraceStyle::Allman
             | BraceStyle::Whitesmith

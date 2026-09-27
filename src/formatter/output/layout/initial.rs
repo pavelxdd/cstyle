@@ -65,7 +65,7 @@ impl FormatEngine<'_> {
             };
         let normal_indent = self.layout.indentation.line_indent(line_kind, self.options)
             + self.case_body_indent_extra(line_kind)
-            + self.case_preproc_body_indent_extra(line_kind, line)
+            + self.case_preprocessor_body_indent_extra(line_kind, line)
             + split_else_extra
             + else_if_break_extra
             + self.member_init_continuation_extra(line_kind, line);

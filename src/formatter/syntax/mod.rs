@@ -248,10 +248,10 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
             b'(' | b'[' => depth += 1,
             b')' | b']' => depth = depth.saturating_sub(1),
             b'=' if depth == 0 => {
-                let prev = if i > 0 { bytes[i - 1] } else { b' ' };
+                let previous = if i > 0 { bytes[i - 1] } else { b' ' };
                 let next = bytes.get(i + 1).copied().unwrap_or(b' ');
                 if !matches!(
-                    prev,
+                    previous,
                     b'=' | b'!'
                         | b'<'
                         | b'>'

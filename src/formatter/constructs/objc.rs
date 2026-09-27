@@ -10,7 +10,7 @@ use crate::formatter::text::line_scan::{
 use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(crate) struct ObjectiveCLineState {
+pub(crate) struct ObjCLineState {
     pub(crate) post_prefix: bool,
     pub(crate) post_method_colon: bool,
     pub(crate) return_paren_depth: Option<usize>,
@@ -256,8 +256,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|frame| {
-                frame.role == BracketRole::ObjectiveCMessage
-                    && frame.parent_objc_message_align.is_none()
+                frame.role == BracketRole::ObjCMessage && frame.parent_objc_message_align.is_none()
             })
             .and_then(|frame| {
                 objc_message_selector_indent_spaces(line, frame, self.options.tab_width)

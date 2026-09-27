@@ -837,7 +837,7 @@ impl FormatEngine<'_> {
             })
             .or_else(|| {
                 (self.current_is_blank() && self.previous_output_code_ends_assignment())
-                    .then_some(BraceType::Init)
+                    .then_some(BraceType::Initializer)
             })
             .or_else(|| {
                 let previous_code = self.output.last().map(|line| {
@@ -956,11 +956,11 @@ impl FormatEngine<'_> {
             && self.options.indent_braces
             && matches!(
                 brace_type,
-                BraceType::Array | BraceType::Init | BraceType::CompoundLiteral
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
             )
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Init | BraceType::CompoundLiteral)
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
             )
         {
             self.layout.continuation_indent.next_line_indent =
@@ -977,7 +977,7 @@ impl FormatEngine<'_> {
                 .is_some()
                 && matches!(
                     self.layout.nesting.brace_type_stack.last(),
-                    Some(BraceType::Array | BraceType::Init | BraceType::CompoundLiteral)
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
                 ))
         {
             self.layout.continuation_indent.next_line_indent =
@@ -1245,7 +1245,7 @@ impl FormatEngine<'_> {
         let next = next_non_whitespace(tokens, close_index + 1, line_end)
             .and_then(|next_index| tokens.get(next_index));
         let init_block_continues_expression =
-            brace_type == BraceType::Init && matches!(next, Some(Token::Symbol('(' | ')')));
+            brace_type == BraceType::Initializer && matches!(next, Some(Token::Symbol('(' | ')')));
         let empty_value_block_continues_expression = is_empty_block
             && (matches!(next, Some(Token::Symbol('(' | ')')))
                 || (empty_block_after_operator && next.is_some()));
@@ -1356,7 +1356,7 @@ impl FormatEngine<'_> {
                 opening_body_gap.as_deref(),
             )
         };
-        let braced_init = (brace_type == BraceType::Init
+        let braced_init = (brace_type == BraceType::Initializer
             && (self
                 .layout
                 .command_state
@@ -1436,7 +1436,11 @@ impl FormatEngine<'_> {
             None if braced_init
                 && unmatched_open_paren_column(&self.current).is_none()
                 && ((block.trim_start().starts_with("{-")
-                    && (self.layout.indentation.current_preproc_indent().is_some()
+                    && (self
+                        .layout
+                        .indentation
+                        .current_preprocessor_indent()
+                        .is_some()
                         || !self.preprocessor.branch_stack.is_empty()))
                     || self
                         .output
@@ -1481,7 +1485,7 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
                     BraceType::Array
-                        | BraceType::Init
+                        | BraceType::Initializer
                         | BraceType::CompoundLiteral
                         | BraceType::Enum
                 )
@@ -1500,7 +1504,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        !matches!(brace_type, BraceType::Init)
+        !matches!(brace_type, BraceType::Initializer)
             || self.current.trim_end().ends_with('>')
             || !self
                 .layout
@@ -1574,7 +1578,7 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
                     BraceType::Array
-                        | BraceType::Init
+                        | BraceType::Initializer
                         | BraceType::CompoundLiteral
                         | BraceType::Enum
                 )
@@ -2159,7 +2163,9 @@ fn initializer_brace_type(
     }
     match tokens.get(previous)? {
         Token::Operator(operator) if operator == "=" => Some(BraceType::Array),
-        Token::Operator(operator) if operator == ">" && !has_block_word => Some(BraceType::Init),
+        Token::Operator(operator) if operator == ">" && !has_block_word => {
+            Some(BraceType::Initializer)
+        }
         Token::Symbol(',') | Token::Symbol('@') => Some(BraceType::Array),
         Token::Symbol('(') if !has_block_word => Some(BraceType::Array),
         Token::Symbol(')') if is_compound_literal_before_brace(tokens, previous, line_start) => {
@@ -2170,14 +2176,14 @@ fn initializer_brace_type(
         {
             Some(BraceType::Array)
         }
-        Token::Symbol(']') | Token::Number(_) if !has_block_word => Some(BraceType::Init),
+        Token::Symbol(']') | Token::Number(_) if !has_block_word => Some(BraceType::Initializer),
         Token::Word(word)
             if !has_block_word
                 && !language::is_header(word)
                 && !is_asm_block_header(word)
                 && !language::PRE_COMMAND_QUALIFIERS.contains(&word.as_str()) =>
         {
-            Some(BraceType::Init)
+            Some(BraceType::Initializer)
         }
         _ => None,
     }

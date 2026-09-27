@@ -115,7 +115,7 @@ impl FormatEngine<'_> {
             self.inline_array.frames.pop();
             if matches!(
                 self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Init | BraceType::CompoundLiteral)
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
             ) {
                 self.exit_brace_state();
             }
@@ -219,7 +219,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !matches!(
             self.layout.nesting.last_closed_brace_type,
-            Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
+            Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
         ) {
             return None;
         }
@@ -541,13 +541,14 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
                     BraceType::Array
-                        | BraceType::Init
+                        | BraceType::Initializer
                         | BraceType::CompoundLiteral
                         | BraceType::Enum
                 )
             );
-        let double_brace_initializer = matches!(brace_type, BraceType::Array | BraceType::Init)
-            && self.current.trim_end().ends_with('{');
+        let double_brace_initializer =
+            matches!(brace_type, BraceType::Array | BraceType::Initializer)
+                && self.current.trim_end().ends_with('{');
         let run_in_after_comma = enclosed
             && !self.token_input.token_begins_source_line
             && self.current.trim_end().ends_with(',');
@@ -590,7 +591,9 @@ impl FormatEngine<'_> {
                 Some('(') => self.emit_source_space(),
                 Some('{') if self.current.ends_with([' ', '\t']) => {}
                 Some('@') => self.emit_source_space_or_ensure(),
-                _ if brace_type == BraceType::Init && self.current.trim_end().ends_with('>') => {
+                _ if brace_type == BraceType::Initializer
+                    && self.current.trim_end().ends_with('>') =>
+                {
                     self.emit_source_space_or_ensure();
                 }
                 _ if aggregate_assign => self.emit_source_space_or_ensure(),
@@ -627,7 +630,7 @@ impl FormatEngine<'_> {
                 + self.case_body_indent_extra(LineKind::Normal),
         )
         .columns(self.options.indent_width);
-        if brace_type == BraceType::Init
+        if brace_type == BraceType::Initializer
             && line_opens_typed_initializer(&self.current)
             && column.saturating_sub(statement_base) > self.options.max_continuation_indent
         {
@@ -718,7 +721,7 @@ impl FormatEngine<'_> {
                 .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
         });
         let call_argument_array = call_argument_array_column.is_some();
-        let typed_initializer = matches!(closing_brace_type, Some(BraceType::Init))
+        let typed_initializer = matches!(closing_brace_type, Some(BraceType::Initializer))
             && self
                 .output
                 .get(open_output_len)
@@ -971,7 +974,7 @@ impl FormatEngine<'_> {
         if closing
             && !matches!(
                 self.layout.nesting.last_closed_brace_type,
-                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
             )
         {
             return None;

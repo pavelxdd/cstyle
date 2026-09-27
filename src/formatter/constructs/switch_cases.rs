@@ -1372,7 +1372,11 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn case_preproc_body_indent_extra(&self, line_kind: LineKind, line: &str) -> usize {
+    pub(crate) fn case_preprocessor_body_indent_extra(
+        &self,
+        line_kind: LineKind,
+        line: &str,
+    ) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
         }

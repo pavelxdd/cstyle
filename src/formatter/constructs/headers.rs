@@ -529,11 +529,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn braceless_else_output_level(&self) -> Option<usize> {
-        let mut body_idx = self.output.len().checked_sub(1)?;
-        while body_idx > 0 && self.output[body_idx].trim().is_empty() {
-            body_idx -= 1;
+        let mut body_index = self.output.len().checked_sub(1)?;
+        while body_index > 0 && self.output[body_index].trim().is_empty() {
+            body_index -= 1;
         }
-        let body = self.output[body_idx].trim_end();
+        let body = self.output[body_index].trim_end();
         let body_code = body[..trailing_comment_split_limit(body)].trim_end();
         if !body_code.ends_with(';') {
             return None;
@@ -543,7 +543,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut expected = body_width / self.options.indent_width;
-        let mut scan = body_idx;
+        let mut scan = body_index;
         while scan > 0 {
             scan -= 1;
             let line = self.output[scan].trim_end();
@@ -1085,12 +1085,12 @@ impl FormatEngine<'_> {
 
     pub(crate) fn enclosing_if_level(
         &self,
-        body_idx: usize,
+        body_index: usize,
         body_level: usize,
         default: usize,
     ) -> usize {
         let mut expected = body_level;
-        let mut scan = body_idx;
+        let mut scan = body_index;
         let mut saw_condition_closer = false;
         while scan > 0 {
             scan -= 1;

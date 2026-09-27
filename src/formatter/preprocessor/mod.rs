@@ -191,7 +191,7 @@ pub(crate) fn output_has_active_preprocessor_branch(output: &[String]) -> bool {
         .unwrap_or(false)
 }
 
-fn is_ndef_preproc_statement(line: &str, directive: &str) -> bool {
+fn is_ndef_preprocessor_statement(line: &str, directive: &str) -> bool {
     match directive {
         "ifndef" => true,
         "if" => preprocessor_condition(line).is_some_and(is_not_defined_condition),
@@ -249,7 +249,7 @@ fn is_indentable_preprocessor_block(
                         saw_conditional = true;
                         if is_first_conditional
                             && depth == 1
-                            && is_ndef_preproc_statement(line, directive)
+                            && is_ndef_preprocessor_statement(line, directive)
                         {
                             potential_header_guard = true;
                         }
@@ -790,7 +790,11 @@ impl FormatEngine<'_> {
         }
         if self.options.indent_preproc_conditional && is_conditional_preprocessor(directive) {
             if matches!(directive, "if" | "ifdef" | "ifndef")
-                || self.layout.indentation.current_preproc_indent().is_some()
+                || self
+                    .layout
+                    .indentation
+                    .current_preprocessor_indent()
+                    .is_some()
             {
                 return Some(self.current_preprocessor_indent());
             }
@@ -837,7 +841,7 @@ impl FormatEngine<'_> {
                 spaces: case_label_column + self.options.indent_width,
             };
         }
-        if let Some(indent) = self.layout.indentation.current_preproc_indent() {
+        if let Some(indent) = self.layout.indentation.current_preprocessor_indent() {
             if let Some(spaces) = indent.spaces {
                 return PreprocessorLineIndent::Exact {
                     structural_level: indent.level,
@@ -877,7 +881,7 @@ impl FormatEngine<'_> {
                         *spaces += self.options.indent_width;
                     }
                 }
-                self.layout.indentation.push_preproc_indent(
+                self.layout.indentation.push_preprocessor_indent(
                     self.layout.indentation.indent(),
                     self.layout.continuation_indent.next_line_indent_spaces,
                 );
@@ -896,7 +900,7 @@ impl FormatEngine<'_> {
             }
             Some("endif") => {
                 self.preprocessor.branch_stack.pop();
-                self.layout.indentation.pop_preproc_indent();
+                self.layout.indentation.pop_preprocessor_indent();
                 if self.preprocessor.indented_block_stack.pop() == Some(true) {
                     self.layout.indentation.exit_block();
                     if let Some(spaces) = self

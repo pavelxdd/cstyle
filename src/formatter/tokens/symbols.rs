@@ -53,10 +53,10 @@ fn is_single_lvalue_assignment(line: &str) -> bool {
             b'(' | b'[' => depth += 1,
             b')' | b']' => depth = depth.saturating_sub(1),
             b'=' if depth == 0 => {
-                let prev = if i > 0 { bytes[i - 1] } else { b' ' };
+                let previous = if i > 0 { bytes[i - 1] } else { b' ' };
                 let next = bytes.get(i + 1).copied().unwrap_or(b' ');
                 if matches!(
-                    prev,
+                    previous,
                     b'=' | b'!'
                         | b'<'
                         | b'>'
@@ -585,9 +585,9 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.bracket_depth() == 0
             && self.bracket_opens_objc_message();
         let bracket_role = if opens_collection {
-            BracketRole::ObjectiveCCollection
+            BracketRole::ObjCCollection
         } else if opens_message {
-            BracketRole::ObjectiveCMessage
+            BracketRole::ObjCMessage
         } else {
             BracketRole::Other
         };
@@ -715,8 +715,8 @@ impl FormatEngine<'_> {
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(match frame.role {
-                BracketRole::ObjectiveCCollection => frame.opener_output_column.saturating_sub(1),
-                BracketRole::Other | BracketRole::ObjectiveCMessage => frame.opener_output_column,
+                BracketRole::ObjCCollection => frame.opener_output_column.saturating_sub(1),
+                BracketRole::Other | BracketRole::ObjCMessage => frame.opener_output_column,
             });
         }
         if self.token_input.token_begins_source_line

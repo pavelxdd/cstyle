@@ -218,8 +218,8 @@ pub(crate) struct CallFrame {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) enum BracketRole {
     Other,
-    ObjectiveCMessage,
-    ObjectiveCCollection,
+    ObjCMessage,
+    ObjCCollection,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

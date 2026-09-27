@@ -6,7 +6,7 @@ use crate::formatter::constructs::headers::{
     starts_header_word,
 };
 use crate::formatter::constructs::labels;
-use crate::formatter::constructs::objective_c::objc_message_following_keyword_column;
+use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::constructs::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,

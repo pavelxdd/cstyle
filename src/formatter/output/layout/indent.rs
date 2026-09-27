@@ -7,7 +7,7 @@ use crate::formatter::constructs::constructor_initializers::has_inline_construct
 use crate::formatter::constructs::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::constructs::objective_c::objc_message_following_keyword_column;
+use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::continuation::call_arguments::callee_name_start_before_open;
 use crate::formatter::engine::FormatEngine;
@@ -1551,19 +1551,19 @@ impl FormatEngine<'_> {
                 && !current.starts_with(['.', '{', '}', ')', '#', '?', ':'])
             {
                 let mut open_info = None;
-                for (idx, line) in self.output.iter().enumerate().rev() {
+                for (line_index, line) in self.output.iter().enumerate().rev() {
                     let code = line[..trailing_comment_split_limit(line)].trim_end();
                     if code.ends_with(';') || code.contains('{') || code.contains('}') {
                         break;
                     }
                     if let Some(open) = unmatched_open_paren_column(code) {
-                        open_info = Some((idx, open));
+                        open_info = Some((line_index, open));
                         break;
                     }
                 }
-                if let Some((idx, open)) = open_info {
+                if let Some((line_index, open)) = open_info {
                     let target = open + 1;
-                    let before_open = self.output[..idx].iter().rev();
+                    let before_open = self.output[..line_index].iter().rev();
                     let mut saw_blank = false;
                     let mut after_ternary = false;
                     for line in before_open {

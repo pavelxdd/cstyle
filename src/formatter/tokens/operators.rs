@@ -788,7 +788,7 @@ impl FormatEngine<'_> {
                 && self.layout.nesting.paren_depth == 0
                 && matches!(
                     self.layout.nesting.brace_type_stack.last(),
-                    Some(BraceType::Array | BraceType::Init | BraceType::DeferArray)
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::DeferArray)
                 ) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);

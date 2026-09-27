@@ -332,7 +332,7 @@ impl FormatEngine<'_> {
         {
             BraceType::NonStatement
         } else if !self.current_is_blank() {
-            BraceType::Init
+            BraceType::Initializer
         } else {
             BraceType::NonStatement
         }
@@ -561,7 +561,7 @@ impl FormatEngine<'_> {
     pub(crate) fn innermost_init_block_brace(&self) -> bool {
         matches!(
             self.layout.nesting.brace_type_stack.last(),
-            Some(BraceType::Init)
+            Some(BraceType::Initializer)
         ) && self.current_inline_array_column().is_none()
     }
 

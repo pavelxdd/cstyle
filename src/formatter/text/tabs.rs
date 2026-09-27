@@ -86,7 +86,7 @@ fn to_spaces_stateful(
     let mut raw_delimiter = start_raw_delimiter.map(str::to_string);
     let mut in_line_comment = false;
     let mut at_indent = true;
-    let mut prev = '\0';
+    let mut previous = '\0';
     let mut chars = line.char_indices().peekable();
 
     while let Some((byte_index, ch)) = chars.next() {
@@ -95,7 +95,7 @@ fn to_spaces_stateful(
             column = 0;
             in_line_comment = false;
             at_indent = true;
-            prev = '\0';
+            previous = '\0';
             continue;
         }
         let raw = if let Some(delimiter) = raw_delimiter.take() {
@@ -109,13 +109,13 @@ fn to_spaces_stateful(
         if let Some((delimiter, end)) = raw {
             let span_end = end.unwrap_or(line.len());
             push_char(&mut output, &mut column, ch, tab_width);
-            prev = ch;
+            previous = ch;
             while chars.peek().is_some_and(|(index, _)| *index < span_end) {
                 let Some((_, next)) = chars.next() else {
                     break;
                 };
                 push_char(&mut output, &mut column, next, tab_width);
-                prev = next;
+                previous = next;
             }
             at_indent = false;
             if end.is_none() {
@@ -125,11 +125,11 @@ fn to_spaces_stateful(
         }
 
         let is_digit_separator = ch == '\''
-            && prev.is_ascii_hexdigit()
+            && previous.is_ascii_hexdigit()
             && chars
                 .peek()
                 .is_some_and(|(_, next)| next.is_ascii_hexdigit());
-        prev = ch;
+        previous = ch;
 
         let in_leading_indent = at_indent && matches!(ch, ' ' | '\t');
         if !matches!(ch, ' ' | '\t') {

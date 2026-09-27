@@ -169,14 +169,14 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces = None;
             }
 
-            let mut idx = self.output.len() - 1;
-            let last_trimmed = self.output[idx].trim_start();
+            let mut index = self.output.len() - 1;
+            let last_trimmed = self.output[index].trim_start();
             let last_is_same_line_if = (last_trimmed.starts_with("if")
                 || last_trimmed.starts_with("else if"))
                 && last_trimmed.ends_with(';');
             if !last_is_same_line_if {
-                while idx > 0 {
-                    let above = self.output[idx - 1].trim_end();
+                while index > 0 {
+                    let above = self.output[index - 1].trim_end();
                     let above_code = above[..trailing_comment_split_limit(above)].trim_end();
                     if above_code.ends_with(';')
                         || above_code.ends_with('{')
@@ -186,20 +186,20 @@ impl FormatEngine<'_> {
                     {
                         break;
                     }
-                    idx -= 1;
+                    index -= 1;
                 }
             }
-            while idx > 0 {
-                let trimmed = self.output[idx].trim_start();
+            while index > 0 {
+                let trimmed = self.output[index].trim_start();
                 if !(trimmed.starts_with('?') || trimmed.starts_with(':')) {
                     break;
                 }
-                idx -= 1;
-                while idx > 0 && self.output[idx].trim().is_empty() {
-                    idx -= 1;
+                index -= 1;
+                while index > 0 && self.output[index].trim().is_empty() {
+                    index -= 1;
                 }
             }
-            let body_line = &self.output[idx];
+            let body_line = &self.output[index];
             let previous_indent = leading_visual_width(body_line, self.options.tab_width);
             if previous_indent >= self.options.indent_width
                 && previous_indent.is_multiple_of(self.options.indent_width)
@@ -209,7 +209,7 @@ impl FormatEngine<'_> {
                 let same_line_if_body = (body_trimmed.starts_with("if")
                     || body_trimmed.starts_with("else if"))
                     && body_trimmed.ends_with(';');
-                let previous_body_follows_compound_condition = self.output[..idx]
+                let previous_body_follows_compound_condition = self.output[..index]
                     .iter()
                     .rev()
                     .take(4)
@@ -218,7 +218,7 @@ impl FormatEngine<'_> {
                     !same_line_if_body && !previous_body_follows_compound_condition,
                 ));
                 if !same_line_if_body && !previous_body_follows_compound_condition {
-                    match_level = self.enclosing_if_level(idx, previous_level, match_level);
+                    match_level = self.enclosing_if_level(index, previous_level, match_level);
                 }
                 self.layout.continuation_indent.next_line_indent =
                     Some(match_level + self.layout.line_adjuster.total_case_unindent_depth());

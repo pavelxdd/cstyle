@@ -491,8 +491,8 @@ impl FormatEngine<'_> {
                     segment_start = index + ch.len_utf8();
                 }
                 ')' => {
-                    if let Some(prev) = saved_starts.pop() {
-                        segment_start = prev;
+                    if let Some(previous) = saved_starts.pop() {
+                        segment_start = previous;
                     }
                 }
                 '<' => angle_depth += 1,

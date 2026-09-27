@@ -1539,7 +1539,11 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Line
             && standalone_line_comment
             && (self.layout.line_state.column1_line_comment
-                || self.layout.indentation.current_preproc_indent().is_some())
+                || self
+                    .layout
+                    .indentation
+                    .current_preprocessor_indent()
+                    .is_some())
             && self.options.indent_col1_comments
             && line_comment_continuation_indent.is_none()
             && line_comment_stream_chain_indent.is_none()
@@ -1556,7 +1560,7 @@ impl FormatEngine<'_> {
                 .or_else(|| {
                     self.layout
                         .indentation
-                        .current_preproc_indent()
+                        .current_preprocessor_indent()
                         .map(|indent| {
                             indent
                                 .spaces
@@ -1600,7 +1604,11 @@ impl FormatEngine<'_> {
             && self.token_input.token_begins_source_line
             && self.token_input.token_source_column == 0
             && !self.options.indent_col1_comments
-            && self.layout.indentation.current_preproc_indent().is_some()
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some()
             && self.preprocessor_region(false) == PreprocessorRegion::TopLevel
         {
             self.clear_current();
@@ -2108,8 +2116,8 @@ impl FormatEngine<'_> {
                 opener_prefix = " ".repeat(previous_indent);
             }
         }
-        let opener_output_col = leading_visual_width(&opener_prefix, tab_width);
-        self.record_comment_frame(CommentKind::Block, opener_output_col, true);
+        let opener_output_column = leading_visual_width(&opener_prefix, tab_width);
+        self.record_comment_frame(CommentKind::Block, opener_output_column, true);
         let trim_amount = if unindented_namespace_run_in_comment {
             self.token_input.token_source_column + self.options.indent_width.saturating_sub(1)
         } else if self.token_input.token_begins_source_line
@@ -2125,7 +2133,7 @@ impl FormatEngine<'_> {
             && !self.options.remove_braces
             && match self.layout.nesting.brace_type_stack.last() {
                 Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
-                Some(BraceType::Array | BraceType::Init) => true,
+                Some(BraceType::Array | BraceType::Initializer) => true,
                 _ => false,
             }
             && self.output.last().is_some_and(|line| line.trim() == "{");
@@ -2166,7 +2174,7 @@ impl FormatEngine<'_> {
                                     leading_visual_width(previous, self.options.tab_width);
                                 (previous.trim_start().starts_with('*')
                                     && if self.token_input.token_line_opens_with_brace {
-                                        leading >= opener_output_col
+                                        leading >= opener_output_column
                                     } else {
                                         source_closer_leading < trim_amount
                                             && leading == source_closer_leading
@@ -2184,7 +2192,7 @@ impl FormatEngine<'_> {
                     };
                     let star_shift = index > 1
                         && self.token_input.token_begins_source_line
-                        && trim_amount > opener_output_col
+                        && trim_amount > opener_output_column
                         && kept.starts_with('*')
                         && leading_visual_width(line, tab_width) < trim_amount
                         && (!decorative_closer || (!is_last_line && index > 2));
@@ -2193,13 +2201,13 @@ impl FormatEngine<'_> {
                     } else if unindented_namespace_run_in_comment {
                         format!("{opener_prefix}{}", kept.trim_end())
                     } else if self.token_input.token_line_opens_with_brace {
-                        let source_line_col = leading_visual_width(line, tab_width);
+                        let source_line_column = leading_visual_width(line, tab_width);
                         let body_offset = if decorative_closer && is_last_line {
                             0
                         } else if trimmed_kept.starts_with('*') {
                             1
                         } else {
-                            source_line_col.saturating_sub(trim_amount)
+                            source_line_column.saturating_sub(trim_amount)
                         };
                         let indent = if self.options.indent_classes
                             && matches!(
@@ -2210,19 +2218,19 @@ impl FormatEngine<'_> {
                         } else {
                             self.layout.indentation.indent()
                         };
-                        let merged_comment_col =
+                        let merged_comment_column =
                             self.layout.frame_stack.active_brace().map_or_else(
                                 || {
                                     ContinuationIndent::Level(indent)
                                         .columns(self.options.indent_width)
                                 },
-                                |frame| frame.body_indent_column.max(opener_output_col),
+                                |frame| frame.body_indent_column.max(opener_output_column),
                             );
-                        let target = merged_comment_col + body_offset;
+                        let target = merged_comment_column + body_offset;
                         format!(
                             "{}{}",
                             self.options.continuation_indent_prefix(
-                                merged_comment_col / self.options.indent_width.max(1),
+                                merged_comment_column / self.options.indent_width.max(1),
                                 target,
                             ),
                             trimmed_kept.trim_end()
@@ -2251,10 +2259,10 @@ impl FormatEngine<'_> {
         if case_comment_unindent > 0 && self.current_is_preindented {
             self.finish_line();
             self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_col.saturating_sub(case_comment_unindent));
+                Some(opener_output_column.saturating_sub(case_comment_unindent));
         } else if case_comment_unindent > 0 {
             self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_col.saturating_sub(case_comment_unindent));
+                Some(opener_output_column.saturating_sub(case_comment_unindent));
         }
         self.attach_source_space_after_block_comment();
         self.layout.previous = PreviousToken::Other;
@@ -2476,7 +2484,7 @@ impl FormatEngine<'_> {
         line: &str,
         is_opener: bool,
         prefix: &str,
-        opener_source_col: usize,
+        opener_source_column: usize,
     ) -> String {
         let indent_len = self.options.indent_width;
         let tab_width = self.options.tab_width.max(1);
@@ -2500,8 +2508,8 @@ impl FormatEngine<'_> {
                     _ => return format!("{prefix}{}", line.trim_end()),
                 }
             }
-            let content_col = visual_column_at(&chars, content_start, tab_width);
-            let insert = indent_len.saturating_sub(content_col);
+            let content_column = visual_column_at(&chars, content_start, tab_width);
+            let insert = indent_len.saturating_sub(content_column);
             let head: String = chars[..content_start].iter().collect();
             let tail: String = chars[content_start..].iter().collect();
             return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trim_end());
@@ -2523,12 +2531,12 @@ impl FormatEngine<'_> {
             };
             if chars[second] == '*' {
                 let rel =
-                    visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_col);
+                    visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
                 let content: String = chars[first..].iter().collect();
                 return format!("{prefix}{}{}", " ".repeat(rel), content.trim_end());
             }
             let rel = visual_column_at(&chars, second, tab_width)
-                .saturating_sub(opener_source_col)
+                .saturating_sub(opener_source_column)
                 .max(indent_len);
             let mut content = chars[second..]
                 .iter()
@@ -2542,7 +2550,7 @@ impl FormatEngine<'_> {
             return format!("{prefix}{}{content}", " ".repeat(rel));
         }
         let rel = visual_column_at(&chars, first, tab_width)
-            .saturating_sub(opener_source_col)
+            .saturating_sub(opener_source_column)
             .max(indent_len);
         let content: String = chars[first..].iter().collect();
         format!("{prefix}{}{}", " ".repeat(rel), content.trim_end())

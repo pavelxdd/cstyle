@@ -48,7 +48,7 @@ impl FormatEngine<'_> {
             BraceType::Definition => BraceSemanticKind::Definition,
             BraceType::Array => BraceSemanticKind::Array,
             BraceType::CompoundLiteral => BraceSemanticKind::CompoundLiteral,
-            BraceType::Init => BraceSemanticKind::Initializer,
+            BraceType::Initializer => BraceSemanticKind::Initializer,
             BraceType::DeferArray => BraceSemanticKind::DeferArray,
             BraceType::Class
             | BraceType::Interface

@@ -59,7 +59,7 @@ pub(crate) enum BraceType {
     Enum,
     Array,
     CompoundLiteral,
-    Init,
+    Initializer,
     Definition,
     DeferArray,
 }

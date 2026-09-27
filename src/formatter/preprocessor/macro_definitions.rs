@@ -474,9 +474,9 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
             '(' | '[' => depth += 1,
             ')' | ']' => depth -= 1,
             '=' if depth == 0 => {
-                let prev = index.checked_sub(1).and_then(|i| chars.get(i).copied());
+                let previous = index.checked_sub(1).and_then(|i| chars.get(i).copied());
                 let is_comparison = next == Some('=')
-                    || matches!(prev, Some('=') | Some('!') | Some('<') | Some('>'));
+                    || matches!(previous, Some('=') | Some('!') | Some('<') | Some('>'));
                 if !is_comparison {
                     let mut after = index + 1;
                     while chars.get(after).is_some_and(|ch| ch.is_whitespace()) {
@@ -683,8 +683,8 @@ impl FormatEngine<'_> {
         let mut continuation_column =
             define_expression_continuation_spaces(&first_line, self.options.tab_width);
         let mut in_comment = false;
-        let mut comment_src_open_col = 0usize;
-        let mut comment_out_open_col = 0usize;
+        let mut comment_source_open_column = 0usize;
+        let mut comment_output_open_column = 0usize;
         let mut comment_structural_level = base_level;
         for part in body_parts {
             let display = part.trim_start();
@@ -698,10 +698,10 @@ impl FormatEngine<'_> {
                     let source_prefix = &part[..part.len() - display.len()];
                     let source_col = visual_width_from(source_prefix, 0, self.options.tab_width);
                     let column = if display.starts_with("*/") {
-                        comment_out_open_col + 1
+                        comment_output_open_column + 1
                     } else {
-                        let rel = source_col as isize - comment_src_open_col as isize;
-                        (comment_out_open_col as isize + rel)
+                        let rel = source_col as isize - comment_source_open_column as isize;
+                        (comment_output_open_column as isize + rel)
                             .max((base_level * self.options.indent_width) as isize)
                             as usize
                     };
@@ -854,8 +854,8 @@ impl FormatEngine<'_> {
                 in_comment = true;
                 let source_prefix = &part[..part.len() - display.len()];
                 let source_lead = visual_width_from(source_prefix, 0, self.options.tab_width);
-                comment_src_open_col = source_lead + open_column;
-                comment_out_open_col =
+                comment_source_open_column = source_lead + open_column;
+                comment_output_open_column =
                     visual_width_from(&prefix, 0, self.options.tab_width) + open_column;
                 comment_structural_level = prefix_structural_level;
             }

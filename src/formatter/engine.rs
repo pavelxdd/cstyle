@@ -9,7 +9,7 @@ use crate::formatter::constructs::class_declarations::is_split_export_head;
 use crate::formatter::constructs::swig::SwigState;
 use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
-use crate::formatter::constructs::{headers, labels, objective_c, switch_cases};
+use crate::formatter::constructs::{headers, labels, objc, switch_cases};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::max_length::MaxLengthLineState;
 use crate::formatter::lexer::{
@@ -79,7 +79,7 @@ pub(crate) struct LayoutState {
     pub(crate) previous: PreviousToken,
     pub(crate) literal_line: literals::LiteralLineState,
     pub(crate) continuation_indent: continuation::ContinuationIndentState,
-    pub(crate) objc: objective_c::ObjectiveCLineState,
+    pub(crate) objc: objc::ObjCLineState,
     pub(crate) switch_case_layout: SwitchCaseLayoutState,
     pub(crate) in_class_base_clause: bool,
     pub(crate) split_class_export_pending_base: bool,
@@ -147,7 +147,7 @@ impl<'a> FormatEngine<'a> {
                 previous: PreviousToken::None,
                 literal_line: literals::LiteralLineState::default(),
                 continuation_indent: continuation::ContinuationIndentState::default(),
-                objc: objective_c::ObjectiveCLineState::default(),
+                objc: objc::ObjCLineState::default(),
                 switch_case_layout: SwitchCaseLayoutState::default(),
                 in_class_base_clause: false,
                 split_class_export_pending_base: false,

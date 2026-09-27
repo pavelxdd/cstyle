@@ -23,7 +23,7 @@ pub struct IndentationState {
     continuation_indent_stack: Vec<usize>,
     continuation_indent_stack_size_stack: Vec<usize>,
     paren_indent_stack: Vec<usize>,
-    preproc_indent_stack: PersistentStack<PreprocessorIndent>,
+    preprocessor_indent_stack: PersistentStack<PreprocessorIndent>,
     braceless_block_stack: Vec<(usize, usize)>,
 }
 
@@ -177,17 +177,17 @@ impl IndentationState {
         self.continuation_indent_stack.len()
     }
 
-    pub fn push_preproc_indent(&mut self, level: usize, spaces: Option<usize>) {
-        self.preproc_indent_stack
+    pub fn push_preprocessor_indent(&mut self, level: usize, spaces: Option<usize>) {
+        self.preprocessor_indent_stack
             .push(PreprocessorIndent { level, spaces });
     }
 
-    pub fn pop_preproc_indent(&mut self) -> Option<PreprocessorIndent> {
-        self.preproc_indent_stack.pop()
+    pub fn pop_preprocessor_indent(&mut self) -> Option<PreprocessorIndent> {
+        self.preprocessor_indent_stack.pop()
     }
 
-    pub fn current_preproc_indent(&self) -> Option<PreprocessorIndent> {
-        self.preproc_indent_stack.last().copied()
+    pub fn current_preprocessor_indent(&self) -> Option<PreprocessorIndent> {
+        self.preprocessor_indent_stack.last().copied()
     }
 }
 
@@ -340,24 +340,24 @@ mod tests {
     fn tracks_preprocessor_indent_stack() {
         let mut state = IndentationState::default();
 
-        state.push_preproc_indent(1, None);
-        state.push_preproc_indent(2, Some(9));
+        state.push_preprocessor_indent(1, None);
+        state.push_preprocessor_indent(2, Some(9));
         assert_eq!(
-            state.current_preproc_indent(),
+            state.current_preprocessor_indent(),
             Some(PreprocessorIndent {
                 level: 2,
                 spaces: Some(9)
             })
         );
         assert_eq!(
-            state.pop_preproc_indent(),
+            state.pop_preprocessor_indent(),
             Some(PreprocessorIndent {
                 level: 2,
                 spaces: Some(9)
             })
         );
         assert_eq!(
-            state.current_preproc_indent(),
+            state.current_preprocessor_indent(),
             Some(PreprocessorIndent {
                 level: 1,
                 spaces: None

@@ -388,7 +388,7 @@ impl FormatEngine<'_> {
             && self.layout.line_state.is_one_line_block
             && !matches!(
                 self.layout.nesting.last_closed_brace_type,
-                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
             )
             && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'));
         let mut moved_comment_tail = None;
