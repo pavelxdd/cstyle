@@ -23,7 +23,7 @@ pub(crate) struct PreprocessorState {
 }
 
 pub(crate) mod backslash_bodies;
-mod layout;
+pub(crate) mod layout;
 mod macro_definitions;
 pub(crate) mod macro_invocations;
 

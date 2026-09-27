@@ -11,6 +11,7 @@ use crate::formatter::constructs::template_declarations::{
 use crate::formatter::continuation::{ContinuationIndent, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
+use crate::formatter::preprocessor::layout::SplitElseLineStart;
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
@@ -28,6 +29,16 @@ use crate::formatter::tokens::operators::{
     starts_prefix_increment,
 };
 use crate::source::lex::{is_identifier_start, trailing_word};
+
+/// Facts about the line that the initial layout branches share.
+#[derive(Clone, Copy)]
+struct InitialLineFacts {
+    line_kind: LineKind,
+    normal_indent: usize,
+    class_scope_label: bool,
+    else_while_brace: bool,
+    else_if_break_extra: usize,
+}
 
 impl FormatEngine<'_> {
     pub(crate) fn initial_line_layout(
@@ -139,123 +150,18 @@ impl FormatEngine<'_> {
                 },
             }
         } else if line_kind == LineKind::Normal {
-            let pending_level = self.layout.continuation_indent.next_line_indent.take();
-            let pending_spaces = self
-                .layout
-                .continuation_indent
-                .next_line_indent_spaces
-                .take();
-            let delimiter_owns_snapshot = replay.closed_lambda_parameter_list
-                && replay.closed_delimiter_continuation_indent.is_some()
-                || self
-                    .layout
-                    .frame_stack
-                    .active_delimiter()
-                    .is_some_and(|frame| frame.opener_output_line < self.output.len());
-            let snapshot_level = match replay.input_continuation_indent {
-                Some(ContinuationIndent::Level(level))
-                    if delimiter_owns_snapshot
-                        && !line.trim_start().starts_with(['{', '}', ')']) =>
-                {
-                    Some(level)
-                }
-                _ => None,
-            };
-            let next_line_indent = pending_level.or(snapshot_level);
-            let snapshot_spaces = match replay.input_continuation_indent {
-                Some(ContinuationIndent::Spaces(spaces))
-                    if delimiter_owns_snapshot
-                        && !line.trim_start().starts_with(['{', '}', ')']) =>
-                {
-                    Some(spaces)
-                }
-                _ => None,
-            };
-            let level = next_line_indent
-                .map(|level| {
-                    let included_base_indent = if line.trim_start().starts_with("else") {
-                        self.layout.indentation.indent()
-                    } else {
-                        self.layout.indentation.indent() + 1
-                    };
-                    split_else_line_start.adjust_pending_level(level, included_base_indent)
-                        + else_if_break_extra
-                })
-                .unwrap_or(normal_indent);
-            let mut spaces = pending_spaces.or(snapshot_spaces);
-            if spaces.is_some()
-                && let Some(previous) = self
-                    .output
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trim().is_empty())
-            {
-                let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                if (self.in_enum_declaration_brace()
-                    && previous_code.ends_with(',')
-                    && previous.len() != previous_code.len())
-                    || (next_line_indent.is_some()
-                        && is_braceless_header_line(previous_code.trim_start())
-                        && !line.trim_start().starts_with(['#', '{', '}'])
-                        && !operator_chains::starts_operator_chain_continuation(line))
-                {
-                    spaces = None;
-                } else if previous_code.ends_with("},")
-                    && let Some(open) = unmatched_open_paren_column(previous_code)
-                {
-                    spaces = Some(open + 1);
-                } else if self.layout.indentation.indent() == 0
-                    && self.token_input.token_source_line_indent == 0
-                    && previous_code.trim_start().starts_with('#')
-                    && line
-                        .trim_start()
-                        .chars()
-                        .next()
-                        .is_some_and(is_identifier_start)
-                {
-                    spaces = None;
-                }
-            }
-            let opens_lambda_block =
-                line.trim_end().ends_with('{') && line_opens_lambda_block(line);
-            if spaces.is_some() && opens_lambda_block {
-                spaces = None;
-            }
-            let mut level = level.max(self.layout.pending_braceless_block_bias.unwrap_or(0));
-            if opens_lambda_block {
-                level = normal_indent;
-            }
-            if line.trim_start().starts_with("else")
-                && let Some(else_level) = self.braceless_else_output_level()
-            {
-                level = else_level;
-                spaces = None;
-            }
-            if self.options.no_indent_if_after_else
-                && starts_header_word(line.trim_start(), "if")
-                && let Some(previous) = self
-                    .output
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trim().is_empty())
-                && matches!(previous.trim(), "else" | "} else")
-            {
-                let previous_indent = leading_visual_width(previous, self.options.tab_width);
-                if previous_indent.is_multiple_of(self.options.indent_width) {
-                    level = previous_indent / self.options.indent_width;
-                    spaces = None;
-                } else {
-                    spaces = Some(previous_indent);
-                }
-            }
-            LineLayout {
-                line_kind,
-                normal_indent,
-                indent: level,
-                exact_indent_spaces: spaces,
-                class_scope_label,
-                else_while_brace,
-            }
+            self.normal_line_layout(
+                line,
+                replay,
+                &split_else_line_start,
+                &InitialLineFacts {
+                    line_kind,
+                    normal_indent,
+                    class_scope_label,
+                    else_while_brace,
+                    else_if_break_extra,
+                },
+            )
         } else {
             if !(line_kind == LineKind::Label && self.layout.pending_braceless_block_bias.is_some())
             {
@@ -273,6 +179,136 @@ impl FormatEngine<'_> {
                 class_scope_label,
                 else_while_brace,
             }
+        }
+    }
+
+    fn normal_line_layout(
+        &mut self,
+        line: &str,
+        replay: &LineReplayLayout,
+        split_else_line_start: &SplitElseLineStart,
+        facts: &InitialLineFacts,
+    ) -> LineLayout {
+        let InitialLineFacts {
+            line_kind,
+            normal_indent,
+            class_scope_label,
+            else_while_brace,
+            else_if_break_extra,
+        } = *facts;
+        let pending_level = self.layout.continuation_indent.next_line_indent.take();
+        let pending_spaces = self
+            .layout
+            .continuation_indent
+            .next_line_indent_spaces
+            .take();
+        let delimiter_owns_snapshot = replay.closed_lambda_parameter_list
+            && replay.closed_delimiter_continuation_indent.is_some()
+            || self
+                .layout
+                .frame_stack
+                .active_delimiter()
+                .is_some_and(|frame| frame.opener_output_line < self.output.len());
+        let snapshot_level = match replay.input_continuation_indent {
+            Some(ContinuationIndent::Level(level))
+                if delimiter_owns_snapshot && !line.trim_start().starts_with(['{', '}', ')']) =>
+            {
+                Some(level)
+            }
+            _ => None,
+        };
+        let next_line_indent = pending_level.or(snapshot_level);
+        let snapshot_spaces = match replay.input_continuation_indent {
+            Some(ContinuationIndent::Spaces(spaces))
+                if delimiter_owns_snapshot && !line.trim_start().starts_with(['{', '}', ')']) =>
+            {
+                Some(spaces)
+            }
+            _ => None,
+        };
+        let level = next_line_indent
+            .map(|level| {
+                let included_base_indent = if line.trim_start().starts_with("else") {
+                    self.layout.indentation.indent()
+                } else {
+                    self.layout.indentation.indent() + 1
+                };
+                split_else_line_start.adjust_pending_level(level, included_base_indent)
+                    + else_if_break_extra
+            })
+            .unwrap_or(normal_indent);
+        let mut spaces = pending_spaces.or(snapshot_spaces);
+        if spaces.is_some()
+            && let Some(previous) = self
+                .output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+        {
+            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            if (self.in_enum_declaration_brace()
+                && previous_code.ends_with(',')
+                && previous.len() != previous_code.len())
+                || (next_line_indent.is_some()
+                    && is_braceless_header_line(previous_code.trim_start())
+                    && !line.trim_start().starts_with(['#', '{', '}'])
+                    && !operator_chains::starts_operator_chain_continuation(line))
+            {
+                spaces = None;
+            } else if previous_code.ends_with("},")
+                && let Some(open) = unmatched_open_paren_column(previous_code)
+            {
+                spaces = Some(open + 1);
+            } else if self.layout.indentation.indent() == 0
+                && self.token_input.token_source_line_indent == 0
+                && previous_code.trim_start().starts_with('#')
+                && line
+                    .trim_start()
+                    .chars()
+                    .next()
+                    .is_some_and(is_identifier_start)
+            {
+                spaces = None;
+            }
+        }
+        let opens_lambda_block = line.trim_end().ends_with('{') && line_opens_lambda_block(line);
+        if spaces.is_some() && opens_lambda_block {
+            spaces = None;
+        }
+        let mut level = level.max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+        if opens_lambda_block {
+            level = normal_indent;
+        }
+        if line.trim_start().starts_with("else")
+            && let Some(else_level) = self.braceless_else_output_level()
+        {
+            level = else_level;
+            spaces = None;
+        }
+        if self.options.no_indent_if_after_else
+            && starts_header_word(line.trim_start(), "if")
+            && let Some(previous) = self
+                .output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+            && matches!(previous.trim(), "else" | "} else")
+        {
+            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            if previous_indent.is_multiple_of(self.options.indent_width) {
+                level = previous_indent / self.options.indent_width;
+                spaces = None;
+            } else {
+                spaces = Some(previous_indent);
+            }
+        }
+        LineLayout {
+            line_kind,
+            normal_indent,
+            indent: level,
+            exact_indent_spaces: spaces,
+            class_scope_label,
+            else_while_brace,
         }
     }
 
