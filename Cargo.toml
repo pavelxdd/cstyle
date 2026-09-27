@@ -3,3 +3,6 @@ name = "cstyle"
 version = "1.0.4"
 edition = "2024"
 license = "MIT"
+
+[lints.clippy]
+self_named_module_files = "warn"
