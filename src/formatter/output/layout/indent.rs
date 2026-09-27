@@ -10,15 +10,7 @@ use crate::formatter::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::line_adjust::macro_call_starts_with;
-use crate::formatter::literals::{
-    first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
-    starts_string_literal_token, string_literal_has_opening_context,
-};
 use crate::formatter::objective_c::objc_message_following_keyword_column;
-use crate::formatter::operators::{
-    find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
-    trailing_binary_operator_column,
-};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -27,6 +19,14 @@ use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
     reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_bracket_column,
     unmatched_open_paren_column, unmatched_open_paren_columns,
+};
+use crate::formatter::tokens::literals::{
+    first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
+    starts_string_literal_token, string_literal_has_opening_context,
+};
+use crate::formatter::tokens::operators::{
+    find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
+    trailing_binary_operator_column,
 };
 use crate::formatter::{labels, switch_cases};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};

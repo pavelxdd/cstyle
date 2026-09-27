@@ -11,7 +11,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::labels;
 use crate::formatter::lexer::{CommentKind, Token};
-use crate::formatter::operators::head_ends_binary_operator;
 use crate::formatter::return_types::is_parameter_return_type_prefix;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
@@ -25,6 +24,7 @@ use crate::formatter::text::line_scan::{
     is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
     reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
+use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
 
 fn is_semicolonless_call_line(line: &str) -> bool {

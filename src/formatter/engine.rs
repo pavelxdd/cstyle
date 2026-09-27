@@ -2,8 +2,6 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::backslash_bodies::BackslashBodyState;
 use crate::formatter::block_spacing::BlockSpacingState;
 use crate::formatter::class_declarations::is_split_export_head;
-use crate::formatter::comments::trailing_comment_columns;
-use crate::formatter::disabled_formatting::DisabledFormattingState;
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
@@ -33,10 +31,12 @@ use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::tokens::comments::trailing_comment_columns;
+use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
+use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{
     buffer, compound_literals, continuation, headers, initializer_braces, labels, line_adjust,
-    literals, macro_invocations, objective_c, operators, pointers, preprocessor, switch_cases,
-    symbols, syntax,
+    macro_invocations, objective_c, preprocessor, switch_cases, syntax,
 };
 use crate::source::lex::{is_identifier_continue, trailing_word};
 use std::collections::HashSet;

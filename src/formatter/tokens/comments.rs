@@ -1,14 +1,9 @@
 use crate::config::{BraceStyle, PointerAlign, ReferenceAlign};
 use crate::formatter::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::brace_postprocess::horstmann_run_in_fill;
-use crate::formatter::disabled_formatting::DisabledFormattingState;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::labels;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
-use crate::formatter::operators::{
-    find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
-    starts_with_chain_operator,
-};
 use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive};
 use crate::formatter::rewrite::is_add_braces_header;
 use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
@@ -22,6 +17,11 @@ use crate::formatter::text::columns::{
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_ends_with_comment, trailing_comment_split_limit,
     unmatched_open_paren_column,
+};
+use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
+use crate::formatter::tokens::operators::{
+    find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
+    starts_with_chain_operator,
 };
 
 fn comment_starts_header_word(line: &str, word: &str) -> bool {

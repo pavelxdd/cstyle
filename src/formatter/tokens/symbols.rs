@@ -3,7 +3,6 @@ use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::labels;
 use crate::formatter::lexer::Token;
-use crate::formatter::operators::find_assignment_operator;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
@@ -21,6 +20,7 @@ use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, trailing_comment_split_limit, trailing_matching_parens,
     unmatched_open_paren_column,
 };
+use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> bool {

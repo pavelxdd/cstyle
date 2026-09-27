@@ -2,8 +2,6 @@ use crate::config::BraceStyle;
 use crate::formatter::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::literals::starts_string_literal_token;
-use crate::formatter::operators::head_ends_binary_operator;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::rewrite::is_add_braces_header;
 use crate::formatter::state::frame::{BraceSemanticKind, HeaderFrame};
@@ -15,6 +13,8 @@ use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_brace_imbalance, line_paren_imbalance,
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::tokens::literals::starts_string_literal_token;
+use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, leading_identifier,
 };

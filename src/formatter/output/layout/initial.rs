@@ -4,11 +4,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
-use crate::formatter::literals::starts_string_literal_token;
-use crate::formatter::operators::{
-    find_assignment_operator, head_ends_binary_operator, is_prefix_increment_statement,
-    starts_prefix_increment,
-};
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive, preprocessor_directive,
@@ -24,6 +19,11 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, trailing_comment_split_limit,
     unmatched_open_paren_column,
+};
+use crate::formatter::tokens::literals::starts_string_literal_token;
+use crate::formatter::tokens::operators::{
+    find_assignment_operator, head_ends_binary_operator, is_prefix_increment_statement,
+    starts_prefix_increment,
 };
 use crate::formatter::{labels, operator_chains};
 use crate::source::lex::{is_identifier_start, trailing_word};

@@ -2,7 +2,6 @@ use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::operators::{head_ends_assignment_operator, head_ends_binary_operator};
 use crate::formatter::return_types::is_return_type_line;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
@@ -17,6 +16,9 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::{
     last_unmatched_open_delimiter, trailing_comment_split_limit, trailing_matching_parens,
+};
+use crate::formatter::tokens::operators::{
+    head_ends_assignment_operator, head_ends_binary_operator,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 

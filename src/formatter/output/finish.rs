@@ -1,7 +1,5 @@
 use crate::formatter::closing_braces::starts_post_closing_declaration;
-use crate::formatter::comments::line_comment_backslash_trailing_space;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::literals::first_string_literal_start;
 use crate::formatter::operator_chains;
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::PreviousToken;
@@ -12,6 +10,8 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, line_comment_split_limit, trailing_comment_split_limit,
 };
+use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
+use crate::formatter::tokens::literals::first_string_literal_start;
 use crate::source::lex::trailing_word;
 
 impl FormatEngine<'_> {

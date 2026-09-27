@@ -4,7 +4,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::HeaderParenState;
 use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust;
-use crate::formatter::literals::LiteralLineState;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
 use crate::formatter::objective_c::ObjectiveCLineState;
 use crate::formatter::state::frame::{BraceSemanticKind, FrameStack, ParenRole};
@@ -17,6 +16,7 @@ use crate::formatter::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::template_declarations::TemplateDeclarationState;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::line_comment_split_limit;
+use crate::formatter::tokens::literals::LiteralLineState;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 use std::collections::VecDeque;
 

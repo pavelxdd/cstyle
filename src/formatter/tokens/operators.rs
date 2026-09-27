@@ -1,7 +1,6 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::pointers::is_pointer_declaration_segment;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
 use crate::formatter::syntax::language::{
@@ -13,6 +12,7 @@ use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
+use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 pub(crate) fn starts_ternary_arm(line: &str) -> bool {

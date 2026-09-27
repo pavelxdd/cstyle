@@ -3,11 +3,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::operator_chains;
-use crate::formatter::operators::{
-    find_assignment_operator, head_ends_binary_operator, head_starts_binary_operator,
-    starts_with_chain_operator, trailing_binary_operator_column,
-};
-use crate::formatter::pointers::is_pointer_declaration_segment;
 use crate::formatter::return_types::is_return_type_line;
 use crate::formatter::state::frame::{ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
@@ -24,6 +19,11 @@ use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
     unmatched_open_paren_columns,
 };
+use crate::formatter::tokens::operators::{
+    find_assignment_operator, head_ends_binary_operator, head_starts_binary_operator,
+    starts_with_chain_operator, trailing_binary_operator_column,
+};
+use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_word_char};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
