@@ -135,6 +135,66 @@ fn attach_brace_to_code_and_comment(code: &str, comment: &str) -> String {
     output
 }
 
+/// The brace being opened, as the placement steps of `push_open_brace` see it.
+struct OpenBrace {
+    header: Option<String>,
+    brace_type: BraceType,
+    block_indent_extra: usize,
+    class_block_indent_extra: usize,
+    breaks_before_call: bool,
+}
+
+#[derive(Clone, Copy)]
+struct OpenBraceLambda {
+    line_opens_body: bool,
+    previous_line_opens_body: bool,
+    opens_body: bool,
+    header_indent: Option<usize>,
+    breaks_before_call: bool,
+}
+
+/// A single-line comment token that directly follows the brace on its line.
+#[derive(Clone, Copy)]
+struct OpenBraceComments<'t> {
+    line: Option<&'t str>,
+    block: Option<&'t str>,
+    next_is_trailing: bool,
+}
+
+impl<'t> OpenBraceComments<'t> {
+    fn from_next(next: Option<&'t Token>, current_is_blank: bool) -> Self {
+        let line = match next {
+            Some(Token::Comment(CommentKind::Line, comment)) if !current_is_blank => {
+                Some(comment.as_str())
+            }
+            _ => None,
+        };
+        let block = match next {
+            Some(Token::Comment(CommentKind::Block, comment))
+                if !current_is_blank && !comment.contains('\n') =>
+            {
+                Some(comment.as_str())
+            }
+            _ => None,
+        };
+        let next_is_trailing = !current_is_blank && matches!(next, Some(Token::Comment(_, _)));
+        Self {
+            line,
+            block,
+            next_is_trailing,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct OpenBracePlacement<'t> {
+    comments: OpenBraceComments<'t>,
+    lambda: OpenBraceLambda,
+    attach_case_label_brace: bool,
+    inline_nested_header_level: Option<usize>,
+    headerless_inline_command_column: Option<usize>,
+}
+
 impl FormatEngine<'_> {
     pub(crate) fn continuation_adjacent_opening_brace_indent_spaces(
         &self,
@@ -731,6 +791,95 @@ impl FormatEngine<'_> {
     ) {
         self.unmatched_closing_brace_recovery = false;
         let class_base = self.layout.in_class_base_clause;
+        self.clear_continuation_before_open_brace();
+        if self.try_push_open_brace_without_block() {
+            return;
+        }
+        self.break_source_line_before_open_brace();
+        let brace_header = self.push_pre_brace_header();
+        self.observe_block_spacing_open_brace();
+        let brace_type = self.classify_pushed_open_brace(
+            brace_header.as_deref(),
+            next,
+            inferred_definition_brace,
+        );
+        let lambda = self.open_brace_lambda_context();
+        self.prepare_continuation_for_open_brace(brace_header.as_deref(), brace_type);
+
+        let inline_nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
+        let block_indent_extra =
+            block_indent_extra(brace_header.as_deref(), brace_type, self.options);
+        let class_block_indent_extra = self.class_block_indent_extra(brace_type, token_index);
+        self.push_brace_frame(
+            brace_header.as_ref(),
+            brace_type,
+            lambda.opens_body,
+            lambda.header_indent,
+            class_base,
+        );
+        let headerless_inline_command_column = (brace_type == BraceType::Command
+            && brace_header.is_none()
+            && !lambda.opens_body
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman | BraceStyle::Gnu | BraceStyle::Vtk | BraceStyle::Lisp
+            ))
+        .then(|| self.current_inline_array_column())
+        .flatten();
+        self.realign_compound_literal_cast_brace(brace_type);
+        let mut brace = OpenBrace {
+            header: brace_header,
+            brace_type,
+            block_indent_extra,
+            class_block_indent_extra,
+            breaks_before_call: lambda.breaks_before_call,
+        };
+        if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
+            self.current.replace(self.output.pop().unwrap_or_default());
+            self.token_input.token_begins_source_line = false;
+            self.open_multiline_attached_initializer_brace(
+                brace.header.take(),
+                brace_type,
+                block_indent_extra,
+                false,
+            );
+            return;
+        }
+        let comments = OpenBraceComments::from_next(next, self.current_is_blank());
+        if self.try_open_brace_before_trailing_comment(&mut brace, &comments) {
+            return;
+        }
+        if self.try_open_initializer_brace(&mut brace, next, token_index, lambda.line_opens_body) {
+            return;
+        }
+        let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
+        if self.should_open_multiline_attached_initializer_brace(brace_type, next) {
+            self.open_multiline_attached_initializer_brace(
+                brace.header.take(),
+                brace_type,
+                block_indent_extra,
+                false,
+            );
+            return;
+        }
+        let placement = OpenBracePlacement {
+            comments,
+            lambda,
+            attach_case_label_brace,
+            inline_nested_header_level,
+            headerless_inline_command_column,
+        };
+        let attached_case_label_output_brace = self.place_open_brace(&brace, &placement, next);
+        self.enter_pushed_brace_scope(
+            brace,
+            inline_nested_header_level,
+            headerless_inline_command_column,
+            attach_case_label_brace || attached_case_label_output_brace,
+        );
+        self.layout.previous = PreviousToken::Other;
+    }
+
+    fn clear_continuation_before_open_brace(&mut self) {
         if self.layout.in_class_base_clause && self.current_is_blank() {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
@@ -741,13 +890,18 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
+    }
+
+    /// Pushes a brace that opens no block: inside `#define`, after a backslash
+    /// continuation, in one-line block mode, or in a bare brace run.
+    fn try_push_open_brace_without_block(&mut self) -> bool {
         if self.current.trim_start().starts_with("#define") {
             self.emit_source_space_or_ensure();
             self.current.push('{');
             self.layout.command_state.observe_char('{');
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
         if !self.token_input.token_begins_source_line && self.current.trim_end().ends_with('\\') {
             self.ensure_space();
@@ -756,15 +910,19 @@ impl FormatEngine<'_> {
             self.layout.command_state.observe_char('{');
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
         if self.one_line_block_mode {
             self.push_inline_open_brace();
-            return;
+            return true;
         }
         if self.try_push_bare_open_brace_run() {
-            return;
+            return true;
         }
+        false
+    }
+
+    fn break_source_line_before_open_brace(&mut self) {
         if self.token_input.token_begins_source_line
             && line_ends_compound_literal_cast(self.current.trim_end())
         {
@@ -785,10 +943,15 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         }
-        let brace_header = self.push_pre_brace_header();
-        self.observe_block_spacing_open_brace();
-        let mut brace_type =
-            self.classify_opening_brace(brace_header.as_deref(), self.pending_extern);
+    }
+
+    fn classify_pushed_open_brace(
+        &mut self,
+        brace_header: Option<&str>,
+        next: Option<&Token>,
+        inferred_definition_brace: bool,
+    ) -> BraceType {
+        let mut brace_type = self.classify_opening_brace(brace_header, self.pending_extern);
         self.layout.objc.method_continuation = false;
         if inferred_definition_brace {
             brace_type = BraceType::Definition;
@@ -821,6 +984,10 @@ impl FormatEngine<'_> {
         {
             brace_type = BraceType::Array;
         }
+        brace_type
+    }
+
+    fn open_brace_lambda_context(&mut self) -> OpenBraceLambda {
         let capture_only_lambda = is_lambda_capture_header(self.current.trim_end());
         let line_opens_lambda_body = self.current_is_lambda_body_header() || capture_only_lambda;
         let previous_lambda_header = (!line_opens_lambda_body)
@@ -873,6 +1040,20 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.layout.pending_braceless_block_bias = None;
         }
+        OpenBraceLambda {
+            line_opens_body: line_opens_lambda_body,
+            previous_line_opens_body: previous_line_opens_lambda_body,
+            opens_body: opens_lambda_body,
+            header_indent: lambda_header_indent,
+            breaks_before_call: lambda_body_breaks_before_call,
+        }
+    }
+
+    fn prepare_continuation_for_open_brace(
+        &mut self,
+        brace_header: Option<&str>,
+        brace_type: BraceType,
+    ) {
         if self.current_is_blank() {
             self.layout.continuation_indent.next_line_indent_spaces = None;
             if self.layout.command_state.header_broken_before_comment {
@@ -885,9 +1066,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
                 .filter(|line| {
-                    brace_header
-                        .as_deref()
-                        .is_some_and(is_break_blocks_closing_header)
+                    brace_header.is_some_and(is_break_blocks_closing_header)
                         || is_break_blocks_closing_header(line.trim())
                 })
                 .map(|line| leading_visual_width(line, self.options.tab_width));
@@ -963,27 +1142,9 @@ impl FormatEngine<'_> {
                 self.layout.indentation.enter_braceless_block(delta);
             }
         }
+    }
 
-        let inline_nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
-        let block_indent_extra =
-            block_indent_extra(brace_header.as_deref(), brace_type, self.options);
-        let class_block_indent_extra = self.class_block_indent_extra(brace_type, token_index);
-        self.push_brace_frame(
-            brace_header.as_ref(),
-            brace_type,
-            opens_lambda_body,
-            lambda_header_indent,
-            class_base,
-        );
-        let headerless_inline_command_column = (brace_type == BraceType::Command
-            && brace_header.is_none()
-            && !opens_lambda_body
-            && matches!(
-                self.options.brace_style,
-                BraceStyle::Allman | BraceStyle::Gnu | BraceStyle::Vtk | BraceStyle::Lisp
-            ))
-        .then(|| self.current_inline_array_column())
-        .flatten();
+    fn realign_compound_literal_cast_brace(&mut self, brace_type: BraceType) {
         if brace_type == BraceType::CompoundLiteral
             && self.layout.nesting.paren_depth > 0
             && line_ends_compound_literal_cast(self.current.trim_end())
@@ -1011,33 +1172,22 @@ impl FormatEngine<'_> {
                 self.layout.nesting.clear_continuation_indents();
             }
         }
-        if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
-            self.current.replace(self.output.pop().unwrap_or_default());
-            self.token_input.token_begins_source_line = false;
-            self.open_multiline_attached_initializer_brace(
-                brace_header,
-                brace_type,
-                block_indent_extra,
-                false,
-            );
-            return;
-        }
-        let attached_line_comment = match next {
-            Some(Token::Comment(CommentKind::Line, comment)) if !self.current_is_blank() => {
-                Some(comment.as_str())
-            }
-            _ => None,
-        };
-        let attached_block_comment = match next {
-            Some(Token::Comment(CommentKind::Block, comment))
-                if !self.current_is_blank() && !comment.contains('\n') =>
-            {
-                Some(comment.as_str())
-            }
-            _ => None,
-        };
-        let next_is_trailing_comment =
-            !self.current_is_blank() && matches!(next, Some(Token::Comment(_, _)));
+    }
+
+    fn try_open_brace_before_trailing_comment(
+        &mut self,
+        brace: &mut OpenBrace,
+        comments: &OpenBraceComments<'_>,
+    ) -> bool {
+        let OpenBraceComments {
+            line: attached_line_comment,
+            block: attached_block_comment,
+            ..
+        } = *comments;
+        let brace_type = brace.brace_type;
+        let block_indent_extra = brace.block_indent_extra;
+        let class_block_indent_extra = brace.class_block_indent_extra;
+        let lambda_body_breaks_before_call = brace.breaks_before_call;
         let current_comment_start = self.current_trailing_comment_split_limit();
         if matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
             && self.options.brace_style == BraceStyle::OneTrueBrace
@@ -1070,7 +1220,7 @@ impl FormatEngine<'_> {
             self.push_attached_comment_with_source_gap(comment);
             self.layout
                 .nesting
-                .enter_brace(brace_header, brace_type, block_indent_extra);
+                .enter_brace(brace.header.take(), brace_type, block_indent_extra);
             if lambda_body_breaks_before_call {
                 self.layout.nesting.mark_current_brace_break_before_call();
             }
@@ -1080,7 +1230,7 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(header_indent_spaces);
             self.layout.previous = PreviousToken::Other;
-            return;
+            return true;
         }
         if attached_line_comment.is_some()
             && !self.token_input.token_begins_source_line
@@ -1105,7 +1255,7 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout
                 .nesting
-                .enter_brace(brace_header, brace_type, block_indent_extra);
+                .enter_brace(brace.header.take(), brace_type, block_indent_extra);
             if lambda_body_breaks_before_call {
                 self.layout.nesting.mark_current_brace_break_before_call();
             }
@@ -1113,7 +1263,7 @@ impl FormatEngine<'_> {
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
             self.layout.previous = PreviousToken::Other;
-            return;
+            return true;
         }
         if self.token_input.token_followed_by_final_line_comment
             && attached_line_comment.is_some()
@@ -1134,7 +1284,7 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout
                 .nesting
-                .enter_brace(brace_header, brace_type, block_indent_extra);
+                .enter_brace(brace.header.take(), brace_type, block_indent_extra);
             if lambda_body_breaks_before_call {
                 self.layout.nesting.mark_current_brace_break_before_call();
             }
@@ -1142,7 +1292,7 @@ impl FormatEngine<'_> {
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
             self.layout.previous = PreviousToken::Other;
-            return;
+            return true;
         }
         if self.token_input.token_followed_by_final_line_comment
             && attached_line_comment.is_some()
@@ -1173,7 +1323,7 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout
                 .nesting
-                .enter_brace(brace_header, brace_type, block_indent_extra);
+                .enter_brace(brace.header.take(), brace_type, block_indent_extra);
             if lambda_body_breaks_before_call {
                 self.layout.nesting.mark_current_brace_break_before_call();
             }
@@ -1181,8 +1331,20 @@ impl FormatEngine<'_> {
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
             self.layout.previous = PreviousToken::Other;
-            return;
+            return true;
         }
+        false
+    }
+
+    fn try_open_initializer_brace(
+        &mut self,
+        brace: &mut OpenBrace,
+        next: Option<&Token>,
+        token_index: usize,
+        line_opens_lambda_body: bool,
+    ) -> bool {
+        let brace_type = brace.brace_type;
+        let block_indent_extra = brace.block_indent_extra;
         let init_run_in = brace_type == BraceType::Initializer && !self.is_objc_method_line();
         let range_for_init_run_in = matches!(
             brace_type,
@@ -1201,11 +1363,11 @@ impl FormatEngine<'_> {
             );
         if range_for_init_run_in && !matches!(next, None | Some(Token::Newline)) {
             if self.options.brace_style == BraceStyle::None {
-                self.open_attached_range_for_init_brace(brace_header, block_indent_extra);
+                self.open_attached_range_for_init_brace(brace.header.take(), block_indent_extra);
             } else {
-                self.open_range_for_init_brace(brace_header, brace_type, block_indent_extra);
+                self.open_range_for_init_brace(brace.header.take(), brace_type, block_indent_extra);
             }
-            return;
+            return true;
         }
         if !self.is_objc_method_line()
             && self.layout.line_state.has_nested_designated_init_brace
@@ -1220,8 +1382,8 @@ impl FormatEngine<'_> {
                 .as_ref()
                 .is_some_and(|whitespace| !whitespace.is_empty())
         {
-            self.open_expanded_init_brace(brace_header, brace_type, block_indent_extra);
-            return;
+            self.open_expanded_init_brace(brace.header.take(), brace_type, block_indent_extra);
+            return true;
         }
         if brace_type == BraceType::CompoundLiteral
             && !self.current_is_blank()
@@ -1229,12 +1391,12 @@ impl FormatEngine<'_> {
             && !self.comments.next_comment_ends_line
         {
             self.open_multiline_attached_initializer_brace(
-                brace_header,
+                brace.header.take(),
                 brace_type,
                 block_indent_extra,
                 false,
             );
-            return;
+            return true;
         }
         if brace_type == BraceType::Enum
             && self.token_input.token_begins_source_line
@@ -1252,13 +1414,13 @@ impl FormatEngine<'_> {
         {
             let first_is_brace = matches!(next, Some(Token::Symbol('{')));
             self.open_inline_array_brace(
-                brace_header,
+                brace.header.take(),
                 brace_type,
                 block_indent_extra,
                 token_index,
                 first_is_brace,
             );
-            return;
+            return true;
         }
         let non_attaching_lambda_body = line_opens_lambda_body
             && matches!(
@@ -1292,13 +1454,13 @@ impl FormatEngine<'_> {
         {
             let first_is_brace = matches!(next, Some(Token::Symbol('{')));
             self.open_inline_array_brace(
-                brace_header,
+                brace.header.take(),
                 brace_type,
                 block_indent_extra,
                 token_index,
                 first_is_brace,
             );
-            return;
+            return true;
         }
         if self.current_is_blank()
             && !self.token_input.token_begins_source_line
@@ -1324,7 +1486,9 @@ impl FormatEngine<'_> {
                     self.options.brace_style,
                     BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
                 )
-                && (brace_header
+                && (brace
+                    .header
+                    .take()
                     .as_deref()
                     .is_some_and(is_break_blocks_closing_header)
                     || self
@@ -1338,24 +1502,35 @@ impl FormatEngine<'_> {
             && !self.current_open_brace_is_lambda_body()
         {
             self.open_multiline_attached_initializer_brace(
-                brace_header,
+                brace.header.take(),
                 brace_type,
                 block_indent_extra,
                 false,
             );
-            return;
+            return true;
         }
-        let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
+        false
+    }
+
+    /// Places the brace on the current or previous line, or on its own line,
+    /// and returns whether it was attached to an output case label.
+    fn place_open_brace(
+        &mut self,
+        brace: &OpenBrace,
+        placement: &OpenBracePlacement<'_>,
+        next: Option<&Token>,
+    ) -> bool {
+        let OpenBracePlacement {
+            comments:
+                OpenBraceComments {
+                    line: attached_line_comment,
+                    ..
+                },
+            attach_case_label_brace,
+            ..
+        } = *placement;
         let mut attached_case_label_output_brace = false;
-        if self.should_open_multiline_attached_initializer_brace(brace_type, next) {
-            self.open_multiline_attached_initializer_brace(
-                brace_header,
-                brace_type,
-                block_indent_extra,
-                false,
-            );
-            return;
-        }
+        let brace_type = brace.brace_type;
         if self.current_is_blank()
             && self.token_input.token_begins_source_line
             && matches!(brace_type, BraceType::Array | BraceType::Initializer)
@@ -1422,83 +1597,8 @@ impl FormatEngine<'_> {
             || self.should_attach_output_initializer_brace(brace_type)
             || self.should_attach_output_header_brace(brace_type)
         {
-            let line = self.output.pop().unwrap_or_default();
-            let case_label_line =
-                attach_case_label_brace_to_line(&line, &self.options.access_labels);
-            attached_case_label_output_brace = case_label_line.is_some();
-            let line_with_brace_before_comment = case_label_line
-                .is_none()
-                .then(|| attach_brace_before_trailing_comment(&line))
-                .flatten();
-            let brace_attached_before_trailing_comment = line_with_brace_before_comment.is_some();
-            let mut line = case_label_line
-                .or(line_with_brace_before_comment)
-                .unwrap_or_else(|| {
-                    let mut line = line;
-                    line.push_str(" {");
-                    line
-                });
-            self.layout.command_state.observe_char('{');
-            let line_already_has_line_comment =
-                line[trailing_comment_split_limit(&line)..].contains("//");
-            let line_comment_starts_body =
-                brace_attached_before_trailing_comment && self.token_input.token_begins_source_line;
-            if let Some(Token::Comment(CommentKind::Line, comment)) = next
-                && !line_already_has_line_comment
-                && !line_comment_starts_body
-            {
-                if line.trim() == "{"
-                    && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
-                {
-                    line.push_str(&self.initializer_brace_line_comment_gap(&line));
-                } else {
-                    line.push(' ');
-                }
-                line.push_str(comment.trim_end());
-                self.comments.skip_next_attached_comment = true;
-            } else if matches!(next, Some(Token::Comment(CommentKind::Line, _)))
-                && line_comment_starts_body
-            {
-                self.comments.line_comment_starts_reordered_brace_body = true;
-            } else if self.options.brace_style == BraceStyle::OneTrueBrace
-                && brace_type == BraceType::Command
-                && self.token_input.token_followed_by_line_comment_on_line
-                && let Some(Token::Comment(CommentKind::Block, comment)) = next
-                && !comment.contains('\n')
-            {
-                if let Some(whitespace) = self.token_input.next_input_whitespace.as_deref()
-                    && !whitespace.is_empty()
-                {
-                    line.push_str(whitespace);
-                } else {
-                    line.push(' ');
-                }
-                line.push_str(comment.trim_end());
-                self.comments.skip_next_attached_comment = true;
-            } else if attached_case_label_output_brace
-                && let Some(Token::Comment(CommentKind::Block, comment)) = next
-                && !comment.contains('\n')
-            {
-                if let Some(whitespace) = self.token_input.next_input_whitespace.as_deref()
-                    && !whitespace.is_empty()
-                {
-                    line.push_str(whitespace);
-                } else {
-                    line.push(' ');
-                }
-                line.push_str(comment.trim_end());
-                self.comments.skip_next_attached_comment = true;
-            }
-            if attached_case_label_output_brace {
-                let extra = self.layout.line_adjuster.total_case_unindent_depth()
-                    * self.options.indent_width;
-                if extra > 0 {
-                    line = format!("{}{}", " ".repeat(extra), line);
-                }
-            }
-            self.adjust_and_publish_line(line);
-            self.update_current_brace_indent_from_last_output_line();
-            self.previous_was_newline = false;
+            attached_case_label_output_brace =
+                self.attach_open_brace_to_output_line(brace_type, next);
         } else if matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && !self.token_input.token_followed_by_final_line_comment
@@ -1556,492 +1656,328 @@ impl FormatEngine<'_> {
             self.layout.command_state.observe_char('{');
             self.previous_was_newline = false;
         } else if self.should_attach_opening_brace(brace_type, next) {
-            let attached_block_comment_with_line_comment = attached_line_comment.is_none()
-                && attached_block_comment.is_some()
-                && self.token_input.token_followed_by_final_line_comment
-                && self.options.brace_style == BraceStyle::None;
-            let reorder_allowed = matches!(
-                brace_type,
-                BraceType::Command | BraceType::Definition | BraceType::Struct | BraceType::Union
-            );
-            if reorder_allowed
-                && let Some(reordered) = self.reorder_brace_before_current_block_comment()
+            self.attach_open_brace_to_current_line(brace, placement, next);
+        } else {
+            self.break_open_brace_onto_own_line(brace, placement, next);
+        }
+        attached_case_label_output_brace
+    }
+
+    /// Attaches the brace to the last output line and returns whether that
+    /// line is a case label.
+    fn attach_open_brace_to_output_line(
+        &mut self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> bool {
+        let line = self.output.pop().unwrap_or_default();
+        let case_label_line = attach_case_label_brace_to_line(&line, &self.options.access_labels);
+        let attached_case_label_output_brace = case_label_line.is_some();
+        let line_with_brace_before_comment = case_label_line
+            .is_none()
+            .then(|| attach_brace_before_trailing_comment(&line))
+            .flatten();
+        let brace_attached_before_trailing_comment = line_with_brace_before_comment.is_some();
+        let mut line = case_label_line
+            .or(line_with_brace_before_comment)
+            .unwrap_or_else(|| {
+                let mut line = line;
+                line.push_str(" {");
+                line
+            });
+        self.layout.command_state.observe_char('{');
+        let line_already_has_line_comment =
+            line[trailing_comment_split_limit(&line)..].contains("//");
+        let line_comment_starts_body =
+            brace_attached_before_trailing_comment && self.token_input.token_begins_source_line;
+        if let Some(Token::Comment(CommentKind::Line, comment)) = next
+            && !line_already_has_line_comment
+            && !line_comment_starts_body
+        {
+            if line.trim() == "{"
+                && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
-                if matches!(next, Some(Token::Comment(CommentKind::Line, _))) {
-                    if self.token_input.token_begins_source_line {
-                        self.comments.line_comment_starts_reordered_brace_body = true;
-                    } else if let Some(gap) = self.token_input.previous_input_whitespace.clone()
-                        && !gap.is_empty()
-                        && !gap.contains('\n')
-                    {
-                        self.comments.reordered_brace_line_comment_gap = Some(gap);
-                    }
-                }
-                self.current.replace(reordered);
-                self.layout.command_state.observe_char('{');
-                self.finish_line();
+                line.push_str(&self.initializer_brace_line_comment_gap(&line));
             } else {
-                let block_comment_starts_broken_body = attached_line_comment.is_none()
-                    && attached_block_comment.is_some()
-                    && self.layout.line_state.is_one_line_block
-                    && self.options.break_one_line_blocks
-                    && !self
-                        .token_input
-                        .next_input_whitespace
-                        .as_deref()
-                        .is_some_and(|whitespace| whitespace.contains('\n'));
-                self.emit_opening_brace_space(brace_type);
-                self.current.push('{');
-                self.layout.command_state.observe_char('{');
-                if line_opens_lambda_body
-                    && self
-                        .layout
-                        .continuation_indent
-                        .next_line_indent_spaces
-                        .is_some()
-                    && self.layout.indentation.statement_depth() > 0
+                line.push(' ');
+            }
+            line.push_str(comment.trim_end());
+            self.comments.skip_next_attached_comment = true;
+        } else if matches!(next, Some(Token::Comment(CommentKind::Line, _)))
+            && line_comment_starts_body
+        {
+            self.comments.line_comment_starts_reordered_brace_body = true;
+        } else if self.options.brace_style == BraceStyle::OneTrueBrace
+            && brace_type == BraceType::Command
+            && self.token_input.token_followed_by_line_comment_on_line
+            && let Some(Token::Comment(CommentKind::Block, comment)) = next
+            && !comment.contains('\n')
+        {
+            if let Some(whitespace) = self.token_input.next_input_whitespace.as_deref()
+                && !whitespace.is_empty()
+            {
+                line.push_str(whitespace);
+            } else {
+                line.push(' ');
+            }
+            line.push_str(comment.trim_end());
+            self.comments.skip_next_attached_comment = true;
+        } else if attached_case_label_output_brace
+            && let Some(Token::Comment(CommentKind::Block, comment)) = next
+            && !comment.contains('\n')
+        {
+            if let Some(whitespace) = self.token_input.next_input_whitespace.as_deref()
+                && !whitespace.is_empty()
+            {
+                line.push_str(whitespace);
+            } else {
+                line.push(' ');
+            }
+            line.push_str(comment.trim_end());
+            self.comments.skip_next_attached_comment = true;
+        }
+        if attached_case_label_output_brace {
+            let extra =
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            if extra > 0 {
+                line = format!("{}{}", " ".repeat(extra), line);
+            }
+        }
+        self.adjust_and_publish_line(line);
+        self.update_current_brace_indent_from_last_output_line();
+        self.previous_was_newline = false;
+        attached_case_label_output_brace
+    }
+
+    fn attach_open_brace_to_current_line(
+        &mut self,
+        brace: &OpenBrace,
+        placement: &OpenBracePlacement<'_>,
+        next: Option<&Token>,
+    ) {
+        let OpenBracePlacement {
+            comments:
+                OpenBraceComments {
+                    line: attached_line_comment,
+                    block: attached_block_comment,
+                    ..
+                },
+            lambda,
+            ..
+        } = *placement;
+        let line_opens_lambda_body = lambda.line_opens_body;
+        let brace_type = brace.brace_type;
+        let attached_block_comment_with_line_comment = attached_line_comment.is_none()
+            && attached_block_comment.is_some()
+            && self.token_input.token_followed_by_final_line_comment
+            && self.options.brace_style == BraceStyle::None;
+        let reorder_allowed = matches!(
+            brace_type,
+            BraceType::Command | BraceType::Definition | BraceType::Struct | BraceType::Union
+        );
+        if reorder_allowed
+            && let Some(reordered) = self.reorder_brace_before_current_block_comment()
+        {
+            if matches!(next, Some(Token::Comment(CommentKind::Line, _))) {
+                if self.token_input.token_begins_source_line {
+                    self.comments.line_comment_starts_reordered_brace_body = true;
+                } else if let Some(gap) = self.token_input.previous_input_whitespace.clone()
+                    && !gap.is_empty()
+                    && !gap.contains('\n')
                 {
-                    self.layout.continuation_indent.next_line_indent =
-                        Some(self.layout.indentation.indent());
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                    self.layout.nesting.clear_continuation_indents();
-                }
-                let attach_brace_line_block_comment = brace_type == BraceType::Command
-                    && self.options.brace_style == BraceStyle::OneTrueBrace
-                    && self.token_input.token_begins_source_line
-                    && self.token_input.token_followed_by_line_comment_on_line
-                    && attached_line_comment.is_none()
-                    && attached_block_comment.is_some();
-                if let Some(comment) = attached_line_comment.or(attached_block_comment)
-                    && !block_comment_starts_broken_body
-                    && (!self.token_input.token_begins_source_line
-                        || attach_brace_line_block_comment)
-                    && (brace_type != BraceType::Namespace || attached_line_comment.is_some())
-                {
-                    self.push_attached_comment_with_source_gap(comment);
-                }
-                if !attached_block_comment_with_line_comment {
-                    self.finish_line();
-                    self.update_current_brace_indent_from_last_output_line();
+                    self.comments.reordered_brace_line_comment_gap = Some(gap);
                 }
             }
+            self.current.replace(reordered);
+            self.layout.command_state.observe_char('{');
+            self.finish_line();
         } else {
-            let source_attached_initializer_line = matches!(
-                brace_type,
-                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-            ) && matches!(next, Some(Token::Newline))
-                && !matches!(
-                    self.options.brace_style,
-                    BraceStyle::Allman
-                        | BraceStyle::Whitesmith
-                        | BraceStyle::Vtk
-                        | BraceStyle::Gnu
-                        | BraceStyle::Horstmann
-                        | BraceStyle::Pico
-                );
-            let gnu_macro_open_brace =
-                self.options.brace_style == BraceStyle::Gnu && self.current.contains('#');
-            let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
-                && self.current.trim_start().starts_with([
-                    '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-                ]);
-            let source_attached_malformed_open_brace = !self.options.remove_braces
-                && brace_header.is_none()
-                && !self.current_is_blank()
-                && !self.token_input.token_begins_source_line
-                && self
+            let block_comment_starts_broken_body = attached_line_comment.is_none()
+                && attached_block_comment.is_some()
+                && self.layout.line_state.is_one_line_block
+                && self.options.break_one_line_blocks
+                && !self
                     .token_input
-                    .previous_input_whitespace
+                    .next_input_whitespace
                     .as_deref()
-                    .is_none_or(|whitespace| !whitespace.contains('\n'))
-                && !gnu_macro_open_brace
-                && !allman_operator_led_brace
-                && (source_attached_initializer_line
-                    || matches!(next, Some(Token::Symbol('{' | '#')))
-                    || self.current.trim_end().ends_with('{')
-                    || (self.current.trim_start().starts_with('}')
-                        && self.current.trim_end().ends_with('[')));
-            if source_attached_malformed_open_brace {
-                if self.current.trim_end().ends_with('[') {
-                    self.emit_source_space_or_ensure();
-                } else {
-                    self.emit_source_space();
-                }
-                self.current.push('{');
-                self.layout.command_state.observe_char('{');
-                if !matches!(next, Some(Token::Symbol('{' | '#'))) {
-                    let body_indent = if source_attached_initializer_line {
-                        self.current_line_indent_spaces() + self.options.indent_width
-                    } else {
-                        leading_visual_width(self.current.trim_start(), self.options.tab_width)
-                            + self.options.indent_width * 2
-                    };
-                    self.current_is_preindented = true;
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces = Some(body_indent);
-                    self.finish_line();
-                    self.update_current_brace_indent_from_last_output_line();
-                }
-            } else {
-                let comment_starts_block = (self.token_input.token_begins_source_line
-                    || self.options.remove_braces
-                    || (self.layout.line_state.is_one_line_block
-                        && self.options.break_one_line_blocks))
-                    && next_is_trailing_comment;
-                if let Some(comment) = attached_line_comment.or(attached_block_comment)
-                    && !comment_starts_block
-                {
-                    let closing_header_comment_needs_min_gap = attached_line_comment.is_some()
-                        && brace_type == BraceType::Command
-                        && matches!(
-                            self.options.brace_style,
-                            BraceStyle::Allman
-                                | BraceStyle::Whitesmith
-                                | BraceStyle::Vtk
-                                | BraceStyle::Gnu
-                                | BraceStyle::Horstmann
-                        )
-                        && is_break_blocks_closing_header(
-                            self.current[..self.current_trailing_comment_split_limit()]
-                                .trim_end()
-                                .trim_start(),
-                        );
-                    let before_gap = if self.token_input.previous_input_was_adjacent {
-                        String::new()
-                    } else {
-                        self.token_input
-                            .previous_input_whitespace
-                            .clone()
-                            .unwrap_or_default()
-                    };
-                    let after_gap = self
-                        .token_input
-                        .next_input_whitespace
-                        .clone()
-                        .unwrap_or_default();
-                    self.trim_current_end();
-                    if closing_header_comment_needs_min_gap {
-                        let source_gap_len =
-                            before_gap.chars().count() + 1 + after_gap.chars().count();
-                        let min_gap = self.options.indent_width.saturating_mul(2) + 1;
-                        if source_gap_len >= min_gap {
-                            self.current.push_str(&before_gap);
-                            self.current.push(' ');
-                            self.current.push_str(&after_gap);
-                        } else {
-                            self.current.push_str(&" ".repeat(min_gap));
-                        }
-                    } else if brace_type == BraceType::Command
-                        && (self.options.pad_parens_inside || self.options.pad_parens_outside)
-                    {
-                        self.current.push(' ');
-                    } else {
-                        self.current.push_str(&before_gap);
-                        self.current.push(' ');
-                        self.current.push_str(&after_gap);
-                    }
-                    self.current.push_str(comment.trim_end());
-                    self.comments.skip_next_attached_comment = true;
-                }
-                let objc_method_brace = self.is_objc_method_line()
-                    || (brace_type == BraceType::Definition
-                        && self.output_ends_objc_method_header());
-                let header_text = self.current.trim_start();
-                let header_is_standalone_colon = header_text.trim() == ":"
-                    || (header_text.trim().is_empty()
-                        && self
-                            .output
-                            .iter()
-                            .rev()
-                            .find(|line| !line.trim().is_empty())
-                            .is_some_and(|line| line.trim() == ":"));
-                let inline_initializer_command_brace_spaces = (!objc_method_brace)
-                    .then_some(headerless_inline_command_column)
-                    .flatten();
-                let else_while_header =
-                    brace_type == BraceType::Command && header_text.starts_with("else while");
-                let else_nested_loop_header = brace_type == BraceType::Command
-                    && (header_text.starts_with("else for")
-                        || header_text.starts_with("else switch"));
-                let whitesmith_namespace_brace_spaces = (brace_type == BraceType::Namespace
-                    && self.options.brace_style == BraceStyle::Whitesmith)
-                    .then(|| {
-                        let header_spaces = if self.current_is_blank() {
-                            self.output
-                                .iter()
-                                .rev()
-                                .find(|line| !line.trim().is_empty())
-                                .map(|line| leading_visual_width(line, self.options.tab_width))
-                                .unwrap_or(0)
-                        } else {
-                            self.current_line_indent_spaces()
-                        };
-                        header_spaces
-                            + usize::from(self.options.indent_namespaces)
-                                * self.options.indent_width
-                    });
+                    .is_some_and(|whitespace| whitespace.contains('\n'));
+            self.emit_opening_brace_space(brace_type);
+            self.current.push('{');
+            self.layout.command_state.observe_char('{');
+            if line_opens_lambda_body
+                && self
+                    .layout
+                    .continuation_indent
+                    .next_line_indent_spaces
+                    .is_some()
+                && self.layout.indentation.statement_depth() > 0
+            {
+                self.layout.continuation_indent.next_line_indent =
+                    Some(self.layout.indentation.indent());
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.nesting.clear_continuation_indents();
+            }
+            let attach_brace_line_block_comment = brace_type == BraceType::Command
+                && self.options.brace_style == BraceStyle::OneTrueBrace
+                && self.token_input.token_begins_source_line
+                && self.token_input.token_followed_by_line_comment_on_line
+                && attached_line_comment.is_none()
+                && attached_block_comment.is_some();
+            if let Some(comment) = attached_line_comment.or(attached_block_comment)
+                && !block_comment_starts_broken_body
+                && (!self.token_input.token_begins_source_line || attach_brace_line_block_comment)
+                && (brace_type != BraceType::Namespace || attached_line_comment.is_some())
+            {
+                self.push_attached_comment_with_source_gap(comment);
+            }
+            if !attached_block_comment_with_line_comment {
                 self.finish_line();
-                if let Some(level) = inline_nested_header_level
-                    .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
-                    && brace_header.as_deref() != Some("else")
-                    && matches!(brace_type, BraceType::Command | BraceType::Definition)
-                {
-                    let delta = level.saturating_sub(self.layout.indentation.indent());
-                    if delta > 0 {
-                        self.layout.indentation.enter_braceless_block(delta);
-                    }
-                }
-                if matches!(
-                    self.options.brace_style,
-                    BraceStyle::Allman
-                        | BraceStyle::Whitesmith
-                        | BraceStyle::Vtk
-                        | BraceStyle::Gnu
-                        | BraceStyle::Horstmann
-                        | BraceStyle::Pico
-                ) {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                    self.layout.nesting.clear_continuation_indents();
-                }
-                let standalone_colon_brace_spaces = (header_is_standalone_colon
-                    && matches!(
-                        self.options.brace_style,
-                        BraceStyle::Allman | BraceStyle::Gnu
-                    ))
-                .then(|| {
+                self.update_current_brace_indent_from_last_output_line();
+            }
+        }
+    }
+
+    fn break_open_brace_onto_own_line(
+        &mut self,
+        brace: &OpenBrace,
+        placement: &OpenBracePlacement<'_>,
+        next: Option<&Token>,
+    ) {
+        let brace_type = brace.brace_type;
+        let source_attached_initializer_line = matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) && matches!(next, Some(Token::Newline))
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+            );
+        let gnu_macro_open_brace =
+            self.options.brace_style == BraceStyle::Gnu && self.current.contains('#');
+        let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
+            && self.current.trim_start().starts_with([
+                '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
+            ]);
+        let source_attached_malformed_open_brace = !self.options.remove_braces
+            && brace.header.is_none()
+            && !self.current_is_blank()
+            && !self.token_input.token_begins_source_line
+            && self
+                .token_input
+                .previous_input_whitespace
+                .as_deref()
+                .is_none_or(|whitespace| !whitespace.contains('\n'))
+            && !gnu_macro_open_brace
+            && !allman_operator_led_brace
+            && (source_attached_initializer_line
+                || matches!(next, Some(Token::Symbol('{' | '#')))
+                || self.current.trim_end().ends_with('{')
+                || (self.current.trim_start().starts_with('}')
+                    && self.current.trim_end().ends_with('[')));
+        if source_attached_malformed_open_brace {
+            if self.current.trim_end().ends_with('[') {
+                self.emit_source_space_or_ensure();
+            } else {
+                self.emit_source_space();
+            }
+            self.current.push('{');
+            self.layout.command_state.observe_char('{');
+            if !matches!(next, Some(Token::Symbol('{' | '#'))) {
+                let body_indent = if source_attached_initializer_line {
+                    self.current_line_indent_spaces() + self.options.indent_width
+                } else {
+                    leading_visual_width(self.current.trim_start(), self.options.tab_width)
+                        + self.options.indent_width * 2
+                };
+                self.current_is_preindented = true;
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(body_indent);
+                self.finish_line();
+                self.update_current_brace_indent_from_last_output_line();
+            }
+        } else {
+            self.open_brace_on_own_line(brace, placement, next);
+        }
+    }
+
+    fn open_brace_on_own_line(
+        &mut self,
+        brace: &OpenBrace,
+        placement: &OpenBracePlacement<'_>,
+        next: Option<&Token>,
+    ) {
+        let OpenBracePlacement {
+            comments:
+                OpenBraceComments {
+                    line: attached_line_comment,
+                    block: attached_block_comment,
+                    next_is_trailing: next_is_trailing_comment,
+                    ..
+                },
+            lambda,
+            inline_nested_header_level,
+            headerless_inline_command_column,
+            ..
+        } = *placement;
+        let previous_line_opens_lambda_body = lambda.previous_line_opens_body;
+        let brace_type = brace.brace_type;
+        let block_indent_extra = brace.block_indent_extra;
+        let comment_starts_block = (self.token_input.token_begins_source_line
+            || self.options.remove_braces
+            || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks))
+            && next_is_trailing_comment;
+        if let Some(comment) = attached_line_comment.or(attached_block_comment)
+            && !comment_starts_block
+        {
+            self.push_trailing_comment_before_broken_brace(
+                comment,
+                attached_line_comment,
+                brace_type,
+            );
+        }
+        let objc_method_brace = self.is_objc_method_line()
+            || (brace_type == BraceType::Definition && self.output_ends_objc_method_header());
+        let header_text = self.current.trim_start();
+        let header_is_standalone_colon = header_text.trim() == ":"
+            || (header_text.trim().is_empty()
+                && self
+                    .output
+                    .iter()
+                    .rev()
+                    .find(|line| !line.trim().is_empty())
+                    .is_some_and(|line| line.trim() == ":"));
+        let inline_initializer_command_brace_spaces = (!objc_method_brace)
+            .then_some(headerless_inline_command_column)
+            .flatten();
+        let else_while_header =
+            brace_type == BraceType::Command && header_text.starts_with("else while");
+        let else_nested_loop_header = brace_type == BraceType::Command
+            && (header_text.starts_with("else for") || header_text.starts_with("else switch"));
+        let whitesmith_namespace_brace_spaces = (brace_type == BraceType::Namespace
+            && self.options.brace_style == BraceStyle::Whitesmith)
+            .then(|| {
+                let header_spaces = if self.current_is_blank() {
                     self.output
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
                         .map(|line| leading_visual_width(line, self.options.tab_width))
                         .unwrap_or(0)
-                        + if self.options.brace_style == BraceStyle::Gnu {
-                            self.options.indent_width * 2
-                        } else {
-                            self.options.indent_width
-                        }
-                });
-                let inline_preprocessor_header_brace_spaces = (self.current_is_blank()
-                    && matches!(
-                        self.options.brace_style,
-                        BraceStyle::Allman
-                            | BraceStyle::Gnu
-                            | BraceStyle::Horstmann
-                            | BraceStyle::Pico
-                            | BraceStyle::Whitesmith
-                    ))
-                .then(|| {
-                    self.output
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trim().is_empty())
-                        .filter(|line| {
-                            let trimmed = line.trim_start();
-                            line.contains("#if") && !trimmed.starts_with('#')
-                        })
-                        .map(|line| leading_visual_width(line, self.options.tab_width))
-                })
-                .flatten();
-                let previous_else_indent_spaces = self
-                    .current_is_blank()
-                    .then(|| {
-                        self.output
-                            .iter()
-                            .rev()
-                            .find(|line| {
-                                !line.trim().is_empty() && !line.trim_start().starts_with('#')
-                            })
-                            .filter(|line| {
-                                brace_header.as_deref() == Some("else") || line.trim() == "else"
-                            })
-                            .map(|line| leading_visual_width(line, self.options.tab_width))
-                    })
-                    .flatten();
-                let closing_header_broken_brace_spaces = previous_else_indent_spaces
-                    .filter(|_| {
-                        matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk)
-                    })
-                    .map(|spaces| spaces + self.options.indent_width);
-                let whitesmith_broken_brace_spaces = (self.current_is_blank()
-                    && match self.options.brace_style {
-                        BraceStyle::Whitesmith => !objc_method_brace,
-                        BraceStyle::Vtk => {
-                            !objc_method_brace && self.should_indent_brace_line(brace_type)
-                        }
-                        _ => false,
-                    }
-                    && (brace_type != BraceType::Namespace || self.options.indent_namespaces))
-                    .then(|| {
-                        previous_else_indent_spaces
-                            .map(|spaces| spaces + self.options.indent_width)
-                            .unwrap_or_else(|| {
-                                (self.layout.indentation.indent() + 1) * self.options.indent_width
-                            })
-                    });
-                if self.current_is_blank()
-                    && let Some(previous_else_indent_spaces) = previous_else_indent_spaces
-                {
-                    let extra = usize::from(matches!(
-                        self.options.brace_style,
-                        BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
-                    )) + self.case_body_indent_extra(LineKind::Normal);
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        Some(previous_else_indent_spaces + extra * self.options.indent_width);
-                }
-                if else_while_header {
-                    self.layout.continuation_indent.next_line_indent = Some(
-                        self.layout.indentation.indent()
-                            + usize::from(self.options.indent_blocks)
-                            + 2,
-                    );
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                } else if else_nested_loop_header {
-                    self.layout.continuation_indent.next_line_indent = Some(
-                        self.layout.indentation.indent()
-                            + usize::from(self.options.indent_blocks)
-                            + usize::from(inline_nested_header_level.is_none()),
-                    );
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                }
-                if brace_type == BraceType::Command
-                    && self.options.brace_style == BraceStyle::Gnu
-                    && self
-                        .output
-                        .last()
-                        .is_some_and(|line| line.trim_end().ends_with("})"))
-                {
-                    let level = self.layout.indentation.indent() + 1;
-                    self.layout.continuation_indent.next_line_indent = Some(level);
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                    self.layout.inline_nested_header_braceless_bias = Some(level);
-                }
-                if self.current_is_blank()
-                    && self
-                        .output
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trim().is_empty())
-                        .is_some_and(|line| line.trim() == "else")
-                {
-                    self.clear_current();
-                }
-                self.current.push('{');
-                self.layout.command_state.observe_char('{');
-                let attach_runin_comment = self.token_input.token_begins_source_line
-                    && self.layout.command_state.current_header.is_none()
-                    && !self.options.remove_braces
-                    && match brace_type {
-                        BraceType::Command => self.options.brace_style == BraceStyle::OneTrueBrace,
-                        BraceType::Array | BraceType::Initializer => true,
-                        _ => false,
-                    };
-                let runin_comment = if attach_runin_comment {
-                    match next {
-                        Some(Token::Comment(CommentKind::Line, comment)) => Some(comment.as_str()),
-                        Some(Token::Comment(CommentKind::Block, comment))
-                            if !comment.contains('\n') =>
-                        {
-                            Some(comment.as_str())
-                        }
-                        _ => None,
-                    }
                 } else {
-                    None
+                    self.current_line_indent_spaces()
                 };
-                if let Some(comment) = runin_comment {
-                    if comment.trim_start().starts_with("//")
-                        && self.current.trim() == "{"
-                        && (self.in_initializer_brace()
-                            || self.current_inline_array_column().is_some())
-                    {
-                        let gap = self.initializer_brace_line_comment_gap(&self.current);
-                        self.current.push_str(&gap);
-                    } else {
-                        match self.token_input.next_input_whitespace.as_deref() {
-                            Some(ws) if !ws.is_empty() => self.current.push_str(ws),
-                            _ => self.current.push(' '),
-                        }
-                    }
-                    self.current.push_str(comment.trim_end());
-                    self.comments.skip_next_attached_comment = true;
-                }
-                if (!objc_method_brace && self.should_indent_brace_line(brace_type))
-                    || block_indent_extra > 0
-                {
-                    self.layout.continuation_indent.next_line_indent = Some(
-                        self.layout.indentation.indent()
-                            + 1
-                            + self.case_body_indent_extra(LineKind::Normal),
-                    );
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
-                }
-                if let Some(spaces) = inline_initializer_command_brace_spaces
-                    .or(standalone_colon_brace_spaces)
-                    .or(inline_preprocessor_header_brace_spaces)
-                    .or(whitesmith_namespace_brace_spaces)
-                    .or(whitesmith_broken_brace_spaces)
-                    .or(closing_header_broken_brace_spaces)
-                {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-                }
-                if objc_method_brace {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        Some(self.layout.indentation.indent() * self.options.indent_width);
-                }
-                self.finish_line();
-                self.update_current_brace_indent_from_last_output_line();
-                if let Some(spaces) = whitesmith_namespace_brace_spaces
-                    .or(whitesmith_broken_brace_spaces)
-                    .or_else(|| {
-                        (self.options.brace_style == BraceStyle::Vtk)
-                            .then_some(closing_header_broken_brace_spaces)
-                            .flatten()
-                    })
-                {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-                } else if let Some(spaces) = closing_header_broken_brace_spaces {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        Some(spaces + self.options.indent_width);
-                } else if let Some(spaces) = inline_initializer_command_brace_spaces
-                    .or(standalone_colon_brace_spaces)
-                    .or(inline_preprocessor_header_brace_spaces)
-                {
-                    self.layout.continuation_indent.next_line_indent = None;
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        Some(spaces + self.options.indent_width);
-                }
-                if self.options.brace_style == BraceStyle::None
-                    && brace_type != BraceType::Namespace
-                    && self.token_input.token_begins_source_line
-                    && !previous_line_opens_lambda_body
-                    && !matches!(next, None | Some(Token::Newline))
-                    && (!(self.options.break_one_line_blocks
-                        && self.layout.line_state.is_one_line_block)
-                        || matches!(
-                            brace_type,
-                            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-                        ))
-                    && self.output.last().is_some_and(|line| line.trim() == "{")
-                {
-                    self.source_run_in_brace_lines.push(self.output.len() - 1);
-                }
-                if comment_starts_block
-                    && self.options.brace_style == BraceStyle::None
-                    && brace_type != BraceType::Namespace
-                {
-                    self.schedule_run_in_comment_brace_merge(self.output.len() - 1);
-                }
-            }
-        }
+                header_spaces
+                    + usize::from(self.options.indent_namespaces) * self.options.indent_width
+            });
+        self.finish_line();
         if let Some(level) = inline_nested_header_level
             .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
-            && brace_header.as_deref() != Some("else")
+            && brace.header.as_deref() != Some("else")
             && matches!(brace_type, BraceType::Command | BraceType::Definition)
         {
             let delta = level.saturating_sub(self.layout.indentation.indent());
@@ -2049,7 +1985,320 @@ impl FormatEngine<'_> {
                 self.layout.indentation.enter_braceless_block(delta);
             }
         }
-        if brace_header.as_deref() == Some("else") {
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Allman
+                | BraceStyle::Whitesmith
+                | BraceStyle::Vtk
+                | BraceStyle::Gnu
+                | BraceStyle::Horstmann
+                | BraceStyle::Pico
+        ) {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.nesting.clear_continuation_indents();
+        }
+        let standalone_colon_brace_spaces = (header_is_standalone_colon
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman | BraceStyle::Gnu
+            ))
+        .then(|| {
+            self.output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .map(|line| leading_visual_width(line, self.options.tab_width))
+                .unwrap_or(0)
+                + if self.options.brace_style == BraceStyle::Gnu {
+                    self.options.indent_width * 2
+                } else {
+                    self.options.indent_width
+                }
+        });
+        let inline_preprocessor_header_brace_spaces = (self.current_is_blank()
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+                    | BraceStyle::Whitesmith
+            ))
+        .then(|| {
+            self.output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .filter(|line| {
+                    let trimmed = line.trim_start();
+                    line.contains("#if") && !trimmed.starts_with('#')
+                })
+                .map(|line| leading_visual_width(line, self.options.tab_width))
+        })
+        .flatten();
+        let previous_else_indent_spaces = self
+            .current_is_blank()
+            .then(|| {
+                self.output
+                    .iter()
+                    .rev()
+                    .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+                    .filter(|line| brace.header.as_deref() == Some("else") || line.trim() == "else")
+                    .map(|line| leading_visual_width(line, self.options.tab_width))
+            })
+            .flatten();
+        let closing_header_broken_brace_spaces = previous_else_indent_spaces
+            .filter(|_| matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk))
+            .map(|spaces| spaces + self.options.indent_width);
+        let whitesmith_broken_brace_spaces = (self.current_is_blank()
+            && match self.options.brace_style {
+                BraceStyle::Whitesmith => !objc_method_brace,
+                BraceStyle::Vtk => !objc_method_brace && self.should_indent_brace_line(brace_type),
+                _ => false,
+            }
+            && (brace_type != BraceType::Namespace || self.options.indent_namespaces))
+            .then(|| {
+                previous_else_indent_spaces
+                    .map(|spaces| spaces + self.options.indent_width)
+                    .unwrap_or_else(|| {
+                        (self.layout.indentation.indent() + 1) * self.options.indent_width
+                    })
+            });
+        if self.current_is_blank()
+            && let Some(previous_else_indent_spaces) = previous_else_indent_spaces
+        {
+            let extra = usize::from(matches!(
+                self.options.brace_style,
+                BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
+            )) + self.case_body_indent_extra(LineKind::Normal);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(previous_else_indent_spaces + extra * self.options.indent_width);
+        }
+        if else_while_header {
+            self.layout.continuation_indent.next_line_indent = Some(
+                self.layout.indentation.indent() + usize::from(self.options.indent_blocks) + 2,
+            );
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+        } else if else_nested_loop_header {
+            self.layout.continuation_indent.next_line_indent = Some(
+                self.layout.indentation.indent()
+                    + usize::from(self.options.indent_blocks)
+                    + usize::from(inline_nested_header_level.is_none()),
+            );
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+        }
+        if brace_type == BraceType::Command
+            && self.options.brace_style == BraceStyle::Gnu
+            && self
+                .output
+                .last()
+                .is_some_and(|line| line.trim_end().ends_with("})"))
+        {
+            let level = self.layout.indentation.indent() + 1;
+            self.layout.continuation_indent.next_line_indent = Some(level);
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.inline_nested_header_braceless_bias = Some(level);
+        }
+        if self.current_is_blank()
+            && self
+                .output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .is_some_and(|line| line.trim() == "else")
+        {
+            self.clear_current();
+        }
+        self.current.push('{');
+        self.layout.command_state.observe_char('{');
+        let attach_runin_comment = self.token_input.token_begins_source_line
+            && self.layout.command_state.current_header.is_none()
+            && !self.options.remove_braces
+            && match brace_type {
+                BraceType::Command => self.options.brace_style == BraceStyle::OneTrueBrace,
+                BraceType::Array | BraceType::Initializer => true,
+                _ => false,
+            };
+        let runin_comment = if attach_runin_comment {
+            match next {
+                Some(Token::Comment(CommentKind::Line, comment)) => Some(comment.as_str()),
+                Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n') => {
+                    Some(comment.as_str())
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some(comment) = runin_comment {
+            if comment.trim_start().starts_with("//")
+                && self.current.trim() == "{"
+                && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
+            {
+                let gap = self.initializer_brace_line_comment_gap(&self.current);
+                self.current.push_str(&gap);
+            } else {
+                match self.token_input.next_input_whitespace.as_deref() {
+                    Some(ws) if !ws.is_empty() => self.current.push_str(ws),
+                    _ => self.current.push(' '),
+                }
+            }
+            self.current.push_str(comment.trim_end());
+            self.comments.skip_next_attached_comment = true;
+        }
+        if (!objc_method_brace && self.should_indent_brace_line(brace_type))
+            || block_indent_extra > 0
+        {
+            self.layout.continuation_indent.next_line_indent = Some(
+                self.layout.indentation.indent()
+                    + 1
+                    + self.case_body_indent_extra(LineKind::Normal),
+            );
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+        }
+        if let Some(spaces) = inline_initializer_command_brace_spaces
+            .or(standalone_colon_brace_spaces)
+            .or(inline_preprocessor_header_brace_spaces)
+            .or(whitesmith_namespace_brace_spaces)
+            .or(whitesmith_broken_brace_spaces)
+            .or(closing_header_broken_brace_spaces)
+        {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+        }
+        if objc_method_brace {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(self.layout.indentation.indent() * self.options.indent_width);
+        }
+        self.finish_line();
+        self.update_current_brace_indent_from_last_output_line();
+        if let Some(spaces) = whitesmith_namespace_brace_spaces
+            .or(whitesmith_broken_brace_spaces)
+            .or_else(|| {
+                (self.options.brace_style == BraceStyle::Vtk)
+                    .then_some(closing_header_broken_brace_spaces)
+                    .flatten()
+            })
+        {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+        } else if let Some(spaces) = closing_header_broken_brace_spaces {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(spaces + self.options.indent_width);
+        } else if let Some(spaces) = inline_initializer_command_brace_spaces
+            .or(standalone_colon_brace_spaces)
+            .or(inline_preprocessor_header_brace_spaces)
+        {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(spaces + self.options.indent_width);
+        }
+        if self.options.brace_style == BraceStyle::None
+            && brace_type != BraceType::Namespace
+            && self.token_input.token_begins_source_line
+            && !previous_line_opens_lambda_body
+            && !matches!(next, None | Some(Token::Newline))
+            && (!(self.options.break_one_line_blocks && self.layout.line_state.is_one_line_block)
+                || matches!(
+                    brace_type,
+                    BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+                ))
+            && self.output.last().is_some_and(|line| line.trim() == "{")
+        {
+            self.source_run_in_brace_lines.push(self.output.len() - 1);
+        }
+        if comment_starts_block
+            && self.options.brace_style == BraceStyle::None
+            && brace_type != BraceType::Namespace
+        {
+            self.schedule_run_in_comment_brace_merge(self.output.len() - 1);
+        }
+    }
+
+    fn push_trailing_comment_before_broken_brace(
+        &mut self,
+        comment: &str,
+        attached_line_comment: Option<&str>,
+        brace_type: BraceType,
+    ) {
+        let closing_header_comment_needs_min_gap = attached_line_comment.is_some()
+            && brace_type == BraceType::Command
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+            )
+            && is_break_blocks_closing_header(
+                self.current[..self.current_trailing_comment_split_limit()]
+                    .trim_end()
+                    .trim_start(),
+            );
+        let before_gap = if self.token_input.previous_input_was_adjacent {
+            String::new()
+        } else {
+            self.token_input
+                .previous_input_whitespace
+                .clone()
+                .unwrap_or_default()
+        };
+        let after_gap = self
+            .token_input
+            .next_input_whitespace
+            .clone()
+            .unwrap_or_default();
+        self.trim_current_end();
+        if closing_header_comment_needs_min_gap {
+            let source_gap_len = before_gap.chars().count() + 1 + after_gap.chars().count();
+            let min_gap = self.options.indent_width.saturating_mul(2) + 1;
+            if source_gap_len >= min_gap {
+                self.current.push_str(&before_gap);
+                self.current.push(' ');
+                self.current.push_str(&after_gap);
+            } else {
+                self.current.push_str(&" ".repeat(min_gap));
+            }
+        } else if brace_type == BraceType::Command
+            && (self.options.pad_parens_inside || self.options.pad_parens_outside)
+        {
+            self.current.push(' ');
+        } else {
+            self.current.push_str(&before_gap);
+            self.current.push(' ');
+            self.current.push_str(&after_gap);
+        }
+        self.current.push_str(comment.trim_end());
+        self.comments.skip_next_attached_comment = true;
+    }
+
+    fn enter_pushed_brace_scope(
+        &mut self,
+        mut brace: OpenBrace,
+        inline_nested_header_level: Option<usize>,
+        headerless_inline_command_column: Option<usize>,
+        attached_case_label: bool,
+    ) {
+        let brace_type = brace.brace_type;
+        let block_indent_extra = brace.block_indent_extra;
+        let class_block_indent_extra = brace.class_block_indent_extra;
+        let lambda_body_breaks_before_call = brace.breaks_before_call;
+        if let Some(level) = inline_nested_header_level
+            .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
+            && brace.header.as_deref() != Some("else")
+            && matches!(brace_type, BraceType::Command | BraceType::Definition)
+        {
+            let delta = level.saturating_sub(self.layout.indentation.indent());
+            if delta > 0 {
+                self.layout.indentation.enter_braceless_block(delta);
+            }
+        }
+        if brace.header.as_deref() == Some("else") {
             let brace_level = self
                 .output
                 .last()
@@ -2066,7 +2315,7 @@ impl FormatEngine<'_> {
         }
         self.layout
             .nesting
-            .enter_brace(brace_header, brace_type, block_indent_extra);
+            .enter_brace(brace.header.take(), brace_type, block_indent_extra);
         if lambda_body_breaks_before_call {
             self.layout.nesting.mark_current_brace_break_before_call();
         }
@@ -2110,10 +2359,9 @@ impl FormatEngine<'_> {
                 block_indent_extra + class_block_indent_extra + double_brace_extra,
             );
         }
-        if attach_case_label_brace || attached_case_label_output_brace {
+        if attached_case_label {
             self.register_attached_case_label_brace();
         }
-        self.layout.previous = PreviousToken::Other;
     }
 
     pub(crate) fn emit_opening_brace_space(&mut self, brace_type: BraceType) {
