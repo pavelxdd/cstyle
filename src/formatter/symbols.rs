@@ -1,14 +1,14 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::frame::{
-    ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
-    DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
-};
 use crate::formatter::labels;
 use crate::formatter::lexer::Token;
 use crate::formatter::operators::find_assignment_operator;
 use crate::formatter::state::PreviousToken;
+use crate::formatter::state::frame::{
+    ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
+    DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
+};
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_numeric_variable_word, is_pointer_type_word,
     is_type_like_pointer_word,

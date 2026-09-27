@@ -1,6 +1,6 @@
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::Token;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::signature_ends_with_parameter_list;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;

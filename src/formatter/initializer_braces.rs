@@ -3,12 +3,12 @@ use crate::formatter::brace_classification::is_lambda_capture_header;
 use crate::formatter::brace_postprocess::horstmann_run_in_fill;
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::headers::is_braceless_header_line;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::operators::{starts_ternary_arm, starts_with_chain_operator};
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{
     ContinuationIndent, FormatterBraceType, InlineArrayFrame, PreviousToken,
 };

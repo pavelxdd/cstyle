@@ -4,15 +4,15 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::Token;
 use crate::formatter::literals::starts_string_literal_token;
 use crate::formatter::operators::head_ends_binary_operator;
 use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{

@@ -5,14 +5,14 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::CommaRole;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::operators::{
     find_assignment_operator, starts_ternary_arm, starts_with_chain_operator,
 };
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
+use crate::formatter::state::frame::CommaRole;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};

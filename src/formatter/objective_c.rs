@@ -1,8 +1,8 @@
 use crate::config::ObjCColonPad;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{BracketFrame, BracketRole};
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::ContinuationIndent;
+use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, trailing_comment_split_limit,

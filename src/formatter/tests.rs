@@ -3,9 +3,9 @@
 use crate::config::{BraceStyle, FormatOptions, PointerAlign};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::format;
-use crate::formatter::frame::BraceSemanticKind;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::{Token, tokenize};
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, InlineArrayFrame};
 use crate::formatter::syntax::OperatorRole;
 

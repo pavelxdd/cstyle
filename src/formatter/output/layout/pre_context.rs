@@ -2,10 +2,10 @@ use crate::formatter::call_arguments::{
     closing_braced_call_argument_indent_spaces, plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::literals::starts_string_literal_token;
 use crate::formatter::operators::starts_with_chain_operator;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,

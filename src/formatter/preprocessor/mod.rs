@@ -1,14 +1,14 @@
 use crate::formatter::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{BraceSemanticKind, FrameStack, ParenRole};
 use crate::formatter::headers::HeaderParenState;
-use crate::formatter::indentation::IndentationState;
 use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust;
 use crate::formatter::literals::LiteralLineState;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
 use crate::formatter::objective_c::ObjectiveCLineState;
+use crate::formatter::state::frame::{BraceSemanticKind, FrameStack, ParenRole};
+use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
     CommandState, FormatterBraceType, FormatterLineState, FormatterStackState, InlineArrayState,
     PreviousToken, RunInState,

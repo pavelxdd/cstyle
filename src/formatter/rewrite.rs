@@ -6,7 +6,6 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::initializer_braces::bracket_starts_initializer_designator;
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
@@ -15,6 +14,7 @@ use crate::formatter::lexer::{
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;

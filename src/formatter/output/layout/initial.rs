@@ -1,11 +1,9 @@
 use crate::config::BraceStyle;
 use crate::formatter::brace_classification::line_opens_lambda_block;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BracketFrame;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::literals::starts_string_literal_token;
 use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, is_prefix_increment_statement,
@@ -15,6 +13,8 @@ use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayL
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive, preprocessor_directive,
 };
+use crate::formatter::state::frame::BracketFrame;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
 use crate::formatter::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::template_declarations::{

@@ -1,7 +1,7 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::{Token, token_text};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::SyntaxRole;
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::has_unclosed_delimiter_after;

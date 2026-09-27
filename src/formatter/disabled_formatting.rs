@@ -3,14 +3,14 @@
 use crate::formatter::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::frame::FrameStack;
-use crate::formatter::indentation::IndentationState;
 use crate::formatter::lexer::Token;
 use crate::formatter::line_adjust::LineAdjuster;
 use crate::formatter::literals::LiteralLineState;
 use crate::formatter::member_spacing::MemberSpacingBoundary;
 use crate::formatter::objective_c::ObjectiveCLineState;
 use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
+use crate::formatter::state::frame::FrameStack;
+use crate::formatter::state::indentation::IndentationState;
 use crate::formatter::state::{
     CommandState, FormatterLineState, FormatterStackState, PreviousToken, RunInState,
 };

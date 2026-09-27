@@ -1,7 +1,5 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{ColonRole, LogicalOperator};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::Token;
 use crate::formatter::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::operator_chains;
@@ -11,6 +9,8 @@ use crate::formatter::operators::{
 };
 use crate::formatter::pointers::is_pointer_declaration_segment;
 use crate::formatter::return_types::is_return_type_line;
+use crate::formatter::state::frame::{ColonRole, LogicalOperator};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{ContinuationIndent, PreviousToken};
 use crate::formatter::switch_cases::find_case_colon;
 use crate::formatter::syntax::language;

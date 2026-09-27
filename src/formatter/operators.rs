@@ -1,8 +1,8 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::lexer::Token;
 use crate::formatter::pointers::is_pointer_declaration_segment;
+use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,

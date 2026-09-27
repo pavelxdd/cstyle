@@ -5,12 +5,10 @@ use crate::formatter::call_arguments::{
 };
 use crate::formatter::closing_braces::starts_post_closing_declaration;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, same_line_nested_header_extra,
     starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::labels;
 use crate::formatter::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::objective_c::objc_message_following_keyword_column;
@@ -21,6 +19,8 @@ use crate::formatter::operators::{
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::template_declarations::{

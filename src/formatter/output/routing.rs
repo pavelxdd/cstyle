@@ -1,6 +1,6 @@
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
+use crate::formatter::state::indentation::LineKind;
 
 impl FormatEngine<'_> {
     fn route_line_before_layout(&mut self, line: &str) -> LineRoute<LineKind> {

@@ -1,7 +1,7 @@
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::StringContinuationFrame;
 use crate::formatter::operators::starts_with_chain_operator;
 use crate::formatter::state::PreviousToken;
+use crate::formatter::state::frame::StringContinuationFrame;
 use crate::formatter::syntax::language::is_type_like_pointer_word;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::source::lex::{is_identifier_continue, trailing_word};

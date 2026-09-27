@@ -1,5 +1,5 @@
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::indentation::LineKind;
+use crate::formatter::state::indentation::LineKind;
 
 pub(crate) struct SwigState {
     may_have_input: bool,

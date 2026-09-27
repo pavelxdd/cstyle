@@ -1,13 +1,13 @@
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::labels;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_paren_imbalance, trailing_comment_split_limit};
 use crate::source::lex::{is_identifier_continue, leading_identifier};

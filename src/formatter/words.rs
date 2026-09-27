@@ -1,11 +1,11 @@
 use crate::config::{BraceStyle, PointerAlign};
 use crate::formatter::brace_classification::contains_one_line_block;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BracelessHeaderFrame;
 use crate::formatter::headers::is_attachable_closing_header;
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::Token;
 use crate::formatter::rewrite::is_defer_header;
+use crate::formatter::state::frame::BracelessHeaderFrame;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
 use crate::formatter::switch_cases;
 use crate::formatter::text::columns::leading_visual_width;

@@ -1,6 +1,6 @@
 use crate::config::{FormatOptions, IndentStyle};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::labels;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::text::tabs;
 

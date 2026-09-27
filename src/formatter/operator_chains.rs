@@ -1,19 +1,19 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{
-    ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
-};
 use crate::formatter::headers::{
     is_braceless_header_line, is_conditional_header_line, line_is_control_body_header,
     starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::literals::{starts_string_literal_token, string_literal_token_end};
 use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_ternary_arm,
     starts_with_chain_operator,
 };
+use crate::formatter::state::frame::{
+    ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
+};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     is_comment_line, line_paren_imbalance, trailing_comment_split_limit,

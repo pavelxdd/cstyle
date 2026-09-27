@@ -9,7 +9,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::indentation::LineKind;
 use crate::formatter::line_adjust::macro_call_starts_with;
 use crate::formatter::literals::{
     first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
@@ -20,6 +19,7 @@ use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
     trailing_binary_operator_column,
 };
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};

@@ -1,10 +1,10 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::lexer::Token;
 use crate::formatter::operators::{head_ends_assignment_operator, head_ends_binary_operator};
 use crate::formatter::return_types::is_return_type_line;
+use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
 use crate::formatter::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::syntax::language;

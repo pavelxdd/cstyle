@@ -1,11 +1,11 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::lexer::raw_strings;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,

@@ -3,10 +3,7 @@ use crate::formatter::backslash_bodies::BackslashBodyState;
 use crate::formatter::block_spacing::BlockSpacingState;
 use crate::formatter::class_declarations::is_split_export_head;
 use crate::formatter::comments::trailing_comment_columns;
-use crate::formatter::current_line::CurrentLine;
 use crate::formatter::disabled_formatting::DisabledFormattingState;
-use crate::formatter::frame::FrameStack;
-use crate::formatter::indentation::{IndentationState, LineKind};
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
@@ -19,6 +16,10 @@ use crate::formatter::rewrite::{
     remove_cross_line_statement_braces,
 };
 use crate::formatter::source_indent::source_indented_macro_row;
+use crate::formatter::state::current_line::CurrentLine;
+use crate::formatter::state::frame::FrameStack;
+use crate::formatter::state::indentation::{IndentationState, LineKind};
+use crate::formatter::state::next_line;
 use crate::formatter::state::{
     CommandState, ContinuationIndent, FormatterLineState, FormatterStackState, InlineArrayState,
     PreviousToken, RunInState, TemplateAngle, TokenInputState,
@@ -34,8 +35,8 @@ use crate::formatter::text::line_scan::{
 };
 use crate::formatter::{
     buffer, compound_literals, continuation, headers, initializer_braces, labels, line_adjust,
-    literals, macro_invocations, next_line, objective_c, operators, pointers, preprocessor,
-    switch_cases, symbols, syntax,
+    literals, macro_invocations, objective_c, operators, pointers, preprocessor, switch_cases,
+    symbols, syntax,
 };
 use crate::source::lex::{is_identifier_continue, trailing_word};
 use std::collections::HashSet;

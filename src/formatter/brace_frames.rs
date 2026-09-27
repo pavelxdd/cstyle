@@ -1,10 +1,10 @@
 use crate::config::BraceStyle;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{BraceFrame, BraceSemanticKind};
-use crate::formatter::indentation::LineKind;
 use crate::formatter::labels;
 use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::formatter::state::FormatterBraceType;
+use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{is_comment_only_line, trailing_comment_split_limit};

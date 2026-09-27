@@ -1,5 +1,5 @@
-use crate::formatter::indentation::LineKind;
 use crate::formatter::state::ContinuationIndent;
+use crate::formatter::state::indentation::LineKind;
 
 pub(crate) struct LineReplayLayout {
     pub(crate) input_continuation_indent: Option<ContinuationIndent>,

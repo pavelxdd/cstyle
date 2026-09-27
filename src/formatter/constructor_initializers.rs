@@ -1,7 +1,7 @@
 use crate::formatter::brace_classification::is_lambda_capture_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::state::ContinuationIndent;
+use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::scoped_name_is_constructor;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};

@@ -1,3 +1,8 @@
+pub(crate) mod current_line;
+pub(crate) mod frame;
+pub(crate) mod indentation;
+pub(crate) mod next_line;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ContinuationIndent {
     Level(usize),
