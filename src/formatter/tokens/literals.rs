@@ -140,16 +140,17 @@ pub(crate) fn last_string_literal_start(line: &str) -> Option<usize> {
 
 impl FormatEngine<'_> {
     pub(crate) fn try_finish_multiline_literal_line(&mut self) -> bool {
-        if !self.literal_line.is_multiline_literal {
+        if !self.layout.literal_line.is_multiline_literal {
             return false;
         }
         let structural_start = self
+            .layout
             .literal_line
             .multiline_literal_end
             .take()
             .unwrap_or(self.current.len());
         let preserve_line_end =
-            self.current.contains('\x0c') || self.literal_line.unterminated_raw_literal;
+            self.current.contains('\x0c') || self.layout.literal_line.unterminated_raw_literal;
         let line = self.take_current();
         let line = if preserve_line_end {
             line
@@ -167,7 +168,7 @@ impl FormatEngine<'_> {
             return;
         }
         if quote.is_none()
-            && self.previous == PreviousToken::Operator
+            && self.layout.previous == PreviousToken::Operator
             && self.current.trim_end().ends_with(['+', '-'])
         {
             let before_sign = self.current.trim_end_matches([' ', '\t', '+', '-']);
@@ -199,14 +200,20 @@ impl FormatEngine<'_> {
             } else {
                 self.emit_source_space();
             }
-        } else if self.previous.needs_space_before_word() {
+        } else if self.layout.previous.needs_space_before_word() {
             if quote == Some('"')
                 || (quote.is_none()
                     && literal.starts_with('.')
-                    && matches!(self.previous, PreviousToken::Word | PreviousToken::Literal))
+                    && matches!(
+                        self.layout.previous,
+                        PreviousToken::Word | PreviousToken::Literal
+                    ))
             {
                 self.emit_source_space();
-            } else if matches!(self.previous, PreviousToken::Word | PreviousToken::Literal) {
+            } else if matches!(
+                self.layout.previous,
+                PreviousToken::Word | PreviousToken::Literal
+            ) {
                 self.emit_source_space_or_ensure();
             } else if !self.previous_was_newline {
                 self.emit_source_space();
@@ -214,8 +221,9 @@ impl FormatEngine<'_> {
         }
         let string_continuation = quote.is_some().then(|| {
             let line_indent_spaces = self.current_line_indent_spaces();
-            let has_stream_context = self.frame_stack.active_stream().is_some()
+            let has_stream_context = self.layout.frame_stack.active_stream().is_some()
                 || self
+                    .layout
                     .frame_stack
                     .string_continuation_before_output_line(self.output.len())
                     .is_some_and(|frame| frame.has_stream_context);
@@ -229,30 +237,30 @@ impl FormatEngine<'_> {
                 has_opening_context: self.current.contains('('),
                 has_open_brace_before_literal: self.current.contains('{'),
                 has_stream_context,
-                inside_delimiter_context: self.frame_stack.active_delimiter().is_some(),
+                inside_delimiter_context: self.layout.frame_stack.active_delimiter().is_some(),
             }
         });
         self.current.push_str(literal);
         if let Some(frame) = string_continuation {
-            self.frame_stack.set_string_continuation(frame);
+            self.layout.frame_stack.set_string_continuation(frame);
         }
         if quote.is_some_and(|quote| !literal.ends_with(quote)) {
-            self.literal_line.unterminated_literal_line = true;
+            self.layout.literal_line.unterminated_literal_line = true;
         }
-        self.command_state.observe_text(literal);
-        self.previous = PreviousToken::Literal;
+        self.layout.command_state.observe_text(literal);
+        self.layout.previous = PreviousToken::Literal;
         self.previous_was_newline = false;
     }
 
     fn push_multiline_literal(&mut self, literal: &str) {
         let unterminated_raw_literal = raw_literal_is_unterminated(literal);
-        if self.previous.needs_space_before_word() {
+        if self.layout.previous.needs_space_before_word() {
             self.emit_source_space();
         }
         let mut lines = literal.split('\n').peekable();
         if let Some(first) = lines.next() {
             self.current.push_str(first);
-            self.literal_line.preserve_raw_literal_line_end = true;
+            self.layout.literal_line.preserve_raw_literal_line_end = true;
             self.finish_line();
         }
         while let Some(line) = lines.next() {
@@ -261,12 +269,12 @@ impl FormatEngine<'_> {
             } else if !line.is_empty() || !literal.ends_with('\n') {
                 self.current.push_str(line);
                 self.current_is_preindented = true;
-                self.literal_line.is_multiline_literal = true;
-                self.literal_line.multiline_literal_end = Some(self.current.len());
-                self.literal_line.unterminated_raw_literal = unterminated_raw_literal;
+                self.layout.literal_line.is_multiline_literal = true;
+                self.layout.literal_line.multiline_literal_end = Some(self.current.len());
+                self.layout.literal_line.unterminated_raw_literal = unterminated_raw_literal;
             }
         }
-        self.previous = PreviousToken::Literal;
+        self.layout.previous = PreviousToken::Literal;
         self.previous_was_newline = false;
     }
 }

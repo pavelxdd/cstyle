@@ -85,7 +85,7 @@ impl FormatEngine<'_> {
             return;
         }
         let preserve_raw_literal_line_end =
-            std::mem::take(&mut self.literal_line.preserve_raw_literal_line_end);
+            std::mem::take(&mut self.layout.literal_line.preserve_raw_literal_line_end);
         let preserve_run_in_join_space = std::mem::take(&mut self.preserve_run_in_join_space);
         let body = if line_comment_backslash_trailing_space(line)
             || preserve_raw_literal_line_end
@@ -121,7 +121,7 @@ impl FormatEngine<'_> {
             .case_comment_following_indent_spaces(line)
             .map_or(spaces, |target| spaces.max(target));
         let preserve_raw_literal_line_end =
-            std::mem::take(&mut self.literal_line.preserve_raw_literal_line_end);
+            std::mem::take(&mut self.layout.literal_line.preserve_raw_literal_line_end);
         let preserve_run_in_join_space = std::mem::take(&mut self.preserve_run_in_join_space);
         let body = if line_comment_backslash_trailing_space(line)
             || preserve_raw_literal_line_end
@@ -141,7 +141,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn previous_output_indent_prefix(&self) -> String {
-        self.previous_pre_adjust_line
+        self.layout
+            .previous_pre_adjust_line
             .as_ref()
             .map(|line| {
                 line.chars()
@@ -157,8 +158,8 @@ impl FormatEngine<'_> {
         self.observe_raw_output_comment_frame(&line);
         let brace_indent_before_adjustment =
             (line.trim() == "{").then(|| leading_visual_width(&line, self.options.tab_width));
-        self.previous_pre_adjust_line = Some(line.clone());
-        let line = self.line_adjuster.adjust_line(line);
+        self.layout.previous_pre_adjust_line = Some(line.clone());
+        let line = self.layout.line_adjuster.adjust_line(line);
         let line =
             self.align_else_opening_brace_after_adjustment(line, brace_indent_before_adjustment);
         self.publish_ready_line(line);
@@ -169,13 +170,13 @@ impl FormatEngine<'_> {
         line: String,
         structural_start: usize,
     ) {
-        self.previous_pre_adjust_line = Some(line.clone());
-        let line = self.line_adjuster.adjust_raw_literal_line(line);
+        self.layout.previous_pre_adjust_line = Some(line.clone());
+        let line = self.layout.line_adjuster.adjust_raw_literal_line(line);
         self.output.push_raw_literal(line, structural_start);
     }
 
     fn macro_block_body_line_before_adjustment(&self, line: String) -> String {
-        if !self.line_adjuster.is_in_macro_block() || self.options.macro_blocks.is_empty() {
+        if !self.layout.line_adjuster.is_in_macro_block() || self.options.macro_blocks.is_empty() {
             return line;
         }
         let trimmed = line.trim_start();
@@ -204,7 +205,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn publish_unadjusted_line(&mut self, line: String) {
-        self.previous_pre_adjust_line = Some(line.clone());
+        self.layout.previous_pre_adjust_line = Some(line.clone());
         self.publish_ready_line(line);
     }
 
@@ -289,18 +290,18 @@ impl FormatEngine<'_> {
             && line_opens_lambda_block(line)
             && let Some(output_line) = self.output.last()
         {
-            self.continuation_indent.next_line_indent_spaces = Some(
+            self.layout.continuation_indent.next_line_indent_spaces = Some(
                 leading_visual_width(output_line, self.options.tab_width)
                     + self.options.indent_width,
             );
         }
         if let Some(spaces) = post_emission.split_condition_body_indent_spaces {
-            self.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = post_emission.ternary_call_clear_indent_spaces {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(spaces);
-            self.nesting.clear_continuation_indents();
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.nesting.clear_continuation_indents();
         }
         self.observe_split_else_logical_statement_indent(line, line_kind);
         self.restore_split_else_call_argument_indent_after_emission(line, line_kind);
@@ -328,13 +329,13 @@ impl FormatEngine<'_> {
             .is_some_and(|previous| previous.trim() == "else")
         {
             let level = output_spaces / self.options.indent_width;
-            self.continuation_indent.next_line_indent = Some(level);
-            self.continuation_indent.next_line_indent_spaces = None;
-            self.pending_braceless_block_bias = Some(level);
+            self.layout.continuation_indent.next_line_indent = Some(level);
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.pending_braceless_block_bias = Some(level);
         }
         if post_emission.else_while_brace {
-            self.continuation_indent.next_line_indent = Some(layout.indent + 1);
-            self.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.next_line_indent = Some(layout.indent + 1);
+            self.layout.continuation_indent.next_line_indent_spaces = None;
         }
         self.observe_template_declaration_line(line);
         self.observe_member_spacing_boundary(line);

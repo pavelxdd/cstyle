@@ -62,6 +62,7 @@ impl FormatEngine<'_> {
             BraceStyle::Whitesmith | BraceStyle::Vtk
         ) && line.trim_start().starts_with(['.', '['])
             && let Some(frame) = self
+                .layout
                 .frame_stack
                 .active_brace()
                 .filter(|frame| frame.semantic_kind == BraceSemanticKind::CompoundLiteral)
@@ -75,24 +76,24 @@ impl FormatEngine<'_> {
                 .output
                 .last_non_empty_line()
                 .is_some_and(|previous| previous.trim() == "{")
-            && let Some(frame) = self.frame_stack.active_brace().filter(|frame| {
+            && let Some(frame) = self.layout.frame_stack.active_brace().filter(|frame| {
                 frame.semantic_kind == BraceSemanticKind::Definition
-                    && self.nesting.brace_type_stack.last() == Some(&frame.brace_type)
+                    && self.layout.nesting.brace_type_stack.last() == Some(&frame.brace_type)
             })
         {
             exact_indent_spaces = Some(frame.sibling_indent_column);
         }
         let indented_command_body = self.indented_command_body_indent_spaces();
-        let active_brace = self.frame_stack.active_brace();
+        let active_brace = self.layout.frame_stack.active_brace();
         let current_header_owns_active_brace = self.is_header(leading_identifier(line))
             && active_brace
-                .zip(self.frame_stack.active_header())
+                .zip(self.layout.frame_stack.active_header())
                 .is_some_and(|(brace, header)| {
                     brace.header.as_deref() == Some(header.header.as_str())
                         && brace.header_indent_column == header.line_indent_spaces
                 });
         let previous_output_brace = if current_header_owns_active_brace {
-            self.frame_stack.enclosing_brace()
+            self.layout.frame_stack.enclosing_brace()
         } else {
             active_brace
         };
@@ -115,7 +116,7 @@ impl FormatEngine<'_> {
         {
             exact_indent_spaces = Some(
                 frame.body_indent_column
-                    + self.line_adjuster.next_line_case_unindent_depth()
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width,
             );
         }
@@ -145,7 +146,7 @@ impl FormatEngine<'_> {
                     .rev()
                     .find(|line| !line.trim().is_empty())
                     .is_some_and(|previous| matches!(previous.trim(), "else" | "} else")))
-            && let Some(header) = self.frame_stack.active_header().filter(|header| {
+            && let Some(header) = self.layout.frame_stack.active_header().filter(|header| {
                 header
                     .line_indent_spaces
                     .is_multiple_of(self.options.indent_width)
@@ -158,6 +159,7 @@ impl FormatEngine<'_> {
         }
         if line.trim_start().starts_with("else")
             && let Some(header) = self
+                .layout
                 .frame_stack
                 .active_header()
                 .filter(|header| header.header == "else")
@@ -225,7 +227,7 @@ impl FormatEngine<'_> {
         let mut exact_indent_spaces = layout.exact_indent_spaces;
         let (line_closing_parens, line_opening_parens) = line_paren_imbalance(line);
         let line_closes_outer_delimiter = line_closing_parens > line_opening_parens.len();
-        let line_has_owned_continuation = self.frame_stack.active_delimiter().is_some()
+        let line_has_owned_continuation = self.layout.frame_stack.active_delimiter().is_some()
             || self.operator_chain_owns_continuation(line);
         if let Some(spaces) = self.post_block_case_body_indent_override(
             line,
@@ -290,6 +292,7 @@ impl FormatEngine<'_> {
         if line_kind == LineKind::Normal
             && (line.trim_start().starts_with("///") || line.trim_start().starts_with("//!"))
             && self
+                .layout
                 .frame_stack
                 .active_brace()
                 .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Aggregate)
@@ -329,7 +332,9 @@ impl FormatEngine<'_> {
             })
         {
             exact_indent_spaces = Some(
-                spaces + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                spaces
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if let Some(spaces) = self.maximum_length_new_call_argument_indent_spaces() {

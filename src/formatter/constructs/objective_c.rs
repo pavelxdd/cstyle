@@ -182,9 +182,12 @@ impl FormatEngine<'_> {
                     .find(|line| line.contains("@ {"))
                     .map(|opener| leading_visual_width(opener, self.options.tab_width))
             } else {
-                self.previous_pre_adjust_line.as_ref().map(|previous| {
-                    leading_visual_width(previous, self.options.tab_width).saturating_sub(2)
-                })
+                self.layout
+                    .previous_pre_adjust_line
+                    .as_ref()
+                    .map(|previous| {
+                        leading_visual_width(previous, self.options.tab_width).saturating_sub(2)
+                    })
             };
         }
         if !line.trim_start().starts_with('}')
@@ -207,6 +210,7 @@ impl FormatEngine<'_> {
         if !line.trim_start().starts_with('}')
             && !line_is_label_style_dictionary_key(line)
             && self
+                .layout
                 .previous_pre_adjust_line
                 .as_ref()
                 .is_some_and(|previous| previous.trim_end().ends_with(','))
@@ -219,19 +223,26 @@ impl FormatEngine<'_> {
                 .any(|line| line.contains("@ {"))
         {
             current = self
+                .layout
                 .previous_pre_adjust_line
                 .as_ref()
                 .map(|previous| leading_visual_width(previous, self.options.tab_width));
         }
         if line.trim_start().starts_with("@ {")
             && self
+                .layout
                 .previous_pre_adjust_line
                 .as_ref()
                 .is_some_and(|previous| previous.trim_end().ends_with('='))
         {
-            current = self.previous_pre_adjust_line.as_ref().map(|previous| {
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
-            });
+            current = self
+                .layout
+                .previous_pre_adjust_line
+                .as_ref()
+                .map(|previous| {
+                    leading_visual_width(previous, self.options.tab_width)
+                        + self.options.indent_width
+                });
         }
         current
     }
@@ -263,11 +274,12 @@ impl FormatEngine<'_> {
         mut exact_indent_spaces: Option<usize>,
     ) -> ObjCLineAlignment {
         if self
+            .layout
             .previous_pre_adjust_line
             .as_deref()
             .is_some_and(|previous| previous.trim_end().ends_with('{'))
         {
-            self.objc.colon_align = None;
+            self.layout.objc.colon_align = None;
         }
         let closed_nested_bracket = closed_brackets.iter().find(|frame| {
             frame.parent_objc_message_align.is_some()
@@ -276,18 +288,19 @@ impl FormatEngine<'_> {
         let nested_message_align = closed_nested_bracket
             .and_then(|frame| frame.objc_continuation_indent_column())
             .or_else(|| {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .active_bracket()
                     .filter(|frame| frame.opener_output_line < self.output.len())
                     .and_then(|frame| frame.objc_continuation_indent_column())
             });
         if let Some(spaces) = nested_message_align {
-            self.objc.message_align = Some(spaces);
+            self.layout.objc.message_align = Some(spaces);
         }
         let restore_message_align =
             closed_nested_bracket.and_then(|frame| frame.parent_objc_message_align);
         let mut force_message_align = false;
-        if let Some(previous) = &self.previous_pre_adjust_line {
+        if let Some(previous) = &self.layout.previous_pre_adjust_line {
             let previous_text = previous.trim_start();
             let line_text = line.trim_start();
             let simple_selector_line = line_text.split_once(':').is_some_and(|(key, rest)| {
@@ -313,35 +326,35 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width))
                     .saturating_sub(1);
                 exact_indent_spaces = Some(spaces);
-                self.objc.message_align = Some(spaces);
+                self.layout.objc.message_align = Some(spaces);
                 force_message_align = true;
             } else if simple_selector_line
                 && follows_simple_selector
-                && self.objc.message_align.is_some()
+                && self.layout.objc.message_align.is_some()
             {
                 force_message_align = true;
             }
         }
-        if self.objc.message_pending_align {
+        if self.layout.objc.message_pending_align {
             let base = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
             });
             if self.options.align_method_colon {
                 if let Some(colon) = objc_method_colon_position(line) {
-                    self.objc.colon_align = Some(base + colon);
-                    self.objc.message_pending_align = false;
-                } else if !self.objc.message_active {
-                    self.objc.message_pending_align = false;
+                    self.layout.objc.colon_align = Some(base + colon);
+                    self.layout.objc.message_pending_align = false;
+                } else if !self.layout.objc.message_active {
+                    self.layout.objc.message_pending_align = false;
                 }
             } else {
-                self.objc.message_pending_align = false;
-                self.objc.message_align =
+                self.layout.objc.message_pending_align = false;
+                self.layout.objc.message_align =
                     objc_message_following_keyword_column(line).map(|column| base + column);
-                if !self.objc.message_active {
-                    self.objc.message_align = None;
+                if !self.layout.objc.message_active {
+                    self.layout.objc.message_align = None;
                 }
             }
-        } else if let Some(align) = self.objc.message_align
+        } else if let Some(align) = self.layout.objc.message_align
             && !line.trim_start().starts_with(['{', '}'])
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
@@ -352,14 +365,14 @@ impl FormatEngine<'_> {
             } else {
                 natural.max(align)
             });
-            if !self.objc.message_active {
-                self.objc.message_align = None;
+            if !self.layout.objc.message_active {
+                self.layout.objc.message_align = None;
             }
         }
-        if let Some(align_column) = self.objc.colon_align {
+        if let Some(align_column) = self.layout.objc.colon_align {
             let first = line.chars().next();
             if matches!(first, Some('{') | Some('}') | Some('@')) {
-                self.objc.colon_align = None;
+                self.layout.objc.colon_align = None;
             } else if !matches!(first, Some('-') | Some('+'))
                 && let Some(colon) = objc_method_colon_position(line)
                 && colon <= align_column
@@ -368,7 +381,7 @@ impl FormatEngine<'_> {
             }
             let trimmed_end = line.trim_end();
             if trimmed_end.ends_with(';') || trimmed_end.ends_with('{') {
-                self.objc.colon_align = None;
+                self.layout.objc.colon_align = None;
             }
         }
         if line.trim_start().starts_with('{')
@@ -390,7 +403,8 @@ impl FormatEngine<'_> {
 
     pub(crate) fn restore_objc_message_alignment(&mut self, spaces: Option<usize>) {
         if let Some(spaces) = spaces {
-            self.objc.message_align = self
+            self.layout.objc.message_align = self
+                .layout
                 .frame_stack
                 .has_objc_alignment_bracket()
                 .then_some(spaces);
@@ -406,9 +420,9 @@ impl FormatEngine<'_> {
                     || rest.starts_with(['(', '{'])
             })
         }) {
-            let active = self.frame_stack.active_brace();
+            let active = self.layout.frame_stack.active_brace();
             let owner = if active.is_some_and(|frame| frame.header.as_deref() == Some(header)) {
-                self.frame_stack.enclosing_brace()
+                self.layout.frame_stack.enclosing_brace()
             } else {
                 active
             };
@@ -489,15 +503,15 @@ impl FormatEngine<'_> {
 
     pub(crate) fn is_objc_selector_or_message_colon(&self) -> bool {
         let current = self.current.trim_end();
-        self.frame_stack.bracket_depth() > 0
-            || self.objc.method_continuation
+        self.layout.frame_stack.bracket_depth() > 0
+            || self.layout.objc.method_continuation
             || self.is_objc_method_line()
             || has_unclosed_delimiter_after(current, "[", "]")
             || has_unclosed_delimiter_after(current, "@selector(", ")")
     }
 
     pub(crate) fn is_objc_method_line(&self) -> bool {
-        if self.nesting.paren_depth > 0 {
+        if self.layout.nesting.paren_depth > 0 {
             return false;
         }
         let line = self.current.trim_start();
@@ -525,9 +539,9 @@ impl FormatEngine<'_> {
         tokens: &[Token],
         start: usize,
     ) -> Option<usize> {
-        let base =
-            ContinuationIndent::Level(self.indentation.indent()).columns(self.options.indent_width);
-        let cont_indent = ContinuationIndent::Level(self.indentation.indent() + 1)
+        let base = ContinuationIndent::Level(self.layout.indentation.indent())
+            .columns(self.options.indent_width);
+        let cont_indent = ContinuationIndent::Level(self.layout.indentation.indent() + 1)
             .columns(self.options.indent_width);
 
         let mut line_colons: Vec<Option<usize>> = Vec::new();

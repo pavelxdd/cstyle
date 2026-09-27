@@ -70,7 +70,7 @@ impl FormatEngine<'_> {
                 .options
                 .continuation_indent_prefix(structural_level, spaces),
         };
-        let mut line_adjuster = self.line_adjuster.clone();
+        let mut line_adjuster = self.layout.line_adjuster.clone();
         let adjusted = line_adjuster.adjust_line(format!("{prefix}{line}"));
         let base_indent_width =
             configured_indent_width.max(leading_visual_width(&adjusted, self.options.tab_width));
@@ -130,7 +130,7 @@ impl FormatEngine<'_> {
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
             .unwrap_or(split_indent);
         if brace_row_layout.attaches_lisp_closer {
-            next_indent = ContinuationIndent::Level(self.indentation.indent());
+            next_indent = ContinuationIndent::Level(self.layout.indentation.indent());
         }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);

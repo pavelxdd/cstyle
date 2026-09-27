@@ -40,12 +40,12 @@ impl FormatEngine<'_> {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }
-        let Some(previous) = self.pending_member_spacing else {
+        let Some(previous) = self.layout.pending_member_spacing else {
             return;
         };
         let Some(current) = self.current_member_spacing_boundary(line) else {
             if self.line_clears_pending_member_spacing(line) {
-                self.pending_member_spacing = None;
+                self.layout.pending_member_spacing = None;
             }
             return;
         };
@@ -57,17 +57,18 @@ impl FormatEngine<'_> {
                 LineBetweenMembers::Members
             )
         ) {
-            self.pending_member_spacing = None;
+            self.layout.pending_member_spacing = None;
             return;
         }
         if self
+            .layout
             .previous_pre_adjust_line
             .as_deref()
             .is_some_and(|line| !line.trim().is_empty())
         {
             self.push_empty_line();
         }
-        self.pending_member_spacing = None;
+        self.layout.pending_member_spacing = None;
     }
 
     pub(crate) fn observe_member_spacing_boundary(&mut self, line: &str) {
@@ -79,11 +80,11 @@ impl FormatEngine<'_> {
             return;
         }
         if trimmed.starts_with('}') {
-            self.pending_member_spacing =
-                if self.nesting.last_closed_brace_type == Some(BraceType::Definition) {
+            self.layout.pending_member_spacing =
+                if self.layout.nesting.last_closed_brace_type == Some(BraceType::Definition) {
                     if self.in_member_container() {
                         Some(MemberSpacingBoundary::Member)
-                    } else if self.nesting.brace_type_stack.is_empty() {
+                    } else if self.layout.nesting.brace_type_stack.is_empty() {
                         Some(MemberSpacingBoundary::TopFunction)
                     } else {
                         None
@@ -94,14 +95,14 @@ impl FormatEngine<'_> {
             return;
         }
         if self.line_clears_pending_member_spacing(line) {
-            self.pending_member_spacing = None;
+            self.layout.pending_member_spacing = None;
             return;
         }
         if self.in_member_container()
             && trimmed.ends_with(';')
             && let Some(boundary) = member_semicolon_boundary(trimmed)
         {
-            self.pending_member_spacing = Some(boundary);
+            self.layout.pending_member_spacing = Some(boundary);
         }
     }
 
@@ -123,8 +124,8 @@ impl FormatEngine<'_> {
             }
             return None;
         }
-        if self.pending_member_spacing == Some(MemberSpacingBoundary::TopFunction)
-            && self.nesting.brace_type_stack.is_empty()
+        if self.layout.pending_member_spacing == Some(MemberSpacingBoundary::TopFunction)
+            && self.layout.nesting.brace_type_stack.is_empty()
             && looks_like_function_header(trimmed)
         {
             return Some(MemberSpacingBoundary::TopFunction);
@@ -141,11 +142,15 @@ impl FormatEngine<'_> {
     }
 
     fn in_member_container(&self) -> bool {
-        self.nesting.brace_type_stack.iter().any(|brace_type| {
-            matches!(
-                brace_type,
-                BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union
-            )
-        })
+        self.layout
+            .nesting
+            .brace_type_stack
+            .iter()
+            .any(|brace_type| {
+                matches!(
+                    brace_type,
+                    BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union
+                )
+            })
     }
 }

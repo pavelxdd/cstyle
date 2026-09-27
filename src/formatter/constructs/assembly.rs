@@ -95,7 +95,7 @@ impl FormatEngine<'_> {
     pub(crate) fn is_in_asm_operator_context(&self) -> bool {
         let current = self.current.trim_start();
         ((current.starts_with("asm(") || current.starts_with("__asm__("))
-            && self.nesting.paren_depth > 0)
+            && self.layout.nesting.paren_depth > 0)
             || current.starts_with("_asm ")
             || current.starts_with("__asm ")
     }

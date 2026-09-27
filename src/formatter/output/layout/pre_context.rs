@@ -174,7 +174,9 @@ impl FormatEngine<'_> {
             )
         {
             layout.exact_indent_spaces = Some(
-                spaces + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                spaces
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if self.line_opens_attachable_lambda_block(line) {
@@ -228,7 +230,7 @@ impl FormatEngine<'_> {
                 && line_paren_imbalance(previous_code).0 > 0;
             let previous_closes_inner_call = line_paren_imbalance(previous_code).0 > 0;
             let wanted = leading_visual_width(previous, self.options.tab_width)
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if !uses_outer_call_column
                 && !closed_inner_logical_tail
                 && !previous_closes_inner_call
@@ -476,7 +478,8 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if layout.line_kind == LineKind::Normal
@@ -486,7 +489,7 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if previous_code.trim_start().starts_with("#if") && previous_code.contains("->") {
                 layout.exact_indent_spaces =
-                    Some(self.indentation.indent() * self.options.indent_width);
+                    Some(self.layout.indentation.indent() * self.options.indent_width);
             }
         }
         if layout.line_kind == LineKind::Normal

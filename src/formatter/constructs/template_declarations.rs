@@ -189,7 +189,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn prepare_template_continuation_token_indent(&mut self, source_column: usize) {
-        if !self.template_declaration.uses_source_indent
+        if !self.layout.template_declaration.uses_source_indent
             || !self.token_input.token_begins_source_line
         {
             return;
@@ -211,22 +211,22 @@ impl FormatEngine<'_> {
                 })
             })
             .unwrap_or(source_column);
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = Some(spaces);
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
     }
 
     pub(crate) fn template_continuation_active(&self) -> bool {
-        self.template_declaration.uses_source_indent
+        self.layout.template_declaration.uses_source_indent
     }
 
     pub(crate) fn template_continuation_closes_on_line(&self, line: &str) -> bool {
-        self.template_declaration.uses_source_indent
+        self.layout.template_declaration.uses_source_indent
             && line.ends_with('>')
-            && self.template_declaration.angle_depth + angle_depth_delta(line) <= 0
+            && self.layout.template_declaration.angle_depth + angle_depth_delta(line) <= 0
     }
 
     pub(crate) fn template_continuation_line_indent_spaces(&self, line: &str) -> Option<usize> {
-        if !self.template_declaration.uses_source_indent {
+        if !self.layout.template_declaration.uses_source_indent {
             return None;
         }
         let mut spaces = self
@@ -259,19 +259,19 @@ impl FormatEngine<'_> {
             && !trimmed.ends_with(';')
             && !template_declaration_line_complete(trimmed)
         {
-            self.template_declaration.uses_source_indent = true;
-            self.template_declaration.angle_depth = angle_delta;
+            self.layout.template_declaration.uses_source_indent = true;
+            self.layout.template_declaration.angle_depth = angle_delta;
             if let Some(spaces) = template_continuation_indent_spaces(line) {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
             }
-        } else if self.template_declaration.uses_source_indent {
-            self.template_declaration.angle_depth += angle_delta;
-            if self.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
-                self.template_declaration = TemplateDeclarationState::default();
-                self.nesting.clear_continuation_indents();
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = None;
+        } else if self.layout.template_declaration.uses_source_indent {
+            self.layout.template_declaration.angle_depth += angle_delta;
+            if self.layout.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
+                self.layout.template_declaration = TemplateDeclarationState::default();
+                self.layout.nesting.clear_continuation_indents();
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = None;
             }
         }
     }

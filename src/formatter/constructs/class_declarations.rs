@@ -65,13 +65,13 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn current_opens_class_base_clause(&self) -> bool {
-        if self.nesting.has_question_in_current_brace() {
+        if self.layout.nesting.has_question_in_current_brace() {
             return false;
         }
         if self.code_opens_class_base_clause(self.current.trim_end()) {
             return true;
         }
-        if self.split_class_export_pending_base {
+        if self.layout.split_class_export_pending_base {
             return true;
         }
         let current = self.current.trim();
@@ -79,6 +79,7 @@ impl FormatEngine<'_> {
             && current.chars().all(is_identifier_continue);
         single_name
             && (self
+                .layout
                 .previous_pre_adjust_line
                 .as_ref()
                 .is_some_and(|line| is_split_export_head(line.trim()))
@@ -112,7 +113,7 @@ impl FormatEngine<'_> {
         if self.current_opens_class_base_clause() {
             return true;
         }
-        if self.nesting.has_question_in_current_brace()
+        if self.layout.nesting.has_question_in_current_brace()
             || !self.current[..self.current_trailing_comment_split_limit()]
                 .trim()
                 .is_empty()
@@ -167,7 +168,7 @@ impl FormatEngine<'_> {
         };
         previous.push(' ');
         previous.push_str(current);
-        self.previous_pre_adjust_line = Some(previous.clone());
+        self.layout.previous_pre_adjust_line = Some(previous.clone());
         true
     }
 
@@ -183,18 +184,19 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        self.continuation_indent.next_line_indent = Some(self.indentation.indent() + 1);
-        self.continuation_indent.next_line_indent_spaces = None;
-        self.split_class_export_pending_base = true;
+        self.layout.continuation_indent.next_line_indent =
+            Some(self.layout.indentation.indent() + 1);
+        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.split_class_export_pending_base = true;
     }
 
     pub(crate) fn finish_split_class_head_line(&mut self) {
-        let header_indent = self.indentation.indent();
+        let header_indent = self.layout.indentation.indent();
         self.finish_line();
-        self.nesting.clear_continuation_indents();
-        self.continuation_indent.next_line_indent = Some(header_indent + 1);
-        self.continuation_indent.next_line_indent_spaces = None;
-        self.split_class_export_pending_base = true;
+        self.layout.nesting.clear_continuation_indents();
+        self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
+        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.split_class_export_pending_base = true;
         self.previous_was_newline = true;
     }
 

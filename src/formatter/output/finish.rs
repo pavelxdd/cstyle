@@ -18,7 +18,7 @@ impl FormatEngine<'_> {
     pub(crate) fn finish_disabled_line(&mut self) {
         let line = self.take_current();
         self.publish_unadjusted_line(line);
-        self.previous = PreviousToken::None;
+        self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }
 
@@ -27,7 +27,7 @@ impl FormatEngine<'_> {
             self.block_comment_close_paren_ends_declaration;
         self.block_comment_close_paren_ends_declaration = false;
         self.previous_block_comment_close_paren_ended_declaration = false;
-        let preserve_raw_literal_line_end = self.literal_line.preserve_raw_literal_line_end;
+        let preserve_raw_literal_line_end = self.layout.literal_line.preserve_raw_literal_line_end;
         let preserve_run_in_join_space = self.preserve_run_in_join_space;
         if self.try_finish_multiline_literal_line() {
             return;
@@ -41,7 +41,7 @@ impl FormatEngine<'_> {
         let preserve_line_comment_trailing_space =
             line_comment_backslash_trailing_space(&self.current);
         if !preserve_line_comment_trailing_space
-            && !self.literal_line.unterminated_raw_literal
+            && !self.layout.literal_line.unterminated_raw_literal
             && !preserve_raw_literal_line_end
             && !preserve_run_in_join_space
         {
@@ -51,7 +51,8 @@ impl FormatEngine<'_> {
             return;
         }
         if self.current_is_preindented {
-            self.continuation_indent
+            self.layout
+                .continuation_indent
                 .input_line_continuation_indent
                 .take();
             let line = self.take_current();
@@ -60,8 +61,8 @@ impl FormatEngine<'_> {
                 .split_once("*/")
                 .is_some_and(|(_, after)| after.trim_end().ends_with(';'))
             {
-                self.continuation_indent.next_line_indent_spaces = None;
-                self.nesting.clear_continuation_indents();
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.nesting.clear_continuation_indents();
             }
             if !trimmed.trim().is_empty() {
                 self.push_raw_comment_output_line(trimmed);
@@ -89,13 +90,14 @@ impl FormatEngine<'_> {
             let output_line_index = self.output.len();
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let code_ends_with_brace = code.ends_with('}');
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .mark_last_closed_brace_line_end(output_line_index, code_ends_with_brace);
             self.observe_operator_chain_line_context(output_line_index, code);
             let clear_string_after_line = !code.trim_start().starts_with('#')
                 && (code.ends_with(';') || first_string_literal_start(code).is_none());
             let clear_stream_after_line = code.ends_with(';');
-            if self.line_state.column1_line_comment
+            if self.layout.line_state.column1_line_comment
                 && !self.options.indent_col1_comments
                 && line.starts_with("//")
             {
@@ -106,13 +108,15 @@ impl FormatEngine<'_> {
                 if let Some(output_indent) =
                     self.observe_operator_chain_output_line(output_line_index)
                 {
-                    self.frame_stack
+                    self.layout
+                        .frame_stack
                         .mark_delimiter_line_output_indent(output_line_index, output_indent);
                 }
                 if clear_string_after_line {
-                    self.frame_stack.clear_string_continuations();
+                    self.layout.frame_stack.clear_string_continuations();
                 }
-                self.run_in_state.current_run_in_indent = self.continuation_indent.next_line_indent;
+                self.layout.run_in_state.current_run_in_indent =
+                    self.layout.continuation_indent.next_line_indent;
                 self.reset_after_finished_line();
                 return;
             }
@@ -141,8 +145,9 @@ impl FormatEngine<'_> {
                     } else {
                         self.options.indent_width
                     };
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(label_spaces + extra);
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces =
+                        Some(label_spaces + extra);
                     self.finish_line_text(&statement);
                 }
             } else {
@@ -151,7 +156,8 @@ impl FormatEngine<'_> {
             if let Some(output_indent) = self.observe_operator_chain_output_line(output_line_index)
                 && let Some(output_line) = self.output.get(output_line_index)
             {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .mark_delimiter_line_output_indent(output_line_index, output_indent);
                 let output_code =
                     output_line[..trailing_comment_split_limit(output_line)].trim_end();
@@ -166,47 +172,47 @@ impl FormatEngine<'_> {
                     && output_code.contains('#')
                     && !output_code.ends_with(';')
                 {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces =
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces =
                         Some(output_indent + "return ".len());
                 } else if embedded_preprocessor {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces =
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces =
                         Some(if output_code.ends_with(':') {
                             output_indent + self.options.indent_width
                         } else {
                             output_indent
                         });
-                    self.nesting.clear_continuation_indents();
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_stream_frames_and_logical_indent(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 } else if starts_post_closing_declaration(output_code) {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 }
                 if output_code.trim_start().starts_with("else,") {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(0);
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(0);
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 }
                 if output_code.trim_start().starts_with("#define") && !output_code.ends_with('\\') {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = None;
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = None;
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 }
                 if preprocessor_directive(output_code.trim_start()) == Some("endif")
@@ -217,14 +223,14 @@ impl FormatEngine<'_> {
                     && (is_comment_line(previous.trim_start())
                         || previous.trim_start().starts_with("/*"))
                 {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces =
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces =
                         Some(leading_visual_width(previous, self.options.tab_width));
                 }
                 if output_code.trim() == "?" {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
+                    self.layout.nesting.clear_continuation_indents();
                 }
                 if output_code.trim() == "catch"
                     && self.output[..output_line_index]
@@ -237,22 +243,22 @@ impl FormatEngine<'_> {
                                 .ends_with('}')
                         })
                 {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(output_indent);
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 }
                 if output_code.ends_with("; catch") {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces =
-                        Some(self.indentation.indent() * self.options.indent_width);
-                    self.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces =
+                        Some(self.layout.indentation.indent() * self.options.indent_width);
+                    self.layout.nesting.clear_continuation_indents();
                     operator_chains::clear_operator_chain_state(
-                        &mut self.frame_stack,
-                        &mut self.continuation_indent.logical_chain_indent_spaces,
+                        &mut self.layout.frame_stack,
+                        &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                     );
                 }
             }
@@ -265,8 +271,8 @@ impl FormatEngine<'_> {
                     && output_code.contains('#')
                     && !output_code.ends_with(';')
                 {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(
                         leading_visual_width(output_line, self.options.tab_width) + "return ".len(),
                     );
                 }
@@ -277,50 +283,52 @@ impl FormatEngine<'_> {
                         .find(|line| !line.trim().is_empty())
                     && trailing_word(previous_line.trim_end()) == "do"
                 {
-                    self.continuation_indent.next_line_indent = None;
-                    self.continuation_indent.next_line_indent_spaces = Some(
+                    self.layout.continuation_indent.next_line_indent = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = Some(
                         leading_visual_width(previous_line, self.options.tab_width)
                             + self.options.indent_width * 2,
                     );
                 }
             }
             if clear_stream_after_line {
-                operator_chains::clear_operator_chain_frames(&mut self.frame_stack);
+                operator_chains::clear_operator_chain_frames(&mut self.layout.frame_stack);
             }
             if clear_string_after_line {
-                self.frame_stack.clear_string_continuations();
+                self.layout.frame_stack.clear_string_continuations();
             }
             self.observe_finished_block_spacing_line();
             if let Some(spaces) = self
+                .layout
                 .continuation_indent
                 .clear_continuation_after_line
                 .take()
             {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(spaces);
-                self.nesting.clear_continuation_indents();
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.nesting.clear_continuation_indents();
             }
             if case_label_with_comment && let Some(previous) = self.output.last() {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width,
                 );
             }
         }
         if self.unmatched_closing_brace_recovery {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(0);
-            self.indentation.clear_continuation_indents();
-            self.nesting.clear_continuation_indents();
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(0);
+            self.layout.indentation.clear_continuation_indents();
+            self.layout.nesting.clear_continuation_indents();
             operator_chains::clear_operator_chain_state(
-                &mut self.frame_stack,
-                &mut self.continuation_indent.logical_chain_indent_spaces,
+                &mut self.layout.frame_stack,
+                &mut self.layout.continuation_indent.logical_chain_indent_spaces,
             );
         }
-        self.run_in_state.current_run_in_indent = self.continuation_indent.next_line_indent;
+        self.layout.run_in_state.current_run_in_indent =
+            self.layout.continuation_indent.next_line_indent;
         self.max_length_line.reset();
-        self.literal_line.preserve_raw_literal_line_end = false;
+        self.layout.literal_line.preserve_raw_literal_line_end = false;
         self.preserve_run_in_join_space = false;
         self.reset_after_finished_line();
     }

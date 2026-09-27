@@ -70,7 +70,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn pad_before_open_paren_space(&mut self) {
         if self.options.unpad_parens {
-            let use_tab = self.previous != PreviousToken::OpenParen
+            let use_tab = self.layout.previous != PreviousToken::OpenParen
                 && self
                     .token_input
                     .previous_input_whitespace

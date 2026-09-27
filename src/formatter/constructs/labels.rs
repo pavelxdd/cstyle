@@ -206,7 +206,7 @@ impl FormatEngine<'_> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
-            && self.pending_braceless_block_bias.is_none()
+            && self.layout.pending_braceless_block_bias.is_none()
             && !self.in_initializer_brace()
             && self.current_inline_array_column().is_none())
         .then_some(self.options.indent_width)
@@ -270,7 +270,8 @@ impl FormatEngine<'_> {
                 before_trimmed.starts_with("case ") || before_trimmed.starts_with("default:");
             let extra = if follows_switch_label {
                 self.options.indent_width * 2
-                    + self.line_adjuster.next_line_case_unindent_depth() * self.options.indent_width
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
+                        * self.options.indent_width
             } else {
                 self.options.indent_width
             };
@@ -287,7 +288,8 @@ impl FormatEngine<'_> {
         let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
         if line.trim() == "}" && self.current_closes_label_block() {
             return Some(
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .last_closed_brace()
                     .filter(|frame| frame.label_block)
                     .map_or_else(
@@ -316,7 +318,7 @@ impl FormatEngine<'_> {
             };
             return Some(
                 base + usize::from(needs_case_unindent)
-                    * self.line_adjuster.next_line_case_unindent_depth()
+                    * self.layout.line_adjuster.next_line_case_unindent_depth()
                     * self.options.indent_width,
             );
         }
@@ -341,6 +343,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let frame = self
+            .layout
             .frame_stack
             .active_brace()
             .filter(|frame| frame.label_block)?;
@@ -351,7 +354,8 @@ impl FormatEngine<'_> {
         };
         Some(
             target
-                + self.line_adjuster.case_unindent_depth_for_line(line) * self.options.indent_width,
+                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
+                    * self.options.indent_width,
         )
     }
 
@@ -360,12 +364,14 @@ impl FormatEngine<'_> {
             return None;
         }
         let frame = self
+            .layout
             .frame_stack
             .last_closed_brace()
             .filter(|frame| frame.label_block)?;
         Some(
             frame.sibling_indent_column
-                + self.line_adjuster.case_unindent_depth_for_line(line) * self.options.indent_width,
+                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
+                    * self.options.indent_width,
         )
     }
 
@@ -387,7 +393,10 @@ impl FormatEngine<'_> {
         let mut next_spaces = line_indent_spaces + self.options.indent_width;
         if kind == LineKind::Label && !starts_access_label(line, &self.options.access_labels) {
             next_spaces = next_spaces.max(
-                (self.indentation.line_indent(LineKind::Normal, self.options)
+                (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width,
             );
@@ -409,12 +418,13 @@ impl FormatEngine<'_> {
         {
             next_spaces = next_spaces.max(leading_visual_width(previous, self.options.tab_width));
         }
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = Some(next_spaces);
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = Some(next_spaces);
     }
 
     fn enclosing_label_block_body_indent_spaces(&self) -> Option<usize> {
         if let Some(frame) = self
+            .layout
             .frame_stack
             .active_brace()
             .filter(|frame| frame.label_block)

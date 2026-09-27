@@ -131,7 +131,11 @@ impl FormatEngine<'_> {
                     .is_some_and(|rest| rest.starts_with(char::is_whitespace))
             };
             if let Some(column) = self.current_inline_array_column()
-                && self.frame_stack.active_constructor_initializer().is_some()
+                && self
+                    .layout
+                    .frame_stack
+                    .active_constructor_initializer()
+                    .is_some()
                 && previous_code.ends_with(',')
                 && previous_code.contains('{')
                 && !current_trimmed.starts_with('}')
@@ -320,7 +324,7 @@ impl FormatEngine<'_> {
                 }
             }
             let case_unindent =
-                self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if case_unindent > 0
                 && self.token_input.token_source_line_indent > 0
                 && previous_code.ends_with(',')
@@ -365,7 +369,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = labels::access_label_body_indent_spaces(
                 line,
                 previous,
-                self.nesting.brace_type_stack.last().copied(),
+                self.layout.nesting.brace_type_stack.last().copied(),
                 self.options,
             ) {
                 layout.exact_indent_spaces = Some(spaces);
@@ -507,7 +511,7 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['{', '}', '#'])
-            && self.frame_stack.active_brace().is_none_or(|frame| {
+            && self.layout.frame_stack.active_brace().is_none_or(|frame| {
                 frame.header.as_deref().is_none_or(|header| {
                     starts_header_word(header, "if")
                         || starts_header_word(header, "while")
@@ -536,7 +540,7 @@ impl FormatEngine<'_> {
                     + self.options.indent_width * (1 + nested_header_extra)
                     + usize::from(
                         !trimmed.starts_with("case ") && !trimmed.starts_with("default:"),
-                    ) * self.line_adjuster.next_line_case_unindent_depth()
+                    ) * self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width;
                 if layout.exact_indent_spaces.unwrap_or(0) < target {
                     layout.exact_indent_spaces = Some(target);
@@ -624,7 +628,7 @@ impl FormatEngine<'_> {
             if previous.contains("\\ //")
                 && previous_code.contains('{')
                 && !previous_code.trim_start().starts_with('#')
-                && let Some(frame) = self.frame_stack.active_brace()
+                && let Some(frame) = self.layout.frame_stack.active_brace()
             {
                 layout.exact_indent_spaces = Some(frame.body_indent_column);
             }
@@ -647,7 +651,7 @@ impl FormatEngine<'_> {
                     .is_some_and(is_identifier_start)
             {
                 layout.exact_indent_spaces =
-                    Some(self.indentation.indent() * self.options.indent_width);
+                    Some(self.layout.indentation.indent() * self.options.indent_width);
             }
             if previous_code.trim_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
@@ -660,7 +664,7 @@ impl FormatEngine<'_> {
                     .is_some_and(is_identifier_start)
             {
                 layout.exact_indent_spaces =
-                    Some(self.indentation.indent() * self.options.indent_width);
+                    Some(self.layout.indentation.indent() * self.options.indent_width);
             }
             if let Some(spaces) = self.scoped_ternary_continuation_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
@@ -773,7 +777,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = labels::candidate_line_indent_spaces(
             line,
             self.options,
-            self.frame_stack.active_ternary().is_some()
+            self.layout.frame_stack.active_ternary().is_some()
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some(),
         ) {
@@ -1147,7 +1151,7 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['#', '{', '}'])
-            && self.frame_stack.active_brace().is_none_or(|frame| {
+            && self.layout.frame_stack.active_brace().is_none_or(|frame| {
                 frame.header.as_deref().is_none_or(|header| {
                     starts_header_word(header, "if")
                         || starts_header_word(header, "while")
@@ -1356,7 +1360,7 @@ impl FormatEngine<'_> {
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
         if layout.line_kind == LineKind::Normal
-            && self.line_adjuster.total_case_unindent_depth() > 0
+            && self.layout.line_adjuster.total_case_unindent_depth() > 0
             && line
                 .trim_start()
                 .strip_prefix(['+', '-'])
@@ -1413,7 +1417,7 @@ impl FormatEngine<'_> {
                 {
                     layout.exact_indent_spaces = Some(
                         open + 1
-                            + self.line_adjuster.total_case_unindent_depth()
+                            + self.layout.line_adjuster.total_case_unindent_depth()
                                 * self.options.indent_width,
                     );
                 }
@@ -1436,7 +1440,8 @@ impl FormatEngine<'_> {
             {
                 let spaces = open
                     + 1
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width;
                 if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
                     layout.exact_indent_spaces = Some(spaces);
                 }
@@ -1479,7 +1484,9 @@ impl FormatEngine<'_> {
             && self.commented_split_else_preprocessor_region_active()
             && line.trim_end().ends_with(");")
         {
-            self.continuation_indent.clear_continuation_after_line =
+            self.layout
+                .continuation_indent
+                .clear_continuation_after_line =
                 Some(layout.normal_indent * self.options.indent_width);
         }
         if let Some(spaces) = self.none_style_split_else_blank_gap_sibling_indent_spaces(
@@ -1617,7 +1624,9 @@ impl FormatEngine<'_> {
             && self.commented_split_else_preprocessor_region_active()
             && line.trim_end().ends_with(");")
         {
-            self.continuation_indent.clear_continuation_after_line =
+            self.layout
+                .continuation_indent
+                .clear_continuation_after_line =
                 Some(layout.normal_indent * self.options.indent_width);
         }
         contextual
@@ -1656,7 +1665,9 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
-                    self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                    self.layout
+                        .continuation_indent
+                        .clear_continuation_after_line = Some(spaces);
                 }
             }
             if let Some(call_layout) =
@@ -1664,7 +1675,9 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
-                    self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                    self.layout
+                        .continuation_indent
+                        .clear_continuation_after_line = Some(spaces);
                 }
             }
             if let Some(spaces) = self.split_else_following_assignment_call_indent_spaces(
@@ -1685,7 +1698,9 @@ impl FormatEngine<'_> {
                     layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 }
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
-                    self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                    self.layout
+                        .continuation_indent
+                        .clear_continuation_after_line = Some(spaces);
                 }
             }
             if let Some(spaces) =
@@ -1775,7 +1790,9 @@ impl FormatEngine<'_> {
                 .split_else_completed_ternary_call_indent_spaces(line, in_preprocessor_else_context)
             {
                 layout.exact_indent_spaces = Some(spaces);
-                self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                self.layout
+                    .continuation_indent
+                    .clear_continuation_after_line = Some(spaces);
             }
             let in_split_preprocessor_else_context =
                 self.commented_split_else_preprocessor_region_active();
@@ -1791,7 +1808,9 @@ impl FormatEngine<'_> {
                 in_split_preprocessor_else_context,
             ) {
                 layout.exact_indent_spaces = Some(spaces);
-                self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                self.layout
+                    .continuation_indent
+                    .clear_continuation_after_line = Some(spaces);
             }
         }
         contextual
@@ -1828,7 +1847,7 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(
                 spaces
-                    + self.line_adjuster.next_line_case_unindent_depth()
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width,
             );
         }
@@ -1859,7 +1878,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width
-                        + self.line_adjuster.next_line_case_unindent_depth()
+                        + self.layout.line_adjuster.next_line_case_unindent_depth()
                             * self.options.indent_width,
                 ));
             } else if !line.trim_start().starts_with(['{', '}', '#', ':'])
@@ -1878,7 +1897,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(header, self.options.tab_width)
                         + self.options.indent_width
-                        + self.line_adjuster.next_line_case_unindent_depth()
+                        + self.layout.line_adjuster.next_line_case_unindent_depth()
                             * self.options.indent_width,
                 ));
             } else if !line.trim_start().starts_with(['{', '}', '#'])
@@ -1898,7 +1917,7 @@ impl FormatEngine<'_> {
                     layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                         header_indent
                             + self.options.indent_width
-                            + self.line_adjuster.next_line_case_unindent_depth()
+                            + self.layout.line_adjuster.next_line_case_unindent_depth()
                                 * self.options.indent_width,
                     ));
                 }
@@ -1907,7 +1926,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = labels::current_line_indent_spaces(
             layout.line_kind,
             line,
-            self.nesting.brace_type_stack.last().copied(),
+            self.layout.nesting.brace_type_stack.last().copied(),
             self.options,
         ) {
             layout.exact_indent_spaces = Some(spaces);
@@ -1954,7 +1973,7 @@ impl FormatEngine<'_> {
             && !open_trimmed.starts_with("case ")
             && !open_trimmed.starts_with("default:")
             && !matches!(
-                self.nesting.last_closed_brace_header.as_deref(),
+                self.layout.nesting.last_closed_brace_header.as_deref(),
                 Some("case" | "default")
             )
             && layout
@@ -1967,7 +1986,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && line.trim() != "break;"
             && !line.trim_start().starts_with(['#', '{', '}'])
-            && self.nesting.last_closed_brace_header.as_deref() == Some("switch")
+            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("switch")
             && let Some(previous) = self.output.last_non_empty_line()
             && previous.trim() == "}"
         {
@@ -1982,7 +2001,7 @@ impl FormatEngine<'_> {
         }
         if self.options.brace_style == BraceStyle::None
             && !line.trim_start().starts_with(['#', '}'])
-            && self.line_adjuster.next_line_case_unindent_depth() > 0
+            && self.layout.line_adjuster.next_line_case_unindent_depth() > 0
             && let Some(previous) = self.output.last_non_empty_line()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
@@ -2001,7 +2020,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(header, self.options.tab_width)
                         + self.options.indent_width * 2
-                        + self.line_adjuster.next_line_case_unindent_depth()
+                        + self.layout.line_adjuster.next_line_case_unindent_depth()
                             * self.options.indent_width,
                 ));
             }
@@ -2014,7 +2033,7 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width
-                    + self.line_adjuster.next_line_case_unindent_depth()
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width,
             );
         }
@@ -2070,10 +2089,11 @@ impl FormatEngine<'_> {
         }
         if let Some(spaces) = layout.exact_indent_spaces.as_mut()
             && line.trim() == "}"
-            && self.line_adjuster.total_case_unindent_depth() > 0
+            && self.layout.line_adjuster.total_case_unindent_depth() > 0
             && self.current_closes_same_line_else_block()
         {
-            *spaces += self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            *spaces +=
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         }
         contextual
     }
@@ -2191,7 +2211,9 @@ impl FormatEngine<'_> {
             if let Some(call_layout) = self.string_call_continuation_layout(line) {
                 layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
-                    self.continuation_indent.clear_continuation_after_line = Some(spaces);
+                    self.layout
+                        .continuation_indent
+                        .clear_continuation_after_line = Some(spaces);
                 }
             } else if let Some(spaces) =
                 self.multiline_control_header_body_indent_spaces(line, layout.line_kind)
@@ -2240,7 +2262,7 @@ impl FormatEngine<'_> {
             } else if previous_code.ends_with(';')
                 && current_spaces <= previous_indent
                 && (starts_header_word(previous_trimmed, "if")
-                    || (self.line_adjuster.total_case_unindent_depth() > 0
+                    || (self.layout.line_adjuster.total_case_unindent_depth() > 0
                         && (line_is_control_body_header(line.trim_start())
                             || starts_header_word(line.trim_start(), "if")
                             || starts_header_word(line.trim_start(), "while")
@@ -2262,7 +2284,7 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(
                     previous_indent
-                        + self.line_adjuster.total_case_unindent_depth()
+                        + self.layout.line_adjuster.total_case_unindent_depth()
                             * self.options.indent_width,
                 );
             } else if (is_comment_line(previous_raw_trimmed)
@@ -2305,7 +2327,7 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         }
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if let Some(spaces) = self.split_else_adjusted_case_indent_floor(
             line,
             layout.line_kind,
@@ -2369,7 +2391,7 @@ impl FormatEngine<'_> {
             line,
             layout.line_kind,
             self.split_else_body_indent_active(),
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         ) {
             layout.exact_indent_spaces = Some(spaces);
         }
@@ -2427,7 +2449,7 @@ impl FormatEngine<'_> {
         }
         if let Some(spaces) = layout.exact_indent_spaces.as_mut() {
             let case_unindent =
-                self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if case_unindent > 0 {
                 if let Some(adjusted) =
                     self.logical_case_unindent_adjusted_spaces(line, *spaces, layout.normal_indent)
@@ -2515,7 +2537,8 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| preprocessor_directive(line.trim_start()) == Some("endif"))
         {
             layout.exact_indent_spaces = Some(
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .active_brace()
                     .filter(|frame| {
                         frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_some()
@@ -2614,7 +2637,7 @@ impl FormatEngine<'_> {
                     layout.exact_indent_spaces = Some(target);
                 }
             } else if matches!(
-                self.nesting.last_closed_brace_type,
+                self.layout.nesting.last_closed_brace_type,
                 Some(BraceType::CompoundLiteral)
             ) && previous_trimmed.starts_with('}')
                 && previous_code.ends_with(')')
@@ -2648,7 +2671,8 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if self.options.indent_after_parens
@@ -2663,10 +2687,12 @@ impl FormatEngine<'_> {
                     .any(|word| word == "new")
                 && (replay.closed_delimiter_continuation_indent.is_some()
                     || self
+                        .layout
                         .frame_stack
                         .active_delimiter()
                         .is_some_and(|delimiter| delimiter.opener_output_line < self.output.len()))
                 && let Some(spaces) = if self
+                    .layout
                     .frame_stack
                     .active_brace()
                     .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
@@ -2675,7 +2701,7 @@ impl FormatEngine<'_> {
                         .input_continuation_indent
                         .map(|indent| indent.columns(self.options.indent_width))
                         .or(replay.closed_delimiter_continuation_indent)
-                        .or_else(|| self.nesting.current_continuation_indent_spaces())
+                        .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
                 } else {
                     replay
                         .closed_delimiter_continuation_indent
@@ -2684,7 +2710,7 @@ impl FormatEngine<'_> {
                                 .input_continuation_indent
                                 .map(|indent| indent.columns(self.options.indent_width))
                         })
-                        .or_else(|| self.nesting.current_continuation_indent_spaces())
+                        .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
                 }
             {
                 layout.exact_indent_spaces = Some(spaces);
@@ -2697,7 +2723,7 @@ impl FormatEngine<'_> {
             && let Some(spaces) = layout.exact_indent_spaces.as_mut()
         {
             let case_unindent =
-                self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             let normal_spaces = layout.normal_indent * self.options.indent_width;
             if case_unindent > 0 && *spaces < normal_spaces {
                 *spaces += case_unindent;
@@ -2732,7 +2758,8 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if !self.options.indent_after_parens
@@ -2830,7 +2857,8 @@ impl FormatEngine<'_> {
                         || open_trimmed.starts_with("else")
                 })
         } else {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .active_brace()
                 .and_then(|frame| frame.header.as_deref())
                 .is_some_and(|header| {
@@ -2842,7 +2870,7 @@ impl FormatEngine<'_> {
                 })
         };
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if line.trim() == "}"
             && self.options.brace_style == BraceStyle::Horstmann
             && case_unindent > 0
@@ -2855,7 +2883,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && case_unindent > 0
             && line_in_case_control_block
-            && self.nesting.paren_depth == 0
+            && self.layout.nesting.paren_depth == 0
             && !line.trim_start().starts_with("else")
             && !line_is_control_body_header(line.trim_start())
             && (line
@@ -3043,7 +3071,7 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(
                     spaces
-                        + self.line_adjuster.total_case_unindent_depth()
+                        + self.layout.line_adjuster.total_case_unindent_depth()
                             * self.options.indent_width,
                 );
             }
@@ -3074,6 +3102,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(");")
             && !self.options.indent_cases
             && self
+                .layout
                 .nesting
                 .brace_header_stack
                 .iter()
@@ -3095,7 +3124,7 @@ impl FormatEngine<'_> {
             && let Some(spaces) = self.active_initializer_brace_indent_spaces(line, false)
         {
             layout.exact_indent_spaces =
-                Some(spaces.max(self.indentation.indent() * self.options.indent_width));
+                Some(spaces.max(self.layout.indentation.indent() * self.options.indent_width));
         }
         contextual
     }
@@ -3198,7 +3227,7 @@ impl FormatEngine<'_> {
         if layout.exact_indent_spaces.is_none()
             && self.options.brace_style == BraceStyle::Allman
             && layout.line_kind == LineKind::Normal
-            && self.indentation.indent() == 0
+            && self.layout.indentation.indent() == 0
             && layout.indent > layout.normal_indent
             && self.token_input.token_source_line_indent == 0
             && self

@@ -139,7 +139,8 @@ fn constructor_signature_ends_with_parameter_list(line: &str) -> bool {
 impl FormatEngine<'_> {
     pub(crate) fn constructor_initializer_prefix_level(&self, structural_level: usize) -> usize {
         let width = self.options.indent_width.max(1);
-        self.frame_stack
+        self.layout
+            .frame_stack
             .active_constructor_initializer()
             .map_or(structural_level, |frame| {
                 structural_level.max(frame.colon_line_indent_spaces / width)
@@ -151,7 +152,11 @@ impl FormatEngine<'_> {
         line: &str,
     ) -> Option<usize> {
         if self.options.max_code_length.is_none()
-            || self.frame_stack.active_constructor_initializer().is_none()
+            || self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_none()
         {
             return None;
         }
@@ -265,13 +270,15 @@ impl FormatEngine<'_> {
         let colon_line_indent_spaces = if layout == ConstructorInitializerLayout::SameLine
             && line_paren_imbalance(self.current.trim_end()).0 > 0
         {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .line_closed_delimiter_line_indent_spaces()
                 .unwrap_or_else(|| self.current_line_indent_spaces())
         } else {
             self.current_line_indent_spaces()
         };
-        self.frame_stack
+        self.layout
+            .frame_stack
             .push_constructor_initializer(ConstructorInitializerFrame {
                 colon_line_indent_spaces,
                 layout,
@@ -335,7 +342,7 @@ impl FormatEngine<'_> {
     }
 
     fn constructor_initializer_frame_base_indent_spaces(&self) -> Option<usize> {
-        let frame = self.frame_stack.active_constructor_initializer()?;
+        let frame = self.layout.frame_stack.active_constructor_initializer()?;
         if !self.output_has_constructor_initializer_colon() {
             return None;
         }
@@ -388,6 +395,7 @@ impl FormatEngine<'_> {
                 let leading = leading_visual_width(raw, self.options.tab_width);
                 if trimmed == ":" {
                     let function_try = self
+                        .layout
                         .frame_stack
                         .active_constructor_initializer()
                         .is_some_and(|frame| frame.function_try);
@@ -500,7 +508,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
-        if self.nesting.paren_depth > 0
+        if self.layout.nesting.paren_depth > 0
             && previous_code.ends_with(',')
             && line_paren_imbalance(previous_code).0 == 0
         {
@@ -514,7 +522,7 @@ impl FormatEngine<'_> {
         line: &str,
     ) -> Option<usize> {
         let trimmed = line.trim_start();
-        if trimmed.is_empty() || !trimmed.starts_with(',') || self.nesting.paren_depth > 0 {
+        if trimmed.is_empty() || !trimmed.starts_with(',') || self.layout.nesting.paren_depth > 0 {
             return None;
         }
         if !self
@@ -855,7 +863,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn constructor_member_line_base_indent_spaces(&self) -> Option<usize> {
-        self.frame_stack.active_constructor_initializer()?;
+        self.layout.frame_stack.active_constructor_initializer()?;
         self.current
             .trim_start()
             .chars()

@@ -328,7 +328,7 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '{', '}', '/'])
             || self.is_header(leading_identifier(line))
-            || self.pending_braceless_block_bias.is_none()
+            || self.layout.pending_braceless_block_bias.is_none()
             || !(self.split_else_braceless_body_active()
                 || self
                     .output
@@ -338,6 +338,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let header = self
+            .layout
             .frame_stack
             .active_header()
             .filter(|header| self.is_add_braces_header(&header.header))?;
@@ -564,7 +565,7 @@ impl FormatEngine<'_> {
                 break;
             }
             if starts_header_word(trimmed, "if") || trimmed.starts_with("else if") {
-                return Some(level + self.line_adjuster.total_case_unindent_depth());
+                return Some(level + self.layout.line_adjuster.total_case_unindent_depth());
             }
             if starts_header_word(trimmed, "for")
                 || starts_header_word(trimmed, "while")
@@ -651,7 +652,7 @@ impl FormatEngine<'_> {
             indent_level: None,
             indent_spaces: previous_indent
                 + self.options.indent_width
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         })
     }
 
@@ -791,7 +792,7 @@ impl FormatEngine<'_> {
         {
             return Some(
                 leading_visual_width(comment, self.options.tab_width)
-                    + self.line_adjuster.next_line_case_unindent_depth()
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width,
             );
         }
@@ -933,7 +934,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_line()?;
         (previous.trim_end().ends_with(';') && previous.contains('}'))
-            .then(|| self.indentation.indent())
+            .then(|| self.layout.indentation.indent())
     }
 
     pub(crate) fn else_after_closed_nested_header_indent_spaces(
@@ -1026,6 +1027,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn braceless_header_accepts_while(&self, base: usize) -> bool {
         if self
+            .layout
             .frame_stack
             .active_braceless_header()
             .is_some_and(|frame| {
@@ -1054,6 +1056,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn braceless_header_accepts_else(&self, base: usize) -> bool {
         if self
+            .layout
             .frame_stack
             .active_braceless_header()
             .is_some_and(|frame| {
@@ -1155,14 +1158,15 @@ impl FormatEngine<'_> {
     fn record_header_frame(&mut self, word: &str) {
         let attached_closing_indent =
             (word == "else" && self.current.trim_start().starts_with('}')).then(|| {
-                self.frame_stack.last_closed_brace().map_or_else(
+                self.layout.frame_stack.last_closed_brace().map_or_else(
                     || self.current_line_indent_spaces(),
                     |frame| frame.sibling_indent_column,
                 )
             });
         let closed_if_indent = (word == "else")
             .then(|| {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .last_closed_brace()
                     .filter(|frame| frame.header.as_deref() == Some("if"))
                     .map(|frame| frame.header_indent_column)
@@ -1170,7 +1174,8 @@ impl FormatEngine<'_> {
             .flatten();
         let open_if_indent = (word == "else")
             .then(|| {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .active_header()
                     .filter(|frame| frame.header == "if")
                     .map(|frame| frame.line_indent_spaces)
@@ -1183,7 +1188,7 @@ impl FormatEngine<'_> {
                 .trim()
                 .strip_prefix('}')
                 .is_some_and(|rest| rest.trim().is_empty()))
-        .then(|| self.indentation.indent() * self.options.indent_width);
+        .then(|| self.layout.indentation.indent() * self.options.indent_width);
         let starts_output_line = self.token_input.token_begins_source_line
             || (self.current_is_blank() && self.previous_was_newline);
         let keeps_return_continuation_column = self.options.brace_style == BraceStyle::Whitesmith
@@ -1196,10 +1201,12 @@ impl FormatEngine<'_> {
             .current_is_blank()
             .then_some(())
             .and_then(|()| {
-                self.continuation_indent
+                self.layout
+                    .continuation_indent
                     .next_line_indent_spaces
                     .or_else(|| {
-                        self.continuation_indent
+                        self.layout
+                            .continuation_indent
                             .next_line_indent
                             .map(|level| level * self.options.indent_width)
                     })
@@ -1210,12 +1217,14 @@ impl FormatEngine<'_> {
                     || spaces.is_multiple_of(self.options.indent_width)
             });
         let enclosing_else_body_indent = self.current_is_blank().then_some(()).and_then(|()| {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .active_header()
                 .filter(|frame| frame.header == "else" && self.active_else_expects_body())
                 .map(|frame| frame.body_indent_spaces)
         });
         let inline_header_indent = self
+            .layout
             .inline_nested_header_braceless_bias
             .filter(|_| word == "else" || !self.token_input.token_begins_source_line)
             .map(|level| level * self.options.indent_width);
@@ -1235,9 +1244,10 @@ impl FormatEngine<'_> {
                 } else {
                     current_indent
                 };
-                let structural_indent =
-                    current_indent + self.else_if_break_depths.len() * self.options.indent_width;
-                self.frame_stack
+                let structural_indent = current_indent
+                    + self.layout.else_if_break_depths.len() * self.options.indent_width;
+                self.layout
+                    .frame_stack
                     .active_brace()
                     .filter(|frame| frame.semantic_kind == BraceSemanticKind::Command)
                     .map_or(structural_indent, |frame| {
@@ -1246,10 +1256,11 @@ impl FormatEngine<'_> {
                     })
             });
         let parent_delimiter = self
+            .layout
             .frame_stack
             .active_delimiter_with_id()
             .map(|(id, _)| id);
-        self.frame_stack.push_header(HeaderFrame {
+        self.layout.frame_stack.push_header(HeaderFrame {
             header: word.to_string(),
             line_indent_spaces,
             body_indent_spaces: line_indent_spaces + self.options.indent_width,
@@ -1281,26 +1292,26 @@ impl FormatEngine<'_> {
             None
         };
         if let Some(header) = header {
-            self.command_state.current_header = Some(header.to_string());
+            self.layout.command_state.current_header = Some(header.to_string());
             if matches!(header, "case" | "default") {
-                self.command_state.case_label_colon_emitted = false;
+                self.layout.command_state.case_label_colon_emitted = false;
             }
-            self.command_state.header_broken_before_comment = false;
-            self.command_state.preprocessor_after_header = false;
+            self.layout.command_state.header_broken_before_comment = false;
+            self.layout.command_state.preprocessor_after_header = false;
             self.record_header_frame(header);
         }
         if let Some(header) = header {
             self.observe_block_spacing_header(header);
         }
         if (language::BLOCK_WORDS.contains(&word) || language::PRE_BLOCK_WORDS.contains(&word))
-            && self.nesting.paren_depth == 0
+            && self.layout.nesting.paren_depth == 0
             && self.block_word_is_recognized(word, next)
             && !(matches!(word, "class" | "struct")
-                && self.command_state.pending_block_word.as_deref() == Some("enum"))
+                && self.layout.command_state.pending_block_word.as_deref() == Some("enum"))
         {
-            self.command_state.pending_block_word = Some(word.to_string());
+            self.layout.command_state.pending_block_word = Some(word.to_string());
         }
-        self.command_state.observe_text(word);
+        self.layout.command_state.observe_text(word);
     }
 
     fn word_can_be_header_here(&self, word: &str, next: Option<&Token>) -> bool {
@@ -1314,6 +1325,7 @@ impl FormatEngine<'_> {
             if !(before.is_empty()
                 || before == "else"
                 || self
+                    .layout
                     .command_state
                     .current_header
                     .as_deref()
@@ -1340,7 +1352,7 @@ impl FormatEngine<'_> {
                 next,
                 Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _))
             ) && (current.ends_with('}')
-                || self.command_state.previous_non_ws_char == Some('}'));
+                || self.layout.command_state.previous_non_ws_char == Some('}'));
         }
         if word == "do" {
             return !matches!(next, Some(Token::Operator(operator)) if operator == "::");
@@ -1354,20 +1366,21 @@ impl FormatEngine<'_> {
     pub(crate) fn block_word_is_recognized(&self, word: &str, next: Option<&Token>) -> bool {
         match word {
             "module" => {
-                self.command_state.previous_non_ws_char != Some(')')
+                self.layout.command_state.previous_non_ws_char != Some(')')
                     && matches!(
                         next,
                         Some(Token::Word(name))
                             if name.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic())
                     )
             }
-            "interface" => self.command_state.pending_block_word.is_none(),
+            "interface" => self.layout.command_state.pending_block_word.is_none(),
             _ => true,
         }
     }
 
     pub(crate) fn push_pre_brace_header(&mut self) -> Option<String> {
         let header = self
+            .layout
             .command_state
             .current_header
             .take()
@@ -1383,14 +1396,14 @@ impl FormatEngine<'_> {
                             let line = line.trim();
                             is_case_label_start(line) || is_default_label_start(line)
                         }))
-                    || (self.command_state.case_label_colon_emitted
-                        && self.command_state.previous_non_ws_char == Some(':'))
+                    || (self.layout.command_state.case_label_colon_emitted
+                        && self.layout.command_state.previous_non_ws_char == Some(':'))
             })
             .or_else(|| {
                 let word = leading_identifier(self.current.trim_start());
                 (self.is_header(word)
                     && (language::is_non_paren_header(word)
-                        || self.command_state.previous_command_char == Some(')')))
+                        || self.layout.command_state.previous_command_char == Some(')')))
                 .then(|| word.to_string())
             })
             .or_else(|| {
@@ -1404,7 +1417,7 @@ impl FormatEngine<'_> {
                 {
                     return None;
                 }
-                let header = self.frame_stack.active_header()?.header.clone();
+                let header = self.layout.frame_stack.active_header()?.header.clone();
                 let line = self
                     .output
                     .iter()
@@ -1424,8 +1437,9 @@ impl FormatEngine<'_> {
                 Some(header)
             })?;
         self.observe_block_spacing_body_start();
-        self.command_state.preprocessor_after_header = false;
-        self.command_state
+        self.layout.command_state.preprocessor_after_header = false;
+        self.layout
+            .command_state
             .pre_brace_header_stack
             .push(header.clone());
         Some(header)
@@ -1450,9 +1464,9 @@ impl FormatEngine<'_> {
             .trim_end()
             .ends_with('{');
         let frame = if current_opens_brace {
-            self.frame_stack.enclosing_brace()
+            self.layout.frame_stack.enclosing_brace()
         } else {
-            self.frame_stack.active_brace()
+            self.layout.frame_stack.active_brace()
         }?;
         let natural = indent * self.options.indent_width;
         if frame.semantic_kind != BraceSemanticKind::Command
@@ -1553,7 +1567,7 @@ impl FormatEngine<'_> {
                 return matches_if.then(|| {
                     current_spaces.unwrap_or(0).max(
                         self.output.lead_width(index, self.options.tab_width)
-                            + self.line_adjuster.next_line_case_unindent_depth()
+                            + self.layout.line_adjuster.next_line_case_unindent_depth()
                                 * self.options.indent_width,
                     )
                 });
@@ -2036,26 +2050,27 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn match_closing_while_to_braceless_do(&mut self) {
-        while let Some((base, delta)) = self.indentation.last_braceless_block()
-            && self.indentation.indent() == base + delta
+        while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+            && self.layout.indentation.indent() == base + delta
             && !self.braceless_header_accepts_while(base)
         {
-            self.indentation.exit_braceless_block();
+            self.layout.indentation.exit_braceless_block();
         }
-        if let Some((base, delta)) = self.indentation.last_braceless_block()
-            && self.indentation.indent() == base + delta
+        if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+            && self.layout.indentation.indent() == base + delta
             && self.braceless_header_accepts_while(base)
         {
-            self.continuation_indent.next_line_indent =
-                Some(base + self.line_adjuster.total_case_unindent_depth());
-            self.continuation_indent.next_line_indent_spaces = None;
-            self.indentation.exit_braceless_block();
+            self.layout.continuation_indent.next_line_indent =
+                Some(base + self.layout.line_adjuster.total_case_unindent_depth());
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.indentation.exit_braceless_block();
             if self
+                .layout
                 .frame_stack
                 .active_braceless_header()
                 .is_some_and(|frame| frame.header == "do")
             {
-                self.frame_stack.pop_braceless_header();
+                self.layout.frame_stack.pop_braceless_header();
             }
             return;
         }
@@ -2075,11 +2090,11 @@ impl FormatEngine<'_> {
                 if net > pending_whiles {
                     let level = leading_visual_width(line, self.options.tab_width)
                         / self.options.indent_width;
-                    self.continuation_indent.next_line_indent = Some(
+                    self.layout.continuation_indent.next_line_indent = Some(
                         level + net - pending_whiles - 1
-                            + self.line_adjuster.total_case_unindent_depth(),
+                            + self.layout.line_adjuster.total_case_unindent_depth(),
                     );
-                    self.continuation_indent.next_line_indent_spaces = None;
+                    self.layout.continuation_indent.next_line_indent_spaces = None;
                     return;
                 }
                 pending_whiles -= net;

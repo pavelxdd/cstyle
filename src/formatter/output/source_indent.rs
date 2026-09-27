@@ -160,7 +160,7 @@ impl FormatEngine<'_> {
     }
 
     fn source_indent_for_output(&self, source: usize) -> usize {
-        source + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+        source + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
     }
 
     fn source_owned_continuation_line(&self, trimmed: &str) -> bool {
@@ -189,6 +189,6 @@ impl FormatEngine<'_> {
         previous_code.ends_with(['(', '[', '=', '?', '\\'])
             || head_ends_binary_operator(previous_code)
             || self.line_follows_logical_operator()
-            || self.nesting.paren_depth > 0
+            || self.layout.nesting.paren_depth > 0
     }
 }

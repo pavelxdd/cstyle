@@ -233,13 +233,13 @@ impl FormatEngine<'_> {
         if matches!(operator, "*" | "&" | "&&" | "^")
             && statement.starts_with("using ")
             && statement.contains('=')
-            && self.line_state.template_angle_depth == 0
+            && self.layout.line_state.template_angle_depth == 0
         {
             self.emit_source_space();
             self.current.push_str(operator);
             self.emit_trailing_source_space();
-            self.command_state.observe_text(operator);
-            self.previous = PreviousToken::Operator;
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
             return;
         }
@@ -267,9 +267,9 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty())
                 .map_or(0, |line| leading_visual_width(line, self.options.tab_width));
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(indent_spaces);
-            self.continuation_indent.logical_chain_indent_spaces = None;
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(indent_spaces);
+            self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
         if matches!(operator, "&&" | "||") && !split_rvalue_reference {
             self.record_logical_operator_frame(operator);
@@ -287,62 +287,71 @@ impl FormatEngine<'_> {
                 .output
                 .len()
                 .checked_sub(1)
-                .and_then(|line| self.frame_stack.active_logical_on_output_line(line))
+                .and_then(|line| self.layout.frame_stack.active_logical_on_output_line(line))
                 .is_some_and(|frame| frame.operator != current_operator);
             let persisted_chain = if previous_opens_nested_logical_group {
                 None
             } else {
-                self.continuation_indent.logical_chain_indent_spaces
+                self.layout.continuation_indent.logical_chain_indent_spaces
             };
             let chain_spaces = persisted_chain
                 .or_else(|| self.previous_logical_continuation_indent_spaces(operator))
                 .or_else(|| {
-                    self.command_state.current_header.is_none().then(|| {
-                        self.output
-                            .iter()
-                            .rev()
-                            .find(|line| !line.trim().is_empty())
-                            .and_then(|line| {
-                                let line = line.trim_end();
-                                let column = unmatched_open_paren_column(line)?;
-                                let after = line[column + 1..].len()
-                                    - line[column + 1..].trim_start().len();
-                                Some(column + 1 + after)
-                            })
-                            .filter(|spaces| *spaces <= self.options.max_continuation_indent)
-                    })?
+                    self.layout
+                        .command_state
+                        .current_header
+                        .is_none()
+                        .then(|| {
+                            self.output
+                                .iter()
+                                .rev()
+                                .find(|line| !line.trim().is_empty())
+                                .and_then(|line| {
+                                    let line = line.trim_end();
+                                    let column = unmatched_open_paren_column(line)?;
+                                    let after = line[column + 1..].len()
+                                        - line[column + 1..].trim_start().len();
+                                    Some(column + 1 + after)
+                                })
+                                .filter(|spaces| *spaces <= self.options.max_continuation_indent)
+                        })?
                 });
             if let Some(spaces) = chain_spaces {
-                let spaces = if persisted_chain.is_some() && self.nesting.paren_depth == 0 {
+                let spaces = if persisted_chain.is_some() && self.layout.nesting.paren_depth == 0 {
                     spaces
                 } else {
-                    match self.nesting.current_continuation_indent_spaces() {
+                    match self.layout.nesting.current_continuation_indent_spaces() {
                         Some(paren) if paren < spaces => paren,
                         _ => spaces,
                     }
                 };
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(spaces);
-                self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
-            } else if self.nesting.paren_depth == 0
-                && let Some(spaces) = self.continuation_indent.next_line_indent_spaces
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.logical_chain_indent_spaces = Some(spaces);
+            } else if self.layout.nesting.paren_depth == 0
+                && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
             {
-                self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.logical_chain_indent_spaces = Some(spaces);
             }
         }
         if matches!(operator, "<<" | ">>")
             && self.current.trim().is_empty()
             && self.stream_line_follows_multiline_braced_operand()
-            && let Some(stream) = self.frame_stack.active_stream()
+            && let Some(stream) = self.layout.frame_stack.active_stream()
         {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(stream.chain_anchor_column);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(stream.chain_anchor_column);
         }
         if matches!(operator, "<<" | ">>")
             && self.current.trim().is_empty()
-            && self.continuation_indent.next_line_indent.is_none()
-            && self.continuation_indent.next_line_indent_spaces.is_none()
-            && self.indentation.statement_depth() == 0
+            && self.layout.continuation_indent.next_line_indent.is_none()
+            && self
+                .layout
+                .continuation_indent
+                .next_line_indent_spaces
+                .is_none()
+            && self.layout.indentation.statement_depth() == 0
             && !self.in_initializer_brace()
             && self.has_continuable_previous_statement()
             && self
@@ -350,15 +359,16 @@ impl FormatEngine<'_> {
                 .len()
                 .checked_sub(1)
                 .is_none_or(|previous_line| {
-                    self.frame_stack
+                    self.layout
+                        .frame_stack
                         .active_stream_on_output_line(previous_line)
                         .is_none()
                 })
         {
             let spaces = self.continuation_base_indent() * self.options.indent_width
                 + 2 * self.options.indent_width;
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
         if self.skip_adjacent_pointer_operators > 0 && matches!(operator, "*" | "&" | "^") {
             self.skip_adjacent_pointer_operators -= 1;
@@ -373,10 +383,10 @@ impl FormatEngine<'_> {
             TemplateAngle::Open => {
                 self.emit_source_space();
                 self.current.push('<');
-                self.line_state.template_angle_depth += 1;
+                self.layout.line_state.template_angle_depth += 1;
                 self.emit_trailing_source_space();
-                self.command_state.observe_text(operator);
-                self.previous = PreviousToken::Operator;
+                self.layout.command_state.observe_text(operator);
+                self.layout.previous = PreviousToken::Operator;
                 self.previous_was_newline = false;
                 return;
             }
@@ -387,31 +397,35 @@ impl FormatEngine<'_> {
                     self.emit_source_space();
                 }
                 self.current.push_str(operator);
-                self.line_state.template_angle_depth =
-                    self.line_state.template_angle_depth.saturating_sub(count);
+                self.layout.line_state.template_angle_depth = self
+                    .layout
+                    .line_state
+                    .template_angle_depth
+                    .saturating_sub(count);
                 self.emit_trailing_source_space();
-                self.command_state.observe_text(operator);
-                self.previous = PreviousToken::Operator;
+                self.layout.command_state.observe_text(operator);
+                self.layout.previous = PreviousToken::Operator;
                 self.previous_was_newline = false;
-                if self.line_state.template_angle_depth == 0 {
+                if self.layout.line_state.template_angle_depth == 0 {
                     self.previous_was_template_close = true;
                 }
                 return;
             }
             TemplateAngle::None => {}
         }
-        if self.line_state.operator_padding_disabled {
+        if self.layout.line_state.operator_padding_disabled {
             let keeps_non_operator_padding = self.current.ends_with([' ', '\t'])
-                && ((self.previous == PreviousToken::OpenParen && self.options.pad_parens_inside)
-                    || (self.previous == PreviousToken::Comma
+                && ((self.layout.previous == PreviousToken::OpenParen
+                    && self.options.pad_parens_inside)
+                    || (self.layout.previous == PreviousToken::Comma
                         && (self.options.pad_commas || self.options.pad_operators)));
             if !keeps_non_operator_padding {
                 self.emit_source_space();
             }
             self.current.push_str(operator);
             self.emit_trailing_source_space();
-            self.command_state.observe_text(operator);
-            self.previous = PreviousToken::Operator;
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
             return;
         }
@@ -421,15 +435,15 @@ impl FormatEngine<'_> {
         {
             self.trim_current_end();
             self.current.push_str(operator);
-            self.command_state.observe_text(operator);
-            self.previous = PreviousToken::Operator;
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
             return;
         }
         if operator == ">" && self.current.trim_end().ends_with('?') {
             self.current.push('>');
-            self.command_state.observe_text(operator);
-            self.previous = PreviousToken::Other;
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
             return;
         }
@@ -440,8 +454,8 @@ impl FormatEngine<'_> {
                 self.trim_current_end();
             }
             self.current.push_str(operator);
-            self.command_state.observe_text(operator);
-            self.previous = PreviousToken::Operator;
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
             return;
         }
@@ -454,13 +468,17 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| line[..trailing_comment_split_limit(line)].trim() == "}")
         {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces =
-                Some(self.indentation.indent() * self.options.indent_width);
-            self.continuation_indent.logical_chain_indent_spaces = None;
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
+                Some(self.layout.indentation.indent() * self.options.indent_width);
+            self.layout.continuation_indent.logical_chain_indent_spaces = None;
         } else if self.current.trim().is_empty()
             && is_leading_continuation_operator(operator)
-            && self.continuation_indent.next_line_indent_spaces.is_none()
+            && self
+                .layout
+                .continuation_indent
+                .next_line_indent_spaces
+                .is_none()
             && !self.preprocessor.last_output_was_preprocessor
             && self.has_continuable_previous_statement()
         {
@@ -473,15 +491,16 @@ impl FormatEngine<'_> {
                     leading_visual_width(line, self.options.tab_width) / self.options.indent_width
                         + 1
                 })
-                .unwrap_or_else(|| self.indentation.indent() + 1);
+                .unwrap_or_else(|| self.layout.indentation.indent() + 1);
             if self
+                .layout
                 .continuation_indent
                 .next_line_indent
                 .is_some_and(|level| level > stale_level)
             {
-                self.continuation_indent.next_line_indent = Some(stale_level);
-            } else if self.continuation_indent.next_line_indent.is_none() {
-                self.continuation_indent.next_line_indent_spaces = Some(
+                self.layout.continuation_indent.next_line_indent = Some(stale_level);
+            } else if self.layout.continuation_indent.next_line_indent.is_none() {
+                self.layout.continuation_indent.next_line_indent_spaces = Some(
                     self.continuation_base_indent() * self.options.indent_width
                         + self.options.continuation_indent * self.options.indent_width,
                 );
@@ -490,11 +509,15 @@ impl FormatEngine<'_> {
 
         match operator {
             "::" => {
-                if self.previous == PreviousToken::OpenParen && self.options.pad_parens_inside {
+                if self.layout.previous == PreviousToken::OpenParen
+                    && self.options.pad_parens_inside
+                {
                     self.pad_inside_paren_space();
-                } else if self.previous == PreviousToken::OpenParen && self.options.unpad_parens {
+                } else if self.layout.previous == PreviousToken::OpenParen
+                    && self.options.unpad_parens
+                {
                     self.trim_current_end_horizontal_space();
-                } else if !(self.previous == PreviousToken::Comma
+                } else if !(self.layout.previous == PreviousToken::Comma
                     && (self.options.pad_commas || self.options.pad_operators)
                     && self.current.ends_with([' ', '\t']))
                 {
@@ -511,7 +534,7 @@ impl FormatEngine<'_> {
             "+" | "-" if self.is_objc_method_prefix(next) => {
                 self.trim_current_end();
                 self.current.push_str(operator);
-                self.objc.post_prefix = true;
+                self.layout.objc.post_prefix = true;
                 if self.options.pad_method_prefix {
                     self.emit_trailing_source_space_or_ensure();
                 } else if !self.options.unpad_method_prefix {
@@ -538,7 +561,7 @@ impl FormatEngine<'_> {
             "!" | "~" => self.push_unary_prefix(operator),
             "+" | "-"
                 if self.current.trim().is_empty()
-                    && self.indentation.statement_depth() > 0
+                    && self.layout.indentation.statement_depth() > 0
                     && self.options.pad_operators
                     && self.line_start_sign_is_unary(next) =>
             {
@@ -546,7 +569,7 @@ impl FormatEngine<'_> {
             }
             "+" | "-"
                 if self.current.trim().is_empty()
-                    && self.indentation.statement_depth() > 0
+                    && self.layout.indentation.statement_depth() > 0
                     && self.options.pad_operators =>
             {
                 self.current.push_str(operator);
@@ -605,7 +628,7 @@ impl FormatEngine<'_> {
                 self.push_binary_operator(operator);
             }
             "*" if operator_role != OperatorRole::PointerDeclarator
-                && self.nesting.paren_depth > 0
+                && self.layout.nesting.paren_depth > 0
                 && matches!(next, Some(Token::Word(_)))
                 && self.current_paren_is_expression_context()
                 && !self.current_paren_context_is_declaration()
@@ -648,7 +671,7 @@ impl FormatEngine<'_> {
                 self.push_binary_operator(operator);
             }
             "&" if matches!(next, Some(Token::Symbol('[')))
-                && self.previous == PreviousToken::Word
+                && self.layout.previous == PreviousToken::Word
                 && trailing_word(&self.current) == "auto" =>
             {
                 if self.resolved_pointer_align(operator) == PointerAlign::None {
@@ -659,20 +682,20 @@ impl FormatEngine<'_> {
             }
             "&" if operator_role == OperatorRole::PointerDeclarator
                 && self.current.trim_start().starts_with("return ")
-                && self.previous != PreviousToken::OpenParen
+                && self.layout.previous != PreviousToken::OpenParen
                 && !is_pointer_type_word(trailing_word(&self.current)) =>
             {
                 self.push_binary_operator(operator);
             }
             "&" if operator_role == OperatorRole::PointerDeclarator
-                && self.previous == PreviousToken::OpenParen =>
+                && self.layout.previous == PreviousToken::OpenParen =>
             {
                 self.push_unary_prefix(operator);
             }
             "&" if operator_role == OperatorRole::PointerDeclarator
                 && !self.current_ends_cast()
                 && !self.current_ends_pointer_cast()
-                && (self.nesting.paren_depth == 0
+                && (self.layout.nesting.paren_depth == 0
                     || !self.current_paren_started_by_expression_keyword()) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
@@ -702,7 +725,7 @@ impl FormatEngine<'_> {
                 && !self.current_paren_is_lambda_parameter_list()
                 && !self.is_pointer_like(operator, next, next_is_adjacent, following_operator)
                 && matches!(
-                    self.previous,
+                    self.layout.previous,
                     PreviousToken::Word
                         | PreviousToken::Literal
                         | PreviousToken::CloseParen
@@ -713,9 +736,9 @@ impl FormatEngine<'_> {
             {
                 self.push_binary_operator(operator);
             }
-            "&" if self.nesting.paren_depth > 0
+            "&" if self.layout.nesting.paren_depth > 0
                 && matches!(
-                    self.previous,
+                    self.layout.previous,
                     PreviousToken::Word
                         | PreviousToken::Literal
                         | PreviousToken::CloseParen
@@ -742,7 +765,7 @@ impl FormatEngine<'_> {
             "*" if self.current_ends_sizeof_pointer_expr() => {
                 self.push_binary_operator(operator);
             }
-            "&" if self.nesting.paren_depth > 0
+            "&" if self.layout.nesting.paren_depth > 0
                 && self.current_paren_started_by_expression_keyword()
                 && !self.is_unary_pointer_operator()
                 && !self.is_pointer_like(operator, next, next_is_adjacent, following_operator) =>
@@ -761,9 +784,9 @@ impl FormatEngine<'_> {
             "&" | "*" if self.current_ends_pointer_cast() => self.push_unary_prefix(operator),
             "&" if self.current_ends_cast()
                 && !matches!(next, Some(Token::Symbol('(')))
-                && self.nesting.paren_depth == 0
+                && self.layout.nesting.paren_depth == 0
                 && matches!(
-                    self.nesting.brace_type_stack.last(),
+                    self.layout.nesting.brace_type_stack.last(),
                     Some(BraceType::Array | BraceType::Init | BraceType::DeferArray)
                 ) =>
             {
@@ -787,7 +810,7 @@ impl FormatEngine<'_> {
             "&" | "*"
                 if self.current_ends_cast()
                     && self.options.pad_operators
-                    && self.nesting.paren_depth > 0 =>
+                    && self.layout.nesting.paren_depth > 0 =>
             {
                 self.push_unary_prefix(operator);
             }
@@ -821,7 +844,11 @@ impl FormatEngine<'_> {
             "&" | "*" | "^"
                 if self.current.trim().is_empty()
                     && self.token_input.token_begins_source_line
-                    && self.continuation_indent.next_line_indent_spaces.is_some()
+                    && self
+                        .layout
+                        .continuation_indent
+                        .next_line_indent_spaces
+                        .is_some()
                     && self.is_function_declaration_parameter_continuation()
                     && matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ','))) =>
             {
@@ -898,8 +925,8 @@ impl FormatEngine<'_> {
             };
             self.register_current_continuation_indent(rhs_next);
         }
-        self.command_state.observe_text(operator);
-        self.previous = PreviousToken::Operator;
+        self.layout.command_state.observe_text(operator);
+        self.layout.previous = PreviousToken::Operator;
         self.previous_was_newline = false;
     }
 
@@ -943,7 +970,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn is_prefix_increment_or_decrement(&self) -> bool {
         !matches!(
-            self.previous,
+            self.layout.previous,
             PreviousToken::Word
                 | PreviousToken::Literal
                 | PreviousToken::CloseParen
@@ -993,7 +1020,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn is_unary_sign(&self) -> bool {
         matches!(
-            self.previous,
+            self.layout.previous,
             PreviousToken::None
                 | PreviousToken::Operator
                 | PreviousToken::OpenParen
@@ -1043,18 +1070,19 @@ impl FormatEngine<'_> {
                 self.emit_source_space();
             }
         } else if self.options.pad_parens_outside
-            && self.previous == PreviousToken::CloseParen
+            && self.layout.previous == PreviousToken::CloseParen
             && self.current_ends_cast()
-            && self.nesting.paren_depth > 0
+            && self.layout.nesting.paren_depth > 0
         {
             self.emit_source_space_or_ensure();
-        } else if self.previous == PreviousToken::Comma {
+        } else if self.layout.previous == PreviousToken::Comma {
             if self.options.pad_commas || self.options.pad_operators {
                 self.emit_source_space_or_ensure();
             } else {
                 self.emit_source_space();
             }
-        } else if self.previous == PreviousToken::Word || self.previous == PreviousToken::CloseParen
+        } else if self.layout.previous == PreviousToken::Word
+            || self.layout.previous == PreviousToken::CloseParen
         {
             self.emit_source_space();
         }
@@ -1069,25 +1097,30 @@ impl FormatEngine<'_> {
         let Some(previous_line) = self.output.len().checked_sub(1) else {
             return false;
         };
-        self.frame_stack.last_closed_brace().is_some_and(|brace| {
-            brace.close_output_line == Some(previous_line)
-                && brace.close_ends_output_line
-                && self
-                    .frame_stack
-                    .active_stream_on_output_line(previous_line)
-                    .is_none()
-        })
+        self.layout
+            .frame_stack
+            .last_closed_brace()
+            .is_some_and(|brace| {
+                brace.close_output_line == Some(previous_line)
+                    && brace.close_ends_output_line
+                    && self
+                        .layout
+                        .frame_stack
+                        .active_stream_on_output_line(previous_line)
+                        .is_none()
+            })
     }
 
     fn record_logical_operator_frame(&mut self, operator: &str) {
         if self.current.trim() == ")"
             && let Some(spaces) = self
+                .layout
                 .frame_stack
                 .take_line_closed_call_logical_operand_indent(self.output.len())
         {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(spaces);
-            self.continuation_indent.logical_chain_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.logical_chain_indent_spaces = Some(spaces);
         }
         let logical_operator = match operator {
             "&&" => LogicalOperator::And,
@@ -1115,7 +1148,7 @@ impl FormatEngine<'_> {
                     )
             })
         };
-        self.frame_stack.push_logical(LogicalFrame {
+        self.layout.frame_stack.push_logical(LogicalFrame {
             operator: logical_operator,
             operator_output_column,
             operator_output_line: self.output.len(),
@@ -1135,6 +1168,7 @@ impl FormatEngine<'_> {
         let line_indent_spaces = self.current_line_indent_spaces();
         let operator_output_column = line_indent_spaces + self.current_visual_width();
         let chain_anchor_column = self
+            .layout
             .frame_stack
             .active_stream()
             .map(|frame| frame.chain_anchor_column)
@@ -1153,7 +1187,7 @@ impl FormatEngine<'_> {
                     + visual_width_from(&self.current[..value_start], 0, self.options.tab_width)
             });
         let after_multiline_braced_operand = self.stream_line_follows_multiline_braced_operand();
-        self.frame_stack.push_stream(StreamFrame {
+        self.layout.frame_stack.push_stream(StreamFrame {
             operator_output_column,
             operator_output_line: self.output.len(),
             line_indent_spaces,
@@ -1172,7 +1206,7 @@ impl FormatEngine<'_> {
         if matches!(operator, "<<" | ">>")
             && self.current.trim().is_empty()
             && self.stream_line_follows_multiline_braced_operand()
-            && self.frame_stack.active_stream().is_some()
+            && self.layout.frame_stack.active_stream().is_some()
         {
             self.clear_current();
             self.record_stream_operator_frame(operator);

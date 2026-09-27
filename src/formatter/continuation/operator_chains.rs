@@ -174,11 +174,11 @@ impl FormatEngine<'_> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let mut spaces = previous.trim_start().starts_with('?').then(|| {
             leading_visual_width(previous, self.options.tab_width)
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
         });
         if line_kind == LineKind::Normal
             && !current.starts_with("::")
-            && self.nesting.paren_depth == 0
+            && self.layout.nesting.paren_depth == 0
             && previous_code.contains('?')
             && !previous_code.contains('<')
             && find_assignment_operator(previous_code).is_none()
@@ -279,7 +279,7 @@ impl FormatEngine<'_> {
         (previous_code.contains('?')
             && previous_code.contains("::")
             && unmatched_open_paren_column(previous_code).is_none())
-        .then(|| self.indentation.indent() * self.options.indent_width)
+        .then(|| self.layout.indentation.indent() * self.options.indent_width)
     }
 
     pub(crate) fn allman_operator_or_preprocessor_indent_spaces(
@@ -335,12 +335,12 @@ impl FormatEngine<'_> {
             && !previous_trimmed.starts_with("return ")
         {
             let mut spaces = normal_indent * self.options.indent_width;
-            if self.indentation.indent() > 1
+            if self.layout.indentation.indent() > 1
                 && previous_code.contains("#else")
                 && !current_starts_operator
             {
                 spaces = spaces.saturating_sub(self.options.indent_width);
-            } else if self.indentation.indent() > 1
+            } else if self.layout.indentation.indent() > 1
                 && previous_starts_operator
                 && current.chars().next().is_some_and(is_identifier_start)
             {
@@ -405,7 +405,7 @@ impl FormatEngine<'_> {
         }
         let target = unmatched_open_paren_column(previous_code)?
             + 1
-            + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         (current_spaces.unwrap_or(0) < target).then_some(target)
     }
 
@@ -431,7 +431,7 @@ impl FormatEngine<'_> {
     ) {
         let paren_imbalance = line_paren_imbalance(code);
         let unmatched_open_paren = unmatched_open_paren_column(code);
-        self.frame_stack.mark_stream_line_context(
+        self.layout.frame_stack.mark_stream_line_context(
             output_line_index,
             code.ends_with("<<") || code.ends_with(">>"),
             code.contains("{ {"),
@@ -439,18 +439,20 @@ impl FormatEngine<'_> {
             code.ends_with(')'),
             paren_imbalance.0 > 0,
         );
-        self.frame_stack.mark_logical_line_context(
+        self.layout.frame_stack.mark_logical_line_context(
             output_line_index,
             unmatched_open_paren,
             code.ends_with(')'),
             paren_imbalance.0 > 0,
         );
-        if self.line_state.ternary_colon || code.trim_start().starts_with(':') {
-            self.frame_stack
+        if self.layout.line_state.ternary_colon || code.trim_start().starts_with(':') {
+            self.layout
+                .frame_stack
                 .mark_last_ternary_colon_output_line(output_line_index);
         }
-        if self.frame_stack.has_open_ternary() {
-            self.frame_stack
+        if self.layout.frame_stack.has_open_ternary() {
+            self.layout
+                .frame_stack
                 .mark_line_ended_open_ternary(output_line_index);
         }
     }
@@ -461,9 +463,11 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let output_line = self.output.get(output_line_index)?;
         let output_indent = leading_visual_width(output_line, self.options.tab_width);
-        self.frame_stack
+        self.layout
+            .frame_stack
             .mark_stream_line_output_indent(output_line_index, output_indent);
-        self.frame_stack
+        self.layout
+            .frame_stack
             .mark_logical_line_output_indent(output_line_index, output_indent);
         self.observe_ternary_colon_output_line(output_line_index);
         Some(output_indent)
@@ -479,7 +483,8 @@ impl FormatEngine<'_> {
                     .starts_with(':')
             });
         if starts_with_colon {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .mark_last_ternary_colon_output_line(output_line_index);
         }
     }
@@ -490,7 +495,8 @@ impl FormatEngine<'_> {
         line: String,
     ) -> ReadyOperatorChainLine {
         if line.trim_start().starts_with(':') {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .mark_last_ternary_colon_output_line(output_line_index);
         }
         if let Some((colon, tail)) = self.split_ternary_colon_after_chained_true_arm(&line) {
@@ -505,7 +511,7 @@ impl FormatEngine<'_> {
         if !trimmed.starts_with("<<") && !trimmed.starts_with(">>") {
             return None;
         }
-        let frame = self.frame_stack.active_stream()?;
+        let frame = self.layout.frame_stack.active_stream()?;
         frame
             .after_multiline_braced_operand
             .then_some(frame.chain_anchor_column)
@@ -520,6 +526,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.len().checked_sub(1)?;
         let stream = self
+            .layout
             .frame_stack
             .active_stream_on_output_line(previous_line)?;
         if !stream.operator_ends_output_line {
@@ -560,7 +567,8 @@ impl FormatEngine<'_> {
             .output
             .iter()
             .position(|line| line.as_str() == before_comment.as_str())?;
-        self.frame_stack
+        self.layout
+            .frame_stack
             .active_stream_on_output_line(before_comment_line)?;
         Some(leading_visual_width(before_comment, self.options.tab_width))
     }
@@ -671,8 +679,8 @@ impl FormatEngine<'_> {
         };
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if previous_code.contains('?') && previous_code.ends_with(':') {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(current_spaces);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(current_spaces);
         }
     }
 
@@ -694,7 +702,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if let Some(stream) = self.frame_stack.active_stream() {
+        if let Some(stream) = self.layout.frame_stack.active_stream() {
             return Some(if self.options.indent_after_parens {
                 (normal_indent + self.options.continuation_indent) * self.options.indent_width
             } else {
@@ -707,7 +715,7 @@ impl FormatEngine<'_> {
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]);
         if previous_code.trim() == "{" {
-            return self.frame_stack.active_brace().map(|frame| {
+            return self.layout.frame_stack.active_brace().map(|frame| {
                 frame.body_indent_column.min(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width,
@@ -759,6 +767,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.len().checked_sub(1)?;
         let string = self
+            .layout
             .frame_stack
             .string_continuation_on_output_line(previous_line)?;
         (string.has_stream_context
@@ -767,7 +776,8 @@ impl FormatEngine<'_> {
             && !string.inside_delimiter_context)
             .then_some(
                 string.line_indent_spaces
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             )
     }
 
@@ -780,11 +790,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous_line = self.output.len().checked_sub(1)?;
-        let brace = self.frame_stack.last_closed_brace()?;
+        let brace = self.layout.frame_stack.last_closed_brace()?;
         if brace.close_output_line != Some(previous_line) || !brace.close_ends_output_line {
             return None;
         }
-        Some(self.frame_stack.active_stream()?.chain_anchor_column)
+        Some(self.layout.frame_stack.active_stream()?.chain_anchor_column)
     }
 
     pub(crate) fn previous_leading_stream_frame_indent_spaces(&self, line: &str) -> Option<usize> {
@@ -794,6 +804,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.len().checked_sub(1)?;
         let stream = self
+            .layout
             .frame_stack
             .active_stream_on_output_line(previous_line)?;
         (stream.operator_output_column == stream.line_indent_spaces)
@@ -809,10 +820,10 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous_line = self.output.len().checked_sub(1)?;
-        if self.frame_stack.last_ternary_colon_output_line() != Some(previous_line) {
+        if self.layout.frame_stack.last_ternary_colon_output_line() != Some(previous_line) {
             return None;
         }
-        Some(self.frame_stack.active_stream()?.chain_anchor_column)
+        Some(self.layout.frame_stack.active_stream()?.chain_anchor_column)
     }
 
     pub(crate) fn line_start_stream_adjacent_string_indent_spaces(
@@ -823,6 +834,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let frame = self
+            .layout
             .frame_stack
             .string_continuation_before_output_line(self.output.len())?;
         if !frame.line_starts_with_chain_operator || !frame.has_opening_context {
@@ -830,7 +842,7 @@ impl FormatEngine<'_> {
         }
         let current = line.trim_start();
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if string_literal_token_end(current, 0).is_some_and(|end| {
             let rest = current[end..].trim_start();
             rest.starts_with("<<") || rest.starts_with(">>")
@@ -843,20 +855,22 @@ impl FormatEngine<'_> {
     pub(crate) fn line_after_trailing_stream_operator_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
         let stream = self
+            .layout
             .frame_stack
             .active_stream_on_output_line(previous_line)?;
         if !stream.operator_ends_output_line {
             return None;
         }
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-        if let Some(delimiter) = self.frame_stack.active_delimiter()
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        if let Some(delimiter) = self.layout.frame_stack.active_delimiter()
             && delimiter.opener_output_line < previous_line
             && stream.line_indent_spaces == delimiter.opener_output_column + 1
         {
             return Some(stream.line_indent_spaces + case_unindent);
         }
         if let Some(string) = self
+            .layout
             .frame_stack
             .string_continuation_before_output_line(self.output.len())
             && string.output_line == previous_line
@@ -864,7 +878,7 @@ impl FormatEngine<'_> {
         {
             return Some(stream.line_indent_spaces + case_unindent);
         }
-        if let Some(delimiter) = self.frame_stack.active_delimiter()
+        if let Some(delimiter) = self.layout.frame_stack.active_delimiter()
             && delimiter.opener_output_line == previous_line
             && delimiter.opener_output_column < stream.operator_output_column
         {
@@ -878,9 +892,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let string = self
+            .layout
             .frame_stack
             .string_continuation_before_output_line(self.output.len())?;
         let stream = self
+            .layout
             .frame_stack
             .first_stream_on_output_line(string.output_line)?;
         if stream.operator_output_column >= string.literal_start_column
@@ -889,13 +905,15 @@ impl FormatEngine<'_> {
             return None;
         }
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         let delimiter_count = self
+            .layout
             .frame_stack
             .delimiter_count_after_output_column(string.output_line, stream.operator_output_column);
         if delimiter_count >= 2 {
             let max_column = string.line_indent_spaces + self.options.max_continuation_indent;
             let spaces = self
+                .layout
                 .frame_stack
                 .last_delimiter_column_after_output_column(
                     string.output_line,
@@ -1116,7 +1134,7 @@ impl FormatEngine<'_> {
         });
         has_recent_ternary_argument.then_some(
             leading_visual_width(previous, self.options.tab_width)
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
     }
 
@@ -1145,7 +1163,7 @@ impl FormatEngine<'_> {
             .any(|line| line[..trailing_comment_split_limit(line)].contains('?'));
         follows_ternary_argument.then_some(
             leading_visual_width(previous, self.options.tab_width)
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
     }
 
@@ -1237,7 +1255,8 @@ impl FormatEngine<'_> {
         {
             return Some(
                 open + 1
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         if let Some(spaces) =
@@ -1248,7 +1267,7 @@ impl FormatEngine<'_> {
         if (current.starts_with(": ") || current == ":")
             && previous_code.contains('?')
             && !previous_code.trim_start().starts_with("return ")
-            && (self.nesting.paren_depth > 0
+            && (self.layout.nesting.paren_depth > 0
                 || self
                     .output
                     .iter()
@@ -1265,7 +1284,7 @@ impl FormatEngine<'_> {
         {
             return Some(
                 leading_visual_width(previous, tab_width)
-                    + self.line_adjuster.total_case_unindent_depth() * width,
+                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
             );
         }
         if let Some(spaces) = self.ternary_arm_frame_indent_spaces(current) {
@@ -1302,7 +1321,7 @@ impl FormatEngine<'_> {
         {
             return Some(
                 leading_visual_width(previous, tab_width)
-                    + self.line_adjuster.total_case_unindent_depth() * width,
+                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
             );
         }
         if !current.starts_with([')', '}', '?', ':'])
@@ -1312,7 +1331,8 @@ impl FormatEngine<'_> {
         {
             return Some(
                 open + 1
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
             );
         }
         None
@@ -1333,7 +1353,7 @@ impl FormatEngine<'_> {
             return Some(natural);
         }
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if let Some(open) = unmatched_open_paren_column(previous_code) {
             return Some(open + 1 + case_unindent);
         }
@@ -1372,7 +1392,7 @@ impl FormatEngine<'_> {
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         (current.starts_with(':') && previous_code.trim_start().starts_with('?')).then_some(
             previous_indent
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
     }
 
@@ -1386,7 +1406,8 @@ impl FormatEngine<'_> {
                 .len()
                 .checked_sub(1)
                 .is_some_and(|previous_line| {
-                    self.frame_stack
+                    self.layout
+                        .frame_stack
                         .active_stream_on_output_line(previous_line)
                         .is_some_and(|stream| {
                             stream.operator_output_column != stream.line_indent_spaces
@@ -1410,7 +1431,8 @@ impl FormatEngine<'_> {
                 .len()
                 .checked_sub(1)
                 .is_some_and(|previous_line| {
-                    self.frame_stack
+                    self.layout
+                        .frame_stack
                         .active_stream_on_output_line(previous_line)
                         .is_some_and(|stream| stream.line_contains_nested_brace)
                 })
@@ -1436,7 +1458,7 @@ impl FormatEngine<'_> {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             code.ends_with("<<") || code.ends_with(">>")
         });
-        self.frame_stack.active_ternary().is_some()
+        self.layout.frame_stack.active_ternary().is_some()
             || self.line_follows_logical_operator()
             || follows_stream_operator
             || starts_with_chain_operator(line.trim_start())
@@ -1467,6 +1489,7 @@ impl FormatEngine<'_> {
         }
         if !self.split_else_body_indent_active()
             && self
+                .layout
                 .frame_stack
                 .active_delimiter()
                 .is_some_and(|delimiter| {
@@ -1637,7 +1660,13 @@ impl FormatEngine<'_> {
             if previous_indent <= current_indent {
                 return None;
             }
-            if paren_balance == -1 && self.nesting.current_continuation_indent_spaces().is_none() {
+            if paren_balance == -1
+                && self
+                    .layout
+                    .nesting
+                    .current_continuation_indent_spaces()
+                    .is_none()
+            {
                 return None;
             }
             if paren_balance == -1 && !trimmed.starts_with("(!") {
@@ -1690,6 +1719,7 @@ impl FormatEngine<'_> {
             if code.starts_with("return ") {
                 let return_indent = leading_visual_width(previous, self.options.tab_width);
                 let inside_switch = self
+                    .layout
                     .nesting
                     .brace_header_stack
                     .iter()
@@ -1786,7 +1816,7 @@ impl FormatEngine<'_> {
         Some(
             leading_visual_width(previous, self.options.tab_width)
                 + self.options.indent_width
-                + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
     }
 
@@ -1806,7 +1836,7 @@ impl FormatEngine<'_> {
         if !current.starts_with("<<") && !current.starts_with(">>") && !current.starts_with("//") {
             return None;
         }
-        let delimiter = self.frame_stack.active_delimiter()?;
+        let delimiter = self.layout.frame_stack.active_delimiter()?;
         if delimiter.opener_output_line >= self.output.len() {
             return None;
         }
@@ -1851,6 +1881,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.len().checked_sub(1)?;
         let stream = self
+            .layout
             .frame_stack
             .active_stream_on_output_line(previous_line)?;
         if stream.operator_output_column != stream.line_indent_spaces
@@ -1860,17 +1891,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        self.frame_stack
+        self.layout
+            .frame_stack
             .stream_before_output_line_with_unmatched_open_paren(previous_line)
             .map(|head| head.line_indent_spaces)
     }
 
     fn parenthesized_stream_indent_for_line(&self, line: usize) -> Option<usize> {
-        let stream = self.frame_stack.first_stream_on_output_line(line)?;
+        let stream = self.layout.frame_stack.first_stream_on_output_line(line)?;
         if !stream.line_has_unmatched_open_paren {
             return None;
         }
         let delimiter_column = self
+            .layout
             .frame_stack
             .first_delimiter_column_after_output_column(line, stream.operator_output_column)?;
         if stream.operator_output_column >= delimiter_column {
@@ -1899,6 +1932,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.len().checked_sub(1)?;
         if self
+            .layout
             .frame_stack
             .active_delimiter()
             .is_some_and(|delimiter| {
@@ -1908,6 +1942,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let frame = self
+            .layout
             .frame_stack
             .active_logical_on_output_line(previous_line)?;
         if !frame.operator_starts_output_line {
@@ -1919,7 +1954,7 @@ impl FormatEngine<'_> {
             LogicalOperator::Or
         };
         let case_unindent =
-            self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if frame.line_has_positive_paren_delta {
             if frame.line_ends_with_close_paren {
                 let candidate = frame
@@ -1935,6 +1970,7 @@ impl FormatEngine<'_> {
                 return Some(candidate);
             }
             if let Some(open) = self
+                .layout
                 .frame_stack
                 .logical_before_output_line_with_return(previous_line)
                 .and_then(|frame| frame.line_unmatched_open_paren_column)
@@ -1963,7 +1999,7 @@ impl FormatEngine<'_> {
         if !previous_code.trim_start().starts_with(':') || !previous_code.contains('?') {
             return None;
         }
-        let frame = self.frame_stack.last_ternary_with_colon()?;
+        let frame = self.layout.frame_stack.last_ternary_with_colon()?;
         if frame.colon_role != Some(ColonRole::Ternary) {
             return None;
         }
@@ -1972,7 +2008,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ternary_arm_frame_indent_spaces(&self, current: &str) -> Option<usize> {
         if current.starts_with('?') {
-            let frame = self.frame_stack.active_ternary()?;
+            let frame = self.layout.frame_stack.active_ternary()?;
             if frame.colon_role.is_some()
                 || (!matches!(
                     frame.owner_role,
@@ -1982,7 +2018,7 @@ impl FormatEngine<'_> {
                 return None;
             }
             let case_unindent =
-                self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if frame.owner_role == TernaryOwnerRole::Return {
                 if self.recent_base_trailing_return_function_header() {
                     return Some(frame.question_indent_spaces + case_unindent);
@@ -2005,14 +2041,14 @@ impl FormatEngine<'_> {
             }
             let spaces = frame
                 .parent_delimiter
-                .and_then(|id| self.frame_stack.delimiter_by_id(id))
+                .and_then(|id| self.layout.frame_stack.delimiter_by_id(id))
                 .map_or(frame.branch_anchor_column?, |delimiter| {
                     delimiter.opener_output_column + 1
                 });
             return Some(spaces + case_unindent);
         }
         if current.starts_with(": ") || current == ":" {
-            let frame = self.frame_stack.last_ternary_with_colon()?;
+            let frame = self.layout.frame_stack.last_ternary_with_colon()?;
             if frame.colon_role != Some(ColonRole::Ternary)
                 || (!matches!(
                     frame.owner_role,
@@ -2022,7 +2058,7 @@ impl FormatEngine<'_> {
                 return None;
             }
             let case_unindent =
-                self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if frame.owner_role == TernaryOwnerRole::Return {
                 if self.recent_base_trailing_return_function_header() {
                     if self.recent_trailing_return_function_after_multiline_template_declaration() {
@@ -2048,7 +2084,7 @@ impl FormatEngine<'_> {
             }
             let spaces = frame
                 .parent_delimiter
-                .and_then(|id| self.frame_stack.delimiter_by_id(id))
+                .and_then(|id| self.layout.frame_stack.delimiter_by_id(id))
                 .map_or(frame.branch_anchor_column?, |delimiter| {
                     delimiter.opener_output_column + 1
                 });
@@ -2072,11 +2108,11 @@ impl FormatEngine<'_> {
         }
         let indent_width = self.options.indent_width;
         if self.options.indent_after_parens {
-            let frame = self.frame_stack.active_ternary()?;
+            let frame = self.layout.frame_stack.active_ternary()?;
             return Some(
                 frame.question_indent_spaces
                     + self.options.continuation_indent * indent_width
-                    + self.line_adjuster.total_case_unindent_depth() * indent_width,
+                    + self.layout.line_adjuster.total_case_unindent_depth() * indent_width,
             );
         }
         let condition = code[..code.len() - 1].trim_end();
@@ -2096,12 +2132,12 @@ impl FormatEngine<'_> {
             } else {
                 return Some(
                     leading_visual_width(condition, self.options.tab_width)
-                        + self.line_adjuster.total_case_unindent_depth() * indent_width,
+                        + self.layout.line_adjuster.total_case_unindent_depth() * indent_width,
                 );
             };
             visual_width_from(&condition[..operand_byte], 0, self.options.tab_width)
         };
-        Some(anchor + self.line_adjuster.total_case_unindent_depth() * indent_width)
+        Some(anchor + self.layout.line_adjuster.total_case_unindent_depth() * indent_width)
     }
 
     pub(crate) fn ternary_colon_after_comment_indent_spaces(
@@ -2145,7 +2181,8 @@ impl FormatEngine<'_> {
             .is_some_and(|line| line.contains('?'))
             .then(|| {
                 leading_visual_width(previous, self.options.tab_width)
-                    + self.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
             })
     }
 
@@ -2404,10 +2441,10 @@ impl FormatEngine<'_> {
             None
         };
         if let Some(statement) = statement {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces =
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces =
                 Some(leading_visual_width(statement, self.options.tab_width));
-            self.nesting.clear_continuation_indents();
+            self.layout.nesting.clear_continuation_indents();
         }
     }
 }

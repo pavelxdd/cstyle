@@ -112,7 +112,7 @@ impl FormatEngine<'_> {
         {
             self.inline_array.frames.pop();
             if matches!(
-                self.nesting.brace_type_stack.last(),
+                self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Array | BraceType::Init | BraceType::CompoundLiteral)
             ) {
                 self.exit_brace_state();
@@ -187,7 +187,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let spaces = self.indentation.indent() * self.options.indent_width;
+        let spaces = self.layout.indentation.indent() * self.options.indent_width;
         (self.token_input.input_source_indent >= spaces)
             .then(|| current.map_or(spaces, |value| value.max(spaces)))
     }
@@ -216,7 +216,7 @@ impl FormatEngine<'_> {
         normal_indent: usize,
     ) -> Option<usize> {
         if !matches!(
-            self.nesting.last_closed_brace_type,
+            self.layout.nesting.last_closed_brace_type,
             Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
         ) {
             return None;
@@ -255,20 +255,22 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let brace = self.frame_stack.active_brace().filter(|frame| {
+        let brace = self.layout.frame_stack.active_brace().filter(|frame| {
             matches!(
                 frame.semantic_kind,
                 BraceSemanticKind::Array | BraceSemanticKind::Initializer
             )
         })?;
         if let Some(delimiter) = self
+            .layout
             .frame_stack
             .active_delimiter()
             .filter(|frame| frame.role == ParenRole::CastOrGroup)
         {
             return Some(delimiter.opener_output_column);
         }
-        self.frame_stack
+        self.layout
+            .frame_stack
             .active_delimiter()
             .is_none()
             .then_some(brace.body_indent_column)
@@ -314,6 +316,7 @@ impl FormatEngine<'_> {
         exact_indent_spaces: Option<usize>,
     ) -> Option<CompoundLiteralOpeningLayout> {
         if self
+            .layout
             .frame_stack
             .active_brace()
             .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command)
@@ -385,13 +388,15 @@ impl FormatEngine<'_> {
     ) {
         self.emit_source_space_or_ensure();
         self.current.push('{');
-        self.command_state.observe_char('{');
+        self.layout.command_state.observe_char('{');
         self.finish_line();
-        self.nesting
+        self.layout
+            .nesting
             .enter_brace(brace_header, brace_type, block_indent_extra);
-        self.indentation
+        self.layout
+            .indentation
             .enter_block_with_extra(false, block_indent_extra);
-        self.previous = PreviousToken::Other;
+        self.layout.previous = PreviousToken::Other;
     }
 
     pub(crate) fn open_multiline_attached_initializer_brace(
@@ -423,20 +428,22 @@ impl FormatEngine<'_> {
 
         self.emit_opening_brace_space(brace_type);
         self.current.push('{');
-        self.command_state.observe_char('{');
+        self.layout.command_state.observe_char('{');
         if brace_begins_line {
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(opening_indent);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(opening_indent);
         }
         self.finish_line();
         self.update_current_brace_indent_from_last_output_line();
-        self.nesting
+        self.layout
+            .nesting
             .enter_brace(brace_header, brace_type, block_indent_extra);
-        self.indentation.enter_block_without_indent(false);
+        self.layout.indentation.enter_block_without_indent(false);
         if force_break_one_line {
-            self.compound_literal
+            self.layout
+                .compound_literal
                 .forced_break_depths
-                .push(self.nesting.brace_header_stack.len());
+                .push(self.layout.nesting.brace_header_stack.len());
         }
         let brace_column = if self.options.brace_style == BraceStyle::Ratliff
             && brace_type == BraceType::CompoundLiteral
@@ -446,15 +453,15 @@ impl FormatEngine<'_> {
             opening_indent
         };
         self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.nesting.brace_header_stack.len(),
+            depth: self.layout.nesting.brace_header_stack.len(),
             body_column: body_indent,
             brace_column,
             output_line: self.output.len(),
             aggregate_assignment: control_paren_indent.is_some(),
         });
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = Some(body_indent);
-        self.previous = PreviousToken::Other;
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = Some(body_indent);
+        self.layout.previous = PreviousToken::Other;
     }
 
     pub(crate) fn open_attached_range_for_init_brace(
@@ -467,13 +474,14 @@ impl FormatEngine<'_> {
             .unwrap_or_else(|| self.current_line_indent_spaces() + self.options.indent_width * 2);
         self.emit_source_space_or_ensure();
         self.current.push('{');
-        self.command_state.observe_char('{');
+        self.layout.command_state.observe_char('{');
         self.finish_line();
-        self.nesting
+        self.layout
+            .nesting
             .enter_brace(brace_header, BraceType::Array, block_indent_extra);
-        self.indentation.enter_block_without_indent(false);
+        self.layout.indentation.enter_block_without_indent(false);
         self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.nesting.brace_header_stack.len(),
+            depth: self.layout.nesting.brace_header_stack.len(),
             body_column: opening_indent + self.options.indent_width,
             brace_column: opening_indent,
             output_line: self.output.len().saturating_sub(1),
@@ -483,10 +491,10 @@ impl FormatEngine<'_> {
             opening_indent + self.options.indent_width,
             opening_indent,
         );
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces =
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces =
             Some(opening_indent + self.options.indent_width);
-        self.previous = PreviousToken::Other;
+        self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = true;
     }
 
@@ -500,21 +508,21 @@ impl FormatEngine<'_> {
             .for_header_continuation_indent_spaces()
             .unwrap_or_else(|| self.current_line_indent_spaces() + self.options.indent_width * 2);
         self.finish_line();
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = Some(opening_indent);
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = Some(opening_indent);
         self.current.push('{');
-        self.command_state.observe_char('{');
-        self.nesting.enter_brace(None, BraceType::Array, 0);
-        self.indentation.enter_block_without_indent(false);
+        self.layout.command_state.observe_char('{');
+        self.layout.nesting.enter_brace(None, BraceType::Array, 0);
+        self.layout.indentation.enter_block_without_indent(false);
         self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.nesting.brace_header_stack.len(),
+            depth: self.layout.nesting.brace_header_stack.len(),
             body_column: opening_indent + 1,
             brace_column: opening_indent,
             output_line: self.output.len(),
             aggregate_assignment: true,
         });
         self.update_current_brace_indent_columns(opening_indent + 1, opening_indent);
-        self.previous = PreviousToken::Other;
+        self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }
 
@@ -528,7 +536,7 @@ impl FormatEngine<'_> {
     ) {
         let enclosed = brace_type == BraceType::Array
             && matches!(
-                self.nesting.brace_type_stack.last(),
+                self.layout.nesting.brace_type_stack.last(),
                 Some(
                     BraceType::Array
                         | BraceType::Init
@@ -552,10 +560,11 @@ impl FormatEngine<'_> {
             || (brace_type == BraceType::Array
                 && self.inline_array.nested_brace_arrays.contains(&token_index));
         let constructor_indent = self
+            .layout
             .frame_stack
             .active_constructor_initializer()
             .map(|frame| frame.colon_line_indent_spaces);
-        let base_indent = if constructor_indent.is_some() && self.nesting.paren_depth == 0 {
+        let base_indent = if constructor_indent.is_some() && self.layout.nesting.paren_depth == 0 {
             if self.current.trim_start().starts_with([':', ',']) {
                 constructor_indent.unwrap_or_else(|| self.current_line_indent_spaces())
             } else {
@@ -587,7 +596,7 @@ impl FormatEngine<'_> {
             }
         }
         self.current.push('{');
-        self.command_state.observe_char('{');
+        self.layout.command_state.observe_char('{');
         let brace_column = if nested {
             if run_in_after_comma && !first_is_brace {
                 base_indent + self.options.indent_width
@@ -610,7 +619,9 @@ impl FormatEngine<'_> {
             base_indent + self.current_char_len()
         };
         let statement_base = ContinuationIndent::Level(
-            self.indentation.line_indent(LineKind::Normal, self.options)
+            self.layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal),
         )
         .columns(self.options.indent_width);
@@ -629,11 +640,12 @@ impl FormatEngine<'_> {
         } else {
             brace_column
         };
-        self.nesting
+        self.layout
+            .nesting
             .enter_brace(brace_header, brace_type, block_indent_extra);
-        self.indentation.enter_block_without_indent(false);
+        self.layout.indentation.enter_block_without_indent(false);
         self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.nesting.brace_header_stack.len(),
+            depth: self.layout.nesting.brace_header_stack.len(),
             body_column: column,
             brace_column: stored_brace_column,
             output_line: self.output.len(),
@@ -654,25 +666,28 @@ impl FormatEngine<'_> {
         }
         if break_first {
             self.finish_line();
-            self.continuation_indent.next_line_indent = None;
-            self.continuation_indent.next_line_indent_spaces = Some(column);
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(column);
         }
-        self.previous = PreviousToken::Other;
+        self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }
 
     pub(crate) fn close_inline_array_brace(&mut self) {
         if self.current_is_blank() {
-            self.frame_stack.clear_closed_braces();
+            self.layout.frame_stack.clear_closed_braces();
         }
-        let closing_brace_type = self.nesting.brace_type_stack.last().copied();
+        let closing_brace_type = self.layout.nesting.brace_type_stack.last().copied();
         let closing_compound_literal =
             matches!(closing_brace_type, Some(BraceType::CompoundLiteral));
         let closing_enum = matches!(closing_brace_type, Some(BraceType::Enum));
         let inline_array = self.inline_array.frames.pop();
         let body_column = inline_array.map(|frame| frame.body_column);
-        let in_constructor_initializer =
-            self.frame_stack.active_constructor_initializer().is_some();
+        let in_constructor_initializer = self
+            .layout
+            .frame_stack
+            .active_constructor_initializer()
+            .is_some();
         self.inline_array.current_closed_body_column =
             body_column.map(|column| (column, in_constructor_initializer));
         let brace_column = inline_array.map(|frame| frame.brace_column);
@@ -708,15 +723,16 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line_opens_typed_initializer(line));
         let closing_column = call_argument_array_column.or(brace_column);
         let forced_break = self
+            .layout
             .compound_literal
             .forced_break_depths
             .last()
-            .is_some_and(|depth| *depth == self.nesting.brace_header_stack.len());
+            .is_some_and(|depth| *depth == self.layout.nesting.brace_header_stack.len());
         if forced_break {
-            self.compound_literal.forced_break_depths.pop();
+            self.layout.compound_literal.forced_break_depths.pop();
         }
         self.exit_brace_state();
-        if let Some(frame) = self.frame_stack.last_closed_brace_mut() {
+        if let Some(frame) = self.layout.frame_stack.last_closed_brace_mut() {
             if in_constructor_initializer && let Some(column) = body_column {
                 frame.body_indent_column = column;
             }
@@ -729,15 +745,15 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             if let Some(column) = closing_column {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
             }
             self.trim_current_end();
             self.mark_closed_brace_output_position();
             self.current.push('}');
-            self.command_state.observe_char('}');
-            self.compound_literal.just_closed = closing_compound_literal;
-            self.previous = PreviousToken::Other;
+            self.layout.command_state.observe_char('}');
+            self.layout.compound_literal.just_closed = closing_compound_literal;
+            self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
             return;
         }
@@ -756,8 +772,8 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             if let Some(column) = closing_column {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
             }
         } else if self.output.len() > open_output_len
             && !self.current_is_blank()
@@ -772,8 +788,8 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
             if let Some(column) = closing_column {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
             }
         }
         let return_initializer_gap = return_initializer.then(|| {
@@ -800,9 +816,9 @@ impl FormatEngine<'_> {
         }
         self.mark_closed_brace_output_position();
         self.current.push('}');
-        self.command_state.observe_char('}');
-        self.compound_literal.just_closed = closing_compound_literal;
-        self.previous = PreviousToken::Other;
+        self.layout.command_state.observe_char('}');
+        self.layout.compound_literal.just_closed = closing_compound_literal;
+        self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }
 
@@ -810,7 +826,7 @@ impl FormatEngine<'_> {
         self.inline_array
             .frames
             .last()
-            .filter(|frame| frame.depth == self.nesting.brace_header_stack.len())
+            .filter(|frame| frame.depth == self.layout.nesting.brace_header_stack.len())
             .map(|frame| frame.body_column)
     }
 
@@ -832,21 +848,23 @@ impl FormatEngine<'_> {
                 || trimmed.starts_with("};")
                 || trimmed.starts_with("})")
             {
-                self.frame_stack.last_closed_brace()
+                self.layout.frame_stack.last_closed_brace()
             } else {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .first_closed_brace()
-                    .or_else(|| self.frame_stack.last_closed_brace())
+                    .or_else(|| self.layout.frame_stack.last_closed_brace())
             };
-            closed.or_else(|| self.frame_stack.active_brace())?
+            closed.or_else(|| self.layout.frame_stack.active_brace())?
         } else if starts_member_opener {
             let opened_braces = line.chars().filter(|ch| *ch == '{').count();
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .brace_before_top(opened_braces)
-                .or_else(|| self.frame_stack.enclosing_brace())
-                .or_else(|| self.frame_stack.active_brace())?
+                .or_else(|| self.layout.frame_stack.enclosing_brace())
+                .or_else(|| self.layout.frame_stack.active_brace())?
         } else {
-            self.frame_stack.active_brace()?
+            self.layout.frame_stack.active_brace()?
         };
         if !matches!(
             frame.semantic_kind,
@@ -873,7 +891,7 @@ impl FormatEngine<'_> {
         if !closing && !designator {
             return None;
         }
-        if closing && let Some(spaces) = self.continuation_indent.next_line_indent_spaces {
+        if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return Some(spaces);
         }
         if !closing
@@ -929,7 +947,8 @@ impl FormatEngine<'_> {
             }
             if designator {
                 if self.output_has_open_initializer_brace() || self.in_initializer_brace() {
-                    spaces = spaces.max(self.indentation.indent() * self.options.indent_width);
+                    spaces =
+                        spaces.max(self.layout.indentation.indent() * self.options.indent_width);
                 }
                 for (index, previous) in self.output.iter().enumerate().rev() {
                     let code = previous[..trailing_comment_split_limit(previous)].trim_end();
@@ -949,7 +968,7 @@ impl FormatEngine<'_> {
         }
         if closing
             && !matches!(
-                self.nesting.last_closed_brace_type,
+                self.layout.nesting.last_closed_brace_type,
                 Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Init)
             )
         {
@@ -990,10 +1009,10 @@ impl FormatEngine<'_> {
         if !head.starts_with('=') || head.as_bytes().get(1) == Some(&b'=') {
             return None;
         }
-        if self.nesting.paren_depth > 0 {
+        if self.layout.nesting.paren_depth > 0 {
             return None;
         }
-        let frame = self.frame_stack.active_brace()?;
+        let frame = self.layout.frame_stack.active_brace()?;
         if !matches!(
             frame.semantic_kind,
             BraceSemanticKind::Array

@@ -13,7 +13,7 @@ impl FormatEngine<'_> {
         {
             return LineRoute::Published;
         }
-        let observed_line_kind = self.line_adjuster.observe_line(line);
+        let observed_line_kind = self.layout.line_adjuster.observe_line(line);
         if observed_line_kind == LineKind::Normal
             && line.trim_start() == "&else"
             && let Some(previous) = self.output.last_mut()
@@ -28,7 +28,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn finish_line_text(&mut self, line: &str) {
         let replay = self.take_line_replay_layout(line);
-        let line_closed_brackets = self.frame_stack.take_line_closed_brackets();
+        let line_closed_brackets = self.layout.frame_stack.take_line_closed_brackets();
         self.record_closed_objc_message_indent(line, &line_closed_brackets);
         self.preprocessor.last_output_was_preprocessor = false;
         let LineRoute::Layout(observed_line_kind) = self.route_line_before_layout(line) else {

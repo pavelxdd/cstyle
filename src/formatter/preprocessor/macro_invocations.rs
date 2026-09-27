@@ -56,31 +56,40 @@ impl FormatEngine<'_> {
         }
         if has_role
             && (has_unclosed_delimiter_after(trimmed, "(", ")")
-                || self.continuation_indent.next_line_indent_spaces.is_some())
+                || self
+                    .layout
+                    .continuation_indent
+                    .next_line_indent_spaces
+                    .is_some())
         {
             return false;
         }
-        if self.nesting.paren_depth > 0 || self.indentation.statement_depth() > 0 {
+        if self.layout.nesting.paren_depth > 0 || self.layout.indentation.statement_depth() > 0 {
             return false;
         }
         self.finish_line();
-        let indent = self.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
-        let exact_indent_spaces = self.previous_pre_adjust_line.as_ref().and_then(|previous| {
-            headers::line_is_control_body_header(previous.trim_start()).then(|| {
-                columns::leading_visual_width(previous, self.options.tab_width)
-                    + self.options.indent_width
-            })
-        });
+        let indent =
+            self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
+        let exact_indent_spaces =
+            self.layout
+                .previous_pre_adjust_line
+                .as_ref()
+                .and_then(|previous| {
+                    headers::line_is_control_body_header(previous.trim_start()).then(|| {
+                        columns::leading_visual_width(previous, self.options.tab_width)
+                            + self.options.indent_width
+                    })
+                });
         if let Some(spaces) = exact_indent_spaces {
-            self.push_output_line_spaces(trimmed, self.indentation.indent(), spaces);
+            self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), spaces);
         } else {
             self.push_output_line(trimmed, indent);
         }
         self.previous_was_newline = true;
         if trimmed.starts_with("Q_FOREACH(") {
-            self.continuation_indent.next_line_indent = Some(indent + 1);
-            self.continuation_indent.next_line_indent_spaces = None;
-            self.pending_braceless_block_bias = Some(indent + 1);
+            self.layout.continuation_indent.next_line_indent = Some(indent + 1);
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.pending_braceless_block_bias = Some(indent + 1);
         }
         true
     }

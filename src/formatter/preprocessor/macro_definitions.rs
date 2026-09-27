@@ -576,12 +576,12 @@ impl FormatEngine<'_> {
         if code.ends_with('\\') {
             return;
         }
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = None;
-        self.nesting.clear_continuation_indents();
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.nesting.clear_continuation_indents();
         operator_chains::clear_operator_chain_state(
-            &mut self.frame_stack,
-            &mut self.continuation_indent.logical_chain_indent_spaces,
+            &mut self.layout.frame_stack,
+            &mut self.layout.continuation_indent.logical_chain_indent_spaces,
         );
     }
 

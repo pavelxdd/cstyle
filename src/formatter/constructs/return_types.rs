@@ -77,7 +77,7 @@ impl FormatEngine<'_> {
     }
 
     fn recent_base_trailing_return_function_header_index(&self) -> Option<usize> {
-        if self.indentation.indent() == 0 {
+        if self.layout.indentation.indent() == 0 {
             return None;
         }
         let mut closed_blocks = 0usize;

@@ -29,12 +29,18 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     let source = converted_source.as_deref().unwrap_or(&input);
     let tokens = tokenize(source);
     let mut engine = FormatEngine::new(options);
-    engine.line_adjuster.set_tab_conversion_enabled(false);
+    engine
+        .layout
+        .line_adjuster
+        .set_tab_conversion_enabled(false);
     if !case_adjustments_needed_for_tokens(&tokens, options) {
-        engine.line_adjuster.set_case_processing_enabled(false);
+        engine
+            .layout
+            .line_adjuster
+            .set_case_processing_enabled(false);
     }
     if !line_observer_needed_for_tokens(&tokens, options) {
-        engine.line_adjuster.set_line_observe_enabled(false);
+        engine.layout.line_adjuster.set_line_observe_enabled(false);
     }
     engine.set_may_have_backslash_body(input.contains('\\'));
     engine.set_may_have_swig(input.contains('%'));

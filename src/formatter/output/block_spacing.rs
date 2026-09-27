@@ -26,21 +26,22 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        if word == "while" && self.nesting.last_closed_brace_header.as_deref() == Some("do") {
+        if word == "while" && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+        {
             self.clear_block_spacing_blanks();
             return;
         }
         if is_break_blocks_closing_header(word) {
             if self.options.break_closing_header_blocks
                 && self.current_is_blank()
-                && self.command_state.previous_command_char == Some('}')
+                && self.layout.command_state.previous_command_char == Some('}')
             {
                 self.block_spacing.prepend_blank = true;
             }
             return;
         }
         if !self.current_is_blank()
-            || (self.command_state.previous_command_char == Some('{')
+            || (self.layout.command_state.previous_command_char == Some('{')
                 && !self.preprocessor.last_output_was_preprocessor)
             || (self.options.brace_style == BraceStyle::Pico
                 && self.output.last().is_some_and(|line| line.trim() == "{"))
@@ -58,13 +59,14 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks || self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        let Some(previous) = self.previous_pre_adjust_line.as_deref() else {
+        let Some(previous) = self.layout.previous_pre_adjust_line.as_deref() else {
             return;
         };
         let previous = previous.trim_start();
         if previous.is_empty()
-            || self.indentation.indent() == 0
-            || (self.command_state.previous_command_char == Some('{') && !previous.starts_with('#'))
+            || self.layout.indentation.indent() == 0
+            || (self.layout.command_state.previous_command_char == Some('{')
+                && !previous.starts_with('#'))
         {
             return;
         }
@@ -105,7 +107,7 @@ impl FormatEngine<'_> {
     pub(crate) fn observe_block_spacing_semicolon(&mut self) {
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
-            || self.nesting.paren_depth > 0
+            || self.layout.nesting.paren_depth > 0
         {
             return;
         }
@@ -115,8 +117,8 @@ impl FormatEngine<'_> {
             .as_deref()
             .is_some_and(|header| !matches!(header, "case" | "default"));
         let line_is_broken = self.options.break_one_line_statements
-            || (self.line_state.is_one_line_block && self.options.break_one_line_blocks);
-        if header_appends && (line_is_broken || !self.line_state.is_multi_statement_line) {
+            || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks);
+        if header_appends && (line_is_broken || !self.layout.line_state.is_multi_statement_line) {
             self.block_spacing.append_blank = true;
         }
         self.clear_block_spacing_header();
@@ -158,8 +160,9 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return;
         }
-        let closed_header = self.nesting.last_closed_brace_header.as_deref();
-        let closed_command_header = self.nesting.last_closed_brace_type == Some(BraceType::Command)
+        let closed_header = self.layout.nesting.last_closed_brace_header.as_deref();
+        let closed_command_header = self.layout.nesting.last_closed_brace_type
+            == Some(BraceType::Command)
             || closed_header.is_some_and(|header| {
                 is_break_blocks_opening_header(header) || is_break_blocks_closing_header(header)
             });
@@ -186,7 +189,7 @@ impl FormatEngine<'_> {
         if !prepend && !append {
             return false;
         }
-        match self.previous_pre_adjust_line.as_deref() {
+        match self.layout.previous_pre_adjust_line.as_deref() {
             Some(previous) if !previous.trim().is_empty() => {}
             None if prepend => return true,
             _ => return false,
@@ -238,7 +241,8 @@ impl FormatEngine<'_> {
     }
 
     fn previous_block_spacing_line_is_comment_only(&self) -> bool {
-        self.previous_pre_adjust_line
+        self.layout
+            .previous_pre_adjust_line
             .as_deref()
             .is_some_and(|line| {
                 let trimmed = line.trim_start();

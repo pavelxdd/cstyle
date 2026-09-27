@@ -5,10 +5,12 @@ use crate::formatter::output::model::LineReplayLayout;
 impl FormatEngine<'_> {
     pub(crate) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
         let input_continuation_indent = self
+            .layout
             .continuation_indent
             .input_line_continuation_indent
             .take();
         let closed_delimiter_continuation_indent = self
+            .layout
             .frame_stack
             .take_line_closed_delimiter_continuation_indent();
         let constructor_lambda_header_indent_spaces =
@@ -29,8 +31,10 @@ impl FormatEngine<'_> {
         let lisp_attached_suffix_indent_spaces = self.replayed_lisp_attached_suffix_indent_spaces();
         let header_operator_indent_spaces =
             self.replayed_header_operator_indent_spaces(line, closed_delimiter_continuation_indent);
-        let closed_lambda_parameter_list =
-            self.frame_stack.take_line_closed_lambda_parameter_list();
+        let closed_lambda_parameter_list = self
+            .layout
+            .frame_stack
+            .take_line_closed_lambda_parameter_list();
         let break_lambda_parameters = matches!(
             self.options.brace_style,
             BraceStyle::Allman

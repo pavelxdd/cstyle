@@ -64,6 +64,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let frame = self
+            .layout
             .frame_stack
             .active_typedef_function_pointer_declaration()?;
         if current.starts_with(");") {
@@ -97,14 +98,16 @@ impl FormatEngine<'_> {
                 width
             };
             let has_typedef_frame = self
+                .layout
                 .frame_stack
                 .active_typedef_function_pointer_declaration()
                 .is_some();
             let frame = if has_typedef_frame {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .active_typedef_function_pointer_declaration_mut()
             } else {
-                self.frame_stack.active_declaration_mut()
+                self.layout.frame_stack.active_declaration_mut()
             };
             if let Some(frame) = frame {
                 frame.pointer_role = PointerRole::FunctionPointer;
@@ -113,7 +116,7 @@ impl FormatEngine<'_> {
                 frame.closing_anchor_column = Some(target.saturating_sub(width));
             }
         } else if trimmed.starts_with(");") || trimmed.ends_with(';') {
-            self.frame_stack.clear_declarations();
+            self.layout.frame_stack.clear_declarations();
         }
     }
 }

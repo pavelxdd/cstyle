@@ -102,10 +102,12 @@ impl FormatEngine<'_> {
                 .last_non_empty_line()
                 .is_some_and(|line| line.trim_start().starts_with('#'))
         {
-            self.continuation_indent
+            self.layout
+                .continuation_indent
                 .next_line_indent_spaces
                 .or_else(|| {
-                    self.continuation_indent
+                    self.layout
+                        .continuation_indent
                         .next_line_indent
                         .map(|level| level * self.options.indent_width)
                 })
@@ -120,7 +122,8 @@ impl FormatEngine<'_> {
         let line_indent = if closes_interrupted_comment {
             brace_header
                 .and_then(|header| {
-                    self.frame_stack
+                    self.layout
+                        .frame_stack
                         .active_header()
                         .filter(|frame| frame.header == *header)
                 })
@@ -196,12 +199,16 @@ impl FormatEngine<'_> {
         let label_block =
             semantic_kind == BraceSemanticKind::Command && case_header.is_none() && current_label();
         let semantic_header = brace_header.and_then(|header| {
-            self.frame_stack
+            self.layout
+                .frame_stack
                 .active_header()
                 .filter(|frame| frame.header == *header)
         });
         let label_owner_column = label_block.then(|| {
-            (self.indentation.line_indent(LineKind::Normal, self.options)
+            (self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal))
                 * self.options.indent_width
         });
@@ -209,15 +216,15 @@ impl FormatEngine<'_> {
             case_label_token_offset(&self.current, header)
                 .map(|offset| {
                     let base = if self.preprocessor.split_else.extra_levels == 0 {
-                        self.indentation
+                        self.layout
+                            .indentation
                             .line_indent(LineKind::SwitchLabel, self.options)
                             * self.options.indent_width
                     } else {
-                        let owner_depth = 1 + self
-                            .preprocessor
-                            .split_else
-                            .extra_levels
-                            .saturating_sub(self.line_adjuster.next_line_case_unindent_depth());
+                        let owner_depth =
+                            1 + self.preprocessor.split_else.extra_levels.saturating_sub(
+                                self.layout.line_adjuster.next_line_case_unindent_depth(),
+                            );
                         self.current_line_indent_spaces()
                             .saturating_sub(owner_depth * self.options.indent_width)
                     };
@@ -268,7 +275,7 @@ impl FormatEngine<'_> {
         } else {
             (line_indent + self.options.indent_width, line_indent)
         };
-        self.frame_stack.push_brace(BraceFrame {
+        self.layout.frame_stack.push_brace(BraceFrame {
             semantic_kind,
             brace_type,
             header: if label_block {
@@ -291,7 +298,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn update_current_brace_indent_columns(&mut self, body: usize, sibling: usize) {
-        if let Some(frame) = self.frame_stack.active_brace_mut() {
+        if let Some(frame) = self.layout.frame_stack.active_brace_mut() {
             frame.body_indent_column = body;
             frame.sibling_indent_column = sibling;
         }
@@ -303,6 +310,7 @@ impl FormatEngine<'_> {
         };
         let code = line[..trailing_comment_split_limit(line)].trim();
         if self
+            .layout
             .frame_stack
             .active_brace()
             .is_some_and(|frame| frame.header.is_some())
@@ -314,13 +322,14 @@ impl FormatEngine<'_> {
         }
         let sibling = leading_visual_width(line, self.options.tab_width);
         if self
+            .layout
             .frame_stack
             .active_brace()
             .is_some_and(|frame| frame.label_block || frame.case_block)
         {
             return;
         }
-        if self.frame_stack.active_brace().is_some_and(|frame| {
+        if self.layout.frame_stack.active_brace().is_some_and(|frame| {
             code != "{"
                 && ((frame.semantic_kind == BraceSemanticKind::Definition
                     && frame.sibling_indent_column < sibling)
@@ -332,9 +341,13 @@ impl FormatEngine<'_> {
         }) {
             return;
         }
-        let vtk_constructor_lambda = self.frame_stack.active_constructor_initializer().is_some();
+        let vtk_constructor_lambda = self
+            .layout
+            .frame_stack
+            .active_constructor_initializer()
+            .is_some();
         let body_uses_brace_column = code == "{"
-            && self.frame_stack.active_brace().is_some_and(|frame| {
+            && self.layout.frame_stack.active_brace().is_some_and(|frame| {
                 self.options.brace_style == BraceStyle::Whitesmith
                     || self.options.brace_style == BraceStyle::Vtk
                         && (matches!(
@@ -359,37 +372,39 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn exit_brace_state(&mut self) {
-        let closes_scope = self.nesting.has_active_brace_scope();
-        self.indentation.exit_block();
+        let closes_scope = self.layout.nesting.has_active_brace_scope();
+        self.layout.indentation.exit_block();
         if closes_scope {
-            let bracket_depth = self.indentation.bracket_depth();
+            let bracket_depth = self.layout.indentation.bracket_depth();
             self.inline_array.initializer_designator_bracket_depth = 0;
-            self.frame_stack.truncate_brackets(bracket_depth);
-            self.objc.message_active = self.frame_stack.has_objc_alignment_bracket();
-            if !self.objc.message_active {
-                self.objc.message_pending_align = false;
-                self.objc.message_align = None;
+            self.layout.frame_stack.truncate_brackets(bracket_depth);
+            self.layout.objc.message_active = self.layout.frame_stack.has_objc_alignment_bracket();
+            if !self.layout.objc.message_active {
+                self.layout.objc.message_pending_align = false;
+                self.layout.objc.message_align = None;
             }
         }
-        let recovery = self.nesting.exit_brace();
+        let recovery = self.layout.nesting.exit_brace();
         for _ in 0..recovery.parens {
-            self.frame_stack.pop_delimiter(self.output.len());
+            self.layout.frame_stack.pop_delimiter(self.output.len());
         }
         for _ in 0..recovery.questions {
-            self.frame_stack.pop_active_ternary();
+            self.layout.frame_stack.pop_active_ternary();
         }
         if closes_scope {
-            self.frame_stack.pop_brace();
+            self.layout.frame_stack.pop_brace();
         }
     }
 
     pub(crate) fn mark_closed_brace_output_position(&mut self) {
-        self.frame_stack
+        self.layout
+            .frame_stack
             .mark_last_closed_brace_output_position(self.output.len());
     }
 
     pub(crate) fn current_open_brace_is_lambda_body(&self) -> bool {
-        self.frame_stack
+        self.layout
+            .frame_stack
             .active_brace()
             .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
     }

@@ -84,15 +84,19 @@ impl FormatEngine<'_> {
                         || starts_with_chain_operator(trimmed)
                         || trimmed.starts_with(['+', '-', '*', '/', '%']))
             })
-            || self.nesting.current_continuation_indent_spaces().is_some();
+            || self
+                .layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .is_some();
         if in_continuation {
             return;
         }
-        self.continuation_indent.next_line_indent = None;
-        self.continuation_indent.next_line_indent_spaces = None;
-        self.nesting.clear_continuation_indents();
+        self.layout.continuation_indent.next_line_indent = None;
+        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.nesting.clear_continuation_indents();
         operator_chains::clear_logical_chain_indent(
-            &mut self.continuation_indent.logical_chain_indent_spaces,
+            &mut self.layout.continuation_indent.logical_chain_indent_spaces,
         );
     }
 
@@ -192,8 +196,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn is_top_level_table_macro_row(&self) -> bool {
-        self.nesting.brace_type_stack.is_empty()
-            && self.nesting.paren_depth == 0
+        self.layout.nesting.brace_type_stack.is_empty()
+            && self.layout.nesting.paren_depth == 0
             && self.current.trim_start().starts_with('.')
     }
 
@@ -216,7 +220,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        self.nesting.paren_depth == 0
+        self.layout.nesting.paren_depth == 0
             && trimmed.ends_with(['*', '&', '^'])
             && self.looks_like_pointer_declaration_context()
     }
@@ -242,7 +246,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.indentation.statement_depth() == 0
+        if self.layout.indentation.statement_depth() == 0
             && (trimmed.starts_with("//")
                 || trimmed.ends_with(';')
                 || trimmed.starts_with("/*") && trimmed.ends_with("*/")
@@ -265,7 +269,7 @@ impl FormatEngine<'_> {
             && self.in_enum_declaration_brace()
             && (code_before_trailing_comment.contains('{')
                 || self.current_line_indent_spaces()
-                    > self.indentation.indent() * self.options.indent_width)
+                    > self.layout.indentation.indent() * self.options.indent_width)
         {
             return true;
         }
@@ -277,17 +281,17 @@ impl FormatEngine<'_> {
         let bare_question_line = trimmed == "?";
         let bare_leading_operator_line =
             is_leading_continuation_operator(trimmed) || matches!(trimmed, "*" | "&" | "^");
-        self.indentation.statement_depth() > 0
+        self.layout.indentation.statement_depth() > 0
             || (self.next_line.leads_with_assignment
-                && self.indentation.statement_depth() == 0
+                && self.layout.indentation.statement_depth() == 0
                 && !self.current.trim().is_empty())
-            || (matches!(self.previous, PreviousToken::Operator)
+            || (matches!(self.layout.previous, PreviousToken::Operator)
                 && !bare_leading_operator_line
                 && !self.line_ends_with_bare_angle_operator()
                 && !self.current_ends_with_pointer_declarator()
                 && !trimmed.ends_with("->")
-                && (self.indentation.statement_depth() != 0 || !trimmed.ends_with("::")))
-            || (matches!(self.previous, PreviousToken::Comma)
+                && (self.layout.indentation.statement_depth() != 0 || !trimmed.ends_with("::")))
+            || (matches!(self.layout.previous, PreviousToken::Comma)
                 && !self.in_initializer_brace()
                 && !self.in_enum_declaration_brace())
             || self.macro_call_argument_indent_spaces().is_some()
@@ -301,9 +305,9 @@ impl FormatEngine<'_> {
             || self
                 .operator_led_return_continuation_indent_spaces()
                 .is_some()
-            || self.nesting.question_depth > 0
+            || self.layout.nesting.question_depth > 0
             || self.is_stream_continuation_break()
-            || (self.in_class_base_clause && !self.next_line.leads_with_open_brace)
+            || (self.layout.in_class_base_clause && !self.next_line.leads_with_open_brace)
             || (!bare_question_line && self.current.trim_end().ends_with('?'))
             || self.current.trim_end().ends_with(" :")
     }
@@ -356,10 +360,10 @@ impl FormatEngine<'_> {
     pub(crate) fn current_line_indent_spaces(&self) -> usize {
         let split_else_extra =
             self.preprocessor.split_else.extra_levels * self.options.indent_width;
-        if let Some(spaces) = self.continuation_indent.next_line_indent_spaces {
+        if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return spaces + split_else_extra;
         }
-        if let Some(level) = self.continuation_indent.next_line_indent {
+        if let Some(level) = self.layout.continuation_indent.next_line_indent {
             return level * self.options.indent_width + split_else_extra;
         }
         self.continuation_base_indent() * self.options.indent_width + split_else_extra
@@ -408,7 +412,7 @@ impl FormatEngine<'_> {
         {
             line_indent_spaces = line_indent_spaces.max(ternary_indent);
         }
-        let constructor_member_base = (self.nesting.paren_depth == 1)
+        let constructor_member_base = (self.layout.nesting.paren_depth == 1)
             .then(|| self.constructor_member_line_base_indent_spaces())
             .flatten();
         if let Some(base) = constructor_member_base {
@@ -417,7 +421,8 @@ impl FormatEngine<'_> {
         let previous_indent = if constructor_member_base.is_some() {
             line_indent_spaces
         } else {
-            self.nesting
+            self.layout
+                .nesting
                 .current_continuation_indent_spaces()
                 .unwrap_or(line_indent_spaces)
         };
@@ -440,6 +445,7 @@ impl FormatEngine<'_> {
         };
         let mut spaces = if !has_next {
             let base = self
+                .layout
                 .nesting
                 .current_continuation_indent_spaces()
                 .or_else(|| self.return_continuation_indent_spaces())
@@ -484,7 +490,7 @@ impl FormatEngine<'_> {
         }
         let statement_base_spaces = self.continuation_base_indent() * self.options.indent_width;
         let trailing_open_paren = !has_next && self.current.trim_end().ends_with('(');
-        let trailing_first_paren = trailing_open_paren && self.nesting.paren_depth == 1;
+        let trailing_first_paren = trailing_open_paren && self.layout.nesting.paren_depth == 1;
         let trailing_assignment = !has_next && {
             let head = self.current.trim_end();
             head.ends_with('=')
@@ -513,8 +519,9 @@ impl FormatEngine<'_> {
                         .max(self.options.indent_width * 2);
             } else {
                 let opened_on_statement_line = line_indent_spaces <= statement_base_spaces;
-                let enclosing_paren = (opened_on_statement_line && self.nesting.paren_depth >= 2)
-                    .then(|| self.nesting.current_continuation_indent_spaces())
+                let enclosing_paren = (opened_on_statement_line
+                    && self.layout.nesting.paren_depth >= 2)
+                    .then(|| self.layout.nesting.current_continuation_indent_spaces())
                     .flatten();
                 let enclosing_paren = if self.current_is_conditional_header_continuation() {
                     enclosing_paren.map(|column| column.max(fallback))
@@ -535,13 +542,17 @@ impl FormatEngine<'_> {
                 };
             }
         }
-        if self.nesting.paren_depth == 1 {
-            self.nesting.trim_to_current_statement_continuation();
+        if self.layout.nesting.paren_depth == 1 {
+            self.layout.nesting.trim_to_current_statement_continuation();
         }
         if capped_over_max || (trailing_first_paren && over_max) {
-            self.nesting.push_continuation_indent_spaces_raw(spaces);
+            self.layout
+                .nesting
+                .push_continuation_indent_spaces_raw(spaces);
         } else {
-            self.nesting.register_continuation_indent_spaces(spaces);
+            self.layout
+                .nesting
+                .register_continuation_indent_spaces(spaces);
         }
     }
 
@@ -562,7 +573,8 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(':') || !previous_code.contains('?') {
             return None;
         }
-        let unindent = self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         unmatched_open_paren_column(previous_code).map(|open| open + 1 + unindent)
     }
 
@@ -571,14 +583,15 @@ impl FormatEngine<'_> {
         if current.starts_with([')', '}', '?', ':']) {
             return None;
         }
-        let frame = self.frame_stack.active_ternary()?;
+        let frame = self.layout.frame_stack.active_ternary()?;
         if frame.colon_role != Some(ColonRole::Ternary) {
             return None;
         }
-        let unindent = self.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         frame
             .parent_delimiter
-            .and_then(|id| self.frame_stack.delimiter_by_id(id))
+            .and_then(|id| self.layout.frame_stack.delimiter_by_id(id))
             .map(|delimiter| delimiter.opener_output_column + 1 + unindent)
     }
 
@@ -610,16 +623,19 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn has_active_continuation_indent(&self) -> bool {
-        self.nesting.current_continuation_indent_spaces().is_some()
+        self.layout
+            .nesting
+            .current_continuation_indent_spaces()
+            .is_some()
             && !self.in_initializer_brace()
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
-            && (self.command_state.current_header.is_none()
-                || self.indentation.statement_depth() != 0)
+            && (self.layout.command_state.current_header.is_none()
+                || self.layout.indentation.statement_depth() != 0)
     }
 
     pub(crate) fn current_ends_base_clause_colon(&self) -> bool {
-        if self.nesting.question_depth > 0 {
+        if self.layout.nesting.question_depth > 0 {
             return false;
         }
         let line = self.current.trim_end();
@@ -719,7 +735,7 @@ impl FormatEngine<'_> {
             return ContinuationIndent::Spaces(value_column + self.options.indent_width);
         }
         if !self.options.indent_after_parens
-            && self.frame_stack.active_ternary().is_some()
+            && self.layout.frame_stack.active_ternary().is_some()
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
             && head_ends_binary_operator(self.current.trim_end())
@@ -750,7 +766,7 @@ impl FormatEngine<'_> {
                     * self.options.indent_width,
             );
         }
-        if self.in_class_base_clause {
+        if self.layout.in_class_base_clause {
             return ContinuationIndent::Spaces(self.class_base_clause_indent_spaces());
         }
         if self.current_ends_base_clause_colon() {
@@ -780,7 +796,7 @@ impl FormatEngine<'_> {
             return ContinuationIndent::Spaces(spaces);
         }
         if !self.options.indent_after_parens
-            && matches!(self.previous, PreviousToken::Comma)
+            && matches!(self.layout.previous, PreviousToken::Comma)
             && let Some(spaces) = self.macro_call_argument_indent_spaces()
         {
             return ContinuationIndent::Spaces(spaces);
@@ -792,7 +808,7 @@ impl FormatEngine<'_> {
             let line = self.current.trim_end();
             if !line.ends_with("||")
                 && self.current_is_conditional_header_continuation()
-                && let Some(spaces) = self.nesting.current_continuation_indent_spaces()
+                && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
             {
                 return ContinuationIndent::Spaces(spaces);
             }
@@ -816,7 +832,7 @@ impl FormatEngine<'_> {
                 }
                 if !line.ends_with("||")
                     && !self.current_is_conditional_header_continuation()
-                    && let Some(paren) = self.nesting.current_continuation_indent_spaces()
+                    && let Some(paren) = self.layout.nesting.current_continuation_indent_spaces()
                     && paren > spaces
                 {
                     return ContinuationIndent::Spaces(paren);
@@ -858,10 +874,10 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.parameter_default_operator_continuation_indent_spaces() {
             return ContinuationIndent::Spaces(spaces);
         }
-        if self.nesting.current_paren_is_inline_brace_call()
+        if self.layout.nesting.current_paren_is_inline_brace_call()
             && let (Some(spaces), Some(paren_spaces)) = (
-                self.nesting.current_continuation_indent_spaces(),
-                self.nesting.current_paren_indent_spaces(),
+                self.layout.nesting.current_continuation_indent_spaces(),
+                self.layout.nesting.current_paren_indent_spaces(),
             )
             && spaces > paren_spaces
         {
@@ -878,8 +894,8 @@ impl FormatEngine<'_> {
         }
 
         if !self.options.indent_after_parens
-            && self.frame_stack.active_delimiter().is_some()
-            && let Some(spaces) = self.nesting.current_continuation_indent_spaces()
+            && self.layout.frame_stack.active_delimiter().is_some()
+            && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
         {
             return ContinuationIndent::Spaces(spaces);
         }
@@ -891,7 +907,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-            if let Some(spaces) = self.continuation_indent.next_line_indent_spaces {
+            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
                 return ContinuationIndent::Spaces(spaces);
             }
         }
@@ -907,7 +923,7 @@ impl FormatEngine<'_> {
         if (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
-            && let Some(spaces) = self.nesting.current_continuation_indent_spaces()
+            && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
         {
             return ContinuationIndent::Spaces(spaces);
         }
@@ -925,7 +941,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.logical_continuation_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-            if let Some(spaces) = self.continuation_indent.next_line_indent_spaces {
+            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
                 return ContinuationIndent::Spaces(spaces);
             }
             if let Some(spaces) = self.operator_led_return_continuation_indent_spaces() {
@@ -1016,7 +1032,9 @@ impl FormatEngine<'_> {
         .max(self.continuation_base_indent() * self.options.indent_width)
         .max(
             ContinuationIndent::Level(
-                self.indentation.line_indent(LineKind::Normal, self.options)
+                self.layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
                     + self.case_body_indent_extra(LineKind::Normal),
             )
             .columns(self.options.indent_width),
@@ -1042,6 +1060,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn aligned_after_paren_indent_spaces(&self) -> Option<usize> {
         let base_spaces = self
+            .layout
             .continuation_indent
             .next_line_indent_spaces
             .unwrap_or_else(|| self.continuation_base_indent() * self.options.indent_width);
@@ -1144,6 +1163,7 @@ impl FormatEngine<'_> {
         }
         let base_spaces = self.continuation_base_indent() * self.options.indent_width;
         let line_base_spaces = self
+            .layout
             .continuation_indent
             .next_line_indent_spaces
             .unwrap_or(base_spaces);
@@ -1196,7 +1216,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.return_continuation_indent_spaces())
             .or_else(|| self.current_return_logical_tail_indent_spaces())
             .or_else(|| self.previous_return_continuation_indent_spaces())
-            .or(self.continuation_indent.logical_chain_indent_spaces)
+            .or(self.layout.continuation_indent.logical_chain_indent_spaces)
     }
 
     fn current_assignment_logical_tail_indent_spaces(&self) -> Option<usize> {
@@ -1217,7 +1237,7 @@ impl FormatEngine<'_> {
             && self.previous_return_continuation_indent_spaces().is_some()
         {
             let case_unindent =
-                self.line_adjuster.pending_case_unindent() * self.options.indent_width;
+                self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width;
             return Some(
                 self.current_line_indent_spaces()
                     .saturating_sub(case_unindent),
@@ -1257,7 +1277,7 @@ impl FormatEngine<'_> {
         if !head_starts_binary_operator(head) {
             return None;
         }
-        if self.nesting.paren_depth > 0 || unmatched_open_paren_column(trimmed).is_some() {
+        if self.layout.nesting.paren_depth > 0 || unmatched_open_paren_column(trimmed).is_some() {
             return None;
         }
         self.previous_return_continuation_indent_spaces()
@@ -1269,6 +1289,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
         let frame = self
+            .layout
             .frame_stack
             .active_logical_on_output_line(previous_line)?;
         let matches_operator = matches!(
@@ -1279,8 +1300,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
-        if self.indentation.statement_depth() != 0
-            || self.in_class_base_clause
+        if self.layout.indentation.statement_depth() != 0
+            || self.layout.in_class_base_clause
             || self.in_enum_declaration_brace()
             || self.in_initializer_brace()
         {
@@ -1394,7 +1415,7 @@ impl FormatEngine<'_> {
     pub(crate) fn split_aggregate_declaration_name_indent_spaces(&self) -> Option<usize> {
         if !self.newline_breaks_statement
             || self.next_line.word_followed_by_open_paren
-            || self.indentation.statement_depth() != 0
+            || self.layout.indentation.statement_depth() != 0
         {
             return None;
         }
@@ -1505,7 +1526,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
-        if self.nesting.paren_depth == 0 || !head_ends_binary_operator(line) {
+        if self.layout.nesting.paren_depth == 0 || !head_ends_binary_operator(line) {
             return None;
         }
         let content = line.trim_start();
@@ -1633,23 +1654,25 @@ impl FormatEngine<'_> {
             .split(|ch: char| !is_identifier_continue(ch))
             .find(|word| !word.is_empty())?;
         if !language::STREAM_NAMES.contains(&first_word)
-            && (self.nesting.paren_depth > 0
+            && (self.layout.nesting.paren_depth > 0
                 || self.in_initializer_brace()
                 || self.is_header(first_word))
         {
             return None;
         }
-        let stream = self.frame_stack.active_stream()?;
+        let stream = self.layout.frame_stack.active_stream()?;
         (stream.operator_output_line == self.output.len()).then_some(stream.chain_anchor_column)
     }
 
     pub(crate) fn previous_stream_chain_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
         let stream = self
+            .layout
             .frame_stack
             .first_stream_on_output_line(previous_line)
             .or_else(|| {
-                self.frame_stack
+                self.layout
+                    .frame_stack
                     .stream_before_output_line(self.output.len())
             })?;
         let base = self.continuation_base_indent() * self.options.indent_width;
@@ -1672,10 +1695,12 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn continuation_base_indent(&self) -> usize {
-        let braceless_extra = self
-            .pending_braceless_block_bias
-            .map_or(0, |level| level.saturating_sub(self.indentation.indent()));
-        self.indentation.indent() + braceless_extra + self.case_body_indent_extra(LineKind::Normal)
+        let braceless_extra = self.layout.pending_braceless_block_bias.map_or(0, |level| {
+            level.saturating_sub(self.layout.indentation.indent())
+        });
+        self.layout.indentation.indent()
+            + braceless_extra
+            + self.case_body_indent_extra(LineKind::Normal)
     }
 
     pub(crate) fn apply_min_conditional_indent(&self, base_spaces: usize, spaces: usize) -> usize {
@@ -1709,7 +1734,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn current_is_operator_led_continuation(&self) -> bool {
-        if self.indentation.statement_depth() != 0 || self.command_state.current_header.is_some() {
+        if self.layout.indentation.statement_depth() != 0
+            || self.layout.command_state.current_header.is_some()
+        {
             return false;
         }
         let trimmed = self.current.trim_start();
@@ -1726,8 +1753,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn current_is_conditional_header_continuation(&self) -> bool {
-        self.indentation.statement_depth() > 0
+        self.layout.indentation.statement_depth() > 0
             && self
+                .layout
                 .command_state
                 .current_header
                 .as_deref()
@@ -1735,21 +1763,23 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn set_next_continuation_indent(&mut self, indent: ContinuationIndent) {
-        self.continuation_indent.next_input_line_continuation_indent = Some(indent);
+        self.layout
+            .continuation_indent
+            .next_input_line_continuation_indent = Some(indent);
         let level = match indent {
             ContinuationIndent::Level(level) => {
-                self.continuation_indent.next_line_indent = Some(level);
-                self.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.next_line_indent = Some(level);
+                self.layout.continuation_indent.next_line_indent_spaces = None;
                 level
             }
             ContinuationIndent::Spaces(spaces) => {
-                self.continuation_indent.next_line_indent = None;
-                self.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
                 spaces / self.options.indent_width.max(1)
             }
         };
-        self.indentation.register_continuation_indent(level);
-        self.run_in_state.current_run_in_indent = Some(level);
+        self.layout.indentation.register_continuation_indent(level);
+        self.layout.run_in_state.current_run_in_indent = Some(level);
     }
 }
 

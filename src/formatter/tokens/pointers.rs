@@ -64,7 +64,7 @@ impl FormatEngine<'_> {
     }
 
     fn record_declaration_frame_for_pointer(&mut self, operator: &str, next: Option<&Token>) {
-        self.frame_stack.push_declaration(DeclarationFrame {
+        self.layout.frame_stack.push_declaration(DeclarationFrame {
             pointer_role: self.pointer_role(operator, next),
             continuation_anchor_column: None,
             closing_anchor_column: None,
@@ -75,7 +75,7 @@ impl FormatEngine<'_> {
     pub(crate) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
         if self.continues_operator_expression()
             && matches!(
-                self.previous,
+                self.layout.previous,
                 PreviousToken::Word
                     | PreviousToken::Literal
                     | PreviousToken::CloseParen
@@ -128,9 +128,10 @@ impl FormatEngine<'_> {
             return true;
         }
         let previous_word = trailing_word(&self.current);
-        if (self.command_state.current_header.is_some() && previous_word != language::AUTO)
-            || (self.nesting.paren_depth > 0
+        if (self.layout.command_state.current_header.is_some() && previous_word != language::AUTO)
+            || (self.layout.nesting.paren_depth > 0
                 && self
+                    .layout
                     .nesting
                     .brace_type_stack
                     .last()
@@ -155,7 +156,7 @@ impl FormatEngine<'_> {
         }
         if self.continues_operator_expression()
             && matches!(
-                self.previous,
+                self.layout.previous,
                 PreviousToken::Word
                     | PreviousToken::Literal
                     | PreviousToken::CloseParen
@@ -164,7 +165,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if matches!(self.previous, PreviousToken::Literal)
+        if matches!(self.layout.previous, PreviousToken::Literal)
             || (self
                 .current
                 .trim_end()
@@ -196,9 +197,9 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.frame_stack.bracket_depth() > 0
+        if self.layout.frame_stack.bracket_depth() > 0
             && matches!(
-                self.previous,
+                self.layout.previous,
                 PreviousToken::Word
                     | PreviousToken::Literal
                     | PreviousToken::CloseParen
@@ -208,7 +209,7 @@ impl FormatEngine<'_> {
             return false;
         }
         if matches!(operator, "*" | "&")
-            && self.previous == PreviousToken::Operator
+            && self.layout.previous == PreviousToken::Operator
             && self.is_unary_pointer_operator()
             && !self.current.trim_end().ends_with(['*', '&', '^', ':'])
         {
@@ -219,7 +220,7 @@ impl FormatEngine<'_> {
         }
         if self.current.trim_end().ends_with('}')
             && matches!(
-                self.nesting.last_closed_brace_type,
+                self.layout.nesting.last_closed_brace_type,
                 Some(
                     BraceType::Class
                         | BraceType::Struct
@@ -251,7 +252,7 @@ impl FormatEngine<'_> {
                 if self.current.trim().is_empty() {
                     return self.is_function_declaration_parameter_continuation();
                 }
-                if self.nesting.paren_depth > 0
+                if self.layout.nesting.paren_depth > 0
                     && !self.current_paren_context_is_declaration()
                     && !self.current_in_objc_method_type_group()
                     && !self.is_function_declaration_parameter_continuation()
@@ -313,7 +314,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.nesting.paren_depth > 0
+        if self.layout.nesting.paren_depth > 0
             && matches!(next, Some(Token::Word(_)))
             && trailing_word(&self.current)
                 .chars()
@@ -356,7 +357,7 @@ impl FormatEngine<'_> {
             return false;
         }
         if operator == "&"
-            && self.nesting.paren_depth > 0
+            && self.layout.nesting.paren_depth > 0
             && matches!(next, Some(Token::Word(_)))
             && !self.current_paren_context_is_declaration()
             && !is_pointer_type_word(trailing_word(&self.current))
@@ -393,7 +394,7 @@ impl FormatEngine<'_> {
             let ends_ternary_colon = code.ends_with(':')
                 && !is_case_label_start(trimmed)
                 && !is_default_label_start(trimmed)
-                && (self.frame_stack.last_ternary_with_colon().is_some()
+                && (self.layout.frame_stack.last_ternary_with_colon().is_some()
                     || !ends_single_word_label);
             head_ends_binary_operator(code)
                 || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
@@ -404,7 +405,7 @@ impl FormatEngine<'_> {
     }
 
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
-        if self.line_state.template_angle_depth == 0 {
+        if self.layout.line_state.template_angle_depth == 0 {
             return false;
         }
         match next {
@@ -504,7 +505,7 @@ impl FormatEngine<'_> {
         if segment.is_empty() || !is_pointer_declaration_segment(segment) {
             return false;
         }
-        if self.nesting.paren_depth == 0 {
+        if self.layout.nesting.paren_depth == 0 {
             return true;
         }
         self.current_paren_context_is_declaration()
@@ -612,6 +613,7 @@ impl FormatEngine<'_> {
         }
         if return_type.is_empty() {
             return self
+                .layout
                 .nesting
                 .brace_type_stack
                 .last()
@@ -897,7 +899,7 @@ impl FormatEngine<'_> {
 
         match align {
             PointerAlign::Type => {
-                if self.previous == PreviousToken::Comma {
+                if self.layout.previous == PreviousToken::Comma {
                     if self
                         .token_input
                         .previous_input_whitespace
@@ -1236,7 +1238,7 @@ impl FormatEngine<'_> {
     pub(crate) fn is_unary_pointer_operator(&self) -> bool {
         if self.current.trim().is_empty()
             && self.token_input.token_begins_source_line
-            && self.previous == PreviousToken::CloseParen
+            && self.layout.previous == PreviousToken::CloseParen
             && self
                 .output
                 .last()
@@ -1250,7 +1252,7 @@ impl FormatEngine<'_> {
         ) {
             return true;
         }
-        match self.previous {
+        match self.layout.previous {
             PreviousToken::Word
             | PreviousToken::Literal
             | PreviousToken::CloseParen
@@ -1277,7 +1279,7 @@ impl FormatEngine<'_> {
     }
 
     fn current_in_objc_method_type_group(&self) -> bool {
-        if !(self.is_objc_method_line() || self.objc.method_continuation) {
+        if !(self.is_objc_method_line() || self.layout.objc.method_continuation) {
             return false;
         }
         let current = self.current.trim_end();

@@ -174,11 +174,11 @@ impl FormatEngine<'_> {
         header: Option<&str>,
         pending_extern: bool,
     ) -> BraceType {
-        let block_word = self.command_state.pending_block_word.take();
+        let block_word = self.layout.command_state.pending_block_word.take();
         let block_word = match block_word.as_deref() {
             Some("struct" | "union" | "enum" | "class" | "interface")
                 if self.aggregate_header_ends_with_paren_group()
-                    || self.command_state.previous_command_char == Some(')') =>
+                    || self.layout.command_state.previous_command_char == Some(')') =>
             {
                 None
             }
@@ -188,20 +188,25 @@ impl FormatEngine<'_> {
             || is_lambda_capture_header(self.current.trim_end());
         let lambda_in_block_scope = lambda_header
             && matches!(
-                self.nesting.brace_type_stack.last(),
+                self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Command | BraceType::Definition)
             );
         let active_delimiter = self
+            .layout
             .frame_stack
             .active_delimiter_with_id()
             .map(|(id, _)| id);
         let header_condition_closed = header.is_some_and(|header| {
             (language::is_non_paren_header(header)
                 || matches!(header, "autoreleasepool" | "@try" | "@finally")
-                || self.command_state.previous_command_char == Some(')'))
-                && self.frame_stack.active_header().is_some_and(|frame| {
-                    frame.header == header && frame.parent_delimiter == active_delimiter
-                })
+                || self.layout.command_state.previous_command_char == Some(')'))
+                && self
+                    .layout
+                    .frame_stack
+                    .active_header()
+                    .is_some_and(|frame| {
+                        frame.header == header && frame.parent_delimiter == active_delimiter
+                    })
         });
         let current_namespace_header = {
             let split = trailing_comment_split_limit(&self.current);
@@ -220,7 +225,7 @@ impl FormatEngine<'_> {
         if header.is_some_and(is_defer_header) {
             BraceType::DeferArray
         } else if self.is_objc_method_line()
-            || self.objc.method_continuation
+            || self.layout.objc.method_continuation
             || (self.current_is_blank() && self.output_ends_objc_method_header())
         {
             BraceType::Definition
@@ -233,7 +238,7 @@ impl FormatEngine<'_> {
         } else if (header_condition_closed
             || header.is_none() && is_conditional_header_line(self.current.trim_start()))
             && matches!(
-                self.nesting.brace_type_stack.last(),
+                self.layout.nesting.brace_type_stack.last(),
                 Some(
                     BraceType::Command
                         | BraceType::NonStatement
@@ -247,17 +252,18 @@ impl FormatEngine<'_> {
             BraceType::CompoundLiteral
         } else if current_namespace_header || previous_namespace_header {
             BraceType::Namespace
-        } else if self.command_state.previous_command_char == Some('=')
+        } else if self.layout.command_state.previous_command_char == Some('=')
             || trailing_word(self.current.trim_end()) == language::RETURN
             || self
+                .layout
                 .nesting
                 .brace_type_stack
                 .last()
                 .is_some_and(|brace_type| *brace_type == BraceType::Array)
-            || (self.command_state.previous_command_char == Some('{')
+            || (self.layout.command_state.previous_command_char == Some('{')
                 && !self.token_input.token_begins_source_line
                 && matches!(
-                    self.nesting.brace_type_stack.last(),
+                    self.layout.nesting.brace_type_stack.last(),
                     Some(BraceType::NonStatement)
                 ))
         {
@@ -291,7 +297,7 @@ impl FormatEngine<'_> {
             || self.current_ends_trailing_return_definition()
             || (header.is_some()
                 && matches!(
-                    self.nesting.brace_type_stack.last(),
+                    self.layout.nesting.brace_type_stack.last(),
                     None | Some(
                         BraceType::Namespace
                             | BraceType::Class
@@ -308,7 +314,7 @@ impl FormatEngine<'_> {
             || matches!(self.current.trim(), "-" | "+")
             || self.current_ends_definition_header()
                 && matches!(
-                    self.nesting.brace_type_stack.last(),
+                    self.layout.nesting.brace_type_stack.last(),
                     Some(BraceType::Command | BraceType::Definition)
                 )
         {
@@ -316,7 +322,7 @@ impl FormatEngine<'_> {
         } else if self.current_ends_definition_header() {
             BraceType::Definition
         } else if matches!(
-            self.command_state.previous_command_char,
+            self.layout.command_state.previous_command_char,
             Some(':' | ';' | '{' | '}' | '(')
         ) || language::is_non_paren_header(trailing_word(self.current.trim_end()))
         {
@@ -333,10 +339,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn brace_opens_constructor_body(&self) -> bool {
-        if self.command_state.previous_command_char != Some('}') {
+        if self.layout.command_state.previous_command_char != Some('}') {
             return false;
         }
-        let scope_allows = match self.nesting.brace_type_stack.last() {
+        let scope_allows = match self.layout.nesting.brace_type_stack.last() {
             Some(brace_type) => {
                 is_class_like_brace_type(*brace_type) || *brace_type == BraceType::Namespace
             }
@@ -545,19 +551,23 @@ pub(crate) fn brace_indent_applies(brace_type: BraceType) -> bool {
 
 impl FormatEngine<'_> {
     pub(crate) fn in_initializer_brace(&self) -> bool {
-        self.nesting
+        self.layout
+            .nesting
             .brace_type_stack
             .iter()
             .any(|brace_type| matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral))
     }
 
     pub(crate) fn innermost_init_block_brace(&self) -> bool {
-        matches!(self.nesting.brace_type_stack.last(), Some(BraceType::Init))
-            && self.current_inline_array_column().is_none()
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Init)
+        ) && self.current_inline_array_column().is_none()
     }
 
     pub(crate) fn in_aggregate_declaration_brace(&self) -> bool {
-        self.nesting
+        self.layout
+            .nesting
             .brace_type_stack
             .last()
             .is_some_and(|brace_type| {
@@ -569,7 +579,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn in_enum_declaration_brace(&self) -> bool {
-        self.nesting
+        self.layout
+            .nesting
             .brace_type_stack
             .last()
             .is_some_and(|brace_type| *brace_type == BraceType::Enum)
@@ -577,13 +588,14 @@ impl FormatEngine<'_> {
 
     pub(crate) fn innermost_brace_is_compound_literal(&self) -> bool {
         matches!(
-            self.nesting.brace_type_stack.last(),
+            self.layout.nesting.brace_type_stack.last(),
             Some(BraceType::CompoundLiteral)
         )
     }
 
     pub(crate) fn enclosed_in_compound_literal(&self) -> bool {
-        self.nesting
+        self.layout
+            .nesting
             .brace_type_stack
             .iter()
             .any(|brace_type| matches!(brace_type, BraceType::CompoundLiteral))
