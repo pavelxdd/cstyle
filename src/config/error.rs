@@ -17,8 +17,12 @@ impl ConfigError {
         Self::new(format!("failed to read {}: {error}", path.display()))
     }
 
-    pub(crate) fn line(path: &Path, line_number: usize, message: impl fmt::Display) -> Self {
-        Self::new(format!("{}:{line_number}: {message}", path.display()))
+    pub(crate) fn at(location: OptionLocation<'_>, message: impl fmt::Display) -> Self {
+        Self::new(format!(
+            "{}:{}: {message}",
+            location.path.display(),
+            location.line_number
+        ))
     }
 }
 
@@ -29,3 +33,10 @@ impl fmt::Display for ConfigError {
 }
 
 impl std::error::Error for ConfigError {}
+
+/// The config file line or command-line argument an option came from.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OptionLocation<'a> {
+    pub(crate) path: &'a Path,
+    pub(crate) line_number: usize,
+}

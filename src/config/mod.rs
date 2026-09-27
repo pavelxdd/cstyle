@@ -1,4 +1,5 @@
 pub use error::ConfigError;
+pub(crate) use error::OptionLocation;
 pub(crate) use file_options::{BackupSuffix, ConfigFileOptions};
 pub use files::{
     apply_file, apply_project_file, find_project_file, load_from_current_dir, load_from_dir,
