@@ -1,6 +1,6 @@
 use crate::config::{BraceStyle, IndentStyle};
-use crate::formatter::FormatEngine;
 use crate::formatter::columns::leading_visual_width;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,

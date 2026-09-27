@@ -1,5 +1,5 @@
-use crate::formatter::FormatEngine;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::PointerRole;
 use crate::formatter::labels::is_standard_access_label;
 use crate::formatter::line_scan::unmatched_open_paren_column;

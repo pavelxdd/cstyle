@@ -5,6 +5,7 @@ use crate::formatter::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
 };
 use crate::formatter::disabled_formatting::DisabledFormattingState;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::{
@@ -20,7 +21,7 @@ use crate::formatter::rewrite::is_add_braces_header;
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType, PreviousToken};
 use crate::formatter::switch_cases::find_case_colon;
 use crate::formatter::token::{CommentKind, Token, token_char_len};
-use crate::formatter::{FormatEngine, labels, language};
+use crate::formatter::{labels, language};
 
 fn comment_starts_header_word(line: &str, word: &str) -> bool {
     line.strip_prefix(word)

@@ -1,8 +1,8 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use crate::config::{BraceStyle, FormatOptions, PointerAlign};
-use crate::formatter::FormatEngine;
-use crate::formatter::entry::format_c;
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::format;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::state::{FormatterBraceType, InlineArrayFrame};
@@ -139,7 +139,7 @@ fn preserves_preprocessor_macro_comments() {
     options.pointer_align = PointerAlign::Name;
 
     assert_eq!(
-        format_c(&source, &options),
+        format(&source, &options),
         fixture(&[
             "#if A",
             "#define VALUE(x) (x) // keep",

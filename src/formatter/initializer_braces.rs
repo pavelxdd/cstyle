@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::FormatEngine;
 use crate::formatter::brace_classification::is_lambda_capture_header;
 use crate::formatter::brace_postprocess::horstmann_run_in_fill;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::headers::is_braceless_header_line;
 use crate::formatter::indentation::LineKind;

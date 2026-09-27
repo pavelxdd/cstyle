@@ -1,6 +1,7 @@
 use crate::config::BraceStyle;
 use crate::formatter::brace_classification::line_opens_lambda_block;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BracketFrame;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
@@ -24,7 +25,7 @@ use crate::formatter::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
 };
-use crate::formatter::{FormatEngine, labels, operator_chains};
+use crate::formatter::{labels, operator_chains};
 use crate::source::lex::{is_identifier_start, trailing_word};
 
 impl FormatEngine<'_> {

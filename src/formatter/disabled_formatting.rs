@@ -2,6 +2,7 @@
 
 use crate::formatter::compound_literals::CompoundLiteralState;
 use crate::formatter::continuation::ContinuationIndentState;
+use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::frame::FrameStack;
 use crate::formatter::indentation::IndentationState;
 use crate::formatter::line_adjust::LineAdjuster;
@@ -16,7 +17,6 @@ use crate::formatter::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::syntax::SyntaxRoles;
 use crate::formatter::template_declarations::TemplateDeclarationState;
 use crate::formatter::token::Token;
-use crate::formatter::{FormatEngine, TokenPushContext};
 use std::collections::VecDeque;
 
 /// The subset of engine state that formatting after a disabled region depends on.

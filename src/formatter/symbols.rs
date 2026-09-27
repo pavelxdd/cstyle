@@ -1,10 +1,12 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
     DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
 };
+use crate::formatter::labels;
 use crate::formatter::language::{
     self, is_leading_continuation_operator, is_numeric_variable_word, is_pointer_type_word,
     is_type_like_pointer_word,
@@ -19,7 +21,6 @@ use crate::formatter::syntax::{
     assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
 };
 use crate::formatter::token::Token;
-use crate::formatter::{FormatEngine, TokenPushContext, labels};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> bool {

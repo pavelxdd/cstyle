@@ -2,6 +2,7 @@ use crate::config::{FormatOptions, IndentStyle};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::columns::leading_visual_width;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::starts_header_word;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::{
@@ -9,7 +10,7 @@ use crate::formatter::line_scan::{
 };
 use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
 use crate::formatter::switch_cases::{find_case_colon, is_case_label_start};
-use crate::formatter::{FormatEngine, language, raw_strings};
+use crate::formatter::{language, raw_strings};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {

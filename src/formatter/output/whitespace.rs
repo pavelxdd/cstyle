@@ -1,4 +1,4 @@
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::PreviousToken;
 
 impl FormatEngine<'_> {

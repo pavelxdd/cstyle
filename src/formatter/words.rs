@@ -1,14 +1,15 @@
 use crate::config::{BraceStyle, PointerAlign};
 use crate::formatter::brace_classification::contains_one_line_block;
 use crate::formatter::columns::leading_visual_width;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BracelessHeaderFrame;
 use crate::formatter::headers::is_attachable_closing_header;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::{has_unclosed_delimiter_after, trailing_comment_split_limit};
 use crate::formatter::rewrite::is_defer_header;
 use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::switch_cases;
 use crate::formatter::token::Token;
-use crate::formatter::{FormatEngine, switch_cases};
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {

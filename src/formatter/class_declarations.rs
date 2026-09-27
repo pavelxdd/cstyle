@@ -1,5 +1,5 @@
-use crate::formatter::FormatEngine;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::trailing_comment_split_limit;
 use crate::formatter::syntax::signature_ends_with_parameter_list;

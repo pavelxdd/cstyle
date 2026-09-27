@@ -44,7 +44,7 @@ impl Default for Formatter {
 }
 
 pub fn format(source: &str, options: &FormatOptions) -> String {
-    formatter::format_c(source, options)
+    formatter::format(source, options)
 }
 
 /// Formats encoded source bytes, preserving the input encoding, the observed
@@ -53,7 +53,7 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
 pub fn format_bytes(input: &[u8], options: &FormatOptions) -> io::Result<Vec<u8>> {
     let source = DecodedSource::from_bytes(input)?;
     let options = resolve_preserved_line_ending(options, source.observed_line_ending());
-    let mut output = formatter::format_c(source.text(), &options);
+    let mut output = formatter::format(source.text(), &options);
     if !source.had_final_line_break() {
         let line_break = options.line_break();
         if output.ends_with(line_break) {

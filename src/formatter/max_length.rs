@@ -1,7 +1,7 @@
 use crate::config::BraceStyle;
-use crate::formatter::FormatEngine;
 use crate::formatter::brace_classification::is_lambda_capture_header;
 use crate::formatter::columns::leading_visual_width;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::is_conditional_header_line;
 use crate::formatter::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::line_scan::{

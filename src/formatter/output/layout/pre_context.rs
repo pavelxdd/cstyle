@@ -1,8 +1,8 @@
-use crate::formatter::FormatEngine;
 use crate::formatter::call_arguments::{
     closing_braced_call_argument_indent_spaces, plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::{
     has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,

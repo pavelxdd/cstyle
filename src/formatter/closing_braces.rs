@@ -1,10 +1,10 @@
 use crate::config::BraceStyle;
-use crate::formatter::FormatEngine;
 use crate::formatter::brace_classification::{
     contains_one_line_block, is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::buffer::OpenBraceShape;
 use crate::formatter::columns::leading_visual_width;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,

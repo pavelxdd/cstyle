@@ -1,7 +1,7 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
-use crate::formatter::FormatEngine;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };

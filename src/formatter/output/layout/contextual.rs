@@ -5,12 +5,14 @@ use crate::formatter::call_arguments::{
 };
 use crate::formatter::closing_braces::starts_post_closing_declaration;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::BraceSemanticKind;
 use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, same_line_nested_header_extra,
     starts_header_word,
 };
 use crate::formatter::indentation::LineKind;
+use crate::formatter::labels;
 use crate::formatter::language::is_macro_like_word;
 use crate::formatter::line_scan::{
     has_unmatched_open_brace, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
@@ -29,7 +31,6 @@ use crate::formatter::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
 };
-use crate::formatter::{FormatEngine, labels};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
 impl FormatEngine<'_> {

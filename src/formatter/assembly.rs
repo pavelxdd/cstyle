@@ -1,4 +1,4 @@
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 
 pub(crate) fn is_asm_block_header(word: &str) -> bool {
     matches!(word, "_asm" | "__asm")

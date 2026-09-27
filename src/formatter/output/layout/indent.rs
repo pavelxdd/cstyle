@@ -6,6 +6,7 @@ use crate::formatter::call_arguments::callee_name_start_before_open;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructor_initializers::has_inline_constructor_initializer_colon;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
@@ -26,7 +27,7 @@ use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
     trailing_binary_operator_column,
 };
-use crate::formatter::{FormatEngine, labels, language, switch_cases};
+use crate::formatter::{labels, language, switch_cases};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {

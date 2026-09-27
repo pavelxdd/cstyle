@@ -1,6 +1,6 @@
 use crate::config::{PointerAlign, ReferenceAlign};
-use crate::formatter::FormatEngine;
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,

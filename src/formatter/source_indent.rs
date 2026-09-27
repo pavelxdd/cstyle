@@ -1,5 +1,5 @@
 use crate::config::MinConditionalIndent;
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::initializer_braces::initializer_sibling_uses_previous_indent;
 use crate::formatter::labels::is_attached_user_label;

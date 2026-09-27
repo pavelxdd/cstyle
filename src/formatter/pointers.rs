@@ -1,7 +1,9 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::brace_classification::is_class_like_brace_type;
 use crate::formatter::columns::visual_width_from;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{DeclarationFrame, PointerRole};
+use crate::formatter::language;
 use crate::formatter::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -16,7 +18,6 @@ use crate::formatter::syntax::{
     function_head_has_assignment, function_name_start, scoped_name_is_constructor,
 };
 use crate::formatter::token::Token;
-use crate::formatter::{FormatEngine, language};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

@@ -8,6 +8,7 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::columns::leading_visual_width;
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::indentation::LineKind;
@@ -22,7 +23,7 @@ use crate::formatter::state::{
 };
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::token::{CommentKind, Token};
-use crate::formatter::{FormatEngine, labels, line_scan};
+use crate::formatter::{labels, line_scan};
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
 
 fn is_semicolonless_call_line(line: &str) -> bool {

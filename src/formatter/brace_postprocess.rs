@@ -3,11 +3,12 @@ use crate::formatter::brace_classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
 use crate::formatter::preprocessor::preprocessor_directive;
 use crate::formatter::token::{self, Token};
-use crate::formatter::{FormatEngine, labels, switch_cases};
+use crate::formatter::{labels, switch_cases};
 
 pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) first_width: usize,

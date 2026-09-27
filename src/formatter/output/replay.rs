@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::LineReplayLayout;
 
 impl FormatEngine<'_> {

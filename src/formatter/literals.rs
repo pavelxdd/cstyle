@@ -1,4 +1,4 @@
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::StringContinuationFrame;
 use crate::formatter::language::is_type_like_pointer_word;
 use crate::formatter::line_scan::trailing_comment_split_limit;

@@ -1,5 +1,6 @@
 use crate::config::{BraceStyle, MinConditionalIndent};
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::{ColonRole, LogicalOperator};
 use crate::formatter::indentation::LineKind;
 use crate::formatter::language::{is_leading_continuation_operator, is_macro_like_word};
@@ -21,7 +22,7 @@ use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start,
 };
 use crate::formatter::token::Token;
-use crate::formatter::{FormatEngine, language, operator_chains};
+use crate::formatter::{language, operator_chains};
 use crate::source::lex::{is_identifier_continue, is_word_char};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

@@ -1,13 +1,14 @@
 use crate::config::IndentStyle;
 use crate::formatter::brace_classification::line_opens_lambda_block;
+use crate::formatter::buffer;
 use crate::formatter::columns::leading_visual_width;
 use crate::formatter::comments::line_comment_backslash_trailing_space;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::indentation::LineKind;
 use crate::formatter::line_adjust::macro_call_starts_with;
 use crate::formatter::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::state::ContinuationIndent;
-use crate::formatter::{FormatEngine, buffer};
 
 impl FormatEngine<'_> {
     pub(crate) fn publish_formatted_line_layout(

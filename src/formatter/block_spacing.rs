@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::FormatEngine;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::FormatterBraceType;
 use crate::formatter::token::Token;
 use crate::source::lex::leading_identifier;

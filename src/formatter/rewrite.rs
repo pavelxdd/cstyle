@@ -6,8 +6,10 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::columns::leading_visual_width;
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::indentation::LineKind;
 use crate::formatter::initializer_braces::bracket_starts_initializer_designator;
+use crate::formatter::language;
 use crate::formatter::language::is_macro_like_word;
 use crate::formatter::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
@@ -22,7 +24,6 @@ use crate::formatter::token::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
     next_non_whitespace, token_text,
 };
-use crate::formatter::{FormatEngine, TokenPushContext, language};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 impl FormatEngine<'_> {
@@ -2472,8 +2473,8 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
 
 #[cfg(test)]
 mod tests {
-    use crate::formatter::token::tokenize;
     use super::*;
+    use crate::formatter::token::tokenize;
 
     #[test]
     fn add_braces_keeps_braced_condition_interrupted_by_preprocessor() {

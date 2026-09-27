@@ -5,9 +5,11 @@ use crate::formatter::brace_classification::{
 };
 use crate::formatter::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::frame::CommaRole;
 use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::indentation::LineKind;
+use crate::formatter::language;
 use crate::formatter::language::is_macro_like_word;
 use crate::formatter::line_scan::{
     is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
@@ -19,7 +21,6 @@ use crate::formatter::operators::{
     find_assignment_operator, starts_ternary_arm, starts_with_chain_operator,
 };
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
-use crate::formatter::{FormatEngine, language};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) struct SplitElseCallLineLayout {
