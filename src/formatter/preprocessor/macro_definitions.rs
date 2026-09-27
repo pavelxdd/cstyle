@@ -558,83 +558,110 @@ impl FormatEngine<'_> {
                 .map(|spaces| spaces + define_base * self.options.indent_width)
             && define_body_is_expression_continuation(body_parts)
         {
-            let mut paren_anchors = Vec::new();
-            update_define_expression_paren_anchors(
-                &first_line,
-                &mut paren_anchors,
-                self.options.tab_width,
-            );
-            let mut line_spaces = spaces;
-            let mut previous_line = None;
-            for (index, part) in body_parts.iter().enumerate() {
-                if index > 0
-                    && let Some(previous) = previous_line.as_deref()
-                {
-                    let current = strip_define_backslash(part).0.trim_start();
-                    line_spaces = if let Some(anchor) = paren_anchors
-                        .last()
-                        .copied()
-                        .filter(|column| *column <= self.options.max_continuation_indent)
-                    {
-                        anchor.saturating_sub(usize::from(current.starts_with(')')))
-                    } else {
-                        next_define_expression_indent(previous, spaces, self.options)
-                    };
-                }
-                let prefix = self
-                    .options
-                    .continuation_indent_prefix(body_level, line_spaces);
-                let line = format!("{prefix}{}", part.trim_start());
-                self.adjust_and_publish_line(line.clone());
-                update_define_expression_paren_anchors(
-                    &line,
-                    &mut paren_anchors,
-                    self.options.tab_width,
-                );
-                previous_line = Some(line.trim_end_matches('\\').trim_end().to_string());
-            }
+            self.push_define_rows_aligned_to_header(&first_line, body_parts, body_level, spaces);
             return;
         }
 
         if define_body_is_expression_continuation(body_parts) {
-            let base_spaces = body_level * self.options.indent_width;
-            let mut paren_anchors = Vec::new();
-            let mut assignment_anchor = None;
-            let mut line_spaces = base_spaces;
-            for (index, part) in body_parts.iter().enumerate() {
-                if index > 0 {
-                    let current = strip_define_backslash(part).0.trim_start();
-                    let current_starts_assignment =
-                        current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
-                    line_spaces = if current_starts_assignment {
-                        base_spaces + self.options.indent_width
-                    } else {
-                        assignment_anchor
-                            .or_else(|| {
-                                paren_anchors.last().copied().filter(|column| {
-                                    *column <= self.options.max_continuation_indent
-                                })
-                            })
-                            .unwrap_or(base_spaces)
-                    };
-                }
-                let prefix = self
-                    .options
-                    .continuation_indent_prefix(body_level, line_spaces);
-                let line = format!("{prefix}{}", part.trim_start());
-                self.adjust_and_publish_line(line.clone());
-                if let Some(anchor) = self.define_assignment_row_anchor(&line) {
-                    assignment_anchor = Some(anchor);
-                }
-                update_define_expression_paren_anchors(
-                    &line,
-                    &mut paren_anchors,
-                    self.options.tab_width,
-                );
-            }
+            self.push_define_expression_rows(body_parts, body_level);
             return;
         }
 
+        self.push_define_statement_rows(first, &first_line, body_parts, body_level);
+    }
+
+    /// Lays out an expression body whose rows align to the expression that starts
+    /// on the `#define` line.
+    fn push_define_rows_aligned_to_header(
+        &mut self,
+        first_line: &str,
+        body_parts: &[&str],
+        body_level: usize,
+        spaces: usize,
+    ) {
+        let mut paren_anchors = Vec::new();
+        update_define_expression_paren_anchors(
+            first_line,
+            &mut paren_anchors,
+            self.options.tab_width,
+        );
+        let mut line_spaces = spaces;
+        let mut previous_line = None;
+        for (index, part) in body_parts.iter().enumerate() {
+            if index > 0
+                && let Some(previous) = previous_line.as_deref()
+            {
+                let current = strip_define_backslash(part).0.trim_start();
+                line_spaces = if let Some(anchor) = paren_anchors
+                    .last()
+                    .copied()
+                    .filter(|column| *column <= self.options.max_continuation_indent)
+                {
+                    anchor.saturating_sub(usize::from(current.starts_with(')')))
+                } else {
+                    next_define_expression_indent(previous, spaces, self.options)
+                };
+            }
+            let prefix = self
+                .options
+                .continuation_indent_prefix(body_level, line_spaces);
+            let line = format!("{prefix}{}", part.trim_start());
+            self.adjust_and_publish_line(line.clone());
+            update_define_expression_paren_anchors(
+                &line,
+                &mut paren_anchors,
+                self.options.tab_width,
+            );
+            previous_line = Some(line.trim_end_matches('\\').trim_end().to_string());
+        }
+    }
+
+    fn push_define_expression_rows(&mut self, body_parts: &[&str], body_level: usize) {
+        let base_spaces = body_level * self.options.indent_width;
+        let mut paren_anchors = Vec::new();
+        let mut assignment_anchor = None;
+        let mut line_spaces = base_spaces;
+        for (index, part) in body_parts.iter().enumerate() {
+            if index > 0 {
+                let current = strip_define_backslash(part).0.trim_start();
+                let current_starts_assignment =
+                    current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
+                line_spaces = if current_starts_assignment {
+                    base_spaces + self.options.indent_width
+                } else {
+                    assignment_anchor
+                        .or_else(|| {
+                            paren_anchors
+                                .last()
+                                .copied()
+                                .filter(|column| *column <= self.options.max_continuation_indent)
+                        })
+                        .unwrap_or(base_spaces)
+                };
+            }
+            let prefix = self
+                .options
+                .continuation_indent_prefix(body_level, line_spaces);
+            let line = format!("{prefix}{}", part.trim_start());
+            self.adjust_and_publish_line(line.clone());
+            if let Some(anchor) = self.define_assignment_row_anchor(&line) {
+                assignment_anchor = Some(anchor);
+            }
+            update_define_expression_paren_anchors(
+                &line,
+                &mut paren_anchors,
+                self.options.tab_width,
+            );
+        }
+    }
+
+    fn push_define_statement_rows(
+        &mut self,
+        first: &str,
+        first_line: &str,
+        body_parts: &[&str],
+        body_level: usize,
+    ) {
         let base_level = body_level;
         let mut frames: Vec<DefineFrame> = Vec::new();
         let first_replacement = define_replacement_text(first);
@@ -650,7 +677,7 @@ impl FormatEngine<'_> {
             );
         }
         let mut continuation_column =
-            define_expression_continuation_spaces(&first_line, self.options.tab_width);
+            define_expression_continuation_spaces(first_line, self.options.tab_width);
         let mut in_comment = false;
         let mut comment_source_open_column = 0usize;
         let mut comment_output_open_column = 0usize;
