@@ -1,4 +1,4 @@
-use crate::config::BraceStyle;
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
@@ -48,7 +48,7 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        if self.is_break_blocks_opening_header(word)
+        if is_break_blocks_opening_header(self.options, word)
             && (previous_header.is_none() || self.preprocessor.last_output_was_preprocessor)
         {
             self.block_spacing.prepend_blank = true;
@@ -73,7 +73,7 @@ impl FormatEngine<'_> {
         let Some(word) = self.following_break_blocks_header(tokens, index + 1) else {
             return;
         };
-        if self.is_break_blocks_opening_header(&word)
+        if is_break_blocks_opening_header(self.options, &word)
             || (self.options.break_closing_header_blocks && is_break_blocks_closing_header(&word))
         {
             self.block_spacing.prepend_blank = true;
@@ -92,7 +92,7 @@ impl FormatEngine<'_> {
                 .filter(|index| matches!(tokens.get(*index), Some(Token::Comment(_, _))))
                 .and_then(|index| self.following_break_blocks_header(tokens, index + 1))
                 .is_some_and(|word| {
-                    self.is_break_blocks_opening_header(&word)
+                    is_break_blocks_opening_header(self.options, &word)
                         || (self.options.break_closing_header_blocks
                             && is_break_blocks_closing_header(&word))
                 })
@@ -164,7 +164,8 @@ impl FormatEngine<'_> {
         let closed_command_header = self.layout.nesting.last_closed_brace_type
             == Some(BraceType::Command)
             || closed_header.is_some_and(|header| {
-                is_break_blocks_opening_header(header) || is_break_blocks_closing_header(header)
+                is_standard_break_blocks_opening_header(header)
+                    || is_break_blocks_closing_header(header)
             });
         if closed_command_header
             && closed_header.is_some_and(|header| !matches!(header, "case" | "default"))
@@ -231,15 +232,6 @@ impl FormatEngine<'_> {
         None
     }
 
-    fn is_break_blocks_opening_header(&self, word: &str) -> bool {
-        is_break_blocks_opening_header(word)
-            || self
-                .options
-                .control_headers
-                .iter()
-                .any(|header| header == word)
-    }
-
     fn previous_block_spacing_line_is_comment_only(&self) -> bool {
         self.layout
             .previous_pre_adjust_line
@@ -269,9 +261,14 @@ pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
     )
 }
 
-pub(crate) fn is_break_blocks_opening_header(word: &str) -> bool {
+pub(crate) fn is_standard_break_blocks_opening_header(word: &str) -> bool {
     matches!(
         word,
         "if" | "for" | "while" | "switch" | "do" | "try" | "__try" | "case" | "default"
     )
+}
+
+fn is_break_blocks_opening_header(options: &FormatOptions, word: &str) -> bool {
+    is_standard_break_blocks_opening_header(word)
+        || options.control_headers.iter().any(|header| header == word)
 }

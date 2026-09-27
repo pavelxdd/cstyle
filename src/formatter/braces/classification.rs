@@ -152,23 +152,6 @@ pub(crate) fn is_namespace_or_module_block_header(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn exact_brace_indent_level(
-        &self,
-        line: &str,
-        structural_level: usize,
-        spaces: usize,
-    ) -> usize {
-        if self.options.indent_style != IndentStyle::Tabs
-            || !spaces.is_multiple_of(self.options.indent_width.max(1))
-            || !line[..trailing_comment_split_limit(line)]
-                .trim_start()
-                .starts_with(['{', '}'])
-        {
-            return structural_level;
-        }
-        structural_level.max(spaces / self.options.indent_width.max(1))
-    }
-
     pub(crate) fn classify_opening_brace(
         &mut self,
         header: Option<&str>,
@@ -432,32 +415,7 @@ impl FormatEngine<'_> {
         } else {
             self.current.as_str()
         };
-        self.code_ends_definition_header(source)
-    }
-
-    pub(crate) fn code_ends_definition_header(&self, source: &str) -> bool {
-        let mut rest = source.trim_end();
-        loop {
-            if rest.ends_with(')') {
-                return true;
-            }
-            let stripped = rest.trim_end_matches('&').trim_end();
-            if stripped.len() != rest.len() {
-                rest = stripped;
-                continue;
-            }
-            let word = trailing_word(rest);
-            if word.is_empty()
-                || !(language::PRE_COMMAND_QUALIFIERS.contains(&word) || is_macro_like_word(word))
-            {
-                return false;
-            }
-            let candidate = rest[..rest.len() - word.len()].trim_end();
-            if candidate.is_empty() {
-                return false;
-            }
-            rest = candidate;
-        }
+        code_ends_definition_header(source)
     }
 
     pub(crate) fn aggregate_header_ends_with_paren_group(&self) -> bool {
@@ -697,4 +655,46 @@ pub(crate) fn line_ends_lambda_parameter_list(line: &str) -> bool {
         return false;
     };
     current[..open_pos].trim_end().ends_with(']')
+}
+
+pub(crate) fn exact_brace_indent_level(
+    options: &FormatOptions,
+    line: &str,
+    structural_level: usize,
+    spaces: usize,
+) -> usize {
+    if options.indent_style != IndentStyle::Tabs
+        || !spaces.is_multiple_of(options.indent_width.max(1))
+        || !line[..trailing_comment_split_limit(line)]
+            .trim_start()
+            .starts_with(['{', '}'])
+    {
+        return structural_level;
+    }
+    structural_level.max(spaces / options.indent_width.max(1))
+}
+
+pub(crate) fn code_ends_definition_header(source: &str) -> bool {
+    let mut rest = source.trim_end();
+    loop {
+        if rest.ends_with(')') {
+            return true;
+        }
+        let stripped = rest.trim_end_matches('&').trim_end();
+        if stripped.len() != rest.len() {
+            rest = stripped;
+            continue;
+        }
+        let word = trailing_word(rest);
+        if word.is_empty()
+            || !(language::PRE_COMMAND_QUALIFIERS.contains(&word) || is_macro_like_word(word))
+        {
+            return false;
+        }
+        let candidate = rest[..rest.len() - word.len()].trim_end();
+        if candidate.is_empty() {
+            return false;
+        }
+        rest = candidate;
+    }
 }

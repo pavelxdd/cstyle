@@ -7,6 +7,7 @@ use crate::formatter::braces::rewrite::{
 };
 use crate::formatter::braces::{compound_literals, initializers};
 use crate::formatter::constructs::class_declarations::is_split_export_head;
+use crate::formatter::constructs::objc::token_starts_objc_method_definition;
 use crate::formatter::constructs::swig::SwigState;
 use crate::formatter::constructs::switch_cases::SwitchCaseLayoutState;
 use crate::formatter::constructs::template_declarations::TemplateDeclarationState;
@@ -273,51 +274,6 @@ impl<'a> FormatEngine<'a> {
         self.previous_was_newline = false;
     }
 
-    fn line_source_columns(&self, line_tokens: &[Token]) -> LineSourceColumns {
-        let tab_width = self.options.tab_width.max(1);
-        let mut prefix = Vec::with_capacity(line_tokens.len() + 1);
-        let mut non_ws_prefix = Vec::with_capacity(line_tokens.len() + 1);
-        let mut column = 0usize;
-        let mut non_ws = 0usize;
-        let mut first_non_ws = None;
-        let mut first_non_ws_is_brace = false;
-        let mut leading_indent = 0usize;
-        prefix.push(0);
-        non_ws_prefix.push(0);
-        for (offset, token) in line_tokens.iter().enumerate() {
-            match token {
-                Token::Newline => {}
-                Token::Whitespace(ws) => {
-                    for ch in ws.chars() {
-                        if ch == '\t' {
-                            column += tab_width - (column % tab_width);
-                        } else {
-                            column += 1;
-                        }
-                    }
-                }
-                other => {
-                    if first_non_ws.is_none() {
-                        first_non_ws = Some(offset);
-                        first_non_ws_is_brace = matches!(other, Token::Symbol('{'));
-                        leading_indent = column;
-                    }
-                    non_ws += 1;
-                    column += token_char_len(other);
-                }
-            }
-            prefix.push(column);
-            non_ws_prefix.push(non_ws);
-        }
-        LineSourceColumns {
-            prefix,
-            non_ws_prefix,
-            first_non_ws,
-            first_non_ws_is_brace,
-            leading_indent,
-        }
-    }
-
     pub(crate) fn format_into(mut self, tokens: &[Token]) -> Self {
         let rewritten_tokens;
         let tokens = if self.options.remove_braces {
@@ -380,7 +336,7 @@ impl<'a> FormatEngine<'a> {
             return;
         }
         let mut index = line.start;
-        let line_columns = self.line_source_columns(&tokens[line.start..line.end]);
+        let line_columns = line_source_columns(self.options, &tokens[line.start..line.end]);
         self.fill_line_brace_matches(tokens, line.start, line.end);
         let multiline_case_colon =
             switch_cases::multiline_switch_label_colon(tokens, line.start, line.end);
@@ -524,7 +480,7 @@ impl<'a> FormatEngine<'a> {
         if self.options.align_method_colon
             && self.layout.objc.colon_align.is_none()
             && self.token_input.token_begins_source_line
-            && self.token_starts_objc_method_definition(tokens, index, line.end)
+            && token_starts_objc_method_definition(tokens, index, line.end)
         {
             self.layout.objc.colon_align = self.compute_objc_method_colon_align(tokens, index);
         }
@@ -1676,4 +1632,49 @@ fn closing_braces_after_semicolon(tokens: &[Token], index: usize) -> usize {
         cursor += 1;
     }
     count
+}
+
+fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSourceColumns {
+    let tab_width = options.tab_width.max(1);
+    let mut prefix = Vec::with_capacity(line_tokens.len() + 1);
+    let mut non_ws_prefix = Vec::with_capacity(line_tokens.len() + 1);
+    let mut column = 0usize;
+    let mut non_ws = 0usize;
+    let mut first_non_ws = None;
+    let mut first_non_ws_is_brace = false;
+    let mut leading_indent = 0usize;
+    prefix.push(0);
+    non_ws_prefix.push(0);
+    for (offset, token) in line_tokens.iter().enumerate() {
+        match token {
+            Token::Newline => {}
+            Token::Whitespace(ws) => {
+                for ch in ws.chars() {
+                    if ch == '\t' {
+                        column += tab_width - (column % tab_width);
+                    } else {
+                        column += 1;
+                    }
+                }
+            }
+            other => {
+                if first_non_ws.is_none() {
+                    first_non_ws = Some(offset);
+                    first_non_ws_is_brace = matches!(other, Token::Symbol('{'));
+                    leading_indent = column;
+                }
+                non_ws += 1;
+                column += token_char_len(other);
+            }
+        }
+        prefix.push(column);
+        non_ws_prefix.push(non_ws);
+    }
+    LineSourceColumns {
+        prefix,
+        non_ws_prefix,
+        first_non_ws,
+        first_non_ws_is_brace,
+        leading_indent,
+    }
 }

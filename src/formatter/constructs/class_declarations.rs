@@ -1,3 +1,4 @@
+use crate::config::FormatOptions;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::indentation::LineKind;
@@ -68,7 +69,7 @@ impl FormatEngine<'_> {
         if self.layout.nesting.has_question_in_current_brace() {
             return false;
         }
-        if self.code_opens_class_base_clause(self.current.trim_end()) {
+        if code_opens_class_base_clause(self.current.trim_end()) {
             return true;
         }
         if self.layout.split_class_export_pending_base {
@@ -92,23 +93,6 @@ impl FormatEngine<'_> {
                 || self.in_open_class_head())
     }
 
-    pub(crate) fn code_opens_class_base_clause(&self, before: &str) -> bool {
-        if before.is_empty() || before.ends_with(':') || before.contains('?') {
-            return false;
-        }
-        if signature_ends_with_parameter_list(before) {
-            return false;
-        }
-        let statement = before
-            .rsplit([';', '{', '}'])
-            .next()
-            .unwrap_or(before)
-            .trim_start();
-        statement
-            .split(|ch: char| !is_identifier_continue(ch))
-            .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
-    }
-
     pub(crate) fn colon_leads_class_base_clause(&self) -> bool {
         if self.current_opens_class_base_clause() {
             return true;
@@ -127,7 +111,7 @@ impl FormatEngine<'_> {
             return false;
         };
         let code = &line[..trailing_comment_split_limit(line)];
-        self.code_opens_class_base_clause(code.trim_end())
+        code_opens_class_base_clause(code.trim_end())
     }
 
     pub(crate) fn try_join_class_base_line(&mut self, line: &str) -> bool {
@@ -265,37 +249,6 @@ impl FormatEngine<'_> {
             && (previous_code.ends_with("&&") || previous_code.ends_with("||")))
         .then(|| leading_visual_width(previous, self.options.tab_width))
     }
-
-    pub(crate) fn template_base_colon_indent_spaces(
-        &self,
-        current: &str,
-        previous: &str,
-    ) -> Option<usize> {
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let previous_trimmed = previous_code.trim_start();
-        if !current.starts_with(':')
-            || !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
-            || max_template_angle_depth(previous_code) <= 1
-        {
-            return None;
-        }
-        let previous_indent = leading_visual_width(previous, self.options.tab_width);
-        if previous_code.contains(',') && previous_code.contains("sizeof(") {
-            return Some(previous_indent);
-        }
-        if has_outer_template_comma(previous_code) && !previous_code.contains(" < ") {
-            return Some(previous_indent + self.options.indent_width);
-        }
-        let aligned =
-            previous_indent + visual_width_from(previous_trimmed, 0, self.options.tab_width) + 2;
-        Some(
-            if aligned.saturating_sub(previous_indent) > self.options.max_continuation_indent {
-                previous_indent + self.options.indent_width * 3
-            } else {
-                aligned
-            },
-        )
-    }
 }
 
 fn max_template_angle_depth(line: &str) -> usize {
@@ -328,4 +281,51 @@ fn has_outer_template_comma(line: &str) -> bool {
         }
     }
     false
+}
+
+pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
+    if before.is_empty() || before.ends_with(':') || before.contains('?') {
+        return false;
+    }
+    if signature_ends_with_parameter_list(before) {
+        return false;
+    }
+    let statement = before
+        .rsplit([';', '{', '}'])
+        .next()
+        .unwrap_or(before)
+        .trim_start();
+    statement
+        .split(|ch: char| !is_identifier_continue(ch))
+        .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
+}
+
+pub(crate) fn template_base_colon_indent_spaces(
+    options: &FormatOptions,
+    current: &str,
+    previous: &str,
+) -> Option<usize> {
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+    let previous_trimmed = previous_code.trim_start();
+    if !current.starts_with(':')
+        || !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
+        || max_template_angle_depth(previous_code) <= 1
+    {
+        return None;
+    }
+    let previous_indent = leading_visual_width(previous, options.tab_width);
+    if previous_code.contains(',') && previous_code.contains("sizeof(") {
+        return Some(previous_indent);
+    }
+    if has_outer_template_comma(previous_code) && !previous_code.contains(" < ") {
+        return Some(previous_indent + options.indent_width);
+    }
+    let aligned = previous_indent + visual_width_from(previous_trimmed, 0, options.tab_width) + 2;
+    Some(
+        if aligned.saturating_sub(previous_indent) > options.max_continuation_indent {
+            previous_indent + options.indent_width * 3
+        } else {
+            aligned
+        },
+    )
 }

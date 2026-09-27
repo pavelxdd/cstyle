@@ -1,3 +1,4 @@
+use crate::config::FormatOptions;
 use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::PointerRole;
@@ -5,23 +6,6 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::unmatched_open_paren_column;
 
 impl FormatEngine<'_> {
-    pub(crate) fn immediate_typedef_template_indent_spaces(
-        &self,
-        current: &str,
-        previous: &str,
-    ) -> Option<usize> {
-        let previous_trimmed = previous.trim();
-        if current.starts_with('<') && previous_trimmed.starts_with("typedef typename ") {
-            return Some(leading_visual_width(previous, self.options.tab_width));
-        }
-        (previous_trimmed.starts_with("typedef ")
-            && previous_trimmed.contains('<')
-            && previous_trimmed.ends_with(','))
-        .then(|| {
-            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width * 2
-        })
-    }
-
     pub(crate) fn typedef_template_context_indent_spaces(&self, current: &str) -> Option<usize> {
         if current.is_empty() || current.starts_with('#') {
             return None;
@@ -119,4 +103,19 @@ impl FormatEngine<'_> {
             self.layout.frame_stack.clear_declarations();
         }
     }
+}
+
+pub(crate) fn immediate_typedef_template_indent_spaces(
+    options: &FormatOptions,
+    current: &str,
+    previous: &str,
+) -> Option<usize> {
+    let previous_trimmed = previous.trim();
+    if current.starts_with('<') && previous_trimmed.starts_with("typedef typename ") {
+        return Some(leading_visual_width(previous, options.tab_width));
+    }
+    (previous_trimmed.starts_with("typedef ")
+        && previous_trimmed.contains('<')
+        && previous_trimmed.ends_with(','))
+    .then(|| leading_visual_width(previous, options.tab_width) + options.indent_width * 2)
 }

@@ -1,3 +1,4 @@
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels::is_label_start;
 use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::FormatEngine;
@@ -57,7 +58,7 @@ impl FormatEngine<'_> {
                 let name = before[name_start..].trim_start();
                 if is_parameter_return_type_prefix(return_type)
                     && !name.is_empty()
-                    && !self.is_header(name)
+                    && !is_header(self.options, name)
                 {
                     return Some(leading_visual_width(previous, self.options.tab_width));
                 }
@@ -170,7 +171,7 @@ impl FormatEngine<'_> {
                     && (prefixed_return_type
                         || self.output_closes_multiline_template_declaration_before(previous_index))
                     && !name.is_empty()
-                    && !self.is_header(name)
+                    && !is_header(self.options, name)
                 {
                     return Some(0);
                 }
@@ -193,7 +194,9 @@ impl FormatEngine<'_> {
         let name_start = function_name_start(before)?;
         let return_type = before[..name_start].trim_end();
         let name = before[name_start..].trim_start();
-        if !is_parameter_return_type_prefix(return_type) || name.is_empty() || self.is_header(name)
+        if !is_parameter_return_type_prefix(return_type)
+            || name.is_empty()
+            || is_header(self.options, name)
         {
             return None;
         }
@@ -266,7 +269,7 @@ impl FormatEngine<'_> {
         } else {
             self.options.break_return_type && !self.options.attach_return_type
         };
-        if !should_split || self.is_header(leading_identifier(line.trim_start())) {
+        if !should_split || is_header(self.options, leading_identifier(line.trim_start())) {
             return false;
         }
         let Some((return_type, function_part)) = split_return_type_line(line) else {

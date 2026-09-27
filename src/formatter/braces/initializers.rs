@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, MinConditionalIndent};
+use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
@@ -371,15 +371,6 @@ impl FormatEngine<'_> {
             line_indent_spaces,
             brace_indent_spaces,
         })
-    }
-
-    pub(crate) fn initializer_brace_line_comment_gap(&self, brace_line: &str) -> String {
-        if self.options.brace_style != BraceStyle::Horstmann {
-            return "   ".to_string();
-        }
-        let brace_column = leading_visual_width(brace_line, self.options.tab_width);
-        let target = brace_column + self.options.indent_width;
-        horstmann_run_in_fill(brace_line, &" ".repeat(target), self.options)
     }
 
     pub(crate) fn open_expanded_init_brace(
@@ -1288,4 +1279,16 @@ pub(crate) struct InlineArrayState {
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(crate) aggregate_braces: Vec<bool>,
     pub(crate) nested_brace_arrays: std::collections::HashSet<usize>,
+}
+
+pub(crate) fn initializer_brace_line_comment_gap(
+    options: &FormatOptions,
+    brace_line: &str,
+) -> String {
+    if options.brace_style != BraceStyle::Horstmann {
+        return "   ".to_string();
+    }
+    let brace_column = leading_visual_width(brace_line, options.tab_width);
+    let target = brace_column + options.indent_width;
+    horstmann_run_in_fill(brace_line, &" ".repeat(target), options)
 }

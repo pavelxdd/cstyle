@@ -1,5 +1,5 @@
 use crate::config::IndentStyle;
-use crate::formatter::braces::classification::line_opens_lambda_block;
+use crate::formatter::braces::classification::{exact_brace_indent_level, line_opens_lambda_block};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
@@ -20,7 +20,8 @@ impl FormatEngine<'_> {
             .exact_indent_spaces
             .unwrap_or(layout.indent * self.options.indent_width);
         if let Some(spaces) = layout.exact_indent_spaces {
-            let structural_level = self.exact_brace_indent_level(line, layout.indent, spaces);
+            let structural_level =
+                exact_brace_indent_level(self.options, line, layout.indent, spaces);
             self.push_formatted_line_exact(line, structural_level, spaces);
         } else {
             self.push_formatted_line(line, layout.indent);

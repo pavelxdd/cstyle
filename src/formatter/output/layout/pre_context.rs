@@ -1,5 +1,6 @@
 use crate::formatter::continuation::call_arguments::{
-    closing_braced_call_argument_indent_spaces, plain_call_opener_indent_for_closing_line,
+    closing_braced_call_argument_indent_spaces, line_opens_attachable_lambda_block,
+    plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
@@ -179,7 +180,7 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        if self.line_opens_attachable_lambda_block(line) {
+        if line_opens_attachable_lambda_block(self.options, line) {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line.trim_start().starts_with("/*") {

@@ -1,5 +1,6 @@
-use crate::config::{PointerAlign, ReferenceAlign};
+use crate::config::{FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_class_like_brace_type;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::engine::FormatEngine;
@@ -545,7 +546,7 @@ impl FormatEngine<'_> {
             };
             let return_type = before[..name_start].trim_end();
             let name = before[name_start..].trim_start();
-            return !return_type.is_empty() && !name.is_empty() && !self.is_header(name);
+            return !return_type.is_empty() && !name.is_empty() && !is_header(self.options, name);
         }
         false
     }
@@ -611,7 +612,7 @@ impl FormatEngine<'_> {
         };
         let return_type = before[..name_start].trim_end();
         let name = before[name_start..].trim_start();
-        if name.is_empty() || self.is_header(name) || is_non_type_keyword(name) {
+        if name.is_empty() || is_header(self.options, name) || is_non_type_keyword(name) {
             return false;
         }
         if return_type.is_empty() {
@@ -716,7 +717,10 @@ impl FormatEngine<'_> {
             return false;
         };
         let before = self.current[..open].trim_end();
-        if before.is_empty() || function_head_has_assignment(before) || self.is_header(before) {
+        if before.is_empty()
+            || function_head_has_assignment(before)
+            || is_header(self.options, before)
+        {
             return false;
         }
         if !matches!(function_name_start(before), Some(0)) {
@@ -741,7 +745,7 @@ impl FormatEngine<'_> {
             self.record_declaration_frame_for_pointer(operator, next);
             if operator == "&"
                 && matches!(
-                    self.resolved_pointer_align(operator),
+                    resolved_pointer_align(self.options, operator),
                     PointerAlign::Type | PointerAlign::Name
                 )
             {
@@ -791,7 +795,7 @@ impl FormatEngine<'_> {
         let is_after_scope_resolution = self.current.trim_end().ends_with(':');
         if is_after_scope_resolution && operator == "*" {
             self.record_declaration_frame_for_pointer(operator, next);
-            match self.resolved_pointer_align(operator) {
+            match resolved_pointer_align(self.options, operator) {
                 PointerAlign::None => {
                     self.current.push_str(operator);
                     self.emit_trailing_source_space();
@@ -829,7 +833,7 @@ impl FormatEngine<'_> {
         }
         if operator.starts_with('&') && self.current.trim_end().ends_with('*') {
             self.record_declaration_frame_for_pointer(operator, next);
-            let align = self.resolved_pointer_align(operator);
+            let align = resolved_pointer_align(self.options, operator);
             self.trim_current_end();
             if operator == "&" && self.options.pointer_align == PointerAlign::Name {
                 self.current.push('&');
@@ -881,7 +885,7 @@ impl FormatEngine<'_> {
             return;
         }
         self.record_declaration_frame_for_pointer(operator, next);
-        let align = self.resolved_pointer_align(operator);
+        let align = resolved_pointer_align(self.options, operator);
         if matches!(next, None | Some(Token::Newline)) {
             match align {
                 PointerAlign::None => {
@@ -1253,20 +1257,6 @@ impl FormatEngine<'_> {
         format!("{before}{after}")
     }
 
-    pub(crate) fn resolved_pointer_align(&self, operator: &str) -> PointerAlign {
-        if operator.starts_with('&') {
-            match self.options.reference_align {
-                ReferenceAlign::None => PointerAlign::None,
-                ReferenceAlign::Type => PointerAlign::Type,
-                ReferenceAlign::Middle => PointerAlign::Middle,
-                ReferenceAlign::Name => PointerAlign::Name,
-                ReferenceAlign::SameAsPointer => self.options.pointer_align,
-            }
-        } else {
-            self.options.pointer_align
-        }
-    }
-
     pub(crate) fn is_unary_pointer_operator(&self) -> bool {
         if self.current.trim().is_empty()
             && self.token_input.token_begins_source_line
@@ -1490,4 +1480,18 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
         first,
         "return" | "case" | "sizeof" | "delete" | "new" | "throw" | "else"
     ) && !language::is_header(first)
+}
+
+pub(crate) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
+    if operator.starts_with('&') {
+        match options.reference_align {
+            ReferenceAlign::None => PointerAlign::None,
+            ReferenceAlign::Type => PointerAlign::Type,
+            ReferenceAlign::Middle => PointerAlign::Middle,
+            ReferenceAlign::Name => PointerAlign::Name,
+            ReferenceAlign::SameAsPointer => options.pointer_align,
+        }
+    } else {
+        options.pointer_align
+    }
 }

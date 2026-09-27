@@ -68,39 +68,6 @@ impl FormatEngine<'_> {
             && template_declaration_line_complete(current)
     }
 
-    pub(crate) fn is_template_declaration_head_line(&self, line: &str) -> bool {
-        let trimmed = line.trim_start();
-        let Some(rest) = trimmed.strip_prefix("template") else {
-            return false;
-        };
-        let Some(open_offset) = rest.find('<') else {
-            return false;
-        };
-        let start = "template".len() + open_offset;
-        let mut depth = 0isize;
-        let mut paren_depth = 0usize;
-        let mut saw_open = false;
-        for (offset, ch) in trimmed[start..].char_indices() {
-            match ch {
-                '(' | '[' => paren_depth += 1,
-                ')' | ']' => paren_depth = paren_depth.saturating_sub(1),
-                '<' if paren_depth == 0 => {
-                    depth += 1;
-                    saw_open = true;
-                }
-                '>' if paren_depth == 0 => {
-                    depth -= 1;
-                    if saw_open && depth <= 0 {
-                        let end = start + offset + ch.len_utf8();
-                        return trimmed[end..].trim().is_empty();
-                    }
-                }
-                _ => {}
-            }
-        }
-        saw_open && depth > 0
-    }
-
     pub(crate) fn previous_output_is_complete_template_declaration(&self) -> bool {
         let Some(index) = self.output.last_non_empty_index() else {
             return false;
@@ -111,7 +78,7 @@ impl FormatEngine<'_> {
         }
         let code = line[..trailing_comment_split_limit(line)].trim_end();
         let trimmed = code.trim_start();
-        self.is_template_declaration_head_line(trimmed)
+        is_template_declaration_head_line(trimmed)
             && template_declaration_line_complete(trimmed)
             && !trimmed.ends_with(';')
     }
@@ -134,7 +101,7 @@ impl FormatEngine<'_> {
         for (index, line) in lines.iter().enumerate().skip(1) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
-            if self.is_template_declaration_head_line(trimmed) {
+            if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
@@ -170,7 +137,7 @@ impl FormatEngine<'_> {
         for (index, line) in lines.iter().enumerate().skip(1) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
-            if self.is_template_declaration_head_line(trimmed) {
+            if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
@@ -284,4 +251,37 @@ fn angle_depth(line: &str) -> isize {
         }
     }
     depth
+}
+
+pub(crate) fn is_template_declaration_head_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    let Some(rest) = trimmed.strip_prefix("template") else {
+        return false;
+    };
+    let Some(open_offset) = rest.find('<') else {
+        return false;
+    };
+    let start = "template".len() + open_offset;
+    let mut depth = 0isize;
+    let mut paren_depth = 0usize;
+    let mut saw_open = false;
+    for (offset, ch) in trimmed[start..].char_indices() {
+        match ch {
+            '(' | '[' => paren_depth += 1,
+            ')' | ']' => paren_depth = paren_depth.saturating_sub(1),
+            '<' if paren_depth == 0 => {
+                depth += 1;
+                saw_open = true;
+            }
+            '>' if paren_depth == 0 => {
+                depth -= 1;
+                if saw_open && depth <= 0 {
+                    let end = start + offset + ch.len_utf8();
+                    return trimmed[end..].trim().is_empty();
+                }
+            }
+            _ => {}
+        }
+    }
+    saw_open && depth > 0
 }

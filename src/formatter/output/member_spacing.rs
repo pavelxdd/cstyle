@@ -44,7 +44,7 @@ impl FormatEngine<'_> {
             return;
         };
         let Some(current) = self.current_member_spacing_boundary(line) else {
-            if self.line_clears_pending_member_spacing(line) {
+            if line_clears_pending_member_spacing(line) {
                 self.layout.pending_member_spacing = None;
             }
             return;
@@ -94,7 +94,7 @@ impl FormatEngine<'_> {
                 };
             return;
         }
-        if self.line_clears_pending_member_spacing(line) {
+        if line_clears_pending_member_spacing(line) {
             self.layout.pending_member_spacing = None;
             return;
         }
@@ -133,14 +133,6 @@ impl FormatEngine<'_> {
         None
     }
 
-    fn line_clears_pending_member_spacing(&self, line: &str) -> bool {
-        let trimmed = line.trim();
-        trimmed.is_empty()
-            || trimmed.starts_with(['#', '}'])
-            || is_standard_access_label(trimmed)
-            || nested_type_start(trimmed)
-    }
-
     fn in_member_container(&self) -> bool {
         self.layout
             .nesting
@@ -153,4 +145,12 @@ impl FormatEngine<'_> {
                 )
             })
     }
+}
+
+fn line_clears_pending_member_spacing(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.is_empty()
+        || trimmed.starts_with(['#', '}'])
+        || is_standard_access_label(trimmed)
+        || nested_type_start(trimmed)
 }

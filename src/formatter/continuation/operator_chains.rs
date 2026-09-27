@@ -1,9 +1,10 @@
-use crate::config::{BraceStyle, MinConditionalIndent};
+use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::headers::{
     is_braceless_header_line, is_conditional_header_line, line_is_control_body_header,
     starts_header_word,
 };
+use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
@@ -407,21 +408,6 @@ impl FormatEngine<'_> {
             + 1
             + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         (current_spaces.unwrap_or(0) < target).then_some(target)
-    }
-
-    pub(crate) fn nested_ternary_colon_sibling_indent_spaces(
-        &self,
-        current: &str,
-        previous: &str,
-    ) -> Option<usize> {
-        if !current.starts_with(':') {
-            return None;
-        }
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        (previous_code.trim_start().starts_with(':')
-            && previous_code.contains('?')
-            && unmatched_open_paren_column(previous_code).is_none())
-        .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
     pub(crate) fn observe_operator_chain_line_context(
@@ -1367,26 +1353,14 @@ impl FormatEngine<'_> {
         Some(leading_visual_width(previous, self.options.tab_width) + value_offset + case_unindent)
     }
 
-    pub(crate) fn inline_stream_opener_argument_indent_spaces(
-        &self,
-        current: &str,
-        previous_code: &str,
-    ) -> Option<usize> {
-        if current.starts_with(['#', '(', ')', '{', '}']) || !previous_code.ends_with('(') {
-            return None;
-        }
-        previous_code
-            .find(" << ")
-            .or_else(|| previous_code.find(" >> "))
-            .map(|operator_start| operator_start + 5)
-    }
-
     pub(crate) fn contextual_ternary_colon_sibling_indent_spaces(
         &self,
         current: &str,
         previous: &str,
     ) -> Option<usize> {
-        if let Some(spaces) = self.nested_ternary_colon_sibling_indent_spaces(current, previous) {
+        if let Some(spaces) =
+            nested_ternary_colon_sibling_indent_spaces(self.options, current, previous)
+        {
             return Some(spaces);
         }
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
@@ -1556,14 +1530,14 @@ impl FormatEngine<'_> {
                 if previous_header.starts_with("else if") {
                     paren_indent
                 } else if starts_nested_group {
-                    base + self.min_conditional_indent_spaces()
+                    base + min_conditional_indent_spaces(self.options)
                 } else if line_paren_imbalance(previous_code).1.len() > 1 {
                     column + 1
                 } else {
                     column
                 }
             } else {
-                paren_indent.max(base + self.min_conditional_indent_spaces())
+                paren_indent.max(base + min_conditional_indent_spaces(self.options))
             }
         })
     }
@@ -1615,7 +1589,7 @@ impl FormatEngine<'_> {
         if code.ends_with("||") {
             let base = self.continuation_base_indent() * self.options.indent_width;
             let standard = base + self.options.continuation_indent * self.options.indent_width;
-            let conditional_floor = base + self.min_conditional_indent_spaces();
+            let conditional_floor = base + min_conditional_indent_spaces(self.options);
             if is_braceless_header_line(code.trim_start())
                 && !line_paren_imbalance(code).1.is_empty()
             {
@@ -2220,7 +2194,7 @@ impl FormatEngine<'_> {
         {
             return Some(
                 leading_visual_width(previous, self.options.tab_width)
-                    + self.min_conditional_indent_spaces(),
+                    + min_conditional_indent_spaces(self.options),
             );
         }
         if (split < previous.len() || in_split_preprocessor_context)
@@ -2232,7 +2206,7 @@ impl FormatEngine<'_> {
                     || {
                         if is_conditional_header_line(previous_code) {
                             leading_visual_width(previous, self.options.tab_width)
-                                + self.min_conditional_indent_spaces()
+                                + min_conditional_indent_spaces(self.options)
                         } else {
                             unmatched_open_paren_column(previous_code)
                                 .map(|column| column + 1)
@@ -2458,4 +2432,32 @@ fn assignment_value_column(code: &str, tab_width: usize) -> Option<usize> {
         .find(|(_, ch)| !ch.is_whitespace())
         .map_or(code.len(), |(offset, _)| after_operator + offset);
     Some(visual_width_from(&code[..value_start], 0, tab_width))
+}
+
+pub(crate) fn nested_ternary_colon_sibling_indent_spaces(
+    options: &FormatOptions,
+    current: &str,
+    previous: &str,
+) -> Option<usize> {
+    if !current.starts_with(':') {
+        return None;
+    }
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+    (previous_code.trim_start().starts_with(':')
+        && previous_code.contains('?')
+        && unmatched_open_paren_column(previous_code).is_none())
+    .then(|| leading_visual_width(previous, options.tab_width))
+}
+
+pub(crate) fn inline_stream_opener_argument_indent_spaces(
+    current: &str,
+    previous_code: &str,
+) -> Option<usize> {
+    if current.starts_with(['#', '(', ')', '{', '}']) || !previous_code.ends_with('(') {
+        return None;
+    }
+    previous_code
+        .find(" << ")
+        .or_else(|| previous_code.find(" >> "))
+        .map(|operator_start| operator_start + 5)
 }

@@ -1,4 +1,5 @@
 use crate::config::{PointerAlign, ReferenceAlign};
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
@@ -12,7 +13,7 @@ use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
+use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 pub(crate) fn starts_ternary_arm(line: &str) -> bool {
@@ -397,7 +398,7 @@ impl FormatEngine<'_> {
             && matches!(operator, "*" | "&" | "^")
         {
             self.pointer_run.skip_adjacent_pointer_operators -= 1;
-            if self.resolved_pointer_align(operator) == PointerAlign::None
+            if resolved_pointer_align(self.options, operator) == PointerAlign::None
                 && self.pointer_run.skip_adjacent_pointer_operators == 0
             {
                 self.emit_trailing_source_space();
@@ -713,7 +714,7 @@ impl FormatEngine<'_> {
                 && self.layout.previous == PreviousToken::Word
                 && trailing_word(&self.current) == "auto" =>
             {
-                if self.resolved_pointer_align(operator) == PointerAlign::None {
+                if resolved_pointer_align(self.options, operator) == PointerAlign::None {
                     self.push_unary_prefix(operator);
                 } else {
                     self.push_pointer_or_reference(operator, next, next_is_adjacent);
@@ -993,7 +994,7 @@ impl FormatEngine<'_> {
             let before = trimmed[..open].trim();
             if !before.is_empty()
                 && !before.contains('=')
-                && !self.is_header(before)
+                && !is_header(self.options, before)
                 && matches!(function_name_start(before), Some(0))
             {
                 return true;

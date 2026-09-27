@@ -1,19 +1,24 @@
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::classification::line_opens_lambda_block;
-use crate::formatter::braces::closing::starts_post_closing_declaration;
+use crate::formatter::braces::closing::{
+    starts_post_closing_declaration, top_level_closing_brace_indent_spaces,
+};
 use crate::formatter::constructs::headers::{
     is_braceless_header_line, line_is_control_body_header, same_line_nested_header_extra,
     starts_header_word,
 };
 use crate::formatter::constructs::labels;
+use crate::formatter::constructs::labels::else_after_candidate_label_indent_spaces;
 use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::constructs::template_declarations::{
-    template_continuation_indent_spaces, template_declaration_line_complete,
+    is_template_declaration_head_line, template_continuation_indent_spaces,
+    template_declaration_line_complete,
 };
 use crate::formatter::continuation::call_arguments::{
     assignment_call_value_column, casted_assignment_value_column,
 };
+use crate::formatter::continuation::operator_chains::nested_ternary_colon_sibling_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
 use crate::formatter::state::BraceType;
@@ -786,7 +791,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_non_empty_line()
         {
             if let Some(spaces) =
-                self.else_after_candidate_label_indent_spaces(layout.line_kind, previous)
+                else_after_candidate_label_indent_spaces(self.options, layout.line_kind, previous)
             {
                 layout.exact_indent_spaces = Some(spaces);
             } else if let Some(spaces) = self.else_after_closed_nested_header_indent_spaces(line) {
@@ -901,7 +906,7 @@ impl FormatEngine<'_> {
             let previous = &self.output[previous_index];
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let previous_trimmed = previous_code.trim_start();
-            if self.is_template_declaration_head_line(previous_trimmed)
+            if is_template_declaration_head_line(previous_trimmed)
                 && !line.trim_start().starts_with(['#', '{', '}', ':', ','])
             {
                 if template_declaration_line_complete(previous_trimmed) {
@@ -2909,7 +2914,8 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        if let Some(spaces) = self.top_level_closing_brace_indent_spaces(line, layout.normal_indent)
+        if let Some(spaces) =
+            top_level_closing_brace_indent_spaces(self.options, line, layout.normal_indent)
         {
             layout.exact_indent_spaces = Some(spaces);
         }
@@ -3089,9 +3095,11 @@ impl FormatEngine<'_> {
                     visual_width_from(&previous_code[..open + 1], 0, self.options.tab_width) + 1,
                 );
             }
-            if let Some(spaces) =
-                self.nested_ternary_colon_sibling_indent_spaces(line.trim_start(), previous)
-            {
+            if let Some(spaces) = nested_ternary_colon_sibling_indent_spaces(
+                self.options,
+                line.trim_start(),
+                previous,
+            ) {
                 layout.exact_indent_spaces = Some(spaces);
             }
         }

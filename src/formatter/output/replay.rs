@@ -1,4 +1,6 @@
 use crate::config::BraceStyle;
+use crate::formatter::constructs::labels::replayed_inline_access_body_indent_spaces;
+use crate::formatter::constructs::switch_cases::replayed_inline_case_body_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::LineReplayLayout;
 
@@ -17,12 +19,14 @@ impl FormatEngine<'_> {
             self.replayed_constructor_lambda_header_indent_spaces(line);
         let inline_body_owner_indent_spaces =
             self.output.last_non_empty_line().and_then(|previous| {
-                self.replayed_inline_case_body_indent_spaces(
+                replayed_inline_case_body_indent_spaces(
+                    self.options,
                     previous,
                     closed_delimiter_continuation_indent.is_some(),
                 )
                 .or_else(|| {
-                    self.replayed_inline_access_body_indent_spaces(
+                    replayed_inline_access_body_indent_spaces(
+                        self.options,
                         previous,
                         closed_delimiter_continuation_indent.is_some(),
                     )

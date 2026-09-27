@@ -3,13 +3,17 @@ use crate::formatter::braces::classification::{
     is_lambda_body_header, line_opens_lambda_block, line_opens_lambda_or_capture_only_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::constructs::class_declarations::template_base_colon_indent_spaces;
 use crate::formatter::constructs::constructor_initializers::has_inline_constructor_initializer_colon;
 use crate::formatter::constructs::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::constructs::objc::objc_message_following_keyword_column;
+use crate::formatter::constructs::typedefs::immediate_typedef_template_indent_spaces;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::continuation::call_arguments::callee_name_start_before_open;
+use crate::formatter::continuation::operator_chains::inline_stream_opener_argument_indent_spaces;
+use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::state::indentation::LineKind;
@@ -702,7 +706,7 @@ impl FormatEngine<'_> {
         {
             return Some(leading_visual_width(previous, tab_width));
         }
-        if let Some(spaces) = self.template_base_colon_indent_spaces(current, previous) {
+        if let Some(spaces) = template_base_colon_indent_spaces(self.options, current, previous) {
             return Some(spaces);
         }
         if let Some(spaces) = self.ternary_colon_row_frame_indent_spaces(current) {
@@ -968,7 +972,9 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        if let Some(spaces) = self.split_declaration_assignment_indent_spaces(current, previous) {
+        if let Some(spaces) =
+            split_declaration_assignment_indent_spaces(self.options, current, previous)
+        {
             return Some(spaces);
         }
         if current.starts_with('.')
@@ -1115,9 +1121,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.logical_after_previous_frame_indent_spaces(current) {
             return Some(spaces);
         }
-        if let Some(spaces) =
-            self.inline_stream_opener_argument_indent_spaces(current, previous_code)
-        {
+        if let Some(spaces) = inline_stream_opener_argument_indent_spaces(current, previous_code) {
             return Some(spaces);
         }
         if !current.starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
@@ -1633,7 +1637,9 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        if let Some(spaces) = self.immediate_typedef_template_indent_spaces(current, previous) {
+        if let Some(spaces) =
+            immediate_typedef_template_indent_spaces(self.options, current, previous)
+        {
             return Some(spaces);
         }
         None

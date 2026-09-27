@@ -1,7 +1,8 @@
-use crate::config::BraceStyle;
-use crate::formatter::braces::rewrite::is_add_braces_header;
+use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
+use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
@@ -130,31 +131,13 @@ impl FormatEngine<'_> {
             .then_some(previous_spaces)
     }
 
-    pub(crate) fn is_header(&self, word: &str) -> bool {
-        language::is_header(word)
-            || self
-                .options
-                .control_headers
-                .iter()
-                .any(|header| header == word)
-    }
-
     pub(crate) fn maximum_length_conditional_continuation_floor(
         &self,
         line: &str,
         base_indent_width: usize,
     ) -> Option<usize> {
         (is_conditional_header_line(line) && !self.options.indent_after_parens)
-            .then(|| base_indent_width + self.min_conditional_indent_spaces())
-    }
-
-    pub(crate) fn is_add_braces_header(&self, word: &str) -> bool {
-        is_add_braces_header(word)
-            || self
-                .options
-                .control_headers
-                .iter()
-                .any(|header| header == word)
+            .then(|| base_indent_width + min_conditional_indent_spaces(self.options))
     }
 
     pub(crate) fn active_split_else_header_continuation_indent_spaces(
@@ -177,7 +160,7 @@ impl FormatEngine<'_> {
         }
         Some(
             leading_visual_width(previous, self.options.tab_width)
-                + self.min_conditional_indent_spaces(),
+                + min_conditional_indent_spaces(self.options),
         )
     }
 
@@ -327,7 +310,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '{', '}', '/'])
-            || self.is_header(leading_identifier(line))
+            || is_header(self.options, leading_identifier(line))
             || self.layout.pending_braceless_block_bias.is_none()
             || !(self.split_else_braceless_body_active()
                 || self
@@ -341,7 +324,7 @@ impl FormatEngine<'_> {
             .layout
             .frame_stack
             .active_header()
-            .filter(|header| self.is_add_braces_header(&header.header))?;
+            .filter(|header| is_add_braces_header(self.options, &header.header))?;
         if self.split_else_braceless_body_active() {
             return Some(header.body_indent_spaces);
         }
@@ -1284,7 +1267,8 @@ impl FormatEngine<'_> {
             .flatten();
         let header = if let Some(header) = objc_header {
             Some(header)
-        } else if ((self.is_header(word) && !word_is_macro_argument) || is_asm_block_header(word))
+        } else if ((is_header(self.options, word) && !word_is_macro_argument)
+            || is_asm_block_header(word))
             && self.word_can_be_header_here(word, next)
         {
             Some(word)
@@ -1329,7 +1313,7 @@ impl FormatEngine<'_> {
                     .command_state
                     .current_header
                     .as_deref()
-                    .is_some_and(|header| self.is_add_braces_header(header)))
+                    .is_some_and(|header| is_add_braces_header(self.options, header)))
             {
                 return false;
             }
@@ -1401,7 +1385,7 @@ impl FormatEngine<'_> {
             })
             .or_else(|| {
                 let word = leading_identifier(self.current.trim_start());
-                (self.is_header(word)
+                (is_header(self.options, word)
                     && (language::is_non_paren_header(word)
                         || self.layout.command_state.previous_command_char == Some(')')))
                 .then(|| word.to_string())
@@ -1456,7 +1440,7 @@ impl FormatEngine<'_> {
         if !interrupted_header_context
             || line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '}', ':'])
-            || self.is_header(leading_identifier(line.trim_start()))
+            || is_header(self.options, leading_identifier(line.trim_start()))
         {
             return None;
         }
@@ -2142,4 +2126,13 @@ pub(crate) fn is_attachable_closing_header(word: &str) -> bool {
 fn header_word_is(line: &str, word: &str) -> bool {
     line.strip_prefix(word)
         .is_some_and(|rest| matches!(rest.chars().next(), Some('(') | Some(' ')))
+}
+
+pub(crate) fn is_header(options: &FormatOptions, word: &str) -> bool {
+    language::is_header(word) || options.control_headers.iter().any(|header| header == word)
+}
+
+pub(crate) fn is_add_braces_header(options: &FormatOptions, word: &str) -> bool {
+    is_standard_add_braces_header(word)
+        || options.control_headers.iter().any(|header| header == word)
 }

@@ -1,4 +1,5 @@
 use crate::formatter::constructs::headers;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::state::indentation::LineKind;
@@ -22,7 +23,7 @@ impl FormatEngine<'_> {
             .collect::<String>();
         let line = collapse_empty_comma_arguments(&line);
         let trimmed = line.trim();
-        if self.is_header(leading_identifier(trimmed)) {
+        if is_header(self.options, leading_identifier(trimmed)) {
             return false;
         }
         if self.options.pad_commas {

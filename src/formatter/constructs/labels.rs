@@ -172,36 +172,6 @@ pub(crate) fn access_label_body_indent_spaces(
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn replayed_inline_access_body_indent_spaces(
-        &self,
-        previous: &str,
-        delimiter_replayed: bool,
-    ) -> Option<usize> {
-        if self.options.max_code_length.is_none()
-            || !delimiter_replayed
-            || !starts_access_label(previous, &self.options.access_labels)
-            || previous.trim_end().ends_with('(')
-        {
-            return None;
-        }
-        let trimmed = previous.trim_start();
-        unmatched_open_paren_column(trimmed).map(|open| {
-            leading_visual_width(previous, self.options.tab_width)
-                + open
-                + 1
-                + self.options.indent_width
-        })
-    }
-
-    pub(crate) fn max_length_inline_access_body_indent_extra(&self, line: &str) -> Option<usize> {
-        (starts_access_label(line, &self.options.access_labels)
-            && line
-                .trim_start()
-                .split_once(':')
-                .is_some_and(|(_, body)| !body.trim().is_empty()))
-        .then_some(self.options.indent_width)
-    }
-
     pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         (is_user_label_candidate(previous_code, &self.options.access_labels)
@@ -210,17 +180,6 @@ impl FormatEngine<'_> {
             && !self.in_initializer_brace()
             && self.current_inline_array_column().is_none())
         .then_some(self.options.indent_width)
-    }
-
-    pub(crate) fn else_after_candidate_label_indent_spaces(
-        &self,
-        kind: LineKind,
-        previous: &str,
-    ) -> Option<usize> {
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        (kind == LineKind::Normal
-            && is_user_label_candidate(previous_code, &self.options.access_labels))
-        .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 
     pub(crate) fn following_label_body_indent_spaces(
@@ -653,6 +612,46 @@ fn is_scope_resolution_prefix(trimmed: &str) -> bool {
         && prefix
             .chars()
             .all(|ch| is_identifier_continue(ch) || matches!(ch, ':' | '<' | '>' | ',' | '~' | ' '))
+}
+
+pub(crate) fn replayed_inline_access_body_indent_spaces(
+    options: &FormatOptions,
+    previous: &str,
+    delimiter_replayed: bool,
+) -> Option<usize> {
+    if options.max_code_length.is_none()
+        || !delimiter_replayed
+        || !starts_access_label(previous, &options.access_labels)
+        || previous.trim_end().ends_with('(')
+    {
+        return None;
+    }
+    let trimmed = previous.trim_start();
+    unmatched_open_paren_column(trimmed).map(|open| {
+        leading_visual_width(previous, options.tab_width) + open + 1 + options.indent_width
+    })
+}
+
+pub(crate) fn max_length_inline_access_body_indent_extra(
+    options: &FormatOptions,
+    line: &str,
+) -> Option<usize> {
+    (starts_access_label(line, &options.access_labels)
+        && line
+            .trim_start()
+            .split_once(':')
+            .is_some_and(|(_, body)| !body.trim().is_empty()))
+    .then_some(options.indent_width)
+}
+
+pub(crate) fn else_after_candidate_label_indent_spaces(
+    options: &FormatOptions,
+    kind: LineKind,
+    previous: &str,
+) -> Option<usize> {
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+    (kind == LineKind::Normal && is_user_label_candidate(previous_code, &options.access_labels))
+        .then(|| leading_visual_width(previous, options.tab_width) + options.indent_width)
 }
 
 #[cfg(test)]

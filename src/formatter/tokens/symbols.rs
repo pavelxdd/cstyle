@@ -1,5 +1,9 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
-use crate::formatter::braces::classification::is_class_like_brace_type;
+use crate::formatter::braces::classification::{
+    code_ends_definition_header, is_class_like_brace_type,
+};
+use crate::formatter::constructs::constructor_initializers::constructor_initializer_name_indent_from_line;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
@@ -21,6 +25,7 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_column,
 };
 use crate::formatter::tokens::operators::find_assignment_operator;
+use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> bool {
@@ -267,7 +272,7 @@ impl FormatEngine<'_> {
         let current_word = trailing_word(&self.current).to_string();
         let opens_header_paren = self.layout.previous == PreviousToken::Word
             && current_word != "case"
-            && self.is_header(&current_word);
+            && is_header(self.options, &current_word);
         if opens_header_paren
             && self.token_input.token_begins_source_line
             && !self.current.trim().is_empty()
@@ -311,7 +316,7 @@ impl FormatEngine<'_> {
                 && self.options.pad_operators
                 && !self.layout.line_state.operator_padding_disabled)
                 || (self.options.pad_header
-                    && (self.is_header(word)
+                    && (is_header(self.options, word)
                         || matches!(word, "return" | "new" | "delete")
                         || word == "throw" && !self.throw_is_exception_specification()))
                 || outside_pad;
@@ -368,7 +373,7 @@ impl FormatEngine<'_> {
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;
             } else if let Some(spaces) =
-                self.constructor_initializer_name_indent_from_line(previous)
+                constructor_initializer_name_indent_from_line(self.options, previous)
             {
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;
@@ -642,7 +647,7 @@ impl FormatEngine<'_> {
                 (None, current)
             };
         let declarator_alignment =
-            declarator_operator.map(|operator| self.resolved_pointer_align(operator));
+            declarator_operator.map(|operator| resolved_pointer_align(self.options, operator));
         let opens_attribute = matches!(next, Some(Token::Symbol('[')));
         let opens_structured_binding =
             declarator_operator == Some("&") && trailing_word(declarator_prefix) == "auto";
@@ -859,7 +864,7 @@ impl FormatEngine<'_> {
             let following_header = matches!(
                 next,
                 Some(Token::Word(word))
-                    if self.is_header(word) && !matches!(word.as_str(), "case" | "default")
+                    if is_header(self.options, word) && !matches!(word.as_str(), "case" | "default")
             );
             let break_expanded_lisp_header = self.options.brace_style == BraceStyle::Lisp
                 && self.layout.line_state.is_one_line_block
@@ -1612,7 +1617,7 @@ impl FormatEngine<'_> {
                 .brace_type_stack
                 .iter()
                 .any(|brace_type| is_class_like_brace_type(*brace_type))
-                || self.code_ends_definition_header(code))
+                || code_ends_definition_header(code))
     }
 
     pub(crate) fn colon_leads_class_initializer(&self) -> bool {

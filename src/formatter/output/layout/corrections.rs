@@ -1,6 +1,6 @@
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::constructs::headers::{
-    is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
+    is_attachable_closing_header, is_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
@@ -86,7 +86,7 @@ impl FormatEngine<'_> {
         }
         let indented_command_body = self.indented_command_body_indent_spaces();
         let active_brace = self.layout.frame_stack.active_brace();
-        let current_header_owns_active_brace = self.is_header(leading_identifier(line))
+        let current_header_owns_active_brace = is_header(self.options, leading_identifier(line))
             && active_brace
                 .zip(self.layout.frame_stack.active_header())
                 .is_some_and(|(brace, header)| {
@@ -127,7 +127,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         } else if line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['#', '{', '}', '/'])
-            && !self.is_header(leading_identifier(line))
+            && !is_header(self.options, leading_identifier(line))
             && self
                 .output
                 .last_non_empty_line()
@@ -137,7 +137,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && self.is_header(leading_identifier(line))
+            && is_header(self.options, leading_identifier(line))
             && same_line_nested_header_extra(line.trim_start()) == 0
             && !(self.options.no_indent_if_after_else
                 && starts_header_word(line.trim_start(), "if")

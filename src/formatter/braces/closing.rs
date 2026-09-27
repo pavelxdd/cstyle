@@ -1,4 +1,4 @@
-use crate::config::BraceStyle;
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     ExternCGuard, contains_one_line_block, is_lambda_body_header,
     is_namespace_or_module_block_header,
@@ -605,7 +605,7 @@ impl FormatEngine<'_> {
             {
                 return false;
             }
-            return (self.is_attached_closing_header_style()
+            return (is_attached_closing_header_style(self.options)
                 || self.options.brace_style == BraceStyle::None)
                 && !self.options.break_closing_braces
                 && !self.options.indent_braces
@@ -624,17 +624,10 @@ impl FormatEngine<'_> {
             }
             return next_is_closing_header && !self.options.break_closing_braces;
         }
-        self.is_attached_closing_header_style()
+        is_attached_closing_header_style(self.options)
             && !self.options.break_closing_braces
             && !self.options.indent_braces
             && next_is_closing_header
-    }
-
-    pub(crate) fn is_attached_closing_header_style(&self) -> bool {
-        matches!(
-            self.options.brace_style,
-            BraceStyle::Attach | BraceStyle::OneTrueBrace | BraceStyle::Ratliff
-        )
     }
 
     pub(crate) fn try_attach_leading_closing_header(&mut self, word: &str) -> bool {
@@ -642,13 +635,13 @@ impl FormatEngine<'_> {
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
         let allowed = if is_do_while {
             self.options.attach_closing_while
-                || (self.is_attached_closing_header_style()
+                || (is_attached_closing_header_style(self.options)
                     && !self.options.break_closing_braces
                     && !self.options.indent_braces
                     && !self.options.indent_blocks)
         } else {
             is_attachable_closing_header(word)
-                && self.is_attached_closing_header_style()
+                && is_attached_closing_header_style(self.options)
                 && !self.options.break_closing_braces
                 && !self.options.indent_braces
         };
@@ -766,14 +759,6 @@ impl FormatEngine<'_> {
                     open_spaces == output_spaces && starts_header_word(open, "if")
                 }))
         .then_some(output_spaces)
-    }
-
-    pub(crate) fn top_level_closing_brace_indent_spaces(
-        &self,
-        line: &str,
-        normal_indent: usize,
-    ) -> Option<usize> {
-        (line.trim() == "}" && normal_indent == 0 && !self.options.indent_braces).then_some(0)
     }
 
     pub(crate) fn same_line_nested_header_closing_brace_indent_spaces(
@@ -1243,4 +1228,19 @@ impl FormatEngine<'_> {
             _ => false,
         }
     }
+}
+
+pub(crate) fn is_attached_closing_header_style(options: &FormatOptions) -> bool {
+    matches!(
+        options.brace_style,
+        BraceStyle::Attach | BraceStyle::OneTrueBrace | BraceStyle::Ratliff
+    )
+}
+
+pub(crate) fn top_level_closing_brace_indent_spaces(
+    options: &FormatOptions,
+    line: &str,
+    normal_indent: usize,
+) -> Option<usize> {
+    (line.trim() == "}" && normal_indent == 0 && !options.indent_braces).then_some(0)
 }

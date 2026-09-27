@@ -1,4 +1,5 @@
 use crate::config::BraceStyle;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
@@ -53,7 +54,7 @@ impl FormatEngine<'_> {
             .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
             .next()
             .unwrap_or_default();
-        !self.is_header(first)
+        !is_header(self.options, first)
     }
 
     fn should_delete_input_empty_line(&self) -> bool {

@@ -1,3 +1,4 @@
+use crate::config::FormatOptions;
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
@@ -169,95 +170,6 @@ impl FormatEngine<'_> {
         let open = unmatched_open_paren_column(previous)?;
         let target = leading_visual_width(previous, self.options.tab_width) + open + 1;
         (target == self.token_input.input_source_indent).then_some(target)
-    }
-
-    pub(crate) fn start_max_length_constructor_replay(
-        &self,
-        line: &str,
-        head: &str,
-        tail: &str,
-        base_indent_width: usize,
-        structural_level: usize,
-        mut next_indent: ContinuationIndent,
-    ) -> (MaxLengthConstructorReplay, ContinuationIndent) {
-        let has_constructor_initializer = line.find('(').is_some_and(|open| {
-            scoped_name_is_constructor(line[..open].trim_end()) && line[open + 1..].contains(':')
-        });
-        let mut replay = MaxLengthConstructorReplay {
-            has_constructor_initializer,
-            in_constructor_initializer: false,
-            lambda_call_indent: None,
-            structural_level: None,
-        };
-        replay.in_constructor_initializer = replay.head_enters_constructor_initializer(head);
-        let split_ends_lambda_parameter_opener = head
-            .trim_end()
-            .strip_suffix('(')
-            .is_some_and(|head| is_lambda_capture_header(head.trim_end()));
-        let tail_starts_lambda_capture = tail
-            .trim_start()
-            .find('(')
-            .is_some_and(|open| is_lambda_capture_header(tail.trim_start()[..open].trim_end()));
-        let constructor_lambda_tail =
-            replay.in_constructor_initializer && tail_starts_lambda_capture;
-        if constructor_lambda_tail && let Some(open) = unmatched_open_paren_columns(head).last() {
-            next_indent = ContinuationIndent::Spaces(base_indent_width + open + 1);
-        } else if replay.in_constructor_initializer && !split_ends_lambda_parameter_opener {
-            next_indent = ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
-        }
-        replay.lambda_call_indent = if constructor_lambda_tail {
-            Some(next_indent)
-        } else if replay.in_constructor_initializer && split_ends_lambda_parameter_opener {
-            unmatched_open_paren_columns(head)
-                .into_iter()
-                .rev()
-                .nth(1)
-                .map(|open| ContinuationIndent::Spaces(base_indent_width + open + 1))
-        } else {
-            None
-        };
-        if replay.in_constructor_initializer
-            && (split_ends_lambda_parameter_opener || constructor_lambda_tail)
-        {
-            replay.structural_level = Some(structural_level.max(1));
-        }
-        (replay, next_indent)
-    }
-
-    pub(crate) fn advance_max_length_constructor_replay(
-        &self,
-        replay: &mut MaxLengthConstructorReplay,
-        head: &str,
-        base_indent_width: usize,
-        next_indent: ContinuationIndent,
-        mut following_indent: ContinuationIndent,
-    ) -> ContinuationIndent {
-        let enters_constructor_initializer = replay.head_enters_constructor_initializer(head);
-        if replay.in_constructor_initializer
-            && inline_brace_pair_range(head).is_some()
-            && let Some(owner) = replay.lambda_call_indent
-        {
-            following_indent = owner;
-        } else if enters_constructor_initializer {
-            following_indent =
-                ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
-        } else if replay.in_constructor_initializer
-            && let Some(target) = unmatched_open_paren_columns(head)
-                .into_iter()
-                .rev()
-                .map(|open| next_indent.columns(self.options.indent_width) + open + 1)
-                .find(|target| {
-                    target.saturating_sub(base_indent_width) <= self.options.max_continuation_indent
-                })
-        {
-            following_indent = ContinuationIndent::Spaces(target);
-        } else if following_indent.columns(self.options.indent_width)
-            < next_indent.columns(self.options.indent_width)
-        {
-            following_indent = next_indent;
-        }
-        replay.in_constructor_initializer |= enters_constructor_initializer;
-        following_indent
     }
 
     pub(crate) fn record_constructor_initializer_frame(&mut self, function_try: bool) {
@@ -843,24 +755,6 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn constructor_initializer_name_indent_from_line(
-        &self,
-        line: &str,
-    ) -> Option<usize> {
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
-        let leading = leading_visual_width(code, self.options.tab_width);
-        let trimmed = code.trim_start();
-        let punctuation = trimmed.chars().next()?;
-        if !matches!(punctuation, ':' | ',')
-            || (punctuation == ':' && trimmed[punctuation.len_utf8()..].starts_with(':'))
-        {
-            return None;
-        }
-        let name_start = trimmed[punctuation.len_utf8()..].find(|ch: char| !ch.is_whitespace())?
-            + punctuation.len_utf8();
-        Some(leading + name_start)
-    }
-
     pub(crate) fn constructor_member_line_base_indent_spaces(&self) -> Option<usize> {
         self.layout.frame_stack.active_constructor_initializer()?;
         self.current
@@ -881,4 +775,109 @@ impl FormatEngine<'_> {
             })?;
         self.constructor_initializer_base_indent_spaces()
     }
+}
+
+pub(crate) fn start_max_length_constructor_replay(
+    options: &FormatOptions,
+    line: &str,
+    head: &str,
+    tail: &str,
+    base_indent_width: usize,
+    structural_level: usize,
+    mut next_indent: ContinuationIndent,
+) -> (MaxLengthConstructorReplay, ContinuationIndent) {
+    let has_constructor_initializer = line.find('(').is_some_and(|open| {
+        scoped_name_is_constructor(line[..open].trim_end()) && line[open + 1..].contains(':')
+    });
+    let mut replay = MaxLengthConstructorReplay {
+        has_constructor_initializer,
+        in_constructor_initializer: false,
+        lambda_call_indent: None,
+        structural_level: None,
+    };
+    replay.in_constructor_initializer = replay.head_enters_constructor_initializer(head);
+    let split_ends_lambda_parameter_opener = head
+        .trim_end()
+        .strip_suffix('(')
+        .is_some_and(|head| is_lambda_capture_header(head.trim_end()));
+    let tail_starts_lambda_capture = tail
+        .trim_start()
+        .find('(')
+        .is_some_and(|open| is_lambda_capture_header(tail.trim_start()[..open].trim_end()));
+    let constructor_lambda_tail = replay.in_constructor_initializer && tail_starts_lambda_capture;
+    if constructor_lambda_tail && let Some(open) = unmatched_open_paren_columns(head).last() {
+        next_indent = ContinuationIndent::Spaces(base_indent_width + open + 1);
+    } else if replay.in_constructor_initializer && !split_ends_lambda_parameter_opener {
+        next_indent = ContinuationIndent::Spaces(base_indent_width + options.indent_width);
+    }
+    replay.lambda_call_indent = if constructor_lambda_tail {
+        Some(next_indent)
+    } else if replay.in_constructor_initializer && split_ends_lambda_parameter_opener {
+        unmatched_open_paren_columns(head)
+            .into_iter()
+            .rev()
+            .nth(1)
+            .map(|open| ContinuationIndent::Spaces(base_indent_width + open + 1))
+    } else {
+        None
+    };
+    if replay.in_constructor_initializer
+        && (split_ends_lambda_parameter_opener || constructor_lambda_tail)
+    {
+        replay.structural_level = Some(structural_level.max(1));
+    }
+    (replay, next_indent)
+}
+
+pub(crate) fn advance_max_length_constructor_replay(
+    options: &FormatOptions,
+    replay: &mut MaxLengthConstructorReplay,
+    head: &str,
+    base_indent_width: usize,
+    next_indent: ContinuationIndent,
+    mut following_indent: ContinuationIndent,
+) -> ContinuationIndent {
+    let enters_constructor_initializer = replay.head_enters_constructor_initializer(head);
+    if replay.in_constructor_initializer
+        && inline_brace_pair_range(head).is_some()
+        && let Some(owner) = replay.lambda_call_indent
+    {
+        following_indent = owner;
+    } else if enters_constructor_initializer {
+        following_indent = ContinuationIndent::Spaces(base_indent_width + options.indent_width);
+    } else if replay.in_constructor_initializer
+        && let Some(target) = unmatched_open_paren_columns(head)
+            .into_iter()
+            .rev()
+            .map(|open| next_indent.columns(options.indent_width) + open + 1)
+            .find(|target| {
+                target.saturating_sub(base_indent_width) <= options.max_continuation_indent
+            })
+    {
+        following_indent = ContinuationIndent::Spaces(target);
+    } else if following_indent.columns(options.indent_width)
+        < next_indent.columns(options.indent_width)
+    {
+        following_indent = next_indent;
+    }
+    replay.in_constructor_initializer |= enters_constructor_initializer;
+    following_indent
+}
+
+pub(crate) fn constructor_initializer_name_indent_from_line(
+    options: &FormatOptions,
+    line: &str,
+) -> Option<usize> {
+    let code = line[..trailing_comment_split_limit(line)].trim_end();
+    let leading = leading_visual_width(code, options.tab_width);
+    let trimmed = code.trim_start();
+    let punctuation = trimmed.chars().next()?;
+    if !matches!(punctuation, ':' | ',')
+        || (punctuation == ':' && trimmed[punctuation.len_utf8()..].starts_with(':'))
+    {
+        return None;
+    }
+    let name_start = trimmed[punctuation.len_utf8()..].find(|ch: char| !ch.is_whitespace())?
+        + punctuation.len_utf8();
+    Some(leading + name_start)
 }

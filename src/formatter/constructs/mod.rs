@@ -10,4 +10,4 @@ pub(crate) mod return_types;
 pub(crate) mod swig;
 pub(crate) mod switch_cases;
 pub(crate) mod template_declarations;
-mod typedefs;
+pub(crate) mod typedefs;

@@ -1,6 +1,7 @@
-use crate::config::{BraceStyle, PointerAlign, ReferenceAlign};
+use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
+use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
-use crate::formatter::braces::rewrite::is_add_braces_header;
+use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::ContinuationIndent;
@@ -2281,7 +2282,8 @@ impl FormatEngine<'_> {
             while let Some(line) = lines.next() {
                 let shifted = if self.options.strip_comment_prefix {
                     let opener_prefix = " ".repeat(self.current_line_indent_spaces());
-                    self.strip_block_comment_line(
+                    strip_block_comment_line(
+                        self.options,
                         line,
                         false,
                         &opener_prefix,
@@ -2333,7 +2335,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let formatted = if self.options.strip_comment_prefix {
-                self.strip_block_comment_line(line, index == 0, opener_prefix, trim_amount)
+                strip_block_comment_line(self.options, line, index == 0, opener_prefix, trim_amount)
             } else if index == 0 {
                 format!("{opener_prefix}{}", line.trim_end())
             } else {
@@ -2460,7 +2462,7 @@ impl FormatEngine<'_> {
                 .command_state
                 .current_header
                 .as_deref()
-                .is_some_and(is_add_braces_header)
+                .is_some_and(is_standard_add_braces_header)
     }
 
     fn enum_value_comment_continuation_indent_spaces(&self) -> Option<usize> {
@@ -2582,7 +2584,7 @@ impl FormatEngine<'_> {
             && trimmed_code == "{"
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
-            let gap = self.initializer_brace_line_comment_gap(&self.current);
+            let gap = initializer_brace_line_comment_gap(self.options, &self.current);
             self.current.push_str(&gap);
             return;
         }
@@ -2647,83 +2649,6 @@ impl FormatEngine<'_> {
         } else {
             self.current.push_str(&gap);
         }
-    }
-
-    fn strip_block_comment_line(
-        &self,
-        line: &str,
-        is_opener: bool,
-        prefix: &str,
-        opener_source_column: usize,
-    ) -> String {
-        let indent_len = self.options.indent_width;
-        let tab_width = self.options.tab_width.max(1);
-        let chars: Vec<char> = line.chars().collect();
-
-        if is_opener {
-            let Some(mut content_start) = chars[2..]
-                .iter()
-                .position(|&ch| ch != ' ' && ch != '\t')
-                .map(|pos| pos + 2)
-            else {
-                return format!("{prefix}/*");
-            };
-            if matches!(chars[content_start], '*' | '!') {
-                match chars[content_start + 1..]
-                    .iter()
-                    .position(|&ch| ch != ' ' && ch != '\t')
-                    .map(|pos| content_start + 1 + pos)
-                {
-                    Some(next) if chars[next] != '*' => content_start = next,
-                    _ => return format!("{prefix}{}", line.trim_end()),
-                }
-            }
-            let content_column = visual_column_at(&chars, content_start, tab_width);
-            let insert = indent_len.saturating_sub(content_column);
-            let head: String = chars[..content_start].iter().collect();
-            let tail: String = chars[content_start..].iter().collect();
-            return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trim_end());
-        }
-
-        let Some(first) = chars.iter().position(|&ch| ch != ' ' && ch != '\t') else {
-            return String::new();
-        };
-        if chars[first] == '*' && chars.get(first + 1) == Some(&'/') {
-            return format!("{prefix}*/");
-        }
-        if chars[first] == '*' {
-            let Some(second) = chars[first + 1..]
-                .iter()
-                .position(|&ch| ch != ' ' && ch != '\t')
-                .map(|pos| first + 1 + pos)
-            else {
-                return String::new();
-            };
-            if chars[second] == '*' {
-                let rel =
-                    visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
-                let content: String = chars[first..].iter().collect();
-                return format!("{prefix}{}{}", " ".repeat(rel), content.trim_end());
-            }
-            let rel = visual_column_at(&chars, second, tab_width)
-                .saturating_sub(opener_source_column)
-                .max(indent_len);
-            let mut content = chars[second..]
-                .iter()
-                .collect::<String>()
-                .trim_end()
-                .to_string();
-            if content.ends_with('*') {
-                content.pop();
-                content = content.trim_end().to_string();
-            }
-            return format!("{prefix}{}{content}", " ".repeat(rel));
-        }
-        let rel = visual_column_at(&chars, first, tab_width)
-            .saturating_sub(opener_source_column)
-            .max(indent_len);
-        let content: String = chars[first..].iter().collect();
-        format!("{prefix}{}{}", " ".repeat(rel), content.trim_end())
     }
 }
 
@@ -2832,4 +2757,81 @@ pub(crate) struct CommentState {
     pub(crate) skip_next_attached_comment: bool,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
+}
+
+fn strip_block_comment_line(
+    options: &FormatOptions,
+    line: &str,
+    is_opener: bool,
+    prefix: &str,
+    opener_source_column: usize,
+) -> String {
+    let indent_len = options.indent_width;
+    let tab_width = options.tab_width.max(1);
+    let chars: Vec<char> = line.chars().collect();
+
+    if is_opener {
+        let Some(mut content_start) = chars[2..]
+            .iter()
+            .position(|&ch| ch != ' ' && ch != '\t')
+            .map(|pos| pos + 2)
+        else {
+            return format!("{prefix}/*");
+        };
+        if matches!(chars[content_start], '*' | '!') {
+            match chars[content_start + 1..]
+                .iter()
+                .position(|&ch| ch != ' ' && ch != '\t')
+                .map(|pos| content_start + 1 + pos)
+            {
+                Some(next) if chars[next] != '*' => content_start = next,
+                _ => return format!("{prefix}{}", line.trim_end()),
+            }
+        }
+        let content_column = visual_column_at(&chars, content_start, tab_width);
+        let insert = indent_len.saturating_sub(content_column);
+        let head: String = chars[..content_start].iter().collect();
+        let tail: String = chars[content_start..].iter().collect();
+        return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trim_end());
+    }
+
+    let Some(first) = chars.iter().position(|&ch| ch != ' ' && ch != '\t') else {
+        return String::new();
+    };
+    if chars[first] == '*' && chars.get(first + 1) == Some(&'/') {
+        return format!("{prefix}*/");
+    }
+    if chars[first] == '*' {
+        let Some(second) = chars[first + 1..]
+            .iter()
+            .position(|&ch| ch != ' ' && ch != '\t')
+            .map(|pos| first + 1 + pos)
+        else {
+            return String::new();
+        };
+        if chars[second] == '*' {
+            let rel =
+                visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
+            let content: String = chars[first..].iter().collect();
+            return format!("{prefix}{}{}", " ".repeat(rel), content.trim_end());
+        }
+        let rel = visual_column_at(&chars, second, tab_width)
+            .saturating_sub(opener_source_column)
+            .max(indent_len);
+        let mut content = chars[second..]
+            .iter()
+            .collect::<String>()
+            .trim_end()
+            .to_string();
+        if content.ends_with('*') {
+            content.pop();
+            content = content.trim_end().to_string();
+        }
+        return format!("{prefix}{}{content}", " ".repeat(rel));
+    }
+    let rel = visual_column_at(&chars, first, tab_width)
+        .saturating_sub(opener_source_column)
+        .max(indent_len);
+    let content: String = chars[first..].iter().collect();
+    format!("{prefix}{}{}", " ".repeat(rel), content.trim_end())
 }

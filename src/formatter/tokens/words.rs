@@ -1,7 +1,9 @@
 use crate::config::{BraceStyle, PointerAlign};
 use crate::formatter::braces::classification::contains_one_line_block;
 use crate::formatter::braces::rewrite::is_defer_header;
-use crate::formatter::constructs::headers::is_attachable_closing_header;
+use crate::formatter::constructs::headers::{
+    is_add_braces_header, is_attachable_closing_header, is_header,
+};
 use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
@@ -12,6 +14,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, trailing_comment_split_limit,
 };
+use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
@@ -31,7 +34,7 @@ impl FormatEngine<'_> {
             && !self.one_line_block_mode
             && matches!(word, "else" | "while")
             && self.current.trim_end().ends_with(';')
-            && !self.is_header(leading_identifier(self.current.trim_start()))
+            && !is_header(self.options, leading_identifier(self.current.trim_start()))
         {
             self.finish_line();
         }
@@ -95,7 +98,7 @@ impl FormatEngine<'_> {
             self.layout.command_state.current_header = None;
             previous_header = None;
         }
-        if self.is_header(word)
+        if is_header(self.options, word)
             && word != "else"
             && self.layout.nesting.paren_depth == 0
             && self.current_is_blank()
@@ -104,7 +107,7 @@ impl FormatEngine<'_> {
                 brace.header.as_deref() == Some(frame.header.as_str())
                     && brace.header_indent_column == frame.line_indent_spaces
             })
-            && self.is_add_braces_header(&frame.header)
+            && is_add_braces_header(self.options, &frame.header)
             && previous_header
                 .as_deref()
                 .is_none_or(|header| header == frame.header)
@@ -120,10 +123,10 @@ impl FormatEngine<'_> {
                     can_match_else: frame.header == "if",
                 });
         }
-        if self.is_header(word)
+        if is_header(self.options, word)
             && previous_header
                 .as_deref()
-                .is_some_and(|header| self.is_add_braces_header(header))
+                .is_some_and(|header| is_add_braces_header(self.options, header))
             && !matches!(previous_header.as_deref(), Some("else") if word == "if")
             && !previous_header.as_deref().is_some_and(is_defer_header)
             && self.layout.nesting.paren_depth == 0
@@ -366,7 +369,7 @@ impl FormatEngine<'_> {
         };
         let attaches_after_name_aligned_pointer = self.layout.previous == PreviousToken::Operator
             && current_ends_pointer_operator
-            && (self.resolved_pointer_align(trailing_operator) == PointerAlign::Name
+            && (resolved_pointer_align(self.options, trailing_operator) == PointerAlign::Name
                 || pointer_name_aligns_mixed_declarator)
             && self.current_paren_context_is_declaration()
             && self

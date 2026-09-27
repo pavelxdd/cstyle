@@ -855,30 +855,6 @@ struct ActiveCaseLayout {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn replayed_inline_case_body_indent_spaces(
-        &self,
-        previous: &str,
-        delimiter_replayed: bool,
-    ) -> Option<usize> {
-        if self.options.max_code_length.is_none()
-            || !delimiter_replayed
-            || !starts_inline_case_statement(previous)
-        {
-            return None;
-        }
-        let trimmed = previous.trim_start();
-        unmatched_open_paren_column(trimmed).map(|open| {
-            leading_visual_width(previous, self.options.tab_width)
-                + open
-                + 1
-                + self.options.indent_width
-        })
-    }
-
-    pub(crate) fn max_length_inline_case_body_indent_extra(&self, line: &str) -> Option<usize> {
-        starts_inline_case_statement(line).then_some(self.options.indent_width)
-    }
-
     pub(crate) fn split_else_header_operator_case_compensation_indent_spaces(
         &self,
         line: &str,
@@ -2056,6 +2032,30 @@ impl FormatEngine<'_> {
         }
         None
     }
+}
+
+pub(crate) fn replayed_inline_case_body_indent_spaces(
+    options: &FormatOptions,
+    previous: &str,
+    delimiter_replayed: bool,
+) -> Option<usize> {
+    if options.max_code_length.is_none()
+        || !delimiter_replayed
+        || !starts_inline_case_statement(previous)
+    {
+        return None;
+    }
+    let trimmed = previous.trim_start();
+    unmatched_open_paren_column(trimmed).map(|open| {
+        leading_visual_width(previous, options.tab_width) + open + 1 + options.indent_width
+    })
+}
+
+pub(crate) fn max_length_inline_case_body_indent_extra(
+    options: &FormatOptions,
+    line: &str,
+) -> Option<usize> {
+    starts_inline_case_statement(line).then_some(options.indent_width)
 }
 
 #[cfg(test)]

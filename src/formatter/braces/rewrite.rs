@@ -3,9 +3,11 @@ use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
     lambda_header_has_trailing_return,
 };
+use crate::formatter::braces::closing::is_attached_closing_header_style;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
 use crate::formatter::constructs::assembly::is_asm_block_header;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
@@ -68,7 +70,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let header = self.layout.command_state.current_header.as_deref()?;
-        if !is_add_braces_header(header)
+        if !is_standard_add_braces_header(header)
             || is_defer_header(header)
             || token_range_has_line_comment(tokens, line_start, start)
         {
@@ -90,7 +92,7 @@ impl FormatEngine<'_> {
             | Token::Comment(_, _)
             | Token::Preprocessor(_)
             | Token::Newline => return None,
-            Token::Word(word) if self.is_header(word) => return None,
+            Token::Word(word) if is_header(self.options, word) => return None,
             _ => {}
         }
 
@@ -262,7 +264,7 @@ impl FormatEngine<'_> {
         let following_index = next_statement_token(tokens, close_index + 1, line_end, false);
         let following = following_index.and_then(|index| tokens.get(index));
         let following_is_header =
-            matches!(following, Some(Token::Word(word)) if self.is_header(word));
+            matches!(following, Some(Token::Word(word)) if is_header(self.options, word));
         let keep_body_with_following = following.is_some()
             && self.options.keeps_multi_statement_line()
             && !(self.options.break_one_line_headers && following_is_header);
@@ -337,7 +339,9 @@ impl FormatEngine<'_> {
             let Some(header) = header else {
                 return false;
             };
-            if !(is_add_braces_header(header) || header == "switch") || is_defer_header(header) {
+            if !(is_standard_add_braces_header(header) || header == "switch")
+                || is_defer_header(header)
+            {
                 return false;
             }
         }
@@ -395,7 +399,7 @@ impl FormatEngine<'_> {
             || (self.layout.command_state.preprocessor_after_header && header == Some("else"))
         {
             match tokens.get(statement_start) {
-                Some(Token::Word(word)) if self.is_header(word) => {
+                Some(Token::Word(word)) if is_header(self.options, word) => {
                     let header_body_braceless =
                         header_body_start(tokens, statement_start, line_end).is_some_and(|index| {
                             !matches!(tokens.get(index), Some(Token::Symbol('{')))
@@ -458,7 +462,7 @@ impl FormatEngine<'_> {
             Some(Token::Symbol('{') | Token::Symbol(';'))
             | Some(Token::Comment(_, _) | Token::Preprocessor(_) | Token::Newline) => return false,
             Some(Token::Word(word))
-                if is_add_braces_header(word)
+                if is_standard_add_braces_header(word)
                     && !is_defer_header(word)
                     && (header != Some("else") || word != "if")
                     && !split_else_after_preprocessor =>
@@ -482,7 +486,7 @@ impl FormatEngine<'_> {
                 self.previous_was_newline = true;
                 return true;
             }
-            Some(Token::Word(word)) if self.is_header(word) => return false,
+            Some(Token::Word(word)) if is_header(self.options, word) => return false,
             Some(Token::Symbol('#')) => {
                 let header_indent = self
                     .layout
@@ -562,7 +566,7 @@ impl FormatEngine<'_> {
         let Some(header) = self.layout.command_state.current_header.as_deref() else {
             return false;
         };
-        if !is_add_braces_header(header) || is_defer_header(header) {
+        if !is_standard_add_braces_header(header) || is_defer_header(header) {
             return false;
         }
         if matches!(header, "if" | "for" | "while") {
@@ -599,7 +603,7 @@ impl FormatEngine<'_> {
             _ => {}
         }
         let body_is_nested_header =
-            matches!(&tokens[body_index], Token::Word(word) if is_add_braces_header(word));
+            matches!(&tokens[body_index], Token::Word(word) if is_standard_add_braces_header(word));
         if adding_braces && !body_is_nested_header {
             let body_is_multi_line = find_statement_semicolon(tokens, body_index, tokens.len())
                 .is_some_and(|semicolon| {
@@ -1048,7 +1052,7 @@ impl FormatEngine<'_> {
             && self.layout.command_state.current_header.is_some()
             && tokens[start + 1..close_index]
                 .iter()
-                .any(|token| matches!(token, Token::Word(word) if is_add_braces_header(word) || word == "switch"))
+                .any(|token| matches!(token, Token::Word(word) if is_standard_add_braces_header(word) || word == "switch"))
         {
             return None;
         }
@@ -1219,7 +1223,7 @@ impl FormatEngine<'_> {
         );
         if is_empty_block
             && (self.options.brace_style == BraceStyle::None
-                || self.is_attached_closing_header_style())
+                || is_attached_closing_header_style(self.options))
             && self.layout.command_state.current_header.as_deref() == Some("do")
             && let Some(while_index) = next_non_whitespace(tokens, close_index + 1, line_end)
             && matches!(tokens.get(while_index), Some(Token::Word(word)) if word == "while")
@@ -1588,13 +1592,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn attach_closing_brace_mode(&self) -> bool {
-        matches!(
-            self.options.brace_style,
-            BraceStyle::Pico | BraceStyle::Lisp
-        )
-    }
-
     pub(crate) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
         let is_aggregate = self.inline_array.aggregate_braces.pop().unwrap_or(false);
         let closes_compound_literal = is_aggregate
@@ -1602,7 +1599,7 @@ impl FormatEngine<'_> {
                 .current
                 .rsplit_once('{')
                 .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trim_end()));
-        if is_aggregate && self.attach_closing_brace_mode() {
+        if is_aggregate && attach_closing_brace_mode(self.options) {
             self.emit_source_space_or_ensure();
         } else {
             self.emit_source_space();
@@ -1682,7 +1679,7 @@ pub(crate) fn is_defer_header(word: &str) -> bool {
     matches!(word, "defer" | "_Defer")
 }
 
-pub(crate) fn is_add_braces_header(word: &str) -> bool {
+pub(crate) fn is_standard_add_braces_header(word: &str) -> bool {
     matches!(
         word,
         "if" | "else" | "for" | "foreach" | "Q_FOREACH" | "while" | "do"
@@ -1815,7 +1812,9 @@ fn add_braces_insertion_range(
     header_index: usize,
 ) -> Option<(usize, usize, usize)> {
     let header = match tokens.get(header_index)? {
-        Token::Word(word) if is_add_braces_header(word) && !is_defer_header(word) => word.as_str(),
+        Token::Word(word) if is_standard_add_braces_header(word) && !is_defer_header(word) => {
+            word.as_str()
+        }
         _ => return None,
     };
     let header_end = if header == "else" {
@@ -2483,6 +2482,10 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
         .iter()
         .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
         .collect::<Vec<_>>()
+}
+
+pub(crate) fn attach_closing_brace_mode(options: &FormatOptions) -> bool {
+    matches!(options.brace_style, BraceStyle::Pico | BraceStyle::Lisp)
 }
 
 #[cfg(test)]

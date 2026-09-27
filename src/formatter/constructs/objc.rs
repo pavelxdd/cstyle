@@ -1,4 +1,4 @@
-use crate::config::ObjCColonPad;
+use crate::config::{FormatOptions, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
@@ -522,17 +522,6 @@ impl FormatEngine<'_> {
         matches!(next, Some(Token::Symbol('('))) && self.current.trim().is_empty()
     }
 
-    pub(crate) fn token_starts_objc_method_definition(
-        &self,
-        tokens: &[Token],
-        index: usize,
-        line_end: usize,
-    ) -> bool {
-        matches!(&tokens[index], Token::Operator(op) if op == "-" || op == "+")
-            && next_non_whitespace(tokens, index + 1, line_end)
-                .is_some_and(|next| matches!(tokens[next], Token::Symbol('(')))
-    }
-
     pub(crate) fn compute_objc_method_colon_align(
         &self,
         tokens: &[Token],
@@ -601,83 +590,10 @@ impl FormatEngine<'_> {
             return None;
         }
         let first_colon = base
-            + self
-                .objc_method_first_colon_output_column(tokens, start)
+            + objc_method_first_colon_output_column(self.options, tokens, start)
                 .or(line_colons[0])?;
         let max_continuation = line_colons[1..].iter().filter_map(|pos| *pos).max()?;
         Some(first_colon.max(cont_indent + max_continuation))
-    }
-
-    fn objc_method_first_colon_output_column(
-        &self,
-        tokens: &[Token],
-        start: usize,
-    ) -> Option<usize> {
-        let source = tokens[start..]
-            .iter()
-            .take_while(|token| !matches!(token, Token::Newline))
-            .map(token_text)
-            .collect::<String>();
-        if !source.starts_with(['-', '+']) {
-            return None;
-        }
-        let open = source.find('(')?;
-        let mut depth = 0usize;
-        let mut close = None;
-        for (offset, ch) in source[open..].char_indices() {
-            match ch {
-                '(' => depth += 1,
-                ')' => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        close = Some(open + offset);
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-        let close = close?;
-        let colon = close + 1 + source[close + 1..].find(':')?;
-        let selector_start =
-            close + 1 + source[close + 1..colon].find(|ch: char| !ch.is_whitespace())?;
-        let selector_end = source[..colon].trim_end().len();
-        if selector_start > selector_end {
-            return None;
-        }
-
-        let prefix_gap = &source[1..open];
-        let prefix_gap = if self.options.pad_method_prefix {
-            " "
-        } else if self.options.unpad_method_prefix {
-            ""
-        } else {
-            prefix_gap
-        };
-        let return_gap = &source[close + 1..selector_start];
-        let return_gap = if self.options.pad_return_type {
-            " "
-        } else if self.options.unpad_return_type {
-            ""
-        } else {
-            return_gap
-        };
-        let colon_gap = &source[selector_end..colon];
-        let colon_gap = match self.options.pad_method_colon {
-            ObjCColonPad::NoChange => colon_gap,
-            ObjCColonPad::All | ObjCColonPad::Before => " ",
-            ObjCColonPad::None | ObjCColonPad::After => "",
-        };
-        let prefix = format!(
-            "{}{}{}{}{}{}",
-            &source[..1],
-            prefix_gap,
-            &source[open..=close],
-            return_gap,
-            &source[selector_start..selector_end],
-            colon_gap,
-        );
-        Some(visual_width_from(&prefix, 0, self.options.tab_width))
     }
 
     pub(crate) fn is_objc_standalone_line(&self) -> bool {
@@ -697,4 +613,86 @@ impl FormatEngine<'_> {
             )
         )
     }
+}
+
+pub(crate) fn token_starts_objc_method_definition(
+    tokens: &[Token],
+    index: usize,
+    line_end: usize,
+) -> bool {
+    matches!(&tokens[index], Token::Operator(op) if op == "-" || op == "+")
+        && next_non_whitespace(tokens, index + 1, line_end)
+            .is_some_and(|next| matches!(tokens[next], Token::Symbol('(')))
+}
+
+fn objc_method_first_colon_output_column(
+    options: &FormatOptions,
+    tokens: &[Token],
+    start: usize,
+) -> Option<usize> {
+    let source = tokens[start..]
+        .iter()
+        .take_while(|token| !matches!(token, Token::Newline))
+        .map(token_text)
+        .collect::<String>();
+    if !source.starts_with(['-', '+']) {
+        return None;
+    }
+    let open = source.find('(')?;
+    let mut depth = 0usize;
+    let mut close = None;
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    close = Some(open + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let close = close?;
+    let colon = close + 1 + source[close + 1..].find(':')?;
+    let selector_start =
+        close + 1 + source[close + 1..colon].find(|ch: char| !ch.is_whitespace())?;
+    let selector_end = source[..colon].trim_end().len();
+    if selector_start > selector_end {
+        return None;
+    }
+
+    let prefix_gap = &source[1..open];
+    let prefix_gap = if options.pad_method_prefix {
+        " "
+    } else if options.unpad_method_prefix {
+        ""
+    } else {
+        prefix_gap
+    };
+    let return_gap = &source[close + 1..selector_start];
+    let return_gap = if options.pad_return_type {
+        " "
+    } else if options.unpad_return_type {
+        ""
+    } else {
+        return_gap
+    };
+    let colon_gap = &source[selector_end..colon];
+    let colon_gap = match options.pad_method_colon {
+        ObjCColonPad::NoChange => colon_gap,
+        ObjCColonPad::All | ObjCColonPad::Before => " ",
+        ObjCColonPad::None | ObjCColonPad::After => "",
+    };
+    let prefix = format!(
+        "{}{}{}{}{}{}",
+        &source[..1],
+        prefix_gap,
+        &source[open..=close],
+        return_gap,
+        &source[selector_start..selector_end],
+        colon_gap,
+    );
+    Some(visual_width_from(&prefix, 0, options.tab_width))
 }

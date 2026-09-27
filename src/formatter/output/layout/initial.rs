@@ -6,7 +6,8 @@ use crate::formatter::constructs::headers::{
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::constructs::template_declarations::{
-    template_continuation_indent_spaces, template_declaration_line_complete,
+    is_template_declaration_head_line, template_continuation_indent_spaces,
+    template_declaration_line_complete,
 };
 use crate::formatter::continuation::{ContinuationIndent, operator_chains};
 use crate::formatter::engine::FormatEngine;
@@ -322,7 +323,7 @@ impl FormatEngine<'_> {
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let previous_trimmed = previous_code.trim_start();
-            if self.is_template_declaration_head_line(previous_trimmed)
+            if is_template_declaration_head_line(previous_trimmed)
                 && !line.trim_start().starts_with(['#', '{', '}', ':', ','])
             {
                 if template_declaration_line_complete(previous_trimmed) {

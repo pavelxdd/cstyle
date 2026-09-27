@@ -534,10 +534,6 @@ impl FormatEngine<'_> {
         );
     }
 
-    fn define_assignment_row_anchor(&self, line: &str) -> Option<usize> {
-        define_assignment_continuation_indent(line, self.options.tab_width)
-    }
-
     pub(crate) fn push_multiline_define(&mut self, parts: &[&str]) {
         let Some((first, body_parts)) = parts.split_first() else {
             return;
@@ -644,7 +640,7 @@ impl FormatEngine<'_> {
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trim_start());
             self.adjust_and_publish_line(line.clone());
-            if let Some(anchor) = self.define_assignment_row_anchor(&line) {
+            if let Some(anchor) = define_assignment_row_anchor(self.options, &line) {
                 assignment_anchor = Some(anchor);
             }
             update_define_expression_paren_anchors(
@@ -892,4 +888,8 @@ impl FormatEngine<'_> {
             };
         }
     }
+}
+
+fn define_assignment_row_anchor(options: &FormatOptions, line: &str) -> Option<usize> {
+    define_assignment_continuation_indent(line, options.tab_width)
 }

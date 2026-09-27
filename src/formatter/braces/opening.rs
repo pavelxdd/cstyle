@@ -6,8 +6,12 @@ use crate::formatter::braces::classification::{
     line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
-use crate::formatter::braces::initializers::InlineArrayFrame;
-use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::braces::initializers::{
+    InlineArrayFrame, initializer_brace_line_comment_gap,
+};
+use crate::formatter::constructs::headers::{
+    is_header, line_is_control_body_header, starts_header_word,
+};
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::continuation::ContinuationIndent;
@@ -515,7 +519,7 @@ impl FormatEngine<'_> {
                     let return_type = before[..name_start].trim_end();
                     let name = before[name_start..].trim_start();
                     if !name.is_empty()
-                        && !self.is_header(name)
+                        && !is_header(self.options, name)
                         && (is_parameter_return_type_prefix(return_type)
                             || name_start == 0 && scoped_name_is_constructor(name))
                     {
@@ -696,7 +700,7 @@ impl FormatEngine<'_> {
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
             self.trim_current_end();
-            let gap = self.initializer_brace_line_comment_gap(&self.current);
+            let gap = initializer_brace_line_comment_gap(self.options, &self.current);
             self.current.push_str(&gap);
             self.current.push_str(comment.trim_end());
             self.comments.skip_next_attached_comment = true;
@@ -929,7 +933,7 @@ impl FormatEngine<'_> {
         }
         if self.token_input.token_begins_source_line
             && is_semicolonless_call_line(&self.current)
-            && !self.is_header(leading_identifier(self.current.trim_start()))
+            && !is_header(self.options, leading_identifier(self.current.trim_start()))
         {
             self.finish_line();
             self.layout.pending_braceless_block_bias = None;
@@ -1566,7 +1570,7 @@ impl FormatEngine<'_> {
                         .trim_start()
                         .starts_with("/*")
                     && !trimmed.starts_with('#')
-                    && !self.is_header(first)
+                    && !is_header(self.options, first)
             })
         {
             let mut line = self.output.pop().unwrap_or_default();
@@ -1695,7 +1699,7 @@ impl FormatEngine<'_> {
             if line.trim() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
-                line.push_str(&self.initializer_brace_line_comment_gap(&line));
+                line.push_str(&initializer_brace_line_comment_gap(self.options, &line));
             } else {
                 line.push(' ');
             }
@@ -2132,7 +2136,7 @@ impl FormatEngine<'_> {
                 && self.current.trim() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
-                let gap = self.initializer_brace_line_comment_gap(&self.current);
+                let gap = initializer_brace_line_comment_gap(self.options, &self.current);
                 self.current.push_str(&gap);
             } else {
                 match self.token_input.next_input_whitespace.as_deref() {

@@ -1,6 +1,8 @@
 //! Indentation of continuation lines and maximum-length line splitting.
 
-use crate::config::{BraceStyle, MinConditionalIndent};
+use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::constructs::class_declarations::code_opens_class_base_clause;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
@@ -334,7 +336,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn current_looks_like_split_function_head(&self) -> bool {
         let line = self.current.trim_end();
-        if line.is_empty() || function_head_has_assignment(line) || self.is_header(line) {
+        if line.is_empty() || function_head_has_assignment(line) || is_header(self.options, line) {
             return false;
         }
         if unmatched_open_paren_column(line).is_some() {
@@ -344,7 +346,7 @@ impl FormatEngine<'_> {
             .split(|ch: char| !is_identifier_continue(ch))
             .find(|word| !word.is_empty());
         if first_word.is_some_and(|word| {
-            self.is_header(word)
+            is_header(self.options, word)
                 || matches!(
                     word,
                     "return" | "throw" | "delete" | "new" | "co_return" | "co_await" | "co_yield"
@@ -630,7 +632,7 @@ impl FormatEngine<'_> {
         let name_start = function_name_start(before)?;
         let return_type = before[..name_start].trim_end();
         let name = before[name_start..].trim_start();
-        if return_type.is_empty() || name.is_empty() || self.is_header(name) {
+        if return_type.is_empty() || name.is_empty() || is_header(self.options, name) {
             return None;
         }
         return_type
@@ -682,7 +684,7 @@ impl FormatEngine<'_> {
     fn class_base_clause_indent_spaces(&self) -> usize {
         let current_code = &self.current[..self.current_trailing_comment_split_limit()];
         if self.current_opens_class_base_clause()
-            || self.code_opens_class_base_clause(current_code.trim_end())
+            || code_opens_class_base_clause(current_code.trim_end())
             || self.current_ends_base_clause_colon()
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
@@ -693,7 +695,7 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
                 continue;
             }
-            if self.code_opens_class_base_clause(code.trim_end()) {
+            if code_opens_class_base_clause(code.trim_end()) {
                 return leading_visual_width(line, self.options.tab_width)
                     + self.options.indent_width;
             }
@@ -1129,7 +1131,7 @@ impl FormatEngine<'_> {
         let before = self.current[..open].trim();
         if before.is_empty()
             || before.contains('=')
-            || self.is_header(before)
+            || is_header(self.options, before)
             || !matches!(function_name_start(before), Some(0))
         {
             return None;
@@ -1368,45 +1370,6 @@ impl FormatEngine<'_> {
             }
         }
         Some(prefix_len + declaration_comma_continuation_column(line.trim_start()))
-    }
-
-    pub(crate) fn split_declaration_assignment_indent_spaces(
-        &self,
-        current: &str,
-        previous: &str,
-    ) -> Option<usize> {
-        if current
-            .trim_start()
-            .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
-        {
-            return None;
-        }
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let (assignment, operator) = find_assignment_operator(previous_code)?;
-        if operator != "="
-            || !previous_code[assignment + operator.len()..]
-                .trim()
-                .is_empty()
-        {
-            return None;
-        }
-        let content = previous_code.trim_start();
-        let declarator_offset = assignment_declarator_offset(content)?;
-        if !is_nested_template_type(&content[..declarator_offset]) {
-            return None;
-        }
-        let declarator_start = previous_code.len() - content.len() + declarator_offset;
-        let base =
-            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width;
-        let mut spaces = visual_width_from(
-            &previous_code[..declarator_start],
-            0,
-            self.options.tab_width,
-        );
-        if previous_code[..declarator_start].contains('<') && spaces > base {
-            spaces += 1;
-        }
-        Some(spaces.max(base))
     }
 
     pub(crate) fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {
@@ -1676,7 +1639,7 @@ impl FormatEngine<'_> {
         if !language::STREAM_NAMES.contains(&first_word)
             && (self.layout.nesting.paren_depth > 0
                 || self.in_initializer_brace()
-                || self.is_header(first_word))
+                || is_header(self.options, first_word))
         {
             return None;
         }
@@ -1730,18 +1693,9 @@ impl FormatEngine<'_> {
         if self.is_min_conditional_continuation() {
             let floor_base =
                 base_spaces.min(self.continuation_base_indent() * self.options.indent_width);
-            spaces.max(floor_base + self.min_conditional_indent_spaces())
+            spaces.max(floor_base + min_conditional_indent_spaces(self.options))
         } else {
             spaces
-        }
-    }
-
-    pub(crate) fn min_conditional_indent_spaces(&self) -> usize {
-        match self.options.min_conditional_indent {
-            MinConditionalIndent::Zero => 0,
-            MinConditionalIndent::One => self.options.indent_width,
-            MinConditionalIndent::Two => self.options.indent_width * 2,
-            MinConditionalIndent::OneHalf => self.options.indent_width / 2,
         }
     }
 
@@ -1904,5 +1858,48 @@ impl ContinuationIndent {
             Self::Level(level) => level * indent_width,
             Self::Spaces(columns) => columns,
         }
+    }
+}
+
+pub(crate) fn split_declaration_assignment_indent_spaces(
+    options: &FormatOptions,
+    current: &str,
+    previous: &str,
+) -> Option<usize> {
+    if current
+        .trim_start()
+        .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
+    {
+        return None;
+    }
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+    let (assignment, operator) = find_assignment_operator(previous_code)?;
+    if operator != "="
+        || !previous_code[assignment + operator.len()..]
+            .trim()
+            .is_empty()
+    {
+        return None;
+    }
+    let content = previous_code.trim_start();
+    let declarator_offset = assignment_declarator_offset(content)?;
+    if !is_nested_template_type(&content[..declarator_offset]) {
+        return None;
+    }
+    let declarator_start = previous_code.len() - content.len() + declarator_offset;
+    let base = leading_visual_width(previous, options.tab_width) + options.indent_width;
+    let mut spaces = visual_width_from(&previous_code[..declarator_start], 0, options.tab_width);
+    if previous_code[..declarator_start].contains('<') && spaces > base {
+        spaces += 1;
+    }
+    Some(spaces.max(base))
+}
+
+pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
+    match options.min_conditional_indent {
+        MinConditionalIndent::Zero => 0,
+        MinConditionalIndent::One => options.indent_width,
+        MinConditionalIndent::Two => options.indent_width * 2,
+        MinConditionalIndent::OneHalf => options.indent_width / 2,
     }
 }

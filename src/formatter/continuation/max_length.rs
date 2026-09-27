@@ -1,6 +1,11 @@
 use crate::config::BraceStyle;
 use crate::formatter::braces::classification::is_lambda_capture_header;
+use crate::formatter::constructs::constructor_initializers::{
+    advance_max_length_constructor_replay, start_max_length_constructor_replay,
+};
 use crate::formatter::constructs::headers::is_conditional_header_line;
+use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
+use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
@@ -142,22 +147,21 @@ impl FormatEngine<'_> {
         {
             next_indent = ContinuationIndent::Spaces(floor);
         }
-        let inline_body_indent_extra = self
-            .max_length_inline_case_body_indent_extra(line)
-            .or_else(|| self.max_length_inline_access_body_indent_extra(line));
+        let inline_body_indent_extra = max_length_inline_case_body_indent_extra(self.options, line)
+            .or_else(|| max_length_inline_access_body_indent_extra(self.options, line));
         if let Some(extra) = inline_body_indent_extra {
             next_indent =
                 ContinuationIndent::Spaces(next_indent.columns(self.options.indent_width) + extra);
         }
-        let (mut constructor_replay, adjusted_next_indent) = self
-            .start_max_length_constructor_replay(
-                line,
-                &split.head,
-                &split.tail,
-                base_indent_width,
-                structural_level,
-                next_indent,
-            );
+        let (mut constructor_replay, adjusted_next_indent) = start_max_length_constructor_replay(
+            self.options,
+            line,
+            &split.head,
+            &split.tail,
+            base_indent_width,
+            structural_level,
+            next_indent,
+        );
         next_indent = adjusted_next_indent;
         let next_structural_level = if let Some(level) = constructor_replay.structural_level() {
             level
@@ -200,7 +204,8 @@ impl FormatEngine<'_> {
                 },
             )
             .unwrap_or(next_indent);
-            following_indent = self.advance_max_length_constructor_replay(
+            following_indent = advance_max_length_constructor_replay(
+                self.options,
                 &mut constructor_replay,
                 &split.head,
                 base_indent_width,

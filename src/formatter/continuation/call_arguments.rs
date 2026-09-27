@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, MinConditionalIndent};
+use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::braces::classification::{
     is_lambda_body_header, is_lambda_capture_header, lambda_header_has_trailing_return,
     line_opens_lambda_block,
@@ -2172,33 +2172,13 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn line_opens_attachable_lambda_block(&self, line: &str) -> bool {
-        let trimmed = line.trim_end();
-        if trimmed.ends_with('{') {
-            return line_opens_lambda_block(line)
-                || trimmed
-                    .strip_suffix('{')
-                    .is_some_and(|head| is_lambda_capture_header(head.trim_end()));
-        }
-        !trimmed.contains('{')
-            && trimmed.trim_start().starts_with('[')
-            && matches!(
-                self.options.brace_style,
-                BraceStyle::Attach
-                    | BraceStyle::OneTrueBrace
-                    | BraceStyle::WebKit
-                    | BraceStyle::Ratliff
-                    | BraceStyle::Lisp
-            )
-            && is_lambda_body_header(trimmed)
-            && lambda_header_has_trailing_return(trimmed)
-    }
-
     pub(crate) fn lambda_call_argument_after_split_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
-        if !line.trim_start().starts_with('[') || !self.line_opens_attachable_lambda_block(line) {
+        if !line.trim_start().starts_with('[')
+            || !line_opens_attachable_lambda_block(self.options, line)
+        {
             return None;
         }
         let previous = self
@@ -2275,4 +2255,26 @@ impl FormatEngine<'_> {
         }
         false
     }
+}
+
+pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
+    let trimmed = line.trim_end();
+    if trimmed.ends_with('{') {
+        return line_opens_lambda_block(line)
+            || trimmed
+                .strip_suffix('{')
+                .is_some_and(|head| is_lambda_capture_header(head.trim_end()));
+    }
+    !trimmed.contains('{')
+        && trimmed.trim_start().starts_with('[')
+        && matches!(
+            options.brace_style,
+            BraceStyle::Attach
+                | BraceStyle::OneTrueBrace
+                | BraceStyle::WebKit
+                | BraceStyle::Ratliff
+                | BraceStyle::Lisp
+        )
+        && is_lambda_body_header(trimmed)
+        && lambda_header_has_trailing_return(trimmed)
 }
