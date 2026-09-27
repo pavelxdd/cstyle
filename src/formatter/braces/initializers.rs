@@ -432,8 +432,9 @@ impl FormatEngine<'_> {
         self.current.push('{');
         self.layout.command_state.observe_char('{');
         if brace_begins_line {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(opening_indent);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(opening_indent);
         }
         self.finish_line();
         self.update_current_brace_indent_from_last_output_line();
@@ -461,8 +462,9 @@ impl FormatEngine<'_> {
             output_line: self.output.len(),
             aggregate_assignment: control_paren_indent.is_some(),
         });
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = Some(body_indent);
+        self.layout
+            .continuation_indent
+            .set_next_line_spaces(body_indent);
         self.layout.previous = PreviousToken::Other;
     }
 
@@ -493,9 +495,9 @@ impl FormatEngine<'_> {
             opening_indent + self.options.indent_width,
             opening_indent,
         );
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces =
-            Some(opening_indent + self.options.indent_width);
+        self.layout
+            .continuation_indent
+            .set_next_line_spaces(opening_indent + self.options.indent_width);
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = true;
     }
@@ -510,8 +512,9 @@ impl FormatEngine<'_> {
             .for_header_continuation_indent_spaces()
             .unwrap_or_else(|| self.current_line_indent_spaces() + self.options.indent_width * 2);
         self.finish_line();
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = Some(opening_indent);
+        self.layout
+            .continuation_indent
+            .set_next_line_spaces(opening_indent);
         self.current.push('{');
         self.layout.command_state.observe_char('{');
         self.layout.nesting.enter_brace(None, BraceType::Array, 0);
@@ -671,8 +674,7 @@ impl FormatEngine<'_> {
         }
         if break_first {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+            self.layout.continuation_indent.set_next_line_spaces(column);
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
@@ -750,8 +752,7 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             if let Some(column) = closing_column {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.set_next_line_spaces(column);
             }
             self.trim_current_end();
             self.mark_closed_brace_output_position();
@@ -777,8 +778,7 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             if let Some(column) = closing_column {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.set_next_line_spaces(column);
             }
         } else if self.output.len() > open_output_len
             && !self.current_is_blank()
@@ -793,8 +793,7 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
             if let Some(column) = closing_column {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.set_next_line_spaces(column);
             }
         }
         let return_initializer_gap = return_initializer.then(|| {

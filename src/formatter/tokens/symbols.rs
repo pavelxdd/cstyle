@@ -274,8 +274,7 @@ impl FormatEngine<'_> {
         {
             let spaces = self.current_line_indent_spaces();
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
         let handled_objc_return_paren = self.layout.objc.post_prefix;
         if handled_objc_return_paren {
@@ -500,8 +499,7 @@ impl FormatEngine<'_> {
             } else {
                 spaces
             };
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
         let close_paren_out = self.options.pad_parens_outside
             && !self.options.unpad_parens
@@ -833,8 +831,7 @@ impl FormatEngine<'_> {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             self.layout.frame_stack.clear_header();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
             {
@@ -910,8 +907,7 @@ impl FormatEngine<'_> {
                 self.preprocessor.split_else.extra_indent = false;
                 self.preprocessor.split_else.extra_levels = 0;
                 self.preprocessor.split_else.trigger_output_len = None;
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
             }
             while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta

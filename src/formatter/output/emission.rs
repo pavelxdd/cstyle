@@ -329,13 +329,13 @@ impl FormatEngine<'_> {
             .is_some_and(|previous| previous.trim() == "else")
         {
             let level = output_spaces / self.options.indent_width;
-            self.layout.continuation_indent.next_line_indent = Some(level);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.set_next_line_level(level);
             self.layout.pending_braceless_block_bias = Some(level);
         }
         if post_emission.else_while_brace {
-            self.layout.continuation_indent.next_line_indent = Some(layout.indent + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(layout.indent + 1);
         }
         self.observe_template_declaration_line(line);
         self.observe_member_spacing_boundary(line);

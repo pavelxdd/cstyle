@@ -42,6 +42,26 @@ pub(crate) struct ContinuationIndentState {
     pub(crate) clear_continuation_after_line: Option<usize>,
 }
 
+impl ContinuationIndentState {
+    /// Starts the next line at an exact column and drops any pending level.
+    pub(crate) fn set_next_line_spaces(&mut self, spaces: usize) {
+        self.next_line_indent = None;
+        self.next_line_indent_spaces = Some(spaces);
+    }
+
+    /// Starts the next line at an indent level and drops any pending column.
+    pub(crate) fn set_next_line_level(&mut self, level: usize) {
+        self.next_line_indent = Some(level);
+        self.next_line_indent_spaces = None;
+    }
+
+    /// Leaves the next line at its structural indent.
+    pub(crate) fn clear_next_line(&mut self) {
+        self.next_line_indent = None;
+        self.next_line_indent_spaces = None;
+    }
+}
+
 fn declaration_comma_continuation_column(line: &str) -> usize {
     let chars: Vec<char> = line.chars().collect();
     let comma = match chars.len().checked_sub(1) {
@@ -93,8 +113,7 @@ impl FormatEngine<'_> {
         if in_continuation {
             return;
         }
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.continuation_indent.clear_next_line();
         self.layout.nesting.clear_continuation_indents();
         operator_chains::clear_logical_chain_indent(
             &mut self.layout.continuation_indent.logical_chain_indent_spaces,
@@ -1769,13 +1788,11 @@ impl FormatEngine<'_> {
             .next_input_line_continuation_indent = Some(indent);
         let level = match indent {
             ContinuationIndent::Level(level) => {
-                self.layout.continuation_indent.next_line_indent = Some(level);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.set_next_line_level(level);
                 level
             }
             ContinuationIndent::Spaces(spaces) => {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.set_next_line_spaces(spaces);
                 spaces / self.options.indent_width.max(1)
             }
         };

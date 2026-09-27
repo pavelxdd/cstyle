@@ -526,8 +526,7 @@ impl FormatEngine<'_> {
         if branch_separator_after_else {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.pending_braceless_block_bias = None;
             self.layout.inline_nested_header_braceless_bias = None;
             self.layout.else_if_break_depths.clear();
@@ -544,8 +543,7 @@ impl FormatEngine<'_> {
         } else if self.layout.command_state.current_header.is_some() && directive.is_some() {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
         }
         let is_define = directive.is_some_and(|directive| directive == "define");
 
@@ -678,8 +676,7 @@ impl FormatEngine<'_> {
             || (!is_define && directive.is_some() && parts.len() > 1)
         {
             if !(is_define && self.preprocessor_split_else_active()) {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
             }
             self.layout.nesting.clear_continuation_indents();
             self.layout.frame_stack.clear_stream_frames();
@@ -699,9 +696,9 @@ impl FormatEngine<'_> {
             && let Some((word, indent)) = header_before_preprocessor
             && word == "do"
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(indent + self.options.indent_width * 2);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(indent + self.options.indent_width * 2);
         }
         if is_define && parts.len() > 1 && self.preprocessor_split_else_active()
             || self.preprocessor_line_follows_split_else_output()
@@ -919,8 +916,7 @@ impl FormatEngine<'_> {
         if branch_separator_after_else {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.pending_braceless_block_bias = None;
             self.layout.inline_nested_header_braceless_bias = None;
             self.layout.else_if_break_depths.clear();

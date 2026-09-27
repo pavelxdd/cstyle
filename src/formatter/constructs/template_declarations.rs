@@ -211,8 +211,7 @@ impl FormatEngine<'_> {
                 })
             })
             .unwrap_or(source_column);
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+        self.layout.continuation_indent.set_next_line_spaces(spaces);
     }
 
     pub(crate) fn template_continuation_active(&self) -> bool {
@@ -262,16 +261,14 @@ impl FormatEngine<'_> {
             self.layout.template_declaration.uses_source_indent = true;
             self.layout.template_declaration.angle_depth = angle_delta;
             if let Some(spaces) = template_continuation_indent_spaces(line) {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
         } else if self.layout.template_declaration.uses_source_indent {
             self.layout.template_declaration.angle_depth += angle_delta;
             if self.layout.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
                 self.layout.template_declaration = TemplateDeclarationState::default();
                 self.layout.nesting.clear_continuation_indents();
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
             }
         }
     }

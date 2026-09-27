@@ -563,8 +563,9 @@ impl<'a> FormatEngine<'a> {
                 .last()
                 .is_some_and(|line| operators::head_ends_binary_operator(line.trim_end()))
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(source_column);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(source_column);
         }
         self.pointer_run.gap_before_column =
             Some(if self.token_input.previous_input_whitespace.is_some() {
@@ -666,9 +667,9 @@ impl<'a> FormatEngine<'a> {
                         .line_indent(LineKind::SwitchLabel, self.options)
                         * self.options.indent_width
                 });
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(label_spaces + self.options.indent_width);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(label_spaces + self.options.indent_width);
         }
     }
 
@@ -1030,8 +1031,7 @@ impl<'a> FormatEngine<'a> {
             return;
         };
         if self.current.trim().is_empty() && self.layout.line_state.has_literal_quote {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
     }
 
@@ -1186,9 +1186,9 @@ impl<'a> FormatEngine<'a> {
         } else if self.current.trim().is_empty() {
             if self.next_line.leads_with_class_init || self.next_line.leads_with_class_base {
                 self.layout.nesting.clear_continuation_indents();
-                self.layout.continuation_indent.next_line_indent =
-                    Some(self.layout.indentation.indent() + 1);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(self.layout.indentation.indent() + 1);
                 if self.next_line.leads_with_class_base {
                     self.layout.in_class_base_clause = true;
                 }
@@ -1224,22 +1224,22 @@ impl<'a> FormatEngine<'a> {
             let follows_function_try = self.class_initializer_follows_function_try();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
-            self.layout.continuation_indent.next_line_indent =
-                Some(header_indent + usize::from(!follows_function_try));
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(header_indent + usize::from(!follows_function_try));
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_base {
             let header_indent = self.layout.indentation.indent();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
-            self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(header_indent + 1);
             self.layout.in_class_base_clause = true;
             self.previous_was_newline = true;
         } else if self.current.trim_end().ends_with(',') && self.is_top_level_table_macro_row() {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(1);
+            self.layout.continuation_indent.set_next_line_spaces(1);
             self.previous_was_newline = true;
         } else if let Some(column) = self.current_inline_array_column()
             && self.layout.indentation.statement_depth() == 0
@@ -1250,8 +1250,7 @@ impl<'a> FormatEngine<'a> {
                 .ends_with(',')
         {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+            self.layout.continuation_indent.set_next_line_spaces(column);
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_comma
             && self.layout.indentation.statement_depth() > 0
@@ -1260,8 +1259,7 @@ impl<'a> FormatEngine<'a> {
             let spaces = self.current_line_indent_spaces();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.previous_was_newline = true;
         } else if matches!(self.layout.previous, PreviousToken::Comma)
             && self.layout.indentation.statement_depth() == 0
@@ -1291,16 +1289,13 @@ impl<'a> FormatEngine<'a> {
                 && unmatched_open_paren_column(self.current.trim_end()).is_none();
             self.finish_line();
             if clear_enum_continuation {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
                 self.layout.nesting.clear_continuation_indents();
             } else if let Some(column) = direct_list_sibling_column {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.set_next_line_spaces(column);
                 self.layout.nesting.clear_continuation_indents();
             } else if let Some(column) = inline_column {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+                self.layout.continuation_indent.set_next_line_spaces(column);
             }
             self.previous_was_newline = true;
         } else if matches!(self.layout.previous, PreviousToken::Comma)
@@ -1322,9 +1317,9 @@ impl<'a> FormatEngine<'a> {
         {
             self.finish_line();
             if self.newline_breaks_statement {
-                self.layout.continuation_indent.next_line_indent =
-                    Some(self.layout.indentation.indent() + 1);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(self.layout.indentation.indent() + 1);
                 self.layout.objc.method_continuation = true;
             } else {
                 self.layout.objc.method_continuation = self.next_line.leads_with_open_brace;
@@ -1337,8 +1332,7 @@ impl<'a> FormatEngine<'a> {
         {
             let spaces = self.current_line_indent_spaces();
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()].trim() == ":"
             && self
@@ -1348,9 +1342,9 @@ impl<'a> FormatEngine<'a> {
                 .is_some_and(|frame| frame.function_try)
         {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent() + 1);
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
             .trim_end()
@@ -1369,8 +1363,7 @@ impl<'a> FormatEngine<'a> {
                 .current_inline_array_column()
                 .unwrap_or_else(|| self.current_line_indent_spaces());
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+            self.layout.continuation_indent.set_next_line_spaces(column);
             self.previous_was_newline = true;
         } else if self.in_enum_declaration_brace()
             && self.current.trim_end().ends_with(",")
@@ -1378,8 +1371,7 @@ impl<'a> FormatEngine<'a> {
             && unmatched_open_paren_column(self.current.trim_end()).is_none()
         {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
             self.previous_was_newline = true;
         } else if self.current_initializer_member_before_closing_brace() {
@@ -1387,8 +1379,7 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.unmatched_closing_brace_recovery {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(0);
+            self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
             self.layout.frame_stack.clear_stream_frames();
@@ -1425,8 +1416,7 @@ impl<'a> FormatEngine<'a> {
                 ]))
         {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
@@ -1451,11 +1441,11 @@ impl<'a> FormatEngine<'a> {
             let header_indent = self.layout.indentation.indent();
             self.finish_line();
             if bare_return {
-                self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent + 1);
             } else if incomplete_control_header {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
                 self.layout.pending_braceless_block_bias = None;
                 self.layout.inline_nested_header_braceless_bias = None;
                 self.layout.command_state.current_header = None;
@@ -1474,8 +1464,7 @@ impl<'a> FormatEngine<'a> {
         if self.incomplete_control_header() && !self.next_line.leads_with_open_paren {
             self.newline_breaks_statement = true;
             if !self.next_line.leads_with_close_brace {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
             }
             self.layout.pending_braceless_block_bias = None;
             self.layout.inline_nested_header_braceless_bias = None;

@@ -679,8 +679,9 @@ impl FormatEngine<'_> {
         };
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if previous_code.contains('?') && previous_code.ends_with(':') {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(current_spaces);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(current_spaces);
         }
     }
 

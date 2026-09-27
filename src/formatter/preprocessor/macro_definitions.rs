@@ -556,8 +556,7 @@ impl FormatEngine<'_> {
         if code.ends_with('\\') {
             return;
         }
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout.continuation_indent.clear_next_line();
         self.layout.nesting.clear_continuation_indents();
         operator_chains::clear_operator_chain_state(
             &mut self.layout.frame_stack,

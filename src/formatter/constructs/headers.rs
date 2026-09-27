@@ -2060,9 +2060,9 @@ impl FormatEngine<'_> {
             && self.layout.indentation.indent() == base + delta
             && self.braceless_header_accepts_while(base)
         {
-            self.layout.continuation_indent.next_line_indent =
-                Some(base + self.layout.line_adjuster.total_case_unindent_depth());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(base + self.layout.line_adjuster.total_case_unindent_depth());
             self.layout.indentation.exit_braceless_block();
             if self
                 .layout
@@ -2090,11 +2090,10 @@ impl FormatEngine<'_> {
                 if net > pending_whiles {
                     let level = leading_visual_width(line, self.options.tab_width)
                         / self.options.indent_width;
-                    self.layout.continuation_indent.next_line_indent = Some(
+                    self.layout.continuation_indent.set_next_line_level(
                         level + net - pending_whiles - 1
                             + self.layout.line_adjuster.total_case_unindent_depth(),
                     );
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
                     return;
                 }
                 pending_whiles -= net;

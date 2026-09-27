@@ -184,9 +184,9 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        self.layout.continuation_indent.next_line_indent =
-            Some(self.layout.indentation.indent() + 1);
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout
+            .continuation_indent
+            .set_next_line_level(self.layout.indentation.indent() + 1);
         self.layout.split_class_export_pending_base = true;
     }
 
@@ -194,8 +194,9 @@ impl FormatEngine<'_> {
         let header_indent = self.layout.indentation.indent();
         self.finish_line();
         self.layout.nesting.clear_continuation_indents();
-        self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout
+            .continuation_indent
+            .set_next_line_level(header_indent + 1);
         self.layout.split_class_export_pending_base = true;
         self.previous_was_newline = true;
     }

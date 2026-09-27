@@ -881,14 +881,12 @@ impl FormatEngine<'_> {
 
     fn clear_continuation_before_open_brace(&mut self) {
         if self.layout.in_class_base_clause && self.current_is_blank() {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }
         self.layout.in_class_base_clause = false;
         if self.layout.objc.method_continuation && self.current_is_blank() {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
         }
     }
 
@@ -938,9 +936,9 @@ impl FormatEngine<'_> {
             if self.layout.indentation.last_braceless_block().is_some() {
                 self.layout.indentation.exit_braceless_block();
             }
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent());
             self.previous_was_newline = true;
         }
     }
@@ -1166,8 +1164,7 @@ impl FormatEngine<'_> {
                 + self.case_body_indent_extra(LineKind::Normal);
             let spaces = ContinuationIndent::Level(level).columns(self.options.indent_width);
             if self.current_line_indent_spaces() > spaces {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.set_next_line_spaces(spaces);
                 self.layout.continuation_indent.logical_chain_indent_spaces = None;
                 self.layout.nesting.clear_continuation_indents();
             }
@@ -1227,8 +1224,9 @@ impl FormatEngine<'_> {
             self.layout
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(header_indent_spaces);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(header_indent_spaces);
             self.layout.previous = PreviousToken::Other;
             return true;
         }
@@ -1649,9 +1647,9 @@ impl FormatEngine<'_> {
                 .take(3)
                 .any(|line| line.contains("#else") || line.contains("#define"))
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(self.options.indent_width);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(self.options.indent_width);
             self.current.push_str("{ ");
             self.layout.command_state.observe_char('{');
             self.previous_was_newline = false;
@@ -1812,9 +1810,9 @@ impl FormatEngine<'_> {
                     .is_some()
                 && self.layout.indentation.statement_depth() > 0
             {
-                self.layout.continuation_indent.next_line_indent =
-                    Some(self.layout.indentation.indent());
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(self.layout.indentation.indent());
                 self.layout.nesting.clear_continuation_indents();
             }
             let attach_brace_line_block_comment = brace_type == BraceType::Command
@@ -1895,8 +1893,9 @@ impl FormatEngine<'_> {
                         + self.options.indent_width * 2
                 };
                 self.current_is_preindented = true;
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(body_indent);
+                self.layout
+                    .continuation_indent
+                    .set_next_line_spaces(body_indent);
                 self.finish_line();
                 self.update_current_brace_indent_from_last_output_line();
             }
@@ -1994,8 +1993,7 @@ impl FormatEngine<'_> {
                 | BraceStyle::Horstmann
                 | BraceStyle::Pico
         ) {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }
         let standalone_colon_brace_spaces = (header_is_standalone_colon
@@ -2072,22 +2070,20 @@ impl FormatEngine<'_> {
                 self.options.brace_style,
                 BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
             )) + self.case_body_indent_extra(LineKind::Normal);
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(previous_else_indent_spaces + extra * self.options.indent_width);
+            self.layout.continuation_indent.set_next_line_spaces(
+                previous_else_indent_spaces + extra * self.options.indent_width,
+            );
         }
         if else_while_header {
-            self.layout.continuation_indent.next_line_indent = Some(
+            self.layout.continuation_indent.set_next_line_level(
                 self.layout.indentation.indent() + usize::from(self.options.indent_blocks) + 2,
             );
-            self.layout.continuation_indent.next_line_indent_spaces = None;
         } else if else_nested_loop_header {
-            self.layout.continuation_indent.next_line_indent = Some(
+            self.layout.continuation_indent.set_next_line_level(
                 self.layout.indentation.indent()
                     + usize::from(self.options.indent_blocks)
                     + usize::from(inline_nested_header_level.is_none()),
             );
-            self.layout.continuation_indent.next_line_indent_spaces = None;
         }
         if brace_type == BraceType::Command
             && self.options.brace_style == BraceStyle::Gnu
@@ -2097,8 +2093,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trim_end().ends_with("})"))
         {
             let level = self.layout.indentation.indent() + 1;
-            self.layout.continuation_indent.next_line_indent = Some(level);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.set_next_line_level(level);
             self.layout.inline_nested_header_braceless_bias = Some(level);
         }
         if self.current_is_blank()
@@ -2151,12 +2146,11 @@ impl FormatEngine<'_> {
         if (!objc_method_brace && self.should_indent_brace_line(brace_type))
             || block_indent_extra > 0
         {
-            self.layout.continuation_indent.next_line_indent = Some(
+            self.layout.continuation_indent.set_next_line_level(
                 self.layout.indentation.indent()
                     + 1
                     + self.case_body_indent_extra(LineKind::Normal),
             );
-            self.layout.continuation_indent.next_line_indent_spaces = None;
         }
         if let Some(spaces) = inline_initializer_command_brace_spaces
             .or(standalone_colon_brace_spaces)
@@ -2165,8 +2159,7 @@ impl FormatEngine<'_> {
             .or(whitesmith_broken_brace_spaces)
             .or(closing_header_broken_brace_spaces)
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
         if objc_method_brace {
             self.layout.continuation_indent.next_line_indent = None;
@@ -2183,19 +2176,18 @@ impl FormatEngine<'_> {
                     .flatten()
             })
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         } else if let Some(spaces) = closing_header_broken_brace_spaces {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(spaces + self.options.indent_width);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(spaces + self.options.indent_width);
         } else if let Some(spaces) = inline_initializer_command_brace_spaces
             .or(standalone_colon_brace_spaces)
             .or(inline_preprocessor_header_brace_spaces)
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(spaces + self.options.indent_width);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(spaces + self.options.indent_width);
         }
         if self.options.brace_style == BraceStyle::None
             && brace_type != BraceType::Namespace

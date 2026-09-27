@@ -1324,8 +1324,7 @@ impl FormatEngine<'_> {
         else {
             return;
         };
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+        self.layout.continuation_indent.set_next_line_spaces(spaces);
         self.layout.nesting.clear_continuation_indents();
     }
 

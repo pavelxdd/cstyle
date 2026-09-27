@@ -317,8 +317,7 @@ impl FormatEngine<'_> {
             }
         }
         if self.unmatched_closing_brace_recovery {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(0);
+            self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
             operator_chains::clear_operator_chain_state(

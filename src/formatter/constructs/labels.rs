@@ -418,8 +418,9 @@ impl FormatEngine<'_> {
         {
             next_spaces = next_spaces.max(leading_visual_width(previous, self.options.tab_width));
         }
-        self.layout.continuation_indent.next_line_indent = None;
-        self.layout.continuation_indent.next_line_indent_spaces = Some(next_spaces);
+        self.layout
+            .continuation_indent
+            .set_next_line_spaces(next_spaces);
     }
 
     fn enclosing_label_block_body_indent_spaces(&self) -> Option<usize> {

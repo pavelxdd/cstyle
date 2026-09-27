@@ -412,8 +412,7 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
         } else if let Some(column) = closing_frame_indent {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(column);
+            self.layout.continuation_indent.set_next_line_spaces(column);
         }
     }
 
@@ -546,8 +545,7 @@ impl FormatEngine<'_> {
             self.unwind_else_if_break_depths_unless_else(next);
         }
         if unmatched_closing_brace {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(0);
+            self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
             self.layout.frame_stack.clear_stream_frames();

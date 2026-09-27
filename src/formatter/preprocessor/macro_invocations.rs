@@ -87,8 +87,9 @@ impl FormatEngine<'_> {
         }
         self.previous_was_newline = true;
         if trimmed.starts_with("Q_FOREACH(") {
-            self.layout.continuation_indent.next_line_indent = Some(indent + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(indent + 1);
             self.layout.pending_braceless_block_bias = Some(indent + 1);
         }
         true

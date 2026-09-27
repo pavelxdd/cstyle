@@ -59,8 +59,9 @@ impl FormatEngine<'_> {
                 .indent()
                 .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
                 + 1;
-            self.layout.continuation_indent.next_line_indent = Some(body_indent);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(body_indent);
             self.layout.pending_braceless_block_bias = Some(body_indent);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
@@ -116,8 +117,9 @@ impl FormatEngine<'_> {
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
                     + brace_indent_extra;
                 self.finish_line();
-                self.layout.continuation_indent.next_line_indent = Some(block_indent);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(block_indent);
             }
             let mut block_tokens = Vec::with_capacity(semicolon - statement_start + 5);
             block_tokens.push(Token::Symbol('{'));
@@ -252,9 +254,9 @@ impl FormatEngine<'_> {
             });
         if self.options.break_one_line_blocks || block_starts_line {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent() + 1);
             self.layout.command_state.current_header = None;
         }
         let following_index = next_statement_token(tokens, close_index + 1, line_end, false);
@@ -405,9 +407,9 @@ impl FormatEngine<'_> {
                                 matches!(tokens.get(index), Some(Token::Word(next)) if next == "else")
                             });
                     self.finish_line();
-                    self.layout.continuation_indent.next_line_indent =
-                        Some(self.layout.indentation.indent() + 1);
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(self.layout.indentation.indent() + 1);
                     self.preprocessor.split_else.extra_indent = true;
                     self.preprocessor.split_else.extra_levels += 1;
                     self.preprocessor.split_else.pending_body = false;
@@ -421,9 +423,9 @@ impl FormatEngine<'_> {
                 }
                 Some(Token::Symbol('{')) if self.preprocessor.split_else.extra_indent => {
                     self.finish_line();
-                    self.layout.continuation_indent.next_line_indent =
-                        Some(self.layout.indentation.indent() + 1);
-                    self.layout.continuation_indent.next_line_indent_spaces = None;
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(self.layout.indentation.indent() + 1);
                     self.preprocessor.split_else.pending_body = false;
                     self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
                     self.layout.command_state.preprocessor_after_header = false;
@@ -448,8 +450,9 @@ impl FormatEngine<'_> {
                     .indent()
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
                 self.finish_line();
-                self.layout.continuation_indent.next_line_indent = Some(header_indent);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent);
                 return false;
             }
             Some(Token::Symbol('{') | Token::Symbol(';'))
@@ -471,8 +474,9 @@ impl FormatEngine<'_> {
                     )
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
                 self.finish_line();
-                self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent + 1);
                 self.layout.pending_braceless_block_bias = Some(header_indent + 1);
                 self.layout.command_state.current_header = None;
                 self.previous_was_newline = true;
@@ -532,8 +536,9 @@ impl FormatEngine<'_> {
                 || split_else_preprocessor_follows_closing_brace(&self.output));
         let body_indent = header_indent
             + usize::from(!split_else_after_preprocessor || split_else_keeps_body_level);
-        self.layout.continuation_indent.next_line_indent = Some(body_indent);
-        self.layout.continuation_indent.next_line_indent_spaces = None;
+        self.layout
+            .continuation_indent
+            .set_next_line_level(body_indent);
         if !split_else_after_preprocessor {
             self.layout.pending_braceless_block_bias = Some(body_indent);
         }
@@ -649,12 +654,12 @@ impl FormatEngine<'_> {
             };
         self.finish_line();
         if let Some(spaces) = exact_body_indent {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.layout.pending_braceless_block_bias = Some(spaces / self.options.indent_width);
         } else {
-            self.layout.continuation_indent.next_line_indent = Some(header_indent + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(header_indent + 1);
             self.layout.pending_braceless_block_bias = Some(header_indent + 1);
         }
         self.layout.command_state.current_header = None;
@@ -934,9 +939,9 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && self.previous_output_code_ends_assignment()
         {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent());
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
@@ -963,9 +968,9 @@ impl FormatEngine<'_> {
                 Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
             )
         {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent() + 1);
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
@@ -980,15 +985,14 @@ impl FormatEngine<'_> {
                     Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
                 ))
         {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent());
         }
         if brace_type == BraceType::Enum && !self.options.attach_enum && !self.current_is_blank() {
             let indent = self.layout.indentation.indent();
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = Some(indent);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.set_next_line_level(indent);
         }
         if brace_type == BraceType::Array
             && token_begins_line(tokens, start)
@@ -1001,8 +1005,7 @@ impl FormatEngine<'_> {
         {
             let indent = self.layout.indentation.indent();
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent = Some(indent);
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.set_next_line_level(indent);
         }
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
@@ -1197,9 +1200,9 @@ impl FormatEngine<'_> {
             self.classify_opening_brace(brace_header, self.pending_extern)
         };
         if token_begins_line(tokens, start) && self.current_is_blank() {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.layout.indentation.indent());
         }
         let source_gap = match tokens.get(start.wrapping_sub(1)) {
             Some(Token::Whitespace(gap)) => Some(gap.as_str()),
@@ -1274,8 +1277,7 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
             if brace_type == BraceType::Command {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = None;
+                self.layout.continuation_indent.clear_next_line();
             }
         }
         Some(close_index + 1)

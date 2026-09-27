@@ -283,8 +283,9 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty())
                 .map_or(0, |line| leading_visual_width(line, self.options.tab_width));
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(indent_spaces);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(indent_spaces);
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
         if matches!(operator, "&&" | "||") && !split_rvalue_reference {
@@ -341,8 +342,7 @@ impl FormatEngine<'_> {
                         _ => spaces,
                     }
                 };
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.continuation_indent.set_next_line_spaces(spaces);
                 self.layout.continuation_indent.logical_chain_indent_spaces = Some(spaces);
             } else if self.layout.nesting.paren_depth == 0
                 && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
@@ -355,9 +355,9 @@ impl FormatEngine<'_> {
             && self.stream_line_follows_multiline_braced_operand()
             && let Some(stream) = self.layout.frame_stack.active_stream()
         {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(stream.chain_anchor_column);
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(stream.chain_anchor_column);
         }
         if matches!(operator, "<<" | ">>")
             && self.current.trim().is_empty()
@@ -383,8 +383,7 @@ impl FormatEngine<'_> {
         {
             let spaces = self.continuation_base_indent() * self.options.indent_width
                 + 2 * self.options.indent_width;
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
     }
 
