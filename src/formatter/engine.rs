@@ -854,14 +854,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn push_token(&mut self, token: &Token, context: TokenPushContext<'_>) {
-        let TokenPushContext {
-            next,
-            next_is_adjacent,
-            following_operator,
-            template_angle,
-            token_index,
-            ..
-        } = context;
+        let next = context.next;
         if self.formatting_disabled() {
             self.push_disabled(token, next);
             return;
@@ -949,16 +942,7 @@ impl<'a> FormatEngine<'a> {
                 self.push_preprocessor(&line.text, &line.opaque_literal_line_ranges)
             }
             Token::RawLine(line) => self.push_raw_line(line),
-            Token::Operator(operator) => {
-                self.push_operator(
-                    operator,
-                    next,
-                    next_is_adjacent,
-                    following_operator,
-                    template_angle,
-                    token_index,
-                );
-            }
+            Token::Operator(operator) => self.push_operator(operator, context),
             Token::Symbol(symbol) => self.push_symbol(*symbol, context),
             Token::Whitespace(whitespace) => self.push_whitespace(whitespace),
             Token::Newline => self.push_newline(),

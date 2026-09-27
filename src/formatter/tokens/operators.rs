@@ -1,5 +1,5 @@
 use crate::config::{PointerAlign, ReferenceAlign};
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{BraceType, PreviousToken};
@@ -214,15 +214,15 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(crate) fn push_operator(
-        &mut self,
-        operator: &str,
-        next: Option<&Token>,
-        next_is_adjacent: bool,
-        following_operator: Option<&str>,
-        template_angle: TemplateAngle,
-        token_index: usize,
-    ) {
+    pub(crate) fn push_operator(&mut self, operator: &str, context: TokenPushContext<'_>) {
+        let TokenPushContext {
+            next,
+            next_is_adjacent,
+            following_operator,
+            template_angle,
+            token_index,
+            ..
+        } = context;
         let statement = self
             .current
             .rsplit([';', '{', '}'])
@@ -259,6 +259,23 @@ impl FormatEngine<'_> {
                         && last_unmatched_open_delimiter(code).is_none()
                         && is_pointer_declaration_segment(code)
                 });
+        self.set_leading_operator_continuation(operator, split_rvalue_reference);
+        if self.try_push_operator_special_case(operator, next, template_angle) {
+            return;
+        }
+        self.reset_stale_leading_operator_continuation(operator);
+
+        self.push_operator_by_kind(
+            operator,
+            next,
+            next_is_adjacent,
+            following_operator,
+            operator_role,
+            split_rvalue_reference,
+        );
+    }
+
+    fn set_leading_operator_continuation(&mut self, operator: &str, split_rvalue_reference: bool) {
         if split_rvalue_reference {
             let indent_spaces = self
                 .output
@@ -369,6 +386,14 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
+    }
+
+    fn try_push_operator_special_case(
+        &mut self,
+        operator: &str,
+        next: Option<&Token>,
+        template_angle: TemplateAngle,
+    ) -> bool {
         if self.pointer_run.skip_adjacent_pointer_operators > 0
             && matches!(operator, "*" | "&" | "^")
         {
@@ -378,7 +403,7 @@ impl FormatEngine<'_> {
             {
                 self.emit_trailing_source_space();
             }
-            return;
+            return true;
         }
         match template_angle {
             TemplateAngle::Open => {
@@ -389,7 +414,7 @@ impl FormatEngine<'_> {
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;
                 self.previous_was_newline = false;
-                return;
+                return true;
             }
             TemplateAngle::Close(count) => {
                 if self.options.close_templates && self.current.trim_end().ends_with('>') {
@@ -410,7 +435,7 @@ impl FormatEngine<'_> {
                 if self.layout.line_state.template_angle_depth == 0 {
                     self.previous_was_template_close = true;
                 }
-                return;
+                return true;
             }
             TemplateAngle::None => {}
         }
@@ -428,7 +453,7 @@ impl FormatEngine<'_> {
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
 
         if operator == "<?"
@@ -439,14 +464,14 @@ impl FormatEngine<'_> {
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
         if operator == ">" && self.current.trim_end().ends_with('?') {
             self.current.push('>');
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
         if self.is_in_asm_operator_context() {
             if matches!(operator, "*" | "&" | "^") {
@@ -458,8 +483,12 @@ impl FormatEngine<'_> {
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
-            return;
+            return true;
         }
+        false
+    }
+
+    fn reset_stale_leading_operator_continuation(&mut self, operator: &str) {
         if self.current.trim().is_empty()
             && is_leading_continuation_operator(operator)
             && self
@@ -507,7 +536,17 @@ impl FormatEngine<'_> {
                 );
             }
         }
+    }
 
+    fn push_operator_by_kind(
+        &mut self,
+        operator: &str,
+        next: Option<&Token>,
+        next_is_adjacent: bool,
+        following_operator: Option<&str>,
+        operator_role: OperatorRole,
+        split_rvalue_reference: bool,
+    ) {
         match operator {
             "::" => {
                 if self.layout.previous == PreviousToken::OpenParen
