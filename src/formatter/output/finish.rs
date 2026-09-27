@@ -1,26 +1,27 @@
-use super::super::FormatEngine;
-use super::super::closing_braces::starts_post_closing_declaration;
-use super::super::columns::leading_visual_width;
-use super::super::comments::line_comment_backslash_trailing_space;
-use super::super::line_scan::is_comment_line;
-use super::super::line_scan::{line_comment_split_limit, trailing_comment_split_limit};
-use super::super::literals::first_string_literal_start;
-use super::super::operator_chains;
-
-use super::super::preprocessor::preprocessor_directive;
-use super::super::state::PreviousToken;
-use super::super::switch_cases::{case_label_with_trailing_comment, split_switch_label_statement};
+use crate::formatter::closing_braces::starts_post_closing_declaration;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::comments::line_comment_backslash_trailing_space;
+use crate::formatter::line_scan::{
+    is_comment_line, line_comment_split_limit, trailing_comment_split_limit,
+};
+use crate::formatter::literals::first_string_literal_start;
+use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::state::PreviousToken;
+use crate::formatter::switch_cases::{
+    case_label_with_trailing_comment, split_switch_label_statement,
+};
+use crate::formatter::{FormatEngine, operator_chains};
 use crate::source::lex::trailing_word;
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn finish_disabled_line(&mut self) {
+    pub(crate) fn finish_disabled_line(&mut self) {
         let line = self.take_current();
         self.publish_unadjusted_line(line);
         self.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }
 
-    pub(in super::super) fn finish_line(&mut self) {
+    pub(crate) fn finish_line(&mut self) {
         let block_comment_close_paren_ends_declaration =
             self.block_comment_close_paren_ends_declaration;
         self.block_comment_close_paren_ends_declaration = false;
@@ -323,7 +324,7 @@ impl FormatEngine<'_> {
         self.reset_after_finished_line();
     }
 
-    pub(in super::super) fn finish(mut self) -> String {
+    pub(crate) fn finish(mut self) -> String {
         self.flush_backslash_body_parts();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();

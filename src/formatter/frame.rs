@@ -1,8 +1,10 @@
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) struct FrameId(usize);
+use crate::formatter::state::FormatterBraceType;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum ParenRole {
+pub(crate) struct FrameId(usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub(crate) enum ParenRole {
     Call,
     SemicolonlessMacroCall,
     Header,
@@ -11,13 +13,13 @@ pub(super) enum ParenRole {
 }
 
 impl ParenRole {
-    pub(super) fn is_call_like(self) -> bool {
+    pub(crate) fn is_call_like(self) -> bool {
         matches!(self, Self::Call | Self::SemicolonlessMacroCall)
     }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum CommaRole {
+pub(crate) enum CommaRole {
     CallArgument,
     Declaration,
     InitializerSibling,
@@ -26,15 +28,15 @@ pub(super) enum CommaRole {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct ArgumentFrame {
-    pub(super) role: CommaRole,
-    pub(super) owner: Option<FrameId>,
-    pub(super) index: usize,
-    pub(super) sibling_anchor_column: Option<usize>,
+pub(crate) struct ArgumentFrame {
+    pub(crate) role: CommaRole,
+    pub(crate) owner: Option<FrameId>,
+    pub(crate) index: usize,
+    pub(crate) sibling_anchor_column: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum ColonRole {
+pub(crate) enum ColonRole {
     Ternary,
     Label,
     ClassInitializer,
@@ -50,78 +52,78 @@ pub(super) enum ColonRole {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum TernaryOwnerRole {
+pub(crate) enum TernaryOwnerRole {
     Assignment,
     Return,
     Other,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct TernaryFrame {
-    pub(super) owner_role: TernaryOwnerRole,
-    pub(super) parent_delimiter: Option<FrameId>,
-    pub(super) question_indent_spaces: usize,
-    pub(super) branch_anchor_column: Option<usize>,
-    pub(super) colon_role: Option<ColonRole>,
-    pub(super) colon_output_column: Option<usize>,
+pub(crate) struct TernaryFrame {
+    pub(crate) owner_role: TernaryOwnerRole,
+    pub(crate) parent_delimiter: Option<FrameId>,
+    pub(crate) question_indent_spaces: usize,
+    pub(crate) branch_anchor_column: Option<usize>,
+    pub(crate) colon_role: Option<ColonRole>,
+    pub(crate) colon_output_column: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum ConstructorInitializerLayout {
+pub(crate) enum ConstructorInitializerLayout {
     SameLine,
     Split,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct ConstructorInitializerFrame {
-    pub(super) colon_line_indent_spaces: usize,
-    pub(super) layout: ConstructorInitializerLayout,
-    pub(super) function_try: bool,
+pub(crate) struct ConstructorInitializerFrame {
+    pub(crate) colon_line_indent_spaces: usize,
+    pub(crate) layout: ConstructorInitializerLayout,
+    pub(crate) function_try: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct HeaderFrame {
-    pub(super) header: String,
-    pub(super) line_indent_spaces: usize,
-    pub(super) body_indent_spaces: usize,
-    pub(super) parent_delimiter: Option<FrameId>,
+pub(crate) struct HeaderFrame {
+    pub(crate) header: String,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) body_indent_spaces: usize,
+    pub(crate) parent_delimiter: Option<FrameId>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct BracelessHeaderFrame {
-    pub(super) header: String,
-    pub(super) header_indent_spaces: usize,
-    pub(super) can_match_else: bool,
+pub(crate) struct BracelessHeaderFrame {
+    pub(crate) header: String,
+    pub(crate) header_indent_spaces: usize,
+    pub(crate) can_match_else: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum CommentFrameKind {
+pub(crate) enum CommentFrameKind {
     Line,
     Block,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct CommentFrame {
-    pub(super) kind: CommentFrameKind,
-    pub(super) output_column: usize,
-    pub(super) multiline: bool,
-    pub(super) continuation_anchor_column: Option<usize>,
+pub(crate) struct CommentFrame {
+    pub(crate) kind: CommentFrameKind,
+    pub(crate) output_column: usize,
+    pub(crate) multiline: bool,
+    pub(crate) continuation_anchor_column: Option<usize>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct StringContinuationFrame {
-    pub(super) output_line: usize,
-    pub(super) line_indent_spaces: usize,
-    pub(super) literal_start_column: usize,
-    pub(super) line_starts_with_chain_operator: bool,
-    pub(super) has_opening_context: bool,
-    pub(super) has_open_brace_before_literal: bool,
-    pub(super) has_stream_context: bool,
-    pub(super) inside_delimiter_context: bool,
+pub(crate) struct StringContinuationFrame {
+    pub(crate) output_line: usize,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) literal_start_column: usize,
+    pub(crate) line_starts_with_chain_operator: bool,
+    pub(crate) has_opening_context: bool,
+    pub(crate) has_open_brace_before_literal: bool,
+    pub(crate) has_stream_context: bool,
+    pub(crate) inside_delimiter_context: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum PointerRole {
+pub(crate) enum PointerRole {
     DeclarationPointer,
     DeclarationReference,
     UnaryOperator,
@@ -131,49 +133,49 @@ pub(super) enum PointerRole {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct DeclarationFrame {
-    pub(super) pointer_role: PointerRole,
-    pub(super) continuation_anchor_column: Option<usize>,
-    pub(super) closing_anchor_column: Option<usize>,
-    pub(super) is_typedef: bool,
+pub(crate) struct DeclarationFrame {
+    pub(crate) pointer_role: PointerRole,
+    pub(crate) continuation_anchor_column: Option<usize>,
+    pub(crate) closing_anchor_column: Option<usize>,
+    pub(crate) is_typedef: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct LogicalFrame {
-    pub(super) operator: LogicalOperator,
-    pub(super) operator_output_column: usize,
-    pub(super) operator_output_line: usize,
-    pub(super) line_indent_spaces: usize,
-    pub(super) operator_starts_output_line: bool,
-    pub(super) line_has_positive_paren_delta: bool,
-    pub(super) line_ends_with_close_paren: bool,
-    pub(super) line_unmatched_open_paren_column: Option<usize>,
-    pub(super) return_value_column: Option<usize>,
+pub(crate) struct LogicalFrame {
+    pub(crate) operator: LogicalOperator,
+    pub(crate) operator_output_column: usize,
+    pub(crate) operator_output_line: usize,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) operator_starts_output_line: bool,
+    pub(crate) line_has_positive_paren_delta: bool,
+    pub(crate) line_ends_with_close_paren: bool,
+    pub(crate) line_unmatched_open_paren_column: Option<usize>,
+    pub(crate) return_value_column: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum LogicalOperator {
+pub(crate) enum LogicalOperator {
     And,
     Or,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct StreamFrame {
-    pub(super) operator_output_column: usize,
-    pub(super) operator_output_line: usize,
-    pub(super) line_indent_spaces: usize,
-    pub(super) operator_ends_output_line: bool,
-    pub(super) line_contains_nested_brace: bool,
-    pub(super) line_has_unmatched_open_paren: bool,
-    pub(super) line_ends_with_close_paren: bool,
-    pub(super) line_has_positive_paren_delta: bool,
-    pub(super) chain_anchor_column: usize,
-    pub(super) assignment_value_start_column: Option<usize>,
-    pub(super) after_multiline_braced_operand: bool,
+pub(crate) struct StreamFrame {
+    pub(crate) operator_output_column: usize,
+    pub(crate) operator_output_line: usize,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) operator_ends_output_line: bool,
+    pub(crate) line_contains_nested_brace: bool,
+    pub(crate) line_has_unmatched_open_paren: bool,
+    pub(crate) line_ends_with_close_paren: bool,
+    pub(crate) line_has_positive_paren_delta: bool,
+    pub(crate) chain_anchor_column: usize,
+    pub(crate) assignment_value_start_column: Option<usize>,
+    pub(crate) after_multiline_braced_operand: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum BraceSemanticKind {
+pub(crate) enum BraceSemanticKind {
     Command,
     Definition,
     Array,
@@ -188,50 +190,50 @@ pub(super) enum BraceSemanticKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct BraceFrame {
-    pub(super) semantic_kind: BraceSemanticKind,
-    pub(super) formatter_type: super::state::FormatterBraceType,
-    pub(super) header: Option<String>,
-    pub(super) label_block: bool,
-    pub(super) case_block: bool,
-    pub(super) case_header_pending: bool,
-    pub(super) nested_case_label: bool,
-    pub(super) class_base: bool,
-    pub(super) header_indent_column: usize,
-    pub(super) body_indent_column: usize,
-    pub(super) sibling_indent_column: usize,
-    pub(super) split_header: bool,
-    pub(super) close_output_line: Option<usize>,
-    pub(super) close_ends_output_line: bool,
+pub(crate) struct BraceFrame {
+    pub(crate) semantic_kind: BraceSemanticKind,
+    pub(crate) formatter_type: FormatterBraceType,
+    pub(crate) header: Option<String>,
+    pub(crate) label_block: bool,
+    pub(crate) case_block: bool,
+    pub(crate) case_header_pending: bool,
+    pub(crate) nested_case_label: bool,
+    pub(crate) class_base: bool,
+    pub(crate) header_indent_column: usize,
+    pub(crate) body_indent_column: usize,
+    pub(crate) sibling_indent_column: usize,
+    pub(crate) split_header: bool,
+    pub(crate) close_output_line: Option<usize>,
+    pub(crate) close_ends_output_line: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct CallFrame {
-    pub(super) first_argument_column: Option<usize>,
-    pub(super) next_argument_index: usize,
-    pub(super) logical_operand_indent_column: usize,
-    pub(super) logical_operand_indent_tracks_opener: bool,
+pub(crate) struct CallFrame {
+    pub(crate) first_argument_column: Option<usize>,
+    pub(crate) next_argument_index: usize,
+    pub(crate) logical_operand_indent_column: usize,
+    pub(crate) logical_operand_indent_tracks_opener: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(super) enum BracketRole {
+pub(crate) enum BracketRole {
     Other,
     ObjectiveCMessage,
     ObjectiveCCollection,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct BracketFrame {
-    pub(super) opener_output_column: usize,
-    pub(super) opener_output_line: usize,
-    pub(super) line_indent_spaces: usize,
-    pub(super) role: BracketRole,
-    pub(super) parent_objc_message_align: Option<usize>,
-    pub(super) opens_after_selector: bool,
+pub(crate) struct BracketFrame {
+    pub(crate) opener_output_column: usize,
+    pub(crate) opener_output_line: usize,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) role: BracketRole,
+    pub(crate) parent_objc_message_align: Option<usize>,
+    pub(crate) opens_after_selector: bool,
 }
 
 impl BracketFrame {
-    pub(super) fn objc_continuation_indent_column(&self) -> Option<usize> {
+    pub(crate) fn objc_continuation_indent_column(&self) -> Option<usize> {
         self.parent_objc_message_align.map(|parent| {
             if self.opens_after_selector {
                 parent + 1
@@ -243,14 +245,14 @@ impl BracketFrame {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct DelimiterFrame {
-    pub(super) role: ParenRole,
-    pub(super) lambda_parameter_list: bool,
-    pub(super) opener_output_column: usize,
-    pub(super) opener_output_line: usize,
-    pub(super) line_indent_spaces: usize,
-    pub(super) continuation_indent_column: Option<usize>,
-    pub(super) call: Option<CallFrame>,
+pub(crate) struct DelimiterFrame {
+    pub(crate) role: ParenRole,
+    pub(crate) lambda_parameter_list: bool,
+    pub(crate) opener_output_column: usize,
+    pub(crate) opener_output_line: usize,
+    pub(crate) line_indent_spaces: usize,
+    pub(crate) continuation_indent_column: Option<usize>,
+    pub(crate) call: Option<CallFrame>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -267,7 +269,7 @@ struct ClosedDelimiterFrame {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct FrameStack {
+pub(crate) struct FrameStack {
     next_id: usize,
     delimiters: Vec<DelimiterEntry>,
     brackets: Vec<BracketFrame>,
@@ -302,14 +304,14 @@ fn shift_column_for_indent(column: usize, old_indent: usize, new_indent: usize) 
 }
 
 impl FrameStack {
-    pub(super) fn push_delimiter(&mut self, frame: DelimiterFrame) -> FrameId {
+    pub(crate) fn push_delimiter(&mut self, frame: DelimiterFrame) -> FrameId {
         let id = FrameId(self.next_id);
         self.next_id += 1;
         self.delimiters.push(DelimiterEntry { id, frame });
         id
     }
 
-    pub(super) fn pop_delimiter(&mut self, current_output_line: usize) {
+    pub(crate) fn pop_delimiter(&mut self, current_output_line: usize) {
         let Some(entry) = self.delimiters.pop() else {
             return;
         };
@@ -337,69 +339,69 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn push_bracket(&mut self, frame: BracketFrame) {
+    pub(crate) fn push_bracket(&mut self, frame: BracketFrame) {
         self.brackets.push(frame);
     }
 
-    pub(super) fn pop_bracket(&mut self) {
+    pub(crate) fn pop_bracket(&mut self) {
         if let Some(frame) = self.brackets.pop() {
             self.line_closed_brackets.push(frame);
         }
     }
 
-    pub(super) fn take_line_closed_brackets(&mut self) -> Vec<BracketFrame> {
+    pub(crate) fn take_line_closed_brackets(&mut self) -> Vec<BracketFrame> {
         std::mem::take(&mut self.line_closed_brackets)
     }
 
-    pub(super) fn active_bracket(&self) -> Option<&BracketFrame> {
+    pub(crate) fn active_bracket(&self) -> Option<&BracketFrame> {
         self.brackets.last()
     }
 
-    pub(super) fn bracket_depth(&self) -> usize {
+    pub(crate) fn bracket_depth(&self) -> usize {
         self.brackets.len()
     }
 
-    pub(super) fn truncate_brackets(&mut self, len: usize) {
+    pub(crate) fn truncate_brackets(&mut self, len: usize) {
         self.brackets.truncate(len);
     }
 
-    pub(super) fn has_objc_alignment_bracket(&self) -> bool {
+    pub(crate) fn has_objc_alignment_bracket(&self) -> bool {
         self.brackets
             .iter()
             .any(|frame| frame.role != BracketRole::Other)
     }
 
-    pub(super) fn active_delimiter(&self) -> Option<&DelimiterFrame> {
+    pub(crate) fn active_delimiter(&self) -> Option<&DelimiterFrame> {
         self.delimiters.last().map(|entry| &entry.frame)
     }
 
-    pub(super) fn active_delimiter_with_id(&self) -> Option<(FrameId, &DelimiterFrame)> {
+    pub(crate) fn active_delimiter_with_id(&self) -> Option<(FrameId, &DelimiterFrame)> {
         self.delimiters.last().map(|entry| (entry.id, &entry.frame))
     }
 
-    pub(super) fn delimiter_by_id(&self, id: FrameId) -> Option<&DelimiterFrame> {
+    pub(crate) fn delimiter_by_id(&self, id: FrameId) -> Option<&DelimiterFrame> {
         self.delimiters
             .iter()
             .find(|entry| entry.id == id)
             .map(|entry| &entry.frame)
     }
 
-    pub(super) fn active_delimiter_mut(&mut self) -> Option<(FrameId, &mut DelimiterFrame)> {
+    pub(crate) fn active_delimiter_mut(&mut self) -> Option<(FrameId, &mut DelimiterFrame)> {
         self.delimiters
             .last_mut()
             .map(|entry| (entry.id, &mut entry.frame))
     }
 
-    pub(super) fn line_closed_delimiter_line_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn line_closed_delimiter_line_indent_spaces(&self) -> Option<usize> {
         self.line_closed_delimiter_line_indent_spaces
     }
 
-    pub(super) fn take_line_closed_delimiter_continuation_indent(&mut self) -> Option<usize> {
+    pub(crate) fn take_line_closed_delimiter_continuation_indent(&mut self) -> Option<usize> {
         self.line_closed_delimiter_line_indent_spaces = None;
         self.line_closed_delimiter_continuation_indent.take()
     }
 
-    pub(super) fn take_line_closed_call_logical_operand_indent(
+    pub(crate) fn take_line_closed_call_logical_operand_indent(
         &mut self,
         output_line: usize,
     ) -> Option<usize> {
@@ -408,7 +410,7 @@ impl FrameStack {
             .and_then(|(line, indent)| (line == output_line).then_some(indent))
     }
 
-    pub(super) fn take_line_closed_lambda_parameter_list(&mut self) -> bool {
+    pub(crate) fn take_line_closed_lambda_parameter_list(&mut self) -> bool {
         std::mem::take(&mut self.line_closed_lambda_parameter_list)
     }
 
@@ -428,13 +430,13 @@ impl FrameStack {
             )
     }
 
-    pub(super) fn delimiter_count_after_output_column(&self, line: usize, column: usize) -> usize {
+    pub(crate) fn delimiter_count_after_output_column(&self, line: usize, column: usize) -> usize {
         self.delimiter_output_positions()
             .filter(|&(frame_line, frame_column)| frame_line == line && frame_column > column)
             .count()
     }
 
-    pub(super) fn last_delimiter_column_after_output_column(
+    pub(crate) fn last_delimiter_column_after_output_column(
         &self,
         line: usize,
         column: usize,
@@ -445,7 +447,7 @@ impl FrameStack {
             .max()
     }
 
-    pub(super) fn first_delimiter_column_after_output_column(
+    pub(crate) fn first_delimiter_column_after_output_column(
         &self,
         line: usize,
         column: usize,
@@ -456,19 +458,19 @@ impl FrameStack {
             .min()
     }
 
-    pub(super) fn last_argument(&self) -> Option<&ArgumentFrame> {
+    pub(crate) fn last_argument(&self) -> Option<&ArgumentFrame> {
         self.last_argument.as_ref()
     }
 
-    pub(super) fn set_last_argument(&mut self, frame: ArgumentFrame) {
+    pub(crate) fn set_last_argument(&mut self, frame: ArgumentFrame) {
         self.last_argument = Some(frame);
     }
 
-    pub(super) fn push_ternary(&mut self, frame: TernaryFrame) {
+    pub(crate) fn push_ternary(&mut self, frame: TernaryFrame) {
         self.ternary_frames.push(frame);
     }
 
-    pub(super) fn active_ternary(&self) -> Option<&TernaryFrame> {
+    pub(crate) fn active_ternary(&self) -> Option<&TernaryFrame> {
         self.ternary_frames
             .iter()
             .rev()
@@ -476,21 +478,21 @@ impl FrameStack {
             .or_else(|| self.ternary_frames.last())
     }
 
-    pub(super) fn active_ternary_mut(&mut self) -> Option<&mut TernaryFrame> {
+    pub(crate) fn active_ternary_mut(&mut self) -> Option<&mut TernaryFrame> {
         self.ternary_frames
             .iter_mut()
             .rev()
             .find(|frame| frame.colon_role.is_none())
     }
 
-    pub(super) fn last_ternary_with_colon(&self) -> Option<&TernaryFrame> {
+    pub(crate) fn last_ternary_with_colon(&self) -> Option<&TernaryFrame> {
         self.ternary_frames
             .iter()
             .rev()
             .find(|frame| frame.colon_role.is_some())
     }
 
-    pub(super) fn mark_last_ternary_colon_output_line(&mut self, line: usize) {
+    pub(crate) fn mark_last_ternary_colon_output_line(&mut self, line: usize) {
         if self
             .ternary_colon_output_lines
             .last()
@@ -500,15 +502,15 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn last_ternary_colon_output_line(&self) -> Option<usize> {
+    pub(crate) fn last_ternary_colon_output_line(&self) -> Option<usize> {
         self.ternary_colon_output_lines.last().copied()
     }
 
-    pub(super) fn has_open_ternary(&self) -> bool {
+    pub(crate) fn has_open_ternary(&self) -> bool {
         !self.ternary_frames.is_empty()
     }
 
-    pub(super) fn mark_line_ended_open_ternary(&mut self, line: usize) {
+    pub(crate) fn mark_line_ended_open_ternary(&mut self, line: usize) {
         if self
             .open_ternary_line_ends
             .last()
@@ -518,11 +520,11 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn line_ended_open_ternary(&self, line: usize) -> bool {
+    pub(crate) fn line_ended_open_ternary(&self, line: usize) -> bool {
         self.open_ternary_line_ends.contains(&line)
     }
 
-    pub(super) fn pop_active_ternary(&mut self) {
+    pub(crate) fn pop_active_ternary(&mut self) {
         if let Some(index) = self
             .ternary_frames
             .iter()
@@ -532,23 +534,23 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn pop_completed_ternaries(&mut self) {
+    pub(crate) fn pop_completed_ternaries(&mut self) {
         self.ternary_frames
             .retain(|frame| frame.colon_role.is_none());
     }
 
-    pub(super) fn push_logical(&mut self, frame: LogicalFrame) {
+    pub(crate) fn push_logical(&mut self, frame: LogicalFrame) {
         self.logical_frames.push(frame);
     }
 
-    pub(super) fn active_logical_on_output_line(&self, line_index: usize) -> Option<&LogicalFrame> {
+    pub(crate) fn active_logical_on_output_line(&self, line_index: usize) -> Option<&LogicalFrame> {
         self.logical_frames
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line == line_index)
     }
 
-    pub(super) fn logical_before_output_line_with_return(
+    pub(crate) fn logical_before_output_line_with_return(
         &self,
         line: usize,
     ) -> Option<&LogicalFrame> {
@@ -558,7 +560,7 @@ impl FrameStack {
             .find(|frame| frame.operator_output_line < line && frame.return_value_column.is_some())
     }
 
-    pub(super) fn mark_logical_line_context(
+    pub(crate) fn mark_logical_line_context(
         &mut self,
         line: usize,
         unmatched_open_paren_column: Option<usize>,
@@ -576,7 +578,7 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn mark_logical_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
+    pub(crate) fn mark_logical_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
         for frame in self
             .logical_frames
             .iter_mut()
@@ -606,47 +608,47 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn clear_logical_frames(&mut self) {
+    pub(crate) fn clear_logical_frames(&mut self) {
         self.logical_frames.clear();
     }
 
-    pub(super) fn push_stream(&mut self, frame: StreamFrame) {
+    pub(crate) fn push_stream(&mut self, frame: StreamFrame) {
         self.stream_frames.push(frame);
     }
 
-    pub(super) fn push_constructor_initializer(&mut self, frame: ConstructorInitializerFrame) {
+    pub(crate) fn push_constructor_initializer(&mut self, frame: ConstructorInitializerFrame) {
         self.constructor_initializer_frame = Some(frame);
     }
 
-    pub(super) fn active_constructor_initializer(&self) -> Option<&ConstructorInitializerFrame> {
+    pub(crate) fn active_constructor_initializer(&self) -> Option<&ConstructorInitializerFrame> {
         self.constructor_initializer_frame.as_ref()
     }
 
-    pub(super) fn push_header(&mut self, frame: HeaderFrame) {
+    pub(crate) fn push_header(&mut self, frame: HeaderFrame) {
         self.header_frame = Some(frame);
     }
 
-    pub(super) fn active_header(&self) -> Option<&HeaderFrame> {
+    pub(crate) fn active_header(&self) -> Option<&HeaderFrame> {
         self.header_frame.as_ref()
     }
 
-    pub(super) fn clear_header(&mut self) {
+    pub(crate) fn clear_header(&mut self) {
         self.header_frame = None;
     }
 
-    pub(super) fn push_braceless_header(&mut self, frame: BracelessHeaderFrame) {
+    pub(crate) fn push_braceless_header(&mut self, frame: BracelessHeaderFrame) {
         self.braceless_header_frames.push(frame);
     }
 
-    pub(super) fn pop_braceless_header(&mut self) {
+    pub(crate) fn pop_braceless_header(&mut self) {
         self.braceless_header_frames.pop();
     }
 
-    pub(super) fn active_braceless_header(&self) -> Option<&BracelessHeaderFrame> {
+    pub(crate) fn active_braceless_header(&self) -> Option<&BracelessHeaderFrame> {
         self.braceless_header_frames.last()
     }
 
-    pub(super) fn take_matching_braceless_else_indent(&mut self) -> Option<usize> {
+    pub(crate) fn take_matching_braceless_else_indent(&mut self) -> Option<usize> {
         let index = self
             .braceless_header_frames
             .iter()
@@ -656,27 +658,27 @@ impl FrameStack {
         Some(indent)
     }
 
-    pub(super) fn push_comment(&mut self, frame: CommentFrame) {
+    pub(crate) fn push_comment(&mut self, frame: CommentFrame) {
         self.comment_frame = Some(frame);
     }
 
-    pub(super) fn active_comment(&self) -> Option<&CommentFrame> {
+    pub(crate) fn active_comment(&self) -> Option<&CommentFrame> {
         self.comment_frame.as_ref()
     }
 
-    pub(super) fn active_comment_mut(&mut self) -> Option<&mut CommentFrame> {
+    pub(crate) fn active_comment_mut(&mut self) -> Option<&mut CommentFrame> {
         self.comment_frame.as_mut()
     }
 
-    pub(super) fn clear_comments(&mut self) {
+    pub(crate) fn clear_comments(&mut self) {
         self.comment_frame = None;
     }
 
-    pub(super) fn set_string_continuation(&mut self, frame: StringContinuationFrame) {
+    pub(crate) fn set_string_continuation(&mut self, frame: StringContinuationFrame) {
         self.string_continuation_frames.push(frame);
     }
 
-    pub(super) fn string_continuation_before_output_line(
+    pub(crate) fn string_continuation_before_output_line(
         &self,
         line: usize,
     ) -> Option<&StringContinuationFrame> {
@@ -686,7 +688,7 @@ impl FrameStack {
             .find(|frame| frame.output_line < line)
     }
 
-    pub(super) fn string_continuation_on_output_line(
+    pub(crate) fn string_continuation_on_output_line(
         &self,
         line: usize,
     ) -> Option<&StringContinuationFrame> {
@@ -696,27 +698,27 @@ impl FrameStack {
             .find(|frame| frame.output_line == line)
     }
 
-    pub(super) fn clear_string_continuations(&mut self) {
+    pub(crate) fn clear_string_continuations(&mut self) {
         self.string_continuation_frames.clear();
         self.clear_closed_delimiters_if_unused();
     }
 
-    pub(super) fn push_declaration(&mut self, frame: DeclarationFrame) {
+    pub(crate) fn push_declaration(&mut self, frame: DeclarationFrame) {
         self.declaration_frames.push(frame);
     }
 
-    pub(super) fn active_declaration_mut(&mut self) -> Option<&mut DeclarationFrame> {
+    pub(crate) fn active_declaration_mut(&mut self) -> Option<&mut DeclarationFrame> {
         self.declaration_frames.last_mut()
     }
 
-    pub(super) fn active_typedef_function_pointer_declaration(&self) -> Option<&DeclarationFrame> {
+    pub(crate) fn active_typedef_function_pointer_declaration(&self) -> Option<&DeclarationFrame> {
         self.declaration_frames
             .iter()
             .rev()
             .find(|frame| frame.pointer_role == PointerRole::FunctionPointer && frame.is_typedef)
     }
 
-    pub(super) fn active_typedef_function_pointer_declaration_mut(
+    pub(crate) fn active_typedef_function_pointer_declaration_mut(
         &mut self,
     ) -> Option<&mut DeclarationFrame> {
         self.declaration_frames
@@ -725,28 +727,28 @@ impl FrameStack {
             .find(|frame| frame.pointer_role == PointerRole::FunctionPointer && frame.is_typedef)
     }
 
-    pub(super) fn clear_declarations(&mut self) {
+    pub(crate) fn clear_declarations(&mut self) {
         self.declaration_frames.clear();
     }
 
-    pub(super) fn active_stream(&self) -> Option<&StreamFrame> {
+    pub(crate) fn active_stream(&self) -> Option<&StreamFrame> {
         self.stream_frames.last()
     }
 
-    pub(super) fn active_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
+    pub(crate) fn active_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
         self.stream_frames
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line == line_index)
     }
 
-    pub(super) fn first_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
+    pub(crate) fn first_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
         self.stream_frames
             .iter()
             .find(|frame| frame.operator_output_line == line_index)
     }
 
-    pub(super) fn mark_stream_line_context(
+    pub(crate) fn mark_stream_line_context(
         &mut self,
         line: usize,
         ends_with_stream_operator: bool,
@@ -768,14 +770,14 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn stream_before_output_line(&self, line: usize) -> Option<&StreamFrame> {
+    pub(crate) fn stream_before_output_line(&self, line: usize) -> Option<&StreamFrame> {
         self.stream_frames
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line < line)
     }
 
-    pub(super) fn stream_before_output_line_with_unmatched_open_paren(
+    pub(crate) fn stream_before_output_line_with_unmatched_open_paren(
         &self,
         line: usize,
     ) -> Option<&StreamFrame> {
@@ -785,7 +787,7 @@ impl FrameStack {
             .find(|frame| frame.operator_output_line < line && frame.line_has_unmatched_open_paren)
     }
 
-    pub(super) fn mark_stream_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
+    pub(crate) fn mark_stream_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
         for frame in self
             .stream_frames
             .iter_mut()
@@ -811,7 +813,7 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn mark_delimiter_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
+    pub(crate) fn mark_delimiter_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
         for entry in &mut self.delimiters {
             let frame = &mut entry.frame;
             if frame.opener_output_line == line {
@@ -858,7 +860,7 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn clear_stream_frames(&mut self) {
+    pub(crate) fn clear_stream_frames(&mut self) {
         self.stream_frames.clear();
         self.clear_closed_delimiters_if_unused();
     }
@@ -869,16 +871,16 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn push_brace(&mut self, frame: BraceFrame) {
+    pub(crate) fn push_brace(&mut self, frame: BraceFrame) {
         self.closed_brace_frames.clear();
         self.brace_frames.push(frame);
     }
 
-    pub(super) fn clear_closed_braces(&mut self) {
+    pub(crate) fn clear_closed_braces(&mut self) {
         self.closed_brace_frames.clear();
     }
 
-    pub(super) fn pop_brace(&mut self) {
+    pub(crate) fn pop_brace(&mut self) {
         let Some(frame) = self.brace_frames.pop() else {
             return;
         };
@@ -889,49 +891,49 @@ impl FrameStack {
     }
 
     #[cfg(test)]
-    pub(super) fn brace_depth(&self) -> usize {
+    pub(crate) fn brace_depth(&self) -> usize {
         self.brace_frames.len()
     }
 
-    pub(super) fn active_brace(&self) -> Option<&BraceFrame> {
+    pub(crate) fn active_brace(&self) -> Option<&BraceFrame> {
         self.brace_frames.last()
     }
 
-    pub(super) fn active_brace_mut(&mut self) -> Option<&mut BraceFrame> {
+    pub(crate) fn active_brace_mut(&mut self) -> Option<&mut BraceFrame> {
         self.brace_frames.last_mut()
     }
 
-    pub(super) fn enclosing_brace(&self) -> Option<&BraceFrame> {
+    pub(crate) fn enclosing_brace(&self) -> Option<&BraceFrame> {
         self.brace_before_top(1)
     }
 
-    pub(super) fn brace_before_top(&self, skip: usize) -> Option<&BraceFrame> {
+    pub(crate) fn brace_before_top(&self, skip: usize) -> Option<&BraceFrame> {
         self.brace_frames
             .len()
             .checked_sub(skip + 1)
             .and_then(|index| self.brace_frames.get(index))
     }
 
-    pub(super) fn first_closed_brace(&self) -> Option<&BraceFrame> {
+    pub(crate) fn first_closed_brace(&self) -> Option<&BraceFrame> {
         self.closed_brace_frames.first()
     }
 
-    pub(super) fn last_closed_brace(&self) -> Option<&BraceFrame> {
+    pub(crate) fn last_closed_brace(&self) -> Option<&BraceFrame> {
         self.closed_brace_frames.last()
     }
 
-    pub(super) fn last_closed_brace_mut(&mut self) -> Option<&mut BraceFrame> {
+    pub(crate) fn last_closed_brace_mut(&mut self) -> Option<&mut BraceFrame> {
         self.closed_brace_frames.last_mut()
     }
 
-    pub(super) fn mark_last_closed_brace_output_position(&mut self, line: usize) {
+    pub(crate) fn mark_last_closed_brace_output_position(&mut self, line: usize) {
         if let Some(frame) = self.last_closed_brace_mut() {
             frame.close_output_line = Some(line);
             frame.close_ends_output_line = false;
         }
     }
 
-    pub(super) fn mark_last_closed_brace_line_end(&mut self, line: usize, ends_with_brace: bool) {
+    pub(crate) fn mark_last_closed_brace_line_end(&mut self, line: usize, ends_with_brace: bool) {
         if let Some(frame) = self.last_closed_brace_mut()
             && frame.close_output_line == Some(line)
         {
@@ -939,7 +941,7 @@ impl FrameStack {
         }
     }
 
-    pub(super) fn enclosing_delimiter(&self) -> Option<&DelimiterFrame> {
+    pub(crate) fn enclosing_delimiter(&self) -> Option<&DelimiterFrame> {
         self.delimiters
             .len()
             .checked_sub(2)
@@ -950,7 +952,7 @@ impl FrameStack {
 
 #[cfg(test)]
 mod tests {
-    use super::super::state::FormatterBraceType;
+    use super::FormatterBraceType;
     use super::*;
 
     fn delimiter_frame() -> DelimiterFrame {

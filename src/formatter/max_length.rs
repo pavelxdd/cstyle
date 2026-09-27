@@ -1,48 +1,52 @@
-use super::brace_classification::is_lambda_capture_header;
-use super::columns::leading_visual_width;
-use super::headers::is_conditional_header_line;
-use super::language::{self, is_non_type_keyword, is_pointer_type_word};
-use super::line_scan::{
+use crate::config::BraceStyle;
+use crate::formatter::FormatEngine;
+use crate::formatter::brace_classification::is_lambda_capture_header;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::headers::is_conditional_header_line;
+use crate::formatter::language::{self, is_non_type_keyword, is_pointer_type_word};
+use crate::formatter::line_scan::{
     inline_brace_pair_range, trailing_comment_split_limit, trailing_comment_start,
     unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use super::operators::head_ends_assignment_operator;
-use super::pointers::is_pointer_declaration_segment;
-use super::syntax::{function_name_start, scoped_name_is_constructor, template_angle_role};
-use super::token::{token_text, tokenize};
-use super::{BraceStyle, ContinuationIndent, FormatEngine, TemplateAngle};
+use crate::formatter::operators::head_ends_assignment_operator;
+use crate::formatter::pointers::is_pointer_declaration_segment;
+use crate::formatter::state::{ContinuationIndent, TemplateAngle};
+use crate::formatter::syntax::{
+    function_name_start, scoped_name_is_constructor, template_angle_role,
+};
+use crate::formatter::token::{token_text, tokenize};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
 #[derive(Default)]
-pub(super) struct MaxLengthLineState {
+pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
     objc_message_indent_spaces: Option<usize>,
 }
 
 impl MaxLengthLineState {
-    pub(super) fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         *self = Self::default();
     }
 
-    pub(super) fn suffix_width(&self) -> usize {
+    pub(crate) fn suffix_width(&self) -> usize {
         self.suffix_width
     }
 
-    pub(super) fn set_suffix_width(&mut self, width: usize) {
+    pub(crate) fn set_suffix_width(&mut self, width: usize) {
         self.suffix_width = width;
     }
 
-    pub(super) fn objc_message_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn objc_message_indent_spaces(&self) -> Option<usize> {
         self.objc_message_indent_spaces
     }
 
-    pub(super) fn set_objc_message_indent_spaces(&mut self, spaces: Option<usize>) {
+    pub(crate) fn set_objc_message_indent_spaces(&mut self, spaces: Option<usize>) {
         self.objc_message_indent_spaces = spaces;
     }
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn push_formatted_line_with_indent(
+    pub(crate) fn push_formatted_line_with_indent(
         &mut self,
         line: &str,
         structural_level: usize,
@@ -219,7 +223,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn maximum_length_using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn maximum_length_using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
         let current = line.trim_start();
         if self.options.max_code_length.is_none()
             || current.is_empty()
@@ -386,7 +390,7 @@ fn line_has_constructor_initializer(line: &str) -> bool {
         && line[close + 1..].trim_start().starts_with(':')
 }
 
-pub(super) fn lambda_parameter_continuation_indent(
+pub(crate) fn lambda_parameter_continuation_indent(
     line: &str,
     base_indent_width: usize,
     indent_width: usize,
@@ -416,7 +420,7 @@ pub(super) fn lambda_parameter_continuation_indent(
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn replayed_lambda_parameter_indent_spaces(
+    pub(crate) fn replayed_lambda_parameter_indent_spaces(
         &self,
         line_closed_lambda_parameter_list: bool,
         break_lambda_parameters: bool,

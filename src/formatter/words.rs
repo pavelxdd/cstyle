@@ -1,22 +1,18 @@
-use super::FormatEngine;
-use super::brace_classification::contains_one_line_block;
-use super::columns::leading_visual_width;
-use super::frame::BracelessHeaderFrame;
-use super::headers::is_attachable_closing_header;
-use super::indentation::LineKind;
-
-use super::line_scan::has_unclosed_delimiter_after;
-use super::line_scan::trailing_comment_split_limit;
-use super::rewrite::is_defer_header;
-use super::state::{FormatterBraceType, PreviousToken};
-use super::switch_cases;
-
-use super::token::Token;
 use crate::config::{BraceStyle, PointerAlign};
+use crate::formatter::brace_classification::contains_one_line_block;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::frame::BracelessHeaderFrame;
+use crate::formatter::headers::is_attachable_closing_header;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{has_unclosed_delimiter_after, trailing_comment_split_limit};
+use crate::formatter::rewrite::is_defer_header;
+use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::token::Token;
+use crate::formatter::{FormatEngine, switch_cases};
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
-    pub(super) fn push_word(&mut self, word: &str, next: Option<&Token>) {
+    pub(crate) fn push_word(&mut self, word: &str, next: Option<&Token>) {
         if self.options.break_one_line_headers
             && !self.one_line_block_mode
             && matches!(word, "else" | "while")
@@ -428,7 +424,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn update_word_state(&mut self, word: &str, next: Option<&Token>) {
+    pub(crate) fn update_word_state(&mut self, word: &str, next: Option<&Token>) {
         match word {
             "extern" if matches!(next, Some(Token::StringLiteral(literal)) if literal == "\"C\"") =>
             {

@@ -1,11 +1,11 @@
-use super::FormatEngine;
-use super::line_scan::trailing_comment_split_limit;
-use super::state::FormatterBraceType;
-use super::token::Token;
 use crate::config::BraceStyle;
+use crate::formatter::FormatEngine;
+use crate::formatter::line_scan::trailing_comment_split_limit;
+use crate::formatter::state::FormatterBraceType;
+use crate::formatter::token::Token;
 
 impl FormatEngine<'_> {
-    pub(super) fn observe_blank_line_context(
+    pub(crate) fn observe_blank_line_context(
         &mut self,
         tokens: &[Token],
         following_index: Option<usize>,
@@ -14,12 +14,12 @@ impl FormatEngine<'_> {
             self.should_preserve_block_spacing_comment_blank(tokens, following_index);
     }
 
-    pub(super) fn should_preserve_input_empty_line(&self) -> bool {
+    pub(crate) fn should_preserve_input_empty_line(&self) -> bool {
         !self.should_delete_input_empty_line()
             || self.should_keep_empty_line_before_attached_definition_brace()
     }
 
-    pub(super) fn push_empty_line(&mut self) {
+    pub(crate) fn push_empty_line(&mut self) {
         self.flush_backslash_body_parts();
         self.clear_macro_interrupted_initializer_frames();
         self.reset_continuation_after_empty_line();

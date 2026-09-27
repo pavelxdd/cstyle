@@ -1,11 +1,11 @@
-use super::FormatEngine;
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::PointerRole;
-use super::labels::is_standard_access_label;
-use super::line_scan::unmatched_open_paren_column;
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::PointerRole;
+use crate::formatter::labels::is_standard_access_label;
+use crate::formatter::line_scan::unmatched_open_paren_column;
 
 impl FormatEngine<'_> {
-    pub(super) fn immediate_typedef_template_indent_spaces(
+    pub(crate) fn immediate_typedef_template_indent_spaces(
         &self,
         current: &str,
         previous: &str,
@@ -22,7 +22,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn typedef_template_context_indent_spaces(&self, current: &str) -> Option<usize> {
+    pub(crate) fn typedef_template_context_indent_spaces(&self, current: &str) -> Option<usize> {
         if current.is_empty() || current.starts_with('#') {
             return None;
         }
@@ -56,7 +56,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn typedef_function_pointer_frame_indent_spaces(
+    pub(crate) fn typedef_function_pointer_frame_indent_spaces(
         &self,
         current: &str,
     ) -> Option<usize> {
@@ -73,7 +73,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn update_typedef_function_pointer_frame(&mut self, line: &str) {
+    pub(crate) fn update_typedef_function_pointer_frame(&mut self, line: &str) {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
         let trimmed = line.trim_start();

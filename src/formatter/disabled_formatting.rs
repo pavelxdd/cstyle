@@ -1,23 +1,22 @@
 //! State carried across a *INDENT-OFF* ... *INDENT-ON* region.
 
-use super::FormatEngine;
-use super::TokenPushContext;
-use super::compound_literals::CompoundLiteralState;
-use super::continuation::ContinuationIndentState;
-use super::frame::FrameStack;
-use super::indentation::IndentationState;
-use super::line_adjust::LineAdjuster;
-use super::literals::LiteralLineState;
-use super::member_spacing::MemberSpacingBoundary;
-use super::objective_c::ObjectiveCLineState;
-use super::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
-use super::state::{
+use crate::formatter::compound_literals::CompoundLiteralState;
+use crate::formatter::continuation::ContinuationIndentState;
+use crate::formatter::frame::FrameStack;
+use crate::formatter::indentation::IndentationState;
+use crate::formatter::line_adjust::LineAdjuster;
+use crate::formatter::literals::LiteralLineState;
+use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::objective_c::ObjectiveCLineState;
+use crate::formatter::preprocessor::{PreprocessorBranchState, PreprocessorSplitElseState};
+use crate::formatter::state::{
     CommandState, FormatterLineState, FormatterStackState, PreviousToken, RunInState,
 };
-use super::switch_cases::SwitchCaseLayoutState;
-use super::syntax::SyntaxRoles;
-use super::template_declarations::TemplateDeclarationState;
-use super::token::Token;
+use crate::formatter::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::syntax::SyntaxRoles;
+use crate::formatter::template_declarations::TemplateDeclarationState;
+use crate::formatter::token::Token;
+use crate::formatter::{FormatEngine, TokenPushContext};
 use std::collections::VecDeque;
 
 /// The subset of engine state that formatting after a disabled region depends on.
@@ -128,12 +127,12 @@ impl DisabledFormattingSnapshot {
 /// Runs the tokens of a disabled region through a shadow engine so the state
 /// after the region reflects its contents; the captured snapshot is what the
 /// main engine resumes from.
-pub(super) struct DisabledFormattingState<'a> {
+pub(crate) struct DisabledFormattingState<'a> {
     shadow: Box<FormatEngine<'a>>,
 }
 
 impl<'a> DisabledFormattingState<'a> {
-    pub(super) fn capture(engine: &FormatEngine<'a>) -> Self {
+    pub(crate) fn capture(engine: &FormatEngine<'a>) -> Self {
         let mut shadow = FormatEngine::new(engine.options);
         DisabledFormattingSnapshot::capture(engine).apply_to(&mut shadow);
         Self {
@@ -141,11 +140,11 @@ impl<'a> DisabledFormattingState<'a> {
         }
     }
 
-    pub(super) fn restore(self, engine: &mut FormatEngine<'a>) {
+    pub(crate) fn restore(self, engine: &mut FormatEngine<'a>) {
         DisabledFormattingSnapshot::capture(&self.shadow).apply_to(engine);
     }
 
-    pub(super) fn push_token(&mut self, token: &Token, context: TokenPushContext<'_>) {
+    pub(crate) fn push_token(&mut self, token: &Token, context: TokenPushContext<'_>) {
         self.shadow.push_token(token, context);
     }
 }

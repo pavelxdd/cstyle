@@ -1,10 +1,7 @@
-use super::{
-    FormatEngine,
-    brace_postprocess::postprocess_brace_style,
-    class_declarations, tabs,
-    token::{Token, tokenize},
-};
 use crate::config::FormatOptions;
+use crate::formatter::brace_postprocess::postprocess_brace_style;
+use crate::formatter::token::{Token, tokenize};
+use crate::formatter::{FormatEngine, class_declarations, tabs};
 use crate::source::line_endings;
 
 pub(crate) fn format_c(source: &str, options: &FormatOptions) -> String {

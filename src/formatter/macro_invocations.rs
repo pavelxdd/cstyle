@@ -1,14 +1,12 @@
-use super::FormatEngine;
-use super::columns;
-use super::headers;
-use super::indentation::LineKind;
-use super::line_scan::has_unclosed_delimiter_after;
-use super::syntax::SyntaxRole;
-use super::token::{Token, token_text};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::has_unclosed_delimiter_after;
+use crate::formatter::syntax::SyntaxRole;
+use crate::formatter::token::{Token, token_text};
+use crate::formatter::{FormatEngine, columns, headers};
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
-    pub(super) fn try_push_raw_standalone_macro_line(
+    pub(crate) fn try_push_raw_standalone_macro_line(
         &mut self,
         tokens: &[Token],
         line_start: usize,
@@ -86,7 +84,7 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(super) fn is_standalone_macro_invocation_line(line: &str) -> bool {
+pub(crate) fn is_standalone_macro_invocation_line(line: &str) -> bool {
     let Some(open) = line.find('(') else {
         return false;
     };

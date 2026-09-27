@@ -1,7 +1,7 @@
-use super::raw_strings;
+use crate::formatter::raw_strings;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct Converter {
+pub(crate) struct Converter {
     enabled: bool,
     in_block_comment: bool,
     quote: Option<char>,
@@ -9,7 +9,7 @@ pub(super) struct Converter {
 }
 
 impl Converter {
-    pub(super) fn new(enabled: bool) -> Self {
+    pub(crate) fn new(enabled: bool) -> Self {
         Self {
             enabled,
             in_block_comment: false,
@@ -18,11 +18,11 @@ impl Converter {
         }
     }
 
-    pub(super) fn set_enabled(&mut self, enabled: bool) {
+    pub(crate) fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
-    pub(super) fn convert(
+    pub(crate) fn convert(
         &mut self,
         line: String,
         tab_width: usize,
@@ -50,7 +50,7 @@ pub(crate) fn source_to_spaces(source: &str, tab_width: usize) -> String {
     to_spaces_stateful(source, tab_width, false, None, false, None).0
 }
 
-pub(super) fn space_indent_to_force_tabs(line: &str, tab_width: usize) -> String {
+pub(crate) fn space_indent_to_force_tabs(line: &str, tab_width: usize) -> String {
     let tab_width = tab_width.max(1);
     let whitespace = leading_whitespace_len(line);
     let tab_count = whitespace / tab_width;
@@ -58,7 +58,7 @@ pub(super) fn space_indent_to_force_tabs(line: &str, tab_width: usize) -> String
     format!("{}{}", "\t".repeat(tab_count), &line[replace_len..])
 }
 
-pub(super) fn force_tab_indent_to_spaces(line: &str, tab_width: usize) -> String {
+pub(crate) fn force_tab_indent_to_spaces(line: &str, tab_width: usize) -> String {
     let tab_width = tab_width.max(1);
     let mut output = String::new();
     let mut chars = line.chars().peekable();

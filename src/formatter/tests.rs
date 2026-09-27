@@ -1,13 +1,13 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use super::frame::BraceSemanticKind;
-use super::indentation::LineKind;
-use super::state::FormatterBraceType;
-use super::state::InlineArrayFrame;
-use super::syntax::OperatorRole;
-use super::token::{Token, tokenize};
-use super::{FormatEngine, format_c};
 use crate::config::{BraceStyle, FormatOptions, PointerAlign};
+use crate::formatter::FormatEngine;
+use crate::formatter::entry::format_c;
+use crate::formatter::frame::BraceSemanticKind;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::state::{FormatterBraceType, InlineArrayFrame};
+use crate::formatter::syntax::OperatorRole;
+use crate::formatter::token::{Token, tokenize};
 
 fn fixture(lines: &[&str]) -> String {
     lines.join("\n") + "\n"

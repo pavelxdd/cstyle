@@ -1,7 +1,7 @@
-use super::FormatEngine;
-use super::columns::leading_visual_width;
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::leading_visual_width;
 
-pub(super) struct BackslashBodyState {
+pub(crate) struct BackslashBodyState {
     may_have_input: bool,
     parts: Option<(Vec<String>, usize)>,
 }
@@ -16,11 +16,11 @@ impl Default for BackslashBodyState {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn set_may_have_backslash_body(&mut self, may_have_input: bool) {
+    pub(crate) fn set_may_have_backslash_body(&mut self, may_have_input: bool) {
         self.backslash_body.may_have_input = may_have_input;
     }
 
-    pub(super) fn try_emit_backslash_body(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_backslash_body(&mut self, line: &str) -> bool {
         if !self.backslash_body.may_have_input && self.backslash_body.parts.is_none() {
             return false;
         }
@@ -95,7 +95,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn flush_backslash_body_parts(&mut self) {
+    pub(crate) fn flush_backslash_body_parts(&mut self) {
         if let Some((parts, indent)) = self.backslash_body.parts.take() {
             self.push_output_line_spaces(&format!("{{ {} }}", parts.join(" ")), 0, indent);
         }

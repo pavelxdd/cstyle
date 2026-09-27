@@ -1,10 +1,40 @@
-use self::indentation::{IndentationState, LineKind};
-use self::language::{
-    is_macro_like_word, is_numeric_variable_word, is_pointer_type_word, is_type_like_pointer_word,
+use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::backslash_bodies::BackslashBodyState;
+use crate::formatter::block_spacing::BlockSpacingState;
+use crate::formatter::class_declarations::is_split_export_head;
+use crate::formatter::comments::trailing_comment_columns;
+use crate::formatter::current_line::CurrentLine;
+use crate::formatter::disabled_formatting::DisabledFormattingState;
+use crate::formatter::frame::FrameStack;
+use crate::formatter::indentation::{IndentationState, LineKind};
+use crate::formatter::language::{is_numeric_variable_word, is_type_like_pointer_word};
+use crate::formatter::line_scan::{
+    line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
-use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
+use crate::formatter::max_length::MaxLengthLineState;
+use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::preprocessor::preprocessor_block_indentability;
+use crate::formatter::rewrite::{
+    add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
+    remove_cross_line_statement_braces,
+};
+use crate::formatter::source_indent::source_indented_macro_row;
+use crate::formatter::state::{
+    CommandState, ContinuationIndent, FormatterLineState, FormatterStackState, InlineArrayState,
+    PreviousToken, RunInState, TemplateAngle, TokenInputState,
+};
+use crate::formatter::swig::SwigState;
+use crate::formatter::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::syntax::{OperatorRole, SyntaxRoles, classify_syntax, template_angle_role};
+use crate::formatter::template_declarations::TemplateDeclarationState;
+use crate::formatter::token::{
+    CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
+    next_non_whitespace, token_char_len, token_text,
+};
+use crate::source::lex::{is_identifier_continue, trailing_word};
+pub(crate) use entry::format_c;
 use std::collections::HashSet;
+
 mod assembly;
 mod backslash_bodies;
 mod blank_lines;
@@ -59,46 +89,6 @@ mod template_declarations;
 mod token;
 mod typedefs;
 mod words;
-
-use backslash_bodies::BackslashBodyState;
-use block_spacing::BlockSpacingState;
-
-use class_declarations::is_split_export_head;
-
-use comments::trailing_comment_columns;
-use current_line::CurrentLine;
-use disabled_formatting::DisabledFormattingState;
-use frame::FrameStack;
-
-use line_scan::{
-    line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
-};
-
-use max_length::MaxLengthLineState;
-use member_spacing::MemberSpacingBoundary;
-
-use preprocessor::preprocessor_block_indentability;
-use rewrite::{
-    add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
-    remove_cross_line_statement_braces,
-};
-use source_indent::source_indented_macro_row;
-use state::{
-    CommandState, ContinuationIndent, FormatterLineState, FormatterStackState, InlineArrayFrame,
-    InlineArrayState, PreviousToken, RunInState, TemplateAngle, TokenInputState,
-};
-use swig::SwigState;
-use switch_cases::SwitchCaseLayoutState;
-
-use syntax::{OperatorRole, SyntaxRoles, classify_syntax, template_angle_role};
-
-use template_declarations::TemplateDeclarationState;
-use token::{
-    CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
-    next_non_whitespace, token_char_len, token_text,
-};
-
-pub(crate) use entry::format_c;
 
 #[derive(Clone, Copy)]
 struct TokenPushContext<'a> {

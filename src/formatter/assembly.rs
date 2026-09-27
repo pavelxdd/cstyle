@@ -1,9 +1,11 @@
-pub(super) fn is_asm_block_header(word: &str) -> bool {
+use crate::formatter::FormatEngine;
+
+pub(crate) fn is_asm_block_header(word: &str) -> bool {
     matches!(word, "_asm" | "__asm")
 }
 
 #[derive(Default)]
-pub(super) struct AssemblyMacroLines {
+pub(crate) struct AssemblyMacroLines {
     active: bool,
     preserve_leading: bool,
     after_preprocessor: bool,
@@ -11,7 +13,7 @@ pub(super) struct AssemblyMacroLines {
 }
 
 impl AssemblyMacroLines {
-    pub(super) fn take_raw_line(&mut self, line: &str) -> Option<String> {
+    pub(crate) fn take_raw_line(&mut self, line: &str) -> Option<String> {
         let trimmed = line.trim_start();
         if self.active && trimmed.starts_with('#') {
             self.after_preprocessor = true;
@@ -41,7 +43,7 @@ impl AssemblyMacroLines {
         Some(output)
     }
 
-    pub(super) fn observe_preprocessor(&mut self) {
+    pub(crate) fn observe_preprocessor(&mut self) {
         if self.active {
             self.after_preprocessor = true;
         }
@@ -90,7 +92,7 @@ fn format_macro_line(
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn is_in_asm_operator_context(&self) -> bool {
+    pub(crate) fn is_in_asm_operator_context(&self) -> bool {
         let current = self.current.trim_start();
         ((current.starts_with("asm(") || current.starts_with("__asm__("))
             && self.stack_state.paren_depth > 0)
@@ -98,4 +100,3 @@ impl FormatEngine<'_> {
             || current.starts_with("__asm ")
     }
 }
-use super::FormatEngine;

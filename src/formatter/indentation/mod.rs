@@ -1,5 +1,5 @@
-use self::stack::PersistentStack;
 use crate::config::FormatOptions;
+use crate::formatter::indentation::stack::PersistentStack;
 
 mod stack;
 

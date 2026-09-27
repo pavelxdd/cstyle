@@ -1,43 +1,39 @@
-use super::super::super::FormatEngine;
-use super::super::super::brace_classification::line_opens_lambda_block;
-use super::super::super::call_arguments::{
+use crate::config::{BraceStyle, IndentStyle};
+use crate::formatter::brace_classification::line_opens_lambda_block;
+use crate::formatter::call_arguments::{
     assignment_call_value_column, casted_assignment_value_column,
 };
-use super::super::super::closing_braces::starts_post_closing_declaration;
-use super::super::super::columns::{leading_visual_width, visual_width_from};
-use super::super::super::frame::BraceSemanticKind;
-use super::super::super::headers::{
+use crate::formatter::closing_braces::starts_post_closing_declaration;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::BraceSemanticKind;
+use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, same_line_nested_header_extra,
     starts_header_word,
 };
-use super::super::super::indentation::LineKind;
-use super::super::super::labels;
-
-use super::super::super::language::is_macro_like_word;
-use super::super::super::line_scan::is_comment_line;
-use super::super::super::line_scan::{
-    has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,
+use crate::formatter::indentation::LineKind;
+use crate::formatter::language::is_macro_like_word;
+use crate::formatter::line_scan::{
+    has_unmatched_open_brace, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use super::super::super::literals::{first_string_literal_start, starts_string_literal_token};
-use super::super::super::objective_c::objc_message_following_keyword_column;
-use super::super::super::operators::{
+use crate::formatter::literals::{first_string_literal_start, starts_string_literal_token};
+use crate::formatter::objective_c::objc_message_following_keyword_column;
+use crate::formatter::operators::{
     head_ends_binary_operator, is_prefix_increment_statement, starts_prefix_increment,
     starts_with_chain_operator,
 };
-use super::super::super::preprocessor::preprocessor_directive;
-use super::super::super::state::FormatterBraceType;
-use super::super::super::switch_cases::case_label_with_trailing_comment;
-use super::super::super::template_declarations::{
+use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
+use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::state::FormatterBraceType;
+use crate::formatter::switch_cases::case_label_with_trailing_comment;
+use crate::formatter::template_declarations::{
     template_continuation_indent_spaces, template_declaration_line_complete,
 };
-use super::super::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
-use crate::config::{BraceStyle, IndentStyle};
-use crate::source::lex::leading_identifier;
-use crate::source::lex::{is_identifier_continue, is_identifier_start};
+use crate::formatter::{FormatEngine, labels};
+use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn begin_contextual_line_layout(
+    pub(crate) fn begin_contextual_line_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,
@@ -237,7 +233,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_previous_output_call_and_initializer_layout(
+    pub(crate) fn apply_previous_output_call_and_initializer_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -424,7 +420,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_source_indent_brace_and_style_operator_layout(
+    pub(crate) fn apply_source_indent_brace_and_style_operator_layout(
         &mut self,
         line: &str,
         case_unindent_closing_line: bool,
@@ -614,7 +610,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_previous_statement_and_operator_prefix_layout(
+    pub(crate) fn apply_previous_statement_and_operator_prefix_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -765,7 +761,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_label_else_and_conditional_contextual_layout(
+    pub(crate) fn apply_label_else_and_conditional_contextual_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -994,7 +990,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_none_style_else_and_conditional_body_layout(
+    pub(crate) fn apply_none_style_else_and_conditional_body_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -1347,7 +1343,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_normal_literal_comma_and_split_else_entry_layout(
+    pub(crate) fn apply_normal_literal_comma_and_split_else_entry_layout(
         &mut self,
         line: &str,
         replay: &LineReplayLayout,
@@ -1498,7 +1494,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_none_style_split_else_body_and_closing_layout(
+    pub(crate) fn apply_none_style_split_else_body_and_closing_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -1624,7 +1620,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_emitted_split_else_call_initializer_and_ternary_layout(
+    pub(crate) fn apply_emitted_split_else_call_initializer_and_ternary_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -1800,7 +1796,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_header_label_and_switch_contextual_layout(
+    pub(crate) fn apply_header_label_and_switch_contextual_layout(
         &mut self,
         line: &str,
         replay: &LineReplayLayout,
@@ -2079,7 +2075,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_structural_split_else_body_contextual_layout(
+    pub(crate) fn apply_structural_split_else_body_contextual_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -2181,7 +2177,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_string_call_and_emitted_split_else_case_layout(
+    pub(crate) fn apply_string_call_and_emitted_split_else_case_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -2405,7 +2401,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_macro_case_brace_and_return_contextual_layout(
+    pub(crate) fn apply_macro_case_brace_and_return_contextual_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -2559,7 +2555,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_conditional_literal_paren_and_else_layout(
+    pub(crate) fn apply_conditional_literal_paren_and_else_layout(
         &mut self,
         line: &str,
         replay: &LineReplayLayout,
@@ -2717,7 +2713,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_call_initializer_and_case_control_contextual_layout(
+    pub(crate) fn apply_call_initializer_and_case_control_contextual_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -3101,7 +3097,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_final_sibling_and_directive_contextual_layout(
+    pub(crate) fn apply_final_sibling_and_directive_contextual_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,
@@ -3116,7 +3112,7 @@ impl FormatEngine<'_> {
         contextual
     }
 
-    pub(in super::super) fn apply_preprocessor_and_split_else_recovery_layout(
+    pub(crate) fn apply_preprocessor_and_split_else_recovery_layout(
         &mut self,
         line: &str,
         mut contextual: ContextualLineLayout,

@@ -1,8 +1,8 @@
-use super::language::{
+use crate::formatter::language::{
     self, is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
-use super::state::TemplateAngle;
-use super::token::{
+use crate::formatter::state::TemplateAngle;
+use crate::formatter::token::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
 };
 use crate::source::lex::{
@@ -11,14 +11,14 @@ use crate::source::lex::{
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum OperatorRole {
+pub(crate) enum OperatorRole {
     Unknown,
     PointerDeclarator,
     BinaryOperator,
     UnaryOperator,
 }
 
-pub(super) fn signature_ends_with_parameter_list(line: &str) -> bool {
+pub(crate) fn signature_ends_with_parameter_list(line: &str) -> bool {
     let mut rest = line.trim_end();
     loop {
         if rest.ends_with(')') {
@@ -40,7 +40,7 @@ pub(super) fn signature_ends_with_parameter_list(line: &str) -> bool {
     }
 }
 
-pub(super) fn function_name_start(before_open_paren: &str) -> Option<usize> {
+pub(crate) fn function_name_start(before_open_paren: &str) -> Option<usize> {
     let end = before_open_paren.trim_end().len();
     let head = &before_open_paren[..end];
     let bytes = head.as_bytes();
@@ -74,7 +74,7 @@ pub(super) fn function_name_start(before_open_paren: &str) -> Option<usize> {
     (start < end).then_some(start)
 }
 
-pub(super) fn function_head_has_assignment(before: &str) -> bool {
+pub(crate) fn function_head_has_assignment(before: &str) -> bool {
     let limit = operator_function_name_start(before).unwrap_or(before.len());
     before[..limit].contains('=')
 }
@@ -96,14 +96,14 @@ fn operator_function_name_start(before_open_paren: &str) -> Option<usize> {
     .then_some(start)
 }
 
-pub(super) fn first_operator_word(after_operator: &str) -> Option<&str> {
+pub(crate) fn first_operator_word(after_operator: &str) -> Option<&str> {
     after_operator
         .split(|ch: char| !(ch == '_' || ch.is_ascii_alphanumeric()))
         .next()
         .filter(|word| !word.is_empty())
 }
 
-pub(super) fn is_named_operator_word(word: &str) -> bool {
+pub(crate) fn is_named_operator_word(word: &str) -> bool {
     matches!(
         word,
         "new"
@@ -124,7 +124,7 @@ pub(super) fn is_named_operator_word(word: &str) -> bool {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum SyntaxRole {
+pub(crate) enum SyntaxRole {
     Unknown,
     FunctionDeclarator,
     StandaloneMacroInvocation,
@@ -132,12 +132,12 @@ pub(super) enum SyntaxRole {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct SyntaxRoles {
+pub(crate) struct SyntaxRoles {
     token_roles: Vec<SyntaxRole>,
     inside_parenthesized_expression: Vec<bool>,
 }
 
-pub(super) fn template_angle_role(
+pub(crate) fn template_angle_role(
     tokens: &[Token],
     index: usize,
     end: usize,
@@ -216,7 +216,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
     false
 }
 
-pub(super) fn scoped_name_is_constructor(name: &str) -> bool {
+pub(crate) fn scoped_name_is_constructor(name: &str) -> bool {
     let mut parts = name
         .rsplit("::")
         .map(str::trim)
@@ -231,7 +231,7 @@ pub(super) fn scoped_name_is_constructor(name: &str) -> bool {
     last == parent
 }
 
-pub(super) fn assignment_declarator_offset(line: &str) -> Option<usize> {
+pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
     if !line.contains('=') {
         return None;
     }
@@ -307,7 +307,7 @@ pub(super) fn assignment_declarator_offset(line: &str) -> Option<usize> {
     Some(declarator)
 }
 
-pub(super) fn access_modified_brace_indices(tokens: &[Token]) -> HashSet<usize> {
+pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> HashSet<usize> {
     let mut indices = HashSet::new();
     let mut stack: Vec<(usize, usize)> = Vec::new();
     let mut modifier_count = 0usize;
@@ -330,7 +330,7 @@ pub(super) fn access_modified_brace_indices(tokens: &[Token]) -> HashSet<usize> 
     indices
 }
 
-pub(super) fn nested_brace_array_indices(tokens: &[Token]) -> HashSet<usize> {
+pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> HashSet<usize> {
     let mut indices = HashSet::new();
     let mut stack: Vec<usize> = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
@@ -350,7 +350,7 @@ pub(super) fn nested_brace_array_indices(tokens: &[Token]) -> HashSet<usize> {
     indices
 }
 
-pub(super) fn classify_syntax(tokens: &[Token]) -> SyntaxRoles {
+pub(crate) fn classify_syntax(tokens: &[Token]) -> SyntaxRoles {
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
@@ -884,21 +884,21 @@ fn previous_token_skipping_layout(tokens: &[Token], before: usize) -> Option<usi
 }
 
 impl SyntaxRoles {
-    pub(super) fn new(token_count: usize) -> Self {
+    pub(crate) fn new(token_count: usize) -> Self {
         Self {
             token_roles: vec![SyntaxRole::Unknown; token_count],
             inside_parenthesized_expression: vec![false; token_count],
         }
     }
 
-    pub(super) fn role_at(&self, index: usize) -> SyntaxRole {
+    pub(crate) fn role_at(&self, index: usize) -> SyntaxRole {
         self.token_roles
             .get(index)
             .copied()
             .unwrap_or(SyntaxRole::Unknown)
     }
 
-    pub(super) fn operator_role_at(&self, index: usize) -> OperatorRole {
+    pub(crate) fn operator_role_at(&self, index: usize) -> OperatorRole {
         match self.role_at(index) {
             SyntaxRole::Operator(role) => role,
             _ => OperatorRole::Unknown,

@@ -1,26 +1,27 @@
-use super::super::columns::leading_visual_width;
-use super::super::frame::BraceSemanticKind;
-use super::super::headers::{
+use crate::config::{BraceStyle, IndentStyle};
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::frame::BraceSemanticKind;
+use crate::formatter::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
-use super::super::indentation::LineKind;
-use super::super::line_scan::{
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{
     is_comment_line, is_comment_only_line, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
-use super::super::literals::starts_string_literal_token;
-use super::super::operators::starts_with_chain_operator;
-use super::super::{FormatEngine, unmatched_open_paren_column};
-use super::{is_conditional_preprocessor, preprocessor_directive};
-use crate::config::{BraceStyle, IndentStyle};
+use crate::formatter::literals::starts_string_literal_token;
+use crate::formatter::operators::starts_with_chain_operator;
+use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
 use crate::source::lex::is_identifier_start;
 
-pub(in crate::formatter) struct SplitElseLineStart {
+pub(crate) struct SplitElseLineStart {
     extra_levels: usize,
     trigger_is_current_output: bool,
     extra_indent_active: bool,
 }
 
-pub(in crate::formatter) struct StructuralSplitElseBodyContext {
+pub(crate) struct StructuralSplitElseBodyContext {
     structural_chain: bool,
     body_indent_spaces: usize,
     split_else_chain: bool,
@@ -31,52 +32,52 @@ pub(in crate::formatter) struct StructuralSplitElseBodyContext {
     case_unindent_spaces: usize,
 }
 
-pub(in crate::formatter) struct RecentSplitElseChainContext {
+pub(crate) struct RecentSplitElseChainContext {
     chain_active: bool,
     interrupted_header_active: bool,
 }
 
-pub(in crate::formatter) struct SplitElsePreprocessorContext {
+pub(crate) struct SplitElsePreprocessorContext {
     emitted_region_active: bool,
     layout_active: bool,
 }
 
 impl StructuralSplitElseBodyContext {
-    pub(in crate::formatter) fn structural_chain(&self) -> bool {
+    pub(crate) fn structural_chain(&self) -> bool {
         self.structural_chain
     }
 
-    pub(in crate::formatter) fn body_indent_spaces(&self) -> usize {
+    pub(crate) fn body_indent_spaces(&self) -> usize {
         self.body_indent_spaces
     }
 }
 
 impl RecentSplitElseChainContext {
-    pub(in crate::formatter) fn chain_active(&self) -> bool {
+    pub(crate) fn chain_active(&self) -> bool {
         self.chain_active
     }
 
-    pub(in crate::formatter) fn interrupted_header_active(&self) -> bool {
+    pub(crate) fn interrupted_header_active(&self) -> bool {
         self.interrupted_header_active
     }
 }
 
 impl SplitElsePreprocessorContext {
-    pub(in crate::formatter) fn emitted_region_active(&self) -> bool {
+    pub(crate) fn emitted_region_active(&self) -> bool {
         self.emitted_region_active
     }
 
-    pub(in crate::formatter) fn layout_active(&self) -> bool {
+    pub(crate) fn layout_active(&self) -> bool {
         self.layout_active
     }
 }
 
 impl SplitElseLineStart {
-    pub(in crate::formatter) fn extra_levels(&self) -> usize {
+    pub(crate) fn extra_levels(&self) -> usize {
         self.extra_levels
     }
 
-    pub(in crate::formatter) fn adjust_brace_level(&self, level: usize) -> usize {
+    pub(crate) fn adjust_brace_level(&self, level: usize) -> usize {
         if self.trigger_is_current_output && self.extra_indent_active {
             level + self.extra_levels.saturating_sub(1)
         } else {
@@ -84,11 +85,7 @@ impl SplitElseLineStart {
         }
     }
 
-    pub(in crate::formatter) fn adjust_pending_level(
-        &self,
-        level: usize,
-        included_base_indent: usize,
-    ) -> usize {
+    pub(crate) fn adjust_pending_level(&self, level: usize, included_base_indent: usize) -> usize {
         let included_extra = level
             .saturating_sub(included_base_indent)
             .min(self.extra_levels);
@@ -101,7 +98,7 @@ impl SplitElseLineStart {
     }
 }
 
-pub(in crate::formatter) fn embedded_branch_separator(code: &str) -> bool {
+pub(crate) fn embedded_branch_separator(code: &str) -> bool {
     let trimmed = code.trim_start();
     if trimmed.starts_with('#') || code.contains("#if") {
         return false;
@@ -113,7 +110,7 @@ pub(in crate::formatter) fn embedded_branch_separator(code: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(in crate::formatter) fn normalize_ready_preprocessor_line(&self, line: String) -> String {
+    pub(crate) fn normalize_ready_preprocessor_line(&self, line: String) -> String {
         if !self.preprocessor.may_have_preprocessor {
             return line;
         }
@@ -131,27 +128,27 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn split_else_body_indent_active(&self) -> bool {
+    pub(crate) fn split_else_body_indent_active(&self) -> bool {
         self.preprocessor.split_else.extra_indent
     }
 
-    pub(in crate::formatter) fn split_else_braceless_body_active(&self) -> bool {
+    pub(crate) fn split_else_braceless_body_active(&self) -> bool {
         self.preprocessor.split_else.extra_indent && self.preprocessor.split_else.body_braceless
     }
 
-    pub(in crate::formatter) fn split_else_line_layout_active(&self) -> bool {
+    pub(crate) fn split_else_line_layout_active(&self) -> bool {
         self.preprocessor_split_else_active()
             || self.preprocessor.split_else.trigger_output_len.is_some()
     }
 
-    pub(in crate::formatter) fn clear_split_else_closing_state_on_empty_line(&mut self) {
+    pub(crate) fn clear_split_else_closing_state_on_empty_line(&mut self) {
         if self.preprocessor.split_else.extra_levels == 0 {
             self.preprocessor.split_else.clear_pending_after_brace = false;
             self.preprocessor.split_else.closing_brace_has_else = false;
         }
     }
 
-    pub(in crate::formatter) fn take_split_else_comment_body_indent_spaces(
+    pub(crate) fn take_split_else_comment_body_indent_spaces(
         &mut self,
         line: &str,
     ) -> Option<usize> {
@@ -174,7 +171,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn record_split_else_comment_body_indent(
+    pub(crate) fn record_split_else_comment_body_indent(
         &mut self,
         line: &str,
         output_spaces: usize,
@@ -187,7 +184,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn nonconditional_directive_sibling_indent_spaces(
+    pub(crate) fn nonconditional_directive_sibling_indent_spaces(
         &self,
         line: &str,
         normal_indent: usize,
@@ -216,7 +213,7 @@ impl FormatEngine<'_> {
         Some(normal_indent * self.options.indent_width)
     }
 
-    pub(in crate::formatter) fn none_style_split_else_blank_gap_sibling_indent_spaces(
+    pub(crate) fn none_style_split_else_blank_gap_sibling_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -267,7 +264,7 @@ impl FormatEngine<'_> {
         spaces
     }
 
-    pub(in crate::formatter) fn none_style_split_else_body_indent_floor(
+    pub(crate) fn none_style_split_else_body_indent_floor(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -341,7 +338,7 @@ impl FormatEngine<'_> {
         (current_spaces < spaces).then_some(spaces)
     }
 
-    pub(in crate::formatter) fn structural_split_else_body_context(
+    pub(crate) fn structural_split_else_body_context(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -418,7 +415,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(in crate::formatter) fn structural_split_else_ordinary_row_indent_spaces(
+    pub(crate) fn structural_split_else_ordinary_row_indent_spaces(
         &self,
         line: &str,
         current_spaces: usize,
@@ -504,7 +501,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in crate::formatter) fn structural_split_else_trailing_body_indent_spaces(
+    pub(crate) fn structural_split_else_trailing_body_indent_spaces(
         &self,
         current_spaces: usize,
         context: &StructuralSplitElseBodyContext,
@@ -518,7 +515,7 @@ impl FormatEngine<'_> {
             .then_some(context.body_indent_spaces)
     }
 
-    pub(in crate::formatter) fn split_else_branch_body_indent_override(
+    pub(crate) fn split_else_branch_body_indent_override(
         &self,
         current_spaces: usize,
     ) -> Option<usize> {
@@ -531,7 +528,7 @@ impl FormatEngine<'_> {
         .then_some(spaces)
     }
 
-    pub(in crate::formatter) fn split_else_reduced_indent_spaces(
+    pub(crate) fn split_else_reduced_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -580,9 +577,7 @@ impl FormatEngine<'_> {
         Some(spaces.saturating_sub(self.options.indent_width))
     }
 
-    pub(in crate::formatter) fn embedded_preprocessor_branch_body_base_spaces(
-        &self,
-    ) -> Option<usize> {
+    pub(crate) fn embedded_preprocessor_branch_body_base_spaces(&self) -> Option<usize> {
         for index in (0..self.output.len()).rev().take(8) {
             let line = &self.output[index];
             let code = self.output.code(index);
@@ -602,7 +597,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in crate::formatter) fn restored_preprocessor_branch_body_indent_spaces(
+    pub(crate) fn restored_preprocessor_branch_body_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -616,7 +611,7 @@ impl FormatEngine<'_> {
         })?
     }
 
-    pub(in crate::formatter) fn record_preprocessor_branch_body_indent(
+    pub(crate) fn record_preprocessor_branch_body_indent(
         &mut self,
         line: &str,
         emitted_indent_spaces: usize,
@@ -632,7 +627,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn prepare_split_else_line_start(
+    pub(crate) fn prepare_split_else_line_start(
         &mut self,
         line: &str,
         line_kind: LineKind,
@@ -660,7 +655,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn clear_preprocessor_split_else_indent(&mut self) {
+    pub(crate) fn clear_preprocessor_split_else_indent(&mut self) {
         if self
             .frame_stack
             .active_header()
@@ -671,11 +666,7 @@ impl FormatEngine<'_> {
         self.preprocessor.split_else.reset();
     }
 
-    pub(in crate::formatter) fn update_preprocessor_split_else_state(
-        &mut self,
-        line: &str,
-        line_kind: LineKind,
-    ) {
+    pub(crate) fn update_preprocessor_split_else_state(&mut self, line: &str, line_kind: LineKind) {
         if line_kind != LineKind::Normal {
             return;
         }
@@ -736,39 +727,39 @@ impl FormatEngine<'_> {
             .any(|index| self.output.code_trimmed(index).starts_with('#'))
     }
 
-    pub(in crate::formatter) fn commented_split_else_preprocessor_region_active(&self) -> bool {
+    pub(crate) fn commented_split_else_preprocessor_region_active(&self) -> bool {
         self.recent_output_has_split_else(64)
             && self.recent_split_else_region_has_preprocessor(64)
             && self.recent_split_else_region_has_block_comment(64)
     }
 
-    pub(in crate::formatter) fn recent_split_else_preprocessor_region_active(&self) -> bool {
+    pub(crate) fn recent_split_else_preprocessor_region_active(&self) -> bool {
         self.recent_output_has_split_else(128)
             && self.recent_split_else_region_has_preprocessor(256)
     }
 
-    pub(in crate::formatter) fn recent_split_else_output_chain_active(&self) -> bool {
+    pub(crate) fn recent_split_else_output_chain_active(&self) -> bool {
         self.recent_output_has_split_else(128)
     }
 
-    pub(in crate::formatter) fn recent_split_else_operator_region_active(&self) -> bool {
+    pub(crate) fn recent_split_else_operator_region_active(&self) -> bool {
         self.recent_output_has_split_else(128)
             && self.recent_split_else_region_has_preprocessor(128)
     }
 
-    pub(in crate::formatter) fn recent_split_else_logical_statement_region_active(&self) -> bool {
+    pub(crate) fn recent_split_else_logical_statement_region_active(&self) -> bool {
         self.recent_output_has_split_else(256) && self.recent_output_has_preprocessor(256)
     }
 
-    pub(in crate::formatter) fn recent_split_else_call_region_active(&self) -> bool {
+    pub(crate) fn recent_split_else_call_region_active(&self) -> bool {
         self.recent_output_has_split_else(128) && self.recent_output_has_preprocessor(256)
     }
 
-    pub(in crate::formatter) fn recent_split_else_closing_context_active(&self) -> bool {
+    pub(crate) fn recent_split_else_closing_context_active(&self) -> bool {
         self.recent_output_has_split_else(256)
     }
 
-    pub(in crate::formatter) fn split_else_preprocessor_context(
+    pub(crate) fn split_else_preprocessor_context(
         &self,
         line_start_active: bool,
     ) -> SplitElsePreprocessorContext {
@@ -781,7 +772,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn recent_split_else_chain_context(
+    pub(crate) fn recent_split_else_chain_context(
         &self,
         line_start_active: bool,
     ) -> RecentSplitElseChainContext {
@@ -878,9 +869,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(in crate::formatter) fn split_else_preprocessor_branch_body_indent_spaces(
-        &self,
-    ) -> Option<usize> {
+    pub(crate) fn split_else_preprocessor_branch_body_indent_spaces(&self) -> Option<usize> {
         let active_split_else = self.preprocessor.split_else.extra_indent
             || self.preprocessor.split_else.pending_body
             || self.preprocessor_split_else_active();
@@ -1041,7 +1030,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in crate::formatter) fn split_else_branch_opening_brace_indent_spaces(
+    pub(crate) fn split_else_branch_opening_brace_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -1078,7 +1067,7 @@ impl FormatEngine<'_> {
         Some(branch_body_spaces.max(nearest_body_spaces))
     }
 
-    pub(in crate::formatter) fn split_else_exact_tab_indent_level(
+    pub(crate) fn split_else_exact_tab_indent_level(
         &self,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1091,11 +1080,7 @@ impl FormatEngine<'_> {
             .then_some(spaces / indent_width)
     }
 
-    pub(in crate::formatter) fn observe_split_else_body_closing(
-        &mut self,
-        line: &str,
-        output_spaces: usize,
-    ) {
+    pub(crate) fn observe_split_else_body_closing(&mut self, line: &str, output_spaces: usize) {
         if !self.preprocessor.split_else.extra_indent {
             return;
         }
@@ -1125,7 +1110,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in crate::formatter) fn split_else_local_type_body_indent_spaces(
+    pub(crate) fn split_else_local_type_body_indent_spaces(
         &self,
         line: &str,
         split_else_context: bool,
@@ -1156,7 +1141,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in crate::formatter) fn split_else_post_local_type_statement_indent_spaces(
+    pub(crate) fn split_else_post_local_type_statement_indent_spaces(
         &self,
         previous_spaces: usize,
     ) -> Option<usize> {
@@ -1172,7 +1157,7 @@ impl FormatEngine<'_> {
         (inside_local_struct || after_local_struct).then_some(previous_spaces)
     }
 
-    pub(in crate::formatter) fn split_else_local_type_line_indent_spaces(
+    pub(crate) fn split_else_local_type_line_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1215,7 +1200,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(in crate::formatter) fn split_else_braced_member_body_indent_spaces(
+    pub(crate) fn split_else_braced_member_body_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,

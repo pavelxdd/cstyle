@@ -1,17 +1,18 @@
-use super::frame::StringContinuationFrame;
-use super::operators::starts_with_chain_operator;
-use super::{
-    FormatEngine, PreviousToken, is_type_like_pointer_word, trailing_comment_split_limit,
-    trailing_word,
-};
+use crate::formatter::FormatEngine;
+use crate::formatter::frame::StringContinuationFrame;
+use crate::formatter::language::is_type_like_pointer_word;
+use crate::formatter::line_scan::trailing_comment_split_limit;
+use crate::formatter::operators::starts_with_chain_operator;
+use crate::formatter::state::PreviousToken;
+use crate::source::lex::{is_identifier_continue, trailing_word};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct LiteralLineState {
-    pub(super) is_multiline_literal: bool,
-    pub(super) multiline_literal_end: Option<usize>,
-    pub(super) unterminated_raw_literal: bool,
-    pub(super) preserve_raw_literal_line_end: bool,
-    pub(super) unterminated_literal_line: bool,
+pub(crate) struct LiteralLineState {
+    pub(crate) is_multiline_literal: bool,
+    pub(crate) multiline_literal_end: Option<usize>,
+    pub(crate) unterminated_raw_literal: bool,
+    pub(crate) preserve_raw_literal_line_end: bool,
+    pub(crate) unterminated_literal_line: bool,
 }
 
 fn raw_literal_is_unterminated(literal: &str) -> bool {
@@ -29,7 +30,7 @@ fn raw_literal_is_unterminated(literal: &str) -> bool {
     !literal.ends_with(&format!("){delimiter}\""))
 }
 
-pub(super) fn first_string_literal_start(line: &str) -> Option<usize> {
+pub(crate) fn first_string_literal_start(line: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
     let prefixes = [
         "u8R\"", "u8\"", "uR\"", "UR\"", "LR\"", "R\"", "u\"", "U\"", "L\"",
@@ -63,11 +64,11 @@ pub(super) fn first_string_literal_start(line: &str) -> Option<usize> {
     None
 }
 
-pub(super) fn starts_string_literal_token(line: &str) -> bool {
+pub(crate) fn starts_string_literal_token(line: &str) -> bool {
     first_string_literal_start(line) == Some(0)
 }
 
-pub(super) fn string_literal_token_end(line: &str, start: usize) -> Option<usize> {
+pub(crate) fn string_literal_token_end(line: &str, start: usize) -> Option<usize> {
     let quote = line[start..].find('"')? + start;
     if line[start..quote].ends_with('R') {
         let delimiter_start = quote + 1;
@@ -96,14 +97,14 @@ pub(super) fn string_literal_token_end(line: &str, start: usize) -> Option<usize
     None
 }
 
-pub(super) fn string_literal_has_opening_context(line: &str, start: usize) -> bool {
+pub(crate) fn string_literal_has_opening_context(line: &str, start: usize) -> bool {
     !matches!(
         line[..start].trim_end().chars().next_back(),
-        Some(ch) if super::is_identifier_continue(ch) || matches!(ch, ')' | ']')
+        Some(ch) if is_identifier_continue(ch) || matches!(ch, ')' | ']')
     )
 }
 
-pub(super) fn single_string_literal_comma_line(line: &str) -> bool {
+pub(crate) fn single_string_literal_comma_line(line: &str) -> bool {
     let Some(start) = first_string_literal_start(line) else {
         return false;
     };
@@ -116,7 +117,7 @@ pub(super) fn single_string_literal_comma_line(line: &str) -> bool {
     line[end..].trim() == ","
 }
 
-pub(super) fn last_string_literal_start(line: &str) -> Option<usize> {
+pub(crate) fn last_string_literal_start(line: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
     let mut search_start = 0;
     let mut last = None;
@@ -138,7 +139,7 @@ pub(super) fn last_string_literal_start(line: &str) -> Option<usize> {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn try_finish_multiline_literal_line(&mut self) -> bool {
+    pub(crate) fn try_finish_multiline_literal_line(&mut self) -> bool {
         if !self.literal_line.is_multiline_literal {
             return false;
         }
@@ -160,7 +161,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn push_literal(&mut self, literal: &str, quote: Option<char>) {
+    pub(crate) fn push_literal(&mut self, literal: &str, quote: Option<char>) {
         if literal.contains('\n') {
             self.push_multiline_literal(literal);
             return;

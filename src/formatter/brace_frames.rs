@@ -1,17 +1,12 @@
-use super::FormatEngine;
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::{BraceFrame, BraceSemanticKind};
-use super::indentation::LineKind;
-use super::labels;
-
-use super::line_scan;
-use super::line_scan::is_comment_only_line;
-use super::line_scan::trailing_comment_split_limit;
-use super::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
-use super::state::FormatterBraceType;
 use crate::config::BraceStyle;
-use crate::source::lex::is_word_char;
-use crate::source::lex::leading_identifier;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::{BraceFrame, BraceSemanticKind};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{is_comment_only_line, trailing_comment_split_limit};
+use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::state::FormatterBraceType;
+use crate::formatter::{FormatEngine, labels, line_scan};
+use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
@@ -90,7 +85,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn push_brace_frame(
+    pub(crate) fn push_brace_frame(
         &mut self,
         brace_header: Option<&String>,
         brace_type: FormatterBraceType,
@@ -292,14 +287,14 @@ impl FormatEngine<'_> {
         });
     }
 
-    pub(super) fn update_current_brace_indent_columns(&mut self, body: usize, sibling: usize) {
+    pub(crate) fn update_current_brace_indent_columns(&mut self, body: usize, sibling: usize) {
         if let Some(frame) = self.frame_stack.active_brace_mut() {
             frame.body_indent_column = body;
             frame.sibling_indent_column = sibling;
         }
     }
 
-    pub(super) fn update_current_brace_indent_from_last_output_line(&mut self) {
+    pub(crate) fn update_current_brace_indent_from_last_output_line(&mut self) {
         let Some(line) = self.output.last() else {
             return;
         };
@@ -360,7 +355,7 @@ impl FormatEngine<'_> {
         self.update_current_brace_indent_columns(body, sibling);
     }
 
-    pub(super) fn exit_brace_state(&mut self) {
+    pub(crate) fn exit_brace_state(&mut self) {
         let closes_scope = self.stack_state.has_active_brace_scope();
         self.state.exit_block();
         if closes_scope {
@@ -385,12 +380,12 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn mark_closed_brace_output_position(&mut self) {
+    pub(crate) fn mark_closed_brace_output_position(&mut self) {
         self.frame_stack
             .mark_last_closed_brace_output_position(self.output.len());
     }
 
-    pub(super) fn current_open_brace_is_lambda_body(&self) -> bool {
+    pub(crate) fn current_open_brace_is_lambda_body(&self) -> bool {
         self.frame_stack
             .active_brace()
             .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)

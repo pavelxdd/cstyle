@@ -1,11 +1,11 @@
-use super::FormatEngine;
-use super::state::FormatterBraceType;
-use super::token::Token;
 use crate::config::BraceStyle;
+use crate::formatter::FormatEngine;
+use crate::formatter::state::FormatterBraceType;
+use crate::formatter::token::Token;
 use crate::source::lex::leading_identifier;
 
 #[derive(Default)]
-pub(super) struct BlockSpacingState {
+pub(crate) struct BlockSpacingState {
     append_blank: bool,
     prepend_blank: bool,
     active_header: Option<String>,
@@ -15,7 +15,7 @@ pub(super) struct BlockSpacingState {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn observe_block_spacing_header(&mut self, word: &str) {
+    pub(crate) fn observe_block_spacing_header(&mut self, word: &str) {
         if !self.options.break_blocks {
             return;
         }
@@ -54,7 +54,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn observe_block_spacing_comment(&mut self, tokens: &[Token], index: usize) {
+    pub(crate) fn observe_block_spacing_comment(&mut self, tokens: &[Token], index: usize) {
         if !self.options.break_blocks || self.previous_block_spacing_line_is_comment_only() {
             return;
         }
@@ -78,7 +78,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn should_preserve_block_spacing_comment_blank(
+    pub(crate) fn should_preserve_block_spacing_comment_blank(
         &self,
         tokens: &[Token],
         following_index: Option<usize>,
@@ -96,13 +96,13 @@ impl FormatEngine<'_> {
                 })
     }
 
-    pub(super) fn schedule_block_spacing_semicolon(&mut self) {
+    pub(crate) fn schedule_block_spacing_semicolon(&mut self) {
         if self.options.break_blocks {
             self.block_spacing.pending_semicolon = true;
         }
     }
 
-    pub(super) fn observe_block_spacing_semicolon(&mut self) {
+    pub(crate) fn observe_block_spacing_semicolon(&mut self) {
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
             || self.stack_state.paren_depth > 0
@@ -122,7 +122,7 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(super) fn observe_finished_block_spacing_line(&mut self) {
+    pub(crate) fn observe_finished_block_spacing_line(&mut self) {
         if !self.options.break_blocks {
             return;
         }
@@ -134,7 +134,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn observe_block_spacing_one_line_block(&mut self, brace_type: FormatterBraceType) {
+    pub(crate) fn observe_block_spacing_one_line_block(&mut self, brace_type: FormatterBraceType) {
         if !self.options.break_blocks {
             return;
         }
@@ -142,19 +142,19 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(super) fn observe_block_spacing_open_brace(&mut self) {
+    pub(crate) fn observe_block_spacing_open_brace(&mut self) {
         if self.options.break_blocks {
             self.clear_block_spacing_header();
         }
     }
 
-    pub(super) fn observe_block_spacing_inline_close_brace(&mut self) {
+    pub(crate) fn observe_block_spacing_inline_close_brace(&mut self) {
         if self.options.break_blocks {
             self.clear_block_spacing_header();
         }
     }
 
-    pub(super) fn observe_block_spacing_close_brace(&mut self) {
+    pub(crate) fn observe_block_spacing_close_brace(&mut self) {
         if !self.options.break_blocks {
             return;
         }
@@ -172,13 +172,13 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(super) fn observe_block_spacing_body_start(&mut self) {
+    pub(crate) fn observe_block_spacing_body_start(&mut self) {
         if self.options.break_blocks {
             self.block_spacing.header_expects_body = false;
         }
     }
 
-    pub(super) fn take_block_spacing_blank(&mut self, line: &str) -> bool {
+    pub(crate) fn take_block_spacing_blank(&mut self, line: &str) -> bool {
         if !self.options.break_blocks {
             return false;
         }
@@ -205,7 +205,7 @@ impl FormatEngine<'_> {
         !is_break_blocks_closing_header(first) || self.options.break_closing_header_blocks
     }
 
-    pub(super) fn reset_block_spacing(&mut self) {
+    pub(crate) fn reset_block_spacing(&mut self) {
         self.block_spacing = BlockSpacingState::default();
     }
 
@@ -259,14 +259,14 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(super) fn is_break_blocks_closing_header(word: &str) -> bool {
+pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
     matches!(
         word,
         "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except" | "finally"
     )
 }
 
-pub(super) fn is_break_blocks_opening_header(word: &str) -> bool {
+pub(crate) fn is_break_blocks_opening_header(word: &str) -> bool {
     matches!(
         word,
         "if" | "for" | "while" | "switch" | "do" | "try" | "__try" | "case" | "default"

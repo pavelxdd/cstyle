@@ -1,24 +1,25 @@
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::{LogicalFrame, LogicalOperator, StreamFrame};
-use super::language::{self, is_leading_continuation_operator};
-use super::line_scan::has_unclosed_delimiter_after;
-use super::line_scan::last_unmatched_open_delimiter;
-use super::pointers::is_pointer_declaration_segment;
-use super::state::FormatterBraceType;
-use super::syntax::function_name_start;
-use super::token::Token;
-use super::{
-    FormatEngine, OperatorRole, PreviousToken, TemplateAngle, is_macro_like_word,
-    is_pointer_type_word, trailing_comment_split_limit, unmatched_open_paren_column,
-};
 use crate::config::{PointerAlign, ReferenceAlign};
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::{LogicalFrame, LogicalOperator, StreamFrame};
+use crate::formatter::language::{
+    self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
+};
+use crate::formatter::line_scan::{
+    has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
+    unmatched_open_paren_column,
+};
+use crate::formatter::pointers::is_pointer_declaration_segment;
+use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
+use crate::formatter::syntax::{OperatorRole, function_name_start};
+use crate::formatter::token::Token;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
-pub(super) fn starts_ternary_arm(line: &str) -> bool {
+pub(crate) fn starts_ternary_arm(line: &str) -> bool {
     line.starts_with('?') || (line.starts_with(':') && !line.starts_with("::"))
 }
 
-pub(super) fn starts_with_chain_operator(line: &str) -> bool {
+pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
     if ["and", "or"].into_iter().any(|operator| {
         line.strip_prefix(operator).is_some_and(|tail| {
             tail.chars()
@@ -40,7 +41,7 @@ pub(super) fn starts_with_chain_operator(line: &str) -> bool {
     }
 }
 
-pub(super) fn find_assignment_operator(line: &str) -> Option<(usize, &'static str)> {
+pub(crate) fn find_assignment_operator(line: &str) -> Option<(usize, &'static str)> {
     if !line.contains('=') {
         return None;
     }
@@ -136,7 +137,7 @@ fn is_assignment_operator_boundary(line: &str, index: usize, operator: &str) -> 
     ) && !matches!(next, Some('=' | '>'))
 }
 
-pub(super) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
+pub(crate) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
     let head = head.trim_end();
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
@@ -147,7 +148,7 @@ pub(super) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
         .filter(|_| !head.ends_with("++") && !head.ends_with("--") && !head.ends_with("->"))
 }
 
-pub(super) fn head_ends_binary_operator(head: &str) -> bool {
+pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
     let head = head.trim_end();
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
@@ -157,7 +158,7 @@ pub(super) fn head_ends_binary_operator(head: &str) -> bool {
         && !head.ends_with("->")
 }
 
-pub(super) fn head_ends_assignment_operator(head: &str) -> bool {
+pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
     let head = head.trim_end();
     let Some((start, operator)) = find_assignment_operator(head) else {
         return false;
@@ -165,7 +166,7 @@ pub(super) fn head_ends_assignment_operator(head: &str) -> bool {
     start + operator.len() == head.len()
 }
 
-pub(super) fn head_starts_binary_operator(head: &str) -> bool {
+pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
     let head = head.trim_start();
     if ["and", "or"].into_iter().any(|operator| {
         head.strip_prefix(operator).is_some_and(|tail| {
@@ -186,12 +187,12 @@ pub(super) fn head_starts_binary_operator(head: &str) -> bool {
     .any(|operator| head.starts_with(operator))
 }
 
-pub(super) fn starts_prefix_increment(line: &str) -> bool {
+pub(crate) fn starts_prefix_increment(line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with("++") || trimmed.starts_with("--")
 }
 
-pub(super) fn is_prefix_increment_statement(line: &str) -> bool {
+pub(crate) fn is_prefix_increment_statement(line: &str) -> bool {
     starts_prefix_increment(line) && line.trim_end().ends_with(';')
 }
 
@@ -213,7 +214,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(super) fn push_operator(
+    pub(crate) fn push_operator(
         &mut self,
         operator: &str,
         next: Option<&Token>,
@@ -905,7 +906,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn should_attach_sizeof_after_standalone_call_argument(
+    pub(crate) fn should_attach_sizeof_after_standalone_call_argument(
         &self,
         next: Option<&Token>,
     ) -> bool {
@@ -938,12 +939,12 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn is_trailing_return_arrow(&self) -> bool {
+    pub(crate) fn is_trailing_return_arrow(&self) -> bool {
         let current = self.current.trim_end();
         current.starts_with("auto ") && current.ends_with(')')
     }
 
-    pub(super) fn is_prefix_increment_or_decrement(&self) -> bool {
+    pub(crate) fn is_prefix_increment_or_decrement(&self) -> bool {
         !matches!(
             self.previous,
             PreviousToken::Word
@@ -953,11 +954,11 @@ impl FormatEngine<'_> {
         ) || trailing_word(&self.current) == "return"
     }
 
-    pub(super) fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {
+    pub(crate) fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {
         matches!(next, Some(Token::Number(_))) && self.current_ends_numeric_cast()
     }
 
-    pub(super) fn is_sizeof_typedef_unary_sign(&self, next: Option<&Token>) -> bool {
+    pub(crate) fn is_sizeof_typedef_unary_sign(&self, next: Option<&Token>) -> bool {
         if !matches!(next, Some(Token::Number(_))) {
             return false;
         }
@@ -974,7 +975,7 @@ impl FormatEngine<'_> {
         is_pointer_type_word(trailing_word(&current[open + 1..current.len() - 1]))
     }
 
-    pub(super) fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
+    pub(crate) fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
         if !matches!(
             next,
             Some(Token::Word(_) | Token::Number(_) | Token::Symbol('('))
@@ -993,7 +994,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(super) fn is_unary_sign(&self) -> bool {
+    pub(crate) fn is_unary_sign(&self) -> bool {
         matches!(
             self.previous,
             PreviousToken::None
@@ -1005,7 +1006,7 @@ impl FormatEngine<'_> {
             || matches!(trailing_word(&self.current), "return" | "case")
     }
 
-    pub(super) fn current_ends_prefix_increment_or_decrement(&self) -> bool {
+    pub(crate) fn current_ends_prefix_increment_or_decrement(&self) -> bool {
         let current = self.current.trim_end();
         let Some(before) = current
             .strip_suffix("++")
@@ -1020,12 +1021,12 @@ impl FormatEngine<'_> {
             || head_ends_binary_operator(before)
     }
 
-    pub(super) fn current_ends_postfix_increment_or_decrement(&self) -> bool {
+    pub(crate) fn current_ends_postfix_increment_or_decrement(&self) -> bool {
         let current = self.current.trim_end();
         current.ends_with("++") || current.ends_with("--")
     }
 
-    pub(super) fn is_in_case_label_expression(&self) -> bool {
+    pub(crate) fn is_in_case_label_expression(&self) -> bool {
         let current = self.current.trim_start();
         current
             .strip_prefix("case")
@@ -1034,7 +1035,7 @@ impl FormatEngine<'_> {
             && !current.contains(':')
     }
 
-    pub(super) fn push_unary_prefix(&mut self, operator: &str) {
+    pub(crate) fn push_unary_prefix(&mut self, operator: &str) {
         let word = trailing_word(&self.current);
         let after_return = word == "return";
         let after_return_or_case = after_return || matches!(word, "case" | "do");

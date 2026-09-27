@@ -1,16 +1,16 @@
-use super::columns::{leading_visual_width, visual_width_from};
-use super::labels::is_label_start;
-use super::language::{self, is_non_type_keyword, is_type_like_pointer_word};
-use super::line_scan::line_paren_imbalance;
-use super::line_scan::{
-    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::labels::is_label_start;
+use crate::formatter::language::{self, is_non_type_keyword, is_type_like_pointer_word};
+use crate::formatter::line_scan::{
+    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
-use super::syntax::{first_operator_word, function_name_start, is_named_operator_word};
-use super::{FormatEngine, switch_cases};
+use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
+use crate::formatter::{FormatEngine, switch_cases};
 use crate::source::lex::{is_identifier_continue, leading_identifier};
 
 impl FormatEngine<'_> {
-    pub(super) fn split_return_type_pointer_name_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_return_type_pointer_name_indent_spaces(&self, line: &str) -> Option<usize> {
         if !is_pointer_prefixed_function_part(line.trim_start()) {
             return None;
         }
@@ -23,7 +23,7 @@ impl FormatEngine<'_> {
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(super) fn split_trailing_return_arrow_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_trailing_return_arrow_indent_spaces(&self, line: &str) -> Option<usize> {
         let current = line.trim_start();
         if !current.starts_with("->") || current.starts_with("->*") {
             return None;
@@ -103,12 +103,12 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn recent_base_trailing_return_function_header(&self) -> bool {
+    pub(crate) fn recent_base_trailing_return_function_header(&self) -> bool {
         self.recent_base_trailing_return_function_header_index()
             .is_some()
     }
 
-    pub(super) fn recent_trailing_return_function_after_multiline_template_declaration(
+    pub(crate) fn recent_trailing_return_function_after_multiline_template_declaration(
         &self,
     ) -> bool {
         let Some(brace_index) = self.recent_base_trailing_return_function_header_index() else {
@@ -139,7 +139,7 @@ impl FormatEngine<'_> {
         self.output_closes_multiline_template_declaration_before(signature_start)
     }
 
-    pub(super) fn trailing_return_function_parameter_tail_indent_spaces(
+    pub(crate) fn trailing_return_function_parameter_tail_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -182,7 +182,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn function_signature_parameter_continuation_indent_spaces(
+    pub(crate) fn function_signature_parameter_continuation_indent_spaces(
         &self,
         current_line: &str,
         signature_line: &str,
@@ -213,7 +213,7 @@ impl FormatEngine<'_> {
         (spaces <= self.options.max_continuation_indent).then_some(spaces)
     }
 
-    pub(super) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
+    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
         let is_declaration = line.ends_with(';');
         let should_attach = if is_declaration {
             self.options.attach_return_type_decl
@@ -253,7 +253,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn try_publish_split_return_type(
+    pub(crate) fn try_publish_split_return_type(
         &mut self,
         line: &str,
         indent: usize,
@@ -326,7 +326,7 @@ fn is_function_part_line(line: &str) -> bool {
         && function_name_start(before).is_some_and(|start| start == 0)
 }
 
-pub(super) fn is_return_type_line(line: &str) -> bool {
+pub(crate) fn is_return_type_line(line: &str) -> bool {
     if line.is_empty()
         || line.contains("//")
         || line.contains("/*")
@@ -352,7 +352,7 @@ pub(super) fn is_return_type_line(line: &str) -> bool {
         .any(|part| !part.is_empty() && is_type_like_pointer_word(part))
 }
 
-pub(super) fn is_parameter_return_type_prefix(line: &str) -> bool {
+pub(crate) fn is_parameter_return_type_prefix(line: &str) -> bool {
     let first_word = line
         .split(|ch: char| !is_identifier_continue(ch))
         .find(|word| !word.is_empty());

@@ -1,12 +1,12 @@
-use super::FormatEngine;
-use super::columns::{leading_visual_width, visual_width_from};
-use super::indentation::LineKind;
-use super::line_scan::trailing_comment_split_limit;
-use super::syntax::signature_ends_with_parameter_list;
-use super::token::Token;
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::trailing_comment_split_limit;
+use crate::formatter::syntax::signature_ends_with_parameter_list;
+use crate::formatter::token::Token;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
-pub(super) fn has_base_access_token(tokens: &[Token]) -> bool {
+pub(crate) fn has_base_access_token(tokens: &[Token]) -> bool {
     tokens.iter().any(|token| {
         matches!(
             token,
@@ -15,7 +15,7 @@ pub(super) fn has_base_access_token(tokens: &[Token]) -> bool {
     })
 }
 
-pub(super) fn is_split_export_head(line: &str) -> bool {
+pub(crate) fn is_split_export_head(line: &str) -> bool {
     if line
         .chars()
         .any(|ch| !is_identifier_continue(ch) && !ch.is_whitespace())
@@ -42,7 +42,7 @@ pub(super) fn is_split_export_head(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn in_open_class_head(&self) -> bool {
+    pub(crate) fn in_open_class_head(&self) -> bool {
         for index in (0..self.output.len()).rev() {
             let trimmed = self.output.trimmed(index);
             if trimmed.is_empty() {
@@ -64,7 +64,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn current_opens_class_base_clause(&self) -> bool {
+    pub(crate) fn current_opens_class_base_clause(&self) -> bool {
         if self.stack_state.has_question_in_current_brace() {
             return false;
         }
@@ -91,7 +91,7 @@ impl FormatEngine<'_> {
                 || self.in_open_class_head())
     }
 
-    pub(super) fn code_opens_class_base_clause(&self, before: &str) -> bool {
+    pub(crate) fn code_opens_class_base_clause(&self, before: &str) -> bool {
         if before.is_empty() || before.ends_with(':') || before.contains('?') {
             return false;
         }
@@ -108,7 +108,7 @@ impl FormatEngine<'_> {
             .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
     }
 
-    pub(super) fn colon_leads_class_base_clause(&self) -> bool {
+    pub(crate) fn colon_leads_class_base_clause(&self) -> bool {
         if self.current_opens_class_base_clause() {
             return true;
         }
@@ -129,7 +129,7 @@ impl FormatEngine<'_> {
         self.code_opens_class_base_clause(code.trim_end())
     }
 
-    pub(super) fn try_join_class_base_line(&mut self, line: &str) -> bool {
+    pub(crate) fn try_join_class_base_line(&mut self, line: &str) -> bool {
         if !self.may_have_class_base_access {
             return false;
         }
@@ -171,7 +171,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn prepare_split_class_head_continuation(&mut self) {
+    pub(crate) fn prepare_split_class_head_continuation(&mut self) {
         if !self.token_input.token_begins_source_line
             || !self.current.is_empty()
             || !self
@@ -188,7 +188,7 @@ impl FormatEngine<'_> {
         self.split_class_export_pending_base = true;
     }
 
-    pub(super) fn finish_split_class_head_line(&mut self) {
+    pub(crate) fn finish_split_class_head_line(&mut self) {
         let header_indent = self.state.indent();
         self.finish_line();
         self.stack_state.clear_continuation_indents();
@@ -198,7 +198,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = true;
     }
 
-    pub(super) fn split_class_head_indent_spaces(&self, current: &str) -> Option<usize> {
+    pub(crate) fn split_class_head_indent_spaces(&self, current: &str) -> Option<usize> {
         if current == "{" || current == ";" || current.starts_with("};") {
             return None;
         }
@@ -216,7 +216,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn simple_template_base_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn simple_template_base_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line.trim_start().starts_with(':') {
             return None;
         }
@@ -229,7 +229,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn commented_class_head_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn commented_class_head_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line
             .trim_start()
             .chars()
@@ -244,7 +244,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn class_base_logical_operand_indent_spaces(
+    pub(crate) fn class_base_logical_operand_indent_spaces(
         &self,
         line: &str,
         kind: LineKind,
@@ -263,7 +263,7 @@ impl FormatEngine<'_> {
         .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(super) fn template_base_colon_indent_spaces(
+    pub(crate) fn template_base_colon_indent_spaces(
         &self,
         current: &str,
         previous: &str,

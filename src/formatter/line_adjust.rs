@@ -1,8 +1,7 @@
-use super::indentation::LineKind;
-use super::labels;
-use super::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
-use super::tabs;
 use crate::config::{FormatOptions, IndentStyle};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
+use crate::formatter::{labels, tabs};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LineAdjuster {
@@ -203,7 +202,7 @@ fn macro_block_line_starts_with(line: &str, name: &str) -> bool {
             .is_some_and(|rest| macro_call_starts_with(rest.trim_start(), name))
 }
 
-pub(super) fn macro_call_starts_with(line: &str, name: &str) -> bool {
+pub(crate) fn macro_call_starts_with(line: &str, name: &str) -> bool {
     let rest = match line.strip_prefix(name) {
         Some(rest) => rest,
         None => return false,

@@ -1,23 +1,24 @@
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::{BracketFrame, BracketRole};
-use super::line_scan::has_unclosed_delimiter_after;
-use super::state::ContinuationIndent;
-use super::token::{Token, next_non_whitespace, token_text, tokenize};
-use super::{FormatEngine, is_identifier_continue, trailing_comment_split_limit};
 use crate::config::ObjCColonPad;
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::{BracketFrame, BracketRole};
+use crate::formatter::line_scan::{has_unclosed_delimiter_after, trailing_comment_split_limit};
+use crate::formatter::state::ContinuationIndent;
+use crate::formatter::token::{Token, next_non_whitespace, token_text, tokenize};
+use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct ObjectiveCLineState {
-    pub(super) post_prefix: bool,
-    pub(super) post_method_colon: bool,
-    pub(super) return_paren_depth: Option<usize>,
-    pub(super) param_paren_depth: Option<usize>,
-    pub(super) after_paren_pad: Option<bool>,
-    pub(super) colon_align: Option<usize>,
-    pub(super) method_continuation: bool,
-    pub(super) message_active: bool,
-    pub(super) message_pending_align: bool,
-    pub(super) message_align: Option<usize>,
+pub(crate) struct ObjectiveCLineState {
+    pub(crate) post_prefix: bool,
+    pub(crate) post_method_colon: bool,
+    pub(crate) return_paren_depth: Option<usize>,
+    pub(crate) param_paren_depth: Option<usize>,
+    pub(crate) after_paren_pad: Option<bool>,
+    pub(crate) colon_align: Option<usize>,
+    pub(crate) method_continuation: bool,
+    pub(crate) message_active: bool,
+    pub(crate) message_pending_align: bool,
+    pub(crate) message_align: Option<usize>,
 }
 
 fn line_is_label_style_dictionary_key(line: &str) -> bool {
@@ -35,7 +36,7 @@ fn line_is_label_style_dictionary_key(line: &str) -> bool {
             .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
-pub(super) fn objc_message_selector_indent_spaces(
+pub(crate) fn objc_message_selector_indent_spaces(
     line: &str,
     frame: &BracketFrame,
     tab_width: usize,
@@ -86,7 +87,7 @@ pub(super) fn objc_message_selector_indent_spaces(
     None
 }
 
-pub(super) fn objc_method_colon_position(line: &str) -> Option<usize> {
+pub(crate) fn objc_method_colon_position(line: &str) -> Option<usize> {
     let mut ternary = false;
     for (index, ch) in line.chars().enumerate() {
         match ch {
@@ -99,7 +100,7 @@ pub(super) fn objc_method_colon_position(line: &str) -> Option<usize> {
     None
 }
 
-pub(super) fn objc_message_following_keyword_column(line: &str) -> Option<usize> {
+pub(crate) fn objc_message_following_keyword_column(line: &str) -> Option<usize> {
     let chars: Vec<char> = line.chars().collect();
     let is_space = |ch: char| ch == ' ' || ch == '\t';
     let mut open_brackets = Vec::new();
@@ -143,14 +144,14 @@ pub(super) fn objc_message_following_keyword_column(line: &str) -> Option<usize>
     }
 }
 
-pub(super) struct ObjCLineAlignment {
-    pub(super) indent_level: usize,
-    pub(super) exact_indent_spaces: Option<usize>,
-    pub(super) restore_message_align: Option<usize>,
+pub(crate) struct ObjCLineAlignment {
+    pub(crate) indent_level: usize,
+    pub(crate) exact_indent_spaces: Option<usize>,
+    pub(crate) restore_message_align: Option<usize>,
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn objc_dictionary_indent_spaces(
+    pub(crate) fn objc_dictionary_indent_spaces(
         &self,
         line: &str,
         mut current: Option<usize>,
@@ -233,7 +234,7 @@ impl FormatEngine<'_> {
         current
     }
 
-    pub(super) fn record_closed_objc_message_indent(
+    pub(crate) fn record_closed_objc_message_indent(
         &mut self,
         line: &str,
         closed_brackets: &[BracketFrame],
@@ -252,7 +253,7 @@ impl FormatEngine<'_> {
             .set_objc_message_indent_spaces(indent_spaces);
     }
 
-    pub(super) fn apply_objc_message_alignment(
+    pub(crate) fn apply_objc_message_alignment(
         &mut self,
         line: &str,
         closed_brackets: &[BracketFrame],
@@ -385,7 +386,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn restore_objc_message_alignment(&mut self, spaces: Option<usize>) {
+    pub(crate) fn restore_objc_message_alignment(&mut self, spaces: Option<usize>) {
         if let Some(spaces) = spaces {
             self.objc.message_align = self
                 .frame_stack
@@ -394,7 +395,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn objc_line_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn objc_line_indent_override(&self, line: &str) -> Option<usize> {
         let mut spaces = None;
         if let Some(header) = ["@try", "@catch", "@finally"].into_iter().find(|header| {
             line.trim_start().strip_prefix(header).is_some_and(|rest| {
@@ -438,7 +439,7 @@ impl FormatEngine<'_> {
         spaces
     }
 
-    pub(super) fn ready_objc_method_closing_brace_indent_spaces(
+    pub(crate) fn ready_objc_method_closing_brace_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -457,11 +458,11 @@ impl FormatEngine<'_> {
         .then_some(0)
     }
 
-    pub(super) fn output_ends_objc_method_header(&self) -> bool {
+    pub(crate) fn output_ends_objc_method_header(&self) -> bool {
         self.output_objc_method_header_indent_spaces().is_some()
     }
 
-    pub(super) fn output_objc_method_header_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn output_objc_method_header_indent_spaces(&self) -> Option<usize> {
         for line in self
             .output
             .iter()
@@ -484,7 +485,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn is_objc_selector_or_message_colon(&self) -> bool {
+    pub(crate) fn is_objc_selector_or_message_colon(&self) -> bool {
         let current = self.current.trim_end();
         self.frame_stack.bracket_depth() > 0
             || self.objc.method_continuation
@@ -493,7 +494,7 @@ impl FormatEngine<'_> {
             || has_unclosed_delimiter_after(current, "@selector(", ")")
     }
 
-    pub(super) fn is_objc_method_line(&self) -> bool {
+    pub(crate) fn is_objc_method_line(&self) -> bool {
         if self.stack_state.paren_depth > 0 {
             return false;
         }
@@ -502,11 +503,11 @@ impl FormatEngine<'_> {
             .is_some_and(|rest| rest.trim_start().starts_with('('))
     }
 
-    pub(super) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
+    pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
         matches!(next, Some(Token::Symbol('('))) && self.current.trim().is_empty()
     }
 
-    pub(super) fn token_starts_objc_method_definition(
+    pub(crate) fn token_starts_objc_method_definition(
         &self,
         tokens: &[Token],
         index: usize,
@@ -517,7 +518,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|next| matches!(tokens[next], Token::Symbol('(')))
     }
 
-    pub(super) fn compute_objc_method_colon_align(
+    pub(crate) fn compute_objc_method_colon_align(
         &self,
         tokens: &[Token],
         start: usize,
@@ -664,7 +665,7 @@ impl FormatEngine<'_> {
         Some(visual_width_from(&prefix, 0, self.options.tab_width))
     }
 
-    pub(super) fn is_objc_standalone_line(&self) -> bool {
+    pub(crate) fn is_objc_standalone_line(&self) -> bool {
         matches!(
             self.current.split_whitespace().next(),
             Some(

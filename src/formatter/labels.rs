@@ -1,18 +1,18 @@
-use super::brace_classification::is_class_like_brace_type;
-use super::buffer::OpenBraceShape;
-use super::columns::leading_visual_width;
-use super::headers::starts_header_word;
-use super::indentation::LineKind;
-use super::language;
-use super::line_scan::{is_comment_line, trailing_comment_split_limit};
-use super::raw_strings;
-use super::state::{ContinuationIndent, FormatterBraceType};
-use super::switch_cases::{find_case_colon, is_case_label_start};
-use super::{FormatEngine, unmatched_open_paren_column};
 use crate::config::{FormatOptions, IndentStyle};
+use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::buffer::OpenBraceShape;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::headers::starts_header_word;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{
+    is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+};
+use crate::formatter::state::{ContinuationIndent, FormatterBraceType};
+use crate::formatter::switch_cases::{find_case_colon, is_case_label_start};
+use crate::formatter::{FormatEngine, language, raw_strings};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
-pub(super) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
+pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
     if find_case_colon(line).is_some() {
         LineKind::SwitchLabel
     } else if is_plain_label(line, access_labels) {
@@ -23,19 +23,19 @@ pub(super) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct ClassificationContext<'a> {
-    pub(super) enclosing_brace: Option<FormatterBraceType>,
-    pub(super) in_initializer: bool,
-    pub(super) in_ternary: bool,
-    pub(super) previous_line: Option<&'a str>,
+pub(crate) struct ClassificationContext<'a> {
+    pub(crate) enclosing_brace: Option<FormatterBraceType>,
+    pub(crate) in_initializer: bool,
+    pub(crate) in_ternary: bool,
+    pub(crate) previous_line: Option<&'a str>,
 }
 
-pub(super) struct LineLayout {
-    pub(super) indent_level: Option<usize>,
-    pub(super) indent_spaces: usize,
+pub(crate) struct LineLayout {
+    pub(crate) indent_level: Option<usize>,
+    pub(crate) indent_spaces: usize,
 }
 
-pub(super) fn reconcile_line_kind(
+pub(crate) fn reconcile_line_kind(
     mut kind: LineKind,
     line: &str,
     access_labels: &[String],
@@ -69,7 +69,7 @@ pub(super) fn reconcile_line_kind(
     kind
 }
 
-pub(super) fn class_scope_indent(
+pub(crate) fn class_scope_indent(
     kind: LineKind,
     line: &str,
     enclosing_brace: Option<FormatterBraceType>,
@@ -95,7 +95,7 @@ pub(super) fn class_scope_indent(
     Some(ContinuationIndent::Level(current_indent.saturating_sub(1)))
 }
 
-pub(super) fn candidate_line_indent_spaces(
+pub(crate) fn candidate_line_indent_spaces(
     line: &str,
     options: &FormatOptions,
     in_expression_context: bool,
@@ -106,7 +106,7 @@ pub(super) fn candidate_line_indent_spaces(
         .then_some(0)
 }
 
-pub(super) fn current_line_indent_spaces(
+pub(crate) fn current_line_indent_spaces(
     kind: LineKind,
     line: &str,
     enclosing_brace: Option<FormatterBraceType>,
@@ -126,7 +126,7 @@ pub(super) fn current_line_indent_spaces(
     (is_unindented_label || is_attached_user_label(line)).then_some(0)
 }
 
-pub(super) fn default_line_layout(
+pub(crate) fn default_line_layout(
     kind: LineKind,
     has_class_scope_layout: bool,
     indent: usize,
@@ -145,7 +145,7 @@ pub(super) fn default_line_layout(
     })
 }
 
-pub(super) fn access_label_body_indent_spaces(
+pub(crate) fn access_label_body_indent_spaces(
     line: &str,
     previous: &str,
     enclosing_brace: Option<FormatterBraceType>,
@@ -174,7 +174,7 @@ pub(super) fn access_label_body_indent_spaces(
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn replayed_inline_access_body_indent_spaces(
+    pub(crate) fn replayed_inline_access_body_indent_spaces(
         &self,
         previous: &str,
         delimiter_replayed: bool,
@@ -195,7 +195,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn max_length_inline_access_body_indent_extra(&self, line: &str) -> Option<usize> {
+    pub(crate) fn max_length_inline_access_body_indent_extra(&self, line: &str) -> Option<usize> {
         (starts_access_label(line, &self.options.access_labels)
             && line
                 .trim_start()
@@ -204,7 +204,7 @@ impl FormatEngine<'_> {
         .then_some(self.options.indent_width)
     }
 
-    pub(super) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
+    pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
@@ -214,7 +214,7 @@ impl FormatEngine<'_> {
         .then_some(self.options.indent_width)
     }
 
-    pub(super) fn else_after_candidate_label_indent_spaces(
+    pub(crate) fn else_after_candidate_label_indent_spaces(
         &self,
         kind: LineKind,
         previous: &str,
@@ -225,7 +225,7 @@ impl FormatEngine<'_> {
         .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 
-    pub(super) fn following_label_body_indent_spaces(
+    pub(crate) fn following_label_body_indent_spaces(
         &self,
         line: &str,
         current_indent_spaces: Option<usize>,
@@ -281,7 +281,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn label_block_indent_spaces(
+    pub(crate) fn label_block_indent_spaces(
         &self,
         line: &str,
         current_indent_spaces: Option<usize>,
@@ -326,7 +326,7 @@ impl FormatEngine<'_> {
             .then(|| current_indent_spaces.unwrap_or(0).max(body_spaces))
     }
 
-    pub(super) fn active_label_block_indent_spaces(
+    pub(crate) fn active_label_block_indent_spaces(
         &self,
         line: &str,
         kind: LineKind,
@@ -357,7 +357,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(super) fn closed_label_block_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn closed_label_block_indent_spaces(&self, line: &str) -> Option<usize> {
         if line.trim() != "}" {
             return None;
         }
@@ -371,7 +371,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(super) fn observe_emitted_label_body_indent(
+    pub(crate) fn observe_emitted_label_body_indent(
         &mut self,
         line: &str,
         kind: LineKind,
@@ -472,28 +472,28 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(super) fn is_label_start(line: &str, access_labels: &[String]) -> bool {
+pub(crate) fn is_label_start(line: &str, access_labels: &[String]) -> bool {
     is_case_label_start(line) || line == "default" || is_plain_label_start(line, access_labels)
 }
 
-pub(super) fn is_access_label_start(line: &str, access_labels: &[String]) -> bool {
+pub(crate) fn is_access_label_start(line: &str, access_labels: &[String]) -> bool {
     language::ACCESS_MODIFIERS.contains(&line)
         || matches!(line, "signals" | "Q_SIGNALS")
         || is_qt_slot_access_label(line)
         || access_labels.iter().any(|custom| custom == line)
 }
 
-pub(super) fn is_access_label(line: &str, access_labels: &[String]) -> bool {
+pub(crate) fn is_access_label(line: &str, access_labels: &[String]) -> bool {
     let trimmed = line.trim();
     trimmed.ends_with(':')
         && is_access_label_start(trimmed.trim_end_matches(':').trim_end(), access_labels)
 }
 
-pub(super) fn is_standard_access_label(line: &str) -> bool {
+pub(crate) fn is_standard_access_label(line: &str) -> bool {
     is_access_label(line, &[])
 }
 
-pub(super) fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
+pub(crate) fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
     let trimmed = line.trim_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
@@ -501,7 +501,7 @@ pub(super) fn starts_access_label(line: &str, access_labels: &[String]) -> bool 
     !rest.starts_with(':') && is_access_label_start(label.trim_end(), access_labels)
 }
 
-pub(super) fn is_attached_user_label(line: &str) -> bool {
+pub(crate) fn is_attached_user_label(line: &str) -> bool {
     let trimmed = line.trim_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
@@ -519,7 +519,7 @@ pub(super) fn is_attached_user_label(line: &str) -> bool {
     rest.starts_with('{') && !rest.starts_with("::")
 }
 
-pub(super) fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
+pub(crate) fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
     let trimmed = line[..trailing_comment_split_limit(line)].trim();
     let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trim_end();
     trimmed.ends_with(':')

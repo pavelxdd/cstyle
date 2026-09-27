@@ -1,45 +1,36 @@
-use super::super::super::FormatEngine;
-use super::super::super::brace_classification::{
+use crate::config::BraceStyle;
+use crate::formatter::brace_classification::{
     is_lambda_body_header, line_opens_lambda_block, line_opens_lambda_or_capture_only_block,
 };
-use super::super::super::call_arguments::callee_name_start_before_open;
-use super::super::super::columns::{leading_visual_width, visual_width_from};
-use super::super::super::compound_literals::line_ends_compound_literal_cast;
-use super::super::super::constructor_initializers::has_inline_constructor_initializer_colon;
-use super::super::super::headers::{
+use crate::formatter::call_arguments::callee_name_start_before_open;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::constructor_initializers::has_inline_constructor_initializer_colon;
+use crate::formatter::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
-use super::super::super::indentation::LineKind;
-use super::super::super::labels;
-
-use super::super::super::language::is_macro_like_word;
-use super::super::super::line_adjust::macro_call_starts_with;
-use super::super::super::line_scan::is_comment_only_line;
-use super::super::super::line_scan::{
-    has_unmatched_open_brace, line_paren_imbalance, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+use crate::formatter::indentation::LineKind;
+use crate::formatter::language::is_macro_like_word;
+use crate::formatter::line_adjust::macro_call_starts_with;
+use crate::formatter::line_scan::{
+    has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use super::super::super::literals::{
+use crate::formatter::literals::{
     first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
     starts_string_literal_token, string_literal_has_opening_context,
 };
-use super::super::super::objective_c::objc_message_following_keyword_column;
-use super::super::super::operators::{
+use crate::formatter::objective_c::objc_message_following_keyword_column;
+use crate::formatter::operators::{
     find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
     trailing_binary_operator_column,
 };
-
-use super::super::super::{language, switch_cases};
-use crate::config::BraceStyle;
+use crate::formatter::{FormatEngine, labels, language, switch_cases};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn member_init_continuation_extra(
-        &self,
-        line_kind: LineKind,
-        line: &str,
-    ) -> usize {
+    pub(crate) fn member_init_continuation_extra(&self, line_kind: LineKind, line: &str) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
         }
@@ -91,7 +82,7 @@ impl FormatEngine<'_> {
         0
     }
 
-    pub(in super::super) fn string_literal_continuation_after_layout_indent_spaces(
+    pub(crate) fn string_literal_continuation_after_layout_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -292,7 +283,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in super::super) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
         let previous = self.output.last()?;
         let trimmed = previous.trim_end();
         if !head_ends_binary_operator(trimmed) || unmatched_open_bracket_column(trimmed).is_none() {
@@ -301,7 +292,7 @@ impl FormatEngine<'_> {
         trailing_binary_operator_column(trimmed)
     }
 
-    pub(in super::super::super) fn adjusted_line_indent_delta(&self, adjusted: &str) -> usize {
+    pub(crate) fn adjusted_line_indent_delta(&self, adjusted: &str) -> usize {
         self.previous_pre_adjust_line
             .as_deref()
             .filter(|raw| raw.trim() == adjusted.trim())
@@ -311,7 +302,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(in super::super) fn function_parameter_continuation_indent_spaces(
+    pub(crate) fn function_parameter_continuation_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -421,7 +412,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in super::super::super) fn open_lambda_body_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn open_lambda_body_indent_spaces(&self) -> Option<usize> {
         let mut closed_blocks = 0usize;
         for raw in self
             .output
@@ -444,7 +435,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
         let current = line.trim_start();
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
@@ -469,7 +460,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(in super::super) fn split_assignment_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
         let current = line.trim_start();
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
@@ -499,7 +490,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(in super::super) fn current_macro_block_begin_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn current_macro_block_begin_indent_spaces(&self) -> Option<usize> {
         if self.options.macro_blocks.is_empty() {
             return None;
         }
@@ -531,7 +522,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in super::super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
         let previous = self
             .output
             .iter()
@@ -566,7 +557,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(in super::super) fn asm_colon_line_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn asm_colon_line_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line.trim_start().starts_with(':') {
             return None;
         }
@@ -589,7 +580,7 @@ impl FormatEngine<'_> {
         saw_asm.then_some(colon_spaces).flatten()
     }
 
-    pub(in super::super) fn contextual_line_indent_spaces(
+    pub(crate) fn contextual_line_indent_spaces(
         &self,
         line: &str,
         indent: usize,

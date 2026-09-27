@@ -1,16 +1,17 @@
-use super::columns::leading_visual_width;
-use super::frame::BraceSemanticKind;
-use super::headers::{line_is_control_body_header, starts_header_word};
-use super::indentation::LineKind;
-use super::line_scan::is_comment_line;
-use super::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
-use super::token::{Token, token_text};
-use super::{FormatEngine, trailing_comment_split_limit, unmatched_open_paren_column};
-use super::{raw_strings, tabs};
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::frame::BraceSemanticKind;
+use crate::formatter::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{
+    is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+};
+use crate::formatter::preprocessor::{is_conditional_preprocessor, preprocessor_directive};
+use crate::formatter::token::{Token, token_text};
+use crate::formatter::{FormatEngine, raw_strings, tabs};
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
-pub(super) fn find_case_colon(line: &str) -> Option<usize> {
+pub(crate) fn find_case_colon(line: &str) -> Option<usize> {
     let trimmed = line.trim_start();
     if !(is_case_label_start(trimmed) || is_default_label_start(trimmed)) {
         return None;
@@ -19,7 +20,7 @@ pub(super) fn find_case_colon(line: &str) -> Option<usize> {
     find_case_colon_from(line, start)
 }
 
-pub(super) fn split_switch_label_statement(line: &str) -> Option<(String, String)> {
+pub(crate) fn split_switch_label_statement(line: &str) -> Option<(String, String)> {
     let colon = find_case_colon(line)?;
     let statement = line[colon + 1..].trim_start();
     if statement.is_empty()
@@ -32,7 +33,7 @@ pub(super) fn split_switch_label_statement(line: &str) -> Option<(String, String
     Some((line[..=colon].to_string(), statement.to_string()))
 }
 
-pub(super) fn case_label_with_trailing_comment(line: &str) -> bool {
+pub(crate) fn case_label_with_trailing_comment(line: &str) -> bool {
     let comment = trailing_comment_split_limit(line);
     if comment == line.len() {
         return false;
@@ -41,7 +42,7 @@ pub(super) fn case_label_with_trailing_comment(line: &str) -> bool {
     (find_case_colon(code).is_some() || code == "default:") && code.ends_with(':')
 }
 
-pub(super) fn multiline_switch_label_colon(
+pub(crate) fn multiline_switch_label_colon(
     tokens: &[Token],
     line_start: usize,
     line_end: usize,
@@ -70,13 +71,13 @@ pub(super) fn multiline_switch_label_colon(
     None
 }
 
-pub(super) fn is_case_label_start(line: &str) -> bool {
+pub(crate) fn is_case_label_start(line: &str) -> bool {
     line.strip_prefix("case")
         .and_then(|rest| rest.chars().next())
         .is_some_and(|ch| !is_identifier_continue(ch))
 }
 
-pub(super) fn is_default_label_start(line: &str) -> bool {
+pub(crate) fn is_default_label_start(line: &str) -> bool {
     line.strip_prefix("default").is_some_and(|rest| {
         rest.chars()
             .next()
@@ -84,7 +85,7 @@ pub(super) fn is_default_label_start(line: &str) -> bool {
     })
 }
 
-pub(super) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
+pub(crate) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     let chars = line.char_indices().collect::<Vec<_>>();
     let code_chars = line.chars().collect::<Vec<_>>();
     let mut index = chars.partition_point(|(byte_index, _)| *byte_index < start);
@@ -166,7 +167,7 @@ pub(super) fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     None
 }
 
-pub(super) fn is_one_line_block_reached(line: &str, start: usize) -> bool {
+pub(crate) fn is_one_line_block_reached(line: &str, start: usize) -> bool {
     let braces = code_delimiters(line, start);
     let Some(open) = braces.iter().position(|(_, ch)| *ch == '{') else {
         return false;
@@ -175,7 +176,7 @@ pub(super) fn is_one_line_block_reached(line: &str, start: usize) -> bool {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct CodeDelimiterState {
+pub(crate) struct CodeDelimiterState {
     in_block_comment: bool,
     quote: Option<char>,
     escaped: bool,
@@ -186,7 +187,7 @@ fn code_delimiters(line: &str, start: usize) -> Vec<(usize, char)> {
     code_delimiters_stateful(line, start, &mut CodeDelimiterState::default())
 }
 
-pub(super) fn code_delimiters_stateful(
+pub(crate) fn code_delimiters_stateful(
     line: &str,
     start: usize,
     state: &mut CodeDelimiterState,
@@ -263,7 +264,7 @@ pub(super) fn code_delimiters_stateful(
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct SwitchCaseObserver {
+pub(crate) struct SwitchCaseObserver {
     switch_depth: usize,
     switch_stack: Vec<usize>,
     brace_depth: usize,
@@ -275,7 +276,7 @@ pub(super) struct SwitchCaseObserver {
 }
 
 impl SwitchCaseObserver {
-    pub(super) fn observe_line(&mut self, line: &str, mut kind: LineKind) -> LineKind {
+    pub(crate) fn observe_line(&mut self, line: &str, mut kind: LineKind) -> LineKind {
         let trimmed = line.trim_start();
         if kind == LineKind::Normal
             && !self.switch_stack.is_empty()
@@ -338,7 +339,7 @@ impl SwitchCaseObserver {
         kind
     }
 
-    pub(super) fn switch_depth(&self) -> usize {
+    pub(crate) fn switch_depth(&self) -> usize {
         self.switch_depth
     }
 }
@@ -351,7 +352,7 @@ struct CaseBlockState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct SwitchCaseLineTransformer {
+pub(crate) struct SwitchCaseLineTransformer {
     case_block_state: CaseBlockState,
     case_stack: Vec<CaseBlockState>,
     brace_depth: usize,
@@ -377,7 +378,7 @@ pub(super) struct SwitchCaseLineTransformer {
 }
 
 impl SwitchCaseLineTransformer {
-    pub(super) fn new(options: &FormatOptions) -> Self {
+    pub(crate) fn new(options: &FormatOptions) -> Self {
         Self {
             case_block_state: CaseBlockState::default(),
             case_stack: Vec::new(),
@@ -404,27 +405,27 @@ impl SwitchCaseLineTransformer {
         }
     }
 
-    pub(super) fn begin_line(&mut self) {
+    pub(crate) fn begin_line(&mut self) {
         self.line_number += 1;
     }
 
-    pub(super) fn mark_label_colon(&mut self, byte_index: usize) {
+    pub(crate) fn mark_label_colon(&mut self, byte_index: usize) {
         self.marked_label_colon = Some(byte_index);
     }
 
-    pub(super) fn raw_literal_suffix_start(&self, line: &str) -> Option<usize> {
+    pub(crate) fn raw_literal_suffix_start(&self, line: &str) -> Option<usize> {
         self.raw_string_delimiter
             .as_deref()
             .and_then(|delimiter| raw_strings::closing_end(line, 0, delimiter))
     }
 
-    pub(super) fn scan_raw_literal_line(&mut self, line: &str) {
+    pub(crate) fn scan_raw_literal_line(&mut self, line: &str) {
         let mut scan = line.to_string();
         let is_preprocessor = scan.trim_start().starts_with('#');
         self.parse_line(&mut scan, is_preprocessor);
     }
 
-    pub(super) fn transform_line(&mut self, mut line: String) -> String {
+    pub(crate) fn transform_line(&mut self, mut line: String) -> String {
         self.should_unindent_line = true;
         self.should_unindent_comment = false;
 
@@ -668,15 +669,15 @@ impl SwitchCaseLineTransformer {
         index
     }
 
-    pub(super) fn total_unindent_depth(&self) -> usize {
+    pub(crate) fn total_unindent_depth(&self) -> usize {
         self.case_block_state.unindent_depth + self.stack_unindent_depth()
     }
 
-    pub(super) fn next_line_unindent_depth(&self) -> usize {
+    pub(crate) fn next_line_unindent_depth(&self) -> usize {
         self.total_unindent_depth() + usize::from(self.unindent_next_line)
     }
 
-    pub(super) fn unindent_depth_for_line(&self, line: &str) -> usize {
+    pub(crate) fn unindent_depth_for_line(&self, line: &str) -> usize {
         if !self.indent_cases
             && first_non_ws_byte(line).is_some_and(|index| line[index..].starts_with('}'))
             && self.case_block_state.switch_brace_count == 1
@@ -694,7 +695,7 @@ impl SwitchCaseLineTransformer {
             )
     }
 
-    pub(super) fn pending_unindent_depth(&self) -> usize {
+    pub(crate) fn pending_unindent_depth(&self) -> usize {
         let total = self.total_unindent_depth();
         if self.case_block_state.unindent_case {
             total.saturating_sub(1)
@@ -804,7 +805,7 @@ fn char_index_after_byte(chars: &[(usize, char)], byte_index: usize) -> usize {
     chars.partition_point(|(index, _)| *index <= byte_index)
 }
 
-pub(super) fn starts_inline_case_statement(line: &str) -> bool {
+pub(crate) fn starts_inline_case_statement(line: &str) -> bool {
     let line = line.trim_start();
     if !(starts_header_word(line, "case") || starts_header_word(line, "default")) {
         return false;
@@ -840,14 +841,14 @@ pub(super) fn starts_inline_case_statement(line: &str) -> bool {
     false
 }
 
-pub(super) fn is_braced_switch_label_line(line: &str) -> bool {
+pub(crate) fn is_braced_switch_label_line(line: &str) -> bool {
     let code = line[..trailing_comment_split_limit(line)].trim_end();
     let trimmed = code.trim_start();
     code.ends_with('{') && (find_case_colon(trimmed).is_some() || trimmed == "default: {")
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub(super) struct SwitchCaseLayoutState {
+pub(crate) struct SwitchCaseLayoutState {
     body_brace_depths: Vec<usize>,
     pending_label_brace: bool,
     preprocessor_brace_depths: Vec<usize>,
@@ -855,9 +856,9 @@ pub(super) struct SwitchCaseLayoutState {
     closing_line_needs_unindent: bool,
 }
 
-pub(super) struct CaseBlockBodyLayout {
-    pub(super) exact_indent_spaces: usize,
-    pub(super) minimum_indent_level: Option<usize>,
+pub(crate) struct CaseBlockBodyLayout {
+    pub(crate) exact_indent_spaces: usize,
+    pub(crate) minimum_indent_level: Option<usize>,
 }
 
 struct ActiveCaseLayout {
@@ -866,7 +867,7 @@ struct ActiveCaseLayout {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn replayed_inline_case_body_indent_spaces(
+    pub(crate) fn replayed_inline_case_body_indent_spaces(
         &self,
         previous: &str,
         delimiter_replayed: bool,
@@ -886,11 +887,11 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn max_length_inline_case_body_indent_extra(&self, line: &str) -> Option<usize> {
+    pub(crate) fn max_length_inline_case_body_indent_extra(&self, line: &str) -> Option<usize> {
         starts_inline_case_statement(line).then_some(self.options.indent_width)
     }
 
-    pub(super) fn split_else_header_operator_case_compensation_indent_spaces(
+    pub(crate) fn split_else_header_operator_case_compensation_indent_spaces(
         &self,
         line: &str,
         current_spaces: Option<usize>,
@@ -915,7 +916,7 @@ impl FormatEngine<'_> {
         (!header_operator_indent).then_some(spaces + self.options.indent_width)
     }
 
-    pub(super) fn split_else_switch_comment_indent_spaces(
+    pub(crate) fn split_else_switch_comment_indent_spaces(
         &self,
         line: &str,
         split_else_output_context: bool,
@@ -938,7 +939,7 @@ impl FormatEngine<'_> {
         Some(leading_visual_width(previous, self.options.tab_width) + case_unindent)
     }
 
-    pub(super) fn split_else_adjusted_case_indent_floor(
+    pub(crate) fn split_else_adjusted_case_indent_floor(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -976,7 +977,7 @@ impl FormatEngine<'_> {
         (current_spaces.unwrap_or(0) <= target).then_some(target)
     }
 
-    pub(super) fn split_else_switch_label_indent_spaces(
+    pub(crate) fn split_else_switch_label_indent_spaces(
         &self,
         line_kind: LineKind,
         split_else_context: bool,
@@ -994,7 +995,7 @@ impl FormatEngine<'_> {
         Some(leading_visual_width(switch_line, self.options.tab_width) + body_indent)
     }
 
-    pub(super) fn split_else_case_body_indent_spaces(
+    pub(crate) fn split_else_case_body_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1045,7 +1046,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn split_else_case_closed_block_indent_spaces(
+    pub(crate) fn split_else_case_closed_block_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1114,7 +1115,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn split_else_case_completed_call_indent_spaces(
+    pub(crate) fn split_else_case_completed_call_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1171,7 +1172,7 @@ impl FormatEngine<'_> {
         (target != current).then_some(target)
     }
 
-    pub(super) fn case_parenthesized_block_indent_spaces(
+    pub(crate) fn case_parenthesized_block_indent_spaces(
         &self,
         line: &str,
         current_spaces: usize,
@@ -1186,7 +1187,7 @@ impl FormatEngine<'_> {
         .then_some(current_spaces + case_unindent)
     }
 
-    pub(super) fn case_control_indent_floor(
+    pub(crate) fn case_control_indent_floor(
         &self,
         line: &str,
         normal_indent: usize,
@@ -1211,7 +1212,7 @@ impl FormatEngine<'_> {
         owns_case_floor.then(|| current_spaces.max(normal_indent * self.options.indent_width))
     }
 
-    pub(super) fn case_post_comment_sibling_indent_spaces(
+    pub(crate) fn case_post_comment_sibling_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1249,7 +1250,7 @@ impl FormatEngine<'_> {
             .then_some(previous_indent + case_unindent)
     }
 
-    pub(super) fn logical_case_unindent_adjusted_spaces(
+    pub(crate) fn logical_case_unindent_adjusted_spaces(
         &self,
         line: &str,
         current_spaces: usize,
@@ -1264,24 +1265,24 @@ impl FormatEngine<'_> {
             .then_some(current_spaces + case_unindent)
     }
 
-    pub(super) fn has_pending_case_label_brace(&self) -> bool {
+    pub(crate) fn has_pending_case_label_brace(&self) -> bool {
         self.switch_case_layout.pending_label_brace
     }
 
-    pub(super) fn case_closing_line_needs_unindent(&self) -> bool {
+    pub(crate) fn case_closing_line_needs_unindent(&self) -> bool {
         self.switch_case_layout.closing_line_needs_unindent
     }
 
-    pub(super) fn has_case_body_at_current_depth(&self) -> bool {
+    pub(crate) fn has_case_body_at_current_depth(&self) -> bool {
         let current = self.stack_state.brace_header_stack.len();
         self.switch_case_layout.body_brace_depths.contains(&current)
     }
 
-    pub(super) fn has_case_body_indent(&self) -> bool {
+    pub(crate) fn has_case_body_indent(&self) -> bool {
         !self.switch_case_layout.body_brace_depths.is_empty()
     }
 
-    pub(super) fn register_attached_case_label_brace(&mut self) {
+    pub(crate) fn register_attached_case_label_brace(&mut self) {
         if !self.switch_case_layout.pending_label_brace {
             return;
         }
@@ -1291,7 +1292,7 @@ impl FormatEngine<'_> {
         self.switch_case_layout.pending_label_brace = false;
     }
 
-    pub(super) fn prepare_case_closing_brace(&mut self) {
+    pub(crate) fn prepare_case_closing_brace(&mut self) {
         self.switch_case_layout.closing_line_needs_unindent = self
             .switch_case_layout
             .unindent_brace_depths
@@ -1299,7 +1300,7 @@ impl FormatEngine<'_> {
             .is_some_and(|depth| *depth == self.stack_state.brace_header_stack.len());
     }
 
-    pub(super) fn clear_case_body_indent_if_past_switch(&mut self) {
+    pub(crate) fn clear_case_body_indent_if_past_switch(&mut self) {
         let current = self.stack_state.brace_header_stack.len();
         while self
             .switch_case_layout
@@ -1319,7 +1320,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn direct_switch_body_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn direct_switch_body_indent_spaces(&self) -> Option<usize> {
         if !self.options.indent_switches && self.options.brace_style != BraceStyle::Vtk {
             return None;
         }
@@ -1330,7 +1331,7 @@ impl FormatEngine<'_> {
         Some(frame.body_indent_column + self.options.indent_width)
     }
 
-    pub(super) fn case_body_indent_extra(&self, line_kind: LineKind) -> usize {
+    pub(crate) fn case_body_indent_extra(&self, line_kind: LineKind) -> usize {
         if !self.options.indent_switches {
             return 0;
         }
@@ -1358,7 +1359,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn case_preproc_body_indent_extra(&self, line_kind: LineKind, line: &str) -> usize {
+    pub(crate) fn case_preproc_body_indent_extra(&self, line_kind: LineKind, line: &str) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
         }
@@ -1379,7 +1380,7 @@ impl FormatEngine<'_> {
             .count()
     }
 
-    pub(super) fn isolated_opening_brace_is_switch_label(&self) -> bool {
+    pub(crate) fn isolated_opening_brace_is_switch_label(&self) -> bool {
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
@@ -1454,7 +1455,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn initial_switch_case_indent_spaces(
+    pub(crate) fn initial_switch_case_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1519,7 +1520,7 @@ impl FormatEngine<'_> {
         exact_indent_spaces
     }
 
-    pub(super) fn emitted_case_body_indent_spaces(
+    pub(crate) fn emitted_case_body_indent_spaces(
         &self,
         line: &str,
         current_spaces: Option<usize>,
@@ -1589,7 +1590,7 @@ impl FormatEngine<'_> {
         (trimmed.starts_with('}') || current_spaces.unwrap_or(0) < target).then_some(target)
     }
 
-    pub(super) fn immediate_case_brace_indent_spaces(
+    pub(crate) fn immediate_case_brace_indent_spaces(
         &self,
         line: &str,
         closing_line_needs_unindent: bool,
@@ -1612,7 +1613,7 @@ impl FormatEngine<'_> {
         Some(indent * self.options.indent_width)
     }
 
-    pub(super) fn case_label_block_indent_override(
+    pub(crate) fn case_label_block_indent_override(
         &self,
         line: &str,
         structural_indent: usize,
@@ -1646,7 +1647,7 @@ impl FormatEngine<'_> {
         (current <= target).then_some(target + case_unindent_depth * self.options.indent_width)
     }
 
-    pub(super) fn active_case_control_closing_indent_override(
+    pub(crate) fn active_case_control_closing_indent_override(
         &self,
         line: &str,
         structural_indent: usize,
@@ -1705,7 +1706,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn compound_case_label_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn compound_case_label_indent_override(&self, line: &str) -> Option<usize> {
         if self.options.indent_cases {
             return None;
         }
@@ -1719,7 +1720,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(super) fn split_switch_closing_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_switch_closing_indent_override(&self, line: &str) -> Option<usize> {
         if line.trim() != "}" {
             return None;
         }
@@ -1730,7 +1731,7 @@ impl FormatEngine<'_> {
             .then_some(frame.sibling_indent_column)
     }
 
-    pub(super) fn post_block_case_body_indent_override(
+    pub(crate) fn post_block_case_body_indent_override(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1762,7 +1763,7 @@ impl FormatEngine<'_> {
             .map(|spaces| spaces + self.options.indent_width)
     }
 
-    pub(super) fn nested_case_label_indent_override(
+    pub(crate) fn nested_case_label_indent_override(
         &mut self,
         line_kind: LineKind,
     ) -> Option<usize> {
@@ -1782,7 +1783,7 @@ impl FormatEngine<'_> {
         Some(frame.header_indent_column + indent_width)
     }
 
-    pub(super) fn active_case_block_body_layout(
+    pub(crate) fn active_case_block_body_layout(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -1830,7 +1831,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn switch_case_frame_closing_indent_override(
+    pub(crate) fn switch_case_frame_closing_indent_override(
         &self,
         line: &str,
         exact_indent_spaces: Option<usize>,
@@ -1870,7 +1871,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(super) fn active_case_label_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn active_case_label_indent_spaces(&self) -> Option<usize> {
         let tab_width = self.options.tab_width;
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
@@ -1890,7 +1891,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn update_case_body_indent(&mut self, line_kind: LineKind) {
+    pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind) {
         if line_kind == LineKind::SwitchLabel {
             let current = self.stack_state.brace_header_stack.len();
             if self.switch_case_layout.body_brace_depths.last() != Some(&current) {
@@ -1899,7 +1900,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn update_case_brace_unindent(&mut self, line_kind: LineKind, line: &str) {
+    pub(crate) fn update_case_brace_unindent(&mut self, line_kind: LineKind, line: &str) {
         if self.options.indent_cases {
             self.switch_case_layout.pending_label_brace = false;
             self.switch_case_layout.closing_line_needs_unindent = false;
@@ -1966,7 +1967,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
         if line.trim_start().starts_with(['#', '{', '}', '/'])
             || find_case_colon(line).is_some()
             || self

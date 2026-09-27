@@ -1,31 +1,32 @@
-use super::assembly::is_asm_block_header;
-use super::brace_classification::{
+use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::formatter::assembly::is_asm_block_header;
+use crate::formatter::brace_classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
+    lambda_header_has_trailing_return,
 };
-use super::columns::leading_visual_width;
-use super::compound_literals::line_ends_compound_literal_cast;
-use super::indentation::LineKind;
-use super::initializer_braces::bracket_starts_initializer_designator;
-use super::language;
-use super::language::is_macro_like_word;
-use super::line_scan::{
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::initializer_braces::bracket_starts_initializer_designator;
+use crate::formatter::language::is_macro_like_word;
+use crate::formatter::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use super::preprocessor::{is_conditional_preprocessor, is_known_preprocessor_directive};
-
-use super::state::{FormatterBraceType, PreviousToken, TemplateAngle};
-use super::syntax::template_angle_role;
-use super::token::{
+use crate::formatter::preprocessor::{
+    is_conditional_preprocessor, is_known_preprocessor_directive,
+};
+use crate::formatter::state::{FormatterBraceType, PreviousToken, TemplateAngle};
+use crate::formatter::syntax::template_angle_role;
+use crate::formatter::token::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
     next_non_whitespace, token_text,
 };
-use super::{FormatEngine, TokenPushContext};
-use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::formatter::{FormatEngine, TokenPushContext, language};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 impl FormatEngine<'_> {
-    pub(super) fn try_add_braces_to_statement(
+    pub(crate) fn try_add_braces_to_statement(
         &mut self,
         tokens: &[Token],
         line_start: usize,
@@ -215,7 +216,7 @@ impl FormatEngine<'_> {
         Some(semicolon + 1)
     }
 
-    pub(super) fn try_remove_braces_from_statement(
+    pub(crate) fn try_remove_braces_from_statement(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -312,7 +313,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(super) fn try_break_one_line_header(
+    pub(crate) fn try_break_one_line_header(
         &mut self,
         tokens: &[Token],
         line_start: usize,
@@ -535,7 +536,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn try_break_braceless_header_body(
+    pub(crate) fn try_break_braceless_header_body(
         &mut self,
         tokens: &[Token],
         newline_index: usize,
@@ -642,7 +643,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn try_break_else_if(&mut self, tokens: &[Token], start: usize) -> bool {
+    pub(crate) fn try_break_else_if(&mut self, tokens: &[Token], start: usize) -> bool {
         if !self.options.break_else_ifs
             || !matches!(tokens.get(start), Some(Token::Word(word)) if word == "if")
             || self.command_state.current_header.as_deref() != Some("else")
@@ -656,11 +657,11 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn is_after_preprocessor_split_else(&self) -> bool {
+    pub(crate) fn is_after_preprocessor_split_else(&self) -> bool {
         self.preprocessor.split_else.pending_body && self.preprocessor.split_else.after_line
     }
 
-    pub(super) fn try_push_one_line_defer_block(
+    pub(crate) fn try_push_one_line_defer_block(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -768,7 +769,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(super) fn inferred_definition_brace(&self, tokens: &[Token], brace_index: usize) -> bool {
+    pub(crate) fn inferred_definition_brace(&self, tokens: &[Token], brace_index: usize) -> bool {
         if !self.in_declaration_brace_scope() || !segment_follows_inferred_type(tokens, brace_index)
         {
             return false;
@@ -783,7 +784,7 @@ impl FormatEngine<'_> {
             && self.inferred_definition_brace(tokens, brace_index)
     }
 
-    pub(super) fn try_push_one_line_initializer_block(
+    pub(crate) fn try_push_one_line_initializer_block(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -1012,7 +1013,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(super) fn try_push_kept_one_line_block(
+    pub(crate) fn try_push_kept_one_line_block(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -1265,7 +1266,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(super) fn try_push_one_line_preprocessor_block(
+    pub(crate) fn try_push_one_line_preprocessor_block(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -1321,7 +1322,7 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
-    pub(super) fn push_attached_one_line_block(
+    pub(crate) fn push_attached_one_line_block(
         &mut self,
         tokens: &[Token],
         brace_type: FormatterBraceType,
@@ -1402,9 +1403,7 @@ impl FormatEngine<'_> {
                 _ => {}
             },
             None if self.current_is_lambda_body_header()
-                && super::brace_classification::lambda_header_has_trailing_return(
-                    self.current.trim_end(),
-                ) =>
+                && lambda_header_has_trailing_return(self.current.trim_end()) =>
             {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
@@ -1464,7 +1463,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn is_nested_designated_init_field(&self) -> bool {
+    pub(crate) fn is_nested_designated_init_field(&self) -> bool {
         self.command_state.previous_command_char == Some('=')
             && matches!(
                 self.stack_state.brace_type_stack.last(),
@@ -1477,7 +1476,7 @@ impl FormatEngine<'_> {
             )
     }
 
-    pub(super) fn should_space_before_one_line_block(
+    pub(crate) fn should_space_before_one_line_block(
         &self,
         brace_type: FormatterBraceType,
     ) -> bool {
@@ -1503,7 +1502,7 @@ impl FormatEngine<'_> {
                 .is_some_and(is_identifier_continue)
     }
 
-    pub(super) fn push_inline_open_brace(&mut self) {
+    pub(crate) fn push_inline_open_brace(&mut self) {
         let inside_aggregate = self.inline_array.aggregate_braces.last() == Some(&true);
         let is_aggregate = self.inline_open_brace_is_aggregate();
         self.inline_array.aggregate_braces.push(is_aggregate);
@@ -1534,9 +1533,7 @@ impl FormatEngine<'_> {
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == '>')
                 && self.current_is_lambda_body_header()
-                && super::brace_classification::lambda_header_has_trailing_return(
-                    self.current.trim_end(),
-                )
+                && lambda_header_has_trailing_return(self.current.trim_end())
             {
                 self.emit_source_space();
             } else {
@@ -1550,7 +1547,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn inline_open_brace_is_aggregate(&self) -> bool {
+    pub(crate) fn inline_open_brace_is_aggregate(&self) -> bool {
         if self.current.trim_end().ends_with('@') {
             return true;
         }
@@ -1573,14 +1570,14 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn attach_closing_brace_mode(&self) -> bool {
+    pub(crate) fn attach_closing_brace_mode(&self) -> bool {
         matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
         )
     }
 
-    pub(super) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
+    pub(crate) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
         let is_aggregate = self.inline_array.aggregate_braces.pop().unwrap_or(false);
         let closes_compound_literal = is_aggregate
             && self
@@ -1605,7 +1602,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn push_inline_semicolon(&mut self, next: Option<&Token>) {
+    pub(crate) fn push_inline_semicolon(&mut self, next: Option<&Token>) {
         self.emit_source_space();
         self.current.push(';');
         self.command_state.observe_char(';');
@@ -1622,7 +1619,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    pub(super) fn push_replayed_statement(
+    pub(crate) fn push_replayed_statement(
         &mut self,
         tokens: &[Token],
         start: usize,
@@ -1663,11 +1660,11 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(super) fn is_defer_header(word: &str) -> bool {
+pub(crate) fn is_defer_header(word: &str) -> bool {
     matches!(word, "defer" | "_Defer")
 }
 
-pub(super) fn is_add_braces_header(word: &str) -> bool {
+pub(crate) fn is_add_braces_header(word: &str) -> bool {
     matches!(
         word,
         "if" | "else" | "for" | "foreach" | "Q_FOREACH" | "while" | "do"
@@ -1700,7 +1697,7 @@ fn is_remove_braces_header(word: &str) -> bool {
     matches!(word, "if" | "else" | "for" | "while")
 }
 
-pub(super) fn add_cross_line_statement_braces(
+pub(crate) fn add_cross_line_statement_braces(
     tokens: &[Token],
     attach_added_braces: bool,
 ) -> Vec<Token> {
@@ -1852,7 +1849,7 @@ fn next_add_braces_statement_token(tokens: &[Token], start: usize) -> Option<usi
     None
 }
 
-pub(super) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token> {
+pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token> {
     let mut remove = vec![false; tokens.len()];
     let mut replace_with_space = vec![false; tokens.len()];
     for open_index in 0..tokens.len() {
@@ -2046,7 +2043,7 @@ fn find_statement_semicolon(tokens: &[Token], start: usize, line_end: usize) -> 
     None
 }
 
-pub(super) fn following_operator_after_next_word(
+pub(crate) fn following_operator_after_next_word(
     tokens: &[Token],
     start: usize,
     end: usize,
@@ -2179,7 +2176,7 @@ fn initializer_brace_type(
     }
 }
 
-pub(super) fn previous_non_whitespace(
+pub(crate) fn previous_non_whitespace(
     tokens: &[Token],
     before: usize,
     line_start: usize,
@@ -2475,7 +2472,7 @@ fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::token::tokenize;
+    use crate::formatter::token::tokenize;
     use super::*;
 
     #[test]

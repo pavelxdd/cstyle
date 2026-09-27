@@ -1,9 +1,9 @@
-use super::super::FormatEngine;
-use super::model::LineReplayLayout;
 use crate::config::BraceStyle;
+use crate::formatter::FormatEngine;
+use crate::formatter::output::model::LineReplayLayout;
 
 impl FormatEngine<'_> {
-    pub(super) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
+    pub(crate) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
         let input_continuation_indent = self
             .continuation_indent
             .input_line_continuation_indent

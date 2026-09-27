@@ -1,31 +1,30 @@
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::line_scan::{line_brace_imbalance, line_paren_imbalance};
+use crate::formatter::token::{Token, token_text, tokenize};
+use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell};
 use std::ops::Deref;
 
-use super::columns::leading_visual_width;
-use super::line_scan::{line_brace_imbalance, line_paren_imbalance};
-use super::token::{Token, token_text, tokenize};
-use crate::source::lex::{is_identifier_continue, is_identifier_start};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum OpenBraceShape {
+pub(crate) enum OpenBraceShape {
     Isolated,
     Label,
     Other,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct LineBraceMeta {
-    pub(super) code_starts_with_hash: bool,
-    pub(super) closes: usize,
-    pub(super) opens: usize,
-    pub(super) open_shape: OpenBraceShape,
-    pub(super) trim_start_byte: usize,
-    pub(super) trim_end_byte: usize,
-    pub(super) code_end_byte: usize,
-    pub(super) paren_closes: usize,
-    pub(super) paren_open_count: usize,
-    pub(super) paren_last_open_column: Option<usize>,
+pub(crate) struct LineBraceMeta {
+    pub(crate) code_starts_with_hash: bool,
+    pub(crate) closes: usize,
+    pub(crate) opens: usize,
+    pub(crate) open_shape: OpenBraceShape,
+    pub(crate) trim_start_byte: usize,
+    pub(crate) trim_end_byte: usize,
+    pub(crate) code_end_byte: usize,
+    pub(crate) paren_closes: usize,
+    pub(crate) paren_open_count: usize,
+    pub(crate) paren_last_open_column: Option<usize>,
 }
 
 fn is_raw_literal(token: &Token) -> bool {
@@ -111,7 +110,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
 }
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct OutputLineHints {
+pub(crate) struct OutputLineHints {
     has_colon: bool,
     has_else: bool,
     has_hash: bool,
@@ -120,7 +119,7 @@ pub(super) struct OutputLineHints {
     starts_star: bool,
 }
 
-pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
+pub(crate) fn output_line_hints(line: &str) -> OutputLineHints {
     let bytes = line.as_bytes();
     let mut hints = OutputLineHints::default();
     let mut first_non_space = None;
@@ -143,7 +142,7 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
 
 // Reads go through `Deref`; mutations stay on this type so cached line metadata cannot go stale.
 #[derive(Default)]
-pub(super) struct OutputBuffer {
+pub(crate) struct OutputBuffer {
     lines: Vec<String>,
     meta: Vec<OnceCell<LineBraceMeta>>,
     may_have_label_open: bool,
@@ -167,12 +166,12 @@ impl OutputBuffer {
         self.may_have_question |= hints.has_question;
     }
 
-    pub(super) fn push(&mut self, line: String) {
+    pub(crate) fn push(&mut self, line: String) {
         let hints = output_line_hints(&line);
         self.push_with_hints(line, hints);
     }
 
-    pub(super) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
+    pub(crate) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
         self.record_hints(&line, hints);
         let index = self.lines.len();
         if !line.trim().is_empty() {
@@ -183,7 +182,7 @@ impl OutputBuffer {
         self.meta.push(OnceCell::new());
     }
 
-    pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
+    pub(crate) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
         let suffix = line.get(structural_start..).unwrap_or("");
         self.record_hints(suffix, output_line_hints(suffix));
         let meta = compute_raw_literal_line_meta(&line, structural_start);
@@ -196,7 +195,7 @@ impl OutputBuffer {
         self.meta.push(OnceCell::from(meta));
     }
 
-    pub(super) fn pop(&mut self) -> Option<String> {
+    pub(crate) fn pop(&mut self) -> Option<String> {
         self.meta.pop();
         let line = self.lines.pop();
         if line.is_some() {
@@ -205,7 +204,7 @@ impl OutputBuffer {
         line
     }
 
-    pub(super) fn last_mut(&mut self) -> Option<&mut String> {
+    pub(crate) fn last_mut(&mut self) -> Option<&mut String> {
         if let Some(slot) = self.meta.last_mut() {
             *slot = OnceCell::new();
             self.may_have_label_open = true;
@@ -218,7 +217,7 @@ impl OutputBuffer {
         self.lines.last_mut()
     }
 
-    pub(super) fn get_mut(&mut self, index: usize) -> Option<&mut String> {
+    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut String> {
         if let Some(slot) = self.meta.get_mut(index) {
             *slot = OnceCell::new();
             self.may_have_label_open = true;
@@ -231,13 +230,13 @@ impl OutputBuffer {
         self.lines.get_mut(index)
     }
 
-    pub(super) fn remove(&mut self, index: usize) -> String {
+    pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
         self.last_non_empty_dirty.set(true);
         self.lines.remove(index)
     }
 
-    pub(super) fn set(&mut self, index: usize, line: String) {
+    pub(crate) fn set(&mut self, index: usize, line: String) {
         let hints = output_line_hints(&line);
         self.record_hints(&line, hints);
         self.meta[index] = OnceCell::new();
@@ -245,11 +244,11 @@ impl OutputBuffer {
         self.last_non_empty_dirty.set(true);
     }
 
-    pub(super) fn as_slice(&self) -> &[String] {
+    pub(crate) fn as_slice(&self) -> &[String] {
         &self.lines
     }
 
-    pub(super) fn range_mut(&mut self, range: std::ops::Range<usize>) -> &mut [String] {
+    pub(crate) fn range_mut(&mut self, range: std::ops::Range<usize>) -> &mut [String] {
         for slot in &mut self.meta[range.clone()] {
             *slot = OnceCell::new();
         }
@@ -264,30 +263,30 @@ impl OutputBuffer {
         &mut self.lines[range]
     }
 
-    pub(super) fn brace_meta(&self, index: usize) -> &LineBraceMeta {
+    pub(crate) fn brace_meta(&self, index: usize) -> &LineBraceMeta {
         self.meta[index].get_or_init(|| compute_line_brace_meta(&self.lines[index]))
     }
 
-    pub(super) fn trimmed(&self, index: usize) -> &str {
+    pub(crate) fn trimmed(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
         &self.lines[index][meta.trim_start_byte..meta.trim_end_byte.max(meta.trim_start_byte)]
     }
 
-    pub(super) fn code(&self, index: usize) -> &str {
+    pub(crate) fn code(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
         &self.lines[index][..meta.code_end_byte]
     }
 
-    pub(super) fn code_trimmed(&self, index: usize) -> &str {
+    pub(crate) fn code_trimmed(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
         &self.lines[index][meta.trim_start_byte.min(meta.code_end_byte)..meta.code_end_byte]
     }
 
-    pub(super) fn lead_width(&self, index: usize, tab_width: usize) -> usize {
+    pub(crate) fn lead_width(&self, index: usize, tab_width: usize) -> usize {
         leading_visual_width(&self.lines[index], tab_width)
     }
 
-    pub(super) fn current_closing_brace_open(
+    pub(crate) fn current_closing_brace_open(
         &self,
         tab_width: usize,
     ) -> Option<(usize, OpenBraceShape, &str)> {
@@ -310,7 +309,7 @@ impl OutputBuffer {
         None
     }
 
-    pub(super) fn last_non_empty_index(&self) -> Option<usize> {
+    pub(crate) fn last_non_empty_index(&self) -> Option<usize> {
         if self.last_non_empty_dirty.get() {
             self.last_non_empty_index
                 .set(self.lines.iter().rposition(|line| !line.trim().is_empty()));
@@ -319,27 +318,27 @@ impl OutputBuffer {
         self.last_non_empty_index.get()
     }
 
-    pub(super) fn last_non_empty_line(&self) -> Option<&String> {
+    pub(crate) fn last_non_empty_line(&self) -> Option<&String> {
         self.last_non_empty_index().map(|index| &self.lines[index])
     }
 
-    pub(super) fn may_have_label_open(&self) -> bool {
+    pub(crate) fn may_have_label_open(&self) -> bool {
         self.may_have_label_open
     }
 
-    pub(super) fn may_have_else(&self) -> bool {
+    pub(crate) fn may_have_else(&self) -> bool {
         self.may_have_else
     }
 
-    pub(super) fn may_have_hash(&self) -> bool {
+    pub(crate) fn may_have_hash(&self) -> bool {
         self.may_have_hash
     }
 
-    pub(super) fn may_have_comment(&self) -> bool {
+    pub(crate) fn may_have_comment(&self) -> bool {
         self.may_have_comment
     }
 
-    pub(super) fn may_have_question(&self) -> bool {
+    pub(crate) fn may_have_question(&self) -> bool {
         self.may_have_question
     }
 }

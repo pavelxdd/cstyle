@@ -1,8 +1,7 @@
-use super::columns::{leading_visual_width, visual_width_from};
-use super::{
-    FormatEngine, operator_chains, trailing_comment_split_limit, unmatched_open_paren_column,
-};
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
+use crate::formatter::{FormatEngine, operator_chains};
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -565,7 +564,7 @@ fn update_define_expression_paren_anchors(line: &str, anchors: &mut Vec<usize>, 
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn finish_define_line(&mut self, line: &str) {
+    pub(crate) fn finish_define_line(&mut self, line: &str) {
         let line_start = line.trim_start();
         if !line_start.starts_with("#define") {
             return;
@@ -587,7 +586,7 @@ impl FormatEngine<'_> {
         define_assignment_continuation_indent(line, self.options.tab_width)
     }
 
-    pub(super) fn push_multiline_define(&mut self, parts: &[&str]) {
+    pub(crate) fn push_multiline_define(&mut self, parts: &[&str]) {
         let Some((first, body_parts)) = parts.split_first() else {
             return;
         };

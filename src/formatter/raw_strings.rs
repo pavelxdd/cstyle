@@ -1,12 +1,12 @@
 use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct RawStringStart {
-    pub(super) delimiter: String,
-    pub(super) end: Option<usize>,
+pub(crate) struct RawStringStart {
+    pub(crate) delimiter: String,
+    pub(crate) end: Option<usize>,
 }
 
-pub(super) fn start(line: &str, start: usize) -> Option<RawStringStart> {
+pub(crate) fn start(line: &str, start: usize) -> Option<RawStringStart> {
     let rest = line.get(start..)?;
     if line
         .get(..start)?
@@ -33,13 +33,13 @@ pub(super) fn start(line: &str, start: usize) -> Option<RawStringStart> {
     })
 }
 
-pub(super) fn closing_end(line: &str, start: usize, delimiter: &str) -> Option<usize> {
+pub(crate) fn closing_end(line: &str, start: usize, delimiter: &str) -> Option<usize> {
     let closing = format!("){delimiter}\"");
     line.get(start..)?
         .find(&closing)
         .map(|offset| start + offset + closing.len())
 }
 
-pub(super) fn end(line: &str, start: usize) -> Option<usize> {
+pub(crate) fn end(line: &str, start: usize) -> Option<usize> {
     self::start(line, start).map(|raw| raw.end.unwrap_or(line.len()))
 }

@@ -1,29 +1,26 @@
-use super::block_spacing::is_break_blocks_closing_header;
-use super::brace_postprocess::horstmann_run_in_fill;
-use super::columns::{
+use crate::config::{BraceStyle, PointerAlign, ReferenceAlign};
+use crate::formatter::block_spacing::is_break_blocks_closing_header;
+use crate::formatter::brace_postprocess::horstmann_run_in_fill;
+use crate::formatter::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
 };
-use super::disabled_formatting::DisabledFormattingState;
-use super::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
-use super::indentation::LineKind;
-use super::labels;
-use super::language;
-use super::line_scan::{is_comment_line, is_comment_only_line, line_ends_with_comment};
-use super::operators::{
+use crate::formatter::disabled_formatting::DisabledFormattingState;
+use crate::formatter::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{
+    is_comment_line, is_comment_only_line, line_ends_with_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column,
+};
+use crate::formatter::operators::{
     find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
     starts_with_chain_operator,
 };
-use super::preprocessor::PreprocessorRegion;
-use super::preprocessor::preprocessor_directive;
-use super::rewrite::is_add_braces_header;
-use super::state::ContinuationIndent;
-use super::state::FormatterBraceType;
-use super::token::{CommentKind, Token, token_char_len};
-use super::{
-    FormatEngine, PointerAlign, PreviousToken, ReferenceAlign, trailing_comment_split_limit,
-    unmatched_open_paren_column,
-};
-use crate::config::BraceStyle;
+use crate::formatter::preprocessor::{PreprocessorRegion, preprocessor_directive};
+use crate::formatter::rewrite::is_add_braces_header;
+use crate::formatter::state::{ContinuationIndent, FormatterBraceType, PreviousToken};
+use crate::formatter::switch_cases::find_case_colon;
+use crate::formatter::token::{CommentKind, Token, token_char_len};
+use crate::formatter::{FormatEngine, labels, language};
 
 fn comment_starts_header_word(line: &str, word: &str) -> bool {
     line.strip_prefix(word)
@@ -45,7 +42,7 @@ fn post_closing_declaration_owns_comment(line: &str) -> bool {
     !matches!(word, "else" | "catch" | "while" | "__finally" | "__except")
 }
 
-pub(super) fn line_comment_backslash_trailing_space(line: &str) -> bool {
+pub(crate) fn line_comment_backslash_trailing_space(line: &str) -> bool {
     if !line.chars().next_back().is_some_and(char::is_whitespace) {
         return false;
     }
@@ -55,11 +52,11 @@ pub(super) fn line_comment_backslash_trailing_space(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn schedule_run_in_comment_brace_merge(&mut self, brace_line: usize) {
+    pub(crate) fn schedule_run_in_comment_brace_merge(&mut self, brace_line: usize) {
         self.run_in_comment_brace_lines.push(brace_line);
     }
 
-    pub(super) fn merge_run_in_comment_braces(&mut self) {
+    pub(crate) fn merge_run_in_comment_braces(&mut self) {
         let mut indices = std::mem::take(&mut self.run_in_comment_brace_lines);
         indices.sort_unstable();
         indices.dedup();
@@ -88,7 +85,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn push_raw_comment_output_line(&mut self, line: String) {
+    pub(crate) fn push_raw_comment_output_line(&mut self, line: String) {
         if self.take_block_spacing_blank(&line) {
             self.push_empty_line();
         }
@@ -96,7 +93,7 @@ impl FormatEngine<'_> {
         self.adjust_and_publish_line(line);
     }
 
-    pub(super) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {
+    pub(crate) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {
         let trimmed = line.trim_start();
         if !trimmed.starts_with("/*") || trimmed.match_indices("/*").nth(1).is_none() {
             return line;
@@ -117,12 +114,12 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn observe_raw_output_comment_frame(&mut self, line: &str) {
+    pub(crate) fn observe_raw_output_comment_frame(&mut self, line: &str) {
         let output_spaces = leading_visual_width(line, self.options.tab_width);
         self.observe_output_comment_frame(line, output_spaces, false);
     }
 
-    pub(super) fn observe_formatted_output_comment_frame(
+    pub(crate) fn observe_formatted_output_comment_frame(
         &mut self,
         line: &str,
         output_spaces: usize,
@@ -130,7 +127,7 @@ impl FormatEngine<'_> {
         self.observe_output_comment_frame(line, output_spaces, true);
     }
 
-    pub(super) fn line_comment_continuation_anchor_column(&self) -> Option<usize> {
+    pub(crate) fn line_comment_continuation_anchor_column(&self) -> Option<usize> {
         self.frame_stack
             .active_comment()
             .and_then(|frame| frame.continuation_anchor_column)
@@ -158,7 +155,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn split_else_comment_row_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_else_comment_row_indent_spaces(&self, line: &str) -> Option<usize> {
         if !is_comment_line(line.trim_start()) {
             return None;
         }
@@ -176,7 +173,7 @@ impl FormatEngine<'_> {
         result
     }
 
-    pub(super) fn none_style_post_comment_sibling_indent_spaces(
+    pub(crate) fn none_style_post_comment_sibling_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -215,7 +212,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn split_else_immediate_post_comment_indent_floor(
+    pub(crate) fn split_else_immediate_post_comment_indent_floor(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -238,7 +235,7 @@ impl FormatEngine<'_> {
         (current_spaces.unwrap_or(output_spaces) < target).then_some(target)
     }
 
-    pub(super) fn structural_split_else_post_comment_indent_spaces(
+    pub(crate) fn structural_split_else_post_comment_indent_spaces(
         &self,
         line: &str,
         current_spaces: usize,
@@ -256,7 +253,7 @@ impl FormatEngine<'_> {
             .then_some(body_spaces)
     }
 
-    pub(super) fn preprocessor_else_comment_sibling_indent_spaces(
+    pub(crate) fn preprocessor_else_comment_sibling_indent_spaces(
         &self,
         line: &str,
         line_kind: LineKind,
@@ -283,7 +280,7 @@ impl FormatEngine<'_> {
         .then(|| leading_visual_width(before, self.options.tab_width))
     }
 
-    pub(super) fn try_finish_preindented_comment_line(
+    pub(crate) fn try_finish_preindented_comment_line(
         &mut self,
         close_paren_ends_declaration: bool,
     ) -> bool {
@@ -361,7 +358,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn push_inline_comment(&mut self, comment: &str) {
+    pub(crate) fn push_inline_comment(&mut self, comment: &str) {
         if self.token_input.previous_input_was_adjacent {
             self.trim_current_end();
             if comment.trim_start().starts_with("//") {
@@ -399,7 +396,7 @@ impl FormatEngine<'_> {
         });
     }
 
-    pub(super) fn reindent_trailing_comment(&mut self, line_kind: LineKind) -> bool {
+    pub(crate) fn reindent_trailing_comment(&mut self, line_kind: LineKind) -> bool {
         let mut end = self.output.len();
         while end > 0 && self.output[end - 1].trim().is_empty() {
             end -= 1;
@@ -511,7 +508,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
         let frame = self.frame_stack.active_brace()?;
         let body_column = if frame.formatter_type == FormatterBraceType::Namespace
             && (!self.options.indent_namespaces
@@ -548,7 +545,7 @@ impl FormatEngine<'_> {
             .trim_start()
             .strip_prefix('{')
             .map_or(code.trim_start(), str::trim_start);
-        let colon = super::switch_cases::find_case_colon(candidate)?;
+        let colon = find_case_colon(candidate)?;
         candidate[colon + 1..].trim().is_empty().then(|| {
             let offset = code.len() - candidate.len();
             visual_width_from(&code[..offset], 0, self.options.tab_width)
@@ -556,7 +553,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn push_comment(&mut self, kind: CommentKind, comment: &str) {
+    pub(crate) fn push_comment(&mut self, kind: CommentKind, comment: &str) {
         let function_try_initializer_comment = self.options.break_one_line_statements
             && self
                 .frame_stack
@@ -2487,7 +2484,7 @@ fn is_decorative_block_comment_closer(line: &str) -> bool {
     line.ends_with("*/") && line.chars().all(|ch| matches!(ch, '*' | '/'))
 }
 
-pub(super) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
+pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
     let mut columns = Vec::new();
     let mut column = 0usize;
     let mut seen_code = false;

@@ -1,7 +1,7 @@
+use std::rc::Rc;
+
 // Stack with O(1) clone: clones share the list and never copy elements.
 // Snapshots taken per preprocessor conditional stay cheap at any depth.
-
-use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct PersistentStack<T> {

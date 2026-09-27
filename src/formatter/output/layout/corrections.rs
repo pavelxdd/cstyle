@@ -1,20 +1,18 @@
-use super::super::super::FormatEngine;
-use super::super::super::columns::leading_visual_width;
-use super::super::super::frame::BraceSemanticKind;
-use super::super::super::headers::is_attachable_closing_header;
-use super::super::super::headers::{same_line_nested_header_extra, starts_header_word};
-use super::super::super::indentation::LineKind;
-use super::super::super::labels;
-
-use super::super::super::line_scan::{line_paren_imbalance, trailing_comment_split_limit};
-use super::super::super::preprocessor::preprocessor_directive;
-use super::super::model::{LineLayout, LineReplayLayout};
 use crate::config::{BraceStyle, IndentStyle};
-use crate::source::lex::is_identifier_continue;
-use crate::source::lex::leading_identifier;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::frame::BraceSemanticKind;
+use crate::formatter::headers::{
+    is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
+};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{line_paren_imbalance, trailing_comment_split_limit};
+use crate::formatter::output::model::{LineLayout, LineReplayLayout};
+use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::{FormatEngine, labels};
+use crate::source::lex::{is_identifier_continue, leading_identifier};
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_brace_header_case_and_initializer_correction_layout(
+    pub(crate) fn apply_brace_header_case_and_initializer_correction_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,
@@ -214,7 +212,7 @@ impl FormatEngine<'_> {
         layout
     }
 
-    pub(in super::super) fn apply_label_switch_case_and_opening_brace_correction_layout(
+    pub(crate) fn apply_label_switch_case_and_opening_brace_correction_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,
@@ -303,7 +301,7 @@ impl FormatEngine<'_> {
         layout
     }
 
-    pub(in super::super) fn apply_final_recovery_floor_and_replay_layout(
+    pub(crate) fn apply_final_recovery_floor_and_replay_layout(
         &mut self,
         line: &str,
         replay: &LineReplayLayout,

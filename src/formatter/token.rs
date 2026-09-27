@@ -1,9 +1,9 @@
-use super::assembly::AssemblyMacroLines;
-use super::language;
+use crate::formatter::assembly::AssemblyMacroLines;
+use crate::formatter::language;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) enum Token {
+pub(crate) enum Token {
     Word(String),
     Number(String),
     StringLiteral(String),
@@ -18,15 +18,15 @@ pub(super) enum Token {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum CommentKind {
+pub(crate) enum CommentKind {
     Line,
     Block,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct PreprocessorToken {
-    pub(super) text: String,
-    pub(super) opaque_literal_line_ranges: Vec<(usize, usize)>,
+pub(crate) struct PreprocessorToken {
+    pub(crate) text: String,
+    pub(crate) opaque_literal_line_ranges: Vec<(usize, usize)>,
 }
 
 fn hash_after_statement_opens_preprocessor(chars: &[char], line_start: usize, hash: usize) -> bool {
@@ -121,7 +121,7 @@ fn is_known_hash_directive(directive: &str) -> bool {
     )
 }
 
-pub(super) fn tokenize(source: &str) -> Vec<Token> {
+pub(crate) fn tokenize(source: &str) -> Vec<Token> {
     let chars = source.chars().collect::<Vec<_>>();
     let mut tokens = Vec::new();
     let mut index = 0;
@@ -575,26 +575,26 @@ fn read_while(chars: &[char], start: usize, predicate: impl Fn(char) -> bool) ->
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct TokenLine {
-    pub(super) start: usize,
-    pub(super) end: usize,
+pub(crate) struct TokenLine {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct TokenLineCursor<'a> {
+pub(crate) struct TokenLineCursor<'a> {
     tokens: &'a [Token],
     position: usize,
 }
 
 impl<'a> TokenLineCursor<'a> {
-    pub(super) fn new(tokens: &'a [Token]) -> Self {
+    pub(crate) fn new(tokens: &'a [Token]) -> Self {
         Self {
             tokens,
             position: 0,
         }
     }
 
-    pub(super) fn next_line(&mut self) -> Option<TokenLine> {
+    pub(crate) fn next_line(&mut self) -> Option<TokenLine> {
         if self.position >= self.tokens.len() {
             return None;
         }
@@ -615,7 +615,7 @@ impl<'a> TokenLineCursor<'a> {
     }
 }
 
-pub(super) fn matching_close_paren_index(tokens: &[Token], open_paren: usize) -> Option<usize> {
+pub(crate) fn matching_close_paren_index(tokens: &[Token], open_paren: usize) -> Option<usize> {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate().skip(open_paren) {
         match token {
@@ -632,16 +632,16 @@ pub(super) fn matching_close_paren_index(tokens: &[Token], open_paren: usize) ->
     None
 }
 
-pub(super) fn next_non_layout_token_index(tokens: &[Token], start: usize) -> Option<usize> {
+pub(crate) fn next_non_layout_token_index(tokens: &[Token], start: usize) -> Option<usize> {
     (start..tokens.len())
         .find(|index| !matches!(tokens[*index], Token::Whitespace(_) | Token::Newline))
 }
 
-pub(super) fn next_non_whitespace(tokens: &[Token], start: usize, end: usize) -> Option<usize> {
+pub(crate) fn next_non_whitespace(tokens: &[Token], start: usize, end: usize) -> Option<usize> {
     (start..end).find(|index| !matches!(tokens[*index], Token::Whitespace(_)))
 }
 
-pub(super) fn token_char_len(token: &Token) -> usize {
+pub(crate) fn token_char_len(token: &Token) -> usize {
     match token {
         Token::Word(value)
         | Token::Number(value)
@@ -656,7 +656,7 @@ pub(super) fn token_char_len(token: &Token) -> usize {
     }
 }
 
-pub(super) fn token_text(token: &Token) -> String {
+pub(crate) fn token_text(token: &Token) -> String {
     match token {
         Token::Word(value)
         | Token::Number(value)

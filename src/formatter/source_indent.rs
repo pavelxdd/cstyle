@@ -1,14 +1,16 @@
-use super::FormatEngine;
-use super::indentation::LineKind;
-use super::initializer_braces::initializer_sibling_uses_previous_indent;
-use super::labels::is_attached_user_label;
-use super::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
-use super::literals::starts_string_literal_token;
-use super::operators::{head_ends_binary_operator, starts_ternary_arm, starts_with_chain_operator};
-use super::token::{Token, next_non_whitespace};
 use crate::config::MinConditionalIndent;
+use crate::formatter::FormatEngine;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::initializer_braces::initializer_sibling_uses_previous_indent;
+use crate::formatter::labels::is_attached_user_label;
+use crate::formatter::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
+use crate::formatter::literals::starts_string_literal_token;
+use crate::formatter::operators::{
+    head_ends_binary_operator, starts_ternary_arm, starts_with_chain_operator,
+};
+use crate::formatter::token::{Token, next_non_whitespace};
 
-pub(super) fn source_indented_macro_row(
+pub(crate) fn source_indented_macro_row(
     tokens: &[Token],
     line_start: usize,
     line_end: usize,
@@ -39,7 +41,7 @@ pub(super) fn source_indented_macro_row(
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn source_indent_override_spaces(
+    pub(crate) fn source_indent_override_spaces(
         &self,
         line: &str,
         line_kind: LineKind,

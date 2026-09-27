@@ -1,7 +1,7 @@
-use super::token::{CommentKind, Token, token_text, tokenize};
+use crate::formatter::token::{CommentKind, Token, token_text, tokenize};
 use crate::source::lex::is_digit_separator;
 
-pub(super) fn is_comment_line(line: &str) -> bool {
+pub(crate) fn is_comment_line(line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
@@ -9,7 +9,7 @@ pub(super) fn is_comment_line(line: &str) -> bool {
         || trimmed.starts_with("*/")
 }
 
-pub(super) fn is_comment_only_line(line: &str) -> bool {
+pub(crate) fn is_comment_only_line(line: &str) -> bool {
     line.starts_with("//")
         || line.starts_with("/*")
         || line.starts_with("*/")
@@ -18,14 +18,14 @@ pub(super) fn is_comment_only_line(line: &str) -> bool {
         || line.starts_with("*\t")
 }
 
-pub(super) fn has_unclosed_delimiter_after(text: &str, open: &str, close: &str) -> bool {
+pub(crate) fn has_unclosed_delimiter_after(text: &str, open: &str, close: &str) -> bool {
     text.rfind(open).is_some_and(|open_index| {
         text.rfind(close)
             .is_none_or(|close_index| close_index < open_index)
     })
 }
 
-pub(super) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {
+pub(crate) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {
     let close_pos = line.char_indices().next_back()?.0;
     let mut open_stack: Vec<usize> = Vec::new();
     let mut in_quote = false;
@@ -62,7 +62,7 @@ pub(super) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {
     None
 }
 
-pub(super) fn has_top_level_comma_in_text(text: &str) -> bool {
+pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
     let mut depth = 0usize;
     let mut in_quote = false;
     let mut quote = '\0';
@@ -94,7 +94,7 @@ pub(super) fn has_top_level_comma_in_text(text: &str) -> bool {
     false
 }
 
-pub(super) fn line_ends_with_comment(line: &str) -> bool {
+pub(crate) fn line_ends_with_comment(line: &str) -> bool {
     let trimmed = line.trim_end();
     if trimmed.ends_with("*/") {
         return true;
@@ -125,7 +125,7 @@ pub(super) fn line_ends_with_comment(line: &str) -> bool {
     false
 }
 
-pub(super) fn find_outside_quotes(line: &str, needle: &str) -> Option<usize> {
+pub(crate) fn find_outside_quotes(line: &str, needle: &str) -> Option<usize> {
     let mut in_string = false;
     let mut in_char = false;
     let mut escaped = false;
@@ -150,21 +150,21 @@ pub(super) fn find_outside_quotes(line: &str, needle: &str) -> Option<usize> {
     None
 }
 
-pub(super) fn unmatched_open_paren_column(line: &str) -> Option<usize> {
+pub(crate) fn unmatched_open_paren_column(line: &str) -> Option<usize> {
     unmatched_open_paren_columns(line)
         .into_iter()
         .rev()
         .find(|&column| line[column + 1..].chars().any(|ch| !ch.is_whitespace()))
 }
 
-pub(super) fn unmatched_open_bracket_column(line: &str) -> Option<usize> {
+pub(crate) fn unmatched_open_bracket_column(line: &str) -> Option<usize> {
     unmatched_open_paren_columns(line)
         .into_iter()
         .rev()
         .find(|&column| line[column..].starts_with('['))
 }
 
-pub(super) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
+pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack: Vec<usize> = Vec::new();
     let mut unmatched_closes = 0usize;
@@ -229,7 +229,7 @@ pub(super) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
 /// Returns the brace imbalance of a single line as `(unmatched_closes, unmatched_opens)`,
 /// ignoring braces inside strings and comments. A `}` without a matching `{` earlier on the
 /// same line counts as an unmatched close; a `{` left open at the end counts as an open.
-pub(super) fn line_brace_imbalance(line: &str) -> (usize, usize) {
+pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
     let chars = line.chars().collect::<Vec<_>>();
     let mut open_depth = 0usize;
     let mut unmatched_closes = 0usize;
@@ -285,7 +285,7 @@ pub(super) fn line_brace_imbalance(line: &str) -> (usize, usize) {
 }
 
 /// True when the line has a `{` or `}` outside strings and comments.
-pub(super) fn line_has_brace(line: &str) -> bool {
+pub(crate) fn line_has_brace(line: &str) -> bool {
     let chars = line.chars().collect::<Vec<_>>();
     let mut index = 0;
     let mut quote = None;
@@ -335,7 +335,7 @@ pub(super) fn line_has_brace(line: &str) -> bool {
     false
 }
 
-pub(super) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
+pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack = Vec::new();
     let mut index = 0;
@@ -402,7 +402,7 @@ pub(super) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     stack
 }
 
-pub(super) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)> {
+pub(crate) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)> {
     let indexed = line.char_indices().collect::<Vec<_>>();
     let chars = indexed.iter().map(|&(_, ch)| ch).collect::<Vec<_>>();
     let mut stack: Vec<(char, usize)> = Vec::new();
@@ -463,7 +463,7 @@ pub(super) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)>
     stack.pop()
 }
 
-pub(super) fn has_unmatched_open_brace(line: &str) -> bool {
+pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
     let chars = line.chars().collect::<Vec<_>>();
     let mut depth = 0usize;
     let mut index = 0;
@@ -519,7 +519,7 @@ pub(super) fn has_unmatched_open_brace(line: &str) -> bool {
 }
 
 // A middle line of a multiline block comment has no lexical marker of its own.
-pub(super) fn reverse_scan_skips_block_comment(trimmed: &str, in_block_comment: &mut bool) -> bool {
+pub(crate) fn reverse_scan_skips_block_comment(trimmed: &str, in_block_comment: &mut bool) -> bool {
     if *in_block_comment {
         if trimmed.contains("/*") {
             *in_block_comment = false;
@@ -536,7 +536,7 @@ pub(super) fn reverse_scan_skips_block_comment(trimmed: &str, in_block_comment: 
     false
 }
 
-pub(super) fn inline_brace_pair_range(line: &str) -> Option<(usize, usize)> {
+pub(crate) fn inline_brace_pair_range(line: &str) -> Option<(usize, usize)> {
     let mut offset = 0usize;
     let mut depth = 0usize;
     let mut first_open = None;
@@ -562,19 +562,19 @@ pub(super) fn inline_brace_pair_range(line: &str) -> Option<(usize, usize)> {
     None
 }
 
-pub(super) fn trailing_comment_split_limit(line: &str) -> usize {
+pub(crate) fn trailing_comment_split_limit(line: &str) -> usize {
     trailing_comment_start(line)
         .map(|index| line[..index].trim_end().len())
         .unwrap_or(line.len())
 }
 
-pub(super) fn line_comment_split_limit(line: &str) -> usize {
+pub(crate) fn line_comment_split_limit(line: &str) -> usize {
     line_comment_start(line)
         .map(|index| line[..index].trim_end().len())
         .unwrap_or(line.len())
 }
 
-pub(super) fn trailing_comment_start(line: &str) -> Option<usize> {
+pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
     if !line.contains("//") && !line.contains("/*") {
         return None;
     }

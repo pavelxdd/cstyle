@@ -1,10 +1,10 @@
-use super::FormatEngine;
-use super::labels::is_standard_access_label;
-use super::state::FormatterBraceType;
 use crate::config::LineBetweenMembers;
+use crate::formatter::FormatEngine;
+use crate::formatter::labels::is_standard_access_label;
+use crate::formatter::state::FormatterBraceType;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum MemberSpacingBoundary {
+pub(crate) enum MemberSpacingBoundary {
     Field,
     Member,
     TopFunction,
@@ -36,7 +36,7 @@ fn nested_type_start(trimmed: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn insert_member_spacing_before_line(&mut self, line: &str) {
+    pub(crate) fn insert_member_spacing_before_line(&mut self, line: &str) {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }
@@ -70,7 +70,7 @@ impl FormatEngine<'_> {
         self.pending_member_spacing = None;
     }
 
-    pub(super) fn observe_member_spacing_boundary(&mut self, line: &str) {
+    pub(crate) fn observe_member_spacing_boundary(&mut self, line: &str) {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }

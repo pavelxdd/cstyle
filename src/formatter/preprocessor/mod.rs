@@ -1,34 +1,37 @@
-use super::FormatEngine;
-use super::columns::leading_visual_width;
-use super::continuation::ContinuationIndentState;
-use super::frame::{BraceSemanticKind, ParenRole};
-use super::indentation::IndentationState;
-use super::line_adjust;
-use super::literals::LiteralLineState;
-use super::member_spacing::MemberSpacingBoundary;
-use super::state::{
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::compound_literals::CompoundLiteralState;
+use crate::formatter::continuation::ContinuationIndentState;
+use crate::formatter::frame::{BraceSemanticKind, FrameStack, ParenRole};
+use crate::formatter::headers::HeaderParenState;
+use crate::formatter::indentation::IndentationState;
+use crate::formatter::line_scan::line_comment_split_limit;
+use crate::formatter::literals::LiteralLineState;
+use crate::formatter::member_spacing::MemberSpacingBoundary;
+use crate::formatter::objective_c::ObjectiveCLineState;
+use crate::formatter::state::{
     CommandState, FormatterBraceType, FormatterLineState, FormatterStackState, InlineArrayState,
     PreviousToken, RunInState,
 };
-use super::switch_cases::SwitchCaseLayoutState;
-use super::template_declarations::TemplateDeclarationState;
-use super::token::Token;
+use crate::formatter::switch_cases::SwitchCaseLayoutState;
+use crate::formatter::template_declarations::TemplateDeclarationState;
+use crate::formatter::token::Token;
+use crate::formatter::{FormatEngine, line_adjust};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 use std::collections::VecDeque;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct PreprocessorState {
-    pub(super) branch_stack: Vec<PreprocessorBranchState>,
-    pub(super) indented_block_stack: Vec<bool>,
-    pub(super) indentable_blocks: VecDeque<bool>,
-    pub(super) split_else: PreprocessorSplitElseState,
-    pub(super) may_have_preprocessor: bool,
-    pub(super) last_output_was_preprocessor: bool,
+pub(crate) struct PreprocessorState {
+    pub(crate) branch_stack: Vec<PreprocessorBranchState>,
+    pub(crate) indented_block_stack: Vec<bool>,
+    pub(crate) indentable_blocks: VecDeque<bool>,
+    pub(crate) split_else: PreprocessorSplitElseState,
+    pub(crate) may_have_preprocessor: bool,
+    pub(crate) last_output_was_preprocessor: bool,
 }
 
-pub(super) mod layout;
+pub(crate) mod layout;
 
-pub(super) fn indent_off_follows_code(tokens: &[Token]) -> bool {
+pub(crate) fn indent_off_follows_code(tokens: &[Token]) -> bool {
     let mut seen_code = false;
     for token in tokens {
         match token {
@@ -42,17 +45,17 @@ pub(super) fn indent_off_follows_code(tokens: &[Token]) -> bool {
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub(super) struct PreprocessorSplitElseState {
-    pub(super) extra_indent: bool,
-    pub(super) extra_levels: usize,
-    pub(super) trigger_output_len: Option<usize>,
-    pub(super) pending_body: bool,
-    pub(super) clear_pending_after_brace: bool,
-    pub(super) closing_brace_has_else: bool,
-    pub(super) comment_body_indent_spaces: Option<usize>,
-    pub(super) body_braceless: bool,
-    pub(super) brace_indent: usize,
-    pub(super) after_line: bool,
+pub(crate) struct PreprocessorSplitElseState {
+    pub(crate) extra_indent: bool,
+    pub(crate) extra_levels: usize,
+    pub(crate) trigger_output_len: Option<usize>,
+    pub(crate) pending_body: bool,
+    pub(crate) clear_pending_after_brace: bool,
+    pub(crate) closing_brace_has_else: bool,
+    pub(crate) comment_body_indent_spaces: Option<usize>,
+    pub(crate) body_braceless: bool,
+    pub(crate) brace_indent: usize,
+    pub(crate) after_line: bool,
 }
 
 impl PreprocessorSplitElseState {
@@ -94,35 +97,35 @@ impl PreprocessorSplitElseState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct PreprocessorBranchState {
-    pub(super) state: IndentationState,
-    pub(super) command_state: CommandState,
-    pub(super) stack_state: FormatterStackState,
-    pub(super) frame_stack: super::frame::FrameStack,
-    pub(super) line_state: FormatterLineState,
-    pub(super) run_in_state: RunInState,
-    pub(super) line_adjuster: line_adjust::LineAdjuster,
-    pub(super) previous_pre_adjust_line: Option<String>,
-    pub(super) pending_member_spacing: Option<MemberSpacingBoundary>,
-    pub(super) previous: PreviousToken,
-    pub(super) literal_line: LiteralLineState,
-    pub(super) continuation_indent: ContinuationIndentState,
-    pub(super) first_body_indent_spaces: Option<usize>,
-    pub(super) restore_body_indent: bool,
-    pub(super) objc: super::objective_c::ObjectiveCLineState,
-    pub(super) switch_case_layout: SwitchCaseLayoutState,
-    pub(super) in_class_base_clause: bool,
-    pub(super) split_class_export_pending_base: bool,
-    pub(super) preprocessor_split_else: PreprocessorSplitElseState,
-    pub(super) template_declaration: TemplateDeclarationState,
-    pub(super) else_if_break_depths: Vec<usize>,
-    pub(super) compound_literal: super::compound_literals::CompoundLiteralState,
-    pub(super) pending_braceless_block_bias: Option<usize>,
-    pub(super) inline_nested_header_braceless_bias: Option<usize>,
-    pub(super) header_paren: super::headers::HeaderParenState,
-    pub(super) inline_array: InlineArrayState,
-    pub(super) pending_extern: bool,
-    pub(super) cpp_extern_c_brace: u8,
+pub(crate) struct PreprocessorBranchState {
+    pub(crate) state: IndentationState,
+    pub(crate) command_state: CommandState,
+    pub(crate) stack_state: FormatterStackState,
+    pub(crate) frame_stack: FrameStack,
+    pub(crate) line_state: FormatterLineState,
+    pub(crate) run_in_state: RunInState,
+    pub(crate) line_adjuster: line_adjust::LineAdjuster,
+    pub(crate) previous_pre_adjust_line: Option<String>,
+    pub(crate) pending_member_spacing: Option<MemberSpacingBoundary>,
+    pub(crate) previous: PreviousToken,
+    pub(crate) literal_line: LiteralLineState,
+    pub(crate) continuation_indent: ContinuationIndentState,
+    pub(crate) first_body_indent_spaces: Option<usize>,
+    pub(crate) restore_body_indent: bool,
+    pub(crate) objc: ObjectiveCLineState,
+    pub(crate) switch_case_layout: SwitchCaseLayoutState,
+    pub(crate) in_class_base_clause: bool,
+    pub(crate) split_class_export_pending_base: bool,
+    pub(crate) preprocessor_split_else: PreprocessorSplitElseState,
+    pub(crate) template_declaration: TemplateDeclarationState,
+    pub(crate) else_if_break_depths: Vec<usize>,
+    pub(crate) compound_literal: CompoundLiteralState,
+    pub(crate) pending_braceless_block_bias: Option<usize>,
+    pub(crate) inline_nested_header_braceless_bias: Option<usize>,
+    pub(crate) header_paren: HeaderParenState,
+    pub(crate) inline_array: InlineArrayState,
+    pub(crate) pending_extern: bool,
+    pub(crate) cpp_extern_c_brace: u8,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -135,7 +138,7 @@ enum PreprocessorLineIndent {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum PreprocessorRegion {
+pub(crate) enum PreprocessorRegion {
     TopLevel,
     Namespace,
     Block,
@@ -146,7 +149,7 @@ pub(super) enum PreprocessorRegion {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn preprocessor_region(&self, in_macro_body: bool) -> PreprocessorRegion {
+    pub(crate) fn preprocessor_region(&self, in_macro_body: bool) -> PreprocessorRegion {
         let region = Self::preprocessor_region_from_brace_stack(
             &self.stack_state.brace_type_stack,
             in_macro_body,
@@ -163,7 +166,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn preprocessor_region_from_brace_stack(
+    pub(crate) fn preprocessor_region_from_brace_stack(
         brace_type_stack: &[FormatterBraceType],
         in_macro_body: bool,
     ) -> PreprocessorRegion {
@@ -187,7 +190,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn preprocessor_region_allows_block_indent(
+    pub(crate) fn preprocessor_region_allows_block_indent(
         &self,
         region: PreprocessorRegion,
     ) -> bool {
@@ -199,7 +202,7 @@ impl FormatEngine<'_> {
     }
 }
 
-pub(super) fn preprocessor_directive(line: &str) -> Option<&str> {
+pub(crate) fn preprocessor_directive(line: &str) -> Option<&str> {
     let rest = line.trim_start().strip_prefix('#')?.trim_start();
     let end = rest
         .find(|ch: char| !ch.is_ascii_alphabetic())
@@ -207,7 +210,7 @@ pub(super) fn preprocessor_directive(line: &str) -> Option<&str> {
     (end > 0).then(|| &rest[..end])
 }
 
-pub(super) fn output_has_active_preprocessor_branch(output: &[String]) -> bool {
+pub(crate) fn output_has_active_preprocessor_branch(output: &[String]) -> bool {
     output
         .iter()
         .rev()
@@ -233,7 +236,7 @@ fn is_ndef_preproc_statement(line: &str, directive: &str) -> bool {
     }
 }
 
-pub(super) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<bool> {
+pub(crate) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<bool> {
     let mut conditionals: Vec<(usize, bool)> = Vec::new();
     let mut open_stack: Vec<usize> = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
@@ -356,7 +359,7 @@ fn preprocessor_block_followed_by_code(tokens: &[Token], start: usize) -> bool {
     })
 }
 
-pub(super) fn collapse_pound_whitespace(line: &str) -> String {
+pub(crate) fn collapse_pound_whitespace(line: &str) -> String {
     let Some(rest) = line.strip_prefix('#') else {
         return line.to_string();
     };
@@ -403,7 +406,7 @@ fn is_not_defined_condition(condition: &str) -> bool {
     rest.chars().next().is_some_and(is_identifier_start)
 }
 
-pub(super) fn is_cplusplus_conditional(line: &str) -> bool {
+pub(crate) fn is_cplusplus_conditional(line: &str) -> bool {
     match preprocessor_directive(line) {
         Some("ifdef") => preprocessor_directive_argument(line) == Some("__cplusplus"),
         Some("if") => {
@@ -427,14 +430,14 @@ pub(super) fn is_cplusplus_conditional(line: &str) -> bool {
     }
 }
 
-pub(super) fn is_conditional_preprocessor(directive: &str) -> bool {
+pub(crate) fn is_conditional_preprocessor(directive: &str) -> bool {
     matches!(
         directive,
         "if" | "ifdef" | "ifndef" | "elif" | "elifdef" | "elifndef" | "else" | "endif"
     )
 }
 
-pub(super) fn is_known_preprocessor_directive(directive: &str) -> bool {
+pub(crate) fn is_known_preprocessor_directive(directive: &str) -> bool {
     is_conditional_preprocessor(directive)
         || matches!(
             directive,
@@ -452,14 +455,14 @@ pub(super) fn is_known_preprocessor_directive(directive: &str) -> bool {
         )
 }
 
-pub(super) fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
+pub(crate) fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
     matches!(directive, "region" | "endregion")
         || (directive == "pragma"
             && preprocessor_directive_argument(line)
                 .is_some_and(|argument| matches!(argument, "omp" | "region" | "endregion")))
 }
 
-pub(super) fn is_bare_macro_invocation(trimmed: &str) -> bool {
+pub(crate) fn is_bare_macro_invocation(trimmed: &str) -> bool {
     !trimmed.is_empty()
         && trimmed.chars().any(|ch| ch.is_ascii_alphabetic())
         && trimmed
@@ -467,14 +470,14 @@ pub(super) fn is_bare_macro_invocation(trimmed: &str) -> bool {
             .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
 }
 
-pub(super) fn preprocessor_directive_argument(line: &str) -> Option<&str> {
+pub(crate) fn preprocessor_directive_argument(line: &str) -> Option<&str> {
     let mut parts = line.trim_start().strip_prefix('#')?.split_whitespace();
     parts.next()?;
     parts.next()
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn preprocessor_split_else_active(&self) -> bool {
+    pub(crate) fn preprocessor_split_else_active(&self) -> bool {
         self.preprocessor.split_else.is_active()
     }
 
@@ -505,7 +508,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn push_preprocessor(
+    pub(crate) fn push_preprocessor(
         &mut self,
         line: &str,
         opaque_literal_line_ranges: &[(usize, usize)],
@@ -701,7 +704,7 @@ impl FormatEngine<'_> {
             continued_line_comment = if line_is_continued_comment {
                 line_ends_with_backslash
             } else if line_ends_with_backslash && !is_opaque_literal_line {
-                let comment_start = super::line_scan::line_comment_split_limit(part);
+                let comment_start = line_comment_split_limit(part);
                 comment_start < part.len() && part[comment_start..].trim_start().starts_with("//")
             } else {
                 false
@@ -756,7 +759,7 @@ impl FormatEngine<'_> {
         self.preprocessor.last_output_was_preprocessor = true;
     }
 
-    pub(super) fn preprocessor_base_level(&self) -> usize {
+    pub(crate) fn preprocessor_base_level(&self) -> usize {
         self.preprocessor
             .indented_block_stack
             .iter()
@@ -881,7 +884,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn update_preprocessor_state(
+    pub(crate) fn update_preprocessor_state(
         &mut self,
         line: &str,
         opening_indentable: Option<bool>,
@@ -945,7 +948,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn should_indent_preprocessor_block(&mut self) -> bool {
+    pub(crate) fn should_indent_preprocessor_block(&mut self) -> bool {
         let block_is_indentable = self
             .preprocessor
             .indentable_blocks
@@ -960,7 +963,7 @@ impl FormatEngine<'_> {
             && self.preprocessor_region_allows_block_indent(self.preprocessor_region(false))
     }
 
-    pub(super) fn branch_snapshot(&self) -> PreprocessorBranchState {
+    pub(crate) fn branch_snapshot(&self) -> PreprocessorBranchState {
         PreprocessorBranchState {
             state: self.state.clone(),
             command_state: self.command_state.clone(),
@@ -993,7 +996,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn restore_branch_snapshot(&mut self, snapshot: PreprocessorBranchState) {
+    pub(crate) fn restore_branch_snapshot(&mut self, snapshot: PreprocessorBranchState) {
         let active_split_else = self.preprocessor.split_else;
         let PreprocessorBranchState {
             state,

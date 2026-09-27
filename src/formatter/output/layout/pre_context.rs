@@ -1,21 +1,20 @@
-use super::super::super::FormatEngine;
-use super::super::super::call_arguments::{
+use crate::formatter::FormatEngine;
+use crate::formatter::call_arguments::{
     closing_braced_call_argument_indent_spaces, plain_call_opener_indent_for_closing_line,
 };
-use super::super::super::columns::{leading_visual_width, visual_width_from};
-use super::super::super::indentation::LineKind;
-
-use super::super::super::line_scan::{
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{
     has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use super::super::super::literals::starts_string_literal_token;
-use super::super::super::operators::starts_with_chain_operator;
-use super::super::model::{LineLayout, LineReplayLayout};
+use crate::formatter::literals::starts_string_literal_token;
+use crate::formatter::operators::starts_with_chain_operator;
+use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_spacing_new_call_and_stream_layout(
+    pub(crate) fn apply_spacing_new_call_and_stream_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,
@@ -99,7 +98,7 @@ impl FormatEngine<'_> {
         layout
     }
 
-    pub(in super::super) fn apply_lambda_return_call_and_stream_layout(
+    pub(crate) fn apply_lambda_return_call_and_stream_layout(
         &mut self,
         line: &str,
         replay: &LineReplayLayout,
@@ -243,7 +242,7 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(in super::super) fn apply_comment_brace_and_ternary_operand_layout(
+    pub(crate) fn apply_comment_brace_and_ternary_operand_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,
@@ -348,7 +347,7 @@ impl FormatEngine<'_> {
         layout
     }
 
-    pub(in super::super) fn apply_late_call_and_operator_layout(
+    pub(crate) fn apply_late_call_and_operator_layout(
         &mut self,
         line: &str,
         mut layout: LineLayout,

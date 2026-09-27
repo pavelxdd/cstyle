@@ -1,6 +1,6 @@
-use super::super::FormatEngine;
-use super::super::indentation::LineKind;
-use super::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
+use crate::formatter::FormatEngine;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
 
 impl FormatEngine<'_> {
     fn route_line_before_layout(&mut self, line: &str) -> LineRoute<LineKind> {
@@ -26,7 +26,7 @@ impl FormatEngine<'_> {
         LineRoute::Layout(observed_line_kind)
     }
 
-    pub(in super::super) fn finish_line_text(&mut self, line: &str) {
+    pub(crate) fn finish_line_text(&mut self, line: &str) {
         let replay = self.take_line_replay_layout(line);
         let line_closed_brackets = self.frame_stack.take_line_closed_brackets();
         self.record_closed_objc_message_indent(line, &line_closed_brackets);

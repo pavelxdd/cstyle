@@ -1,18 +1,18 @@
-use super::FormatEngine;
-use super::columns::leading_visual_width;
-use super::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
+use crate::formatter::FormatEngine;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::line_scan::{trailing_comment_split_limit, unmatched_open_paren_column};
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub(super) struct TemplateDeclarationState {
+pub(crate) struct TemplateDeclarationState {
     uses_source_indent: bool,
     angle_depth: isize,
 }
 
-pub(super) fn template_declaration_line_complete(line: &str) -> bool {
+pub(crate) fn template_declaration_line_complete(line: &str) -> bool {
     line.ends_with('>') && angle_depth(line) <= 0
 }
 
-pub(super) fn angle_depth_delta(line: &str) -> isize {
+pub(crate) fn angle_depth_delta(line: &str) -> isize {
     line.chars().fold(0, |depth, ch| match ch {
         '<' => depth + 1,
         '>' => depth - 1,
@@ -20,7 +20,7 @@ pub(super) fn angle_depth_delta(line: &str) -> isize {
     })
 }
 
-pub(super) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
+pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
     let trimmed = line.trim_start();
     if !trimmed.starts_with("template") || angle_depth_delta(trimmed) <= 0 {
         return None;
@@ -55,18 +55,18 @@ pub(super) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn is_template_declaration_line(&self) -> bool {
+    pub(crate) fn is_template_declaration_line(&self) -> bool {
         self.current.trim_start().starts_with("template")
     }
 
-    pub(super) fn is_complete_template_declaration_line(&self) -> bool {
+    pub(crate) fn is_complete_template_declaration_line(&self) -> bool {
         let current = self.current.trim();
         current.starts_with("template")
             && current.ends_with('>')
             && template_declaration_line_complete(current)
     }
 
-    pub(super) fn is_template_declaration_head_line(&self, line: &str) -> bool {
+    pub(crate) fn is_template_declaration_head_line(&self, line: &str) -> bool {
         let trimmed = line.trim_start();
         let Some(rest) = trimmed.strip_prefix("template") else {
             return false;
@@ -99,7 +99,7 @@ impl FormatEngine<'_> {
         saw_open && depth > 0
     }
 
-    pub(super) fn previous_output_is_complete_template_declaration(&self) -> bool {
+    pub(crate) fn previous_output_is_complete_template_declaration(&self) -> bool {
         let Some(index) = self.output.last_non_empty_index() else {
             return false;
         };
@@ -114,7 +114,7 @@ impl FormatEngine<'_> {
             && !trimmed.ends_with(';')
     }
 
-    pub(super) fn previous_output_closes_multiline_template_declaration(&self) -> bool {
+    pub(crate) fn previous_output_closes_multiline_template_declaration(&self) -> bool {
         let Some(index) = self.output.last_non_empty_index() else {
             return false;
         };
@@ -150,7 +150,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn output_closes_multiline_template_declaration_before(&self, end: usize) -> bool {
+    pub(crate) fn output_closes_multiline_template_declaration_before(&self, end: usize) -> bool {
         let lines: Vec<&str> = self.output[..end]
             .iter()
             .rev()
@@ -186,7 +186,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn prepare_template_continuation_token_indent(&mut self, source_column: usize) {
+    pub(crate) fn prepare_template_continuation_token_indent(&mut self, source_column: usize) {
         if !self.template_declaration.uses_source_indent
             || !self.token_input.token_begins_source_line
         {
@@ -213,17 +213,17 @@ impl FormatEngine<'_> {
         self.continuation_indent.next_line_indent_spaces = Some(spaces);
     }
 
-    pub(super) fn template_continuation_active(&self) -> bool {
+    pub(crate) fn template_continuation_active(&self) -> bool {
         self.template_declaration.uses_source_indent
     }
 
-    pub(super) fn template_continuation_closes_on_line(&self, line: &str) -> bool {
+    pub(crate) fn template_continuation_closes_on_line(&self, line: &str) -> bool {
         self.template_declaration.uses_source_indent
             && line.ends_with('>')
             && self.template_declaration.angle_depth + angle_depth_delta(line) <= 0
     }
 
-    pub(super) fn template_continuation_line_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn template_continuation_line_indent_spaces(&self, line: &str) -> Option<usize> {
         if !self.template_declaration.uses_source_indent {
             return None;
         }
@@ -249,7 +249,7 @@ impl FormatEngine<'_> {
         spaces
     }
 
-    pub(super) fn observe_template_declaration_line(&mut self, line: &str) {
+    pub(crate) fn observe_template_declaration_line(&mut self, line: &str) {
         let trimmed = line.trim();
         let angle_delta = angle_depth_delta(trimmed);
         if trimmed.starts_with("template")

@@ -1,18 +1,18 @@
-use super::language;
-use super::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
+use crate::formatter::language;
+use crate::formatter::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::source::lex::{is_word_char, trailing_word};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct CompoundLiteralState {
-    pub(super) forced_break_depths: Vec<usize>,
-    pub(super) just_closed: bool,
-    pub(super) after_comma: bool,
-    pub(super) arg_indent_spaces: Option<usize>,
-    pub(super) arg_paren_depth: Option<usize>,
-    pub(super) arg_brace_depth: Option<usize>,
+pub(crate) struct CompoundLiteralState {
+    pub(crate) forced_break_depths: Vec<usize>,
+    pub(crate) just_closed: bool,
+    pub(crate) after_comma: bool,
+    pub(crate) arg_indent_spaces: Option<usize>,
+    pub(crate) arg_paren_depth: Option<usize>,
+    pub(crate) arg_brace_depth: Option<usize>,
 }
 
-pub(super) fn line_ends_compound_literal_cast(line: &str) -> bool {
+pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
     let current = line.trim_end();
     if !current.ends_with(')') {
         return false;

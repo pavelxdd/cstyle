@@ -1,39 +1,36 @@
-use super::FormatEngine;
-use super::brace_classification::is_class_like_brace_type;
-use super::columns::visual_width_from;
-use super::frame::{DeclarationFrame, PointerRole};
-use super::language;
-
-use super::language::{
+use crate::config::{PointerAlign, ReferenceAlign};
+use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::columns::visual_width_from;
+use crate::formatter::frame::{DeclarationFrame, PointerRole};
+use crate::formatter::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
-use super::line_scan::last_unmatched_open_delimiter;
-use super::line_scan::trailing_comment_split_limit;
-use super::line_scan::trailing_matching_parens;
-use super::operators::{head_ends_assignment_operator, head_ends_binary_operator};
-
-use super::return_types::is_return_type_line;
-use super::state::{FormatterBraceType, PreviousToken};
-use super::switch_cases::{is_case_label_start, is_default_label_start};
-use super::syntax::{
+use crate::formatter::line_scan::{
+    last_unmatched_open_delimiter, trailing_comment_split_limit, trailing_matching_parens,
+};
+use crate::formatter::operators::{head_ends_assignment_operator, head_ends_binary_operator};
+use crate::formatter::return_types::is_return_type_line;
+use crate::formatter::state::{FormatterBraceType, PreviousToken};
+use crate::formatter::switch_cases::{is_case_label_start, is_default_label_start};
+use crate::formatter::syntax::{
     function_head_has_assignment, function_name_start, scoped_name_is_constructor,
 };
-use super::token::Token;
-use crate::config::{PointerAlign, ReferenceAlign};
+use crate::formatter::token::Token;
+use crate::formatter::{FormatEngine, language};
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub(super) struct PointerRunState {
-    pub(super) trailing_ws: Option<String>,
-    pub(super) next_is_name_like: bool,
-    pub(super) followed_by_reference: bool,
-    pub(super) reference_has_name: bool,
-    pub(super) followed_by_comment: bool,
-    pub(super) star_count: usize,
-    pub(super) gap_before_column: Option<usize>,
+pub(crate) struct PointerRunState {
+    pub(crate) trailing_ws: Option<String>,
+    pub(crate) next_is_name_like: bool,
+    pub(crate) followed_by_reference: bool,
+    pub(crate) reference_has_name: bool,
+    pub(crate) followed_by_comment: bool,
+    pub(crate) star_count: usize,
+    pub(crate) gap_before_column: Option<usize>,
 }
 
-pub(super) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {
+pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {
     matches!(
         next,
         Some(Token::Word(_) | Token::Number(_) | Token::Symbol('(' | '['))
@@ -72,7 +69,7 @@ impl FormatEngine<'_> {
         });
     }
 
-    pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
+    pub(crate) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
         if self.continues_operator_expression()
             && matches!(
                 self.previous,
@@ -143,7 +140,7 @@ impl FormatEngine<'_> {
             || self.looks_like_pointer_declaration_context()
     }
 
-    pub(super) fn is_pointer_like(
+    pub(crate) fn is_pointer_like(
         &self,
         operator: &str,
         next: Option<&Token>,
@@ -428,7 +425,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn current_ends_named_cast_type_argument(&self) -> bool {
+    pub(crate) fn current_ends_named_cast_type_argument(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('<') else {
             return false;
@@ -442,7 +439,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(super) fn current_ends_type_group(&self) -> bool {
+    pub(crate) fn current_ends_type_group(&self) -> bool {
         let current = self.current.trim_end();
         let Some((open, close)) = trailing_matching_parens(current) else {
             return false;
@@ -472,7 +469,7 @@ impl FormatEngine<'_> {
         }) && !matches!(segment.split_whitespace().next(), Some("return" | "case"))
     }
 
-    pub(super) fn looks_like_pointer_declaration_context(&self) -> bool {
+    pub(crate) fn looks_like_pointer_declaration_context(&self) -> bool {
         let current = self.current.trim_end();
         if current.is_empty() {
             return false;
@@ -520,7 +517,7 @@ impl FormatEngine<'_> {
                 .any(|word| is_pointer_type_word(word) && !is_macro_like_word(word))
     }
 
-    pub(super) fn is_function_declaration_parameter_continuation(&self) -> bool {
+    pub(crate) fn is_function_declaration_parameter_continuation(&self) -> bool {
         for line in self.output.iter().rev().take(8) {
             let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
@@ -546,14 +543,14 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn is_function_pointer_parameter_continuation(&self) -> bool {
+    pub(crate) fn is_function_pointer_parameter_continuation(&self) -> bool {
         self.output.iter().rev().take(4).any(|line| {
             let trimmed = line.trim_end();
             trimmed.contains("(*") && !trimmed.ends_with(';') && !trimmed.ends_with('}')
         })
     }
 
-    pub(super) fn current_paren_context_is_declaration(&self) -> bool {
+    pub(crate) fn current_paren_context_is_declaration(&self) -> bool {
         if self.current_paren_is_lambda_parameter_list() {
             return true;
         }
@@ -587,7 +584,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn paren_head_is_declaration(&self, before: &str) -> bool {
+    pub(crate) fn paren_head_is_declaration(&self, before: &str) -> bool {
         if before.is_empty() || before.contains('?') || function_head_has_assignment(before) {
             return false;
         }
@@ -641,7 +638,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn current_paren_is_lambda_parameter_list(&self) -> bool {
+    pub(crate) fn current_paren_is_lambda_parameter_list(&self) -> bool {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
@@ -693,7 +690,7 @@ impl FormatEngine<'_> {
         !prefix.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, ')' | ']'))
     }
 
-    pub(super) fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {
+    pub(crate) fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {
         if !is_pointer_declaration_segment(segment) {
             return false;
         }
@@ -706,7 +703,7 @@ impl FormatEngine<'_> {
             && scoped_name_is_constructor(before)
     }
 
-    pub(super) fn current_paren_context_has_attached_return_type(&self) -> bool {
+    pub(crate) fn current_paren_context_has_attached_return_type(&self) -> bool {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
@@ -722,7 +719,7 @@ impl FormatEngine<'_> {
             .is_some_and(|line| is_return_type_line(line.trim()))
     }
 
-    pub(super) fn push_pointer_run(
+    pub(crate) fn push_pointer_run(
         &mut self,
         operator: &str,
         next: Option<&Token>,
@@ -757,7 +754,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn push_pointer_or_reference(
+    pub(crate) fn push_pointer_or_reference(
         &mut self,
         operator: &str,
         next: Option<&Token>,
@@ -1112,7 +1109,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn function_pointer_parameter_keeps_space_before_name_group(&self) -> bool {
+    pub(crate) fn function_pointer_parameter_keeps_space_before_name_group(&self) -> bool {
         if !self.current_paren_context_is_declaration()
             && !self.is_function_declaration_parameter_continuation()
         {
@@ -1190,7 +1187,7 @@ impl FormatEngine<'_> {
         (" ".repeat(before_pad), " ".repeat(gap - before_pad))
     }
 
-    pub(super) fn consolidated_pointer_gap(&self) -> String {
+    pub(crate) fn consolidated_pointer_gap(&self) -> String {
         let before = self
             .token_input
             .previous_input_whitespace
@@ -1219,7 +1216,7 @@ impl FormatEngine<'_> {
         format!("{before}{after}")
     }
 
-    pub(super) fn resolved_pointer_align(&self, operator: &str) -> PointerAlign {
+    pub(crate) fn resolved_pointer_align(&self, operator: &str) -> PointerAlign {
         if operator.starts_with('&') {
             match self.options.reference_align {
                 ReferenceAlign::None => PointerAlign::None,
@@ -1233,7 +1230,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn is_unary_pointer_operator(&self) -> bool {
+    pub(crate) fn is_unary_pointer_operator(&self) -> bool {
         if self.current.trim().is_empty()
             && self.token_input.token_begins_source_line
             && self.previous == PreviousToken::CloseParen
@@ -1288,7 +1285,7 @@ impl FormatEngine<'_> {
             && current[..open].rfind(':').is_some_and(|colon| colon < open)
     }
 
-    pub(super) fn current_in_parenthesized_type_operand(&self) -> bool {
+    pub(crate) fn current_in_parenthesized_type_operand(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('(') else {
             return false;
@@ -1304,7 +1301,7 @@ impl FormatEngine<'_> {
         is_pointer_declaration_segment(current[open + 1..].trim())
     }
 
-    pub(super) fn current_in_cast_type_group(&self) -> bool {
+    pub(crate) fn current_in_cast_type_group(&self) -> bool {
         let current = self.current.trim_end();
         let Some(open) = current.rfind('(') else {
             return false;
@@ -1428,7 +1425,7 @@ fn strip_balanced_parens(segment: &str) -> String {
     result
 }
 
-pub(super) fn is_pointer_declaration_segment(segment: &str) -> bool {
+pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
     let stripped = strip_balanced_attributes(segment);
     let stripped = strip_balanced_angles(&stripped);
     let segment = stripped.as_str();

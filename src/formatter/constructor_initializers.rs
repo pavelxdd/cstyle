@@ -1,18 +1,16 @@
-use super::brace_classification::is_lambda_capture_header;
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
-use super::language;
-use super::line_scan::{
-    has_unmatched_open_brace, inline_brace_pair_range, unmatched_open_paren_columns,
+use crate::formatter::brace_classification::is_lambda_capture_header;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
+use crate::formatter::line_scan::{
+    has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,
+    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use super::line_scan::{is_comment_only_line, line_paren_imbalance};
-use super::syntax::scoped_name_is_constructor;
-use super::{
-    ContinuationIndent, FormatEngine, trailing_comment_split_limit, unmatched_open_paren_column,
-};
+use crate::formatter::state::ContinuationIndent;
+use crate::formatter::syntax::scoped_name_is_constructor;
+use crate::formatter::{FormatEngine, language};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
-pub(super) struct MaxLengthConstructorReplay {
+pub(crate) struct MaxLengthConstructorReplay {
     has_constructor_initializer: bool,
     in_constructor_initializer: bool,
     lambda_call_indent: Option<ContinuationIndent>,
@@ -30,7 +28,7 @@ impl MaxLengthConstructorReplay {
             })
     }
 
-    pub(super) fn structural_level(&self) -> Option<usize> {
+    pub(crate) fn structural_level(&self) -> Option<usize> {
         self.structural_level
     }
 }
@@ -69,7 +67,7 @@ fn paren_depth_delta(line: &str) -> isize {
     depth
 }
 
-pub(super) fn has_inline_constructor_initializer_colon(line: &str) -> bool {
+pub(crate) fn has_inline_constructor_initializer_colon(line: &str) -> bool {
     let mut in_string = false;
     let mut in_char = false;
     let mut escaped = false;
@@ -138,7 +136,7 @@ fn constructor_signature_ends_with_parameter_list(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn constructor_initializer_prefix_level(&self, structural_level: usize) -> usize {
+    pub(crate) fn constructor_initializer_prefix_level(&self, structural_level: usize) -> usize {
         let width = self.options.indent_width.max(1);
         self.frame_stack
             .active_constructor_initializer()
@@ -147,7 +145,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(super) fn replayed_constructor_lambda_header_indent_spaces(
+    pub(crate) fn replayed_constructor_lambda_header_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -168,7 +166,7 @@ impl FormatEngine<'_> {
         (target == self.token_input.input_source_indent).then_some(target)
     }
 
-    pub(super) fn start_max_length_constructor_replay(
+    pub(crate) fn start_max_length_constructor_replay(
         &self,
         line: &str,
         head: &str,
@@ -221,7 +219,7 @@ impl FormatEngine<'_> {
         (replay, next_indent)
     }
 
-    pub(super) fn advance_max_length_constructor_replay(
+    pub(crate) fn advance_max_length_constructor_replay(
         &self,
         replay: &mut MaxLengthConstructorReplay,
         head: &str,
@@ -257,7 +255,7 @@ impl FormatEngine<'_> {
         following_indent
     }
 
-    pub(super) fn record_constructor_initializer_frame(&mut self, function_try: bool) {
+    pub(crate) fn record_constructor_initializer_frame(&mut self, function_try: bool) {
         let layout = if self.current.trim().is_empty() {
             ConstructorInitializerLayout::Split
         } else {
@@ -280,7 +278,7 @@ impl FormatEngine<'_> {
             });
     }
 
-    pub(super) fn output_has_constructor_initializer_colon(&self) -> bool {
+    pub(crate) fn output_has_constructor_initializer_colon(&self) -> bool {
         for index in (0..self.output.len()).rev().take(64) {
             let trimmed = self.output.code_trimmed(index);
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
@@ -319,7 +317,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn same_line_constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn same_line_constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
         for index in (0..self.output.len()).rev().take(16) {
             let raw = &self.output[index];
             let trimmed = self.output.code_trimmed(index);
@@ -372,7 +370,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
         let total = self.output.len();
         for offset in 0..total.min(64) {
             let index = total - 1 - offset;
@@ -430,7 +428,7 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn constructor_initializer_header_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn constructor_initializer_header_indent_spaces(&self, line: &str) -> Option<usize> {
         let trimmed = line.trim_start();
         if !trimmed.starts_with(':') || trimmed.starts_with("::") {
             return None;
@@ -478,7 +476,7 @@ impl FormatEngine<'_> {
         Some(leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 
-    pub(super) fn constructor_initializer_continuation_indent_spaces(
+    pub(crate) fn constructor_initializer_continuation_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -510,7 +508,7 @@ impl FormatEngine<'_> {
         Some(base_indent)
     }
 
-    pub(super) fn constructor_initializer_preprocessor_branch_indent_spaces(
+    pub(crate) fn constructor_initializer_preprocessor_branch_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -554,7 +552,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn constructor_initializer_open_paren_arg_indent_spaces(
+    pub(crate) fn constructor_initializer_open_paren_arg_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -594,7 +592,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn constructor_initializer_argument_indent_spaces(
+    pub(crate) fn constructor_initializer_argument_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -615,7 +613,7 @@ impl FormatEngine<'_> {
             .map(|spaces| spaces + self.options.indent_width)
     }
 
-    pub(super) fn constructor_initializer_closing_paren_indent_spaces(
+    pub(crate) fn constructor_initializer_closing_paren_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -652,7 +650,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn constructor_initializer_ternary_arm_indent_spaces(
+    pub(crate) fn constructor_initializer_ternary_arm_indent_spaces(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -679,7 +677,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn constructor_initializer_context_indent(
+    pub(crate) fn constructor_initializer_context_indent(
         &self,
         current: &str,
         natural: usize,
@@ -759,7 +757,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn split_constructor_member_call_indent(&self, current: &str) -> Option<usize> {
+    pub(crate) fn split_constructor_member_call_indent(&self, current: &str) -> Option<usize> {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
         if current.is_empty()
@@ -837,7 +835,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn constructor_initializer_name_indent_from_line(
+    pub(crate) fn constructor_initializer_name_indent_from_line(
         &self,
         line: &str,
     ) -> Option<usize> {
@@ -855,7 +853,7 @@ impl FormatEngine<'_> {
         Some(leading + name_start)
     }
 
-    pub(super) fn constructor_member_line_base_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn constructor_member_line_base_indent_spaces(&self) -> Option<usize> {
         self.frame_stack.active_constructor_initializer()?;
         self.current
             .trim_start()

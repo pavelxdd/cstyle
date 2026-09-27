@@ -1,20 +1,20 @@
-use super::FormatEngine;
-use super::brace_classification::{is_lambda_body_header, is_namespace_or_module_block_header};
-use super::columns::{leading_visual_width, visual_width_from};
-use super::indentation::LineKind;
-use super::labels;
-use super::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
-use super::preprocessor::preprocessor_directive;
-use super::switch_cases;
-use super::token::{self, Token};
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::formatter::brace_classification::{
+    is_lambda_body_header, is_namespace_or_module_block_header,
+};
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_scan::{line_ends_with_comment, trailing_comment_split_limit};
+use crate::formatter::preprocessor::preprocessor_directive;
+use crate::formatter::token::{self, Token};
+use crate::formatter::{FormatEngine, labels, switch_cases};
 
-pub(super) struct MaxLengthBraceRowLayout {
-    pub(super) first_width: usize,
-    pub(super) attaches_lisp_closer: bool,
+pub(crate) struct MaxLengthBraceRowLayout {
+    pub(crate) first_width: usize,
+    pub(crate) attaches_lisp_closer: bool,
 }
 
-pub(super) fn postprocess_brace_style(output: String, options: &FormatOptions) -> String {
+pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -> String {
     match options.brace_style {
         BraceStyle::Pico => {
             let run_in = run_in_horstmann_opening_braces(&output, options);
@@ -27,7 +27,7 @@ pub(super) fn postprocess_brace_style(output: String, options: &FormatOptions) -
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn merge_source_run_in_braces(&mut self) {
+    pub(crate) fn merge_source_run_in_braces(&mut self) {
         let mut indices = std::mem::take(&mut self.source_run_in_brace_lines);
         indices.sort_unstable();
         indices.dedup();
@@ -45,7 +45,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn replayed_lisp_attached_suffix_indent_spaces(&self) -> Option<usize> {
+    pub(crate) fn replayed_lisp_attached_suffix_indent_spaces(&self) -> Option<usize> {
         if self.options.max_code_length.is_none()
             || !matches!(
                 self.options.brace_style,
@@ -62,7 +62,7 @@ impl FormatEngine<'_> {
         (spaces == self.token_input.input_source_indent).then_some(spaces)
     }
 
-    pub(super) fn max_length_brace_row_layout(
+    pub(crate) fn max_length_brace_row_layout(
         &self,
         line: &str,
         structural_level: usize,
@@ -133,7 +133,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn try_emit_whitesmith_lambda_close(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &str) -> bool {
         if !(matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
@@ -157,7 +157,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn try_split_lambda_body_header(&mut self, line: &str) -> bool {
+    pub(crate) fn try_split_lambda_body_header(&mut self, line: &str) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Allman
@@ -191,7 +191,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(super) fn try_split_operator_body(&mut self, line: &str) -> bool {
+    pub(crate) fn try_split_operator_body(&mut self, line: &str) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Allman
@@ -356,7 +356,7 @@ fn previous_line_is_namespace_header(input: &[&str], before: usize) -> bool {
         .is_some_and(|line| is_namespace_or_module_block_header(line))
 }
 
-pub(super) fn horstmann_run_in_fill(
+pub(crate) fn horstmann_run_in_fill(
     brace_line: &str,
     next_line: &str,
     options: &FormatOptions,

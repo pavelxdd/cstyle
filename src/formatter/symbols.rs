@@ -1,22 +1,25 @@
-use super::brace_classification::is_class_like_brace_type;
-use super::columns::{leading_visual_width, visual_width_from};
-use super::frame::{
+use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
+use crate::formatter::brace_classification::is_class_like_brace_type;
+use crate::formatter::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
     DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
 };
-use super::labels;
-use super::language::{self, is_leading_continuation_operator, is_numeric_variable_word};
-use super::line_scan::{has_unclosed_delimiter_after, trailing_matching_parens};
-use super::operators::find_assignment_operator;
-use super::syntax::{
+use crate::formatter::language::{
+    self, is_leading_continuation_operator, is_numeric_variable_word, is_pointer_type_word,
+    is_type_like_pointer_word,
+};
+use crate::formatter::line_scan::{
+    has_unclosed_delimiter_after, trailing_comment_split_limit, trailing_matching_parens,
+    unmatched_open_paren_column,
+};
+use crate::formatter::operators::find_assignment_operator;
+use crate::formatter::state::PreviousToken;
+use crate::formatter::syntax::{
     assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
 };
-use super::token::Token;
-use super::{
-    FormatEngine, PreviousToken, TokenPushContext, is_pointer_type_word, is_type_like_pointer_word,
-    trailing_comment_split_limit, unmatched_open_paren_column,
-};
-use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign};
+use crate::formatter::token::Token;
+use crate::formatter::{FormatEngine, TokenPushContext, labels};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> bool {
@@ -27,7 +30,7 @@ fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> 
             || is_numeric_variable_word(word))
 }
 
-pub(super) fn close_paren_out_suppressed(token: &Token) -> bool {
+pub(crate) fn close_paren_out_suppressed(token: &Token) -> bool {
     match token {
         Token::Symbol(';' | ',' | ']' | '.') => true,
         Token::Operator(op) => {
@@ -85,7 +88,7 @@ fn is_single_lvalue_assignment(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn push_symbol(&mut self, symbol: char, context: TokenPushContext<'_>) {
+    pub(crate) fn push_symbol(&mut self, symbol: char, context: TokenPushContext<'_>) {
         let TokenPushContext {
             next,
             next_is_adjacent,
@@ -1480,12 +1483,12 @@ impl FormatEngine<'_> {
         word_count >= 2 || (next_is_number && word_count >= 1)
     }
 
-    pub(super) fn is_class_initializer_colon(&self) -> bool {
+    pub(crate) fn is_class_initializer_colon(&self) -> bool {
         let code = &self.current[..self.current_trailing_comment_split_limit()];
         self.code_is_class_initializer_signature(code.trim_end())
     }
 
-    pub(super) fn class_initializer_follows_function_try(&self) -> bool {
+    pub(crate) fn class_initializer_follows_function_try(&self) -> bool {
         let code = self.current[..self.current_trailing_comment_split_limit()].trim_end();
         if trailing_word(code) == "try" {
             return true;
@@ -1533,7 +1536,7 @@ impl FormatEngine<'_> {
                 || self.code_ends_definition_header(code))
     }
 
-    pub(super) fn colon_leads_class_initializer(&self) -> bool {
+    pub(crate) fn colon_leads_class_initializer(&self) -> bool {
         if self.is_class_initializer_colon() {
             return true;
         }

@@ -1,20 +1,16 @@
-use super::super::FormatEngine;
-use super::super::brace_classification::line_opens_lambda_block;
-use super::super::buffer;
-
-use super::super::columns::leading_visual_width;
-use super::super::comments::line_comment_backslash_trailing_space;
-use super::super::indentation::LineKind;
-
-use super::super::line_adjust::macro_call_starts_with;
-use super::super::operator_chains::ReadyOperatorChainLine;
-
-use super::super::state::ContinuationIndent;
-use super::model::{LineLayout, PostEmissionLayout};
 use crate::config::IndentStyle;
+use crate::formatter::brace_classification::line_opens_lambda_block;
+use crate::formatter::columns::leading_visual_width;
+use crate::formatter::comments::line_comment_backslash_trailing_space;
+use crate::formatter::indentation::LineKind;
+use crate::formatter::line_adjust::macro_call_starts_with;
+use crate::formatter::operator_chains::ReadyOperatorChainLine;
+use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
+use crate::formatter::state::ContinuationIndent;
+use crate::formatter::{FormatEngine, buffer};
 
 impl FormatEngine<'_> {
-    pub(super) fn publish_formatted_line_layout(
+    pub(crate) fn publish_formatted_line_layout(
         &mut self,
         line: &str,
         layout: &LineLayout,
@@ -31,7 +27,7 @@ impl FormatEngine<'_> {
         emitted_indent_spaces
     }
 
-    pub(in super::super) fn push_formatted_line(&mut self, line: &str, indent: usize) {
+    pub(crate) fn push_formatted_line(&mut self, line: &str, indent: usize) {
         self.push_formatted_line_with_indent(
             line,
             indent,
@@ -42,7 +38,7 @@ impl FormatEngine<'_> {
         );
     }
 
-    pub(in super::super) fn push_formatted_line_exact(
+    pub(crate) fn push_formatted_line_exact(
         &mut self,
         line: &str,
         structural_level: usize,
@@ -58,7 +54,7 @@ impl FormatEngine<'_> {
         );
     }
 
-    pub(in super::super) fn push_output_line_with_indent(
+    pub(crate) fn push_output_line_with_indent(
         &mut self,
         line: &str,
         structural_level: usize,
@@ -72,7 +68,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(in super::super) fn push_output_line(&mut self, line: &str, indent: usize) {
+    pub(crate) fn push_output_line(&mut self, line: &str, indent: usize) {
         if line.is_empty() {
             self.push_empty_line();
             return;
@@ -104,7 +100,7 @@ impl FormatEngine<'_> {
         self.adjust_and_publish_line(output);
     }
 
-    pub(in super::super) fn push_output_line_spaces(
+    pub(crate) fn push_output_line_spaces(
         &mut self,
         line: &str,
         structural_level: usize,
@@ -143,7 +139,7 @@ impl FormatEngine<'_> {
         self.adjust_and_publish_line(output);
     }
 
-    pub(in super::super) fn previous_output_indent_prefix(&self) -> String {
+    pub(crate) fn previous_output_indent_prefix(&self) -> String {
         self.previous_pre_adjust_line
             .as_ref()
             .map(|line| {
@@ -154,7 +150,7 @@ impl FormatEngine<'_> {
             .unwrap_or_default()
     }
 
-    pub(in super::super) fn adjust_and_publish_line(&mut self, line: String) {
+    pub(crate) fn adjust_and_publish_line(&mut self, line: String) {
         let line = self.align_adjacent_block_comments_before_adjustment(line);
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
@@ -167,7 +163,7 @@ impl FormatEngine<'_> {
         self.publish_ready_line(line);
     }
 
-    pub(in super::super) fn adjust_and_publish_raw_literal_line(
+    pub(crate) fn adjust_and_publish_raw_literal_line(
         &mut self,
         line: String,
         structural_start: usize,
@@ -206,12 +202,12 @@ impl FormatEngine<'_> {
         format!("{prefix}{}", line.trim_start_matches([' ', '\t']))
     }
 
-    pub(super) fn publish_unadjusted_line(&mut self, line: String) {
+    pub(crate) fn publish_unadjusted_line(&mut self, line: String) {
         self.previous_pre_adjust_line = Some(line.clone());
         self.publish_ready_line(line);
     }
 
-    pub(in super::super) fn publish_ready_line(&mut self, line: String) {
+    pub(crate) fn publish_ready_line(&mut self, line: String) {
         let line = self.normalize_ready_preprocessor_line(line);
         let line = if let Some(spaces) = self.ready_objc_method_closing_brace_indent_spaces(&line) {
             format!("{}{}", " ".repeat(spaces), line.trim_start())
@@ -259,7 +255,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn deferred_post_emission_layout(
+    pub(crate) fn deferred_post_emission_layout(
         &self,
         line: &str,
         layout: &LineLayout,
@@ -275,7 +271,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn apply_post_emission_state(
+    pub(crate) fn apply_post_emission_state(
         &mut self,
         line: &str,
         layout: &LineLayout,

@@ -1,7 +1,7 @@
-use super::FormatEngine;
-use super::indentation::LineKind;
+use crate::formatter::FormatEngine;
+use crate::formatter::indentation::LineKind;
 
-pub(super) struct SwigState {
+pub(crate) struct SwigState {
     may_have_input: bool,
     pending_typemap_line: Option<(String, usize)>,
     pythoncode_indent_spaces: Option<usize>,
@@ -18,11 +18,11 @@ impl Default for SwigState {
 }
 
 impl FormatEngine<'_> {
-    pub(super) fn set_may_have_swig(&mut self, may_have_input: bool) {
+    pub(crate) fn set_may_have_swig(&mut self, may_have_input: bool) {
         self.swig.may_have_input = may_have_input;
     }
 
-    pub(super) fn try_emit_swig_line(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_swig_line(&mut self, line: &str) -> bool {
         if !self.swig.may_have_input
             && self.swig.pending_typemap_line.is_none()
             && self.swig.pythoncode_indent_spaces.is_none()

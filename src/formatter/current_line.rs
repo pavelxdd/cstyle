@@ -1,9 +1,9 @@
-use super::columns::visual_width_from;
+use crate::formatter::columns::visual_width_from;
 use std::cell::Cell;
 use std::ops::Deref;
 
 #[derive(Default)]
-pub(super) struct CurrentLine {
+pub(crate) struct CurrentLine {
     text: String,
     char_len: Cell<Option<(usize, usize)>>,
     open_brace_run_len: Cell<Option<usize>>,
@@ -15,19 +15,19 @@ pub(super) struct CurrentLine {
 }
 
 impl CurrentLine {
-    pub(super) fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.text
     }
 
-    pub(super) fn push(&mut self, ch: char) {
+    pub(crate) fn push(&mut self, ch: char) {
         self.text.push(ch);
     }
 
-    pub(super) fn push_str(&mut self, text: &str) {
+    pub(crate) fn push_str(&mut self, text: &str) {
         self.text.push_str(text);
     }
 
-    pub(super) fn pop(&mut self) -> Option<char> {
+    pub(crate) fn pop(&mut self) -> Option<char> {
         let popped = self.text.pop();
         if popped.is_some() {
             self.invalidate();
@@ -35,7 +35,7 @@ impl CurrentLine {
         popped
     }
 
-    pub(super) fn truncate(&mut self, new_len: usize) {
+    pub(crate) fn truncate(&mut self, new_len: usize) {
         if new_len >= self.text.len() {
             return;
         }
@@ -43,12 +43,12 @@ impl CurrentLine {
         self.invalidate();
     }
 
-    pub(super) fn insert(&mut self, index: usize, ch: char) {
+    pub(crate) fn insert(&mut self, index: usize, ch: char) {
         self.text.insert(index, ch);
         self.invalidate();
     }
 
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         if self.text.is_empty() {
             return;
         }
@@ -56,27 +56,27 @@ impl CurrentLine {
         self.invalidate();
     }
 
-    pub(super) fn replace(&mut self, text: String) {
+    pub(crate) fn replace(&mut self, text: String) {
         self.text = text;
         self.invalidate();
     }
 
-    pub(super) fn take(&mut self) -> String {
+    pub(crate) fn take(&mut self) -> String {
         self.invalidate();
         std::mem::take(&mut self.text)
     }
 
-    pub(super) fn ensure_space(&mut self) {
+    pub(crate) fn ensure_space(&mut self) {
         if !self.text.is_empty() && !self.text.ends_with(' ') {
             self.text.push(' ');
         }
     }
 
-    pub(super) fn trim_end_spaces(&mut self) {
+    pub(crate) fn trim_end_spaces(&mut self) {
         self.trim_end_matching(|ch| ch == ' ');
     }
 
-    pub(super) fn trim_end_horizontal_space(&mut self) {
+    pub(crate) fn trim_end_horizontal_space(&mut self) {
         self.trim_end_matching(|ch| matches!(ch, ' ' | '\t'));
     }
 
@@ -98,7 +98,7 @@ impl CurrentLine {
             .set(Some((self.text.len(), before_chars - popped)));
     }
 
-    pub(super) fn char_len(&self) -> usize {
+    pub(crate) fn char_len(&self) -> usize {
         let len = self.text.len();
         if let Some((cached_bytes, cached_chars)) = self.char_len.get() {
             if cached_bytes == len {
@@ -116,7 +116,7 @@ impl CurrentLine {
         total
     }
 
-    pub(super) fn is_blank(&self) -> bool {
+    pub(crate) fn is_blank(&self) -> bool {
         let len = self.text.len();
         if let Some((cached_bytes, cached_blank)) = self.blank.get()
             && cached_bytes == len
@@ -128,7 +128,7 @@ impl CurrentLine {
         blank
     }
 
-    pub(super) fn visual_width(&self, tab_width: usize) -> usize {
+    pub(crate) fn visual_width(&self, tab_width: usize) -> usize {
         let len = self.text.len();
         if let Some((cached_bytes, cached_width)) = self.visual_width.get() {
             if cached_bytes == len {
@@ -146,7 +146,7 @@ impl CurrentLine {
         width
     }
 
-    pub(super) fn visual_width_from(&self, start_column: usize, tab_width: usize) -> usize {
+    pub(crate) fn visual_width_from(&self, start_column: usize, tab_width: usize) -> usize {
         let len = self.text.len();
         if let Some((cached_bytes, cached_start, cached_width)) = self.visual_width_from.get()
             && cached_start == start_column
@@ -170,7 +170,7 @@ impl CurrentLine {
         width
     }
 
-    pub(super) fn last_open_brace(&self) -> Option<usize> {
+    pub(crate) fn last_open_brace(&self) -> Option<usize> {
         let len = self.text.len();
         if let Some((cached_bytes, cached_index)) = self.last_open_brace.get() {
             if cached_bytes == len {
@@ -190,7 +190,7 @@ impl CurrentLine {
         index
     }
 
-    pub(super) fn trailing_comment_split_limit(&self) -> usize {
+    pub(crate) fn trailing_comment_split_limit(&self) -> usize {
         let len = self.text.len();
         let mut scan = match self.trailing_comment.get() {
             Some(scan) if scan.scanned <= len && self.text.is_char_boundary(scan.scanned) => scan,
@@ -206,7 +206,7 @@ impl CurrentLine {
         }
     }
 
-    pub(super) fn is_open_brace_run(&self) -> bool {
+    pub(crate) fn is_open_brace_run(&self) -> bool {
         if self.open_brace_run_len.get() == Some(self.text.len()) {
             return true;
         }
@@ -217,7 +217,7 @@ impl CurrentLine {
                 .all(|ch| ch == '{' || ch == ' ' || ch == '\t')
     }
 
-    pub(super) fn mark_open_brace_run(&self) {
+    pub(crate) fn mark_open_brace_run(&self) {
         self.open_brace_run_len.set(Some(self.text.len()));
     }
 
