@@ -440,3 +440,42 @@ fn gnu_malformed_close_before_operator_chain_is_idempotent() {
 
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn whitesmith_brace_after_same_line_closing_brace_keeps_case_body_indent() {
+    let mut options = FormatOptions::default();
+    let args = [
+        "--style=whitesmith",
+        "--add-braces",
+        "--remove-braces",
+        "--break-blocks",
+        "--delete-empty-lines",
+    ]
+    .map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = fixture!(
+        "{body}switch(value) {{",
+        "{body}case ONE: {{",
+        "{call_arg}\"message: %s\\n\",",
+    );
+
+    assert_eq!(
+        format_exact(source, &options),
+        fixture!(
+            "{body}switch(value)",
+            "    {",
+            "        {",
+            "            {",
+            "            body",
+            "            }",
+            "",
+            "        case ONE:",
+            "            {",
+            "                {",
+            "                    {",
+            "                    call_arg",
+            "                    }",
+            "                    \"message: %s\\n\",",
+        ),
+    );
+}

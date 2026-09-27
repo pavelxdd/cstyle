@@ -1490,7 +1490,6 @@ impl FormatEngine<'_> {
                 )
                 && (brace
                     .header
-                    .take()
                     .as_deref()
                     .is_some_and(is_break_blocks_closing_header)
                     || self
