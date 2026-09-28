@@ -6710,3 +6710,10 @@ fn operator_led_statement_after_blank_line_keeps_block_indent() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn call_argument_after_cast_argument_aligns_with_open_paren() {
+    let source = "void f(void)\n{\n    r = g(&x,\n          (const struct sockaddr*) &a,\n          cb);\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

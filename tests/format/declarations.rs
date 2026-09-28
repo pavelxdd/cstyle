@@ -2602,7 +2602,8 @@ fn dollar_sign_extension_identifier_preserves_declaration_spacing() {
 
 #[test]
 fn split_parameter_list_after_function_in_conditional_keeps_continuation_indent() {
-    let source = "#ifndef A\nvoid g(void)\n{\n}\nstatic int f(\n    T *a,\n    int b\n)\n{\n}\n#endif\n";
+    let source =
+        "#ifndef A\nvoid g(void)\n{\n}\nstatic int f(\n    T *a,\n    int b\n)\n{\n}\n#endif\n";
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }

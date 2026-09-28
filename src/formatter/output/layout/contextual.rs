@@ -778,7 +778,12 @@ impl FormatEngine<'_> {
     fn previous_code_ends_statement(&self) -> bool {
         (0..self.output.len())
             .rev()
-            .map(|index| (self.output.code_trimmed(index), self.output[index].trim_start()))
+            .map(|index| {
+                (
+                    self.output.code_trimmed(index),
+                    self.output[index].trim_start(),
+                )
+            })
             .find(|(code, raw)| !code.is_empty() && !raw.starts_with('*'))
             .is_some_and(|(code, _)| code.trim_end().ends_with([';', '{', '}']))
     }
@@ -1374,21 +1379,6 @@ impl FormatEngine<'_> {
         let output_spaces = contextual.output_spaces;
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
-        if layout.line_kind == LineKind::Normal
-            && self.layout.line_adjuster.total_case_unindent_depth() > 0
-            && line
-                .trim_start()
-                .strip_prefix(['+', '-'])
-                .is_some_and(|tail| tail.chars().next().is_some_and(|ch| ch.is_ascii_digit()))
-            && self.output.last_non_empty_line().is_some_and(|previous| {
-                previous[..trailing_comment_split_limit(previous)]
-                    .trim_end()
-                    .ends_with(',')
-            })
-            && let Some(spaces) = layout.exact_indent_spaces.as_mut()
-        {
-            *spaces = spaces.saturating_sub(1);
-        }
         if layout.exact_indent_spaces == Some(0)
             && replay.input_continuation_indent.is_none()
             && let Some(previous) = self.output.last_non_empty_line()

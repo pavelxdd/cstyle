@@ -833,13 +833,9 @@ impl FormatEngine<'_> {
         if previous_code.ends_with(',')
             && previous_trimmed.starts_with('(')
             && !current.starts_with(['#', '(', ')', '{', '}'])
+            && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            let fallback = leading_visual_width(previous, tab_width)
-                + usize::from(!previous_code.contains('?'));
-            return Some(
-                unmatched_open_paren_column(previous_code).map_or(fallback, |open| open + 1)
-                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
-            );
+            return Some(open + 1 + self.layout.line_adjuster.total_case_unindent_depth() * width);
         }
         if !self.options.indent_after_parens
             && previous_code.ends_with(',')
