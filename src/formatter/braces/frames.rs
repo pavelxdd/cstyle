@@ -5,6 +5,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
@@ -395,6 +396,15 @@ impl FormatEngine<'_> {
         }
         if closes_scope {
             self.layout.frame_stack.pop_brace();
+        }
+        // A split else never reaches past the function it is in.
+        if self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.groups.closed_at(brace))
+            .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody))
+        {
+            self.end_preprocessor_split_else();
         }
     }
 

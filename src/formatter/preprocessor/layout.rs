@@ -660,6 +660,10 @@ impl FormatEngine<'_> {
         }
     }
 
+    pub(crate) fn end_preprocessor_split_else(&mut self) {
+        self.preprocessor.split_else.reset();
+    }
+
     fn clear_preprocessor_split_else_indent(&mut self) {
         if self
             .layout

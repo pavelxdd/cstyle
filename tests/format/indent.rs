@@ -6906,3 +6906,52 @@ fn kr_first_statement_after_multiline_condition_brace_takes_header_body_column()
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_preprocessor_split_else_ends_with_its_function() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "static int",
+        "f(int c)",
+        "{",
+        "#if (K)",
+        "    if (a)",
+        "        {",
+        "            x = 1;",
+        "        }",
+        "    else",
+        "#endif",
+        "        {",
+        "            if (b)",
+        "                {",
+        "                    w = 0;",
+        "                }",
+        "        }",
+        "}",
+        "",
+        "static void",
+        "g(void)",
+        "{",
+        "    if (s)",
+        "        {",
+        "            if (t)",
+        "                {",
+        "                    v = 1;",
+        "                }",
+        "            else",
+        "                {",
+        "                    v = 2;",
+        "                }",
+        "#if (X)",
+        "            u = 1;",
+        "#endif",
+        "        }",
+        "    if (ft)",
+        "        {",
+        "            y = 2;",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
