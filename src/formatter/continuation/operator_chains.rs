@@ -299,15 +299,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous_index = self.output.last_non_empty_index()?;
+        let previous = &self.output[previous_index];
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         let current_starts_operator = current.starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]);
-        let previous_starts_operator = previous_trimmed.starts_with([
-            '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]);
+        // The ` */` of a block comment does not start with an operator.
+        let previous_starts_operator = self.output.comment_start_index(previous_index)
+            == previous_index
+            && previous_trimmed.starts_with([
+                '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
+            ]);
         if current_starts_operator && previous_starts_operator {
             if self.preprocessor.split_else.extra_indent
                 && (current.starts_with("&&") || current.starts_with("||"))
@@ -325,11 +329,6 @@ impl FormatEngine<'_> {
                 }
                 _ => previous_indent,
             });
-        }
-        if current_starts_operator && previous_code.trim() == "{" {
-            return Some(
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
-            );
         }
         if previous_code.contains('#')
             && !previous_trimmed.starts_with(['#', '/'])

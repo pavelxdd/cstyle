@@ -4146,3 +4146,23 @@ fn closing_paren_after_trailing_parameter_comment_stays_at_head_indent() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn allman_block_comment_tail_does_not_indent_operator_statement() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x)",
+        "    {",
+        "        /*",
+        "         * c",
+        "         */",
+        "        *p = a;",
+        "    }",
+        "}",
+    );
+    assert_eq!(format_exact(source, &options), source);
+}

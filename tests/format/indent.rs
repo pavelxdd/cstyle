@@ -6717,3 +6717,26 @@ fn call_argument_after_cast_argument_aligns_with_open_paren() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn allman_operator_statement_in_case_block_braceless_body_keeps_block_indent() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch (query)",
+        "    {",
+        "    case A:",
+        "    {",
+        "        for (i = 0; i < n; i++)",
+        "            if (g(i))",
+        "            {",
+        "                *pres1 = TRUE;",
+        "            }",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
