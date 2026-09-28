@@ -4265,3 +4265,19 @@ fn comment_before_a_braceless_body_indents_with_its_tabs() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn block_comment_text_does_not_read_as_a_member_initializer_colon() {
+    let source = fixture!(
+        "#ifndef X",
+        "int f(void)",
+        "{",
+        "    /* files on remote directories",
+        "       (via NFS) can be read through a file:// URL */",
+        "    int x;",
+        "}",
+        "#endif",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

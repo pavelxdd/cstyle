@@ -432,6 +432,22 @@ impl OutputBuffer {
         (self.comment_start_index(index) == index).then(|| &self.lines[index])
     }
 
+    /// The last non-empty line in the current scope that is not only a
+    /// comment: comments take no part in the layout of the code around them.
+    pub(crate) fn last_code_line_in_scope(&self) -> Option<&String> {
+        (self.scope_start.min(self.lines.len())..self.lines.len())
+            .rev()
+            .find(|&index| {
+                let text = self.trimmed(index);
+                !text.is_empty()
+                    && (self.line_tokens(index).is_some()
+                        || self.comment_start_index(index) == index
+                            && !text.starts_with("/*")
+                            && !text.starts_with("//"))
+            })
+            .map(|index| &self.lines[index])
+    }
+
     /// Index of the line that opens the comment on line `index`: a block
     /// comment continuation line maps to the line holding its `/*`.
     pub(crate) fn comment_start_index(&self, index: usize) -> usize {

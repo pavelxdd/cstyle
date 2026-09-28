@@ -7090,3 +7090,21 @@ fn whitesmith_block_after_a_directive_indents_from_the_code_before() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn condition_continuation_after_a_ternary_colon_keeps_the_conditional_floor() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if((a ? b :",
+        "            c) != -1)",
+        "    {",
+        "    }",
+        "    y = (a ? b :",
+        "         c);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

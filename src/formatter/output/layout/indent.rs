@@ -52,10 +52,7 @@ impl FormatEngine<'_> {
         let trimmed = line.trim_start();
         let Some(previous) = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
+            .last_code_line_in_scope()
             .map(|line| line[..trailing_comment_split_limit(line)].trim())
         else {
             return 0;

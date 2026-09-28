@@ -12,7 +12,7 @@ use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
-use crate::formatter::structure::groups::GroupId;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_tree_anchor_layout(
@@ -112,6 +112,26 @@ impl FormatEngine<'_> {
             }
             end = start;
         }
+    }
+
+    /// Leading width of the line holding the control header whose condition
+    /// the line being laid out continues, from the structure tree.
+    pub(crate) fn control_condition_header_indent(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let first = self.output.pending_tokens()?.first;
+        let condition = groups
+            .ancestors(groups.enclosing(first)?)
+            .take_while(|&id| groups.get(id).delimiter == Delimiter::Paren)
+            .last()?;
+        let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
+        if !matches!(&tokens[keyword], Token::Word(word)
+            if matches!(word.as_str(), "if" | "for" | "while" | "switch"))
+        {
+            return None;
+        }
+        let line = self.line_led_by(keyword)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
     }
 
     /// Whether the code before the line being laid out ends with the

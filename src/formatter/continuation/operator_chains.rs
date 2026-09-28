@@ -1332,8 +1332,14 @@ impl FormatEngine<'_> {
             && previous_code.contains('?')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
+            let column = column_after(previous_code, open, tab_width);
+            let column = self
+                .control_condition_header_indent()
+                .map_or(column, |header| {
+                    column.max(header + min_conditional_indent_spaces(self.options))
+                });
             return Some(
-                column_after(previous_code, open, tab_width)
+                column
                     + self.layout.line_adjuster.total_case_unindent_depth()
                         * self.options.indent_width,
             );
