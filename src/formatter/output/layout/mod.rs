@@ -1,3 +1,4 @@
+mod anchors;
 mod contextual;
 mod corrections;
 mod indent;
