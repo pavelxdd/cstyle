@@ -3,6 +3,8 @@
 use super::blocks::{BlockKind, Blocks, next_code_token};
 use super::groups::Groups;
 use crate::formatter::lexer::Token;
+use crate::formatter::preprocessor::is_conditional_preprocessor;
+use crate::formatter::text::line_scan::preprocessor_directive;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
@@ -12,6 +14,10 @@ pub(crate) struct Statements {
     /// Keyword of the control statement whose braceless body starts at a
     /// token, by the body's first token.
     braceless_headers: HashMap<usize, usize>,
+    /// First token of the previous statement in the same block, by a
+    /// statement's first token: labels are skipped, and a statement after
+    /// one without its `;` (a macro call) has none.
+    previous_siblings: HashMap<usize, usize>,
     /// Bodies of `else` keywords separated from them by a blank line.
     split_else_bodies: Vec<ElseBody>,
 }
@@ -35,13 +41,15 @@ impl Statements {
             blocks,
             else_ifs: HashMap::new(),
             braceless_headers: HashMap::new(),
+            previous_siblings: HashMap::new(),
             else_bodies: Vec::new(),
             unterminated: false,
         };
-        parser.items(0, tokens.len());
+        parser.file_items(tokens.len());
         Self {
             else_ifs: parser.else_ifs,
             braceless_headers: parser.braceless_headers,
+            previous_siblings: parser.previous_siblings,
             split_else_bodies: parser
                 .else_bodies
                 .into_iter()
@@ -67,6 +75,12 @@ impl Statements {
         self.braceless_headers.get(&index).copied()
     }
 
+    /// First token of the statement before the one starting at `index`, in
+    /// the same block.
+    pub(crate) fn previous_sibling(&self, index: usize) -> Option<usize> {
+        self.previous_siblings.get(&index).copied()
+    }
+
     /// Whether the token `index` is in the body of an `else` that a blank
     /// line separates from its body.
     pub(crate) fn in_split_else_body(&self, index: usize) -> bool {
@@ -82,6 +96,7 @@ struct Parser<'a> {
     blocks: &'a Blocks,
     else_ifs: HashMap<usize, usize>,
     braceless_headers: HashMap<usize, usize>,
+    previous_siblings: HashMap<usize, usize>,
     else_bodies: Vec<ElseBody>,
     /// Whether the last expression statement ended at a keyword, not `;`.
     unterminated: bool,
@@ -111,8 +126,49 @@ impl Parser<'_> {
     /// Parses the statements in `start..end`.
     fn items(&mut self, start: usize, end: usize) {
         let mut position = start;
+        // The last statement of the block that is no label and ended with
+        // its `;` or block.
+        let mut sibling = None;
+        while let Some(at) = self.next(position, end) {
+            let label = self.is_label(at, end);
+            if !label
+                && let Some(previous) = sibling
+                && !self.crosses_conditional(previous, at)
+            {
+                self.previous_siblings.insert(at, previous);
+            }
+            self.unterminated = false;
+            position = self.statement(at, end).max(at + 1);
+            // astyle lays out statements after a label afresh.
+            sibling = (!label && !self.unterminated).then_some(at);
+        }
+    }
+
+    /// File scope: declarations, not statements of a block.
+    fn file_items(&mut self, end: usize) {
+        let mut position = 0;
         while let Some(at) = self.next(position, end) {
             position = self.statement(at, end).max(at + 1);
+        }
+    }
+
+    /// Whether a conditional directive lies between the tokens `from` and
+    /// `to`: the branches of `#if` parse one after another, so statements
+    /// across one need not follow each other.
+    fn crosses_conditional(&self, from: usize, to: usize) -> bool {
+        self.tokens[from..to].iter().any(|token| {
+            matches!(token, Token::Preprocessor(directive)
+                if preprocessor_directive(&directive.text).is_some_and(is_conditional_preprocessor))
+        })
+    }
+
+    fn is_label(&self, at: usize, end: usize) -> bool {
+        match self.word(at) {
+            Some("case" | "default") => true,
+            Some(_) => self
+                .next(at + 1, end)
+                .is_some_and(|next| self.is_symbol(next, ':')),
+            None => false,
         }
     }
 
@@ -135,10 +191,14 @@ impl Parser<'_> {
                 }
             }
             Some(_) => {
-                if let Some(next) = self.next(at + 1, end)
-                    && self.is_symbol(next, ':')
+                // A labeled statement: the label and the statement after it.
+                if let Some(colon) = self.next(at + 1, end)
+                    && self.is_symbol(colon, ':')
                 {
-                    return next + 1;
+                    return match self.next(colon + 1, end) {
+                        Some(next) if !self.is_symbol(next, '}') => self.statement(next, end),
+                        _ => colon + 1,
+                    };
                 }
             }
             None => {}
@@ -147,9 +207,13 @@ impl Parser<'_> {
             return match self.close_of(at) {
                 Some(close) => {
                     self.items(at + 1, close);
+                    self.unterminated = false;
                     close + 1
                 }
-                None => at + 1,
+                None => {
+                    self.unterminated = true;
+                    at + 1
+                }
             };
         }
         if self.is_symbol(at, ';') {
@@ -162,7 +226,7 @@ impl Parser<'_> {
     fn body(&mut self, header: usize, from: usize, end: usize) -> usize {
         match self.next(from, end) {
             Some(at) => {
-                if !self.is_symbol(at, '{') {
+                if !self.is_symbol(at, '{') && !self.crosses_conditional(header, at) {
                     self.braceless_headers.insert(at, header);
                 }
                 self.statement(at, end)
@@ -260,6 +324,9 @@ impl Parser<'_> {
     /// cannot occur inside an expression (a macro call without `;`).
     fn simple(&mut self, at: usize, end: usize) -> usize {
         let mut position = at;
+        // Whether the statement so far is words and parenthesized groups,
+        // like the head of a statement macro (`FOREACH(x) {`, `SEH_TRY {`).
+        let mut plain_head = true;
         while let Some(index) = self.next(position, end) {
             if index != at
                 && self.word(index).is_some_and(|word| {
@@ -280,13 +347,28 @@ impl Parser<'_> {
                     // as a function head per branch; what follows it still
                     // parses as statements.
                     let Some(close) = self.close_of(index) else {
-                        return index + 1;
+                        if self.is_symbol(index, '{') {
+                            // What follows is inside the block, no sibling.
+                            self.unterminated = true;
+                            return index + 1;
+                        }
+                        position = index + 1;
+                        continue;
                     };
                     self.nested(index, close);
-                    if self.is_symbol(index, '{') && self.brace_ends_statement(index) {
+                    self.unterminated = false;
+                    if self.is_symbol(index, '{') && self.brace_ends_statement(index, plain_head) {
                         return close + 1;
                     }
                     position = close + 1;
+                }
+                Token::Operator(ref operator) if operator != "::" => {
+                    plain_head = false;
+                    position = index + 1;
+                }
+                Token::Symbol(',') => {
+                    plain_head = false;
+                    position = index + 1;
                 }
                 _ => position = index + 1,
             }
@@ -298,16 +380,20 @@ impl Parser<'_> {
         self.blocks.kind(self.groups.opened_at(open)?)
     }
 
-    fn brace_ends_statement(&self, open: usize) -> bool {
-        !matches!(
-            self.brace_kind(open),
+    /// Whether a block at `open` inside a statement ends it: a function or
+    /// namespace body does, a statement macro's block only after a plain
+    /// head; an aggregate, initializer, or lambda does not.
+    fn brace_ends_statement(&self, open: usize, plain_head: bool) -> bool {
+        match self.brace_kind(open) {
+            Some(BlockKind::FunctionBody | BlockKind::Namespace | BlockKind::ExternC) => true,
             Some(
                 BlockKind::Aggregate
-                    | BlockKind::Initializer
-                    | BlockKind::CompoundLiteral
-                    | BlockKind::Lambda
-            )
-        )
+                | BlockKind::Initializer
+                | BlockKind::CompoundLiteral
+                | BlockKind::Lambda,
+            ) => false,
+            _ => plain_head,
+        }
     }
 
     /// Parses statements inside a group of an expression: lambda bodies and
@@ -390,6 +476,36 @@ mod tests {
     fn else_after_semicolonless_macro_body_stays_unpaired() {
         let source = "void f()\n{\n    if ( a )\n        MACRO(a)\n    else if ( b )\n        MACRO(b)\n    return;\n}\n";
         assert_eq!(else_lines(source), [None]);
+    }
+
+    /// For each statement starting a line, the line of its previous
+    /// sibling.
+    fn sibling_lines(source: &str) -> Vec<(usize, usize)> {
+        let tokens = tokenize(source);
+        let groups = Groups::build(&tokens);
+        let blocks = Blocks::build(&tokens, &groups);
+        let statements = Statements::build(&tokens, &groups, &blocks);
+        let line_of = |index: usize| {
+            tokens[..index]
+                .iter()
+                .filter(|token| matches!(token, Token::Newline))
+                .count()
+        };
+        let mut pairs: Vec<_> = (0..tokens.len())
+            .filter_map(|index| {
+                statements
+                    .previous_sibling(index)
+                    .map(|previous| (line_of(index), line_of(previous)))
+            })
+            .collect();
+        pairs.sort_unstable();
+        pairs
+    }
+
+    #[test]
+    fn statements_link_to_previous_siblings_past_comments_and_bodies() {
+        let source = "void f(void)\n{\n    a();\n    /* c */\n    if (x)\n        b();\n    switch (y) {\n    case 1:\n        c();\n        break;\n    }\n    FOO(z)\n    d();\n}\n";
+        assert_eq!(sibling_lines(source), [(4, 2), (6, 4), (9, 8), (11, 6)]);
     }
 
     #[test]

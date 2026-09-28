@@ -193,8 +193,7 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::new());
-        self.tokens.push(self.pending_tokens.take());
-        self.push_pending_comments(blank);
+        self.push_pending_sources(blank);
     }
 
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
@@ -209,15 +208,21 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::from(meta));
-        self.tokens.push(self.pending_tokens.take());
-        self.push_pending_comments(blank);
+        self.push_pending_sources(blank);
     }
 
-    fn push_pending_comments(&mut self, blank: bool) {
-        let active = self.active_comment.filter(|_| !blank);
+    /// Gives the pending sources to the line just pushed; a blank line, such
+    /// as one inserted before the line they belong to, holds none.
+    fn push_pending_sources(&mut self, blank: bool) {
+        if blank {
+            self.tokens.push(None);
+            self.comments.push(LineComments::default());
+            return;
+        }
+        self.tokens.push(self.pending_tokens.take());
         let comments = self.pending_comments.take().unwrap_or(LineComments {
-            lead: active,
-            last: active,
+            lead: self.active_comment,
+            last: self.active_comment,
         });
         self.comments.push(comments);
     }

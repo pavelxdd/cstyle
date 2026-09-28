@@ -312,14 +312,74 @@ impl FormatEngine<'_> {
 
     /// An `else` starting a line takes the indent of the line holding its
     /// `if`, from the structure tree.
-    pub(crate) fn apply_else_matching_if_layout(&self, mut layout: LineLayout) -> LineLayout {
-        if layout.line_kind != LineKind::Normal {
+    pub(crate) fn apply_else_matching_if_layout(
+        &self,
+        line: &str,
+        mut layout: LineLayout,
+    ) -> LineLayout {
+        if layout.line_kind != LineKind::Normal || line.trim_start().starts_with('#') {
             return layout;
         }
         if let Some(spaces) = self.else_matching_if_indent() {
             layout.exact_indent_spaces = Some(spaces);
+        } else if let Some(spaces) = self.braceless_body_indent() {
+            layout.exact_indent_spaces = Some(spaces);
         }
         layout
+    }
+
+    /// A braceless body starting a line takes one level past the line
+    /// holding its header.
+    fn braceless_body_indent(&self) -> Option<usize> {
+        // Added braces make the body a block.
+        if self.options.add_braces || self.options.add_one_line_braces {
+            return None;
+        }
+        let first = self.output.pending_tokens()?.first;
+        let tokens = &self.tree.tokens;
+        let header = self.tree.statements.braceless_header(first)?;
+        // astyle loses track of a body after a block in its header, such as
+        // a lambda in the condition.
+        if tokens[header..first]
+            .iter()
+            .any(|token| matches!(token, Token::Symbol('{')))
+        {
+            return None;
+        }
+        let line = self.line_led_by(header)?;
+        // `else while (x)` nests two headers on one line; `else if` is one.
+        let nested = !matches!(&tokens[header], Token::Word(word) if word == "if")
+            && self
+                .tree
+                .previous_code_token(header)
+                .is_some_and(|previous| {
+                    matches!(&tokens[previous], Token::Word(word) if word == "else")
+                        && self.output.line_with_token(previous) == Some(line)
+                });
+        let levels = 1 + usize::from(nested);
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + levels * self.options.indent_width
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+        )
+    }
+
+    /// The output line holding the token `token` at its start, after at
+    /// most `}` and `else`.
+    fn line_led_by(&self, token: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let line = self.output.line_with_token(token)?;
+        let first = self.output.line_tokens(line)?.first;
+        let mut index = token;
+        while index != first {
+            index = self.tree.previous_code_token(index)?;
+            if !matches!(&tokens[index], Token::Symbol('}'))
+                && !matches!(&tokens[index], Token::Word(word) if word == "else")
+            {
+                return None;
+            }
+        }
+        Some(line)
     }
 
     fn else_matching_if_indent(&self) -> Option<usize> {

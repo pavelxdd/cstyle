@@ -6813,3 +6813,29 @@ fn allman_else_after_block_in_braceless_loop_body_aligns_with_its_if() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn kr_braceless_body_after_else_if_takes_one_level_past_its_header() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static bool parse_flag(struct Cookie *co, bool secure)",
+        "{",
+        "    /*",
+        "     * secure cookies",
+        "     */",
+        "    if(check(name, \"secure\")) {",
+        "        if(secure || !running)",
+        "            co->secure = TRUE;",
+        "        else {",
+        "            infof(data, \"skipped\");",
+        "            return FALSE;",
+        "        }",
+        "    } else if(check(name, \"httponly\"))",
+        "        co->httponly = TRUE;",
+        "",
+        "    return TRUE;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
