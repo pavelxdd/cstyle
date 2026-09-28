@@ -4,6 +4,7 @@ use crate::formatter::lexer::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
     previous_non_layout_token_index,
 };
+use crate::formatter::structure::SourceTree;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -354,12 +355,18 @@ pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> HashSet<usize> {
     indices
 }
 
-pub(crate) fn classify_syntax(tokens: &[Token]) -> SyntaxRoles {
+pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRoles {
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
     for (index, token) in tokens.iter().enumerate() {
         let role = match token {
+            Token::Operator(operator)
+                if matches!(operator.as_str(), "*" | "&")
+                    && is_tree_declarator_operator(tokens, tree, index) =>
+            {
+                OperatorRole::PointerDeclarator
+            }
             Token::Operator(operator) if operator == "*" => {
                 classify_star_operator(tokens, index, &roles)
             }
@@ -373,6 +380,31 @@ pub(crate) fn classify_syntax(tokens: &[Token]) -> SyntaxRoles {
         }
     }
     roles
+}
+
+/// Whether the operator at `index` declares a pointer or reference by the
+/// structure tree: it sits in the return type of a function head, or
+/// directly in a parameter list before any default argument of its
+/// parameter.
+fn is_tree_declarator_operator(tokens: &[Token], tree: &SourceTree, index: usize) -> bool {
+    if tree.functions.is_return_type_pointer(index) {
+        return true;
+    }
+    let Some(group) = tree.groups.enclosing(index) else {
+        return false;
+    };
+    if !tree.functions.is_parameter_list(group) {
+        return false;
+    }
+    let open = tree.groups.get(group).open;
+    !tokens[open + 1..index]
+        .iter()
+        .enumerate()
+        .rev()
+        .filter(|&(offset, _)| tree.groups.enclosing(open + 1 + offset) == Some(group))
+        .map(|(_, token)| token)
+        .take_while(|token| !matches!(token, Token::Symbol(',')))
+        .any(|token| matches!(token, Token::Operator(operator) if operator == "="))
 }
 
 fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
@@ -928,10 +960,11 @@ pub(crate) enum TemplateAngle {
 mod tests {
     use super::{OperatorRole, SyntaxRole, classify_syntax};
     use crate::formatter::lexer::{Token, tokenize};
+    use crate::formatter::structure::SourceTree;
 
     fn operator_roles(source: &str, operator: &str) -> Vec<OperatorRole> {
         let tokens = tokenize(source);
-        let roles = classify_syntax(&tokens);
+        let roles = classify_syntax(&tokens, &SourceTree::build(&tokens));
         tokens
             .iter()
             .enumerate()
@@ -944,7 +977,7 @@ mod tests {
 
     fn word_roles(source: &str, target: &str) -> Vec<SyntaxRole> {
         let tokens = tokenize(source);
-        let roles = classify_syntax(&tokens);
+        let roles = classify_syntax(&tokens, &SourceTree::build(&tokens));
         tokens
             .iter()
             .enumerate()

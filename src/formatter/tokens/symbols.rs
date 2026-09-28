@@ -307,9 +307,15 @@ impl FormatEngine<'_> {
                     && self.layout.previous != PreviousToken::OpenParen));
         if self.layout.previous == PreviousToken::Word {
             let word = trailing_word(&self.current);
+            let opens_declarator = self
+                .current
+                .active_token()
+                .and_then(|index| self.tree.groups.opened_at(index))
+                .is_some_and(|group| self.tree.functions.is_declarator(group));
             let keep_source_space = !next_is_close
-                && (is_pointer_type_word(word) || is_type_like_pointer_word(word))
-                && matches!(next, Some(Token::Operator(op)) if matches!(op.as_str(), "*" | "&" | "^"));
+                && (opens_declarator
+                    || (is_pointer_type_word(word) || is_type_like_pointer_word(word))
+                        && matches!(next, Some(Token::Operator(op)) if matches!(op.as_str(), "*" | "&" | "^")));
             let keep_unpad_space =
                 should_keep_unpad_space_before_paren(word, self.options) || keep_source_space;
             let force_space = (matches!(word, "and" | "or")

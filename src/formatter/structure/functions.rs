@@ -1,10 +1,12 @@
 //! Function heads at declaration scope: return type, name, parameter list,
 //! and body.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::formatter::lexer::Token;
-use crate::formatter::structure::blocks::{BlockKind, Blocks, next_code_token};
+use crate::formatter::structure::blocks::{
+    BlockKind, Blocks, next_code_token, previous_code_token,
+};
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
 use crate::formatter::syntax::language::{is_header, is_non_type_keyword};
 
@@ -36,21 +38,73 @@ pub(crate) struct Functions {
     by_params: HashMap<GroupId, usize>,
     by_start: HashMap<usize, usize>,
     by_name_start: HashMap<usize, usize>,
+    /// Parameter lists outside `heads`: of function pointer declarators
+    /// (`(*name)(...)`) and of functions whose body a macro supplies.
+    other_parameter_lists: HashSet<GroupId>,
+    /// Declarator groups such as `(*name)` in `int (*name)(void)` or
+    /// `(name)` in `int (name)(void)`.
+    declarators: HashSet<GroupId>,
+    /// `*`, `&`, and `^` tokens in the return types of `heads`.
+    return_type_pointers: HashSet<usize>,
 }
 
 impl Functions {
     pub(crate) fn build(tokens: &[Token], groups: &Groups, blocks: &Blocks) -> Self {
         let mut functions = Self::default();
         for params in groups.ids() {
-            if let Some(head) = function_head(tokens, groups, blocks, params) {
-                let index = functions.heads.len();
-                functions.by_params.insert(params, index);
-                functions.by_start.insert(head.start, index);
-                functions.by_name_start.insert(head.name_start, index);
-                functions.heads.push(head);
+            match function_head(tokens, groups, blocks, &functions.by_params, params) {
+                Some(HeadMatch::Head(head)) => {
+                    if let Some((outer, returned)) =
+                        function_pointer_declarator(tokens, groups, params)
+                    {
+                        functions.declarators.insert(outer);
+                        functions.other_parameter_lists.insert(returned);
+                    }
+                    // `int (lua_gettop) (lua_State *L)`
+                    if let Some(name_group) = groups.opened_at(head.name_start) {
+                        functions.declarators.insert(name_group);
+                    }
+                    functions.return_type_pointers.extend(
+                        (head.start..head.name_start).filter(|&index| {
+                            matches!(&tokens[index], Token::Operator(operator) if matches!(operator.as_str(), "*" | "&" | "&&" | "^"))
+                        }),
+                    );
+                    let index = functions.heads.len();
+                    functions.by_params.insert(params, index);
+                    functions.by_start.insert(head.start, index);
+                    functions.by_name_start.insert(head.name_start, index);
+                    functions.heads.push(head);
+                }
+                Some(HeadMatch::ParameterList) => {
+                    functions.other_parameter_lists.insert(params);
+                }
+                None => {
+                    if let Some(declarator) = pointer_declarator_before(tokens, groups, params) {
+                        functions.declarators.insert(declarator);
+                        functions.other_parameter_lists.insert(params);
+                    }
+                }
             }
         }
         functions
+    }
+
+    /// Whether the paren group `id` lists parameters: of a function head or
+    /// of a function pointer declarator.
+    pub(crate) fn is_parameter_list(&self, id: GroupId) -> bool {
+        self.by_params.contains_key(&id) || self.other_parameter_lists.contains(&id)
+    }
+
+    /// Whether the token at `index` is a `*`, `&`, or `^` in the return type
+    /// of a function head.
+    pub(crate) fn is_return_type_pointer(&self, index: usize) -> bool {
+        self.return_type_pointers.contains(&index)
+    }
+
+    /// Whether the paren group `id` is a declarator such as `(*name)` in
+    /// `int (*name)(void)` or `(name)` in `int (name)(void)`.
+    pub(crate) fn is_declarator(&self, id: GroupId) -> bool {
+        self.declarators.contains(&id)
     }
 
     /// The function head whose specifiers and return type start at `token`.
@@ -105,6 +159,15 @@ fn is_builtin_type_word(word: &str) -> bool {
     )
 }
 
+/// A word that takes parentheses after a parameter list: `noexcept(...)`,
+/// `throw()`, `__attribute__((...))`, `__nonnull((1))`, `LOCKS_EXCLUDED(mu)`.
+fn is_suffix_call_word(word: &str) -> bool {
+    matches!(word, "noexcept" | "throw")
+        || is_attribute_word(word)
+        || is_macro_word(word)
+        || word.starts_with("__")
+}
+
 fn is_attribute_word(word: &str) -> bool {
     matches!(
         word,
@@ -128,17 +191,29 @@ fn is_operator(tokens: &[Token], index: usize, expected: &str) -> bool {
     matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == expected)
 }
 
+/// What a paren group at declaration scope turned out to be.
+enum HeadMatch {
+    Head(FunctionHead),
+    /// The parameter list of a function whose head does not end in a body
+    /// or `;` the tree can see.
+    ParameterList,
+}
+
+/// `head_params` holds the parameter lists of heads found so far, which
+/// lie to the left of `params`.
 fn function_head(
     tokens: &[Token],
     groups: &Groups,
     blocks: &Blocks,
+    head_params: &HashMap<GroupId, usize>,
     params: GroupId,
-) -> Option<FunctionHead> {
+) -> Option<HeadMatch> {
     let group = groups.get(params);
     // `(*handler)` is a declarator, not a parameter list.
     if group.delimiter != Delimiter::Paren
         || next_code_token(tokens, group.open + 1)
             .is_some_and(|first| is_operator(tokens, first, "*") || is_operator(tokens, first, "^"))
+        || !holds_declarations(tokens, groups, params)
     {
         return None;
     }
@@ -152,7 +227,9 @@ fn function_head(
     {
         return None;
     }
-    let before_params = previous_head_token(tokens, group.open)?;
+    // `int init\n#endif\n(sqlite3 *db)`: a directive may separate the name
+    // from its parameter list.
+    let before_params = previous_code_token(tokens, group.open)?;
     // `int (lua_gettop) (lua_State *L)` keeps the name in parentheses.
     let (name, parenthesized_name) =
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {
@@ -178,8 +255,8 @@ fn function_head(
     }
     let name_start = parenthesized_name.unwrap_or_else(|| qualified_name_start(tokens, name));
     let start = match declarator {
-        Some((outer, _)) => return_type_start(tokens, groups, groups.get(outer).open)?,
-        None => return_type_start(tokens, groups, name_start)?,
+        Some((outer, _)) => return_type_start(tokens, groups, head_params, groups.get(outer).open)?,
+        None => return_type_start(tokens, groups, head_params, name_start)?,
     };
     let class_scope = scope.and_then(|scope| blocks.kind(scope)) == Some(BlockKind::Aggregate);
     if start == name_start && !class_scope && name_start == name {
@@ -187,7 +264,10 @@ fn function_head(
         return None;
     }
     let last_params = declarator.map_or(params, |(_, returned)| returned);
-    let body = head_end(tokens, groups, last_params, params)?;
+    let body = match head_end(tokens, groups, last_params, params)? {
+        HeadEnd::Found(body) => body,
+        HeadEnd::Unterminated => return Some(HeadMatch::ParameterList),
+    };
     if body.is_some_and(|body| {
         !matches!(
             blocks.kind(body),
@@ -196,13 +276,13 @@ fn function_head(
     }) {
         return None;
     }
-    Some(FunctionHead {
+    Some(HeadMatch::Head(FunctionHead {
         start,
         name_start,
         name,
         params,
         body,
-    })
+    }))
 }
 
 /// The `operator` word of an overloaded operator name that ends at `last`:
@@ -236,10 +316,20 @@ fn qualified_name_start(tokens: &[Token], name: usize) -> usize {
         }
         if is_operator(tokens, previous, "::")
             && let Some(qualifier) = previous_head_token(tokens, previous)
-            && (is_word(tokens, qualifier) || is_operator(tokens, qualifier, ">"))
         {
-            start = qualifier;
-            continue;
+            if is_word(tokens, qualifier) {
+                start = qualifier;
+                continue;
+            }
+            // `Outer<T1, T2>::name`
+            if is_operator(tokens, qualifier, ">")
+                && let Some(open) = template_arguments_start(tokens, qualifier)
+                && let Some(template) = previous_head_token(tokens, open)
+                && is_word(tokens, template)
+            {
+                start = template;
+                continue;
+            }
         }
         break;
     }
@@ -249,7 +339,12 @@ fn qualified_name_start(tokens: &[Token], name: usize) -> usize {
 /// First token of the specifiers and return type before `name_start`, or
 /// `None` when the tokens before the name cannot be a return type (`x = f(`,
 /// `return f(`, `a, f(`).
-fn return_type_start(tokens: &[Token], groups: &Groups, name_start: usize) -> Option<usize> {
+fn return_type_start(
+    tokens: &[Token],
+    groups: &Groups,
+    head_params: &HashMap<GroupId, usize>,
+    name_start: usize,
+) -> Option<usize> {
     let level = groups.enclosing(name_start);
     let mut start = name_start;
     while let Some(previous) = previous_head_token(tokens, start) {
@@ -280,16 +375,39 @@ fn return_type_start(tokens: &[Token], groups: &Groups, name_start: usize) -> Op
             Token::Symbol(')' | ']') => {
                 // `__attribute__((...))`, `[[...]]`, `EXPORT(int)`.
                 let id = groups.closed_at(previous)?;
+                // `f(void) ATTRIBUTE(1)`: the group is the parameter list of
+                // the head found before, and this is its suffix.
+                if head_params.contains_key(&id) {
+                    return None;
+                }
                 let open = groups.get(id).open;
+                // On the line before the name, a macro group is part of the
+                // return type only when the name starts the next line:
+                // `API DEPRECATED(7.1, "x")` / `f(...)`, unlike `MACRO(a, b)` /
+                // `static void f(...)`.
+                let same_line_as_name = !tokens[previous..name_start]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+                    || first_code_token_after_line_break(tokens, previous, name_start)
+                        == Some(name_start);
                 start = match previous_head_token(tokens, open) {
-                    Some(word) if matches!(&tokens[word], Token::Word(word) if is_attribute_word(word) || is_macro_word(word)) => {
+                    Some(word)
+                        if matches!(&tokens[word], Token::Word(word)
+                            if is_attribute_word(word) || is_macro_word(word) && same_line_as_name) =>
+                    {
                         word
                     }
                     _ if tokens[previous] == Token::Symbol(']') => open,
-                    // A macro invocation on its own line before the head,
-                    // such as `rb_gen(...)` without a semicolon.
-                    _ if line_break_between(tokens, previous, start) => break,
-                    _ => return None,
+                    // `void printflike(1, 2) f(...)`: a call followed by the
+                    // rest of the head on the same line is an attribute.
+                    Some(word) if is_word(tokens, word) && same_line_as_name => word,
+                    // The end of a previous line without a semicolon, such as
+                    // a macro invocation `rb_gen(...)` or a declaration whose
+                    // body a macro supplies: `f(void) NOT_REACHED`. The head
+                    // starts on the next line.
+                    _ => {
+                        return first_code_token_after_line_break(tokens, previous, name_start);
+                    }
                 };
             }
             _ => return None,
@@ -318,6 +436,91 @@ fn function_pointer_declarator(
     (groups.get(returned).delimiter == Delimiter::Paren).then_some((outer, returned))
 }
 
+/// The declarator group before the paren group `params`, such as
+/// `(*handler)`, `(*)`, `(^block)`, `(&handler)`, `(Owner::*member)`,
+/// `(*const table[])`, or
+/// `(WINAPI *const callback)`, when that group itself follows a type, as in
+/// `int (*handler)(char *s)`. A call through a pointer, `x = (*fp)(a * b)`,
+/// has no type before the declarator group.
+fn pointer_declarator_before(
+    tokens: &[Token],
+    groups: &Groups,
+    params: GroupId,
+) -> Option<GroupId> {
+    let group = groups.get(params);
+    if group.delimiter != Delimiter::Paren {
+        return None;
+    }
+    let declarator_id = groups.closed_at(previous_head_token(tokens, group.open)?)?;
+    let declarator = groups.get(declarator_id);
+    let close = declarator.close?;
+    let mut saw_pointer = false;
+    let mut index = declarator.open + 1;
+    while let Some(next) = next_code_token(tokens, index).filter(|&next| next < close) {
+        if groups.enclosing(next) == Some(declarator_id) {
+            match &tokens[next] {
+                Token::Operator(operator)
+                    if matches!(operator.as_str(), "*" | "^" | "&" | "&&") =>
+                {
+                    saw_pointer = true;
+                }
+                // Before the pointer only a calling convention or a member
+                // pointer's class may appear, which tells `(WINAPI *f)` and
+                // `(Owner::*f)` from a cast such as `*(void **)(p)`.
+                Token::Word(word)
+                    if saw_pointer
+                        || is_macro_word(word)
+                        || word.starts_with("__")
+                        || next_code_token(tokens, next + 1)
+                            .is_some_and(|after| is_operator(tokens, after, "::")) => {}
+                Token::Operator(operator) if operator == "::" => {}
+                Token::Symbol('[' | ']') if saw_pointer => {}
+                _ => return None,
+            }
+        }
+        index = next + 1;
+    }
+    let after_type =
+        previous_head_token(tokens, declarator.open).is_some_and(|before| match &tokens[before] {
+            Token::Word(word) => !is_non_type_keyword(word),
+            Token::Operator(operator) => matches!(operator.as_str(), "*" | "&"),
+            _ => false,
+        });
+    (saw_pointer && after_type).then_some(declarator_id)
+}
+
+/// Whether the paren group `params` can hold parameter declarations: outside
+/// default arguments it has no literals and no operators other than those of
+/// declarators, as opposed to call arguments such as `(1)` or `(a + b)`.
+fn holds_declarations(tokens: &[Token], groups: &Groups, params: GroupId) -> bool {
+    let group = groups.get(params);
+    let Some(close) = group.close else {
+        return true;
+    };
+    let mut default_argument = false;
+    for (index, token) in tokens.iter().enumerate().take(close).skip(group.open + 1) {
+        if groups.enclosing(index) != Some(params) {
+            continue;
+        }
+        match token {
+            Token::Symbol(',') => default_argument = false,
+            _ if default_argument => {}
+            Token::Operator(operator) if operator == "=" => default_argument = true,
+            Token::Number(_) | Token::StringLiteral(_) | Token::CharLiteral(_) => return false,
+            Token::Operator(operator)
+                if !matches!(
+                    operator.as_str(),
+                    "*" | "&" | "&&" | "^" | "::" | "<" | ">" | ">>"
+                ) =>
+            {
+                return false;
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
 /// The only code token inside the group `id`, when it is a word.
 fn sole_word_in_group(tokens: &[Token], groups: &Groups, id: GroupId) -> Option<usize> {
     let group = groups.get(id);
@@ -325,14 +528,15 @@ fn sole_word_in_group(tokens: &[Token], groups: &Groups, id: GroupId) -> Option<
     (is_word(tokens, word) && next_code_token(tokens, word + 1) == group.close).then_some(word)
 }
 
-fn line_break_between(tokens: &[Token], from: usize, to: usize) -> bool {
-    tokens[from..to]
-        .iter()
-        .any(|token| matches!(token, Token::Newline))
+/// First code token of the first line that starts after `from`, if that
+/// line starts no later than `limit`.
+fn first_code_token_after_line_break(tokens: &[Token], from: usize, limit: usize) -> Option<usize> {
+    let line_break = (from..limit).find(|&index| matches!(tokens[index], Token::Newline))?;
+    next_code_token(tokens, line_break + 1).filter(|&first| first <= limit)
 }
 
 /// Opening `<` of the template argument list closed at `close`.
-fn template_arguments_start(tokens: &[Token], close: usize) -> Option<usize> {
+pub(crate) fn template_arguments_start(tokens: &[Token], close: usize) -> Option<usize> {
     let mut depth = 0usize;
     for index in (0..=close).rev() {
         match &tokens[index] {
@@ -351,41 +555,102 @@ fn template_arguments_start(tokens: &[Token], close: usize) -> Option<usize> {
     None
 }
 
-/// Body of the head whose parameter list is `params` and whose declarator
-/// ends with the paren group `last_params`: `Some(Some(body))` for a
-/// definition, `Some(None)` for a declaration, and `None` when the tokens
-/// after the declarator do not end a function head.
+/// How the tokens after a function declarator end the head.
+enum HeadEnd {
+    /// A body (`Some`) or `;` (`None`).
+    Found(Option<GroupId>),
+    /// The head ends without a body or `;` the tree can see, as when a macro
+    /// supplies the body: `bool f(void) NOT_REACHED`.
+    Unterminated,
+}
+
+/// How the head whose parameter list is `params` and whose declarator ends
+/// with the paren group `last_params` ends; `None` when the tokens after the
+/// declarator show that it is not a function head.
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
     last_params: GroupId,
     params: GroupId,
-) -> Option<Option<GroupId>> {
+) -> Option<HeadEnd> {
     let group = groups.get(last_params);
     let level = group.parent;
     let mut index = group.close? + 1;
     let knr_parameters = is_identifier_list(tokens, groups, params);
+    let mut constructor_initializers = false;
+    // The first `;` after an identifier list may end a declaration or start
+    // K&R parameter declarations; when the tokens after it are no K&R
+    // declarations, the head was a declaration ending there.
+    let mut knr_semicolon = None;
+    let unterminated = |knr_semicolon: Option<usize>| {
+        Some(knr_semicolon.map_or(HeadEnd::Unterminated, |_| HeadEnd::Found(None)))
+    };
     while let Some(next) = next_code_token(tokens, index) {
+        // A directive ends what the tree can see of the head.
+        if tokens[index..next]
+            .iter()
+            .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return unterminated(knr_semicolon);
+        }
         if groups.enclosing(next) != level {
             return None;
         }
+        // Past the parameter list, parentheses belong to attributes,
+        // exception specifications, or constructor initializers; any other
+        // call-like group starts the next declaration. K&R parameter
+        // declarations hold parentheses only as function pointer
+        // declarators, `int (*cmp)();`.
+        let knr_declarator = knr_semicolon.is_some()
+            && (next_code_token(tokens, next + 1)
+                .is_some_and(|first| is_operator(tokens, first, "*"))
+                || previous_head_token(tokens, next)
+                    .and_then(|before| groups.closed_at(before))
+                    .is_some());
+        if tokens[next] == Token::Symbol('(')
+            && !knr_declarator
+            && !constructor_initializers
+            && !previous_head_token(tokens, next).is_some_and(
+                |before| matches!(&tokens[before], Token::Word(word) if is_suffix_call_word(word)),
+            )
+        {
+            if knr_semicolon.is_some() {
+                return unterminated(knr_semicolon);
+            }
+            // On the same line the group was an attribute macro such as
+            // `printflike(1, 2)`, not a parameter list; on a later line the
+            // head ended without a visible body or `;`.
+            let same_line = !tokens[group.close? + 1..next]
+                .iter()
+                .any(|token| matches!(token, Token::Newline));
+            return (!same_line).then_some(HeadEnd::Unterminated);
+        }
         match &tokens[next] {
-            Token::Symbol('{') => return Some(groups.opened_at(next)),
+            Token::Symbol(':') => constructor_initializers = true,
+            Token::Symbol('{') => return Some(HeadEnd::Found(groups.opened_at(next))),
             Token::Symbol(';') => {
-                // K&R parameter declarations run up to the body.
-                if knr_parameters && let Some(after) = next_code_token(tokens, next + 1) {
+                // `f(a) int a; char *b; {`: declarations between the
+                // identifier list and the body.
+                let knr_declarations = knr_parameters
+                    && (knr_semicolon.is_some()
+                        || next_code_token(tokens, group.close? + 1) != Some(next));
+                if knr_declarations && let Some(after) = next_code_token(tokens, next + 1) {
+                    if tokens[after] == Token::Symbol('{') {
+                        return Some(HeadEnd::Found(groups.opened_at(after)));
+                    }
                     if is_word(tokens, after) {
+                        knr_semicolon.get_or_insert(next);
                         index = next + 1;
                         continue;
                     }
-                    if tokens[after] == Token::Symbol('{') {
-                        return Some(groups.opened_at(after));
-                    }
                 }
-                return Some(None);
+                return Some(HeadEnd::Found(None));
             }
-            Token::Symbol('}') => return None,
-            Token::Symbol(',') if !knr_parameters => return Some(None),
+            Token::Symbol('}') => return unterminated(knr_semicolon),
+            Token::Operator(operator) if operator == "=" && knr_semicolon.is_some() => {
+                return unterminated(knr_semicolon);
+            }
+            Token::Symbol(',') if knr_semicolon.is_none() => return Some(HeadEnd::Found(None)),
             _ => {}
         }
         index = match groups.opened_at(next) {
@@ -393,7 +658,7 @@ fn head_end(
             None => next + 1,
         };
     }
-    None
+    unterminated(knr_semicolon)
 }
 
 /// Whether the parameter list holds only identifiers separated by commas,
@@ -408,7 +673,7 @@ fn is_identifier_list(tokens: &[Token], groups: &Groups, params: GroupId) -> boo
     for token in &tokens[group.open + 1..close] {
         match token {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
-            Token::Word(word) if expect_word && !matches!(word.as_str(), "void") => {
+            Token::Word(word) if expect_word && !is_builtin_type_word(word) => {
                 words += 1;
                 expect_word = false;
             }
@@ -484,7 +749,7 @@ mod tests {
     fn handles_suffixes_attributes_and_knr_definitions() {
         assert_eq!(
             heads(
-                "int f(a, b)\nint a;\nchar *b;\n{\n}\nvoid g(void) __attribute__((noreturn));\nLUA_API int (lua_gettop) (lua_State *L) {\n}\nstatic void (*f(int k))(void) {\n}\n__attribute__((cold)) void h(void) {}\n"
+                "int f(a, b)\nint a;\nchar *b;\n{\n}\nvoid g(void) __attribute__((noreturn));\nLUA_API int (lua_gettop) (lua_State *L) {\n}\nbool create(void) NOT_REACHED\nbool enable(tsd_t *tsd) NOT_REACHED\nstatic void (*f(int k))(void) {\n}\n__attribute__((cold)) void h(void) {}\n"
             ),
             [
                 head("int", "f", true),
@@ -496,11 +761,67 @@ mod tests {
         );
     }
 
+    /// Text of every paren group that lists parameters, heads included.
+    fn parameter_lists(source: &str) -> Vec<String> {
+        let tokens = tokenize(source);
+        let groups = Groups::build(&tokens);
+        let blocks = Blocks::build(&tokens, &groups);
+        let functions = Functions::build(&tokens, &groups, &blocks);
+        groups
+            .ids()
+            .filter(|&id| functions.is_parameter_list(id))
+            .map(|id| {
+                let group = groups.get(id);
+                tokens[group.open..=group.close.expect("closed")]
+                    .iter()
+                    .map(token_text)
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn finds_parameter_lists_outside_heads() {
+        assert_eq!(
+            parameter_lists(
+                "bool enable(tsd_t *tsd) NOT_REACHED\ntypedef int (*cb_t)(char *s);\nstatic const void (WINAPI *const tls)(void *h);\nstatic int (*const table[])(sqlite3 *db);\nvoid printflike(1, 2) add(const char *fmt, ...);\nstatic int (*hash(int k))(const void *p, int n) {\n}\nvoid f(void)\n{\n    g((int (*)(void *))h);\n    x = (*fp)(a * b);\n    y = *(void **)(p);\n}\nint init\n#endif\n(sqlite3 *db) {\n}\n"
+            ),
+            [
+                "(tsd_t *tsd)",
+                "(char *s)",
+                "(void *h)",
+                "(sqlite3 *db)",
+                "(const char *fmt, ...)",
+                "(int k)",
+                "(const void *p, int n)",
+                "(void)",
+                "(void *)",
+                "(sqlite3 *db)",
+            ]
+        );
+    }
+
+    #[test]
+    fn tells_knr_definitions_from_following_declarations() {
+        assert_eq!(
+            heads(
+                "int f(a)\nint a;\n{\n}\nint g(size_t);\nint h(int);\nx = foo(a);\nint k(n) __THROW;\nint m(void);\n"
+            ),
+            [
+                head("int", "f", true),
+                head("int", "g", false),
+                head("int", "h", false),
+                head("int", "k", false),
+                head("int", "m", false),
+            ]
+        );
+    }
+
     #[test]
     fn handles_cpp_heads() {
         assert_eq!(
             heads(
-                "namespace n {\nclass C {\npublic:\n    C(int x);\n    ~C();\n    virtual int get() const = 0;\n    int (*handler)(int);\n    run(int);\n};\nstd::vector<int> C::values() const {\n}\n}\nT operator+(T a, T b) {\n}\nbool Cls::operator==(int a);\nvoid *Type::operator new(unsigned long size) {\n}\n"
+                "namespace n {\nclass C {\npublic:\n    C(int x);\n    ~C();\n    virtual int get() const = 0;\n    int (*handler)(int);\n    run(int);\n};\nstd::vector<int> C::values() const {\n}\n}\nT operator+(T a, T b) {\n}\nbool Cls::operator==(int a);\nvoid *Type::operator new(unsigned long size) {\n}\nPair<T1, T2>::Pair(int *p) {\n}\n"
             ),
             [
                 head("", "C", false),
@@ -511,6 +832,7 @@ mod tests {
                 head("T", "operator", true),
                 head("bool", "Cls :: operator", false),
                 head("void *", "Type :: operator", true),
+                head("", "Pair < T1 , T2 > :: Pair", true),
             ]
         );
     }

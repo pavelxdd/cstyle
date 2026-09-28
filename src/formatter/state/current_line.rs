@@ -92,6 +92,11 @@ impl CurrentLine {
         self.active_token = index;
     }
 
+    /// Code token being pushed, if any.
+    pub(crate) fn active_token(&self) -> Option<usize> {
+        self.active_token
+    }
+
     fn record_active_token(&mut self) {
         if let Some(index) = self.active_token {
             self.record_token(index);

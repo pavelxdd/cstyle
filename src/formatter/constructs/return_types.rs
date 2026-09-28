@@ -1,7 +1,8 @@
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
-use crate::formatter::structure::functions::FunctionHead;
+use crate::formatter::structure::functions::{FunctionHead, template_arguments_start};
 use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -239,6 +240,29 @@ impl FormatEngine<'_> {
             && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
     }
 
+    /// Whether `head` starts a statement the way AStyle sees it: after `;`,
+    /// a brace, a label colon, `template<...>`, or at the start of the file.
+    /// After a macro invocation without a semicolon, such as
+    /// `static GIT_PATH_FUNC(a, "b")`, AStyle reads the head as a
+    /// continuation and neither breaks nor attaches its return type.
+    fn head_starts_statement(&self, head: &FunctionHead) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree
+            .previous_code_token(head.start)
+            .is_none_or(|previous| match &tokens[previous] {
+                Token::Symbol(';' | '{' | '}' | ':') => true,
+                // `template<class T>`
+                Token::Operator(operator) if operator == ">" => {
+                    template_arguments_start(tokens, previous)
+                        .and_then(|open| self.tree.previous_code_token(open))
+                        .is_some_and(
+                            |word| matches!(&tokens[word], Token::Word(word) if word == "template"),
+                        )
+                }
+                _ => false,
+            })
+    }
+
     /// Joins a function name line to the return type on the previous output
     /// line (`--attach-return-type`, `--attach-return-type-decl`).
     pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
@@ -253,6 +277,7 @@ impl FormatEngine<'_> {
             self.options.attach_return_type,
             self.options.attach_return_type_decl,
         ) || !self.has_movable_return_type(&head)
+            || !self.head_starts_statement(&head)
         {
             return false;
         }
@@ -316,6 +341,7 @@ impl FormatEngine<'_> {
             self.options.break_return_type_decl && !self.options.attach_return_type_decl,
         ) || !self.has_movable_return_type(&head)
             || !span.contains(head.name_start)
+            || !self.head_starts_statement(&head)
         {
             return false;
         }

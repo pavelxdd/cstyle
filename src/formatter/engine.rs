@@ -303,7 +303,7 @@ impl<'a> FormatEngine<'a> {
             tokens
         };
         self.tree = SourceTree::build(tokens);
-        self.syntax_roles = classify_syntax(tokens);
+        self.syntax_roles = classify_syntax(tokens, &self.tree);
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
         self.inline_array.nested_brace_arrays = syntax::nested_brace_array_indices(tokens);

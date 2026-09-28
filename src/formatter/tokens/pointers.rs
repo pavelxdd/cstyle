@@ -1,12 +1,13 @@
 use crate::config::{FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::is_header;
-use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -514,7 +515,6 @@ impl FormatEngine<'_> {
         }
         self.current_paren_context_is_declaration()
             || self.current_paren_context_is_constructor_declaration(segment)
-            || self.current_paren_context_has_attached_return_type()
             || self.is_function_declaration_parameter_continuation()
             || (self.is_function_pointer_parameter_continuation()
                 && segment
@@ -526,8 +526,11 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_function_declaration_parameter_continuation(&self) -> bool {
-        for index in (0..self.output.len()).rev().take(8) {
-            let trimmed = self.output[index].trim_end();
+        if let Some(declaration) = self.tree_declaration_context() {
+            return declaration;
+        }
+        for line in self.output.iter().rev().take(8) {
+            let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
@@ -540,9 +543,6 @@ impl FormatEngine<'_> {
             let before = trimmed[..open].trim_end();
             if before.is_empty() || before.contains('=') {
                 return false;
-            }
-            if self.paren_head_has_split_return_type(index, before) {
-                return true;
             }
             let Some(name_start) = function_name_start(before) else {
                 return false;
@@ -561,9 +561,33 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// What the structure tree says about the parentheses around the token
+    /// being pushed: `Some(true)` in a parameter list or a pointer
+    /// declarator, `Some(false)` in other parentheses directly at
+    /// declaration scope, and `None` where the tree does not decide (inside
+    /// function bodies, in nested groups, or with no token being pushed).
+    pub(super) fn tree_declaration_context(&self) -> Option<bool> {
+        let tree = &self.tree;
+        let group = tree.groups.enclosing(self.current.active_token()?)?;
+        if tree.groups.get(group).delimiter != Delimiter::Paren {
+            return None;
+        }
+        if tree.functions.is_parameter_list(group) || tree.functions.is_declarator(group) {
+            return Some(true);
+        }
+        let at_declaration_scope = tree.groups.get(group).parent.is_none_or(|parent| {
+            tree.groups.get(parent).delimiter == Delimiter::Brace
+                && BlockKind::is_declaration_scope(tree.blocks.kind(parent))
+        });
+        at_declaration_scope.then_some(false)
+    }
+
     pub(super) fn current_paren_context_is_declaration(&self) -> bool {
         if self.current_paren_is_lambda_parameter_list() {
             return true;
+        }
+        if let Some(declaration) = self.tree_declaration_context() {
+            return declaration;
         }
         match last_unmatched_open_delimiter(&self.current) {
             Some(('(', open)) => {
@@ -583,11 +607,10 @@ impl FormatEngine<'_> {
             None => {
                 // Continuation line of a multi-line parameter list: the enclosing
                 // open paren and its function head live on an earlier output line.
-                let Some((index, before)) = self.enclosing_open_paren_head() else {
+                let Some(before) = self.enclosing_open_paren_head() else {
                     return false;
                 };
                 self.paren_head_is_declaration(before)
-                    || self.paren_head_has_split_return_type(index, before)
                     || (!before.is_empty()
                         && !function_head_has_assignment(before)
                         && scoped_name_is_constructor(before))
@@ -635,11 +658,11 @@ impl FormatEngine<'_> {
         !last_type_word.is_some_and(is_non_type_keyword)
     }
 
-    /// The output line index and head text of the open paren that encloses
-    /// the current parameter continuation line.
-    fn enclosing_open_paren_head(&self) -> Option<(usize, &str)> {
-        for index in (0..self.output.len()).rev().take(8) {
-            let trimmed = self.output[index].trim_end();
+    /// Head text of the open paren that encloses the current parameter
+    /// continuation line.
+    fn enclosing_open_paren_head(&self) -> Option<&str> {
+        for line in self.output.iter().rev().take(8) {
+            let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
@@ -647,7 +670,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let open = trimmed.find('(')?;
-            return Some((index, trimmed[..open].trim_end()));
+            return Some(trimmed[..open].trim_end());
         }
         None
     }
@@ -715,39 +738,6 @@ impl FormatEngine<'_> {
         !before.is_empty()
             && !function_head_has_assignment(before)
             && scoped_name_is_constructor(before)
-    }
-
-    pub(super) fn current_paren_context_has_attached_return_type(&self) -> bool {
-        let Some(open) = self.current.rfind('(') else {
-            return false;
-        };
-        self.paren_head_has_split_return_type(self.output.len(), self.current[..open].trim_end())
-    }
-
-    /// Whether `before`, the head of an open paren on output line `index`, is
-    /// a bare function name at declaration scope whose return type fills the
-    /// previous line (`static int` / `f(`).
-    fn paren_head_has_split_return_type(&self, index: usize, before: &str) -> bool {
-        let declaration_scope = self
-            .layout
-            .nesting
-            .brace_type_stack
-            .iter()
-            .all(|&brace_type| {
-                matches!(brace_type, BraceType::Namespace | BraceType::Extern)
-                    || is_class_like_brace_type(brace_type)
-            });
-        if !declaration_scope
-            || before.is_empty()
-            || function_head_has_assignment(before)
-            || is_header(self.options, before)
-            || !matches!(function_name_start(before), Some(0))
-        {
-            return false;
-        }
-        index
-            .checked_sub(1)
-            .is_some_and(|previous| is_parameter_return_type_prefix(self.output[previous].trim()))
     }
 
     pub(super) fn push_pointer_run(

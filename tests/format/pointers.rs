@@ -3431,3 +3431,42 @@ fn pad_oper_keeps_pointer_parameters_after_split_return_type() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn parameter_lists_from_the_structure_tree_keep_pointer_declarators() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "-p".to_owned(), "-k3".to_owned()],
+    )
+    .expect("valid options");
+    let source = concat!(
+        "static char *\n",
+        "nrv_alloc(const char *s, char **rve, int n)\n",
+        "{\n",
+        "}\n",
+        "/*\n",
+        " */\n",
+        "struct worktree **get_worktrees(struct repository *repo);\n",
+        "static GIT_PATH_FUNC(git_path_info_attributes, INFOATTRIBUTES_FILE)\n",
+        "static void push_stack(struct attr_stack **attr_stack_p, int x);\n",
+        "typedef int (*curl_debug_callback)\n",
+        "(CURL *handle, void *userptr);\n",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn unpad_paren_keeps_space_before_declarator_groups() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["-U".to_owned()]).expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "int (*fp) (int);\nvoid (name) (int);\nx = foo (a);\n",
+            &options
+        ),
+        "int (*fp)(int);\nvoid (name)(int);\nx = foo(a);\n"
+    );
+}

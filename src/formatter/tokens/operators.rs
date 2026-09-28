@@ -682,6 +682,7 @@ impl FormatEngine<'_> {
                 self.push_unary_prefix(operator);
             }
             "*" if operator_role == OperatorRole::PointerDeclarator
+                && self.tree_declaration_context() != Some(true)
                 && self.current.trim_start().starts_with('(')
                 && is_macro_like_word(trailing_word(&self.current))
                 && matches!(next, Some(Token::Word(word)) if !is_macro_like_word(word)) =>
@@ -875,7 +876,6 @@ impl FormatEngine<'_> {
                     || self.current_in_cast_type_group()
                     || self.current_in_parenthesized_type_operand()
                     || self.current_paren_context_is_declaration()
-                    || self.current_paren_context_has_attached_return_type()
                     || self.is_function_declaration_parameter_continuation())
                     && self.is_rvalue_reference_like(next) =>
             {
