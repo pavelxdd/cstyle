@@ -21,6 +21,7 @@ use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
@@ -962,6 +963,17 @@ impl FormatEngine<'_> {
         self.layout.objc.method_continuation = false;
         if inferred_definition_brace {
             brace_type = BraceType::Definition;
+        }
+        // A control condition split over lines can end like a function head.
+        // At file scope astyle reads any such head as a definition.
+        if brace_type == BraceType::Definition
+            && self.pushed_brace_kind() == Some(BlockKind::Control)
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            )
+        {
+            brace_type = BraceType::Command;
         }
         if brace_type == BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
@@ -2485,7 +2497,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(super) fn should_indent_brace_line(&self, brace_type: BraceType) -> bool {
+    pub(crate) fn should_indent_brace_line(&self, brace_type: BraceType) -> bool {
         if self.options.brace_style == BraceStyle::Whitesmith {
             return brace_type != BraceType::Namespace || self.options.indent_namespaces;
         }

@@ -6740,3 +6740,54 @@ fn allman_operator_statement_in_case_block_braceless_body_keeps_block_indent() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_multiline_if_condition_brace_stays_a_control_brace() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "static int",
+        "f(void)",
+        "{",
+        "    if (size(atom_t)",
+        "            + (uint64_t) entries * sizeof(uint32_t) > atom_data_size)",
+        "        {",
+        "            g();",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn else_chain_of_previous_function_does_not_reach_next_function() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if (start)",
+        "        {",
+        "        a = 1;",
+        "        }",
+        "    else",
+        "        {",
+        "        b = 2;",
+        "        }",
+        "    }",
+        "",
+        "",
+        "static int",
+        "g(void)",
+        "    {",
+        "    if (size(atom_t)",
+        "            + entries > atom_data_size)",
+        "        {",
+        "        log_error(NGX_LOG_ERR, mp4->file.log, 0,",
+        "                  \"too small\", mp4->file.name.data);",
+        "        return NGX_ERROR;",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

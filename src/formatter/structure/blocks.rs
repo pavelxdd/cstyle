@@ -191,7 +191,9 @@ fn classify_after_paren(
         return BlockKind::CompoundLiteral;
     };
     match &tokens[before] {
-        Token::Word(word) if is_control_keyword(word) => BlockKind::Control,
+        Token::Word(word) if is_control_keyword(word) && !follows_type(tokens, before) => {
+            BlockKind::Control
+        }
         Token::Word(_) | Token::Symbol('>') | Token::Operator(_)
             if BlockKind::is_declaration_scope(parent_block)
                 && !matches!(&tokens[before], Token::Operator(operator) if operator == "=") =>
@@ -211,6 +213,16 @@ fn classify_after_paren(
         }
         _ => BlockKind::CompoundLiteral,
     }
+}
+
+/// Whether the word at `index` follows a type, as a function named like a
+/// control keyword does (`static int foreach (lua_State *L)`).
+fn follows_type(tokens: &[Token], index: usize) -> bool {
+    previous_code_token(tokens, index).is_some_and(|previous| match &tokens[previous] {
+        Token::Word(word) => !matches!(word.as_str(), "else" | "do"),
+        Token::Operator(operator) => matches!(operator.as_str(), "*" | "&" | "&&"),
+        _ => false,
+    })
 }
 
 /// Code tokens of the statement that a brace at `open` ends, from the
@@ -348,6 +360,10 @@ mod tests {
                 "void g(void) {\n    FOREACH(x) {\n    }\n    switch (a) {\n    case 1: {\n    }\n    }\n}\n"
             ),
             [FunctionBody, Control, Control, Block]
+        );
+        assert_eq!(
+            kinds("static int foreach (lua_State *L)\n{\n    foreach (x) {\n    }\n}\n"),
+            [FunctionBody, Control]
         );
     }
 

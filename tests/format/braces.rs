@@ -1643,6 +1643,16 @@ fn kr_breaks_file_scope_switch_header_brace() {
 }
 
 #[test]
+fn whitesmith_header_after_blank_line_below_brace_keeps_body_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = "void f(void)\n    {\n\n    if (x)\n        {\n\n        while (y)\n            g();\n        }\n    }\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn whitesmith_indents_mid_case_body_block_brace_below_body_level() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])

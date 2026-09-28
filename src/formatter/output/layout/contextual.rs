@@ -3209,8 +3209,21 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim();
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let natural = layout.indent * self.options.indent_width;
-            if previous_code == "{" && previous_indent + self.options.indent_width > natural {
-                layout.exact_indent_spaces = Some(previous_indent + self.options.indent_width);
+            // An indented brace already stands at its body column.
+            let body_offset = if self.options.indent_braces
+                && self
+                    .layout
+                    .nesting
+                    .brace_type_stack
+                    .last()
+                    .is_some_and(|&brace_type| self.should_indent_brace_line(brace_type))
+            {
+                0
+            } else {
+                self.options.indent_width
+            };
+            if previous_code == "{" && previous_indent + body_offset > natural {
+                layout.exact_indent_spaces = Some(previous_indent + body_offset);
             }
         }
         if let Some(spaces) =

@@ -6,6 +6,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
@@ -773,19 +774,43 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// First output line inside the function body that holds the line being
+    /// laid out, from the structure tree.
+    fn current_function_body_start(&self) -> Option<usize> {
+        let token = self
+            .output
+            .pending_tokens()
+            .map(|span| span.first)
+            .or_else(|| {
+                (0..self.output.len())
+                    .rev()
+                    .find_map(|index| self.output.line_tokens(index))
+                    .map(|span| span.first)
+            })?;
+        let groups = &self.tree.groups;
+        let body = groups
+            .ancestors(groups.enclosing(token)?)
+            .find(|&id| self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody))?;
+        Some(self.output.line_with_token(groups.get(body).open)? + 1)
+    }
+
     pub(crate) fn recent_split_else_chain_context(
         &self,
         line_start_active: bool,
     ) -> RecentSplitElseChainContext {
+        // An else chain never reaches past the function it is in.
+        let recent = &self.output[self
+            .current_function_body_start()
+            .unwrap_or(0)
+            .min(self.output.len())..];
         let chain_active = line_start_active
             || (self.output.may_have_else()
-                && self.output.iter().rev().take(128).any(|line| {
+                && recent.iter().rev().take(128).any(|line| {
                     let trimmed = line.trim();
                     trimmed == "else" || trimmed.ends_with("} else")
                 }));
         let has_preprocessor = self.output.may_have_hash()
-            && self
-                .output
+            && recent
                 .iter()
                 .rev()
                 .take(128)
@@ -793,7 +818,7 @@ impl FormatEngine<'_> {
         let mut saw_blank_after_else = false;
         let has_blank_gap = chain_active
             && self.output.may_have_else()
-            && self.output.iter().rev().take(128).any(|line| {
+            && recent.iter().rev().take(128).any(|line| {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     saw_blank_after_else = true;

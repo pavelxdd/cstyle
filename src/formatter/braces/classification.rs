@@ -6,6 +6,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
 use crate::formatter::state::BraceType;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::line_scan::{
@@ -524,6 +525,13 @@ pub(super) fn brace_indent_applies(brace_type: BraceType) -> bool {
 }
 
 impl FormatEngine<'_> {
+    /// Kind of the brace group that the `{` being pushed opens.
+    pub(super) fn pushed_brace_kind(&self) -> Option<BlockKind> {
+        let brace = self.current.active_token()?;
+        let group = self.tree.groups.opened_at(brace)?;
+        self.tree.blocks.kind(group)
+    }
+
     pub(crate) fn in_initializer_brace(&self) -> bool {
         self.layout
             .nesting
