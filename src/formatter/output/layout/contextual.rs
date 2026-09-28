@@ -690,12 +690,10 @@ impl FormatEngine<'_> {
             }
             if starts_post_closing_declaration(previous_code) {
                 let closing_indent = leading_visual_width(previous, self.options.tab_width);
-                let owner_indent = self.output.last_non_empty_index().and_then(|index| {
-                    self.output
-                        .closed_block_owner_indent(index, self.options.tab_width)
-                });
-                layout.exact_indent_spaces =
-                    Some(owner_indent.map_or(closing_indent, |owner| owner.min(closing_indent)));
+                layout.exact_indent_spaces = Some(
+                    self.closed_block_owner_indent()
+                        .map_or(closing_indent, |owner| owner.min(closing_indent)),
+                );
             }
         }
         if line.trim() == "::"
@@ -776,6 +774,20 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(self.options.indent_width);
         }
         contextual
+    }
+
+    /// Leading width of the output line holding the statement that owns the
+    /// block closed at the start of the last output line (`typedef` for
+    /// `} name;`), from the structure tree.
+    fn closed_block_owner_indent(&self) -> Option<usize> {
+        let span = self
+            .output
+            .line_tokens(self.output.last_non_empty_index()?)?;
+        let block = self.tree.groups.closed_at(span.first)?;
+        let owner_line = self
+            .output
+            .line_with_token(self.tree.blocks.owner(block)?)?;
+        Some(self.output.lead_width(owner_line, self.options.tab_width))
     }
 
     /// Whether the last output line with code closes a statement or block, so

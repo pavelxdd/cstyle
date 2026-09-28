@@ -43,22 +43,34 @@ impl BlockKind {
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Blocks {
     kinds: Vec<Option<BlockKind>>,
+    /// First token of the statement each brace group belongs to, such as
+    /// `typedef` in `typedef struct a {`.
+    owners: Vec<Option<usize>>,
 }
 
 impl Blocks {
     pub(crate) fn build(tokens: &[Token], groups: &Groups) -> Self {
         let mut blocks = Self {
             kinds: vec![None; groups.len()],
+            owners: vec![None; groups.len()],
         };
         // Group ids follow their opening tokens, so parents are classified
         // before their children.
         for id in groups.ids() {
-            if groups.get(id).delimiter == Delimiter::Brace {
+            let group = groups.get(id);
+            if group.delimiter == Delimiter::Brace {
                 let kind = classify(tokens, groups, &blocks, id);
                 blocks.kinds[id.index()] = Some(kind);
+                let head = statement_head(tokens, groups, group.open);
+                blocks.owners[id.index()] = Some(head.first().copied().unwrap_or(group.open));
             }
         }
         blocks
+    }
+
+    /// First token of the statement the brace group `id` belongs to.
+    pub(crate) fn owner(&self, id: GroupId) -> Option<usize> {
+        self.owners.get(id.index()).copied().flatten()
     }
 
     /// Marks the bodies of function heads found after block classification,
