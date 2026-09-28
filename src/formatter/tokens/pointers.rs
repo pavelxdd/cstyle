@@ -1,7 +1,7 @@
 use crate::config::{FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::is_header;
-use crate::formatter::constructs::return_types::is_return_type_line;
+use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
@@ -526,8 +526,8 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_function_declaration_parameter_continuation(&self) -> bool {
-        for line in self.output.iter().rev().take(8) {
-            let trimmed = line.trim_end();
+        for index in (0..self.output.len()).rev().take(8) {
+            let trimmed = self.output[index].trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
@@ -540,6 +540,9 @@ impl FormatEngine<'_> {
             let before = trimmed[..open].trim_end();
             if before.is_empty() || before.contains('=') {
                 return false;
+            }
+            if self.paren_head_has_split_return_type(index, before) {
+                return true;
             }
             let Some(name_start) = function_name_start(before) else {
                 return false;
@@ -580,11 +583,11 @@ impl FormatEngine<'_> {
             None => {
                 // Continuation line of a multi-line parameter list: the enclosing
                 // open paren and its function head live on an earlier output line.
-                let Some(before) = self.enclosing_open_paren_head() else {
+                let Some((index, before)) = self.enclosing_open_paren_head() else {
                     return false;
                 };
-                let before = before.trim_end();
                 self.paren_head_is_declaration(before)
+                    || self.paren_head_has_split_return_type(index, before)
                     || (!before.is_empty()
                         && !function_head_has_assignment(before)
                         && scoped_name_is_constructor(before))
@@ -632,9 +635,11 @@ impl FormatEngine<'_> {
         !last_type_word.is_some_and(is_non_type_keyword)
     }
 
-    fn enclosing_open_paren_head(&self) -> Option<String> {
-        for line in self.output.iter().rev().take(8) {
-            let trimmed = line.trim_end();
+    /// The output line index and head text of the open paren that encloses
+    /// the current parameter continuation line.
+    fn enclosing_open_paren_head(&self) -> Option<(usize, &str)> {
+        for index in (0..self.output.len()).rev().take(8) {
+            let trimmed = self.output[index].trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
@@ -642,7 +647,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let open = trimmed.find('(')?;
-            return Some(trimmed[..open].trim_end().to_string());
+            return Some((index, trimmed[..open].trim_end()));
         }
         None
     }
@@ -716,19 +721,33 @@ impl FormatEngine<'_> {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
-        let before = self.current[..open].trim_end();
-        if before.is_empty()
+        self.paren_head_has_split_return_type(self.output.len(), self.current[..open].trim_end())
+    }
+
+    /// Whether `before`, the head of an open paren on output line `index`, is
+    /// a bare function name at declaration scope whose return type fills the
+    /// previous line (`static int` / `f(`).
+    fn paren_head_has_split_return_type(&self, index: usize, before: &str) -> bool {
+        let declaration_scope = self
+            .layout
+            .nesting
+            .brace_type_stack
+            .iter()
+            .all(|&brace_type| {
+                matches!(brace_type, BraceType::Namespace | BraceType::Extern)
+                    || is_class_like_brace_type(brace_type)
+            });
+        if !declaration_scope
+            || before.is_empty()
             || function_head_has_assignment(before)
             || is_header(self.options, before)
+            || !matches!(function_name_start(before), Some(0))
         {
             return false;
         }
-        if !matches!(function_name_start(before), Some(0)) {
-            return false;
-        }
-        self.output
-            .last()
-            .is_some_and(|line| is_return_type_line(line.trim()))
+        index
+            .checked_sub(1)
+            .is_some_and(|previous| is_parameter_return_type_prefix(self.output[previous].trim()))
     }
 
     pub(super) fn push_pointer_run(

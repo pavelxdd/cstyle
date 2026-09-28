@@ -3421,3 +3421,13 @@ fn binary_and_after_call_result_on_continuation_keeps_operator_spacing() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn pad_oper_keeps_pointer_parameters_after_split_return_type() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned(), "-p".to_owned()])
+        .expect("valid options");
+    let source = "static OM_uint32\ng(\n    OM_uint32 *min,\n    gss_t x)\n{\n    y = a * b;\n    h(\n        a * b,\n        c);\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}
