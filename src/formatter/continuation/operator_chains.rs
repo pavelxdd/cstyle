@@ -10,6 +10,7 @@ use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
@@ -1219,7 +1220,7 @@ impl FormatEngine<'_> {
             && (previous_trimmed.starts_with('(') || previous_trimmed.starts_with("return ("))
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, tab_width));
         }
         if current.starts_with('?')
             && previous_code.ends_with(')')
@@ -1254,7 +1255,7 @@ impl FormatEngine<'_> {
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
             return Some(
-                open + 1
+                column_after(previous_code, open, tab_width)
                     + self.layout.line_adjuster.total_case_unindent_depth()
                         * self.options.indent_width,
             );
@@ -1332,7 +1333,7 @@ impl FormatEngine<'_> {
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
             return Some(
-                open + 1
+                column_after(previous_code, open, tab_width)
                     + self.layout.line_adjuster.total_case_unindent_depth()
                         * self.options.indent_width,
             );
@@ -1357,7 +1358,7 @@ impl FormatEngine<'_> {
         let case_unindent =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if let Some(open) = unmatched_open_paren_column(previous_code) {
-            return Some(open + 1 + case_unindent);
+            return Some(column_after(previous_code, open, self.options.tab_width) + case_unindent);
         }
         let after_return = &previous_trimmed["return".len()..];
         let value_offset = "return".len()

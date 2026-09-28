@@ -6995,3 +6995,11 @@ fn kr_top_level_initializer_continuation_after_function_keeps_indent() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn tab_indented_macro_call_arguments_align_after_the_paren_column() {
+    let options = options_from_args(&["--style=linux", "-t8", "-k1"]);
+    let source = "void f(void)\n{\n\tif (maybe_https) {\n\t\tERROR_CHECK_SETOPT(CURLOPT_SSL_VERIFYHOST,\n\t\t                   data->set.doh_verifyhost ? 2L : 0L);\n\t}\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}

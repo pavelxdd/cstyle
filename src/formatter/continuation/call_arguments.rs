@@ -11,6 +11,7 @@ use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
@@ -897,16 +898,17 @@ impl FormatEngine<'_> {
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            (if open < previous_indent {
-                previous_indent + open + 1
+            let open_column = column_after(previous_code, open, self.options.tab_width);
+            (if open_column <= previous_indent {
+                previous_indent + open_column
             } else {
-                open + 1
+                open_column
             }) + case_unindent
         } else if split < previous.len()
             && previous.trim_end().ends_with(',')
             && let Some(open) = unmatched_open_paren_column(previous)
         {
-            open + 1 + case_unindent
+            column_after(previous, open, self.options.tab_width) + case_unindent
         } else if previous_code.ends_with(',')
             && starts_string_literal_token(previous_code.trim_start())
         {
@@ -941,10 +943,11 @@ impl FormatEngine<'_> {
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            (if open < previous_indent {
-                previous_indent + open + 1
+            let open_column = column_after(previous_code, open, self.options.tab_width);
+            (if open_column <= previous_indent {
+                previous_indent + open_column
             } else {
-                open + 1
+                open_column
             }) + case_unindent
         } else if (starts_string_literal_token(line.trim_start())
             || line.trim_start().starts_with(','))
@@ -1186,13 +1189,14 @@ impl FormatEngine<'_> {
                 return None;
             }
             let column = unmatched_open_paren_column(trimmed)?;
-            let padding = trimmed
+            // The paren's byte offset counts a tab as one column.
+            let after_paren = visual_width_from(&trimmed[..=column], 0, self.options.tab_width);
+            let padding = trimmed[column + 1..]
                 .chars()
-                .skip(column + 1)
                 .take_while(|ch| ch.is_whitespace())
                 .collect::<String>();
-            let padding_width = visual_width_from(&padding, column + 1, self.options.tab_width);
-            let spaces = column + 1 + padding_width + self.adjusted_line_indent_delta(previous);
+            let padding_width = visual_width_from(&padding, after_paren, self.options.tab_width);
+            let spaces = after_paren + padding_width + self.adjusted_line_indent_delta(previous);
             return (spaces <= self.options.max_continuation_indent).then_some(spaces);
         }
         None
@@ -1892,9 +1896,9 @@ impl FormatEngine<'_> {
         let base = self.split_new_call_paren_indent_spaces()?;
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         if let Some(open) = unmatched_open_paren_column(previous_code)
-            && open + 1 > previous_indent
+            && column_after(previous_code, open, self.options.tab_width) > previous_indent
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, self.options.tab_width));
         }
         (previous_indent > base + self.options.indent_width).then_some(previous_indent)
     }

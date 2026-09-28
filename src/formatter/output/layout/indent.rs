@@ -19,6 +19,7 @@ use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
@@ -821,13 +822,13 @@ impl FormatEngine<'_> {
             && previous_code.ends_with(',')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, tab_width));
         }
         if (current.starts_with("+ ") || current.starts_with("- "))
             && let Some(open) = previous_code.rfind('{')
             && !previous_code[open + 1..].contains('}')
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, tab_width));
         }
         if previous_code.ends_with(',')
             && previous_code.contains('[')
@@ -857,7 +858,10 @@ impl FormatEngine<'_> {
             && !current.starts_with(['#', '(', ')', '{', '}'])
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1 + self.layout.line_adjuster.total_case_unindent_depth() * width);
+            return Some(
+                column_after(previous_code, open, tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
+            );
         }
         if !self.options.indent_after_parens
             && previous_code.ends_with(',')
@@ -1094,7 +1098,10 @@ impl FormatEngine<'_> {
             && !previous_code.ends_with('{')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1 + self.layout.line_adjuster.total_case_unindent_depth() * width);
+            return Some(
+                column_after(previous_code, open, tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
+            );
         }
         if previous_code.ends_with("qPrintable(")
             && current.starts_with("QString")
@@ -1147,7 +1154,10 @@ impl FormatEngine<'_> {
             && previous_code.ends_with(',')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1 + self.layout.line_adjuster.total_case_unindent_depth() * width);
+            return Some(
+                column_after(previous_code, open, tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth() * width,
+            );
         }
         if current.starts_with(',') && previous_trimmed.starts_with('#') {
             for line in self.output.scoped().iter().rev().skip(1) {

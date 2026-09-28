@@ -4,6 +4,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
+use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,
@@ -597,7 +598,7 @@ impl FormatEngine<'_> {
         if trimmed.starts_with('?')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, self.options.tab_width));
         }
         None
     }

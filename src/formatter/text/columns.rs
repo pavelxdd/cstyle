@@ -60,3 +60,9 @@ pub(crate) fn leading_whitespace_len(line: &str) -> usize {
         .last()
         .unwrap_or(0)
 }
+
+/// Visual column right after the byte at `index` of `line`, which may hold
+/// tabs: a byte offset is no column once tabs indent the line.
+pub(crate) fn column_after(line: &str, index: usize, tab_width: usize) -> usize {
+    visual_width_from(&line[..=index], 0, tab_width)
+}
