@@ -2828,3 +2828,12 @@ fn max_code_length_splits_after_malformed_pointer_cast_group() {
         "\nvoid foo() {\n    ((Object *)\n     Factory::object_factory()->set_debug_line(-1);\n}\n",
     );
 }
+
+#[test]
+fn max_length_split_before_multibyte_comment_char_does_not_panic() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["-xC80".to_owned()]).expect("valid options");
+    let source = "static const T t[] = {\n    {\"1234567890123456789e5\",  1.2345678901234569e23}, /* 19-digit mantissa \u{d7} 10^5 \u{2014} widened path */\n};\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}

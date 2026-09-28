@@ -1147,12 +1147,10 @@ fn is_objc_message_open(line: &str, open: usize) -> bool {
 
 fn ends_single_string_call(line: &str) -> bool {
     let line = line.trim_end();
-    let Some(close) = line.len().checked_sub(1) else {
-        return false;
-    };
-    if !line[close..].starts_with(')') {
+    if !line.ends_with(')') {
         return false;
     }
+    let close = line.len() - 1;
     line.match_indices('(').rev().any(|(open, _)| {
         matching_close_paren(line, open) == Some(close) && is_single_string_call_at(line, open)
     })
