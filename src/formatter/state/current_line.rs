@@ -1,4 +1,4 @@
-use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
 use std::cell::Cell;
 use std::ops::Deref;
@@ -17,6 +17,10 @@ pub(crate) struct CurrentLine {
     tokens: Option<TokenSpan>,
     /// Code token being pushed; text added meanwhile belongs to it.
     active_token: Option<usize>,
+    /// Block comments whose text is on the line so far.
+    comments: LineComments,
+    /// Block comment token being pushed.
+    active_comment: Option<usize>,
 }
 
 impl CurrentLine {
@@ -25,16 +29,18 @@ impl CurrentLine {
     }
 
     pub(crate) fn push(&mut self, ch: char) {
+        let leads = self.leads_comment();
         self.text.push(ch);
         if !ch.is_whitespace() {
-            self.record_active_token();
+            self.record_active_token(leads);
         }
     }
 
     pub(crate) fn push_str(&mut self, text: &str) {
+        let leads = self.leads_comment();
         self.text.push_str(text);
         if !text.trim().is_empty() {
-            self.record_active_token();
+            self.record_active_token(leads);
         }
     }
 
@@ -55,15 +61,17 @@ impl CurrentLine {
     }
 
     pub(crate) fn insert(&mut self, index: usize, ch: char) {
+        let leads = self.leads_comment() && self.text[..index].trim().is_empty();
         self.text.insert(index, ch);
         self.invalidate();
         if !ch.is_whitespace() {
-            self.record_active_token();
+            self.record_active_token(leads);
         }
     }
 
     pub(crate) fn clear(&mut self) {
         self.tokens = None;
+        self.comments = LineComments::default();
         if self.text.is_empty() {
             return;
         }
@@ -76,8 +84,9 @@ impl CurrentLine {
         self.invalidate();
         if self.text.trim().is_empty() {
             self.tokens = None;
+            self.comments = LineComments::default();
         } else {
-            self.record_active_token();
+            self.record_active_token(false);
         }
     }
 
@@ -97,9 +106,27 @@ impl CurrentLine {
         self.active_token
     }
 
-    fn record_active_token(&mut self) {
+    /// Attributes text added from now on to the block comment token at
+    /// `index`; `None` stops attributing.
+    pub(crate) fn set_active_comment(&mut self, index: Option<usize>) {
+        self.active_comment = index;
+    }
+
+    /// Whether text added now would be the first text of the line and belong
+    /// to a block comment.
+    fn leads_comment(&self) -> bool {
+        self.active_comment.is_some() && self.text.trim().is_empty()
+    }
+
+    fn record_active_token(&mut self, leads_comment: bool) {
         if let Some(index) = self.active_token {
             self.record_token(index);
+        }
+        if let Some(index) = self.active_comment {
+            if leads_comment && self.comments.lead.is_none() {
+                self.comments.lead = Some(index);
+            }
+            self.comments.last = Some(index);
         }
     }
 
@@ -119,6 +146,10 @@ impl CurrentLine {
 
     pub(crate) fn take_tokens(&mut self) -> Option<TokenSpan> {
         self.tokens.take()
+    }
+
+    pub(crate) fn take_comments(&mut self) -> LineComments {
+        std::mem::take(&mut self.comments)
     }
 
     pub(crate) fn ensure_space(&mut self) {

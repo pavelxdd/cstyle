@@ -31,6 +31,21 @@ impl TokenSpan {
     }
 }
 
+/// Block comments with text on an output line, as token indices.
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub(crate) struct LineComments {
+    /// Comment whose text starts the line.
+    pub(crate) lead: Option<usize>,
+    /// Last comment with text on the line.
+    pub(crate) last: Option<usize>,
+}
+
+impl LineComments {
+    pub(crate) fn mentions(self, token: usize) -> bool {
+        self.lead == Some(token) || self.last == Some(token)
+    }
+}
+
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct SourceTree {
     pub(crate) tokens: Vec<Token>,

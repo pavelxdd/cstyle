@@ -4166,3 +4166,24 @@ fn allman_block_comment_tail_does_not_indent_operator_statement() {
     );
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_block_after_unstarred_comment_continuation_keeps_statement_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x)",
+        "    {",
+        "        /* a long comment",
+        "           continued here */",
+        "        {",
+        "            g();",
+        "        }",
+        "    }",
+        "}",
+    );
+    assert_eq!(format_exact(source, &options), source);
+}

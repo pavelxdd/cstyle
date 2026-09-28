@@ -17,6 +17,8 @@ impl FormatEngine<'_> {
     pub(crate) fn finish_disabled_line(&mut self) {
         let tokens = self.current.take_tokens();
         self.output.set_pending_tokens(tokens);
+        let comments = self.current.take_comments();
+        self.output.set_pending_comments(comments);
         let line = self.take_current();
         self.publish_unadjusted_line(line);
         self.layout.previous = PreviousToken::None;
@@ -26,6 +28,15 @@ impl FormatEngine<'_> {
     pub(crate) fn finish_line(&mut self) {
         let tokens = self.current.take_tokens();
         self.output.set_pending_tokens(tokens);
+        let comments = self.current.take_comments();
+        self.output.set_pending_comments(comments);
+        self.publish_finished_line();
+        // A finished blank line publishes nothing; its sources must not
+        // reach the next line.
+        self.output.clear_pending_sources();
+    }
+
+    fn publish_finished_line(&mut self) {
         let block_comment_close_paren_ends_declaration =
             self.comments.block_comment_close_paren_ends_declaration;
         self.comments.block_comment_close_paren_ends_declaration = false;

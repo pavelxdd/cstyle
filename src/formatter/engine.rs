@@ -417,8 +417,14 @@ impl<'a> FormatEngine<'a> {
             let context = self.token_push_context(tokens, index, line, &line_columns);
             self.current
                 .set_active_token(is_code_token(&tokens[index]).then_some(index));
+            let block_comment =
+                matches!(tokens[index], Token::Comment(CommentKind::Block, _)).then_some(index);
+            self.current.set_active_comment(block_comment);
+            self.output.set_active_comment(block_comment);
             self.push_token(&tokens[index], context);
             self.current.set_active_token(None);
+            self.current.set_active_comment(None);
+            self.output.set_active_comment(None);
             if let Some((colon_index, has_action)) = multiline_case_colon
                 && colon_index == index
             {

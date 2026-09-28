@@ -1,5 +1,5 @@
 use crate::formatter::lexer::{Token, token_text, tokenize};
-use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_brace_imbalance, line_paren_imbalance};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
@@ -150,6 +150,13 @@ pub(crate) struct OutputBuffer {
     tokens: Vec<Option<TokenSpan>>,
     /// Tokens of the current line just taken, for the next pushed line.
     pending_tokens: Option<TokenSpan>,
+    /// Block comments of each line.
+    comments: Vec<LineComments>,
+    /// Comments of the current line just taken, for the next pushed line.
+    pending_comments: Option<LineComments>,
+    /// Block comment token being pushed; lines pushed without a current line
+    /// meanwhile hold its text.
+    active_comment: Option<usize>,
     may_have_label_open: bool,
     may_have_else: bool,
     may_have_hash: bool,
@@ -179,13 +186,15 @@ impl OutputBuffer {
     pub(super) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
         self.record_hints(&line, hints);
         let index = self.lines.len();
-        if !line.trim().is_empty() {
+        let blank = line.trim().is_empty();
+        if !blank {
             self.last_non_empty_index.set(Some(index));
             self.last_non_empty_dirty.set(false);
         }
         self.lines.push(line);
         self.meta.push(OnceCell::new());
         self.tokens.push(self.pending_tokens.take());
+        self.push_pending_comments(blank);
     }
 
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
@@ -193,18 +202,30 @@ impl OutputBuffer {
         self.record_hints(suffix, output_line_hints(suffix));
         let meta = compute_raw_literal_line_meta(&line, structural_start);
         let index = self.lines.len();
-        if !line.trim().is_empty() {
+        let blank = line.trim().is_empty();
+        if !blank {
             self.last_non_empty_index.set(Some(index));
             self.last_non_empty_dirty.set(false);
         }
         self.lines.push(line);
         self.meta.push(OnceCell::from(meta));
         self.tokens.push(self.pending_tokens.take());
+        self.push_pending_comments(blank);
+    }
+
+    fn push_pending_comments(&mut self, blank: bool) {
+        let active = self.active_comment.filter(|_| !blank);
+        let comments = self.pending_comments.take().unwrap_or(LineComments {
+            lead: active,
+            last: active,
+        });
+        self.comments.push(comments);
     }
 
     pub(crate) fn pop(&mut self) -> Option<String> {
         self.meta.pop();
         self.tokens.pop();
+        self.comments.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -241,6 +262,7 @@ impl OutputBuffer {
     pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
         self.tokens.remove(index);
+        self.comments.remove(index);
         self.last_non_empty_dirty.set(true);
         self.lines.remove(index)
     }
@@ -256,6 +278,22 @@ impl OutputBuffer {
     /// Makes `tokens` the source tokens of the next pushed line.
     pub(crate) fn set_pending_tokens(&mut self, tokens: Option<TokenSpan>) {
         self.pending_tokens = tokens;
+    }
+
+    /// Makes `comments` the block comments of the next pushed line.
+    pub(crate) fn set_pending_comments(&mut self, comments: LineComments) {
+        self.pending_comments = Some(comments);
+    }
+
+    pub(crate) fn clear_pending_sources(&mut self) {
+        self.pending_tokens = None;
+        self.pending_comments = None;
+    }
+
+    /// Makes lines pushed without pending comments hold the text of the
+    /// block comment token `index`.
+    pub(crate) fn set_active_comment(&mut self, index: Option<usize>) {
+        self.active_comment = index;
     }
 
     /// Source tokens of the line being finished, before it is pushed.
@@ -360,6 +398,32 @@ impl OutputBuffer {
     /// Index of the line that opens the comment on line `index`: a block
     /// comment continuation line maps to the line holding its `/*`.
     pub(crate) fn comment_start_index(&self, index: usize) -> usize {
+        let comments = self.comments[index];
+        if let Some(comment) = comments.lead {
+            return self.comment_opening_line(index, comment);
+        }
+        if comments.last.is_some() || self.tokens[index].is_some() {
+            return index;
+        }
+        self.text_comment_start_index(index)
+    }
+
+    /// First line up to `index` holding text of the block comment token
+    /// `comment`; blank lines inside the comment record no tokens.
+    fn comment_opening_line(&self, index: usize, comment: usize) -> usize {
+        let mut start = index;
+        for line in (0..index).rev() {
+            if self.comments[line].mentions(comment) {
+                start = line;
+            } else if !self.lines[line].trim().is_empty() {
+                break;
+            }
+        }
+        start
+    }
+
+    /// [`Self::comment_start_index`] for lines that recorded no tokens.
+    fn text_comment_start_index(&self, index: usize) -> usize {
         if !self.lines[index].trim_start().starts_with('*') {
             return index;
         }

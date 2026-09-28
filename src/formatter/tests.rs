@@ -377,3 +377,26 @@ fn output_lines_record_their_source_tokens() {
         assert_eq!(spanned, code(line), "line {index}");
     }
 }
+
+#[test]
+fn comment_lines_map_to_the_line_opening_their_comment() {
+    let source = fixture(&[
+        "char *s = \"/*\";",
+        "int x; /* trailing",
+        "   continued */",
+        "/*",
+        "  plain text line",
+        "",
+        " * starred line",
+        " */",
+        "*p = 1;",
+    ]);
+    let tokens = tokenize(&source);
+    let options = FormatOptions::default();
+    let formatter = FormatEngine::new(&options).format_into(&tokens);
+    let starts: Vec<usize> = (0..formatter.output.len())
+        .map(|index| formatter.output.comment_start_index(index))
+        .collect();
+
+    assert_eq!(starts, [0, 1, 1, 3, 3, 5, 3, 3, 8]);
+}
