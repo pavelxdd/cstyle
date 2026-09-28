@@ -207,7 +207,7 @@ impl FormatEngine<'_> {
         if !line.trim_start().starts_with(':') {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         (previous.trim_start().starts_with("struct ")
             && previous.contains(" <")
             && previous.contains('>'))
@@ -225,7 +225,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         previous.trim_start().starts_with("class //").then(|| {
             leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
         })
@@ -239,7 +239,7 @@ impl FormatEngine<'_> {
         if kind != LineKind::Normal || !line.trim_start().starts_with("sizeof(") {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         ((previous_trimmed.starts_with("struct ")

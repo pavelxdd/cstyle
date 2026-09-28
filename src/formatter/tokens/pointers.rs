@@ -377,7 +377,7 @@ impl FormatEngine<'_> {
     }
 
     fn continues_operator_expression(&self) -> bool {
-        self.output.last_non_empty_line().is_some_and(|line| {
+        self.output.last_line_outside_comment().is_some_and(|line| {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             if head_ends_assignment_operator(code) {
                 return true;

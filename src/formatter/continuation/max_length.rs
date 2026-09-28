@@ -416,7 +416,7 @@ impl FormatEngine<'_> {
         if !line_closed_lambda_parameter_list {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let base = leading_visual_width(previous, self.options.tab_width);
         lambda_parameter_continuation_indent(
             previous.trim_start(),

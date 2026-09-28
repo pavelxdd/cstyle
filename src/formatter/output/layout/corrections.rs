@@ -4,6 +4,7 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
@@ -30,11 +31,14 @@ impl FormatEngine<'_> {
             && line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['#', '{', '}'])
         {
-            let previous_brace_indent = self.output.last_non_empty_line().and_then(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                code.ends_with('{')
-                    .then(|| leading_visual_width(previous, self.options.tab_width))
-            });
+            let previous_brace_indent =
+                self.output
+                    .last_line_outside_comment()
+                    .and_then(|previous| {
+                        let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                        code.ends_with('{')
+                            .then(|| leading_visual_width(previous, self.options.tab_width))
+                    });
             let target = previous_brace_indent
                 .unwrap_or_else(|| indent.saturating_sub(1) * self.options.indent_width);
             if exact_indent_spaces.unwrap_or(indent * self.options.indent_width) > target {
@@ -75,7 +79,7 @@ impl FormatEngine<'_> {
             && !line.trim_start().starts_with(['#', '{', '}', '/'])
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| previous.trim() == "{")
             && let Some(frame) = self.layout.frame_stack.active_brace().filter(|frame| {
                 frame.semantic_kind == BraceSemanticKind::Definition
@@ -102,7 +106,7 @@ impl FormatEngine<'_> {
             && !line.trim_start().starts_with(['#', '{', '}'])
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|line| line.trim() == "{")
             && self
                 .output
@@ -130,7 +134,7 @@ impl FormatEngine<'_> {
             && !is_header(self.options, leading_identifier(line))
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| previous.trim() == "{")
             && let Some(spaces) = indented_command_body
         {
@@ -183,7 +187,7 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::Normal
             && line.trim_start().starts_with(']')
-            && let Some(previous) = self.output.last_non_empty_line()
+            && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if ["for", "while", "switch"].iter().any(|header| {
@@ -306,6 +310,45 @@ impl FormatEngine<'_> {
         layout
     }
 
+    /// An `else` starting a line takes the indent of the line holding its
+    /// `if`, from the structure tree.
+    pub(crate) fn apply_else_matching_if_layout(&self, mut layout: LineLayout) -> LineLayout {
+        if layout.line_kind != LineKind::Normal {
+            return layout;
+        }
+        if let Some(spaces) = self.else_matching_if_indent() {
+            layout.exact_indent_spaces = Some(spaces);
+        }
+        layout
+    }
+
+    fn else_matching_if_indent(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let else_token = self.output.pending_tokens()?.first;
+        if !matches!(&tokens[else_token], Token::Word(word) if word == "else") {
+            return None;
+        }
+        let if_token = self.tree.statements.if_of_else(else_token)?;
+        let if_line = self.output.line_with_token(if_token)?;
+        // The `if` leads its line, after at most `}` and `else`.
+        let first = self.output.line_tokens(if_line)?.first;
+        let mut token = if_token;
+        while token != first {
+            token = self.tree.previous_code_token(token)?;
+            if !matches!(&tokens[token], Token::Symbol('}'))
+                && !matches!(&tokens[token], Token::Word(word) if word == "else")
+            {
+                return None;
+            }
+        }
+        // Layout indents come before the case-block unindent is taken off;
+        // the `if` line has had it taken off already.
+        Some(
+            self.output.lead_width(if_line, self.options.tab_width)
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+        )
+    }
+
     pub(crate) fn apply_final_recovery_floor_and_replay_layout(
         &mut self,
         line: &str,
@@ -322,15 +365,19 @@ impl FormatEngine<'_> {
                 .is_none()
             && !self.has_over_max_new_call_context()
             && let Some(spaces) = replay.closed_delimiter_continuation_indent
-            && self.output.last_non_empty_line().is_some_and(|previous| {
-                let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                previous_code.ends_with(',')
-                    && line_paren_imbalance(previous_code).0 > 0
-                    && !(self.options.indent_after_parens
-                        && previous_code
-                            .split(|ch: char| !is_identifier_continue(ch))
-                            .any(|word| word == "new"))
-            })
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let previous_code =
+                        previous[..trailing_comment_split_limit(previous)].trim_end();
+                    previous_code.ends_with(',')
+                        && line_paren_imbalance(previous_code).0 > 0
+                        && !(self.options.indent_after_parens
+                            && previous_code
+                                .split(|ch: char| !is_identifier_continue(ch))
+                                .any(|word| word == "new"))
+                })
         {
             exact_indent_spaces = Some(
                 spaces
@@ -342,7 +389,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if self.options.indent_after_parens
-            && let Some(previous) = self.output.last_non_empty_line()
+            && let Some(previous) = self.output.last_line_outside_comment()
             && previous[..trailing_comment_split_limit(previous)]
                 .trim_end()
                 .ends_with(',')
@@ -361,7 +408,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && self.output.last_non_empty_line().is_some()
+            && self.output.last_line_outside_comment().is_some()
             && let Some(spaces) = self.trailing_stream_top_level_indent_spaces(line_kind)
         {
             exact_indent_spaces = Some(spaces);

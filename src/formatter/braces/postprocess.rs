@@ -53,10 +53,13 @@ impl FormatEngine<'_> {
                 self.options.brace_style,
                 BraceStyle::Pico | BraceStyle::Lisp
             )
-            || !self.output.last_non_empty_line().is_some_and(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                code.trim_start().starts_with('}') && code.ends_with(',')
-            })
+            || !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    code.trim_start().starts_with('}') && code.ends_with(',')
+                })
         {
             return None;
         }

@@ -61,10 +61,15 @@ impl FormatEngine<'_> {
             return None;
         }
         if starts_string_literal_token(trimmed)
-            && self.output.last_non_empty_line().is_some_and(|previous| {
-                let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                previous_code.ends_with(',') && unmatched_open_paren_column(previous_code).is_some()
-            })
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let previous_code =
+                        previous[..trailing_comment_split_limit(previous)].trim_end();
+                    previous_code.ends_with(',')
+                        && unmatched_open_paren_column(previous_code).is_some()
+                })
         {
             return None;
         }

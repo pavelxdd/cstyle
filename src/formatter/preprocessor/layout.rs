@@ -199,7 +199,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?.trim_start();
+        let previous = self.output.last_line_outside_comment()?.trim_start();
         if !previous.starts_with('#') {
             return None;
         }
@@ -236,7 +236,7 @@ impl FormatEngine<'_> {
         if !after_blank {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         let mut spaces = None;
@@ -281,7 +281,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let anchor = if preprocessor_directive(previous_code.trim_start()).is_some() {
             self.output.iter().rev().skip(1).find(|line| {
@@ -358,7 +358,7 @@ impl FormatEngine<'_> {
         let (open_spaces, _, open_trimmed) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
-        self.output.last_non_empty_line()?;
+        self.output.last_line_outside_comment()?;
         let structural_chain = self.preprocessor_split_else_active();
         let body_indent_spaces = if structural_chain {
             self.current_closing_multiline_header_indent()
@@ -425,7 +425,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(['{', '}']) {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = context.body_indent_spaces;
@@ -507,7 +507,7 @@ impl FormatEngine<'_> {
         current_spaces: usize,
         context: &StructuralSplitElseBodyContext,
     ) -> Option<usize> {
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         (context.recent_adjacent_string_call_body
             && previous_code.ends_with(");")
@@ -521,7 +521,7 @@ impl FormatEngine<'_> {
         current_spaces: usize,
     ) -> Option<usize> {
         let spaces = self.split_else_preprocessor_branch_body_indent_spaces()?;
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         (current_spaces < spaces
             || preprocessor_directive(previous_code.trim_start())
@@ -545,7 +545,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line();
+        let previous = self.output.last_line_outside_comment();
         if previous.is_some_and(|previous| {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let trimmed = code.trim_start();
@@ -565,13 +565,17 @@ impl FormatEngine<'_> {
         }) || previous.is_some_and(|previous| {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             is_comment_line(previous.trim_start()) || code.ends_with('{')
-        }) || self.output.last_non_empty_line().is_some_and(|previous| {
-            previous[..trailing_comment_split_limit(previous)].trim() == "{"
-        }) || line.trim() == "{"
-            && previous.is_some_and(|previous| {
-                preprocessor_directive(previous.trim_start())
-                    .is_some_and(is_conditional_preprocessor)
+        }) || self
+            .output
+            .last_line_outside_comment()
+            .is_some_and(|previous| {
+                previous[..trailing_comment_split_limit(previous)].trim() == "{"
             })
+            || line.trim() == "{"
+                && previous.is_some_and(|previous| {
+                    preprocessor_directive(previous.trim_start())
+                        .is_some_and(is_conditional_preprocessor)
+                })
         {
             return None;
         }
@@ -774,11 +778,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// First output line inside the function body that holds the line being
-    /// laid out, from the structure tree.
-    fn current_function_body_start(&self) -> Option<usize> {
-        let token = self
-            .output
+    /// First source token of the line being laid out, or of the last line
+    /// that recorded its tokens.
+    fn current_source_token(&self) -> Option<usize> {
+        self.output
             .pending_tokens()
             .map(|span| span.first)
             .or_else(|| {
@@ -786,7 +789,13 @@ impl FormatEngine<'_> {
                     .rev()
                     .find_map(|index| self.output.line_tokens(index))
                     .map(|span| span.first)
-            })?;
+            })
+    }
+
+    /// First output line inside the function body that holds the line being
+    /// laid out, from the structure tree.
+    fn current_function_body_start(&self) -> Option<usize> {
+        let token = self.current_source_token()?;
         let groups = &self.tree.groups;
         let body = groups
             .ancestors(groups.enclosing(token)?)
@@ -815,17 +824,10 @@ impl FormatEngine<'_> {
                 .rev()
                 .take(128)
                 .any(|line| line.trim_start().starts_with('#'));
-        let mut saw_blank_after_else = false;
-        let has_blank_gap = chain_active
-            && self.output.may_have_else()
-            && recent.iter().rev().take(128).any(|line| {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    saw_blank_after_else = true;
-                    return false;
-                }
-                saw_blank_after_else && (trimmed == "else" || trimmed.ends_with("} else"))
-            });
+        let in_split_else_body = chain_active
+            && self
+                .current_source_token()
+                .is_some_and(|token| self.tree.statements.in_split_else_body(token));
         let follows_preprocessor_boundary = self.output.may_have_hash()
             && self
                 .output
@@ -856,7 +858,7 @@ impl FormatEngine<'_> {
         RecentSplitElseChainContext {
             chain_active,
             interrupted_header_active: chain_active
-                && (line_start_active || has_preprocessor || has_blank_gap)
+                && (line_start_active || has_preprocessor || in_split_else_body)
                 && !follows_preprocessor_boundary,
         }
     }
@@ -1152,7 +1154,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed = line.trim_start();
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if previous_code.ends_with('{')
             && (trimmed.contains("struct")
@@ -1251,7 +1253,7 @@ impl FormatEngine<'_> {
         if case_unindent_spaces == 0 {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         let normal_spaces = normal_indent * self.options.indent_width;

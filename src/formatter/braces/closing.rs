@@ -113,7 +113,7 @@ impl FormatEngine<'_> {
             || (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
                 && self
                     .output
-                    .last_non_empty_line()
+                    .last_line_outside_comment()
                     .is_some_and(|line| preprocessor_directive(line.trim_start()).is_some())
         {
             return None;
@@ -719,7 +719,7 @@ impl FormatEngine<'_> {
             && current_spaces.is_some_and(|spaces| spaces > output_spaces)
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| previous.trim() == "}")
             && !self.recent_split_else_closing_context_active())
         .then_some(output_spaces)
@@ -736,7 +736,7 @@ impl FormatEngine<'_> {
             && current_spaces.is_some_and(|spaces| spaces > output_spaces)
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| previous.trim_start().starts_with("#endif")))
         .then_some(output_spaces)
     }
@@ -882,7 +882,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !((previous_code.ends_with(';') && !previous_code.ends_with("};"))
             || previous_code.trim() == "}")
@@ -906,7 +906,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let mut spaces = None;
         if previous_code.ends_with(';')
@@ -1048,7 +1048,7 @@ impl FormatEngine<'_> {
         let (open_spaces, _, open_trimmed) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = if structural_split_else_chain {
@@ -1134,7 +1134,7 @@ impl FormatEngine<'_> {
         if open_trimmed.starts_with("switch")
             || self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|line| line.trim() == "}")
                 && (open_trimmed.starts_with("case ") || open_trimmed.starts_with("default:"))
         {
@@ -1170,7 +1170,7 @@ impl FormatEngine<'_> {
         if line.trim() != "}"
             || self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_none_or(|previous| preprocessor_directive(previous.trim_start()).is_none())
         {
             return None;

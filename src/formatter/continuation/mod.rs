@@ -744,7 +744,7 @@ impl FormatEngine<'_> {
         if self.options.indent_after_parens
             && self.current.trim_end().ends_with(',')
             && contains_word(&self.current, "new")
-            && let Some(previous) = self.output.last_non_empty_line()
+            && let Some(previous) = self.output.last_line_outside_comment()
             && let Some((assignment, operator)) = find_assignment_operator(previous)
         {
             let after_operator = assignment + operator.len();

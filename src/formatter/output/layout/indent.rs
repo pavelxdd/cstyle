@@ -352,11 +352,14 @@ impl FormatEngine<'_> {
             .trim_end()
             .strip_suffix('{')
             .is_some_and(|prefix| line_ends_compound_literal_cast(prefix.trim_end()))
-            && self.output.last_non_empty_line().is_some_and(|previous| {
-                previous[..trailing_comment_split_limit(previous)]
-                    .trim_end()
-                    .ends_with(',')
-            })
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    previous[..trailing_comment_split_limit(previous)]
+                        .trim_end()
+                        .ends_with(',')
+                })
         {
             return None;
         }
@@ -659,6 +662,14 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// Whether output line `index` starts the braceless body of a control
+    /// statement, from the structure tree.
+    fn line_is_braceless_body(&self, index: usize) -> bool {
+        self.output
+            .line_tokens(index)
+            .is_some_and(|span| self.tree.statements.braceless_header(span.first).is_some())
+    }
+
     /// Indentation decided by the previous non-empty output line; the first
     /// matching rule wins.
     fn previous_line_indent_spaces(
@@ -778,6 +789,7 @@ impl FormatEngine<'_> {
             let normal_spaces = normal_indent * width;
             let previous_indent = leading_visual_width(previous, tab_width);
             if previous_indent > normal_spaces
+                && !self.line_is_braceless_body(previous_index)
                 && self.layout.frame_stack.active_brace().is_some_and(|frame| {
                     frame.body_indent_column == previous_indent
                         && frame.header.as_deref().is_some_and(|header| {

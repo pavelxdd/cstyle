@@ -48,7 +48,7 @@ impl FormatEngine<'_> {
             return true;
         }
         if current.starts_with('{')
-            && let Some(previous) = self.output.last_non_empty_line()
+            && let Some(previous) = self.output.last_line_outside_comment()
             && previous.trim_end().ends_with('\\')
             && !line_opens_backslash_control_body(previous.trim_start())
         {

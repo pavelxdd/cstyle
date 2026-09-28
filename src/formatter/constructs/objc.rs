@@ -194,7 +194,7 @@ impl FormatEngine<'_> {
             && !line_is_label_style_dictionary_key(line)
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| line_is_label_style_dictionary_key(previous))
             && let Some(opener) = self
                 .output
@@ -320,7 +320,7 @@ impl FormatEngine<'_> {
             if simple_selector_line && follows_nested_type_argument {
                 let spaces = self
                     .output
-                    .last_non_empty_line()
+                    .last_line_outside_comment()
                     .map(|line| leading_visual_width(line, self.options.tab_width))
                     .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width))
                     .saturating_sub(1);
@@ -384,7 +384,7 @@ impl FormatEngine<'_> {
             }
         }
         if line.trim_start().starts_with('{')
-            && self.output.last_non_empty_line().is_some_and(|line| {
+            && self.output.last_line_outside_comment().is_some_and(|line| {
                 line.trim_start()
                     .strip_prefix(['-', '+'])
                     .is_some_and(|rest| rest.trim_start().starts_with('('))

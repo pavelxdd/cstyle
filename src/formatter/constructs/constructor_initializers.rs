@@ -165,7 +165,7 @@ impl FormatEngine<'_> {
         if !is_lambda_capture_header(current[..open].trim_end()) {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous = previous[..trailing_comment_split_limit(previous)].trim_start();
         let open = unmatched_open_paren_column(previous)?;
         let target = leading_visual_width(previous, self.options.tab_width) + open + 1;

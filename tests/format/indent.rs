@@ -6791,3 +6791,25 @@ fn else_chain_of_previous_function_does_not_reach_next_function() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_else_after_block_in_braceless_loop_body_aligns_with_its_if() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    for (i = 0; i < 8; i++)",
+        "        if (a)",
+        "            return 0;",
+        "        else if (b)",
+        "        {",
+        "            c();",
+        "        }",
+        "        else if (d)",
+        "            return 0;",
+        "    return 1;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

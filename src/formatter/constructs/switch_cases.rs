@@ -867,7 +867,7 @@ impl FormatEngine<'_> {
                 <= self.layout.line_adjuster.total_case_unindent_depth()
             || self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|previous| is_braced_switch_label_line(previous))
             || !self.line_aligns_to_open_paren_content(line)
         {
@@ -890,7 +890,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !previous_code.trim_start().starts_with("switch") || !previous_code.ends_with('{') {
             return None;
@@ -918,7 +918,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         let adjusted_delta = self.adjusted_line_indent_delta(previous);
@@ -1020,7 +1020,7 @@ impl FormatEngine<'_> {
         if self.options.indent_cases {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         if previous.trim() != "}" {
             return None;
         }
@@ -1103,7 +1103,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let body_spaces = normal_indent * self.options.indent_width;
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let call_indent = self
             .output
@@ -1164,7 +1164,7 @@ impl FormatEngine<'_> {
         if self.layout.line_adjuster.total_case_unindent_depth() == 0 {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let trimmed = line.trim_start();
         let owns_case_floor = previous_code.ends_with(") {")
@@ -1198,7 +1198,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         if !is_comment_line(previous.trim_start()) {
             return None;
         }
@@ -1352,10 +1352,13 @@ impl FormatEngine<'_> {
         }
         if line.trim() == "}"
             && !self.layout.switch_case_layout.closing_line_needs_unindent
-            && self.output.last_non_empty_line().is_some_and(|previous| {
-                let trimmed = previous.trim_start();
-                trimmed.starts_with("break;")
-            })
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let trimmed = previous.trim_start();
+                    trimmed.starts_with("break;")
+                })
         {
             return 0;
         }
@@ -1650,10 +1653,14 @@ impl FormatEngine<'_> {
         }
 
         let mut target = None;
-        if !self.output.last_non_empty_line().is_some_and(|previous| {
-            let trimmed = previous.trim();
-            trimmed.starts_with('#') || matches!(trimmed, "}" | "};" | "break;")
-        }) && let Some(open_spaces) = self.recent_same_line_else_open_indent_spaces()
+        if !self
+            .output
+            .last_line_outside_comment()
+            .is_some_and(|previous| {
+                let trimmed = previous.trim();
+                trimmed.starts_with('#') || matches!(trimmed, "}" | "};" | "break;")
+            })
+            && let Some(open_spaces) = self.recent_same_line_else_open_indent_spaces()
         {
             target = Some(open_spaces + case_unindent_depth * self.options.indent_width);
         }
@@ -1740,7 +1747,7 @@ impl FormatEngine<'_> {
                 .starts_with(['#', '{', '}', '/', ')', ']'])
             || self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_none_or(|previous| previous.trim() != "}")
             || !self.has_case_body_at_current_depth()
             || self

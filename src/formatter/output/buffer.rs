@@ -391,8 +391,11 @@ impl OutputBuffer {
         self.last_non_empty_index.get()
     }
 
-    pub(crate) fn last_non_empty_line(&self) -> Option<&String> {
-        self.last_non_empty_index().map(|index| &self.lines[index])
+    /// The last non-empty line, unless it continues a block comment: the
+    /// tail of a comment is no code, whatever its words.
+    pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {
+        let index = self.last_non_empty_index()?;
+        (self.comment_start_index(index) == index).then(|| &self.lines[index])
     }
 
     /// Index of the line that opens the comment on line `index`: a block

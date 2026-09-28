@@ -259,7 +259,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let opening_brace = self.output.last_non_empty_line()?;
+        let opening_brace = self.output.last_line_outside_comment()?;
         if opening_brace[..trailing_comment_split_limit(opening_brace)].trim() != "{" {
             return None;
         }
@@ -332,11 +332,14 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(['{', '}'])
             || line.trim_end().ends_with('{')
             || is_lambda_body_header(line.trim_start())
-            || !self.output.last_non_empty_line().is_some_and(|previous| {
-                previous[..trailing_comment_split_limit(previous)]
-                    .trim_end()
-                    .ends_with('{')
-            })
+            || !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    previous[..trailing_comment_split_limit(previous)]
+                        .trim_end()
+                        .ends_with('{')
+                })
         {
             return None;
         }
@@ -396,14 +399,17 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line.trim() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
-            || !self.output.last_non_empty_line().is_some_and(|previous| {
-                !is_namespace_or_module_block_header(previous)
-                    && previous
-                        .trim_start()
-                        .chars()
-                        .next()
-                        .is_some_and(is_identifier_start)
-            })
+            || !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    !is_namespace_or_module_block_header(previous)
+                        && previous
+                            .trim_start()
+                            .chars()
+                            .next()
+                            .is_some_and(is_identifier_start)
+                })
         {
             return None;
         }
@@ -417,7 +423,7 @@ impl FormatEngine<'_> {
         if line.trim() != "{" || self.options.brace_style != BraceStyle::Whitesmith {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         previous[..trailing_comment_split_limit(previous)]
             .trim_start()
             .starts_with([
@@ -433,7 +439,7 @@ impl FormatEngine<'_> {
         if line.trim() != "{" || self.options.brace_style != BraceStyle::Whitesmith {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if is_namespace_or_module_block_header(previous_code) && !self.options.indent_namespaces {
             return None;
@@ -549,7 +555,7 @@ impl FormatEngine<'_> {
         if line.trim() != "{" || self.options.brace_style != BraceStyle::Gnu {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !head_ends_binary_operator(previous_code)
             && !["<=", ">=", "==", "!="]

@@ -18,20 +18,22 @@ impl FormatEngine<'_> {
         let constructor_lambda_header_indent_spaces =
             self.replayed_constructor_lambda_header_indent_spaces(line);
         let inline_body_owner_indent_spaces =
-            self.output.last_non_empty_line().and_then(|previous| {
-                replayed_inline_case_body_indent_spaces(
-                    self.options,
-                    previous,
-                    closed_delimiter_continuation_indent.is_some(),
-                )
-                .or_else(|| {
-                    replayed_inline_access_body_indent_spaces(
+            self.output
+                .last_line_outside_comment()
+                .and_then(|previous| {
+                    replayed_inline_case_body_indent_spaces(
                         self.options,
                         previous,
                         closed_delimiter_continuation_indent.is_some(),
                     )
-                })
-            });
+                    .or_else(|| {
+                        replayed_inline_access_body_indent_spaces(
+                            self.options,
+                            previous,
+                            closed_delimiter_continuation_indent.is_some(),
+                        )
+                    })
+                });
         let lisp_attached_suffix_indent_spaces = self.replayed_lisp_attached_suffix_indent_spaces();
         let header_operator_indent_spaces =
             self.replayed_header_operator_indent_spaces(line, closed_delimiter_continuation_indent);

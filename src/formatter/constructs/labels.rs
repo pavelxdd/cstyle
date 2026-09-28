@@ -190,7 +190,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(['{', '}', '#']) {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         if !is_user_label_candidate(previous_trimmed, &self.options.access_labels)

@@ -12,11 +12,13 @@
 pub(crate) mod blocks;
 pub(crate) mod functions;
 pub(crate) mod groups;
+pub(crate) mod statements;
 
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use blocks::{Blocks, is_code_token, next_code_token};
 use functions::Functions;
 use groups::Groups;
+use statements::Statements;
 
 /// First and last code token of an output line, as token indices.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -52,6 +54,7 @@ pub(crate) struct SourceTree {
     pub(crate) groups: Groups,
     pub(crate) blocks: Blocks,
     pub(crate) functions: Functions,
+    pub(crate) statements: Statements,
 }
 
 impl SourceTree {
@@ -60,11 +63,13 @@ impl SourceTree {
         let mut blocks = Blocks::build(tokens, &groups);
         let functions = Functions::build(tokens, &groups, &blocks);
         blocks.mark_function_bodies(functions.heads().iter().filter_map(|head| head.body));
+        let statements = Statements::build(tokens, &groups, &blocks);
         Self {
             tokens: tokens.to_vec(),
             groups,
             blocks,
             functions,
+            statements,
         }
     }
 

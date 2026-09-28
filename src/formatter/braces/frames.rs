@@ -101,7 +101,7 @@ impl FormatEngine<'_> {
             && brace_header.is_some()
             && self
                 .output
-                .last_non_empty_line()
+                .last_line_outside_comment()
                 .is_some_and(|line| line.trim_start().starts_with('#'))
         {
             self.layout
@@ -194,7 +194,7 @@ impl FormatEngine<'_> {
             .is_some_and(|header| case_label_token_offset(&self.current, header).is_some());
         let case_separated_by_preprocessor = case_block
             && self.current.trim().is_empty()
-            && self.output.last_non_empty_line().is_some_and(|line| {
+            && self.output.last_line_outside_comment().is_some_and(|line| {
                 preprocessor_directive(line.trim_start())
                     .is_some_and(|directive| !is_conditional_preprocessor(directive))
             });

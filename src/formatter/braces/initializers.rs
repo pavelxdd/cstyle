@@ -127,7 +127,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed = line.trim_start();
-        let previous = self.output.last_non_empty_line();
+        let previous = self.output.last_line_outside_comment();
         if !(self.in_initializer_brace()
             || self.in_aggregate_declaration_brace()
             || (trimmed.starts_with('[')
@@ -164,7 +164,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         if !previous.trim_start().starts_with('[') {
             return None;
         }
@@ -358,10 +358,14 @@ impl FormatEngine<'_> {
                     })
                     .unwrap_or(normal_spaces)
             }
-        } else if self.output.last_non_empty_line().is_some_and(|previous| {
-            let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-            is_braceless_header_line(code.trim_start())
-        }) {
+        } else if self
+            .output
+            .last_line_outside_comment()
+            .is_some_and(|previous| {
+                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                is_braceless_header_line(code.trim_start())
+            })
+        {
             exact_indent_spaces.unwrap_or(indent * self.options.indent_width)
         } else {
             normal_spaces
@@ -1171,7 +1175,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         if !preprocessor_directive(previous.trim_start()).is_some_and(is_conditional_preprocessor) {
             return None;
         }
@@ -1220,7 +1224,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !previous_code.ends_with(';')
             || !(previous_code.len() < previous.trim_end().len() || previous_code.contains("/*"))

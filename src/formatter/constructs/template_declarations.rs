@@ -210,7 +210,7 @@ impl FormatEngine<'_> {
             });
         if self.template_continuation_closes_on_line(line.trim())
             && line.trim() == ">"
-            && let Some(previous) = self.output.last_non_empty_line()
+            && let Some(previous) = self.output.last_line_outside_comment()
         {
             spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }
