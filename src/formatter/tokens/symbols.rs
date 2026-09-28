@@ -1407,6 +1407,7 @@ impl FormatEngine<'_> {
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
         let aligned_continuation_colon = !has_question
+            && !is_bit_field
             && !is_range_for
             && !access_label_candidate
             && (is_asm_operand_colon || find_assignment_operator(&self.current).is_none())

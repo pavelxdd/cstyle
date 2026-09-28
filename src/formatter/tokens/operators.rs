@@ -4,6 +4,7 @@ use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
@@ -277,6 +278,15 @@ impl FormatEngine<'_> {
             self.push_unary_prefix(operator);
             return;
         }
+        if operator == "*"
+            && self.pointer_run.star_count == 2
+            && next_is_adjacent
+            && self.double_pointer_after_comma_in_function_body(token_index)
+        {
+            self.pointer_run.skip_adjacent_pointer_operators = 1;
+            self.push_unary_prefix("**");
+            return;
+        }
 
         self.push_operator_by_kind(
             operator,
@@ -286,6 +296,21 @@ impl FormatEngine<'_> {
             operator_role,
             split_rvalue_reference,
         );
+    }
+
+    /// Whether the `**` at `token_index` follows a comma in a function body:
+    /// astyle reads a `*` or `**` there as a dereference and leaves it alone,
+    /// while it aligns a longer run and declarators outside functions.
+    fn double_pointer_after_comma_in_function_body(&self, token_index: usize) -> bool {
+        let groups = &self.tree.groups;
+        self.tree
+            .previous_code_token(token_index)
+            .is_some_and(|previous| matches!(self.tree.tokens[previous], Token::Symbol(',')))
+            && groups.enclosing(token_index).is_some_and(|group| {
+                groups
+                    .ancestors(group)
+                    .any(|id| self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody))
+            })
     }
 
     /// Whether the code token before `token_index` is a binary operator, so

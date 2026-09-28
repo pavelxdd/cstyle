@@ -2607,3 +2607,18 @@ fn split_parameter_list_after_function_in_conditional_keeps_continuation_indent(
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn bit_field_after_a_comment_keeps_its_colon_spacing() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "struct s {",
+        "    int x;",
+        "    /* y */",
+        "    unsigned a : 1, b:2;",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

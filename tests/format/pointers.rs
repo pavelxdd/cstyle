@@ -3483,3 +3483,19 @@ fn align_pointer_type_keeps_dereference_after_logical_operator() {
     let source = "int f(void)\n{\n    return gc->data.size == 1 && *gc->data.data == ' ';\n}\n";
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn double_pointer_after_comma_in_a_function_body_stays_as_written() {
+    let mut options = FormatOptions::default();
+    options.pointer_align = PointerAlign::Type;
+    let source = concat!(
+        "Item* first, ** second;\n",
+        "void f()\n",
+        "{\n",
+        "    Item* a = NULL, **b, *** c;\n",
+        "    g(a, **b);\n",
+        "}\n",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
