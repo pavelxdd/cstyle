@@ -62,7 +62,15 @@ impl Blocks {
                 let kind = classify(tokens, groups, &blocks, id);
                 blocks.kinds[id.index()] = Some(kind);
                 let head = statement_head(tokens, groups, group.open);
-                blocks.owners[id.index()] = Some(head.first().copied().unwrap_or(group.open));
+                // The statement after a case label owns its block; a block
+                // right after the label is the case's own.
+                let owner = head
+                    .iter()
+                    .position(|&index| matches!(tokens[index], Token::Symbol(':')))
+                    .filter(|_| matches!(word_at(tokens, head[0]), Some("case" | "default")))
+                    .and_then(|colon| head.get(colon + 1))
+                    .or(head.first());
+                blocks.owners[id.index()] = Some(owner.copied().unwrap_or(group.open));
             }
         }
         blocks

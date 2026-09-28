@@ -138,13 +138,32 @@ impl Parser<'_> {
     fn items(&mut self, start: usize, end: usize) {
         let mut position = start;
         // The last statement of the block that is no label and ended with
-        // its `;` or block.
-        let mut sibling = None;
+        // its `;` or block, as its first token and the index after it.
+        let mut sibling: Option<(usize, usize)> = None;
+        // The sibling before each open conditional group: each branch, and
+        // the code after the group, follow the code before it.
+        let mut branch_siblings: Vec<Option<(usize, usize)>> = Vec::new();
         let mut first = true;
         while let Some(at) = self.next(position, end) {
-            let label = self.is_label(at, end);
+            for index in position..at {
+                let Token::Preprocessor(directive) = &self.tokens[index] else {
+                    continue;
+                };
+                match preprocessor_directive(&directive.text) {
+                    Some("if" | "ifdef" | "ifndef") => branch_siblings.push(sibling),
+                    Some("else" | "elif" | "elifdef" | "elifndef") => {
+                        sibling = branch_siblings.last().copied().flatten();
+                    }
+                    Some("endif") => sibling = branch_siblings.pop().flatten(),
+                    _ => {}
+                }
+            }
+            // astyle lays out statements after a label afresh. A branch of
+            // a conditional group may close a block that the tree matched
+            // elsewhere; the code after that stray `}` starts afresh too.
+            let fresh = self.is_label(at, end) || self.is_symbol(at, '}');
             if first
-                && !label
+                && !fresh
                 && let Some(open) = start.checked_sub(1)
                 && self.is_symbol(open, '{')
                 && !self.crosses_conditional(open, at)
@@ -152,16 +171,17 @@ impl Parser<'_> {
                 self.block_openings.insert(at, open);
             }
             first = false;
-            if !label
-                && let Some(previous) = sibling
-                && !self.crosses_conditional(previous, at)
+            // A statement that a directive splits parses one branch after
+            // another; it anchors nothing.
+            if !fresh
+                && let Some((previous, previous_end)) = sibling
+                && !self.crosses_conditional(previous, previous_end)
             {
                 self.previous_siblings.insert(at, previous);
             }
             self.unterminated = false;
             position = self.statement(at, end).max(at + 1);
-            // astyle lays out statements after a label afresh.
-            sibling = (!label && !self.unterminated).then_some(at);
+            sibling = (!fresh && !self.unterminated).then_some((at, position));
         }
     }
 
@@ -529,6 +549,12 @@ mod tests {
     fn statements_link_to_previous_siblings_past_comments_and_bodies() {
         let source = "void f(void)\n{\n    a();\n    /* c */\n    if (x)\n        b();\n    switch (y) {\n    case 1:\n        c();\n        break;\n    }\n    FOO(z)\n    d();\n}\n";
         assert_eq!(sibling_lines(source), [(4, 2), (6, 4), (9, 8), (11, 6)]);
+    }
+
+    #[test]
+    fn conditional_branches_and_the_code_after_them_follow_the_code_before() {
+        let source = "void f(void)\n{\n    a();\n#if X\n    b();\n#else\n    c();\n#endif\n    d();\n    if (x\n#if Y\n        && y\n#endif\n       )\n        e();\n    g();\n}\n";
+        assert_eq!(sibling_lines(source), [(4, 2), (6, 2), (8, 2), (9, 8)]);
     }
 
     #[test]

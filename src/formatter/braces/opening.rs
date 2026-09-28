@@ -497,8 +497,21 @@ impl FormatEngine<'_> {
                     header.body_indent_spaces
                 }
                 _ => {
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
+                    // A directive line says nothing of the code's column; the
+                    // line of the code before it does.
+                    let code_line = previous
+                        .trim_start()
+                        .starts_with('#')
+                        .then(|| {
+                            let first = self.output.pending_tokens()?.first;
+                            let token = self.tree.previous_code_token(first)?;
+                            self.output.line_with_token(token)
+                        })
+                        .flatten();
+                    code_line.map_or_else(
+                        || leading_visual_width(previous, self.options.tab_width),
+                        |index| self.output.lead_width(index, self.options.tab_width),
+                    ) + self.options.indent_width
                 }
             },
         })

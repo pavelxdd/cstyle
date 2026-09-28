@@ -7019,3 +7019,74 @@ fn spaced_cast_before_call_aligns_arguments_to_the_call_paren() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn tab_indented_condition_continuation_aligns_after_the_paren_column() {
+    let options = options_from_args(&["--style=linux", "-t8", "-k1"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "\tif (a) {",
+        "\t\tx();",
+        "\t} else if (status >= A",
+        "\t           && status < B) {",
+        "\t\ty();",
+        "\t}",
+        "\twhile (status >= A",
+        "\t       && status < B) {",
+        "\t\ty();",
+        "\t}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn statement_after_conditional_group_keeps_the_sibling_indent() {
+    let options = options_from_args(&["--style=linux", "-t8", "-k1"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "\tif (host) {",
+        "\t\tb->last = ngx_cpymem(b->last, \"Location: http\",",
+        "\t\t                     sizeof(\"Location: http\") - 1);",
+        "",
+        "#if (SSL)",
+        "\t\tif (c->ssl) {",
+        "\t\t\t*b->last++ ='s';",
+        "\t\t}",
+        "#endif",
+        "",
+        "\t\t*b->last++ = ':';",
+        "\t}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_block_after_a_directive_indents_from_the_code_before() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "int main(void)",
+        "    {",
+        "    if(curl)",
+        "        {",
+        "        a();",
+        "#ifdef X",
+        "            {",
+        "            b();",
+        "            }",
+        "#else",
+        "        c();",
+        "#endif",
+        "        d();",
+        "        }",
+        "    return 0;",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

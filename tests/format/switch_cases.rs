@@ -1161,3 +1161,77 @@ fn vtk_switch_preprocessor_opener_uses_conditional_indent() {
         "void run(int value)\n{\n    switch(value)\n        {\n            #if A\n        case 1:\n            break;\n            #endif\n        }\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_blocks_in_a_case_body_nest_in_the_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch(s)",
+        "        {",
+        "        case A:",
+        "            a();",
+        "                {",
+        "                b();",
+        "                }",
+        "            break;",
+        "        case B:",
+        "            {",
+        "            c();",
+        "            if(x)",
+        "                {",
+        "                y();",
+        "                }",
+        "            }",
+        "        break;",
+        "        case C:",
+        "            if(x)",
+        "                {",
+        "                d();",
+        "                if(y)",
+        "                    e();",
+        "                f();",
+        "                }",
+        "            break;",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_case_after_its_case_block_continues_at_the_label() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch(s)",
+        "        {",
+        "        case B:",
+        "            {",
+        "            c();",
+        "            }",
+        "        x();",
+        "        if(y)",
+        "            z();",
+        "        break;",
+        "        case C:",
+        "            {",
+        "            c();",
+        "            }",
+        "        break;",
+        "        default:",
+        "            q();",
+        "        }",
+        "    w();",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

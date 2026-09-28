@@ -1540,7 +1540,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        unmatched_open_paren_column(previous_code).map(|column| {
+        unmatched_open_paren_column(previous_code).map(|open| {
+            let column = column_after(previous_code, open, self.options.tab_width) - 1;
             let base = leading_visual_width(previous, self.options.tab_width);
             let paren_indent = column
                 + if previous_header.starts_with("else if(") {

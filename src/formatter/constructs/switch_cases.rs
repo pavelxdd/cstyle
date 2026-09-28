@@ -842,6 +842,9 @@ pub(crate) struct SwitchCaseLayoutState {
     preprocessor_brace_depths: Vec<usize>,
     unindent_brace_depths: Vec<usize>,
     closing_line_needs_unindent: bool,
+    /// Switch body depth where a case block closed since the last label:
+    /// astyle lays out the rest of a Whitesmith case at its label.
+    case_block_closed_depth: Option<usize>,
 }
 
 pub(crate) struct CaseBlockBodyLayout {
@@ -1321,13 +1324,24 @@ impl FormatEngine<'_> {
         }
         let current = self.layout.nesting.brace_header_stack.len();
         match line_kind {
-            LineKind::Normal if self.options.brace_style == BraceStyle::Whitesmith => self
-                .layout
-                .switch_case_layout
-                .body_brace_depths
-                .iter()
-                .filter(|depth| **depth == current)
-                .count(),
+            // A Whitesmith case block's body stands at its brace, the case
+            // body column; other blocks nest in the case body.
+            LineKind::Normal if self.options.brace_style == BraceStyle::Whitesmith => {
+                let layout = &self.layout.switch_case_layout;
+                layout
+                    .body_brace_depths
+                    .iter()
+                    .filter(|&&depth| {
+                        if depth < current {
+                            return !layout.unindent_brace_depths.contains(&(depth + 1));
+                        }
+                        depth == current
+                            && (layout.closing_line_needs_unindent
+                                || !layout.unindent_brace_depths.contains(&(depth + 1))
+                                    && layout.case_block_closed_depth != Some(depth))
+                    })
+                    .count()
+            }
             LineKind::Normal => self
                 .layout
                 .switch_case_layout
@@ -1922,22 +1936,24 @@ impl FormatEngine<'_> {
             return;
         }
 
-        if self.layout.switch_case_layout.closing_line_needs_unindent {
-            self.layout.switch_case_layout.unindent_brace_depths.pop();
-            self.layout.switch_case_layout.closing_line_needs_unindent = false;
+        let layout = &mut self.layout.switch_case_layout;
+        if layout.closing_line_needs_unindent {
+            if let Some(depth) = layout.unindent_brace_depths.pop() {
+                layout.case_block_closed_depth = Some(depth - 1);
+            }
+            layout.closing_line_needs_unindent = false;
         }
 
-        while self
-            .layout
-            .switch_case_layout
-            .unindent_brace_depths
-            .last()
-            .is_some_and(|depth| self.layout.nesting.brace_header_stack.len() < *depth)
+        let current = self.layout.nesting.brace_header_stack.len();
+        while let Some(&depth) = layout.unindent_brace_depths.last()
+            && current < depth
         {
-            self.layout.switch_case_layout.unindent_brace_depths.pop();
+            layout.unindent_brace_depths.pop();
+            layout.case_block_closed_depth = Some(depth - 1);
         }
 
         if line_kind == LineKind::SwitchLabel {
+            layout.case_block_closed_depth = None;
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             if code.ends_with('{') {
                 self.layout
