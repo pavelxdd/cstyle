@@ -377,22 +377,26 @@ impl OutputBuffer {
         self.last_non_empty_index().map(|index| &self.lines[index])
     }
 
-    /// Leading width of the comment on line `index`; a block comment
-    /// continuation line is measured at the line that opens the comment.
+    /// Index of the line that opens the comment on line `index`: a block
+    /// comment continuation line maps to the line holding its `/*`.
+    pub(crate) fn comment_start_index(&self, index: usize) -> usize {
+        if !self.lines[index].trim_start().starts_with('*') {
+            return index;
+        }
+        self.lines[..index]
+            .iter()
+            .rposition(|line| line.contains("/*") || line.contains("*/"))
+            .filter(|&start| {
+                let line = &self.lines[start];
+                line.rfind("/*") > line.rfind("*/")
+            })
+            .unwrap_or(index)
+    }
+
+    /// Leading width of the comment on line `index`, measured at the line
+    /// that opens it.
     pub(crate) fn comment_indent_width(&self, index: usize, tab_width: usize) -> usize {
-        let start = if self.lines[index].trim_start().starts_with('*') {
-            self.lines[..index]
-                .iter()
-                .rposition(|line| line.contains("/*") || line.contains("*/"))
-                .filter(|&start| {
-                    let line = &self.lines[start];
-                    line.rfind("/*") > line.rfind("*/")
-                })
-                .unwrap_or(index)
-        } else {
-            index
-        };
-        leading_visual_width(&self.lines[start], tab_width)
+        leading_visual_width(&self.lines[self.comment_start_index(index)], tab_width)
     }
 
     pub(crate) fn may_have_label_open(&self) -> bool {

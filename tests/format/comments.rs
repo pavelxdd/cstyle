@@ -4132,3 +4132,17 @@ fn remove_comment_prefix_strips_unterminated_body_prefix() {
         "void run()\n{\n    call(); /* unterminated\n        body\n",
     );
 }
+
+#[test]
+fn declaration_after_block_comment_with_apostrophe_stays_at_column_zero() {
+    let source = "/* Skip number, don't check that number format is correct, just consume\n * Note: More robust number skipping might check validity,\n * but for skipping, just consuming plausible characters is enough. */\nstatic int skip(const char **p, const char *end);\n#ifndef W\n/* writer_stats returns the statistics.\n   This struct becomes invalid.\n */\nconst struct stats *writer_stats(struct writer *w);\n#endif\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
+fn closing_paren_after_trailing_parameter_comment_stays_at_head_indent() {
+    let source = "WhereInfo *begin(\n    Parse *pParse,          /* The parser context */\n    int iAuxArg             /* If set, index cursor number\n                          ** If limited, then the limit amount */\n)\n{\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

@@ -377,19 +377,21 @@ impl FormatEngine<'_> {
         }
         if !trimmed.trim().is_empty() {
             let closes_standalone_block_comment = trimmed.trim_start().starts_with("*/");
-            let next_indent = closes_standalone_block_comment.then(|| {
-                self.layout
-                    .frame_stack
-                    .active_comment()
-                    .filter(|frame| frame.kind == CommentFrameKind::Block && frame.multiline)
-                    .map_or_else(
-                        || leading_visual_width(&trimmed, self.options.tab_width),
-                        |frame| frame.output_column,
-                    )
-                    + self.layout.line_adjuster.total_case_unindent_depth()
-                        * self.options.indent_width
-            });
+            let frame_column = self
+                .layout
+                .frame_stack
+                .active_comment()
+                .filter(|frame| frame.kind == CommentFrameKind::Block && frame.multiline)
+                .map(|frame| frame.output_column);
             self.push_raw_comment_output_line(trimmed);
+            // The line after a comment closes at the column the comment opened.
+            let next_indent = closes_standalone_block_comment.then(|| {
+                frame_column.unwrap_or_else(|| {
+                    self.output
+                        .comment_indent_width(self.output.len() - 1, self.options.tab_width)
+                }) + self.layout.line_adjuster.total_case_unindent_depth()
+                    * self.options.indent_width
+            });
             if close_paren_ends_declaration {
                 self.comments
                     .previous_block_comment_close_paren_ended_declaration = true;
