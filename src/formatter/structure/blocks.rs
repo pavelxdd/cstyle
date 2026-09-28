@@ -61,6 +61,16 @@ impl Blocks {
         blocks
     }
 
+    /// Marks the bodies of function heads found after block classification,
+    /// such as K&R definitions whose body follows parameter declarations.
+    pub(crate) fn mark_function_bodies(&mut self, bodies: impl IntoIterator<Item = GroupId>) {
+        for body in bodies {
+            if let Some(kind @ Some(BlockKind::Unknown)) = self.kinds.get_mut(body.index()) {
+                *kind = Some(BlockKind::FunctionBody);
+            }
+        }
+    }
+
     /// Kind of the brace group `id`; `None` for parentheses and brackets.
     pub(crate) fn kind(&self, id: GroupId) -> Option<BlockKind> {
         self.kinds.get(id.index()).copied().flatten()
