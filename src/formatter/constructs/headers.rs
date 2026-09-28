@@ -1482,6 +1482,7 @@ impl FormatEngine<'_> {
             || line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '}', ':'])
             || is_header(self.options, leading_identifier(line.trim_start()))
+            || self.pending_line_in_parens()
         {
             return None;
         }

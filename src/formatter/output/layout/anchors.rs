@@ -53,9 +53,7 @@ impl FormatEngine<'_> {
             return;
         };
         let statements = &self.tree.statements;
-        if statements.previous_sibling(first).is_none()
-            && statements.block_opening(first).is_none()
-            && statements.braceless_header(first).is_none()
+        if !statements.starts_block_statement(first) && statements.braceless_header(first).is_none()
         {
             return;
         }
@@ -112,6 +110,16 @@ impl FormatEngine<'_> {
             }
             end = start;
         }
+    }
+
+    /// Whether the line being laid out starts inside parentheses or
+    /// brackets, as the tree reads it: a continuation, never a body.
+    pub(crate) fn pending_line_in_parens(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|group| groups.get(group).delimiter != Delimiter::Brace)
     }
 
     /// Leading width of the line holding the control header whose condition

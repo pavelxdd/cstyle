@@ -5,7 +5,7 @@ use super::groups::Groups;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::text::line_scan::preprocessor_directive;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Statements {
@@ -21,6 +21,8 @@ pub(crate) struct Statements {
     /// The `{` of the block that a statement starts, by the statement's
     /// first token.
     block_openings: HashMap<usize, usize>,
+    /// First tokens of the statements and labels in blocks.
+    block_statements: HashSet<usize>,
     /// Bodies of `else` keywords separated from them by a blank line.
     split_else_bodies: Vec<ElseBody>,
 }
@@ -46,6 +48,7 @@ impl Statements {
             braceless_headers: HashMap::new(),
             previous_siblings: HashMap::new(),
             block_openings: HashMap::new(),
+            block_statements: HashSet::new(),
             else_bodies: Vec::new(),
             unterminated: false,
         };
@@ -55,6 +58,7 @@ impl Statements {
             braceless_headers: parser.braceless_headers,
             previous_siblings: parser.previous_siblings,
             block_openings: parser.block_openings,
+            block_statements: parser.block_statements,
             split_else_bodies: parser
                 .else_bodies
                 .into_iter()
@@ -91,6 +95,11 @@ impl Statements {
         self.block_openings.get(&index).copied()
     }
 
+    /// Whether a statement or label in a block starts at the token `index`.
+    pub(crate) fn starts_block_statement(&self, index: usize) -> bool {
+        self.block_statements.contains(&index)
+    }
+
     /// Whether the token `index` is in the body of an `else` that a blank
     /// line separates from its body.
     pub(crate) fn in_split_else_body(&self, index: usize) -> bool {
@@ -108,6 +117,7 @@ struct Parser<'a> {
     braceless_headers: HashMap<usize, usize>,
     previous_siblings: HashMap<usize, usize>,
     block_openings: HashMap<usize, usize>,
+    block_statements: HashSet<usize>,
     else_bodies: Vec<ElseBody>,
     /// Whether the last expression statement ended at a keyword, not `;`.
     unterminated: bool,
@@ -162,6 +172,7 @@ impl Parser<'_> {
             // a conditional group may close a block that the tree matched
             // elsewhere; the code after that stray `}` starts afresh too.
             let fresh = self.is_label(at, end) || self.is_symbol(at, '}');
+            self.block_statements.insert(at);
             if first
                 && !fresh
                 && let Some(open) = start.checked_sub(1)

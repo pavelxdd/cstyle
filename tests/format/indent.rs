@@ -7108,3 +7108,31 @@ fn condition_continuation_after_a_ternary_colon_keeps_the_conditional_floor() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_statement_after_a_directive_opening_a_block_keeps_its_comment_and_continuation() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if(s(a,",
+        "            b) < 0)",
+        "        {",
+        "        }",
+        "    else",
+        "        {",
+        "#ifdef W",
+        "        /* c",
+        "         d */",
+        "        if(g(10,",
+        "                V))",
+        "            {",
+        "            x();",
+        "            }",
+        "#endif",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
