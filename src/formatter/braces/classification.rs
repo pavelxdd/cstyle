@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::rewrite::is_defer_header;
 use crate::formatter::constructs::headers::is_conditional_header_line;
@@ -666,23 +666,6 @@ pub(super) fn line_ends_lambda_parameter_list(line: &str) -> bool {
         return false;
     };
     current[..open_pos].trim_end().ends_with(']')
-}
-
-pub(crate) fn exact_brace_indent_level(
-    options: &FormatOptions,
-    line: &str,
-    structural_level: usize,
-    spaces: usize,
-) -> usize {
-    if options.indent_style != IndentStyle::Tabs
-        || !spaces.is_multiple_of(options.indent_width.max(1))
-        || !line[..trailing_comment_split_limit(line)]
-            .trim_start()
-            .starts_with(['{', '}'])
-    {
-        return structural_level;
-    }
-    structural_level.max(spaces / options.indent_width.max(1))
 }
 
 pub(crate) fn code_ends_definition_header(source: &str) -> bool {

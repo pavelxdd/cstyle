@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, raw_strings, token_text};
@@ -10,7 +10,6 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use crate::formatter::text::tabs;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 
 pub(crate) fn find_case_colon(line: &str) -> Option<usize> {
@@ -366,7 +365,6 @@ pub(crate) struct SwitchCaseLineTransformer {
     line_number: usize,
     tab_width: usize,
     indent_width: usize,
-    indent_style: IndentStyle,
     indent_cases: bool,
     indent_preproc_define: bool,
     empty_line_fill: bool,
@@ -393,7 +391,6 @@ impl SwitchCaseLineTransformer {
             line_number: 0,
             tab_width: options.tab_width,
             indent_width: options.indent_width,
-            indent_style: options.indent_style,
             indent_cases: options.indent_cases,
             indent_preproc_define: options.indent_preproc_define,
             empty_line_fill: options.empty_line_fill,
@@ -717,34 +714,12 @@ impl SwitchCaseLineTransformer {
             return 0;
         }
 
-        match self.indent_style {
-            IndentStyle::ForceTabs if self.indent_width != self.tab_width => {
-                let mut expanded = tabs::force_tab_indent_to_spaces(line, self.tab_width);
-                let space_indent = leading_whitespace_len(&expanded);
-                let erase = levels * self.indent_width;
-                if erase > space_indent {
-                    return 0;
-                }
-                expanded.replace_range(0..erase, "");
-                *line = tabs::space_indent_to_force_tabs(&expanded, self.tab_width);
-                erase
-            }
-            IndentStyle::Tabs | IndentStyle::ForceTabs => {
-                if levels > whitespace {
-                    return 0;
-                }
-                line.replace_range(0..levels, "");
-                levels
-            }
-            _ => {
-                let erase = levels * self.indent_width;
-                if erase > whitespace {
-                    return 0;
-                }
-                line.replace_range(0..erase, "");
-                erase
-            }
+        let erase = levels * self.indent_width;
+        if erase > whitespace {
+            return 0;
         }
+        line.replace_range(0..erase, "");
+        erase
     }
 }
 
@@ -849,7 +824,6 @@ pub(crate) struct SwitchCaseLayoutState {
 
 pub(crate) struct CaseBlockBodyLayout {
     pub(crate) exact_indent_spaces: usize,
-    pub(crate) minimum_indent_level: Option<usize>,
 }
 
 struct ActiveCaseLayout {
@@ -1846,12 +1820,8 @@ impl FormatEngine<'_> {
         } else {
             target
         };
-        let minimum_indent_level = (self.options.indent_style == IndentStyle::Tabs
-            && exact_indent_spaces.is_multiple_of(self.options.indent_width.max(1)))
-        .then_some(exact_indent_spaces / self.options.indent_width.max(1));
         Some(CaseBlockBodyLayout {
             exact_indent_spaces,
-            minimum_indent_level,
         })
     }
 

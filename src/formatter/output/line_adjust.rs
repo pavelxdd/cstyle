@@ -1,4 +1,4 @@
-use crate::config::{FormatOptions, IndentStyle};
+use crate::config::FormatOptions;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::state::indentation::LineKind;
@@ -14,7 +14,6 @@ pub struct LineAdjuster {
     tab_converter: tabs::Converter,
     tab_width: usize,
     indent_width: usize,
-    indent_style: IndentStyle,
     empty_line_fill: bool,
     case_processing_enabled: bool,
     line_observe_enabled: bool,
@@ -31,7 +30,6 @@ impl LineAdjuster {
             tab_converter: tabs::Converter::new(options.convert_tabs),
             tab_width: options.tab_width,
             indent_width: options.indent_width,
-            indent_style: options.indent_style,
             empty_line_fill: options.empty_line_fill,
             case_processing_enabled: true,
             line_observe_enabled: true,
@@ -99,12 +97,7 @@ impl LineAdjuster {
     }
 
     fn convert_line_tabs(&mut self, line: String) -> String {
-        let keep_indent_tabs = matches!(
-            self.indent_style,
-            IndentStyle::Tabs | IndentStyle::ForceTabs
-        );
-        self.tab_converter
-            .convert(line, self.tab_width, keep_indent_tabs)
+        self.tab_converter.convert(line, self.tab_width, false)
     }
 
     fn adjust_macro_block_line(&mut self, line: String) -> String {
@@ -156,23 +149,9 @@ impl LineAdjuster {
             return 0;
         }
 
-        match self.indent_style {
-            IndentStyle::ForceTabs if self.indent_width != self.tab_width => {
-                let expanded = tabs::force_tab_indent_to_spaces(line, self.tab_width);
-                *line = format!("{}{}", " ".repeat(levels * self.indent_width), expanded);
-                *line = tabs::space_indent_to_force_tabs(line, self.tab_width);
-                levels * self.indent_width
-            }
-            IndentStyle::Tabs | IndentStyle::ForceTabs => {
-                line.insert_str(0, &"\t".repeat(levels));
-                levels
-            }
-            IndentStyle::Spaces => {
-                let spaces = levels * self.indent_width;
-                line.insert_str(0, &" ".repeat(spaces));
-                spaces
-            }
-        }
+        let spaces = levels * self.indent_width;
+        line.insert_str(0, &" ".repeat(spaces));
+        spaces
     }
 
     pub fn switch_depth(&self) -> usize {
@@ -240,31 +219,6 @@ mod tests {
         );
         assert_eq!(line_adjuster.adjust_line("        }".to_string()), "    }");
         assert_eq!(line_adjuster.adjust_line("    }".to_string()), "    }");
-    }
-
-    #[test]
-    fn case_unindent_force_tabs_removes_tabs_when_tab_width_matches_indent_width() {
-        let mut options = FormatOptions::default();
-        options.indent_style = IndentStyle::ForceTabs;
-        options.indent_width = 4;
-        options.tab_width = 4;
-        let mut line_adjuster = LineAdjuster::new(&options);
-
-        assert_eq!(
-            line_adjuster.adjust_line("\tswitch (x)".to_string()),
-            "\tswitch (x)"
-        );
-        assert_eq!(line_adjuster.adjust_line("\t{".to_string()), "\t{");
-        assert_eq!(
-            line_adjuster.adjust_line("\tcase 1:".to_string()),
-            "\tcase 1:"
-        );
-        assert_eq!(line_adjuster.adjust_line("\t\t{".to_string()), "\t{");
-        assert_eq!(
-            line_adjuster.adjust_line("\t\t\treturn 1;".to_string()),
-            "\t\treturn 1;"
-        );
-        assert_eq!(line_adjuster.adjust_line("\t\t}".to_string()), "\t}");
     }
 
     #[test]
@@ -353,25 +307,6 @@ mod tests {
             "BEGIN_BLOCK(Frame, Base)"
         );
         assert_eq!(line_adjuster.adjust_line(String::new()), "    ");
-    }
-
-    #[test]
-    fn macro_block_indent_uses_tab_style() {
-        let mut options = FormatOptions::default();
-        options.indent_style = IndentStyle::ForceTabs;
-        options.empty_line_fill = true;
-        options.macro_blocks = vec![("BEGIN_BLOCK".to_string(), "END_BLOCK".to_string())];
-        let mut line_adjuster = LineAdjuster::new(&options);
-
-        assert_eq!(
-            line_adjuster.adjust_line("BEGIN_BLOCK(Frame, Base)".to_string()),
-            "BEGIN_BLOCK(Frame, Base)"
-        );
-        assert_eq!(
-            line_adjuster.adjust_line("BLOCK_ITEM(ID_MENU, Frame::HandleMenu)".to_string()),
-            "\tBLOCK_ITEM(ID_MENU, Frame::HandleMenu)"
-        );
-        assert_eq!(line_adjuster.adjust_line(String::new()), "\t");
     }
 
     #[test]

@@ -1,12 +1,9 @@
-use crate::config::IndentStyle;
-use crate::formatter::braces::classification::{exact_brace_indent_level, line_opens_lambda_block};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::buffer;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
-use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
 
@@ -20,9 +17,7 @@ impl FormatEngine<'_> {
             .exact_indent_spaces
             .unwrap_or(layout.indent * self.options.indent_width);
         if let Some(spaces) = layout.exact_indent_spaces {
-            let structural_level =
-                exact_brace_indent_level(self.options, line, layout.indent, spaces);
-            self.push_formatted_line_exact(line, structural_level, spaces);
+            self.push_formatted_line_exact(line, layout.indent, spaces);
         } else {
             self.push_formatted_line(line, layout.indent);
         }
@@ -285,17 +280,6 @@ impl FormatEngine<'_> {
         let line_kind = layout.line_kind;
         self.restore_objc_message_alignment(post_emission.restore_objc_message_align);
         self.record_preprocessor_branch_body_indent(line, emitted_indent_spaces);
-        if line_kind == LineKind::Normal
-            && self.options.indent_style == IndentStyle::Tabs
-            && line.trim_end().ends_with('{')
-            && line_opens_lambda_block(line)
-            && let Some(output_line) = self.output.last()
-        {
-            self.layout.continuation_indent.next_line_indent_spaces = Some(
-                leading_visual_width(output_line, self.options.tab_width)
-                    + self.options.indent_width,
-            );
-        }
         if let Some(spaces) = post_emission.split_condition_body_indent_spaces {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }

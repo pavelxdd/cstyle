@@ -1,4 +1,4 @@
-use crate::config::{FormatOptions, IndentStyle};
+use crate::config::FormatOptions;
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
@@ -34,7 +34,6 @@ pub(crate) struct ClassificationContext<'a> {
 }
 
 pub(crate) struct LineLayout {
-    pub(crate) indent_level: Option<usize>,
     pub(crate) indent_spaces: usize,
 }
 
@@ -138,11 +137,7 @@ pub(crate) fn default_line_layout(
     }
     let indent_spaces =
         (indent + usize::from(options.indent_labels) * case_body_extra) * options.indent_width;
-    Some(LineLayout {
-        indent_level: (options.indent_style == IndentStyle::Tabs)
-            .then_some(indent_spaces / options.indent_width.max(1)),
-        indent_spaces,
-    })
+    Some(LineLayout { indent_spaces })
 }
 
 pub(crate) fn access_label_body_indent_spaces(

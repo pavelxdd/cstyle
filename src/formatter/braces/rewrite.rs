@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
     lambda_header_has_trailing_return,
@@ -1190,13 +1190,7 @@ impl FormatEngine<'_> {
             && (self.layout.command_state.current_header.is_some()
                 || self.current_ends_definition_header()
                 || self.output_ends_objc_method_header()))
-        .then(|| {
-            if self.options.indent_style == IndentStyle::Tabs {
-                "\t".to_string()
-            } else {
-                " ".repeat(self.options.indent_width.saturating_sub(1))
-            }
-        });
+        .then(|| " ".repeat(self.options.indent_width.saturating_sub(1)));
         let empty_block_after_operator =
             is_empty_block && self.layout.previous == PreviousToken::Operator;
         let brace_header = is_asm_block.then_some("_asm");

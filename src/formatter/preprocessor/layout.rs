@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, IndentStyle};
+use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
@@ -1114,19 +1114,6 @@ impl FormatEngine<'_> {
             })
             .unwrap_or(branch_body_spaces);
         Some(branch_body_spaces.max(nearest_body_spaces))
-    }
-
-    pub(crate) fn split_else_exact_tab_indent_level(
-        &self,
-        exact_indent_spaces: Option<usize>,
-    ) -> Option<usize> {
-        if self.options.indent_style != IndentStyle::Tabs {
-            return None;
-        }
-        let spaces = self.split_else_preprocessor_branch_body_indent_spaces()?;
-        let indent_width = self.options.indent_width.max(1);
-        (exact_indent_spaces == Some(spaces) && spaces.is_multiple_of(indent_width))
-            .then_some(spaces / indent_width)
     }
 
     pub(crate) fn observe_split_else_body_closing(&mut self, line: &str, output_spaces: usize) {

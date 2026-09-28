@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, IndentStyle, LineEnding};
+use crate::config::{BraceStyle, LineEnding};
 use crate::formatter::braces::classification::{
     ExternCGuard, block_indent_extra, brace_indent_applies, is_lambda_body_header,
     is_lambda_capture_header, is_namespace_or_module_block_header,
@@ -263,12 +263,7 @@ impl FormatEngine<'_> {
         if opening_brace[..trailing_comment_split_limit(opening_brace)].trim() != "{" {
             return None;
         }
-        let visual_tab = if matches!(self.options.indent_style, IndentStyle::ForceTabs) {
-            self.options.tab_width.max(1)
-        } else {
-            self.options.indent_width
-        };
-        let opening_indent = leading_visual_width(opening_brace, visual_tab);
+        let opening_indent = leading_visual_width(opening_brace, self.options.tab_width);
         let class_body_extra = usize::from(
             self.options.indent_classes
                 && matches!(

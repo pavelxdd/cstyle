@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, IndentStyle};
+use crate::config::BraceStyle;
 use crate::formatter::braces::classification::line_opens_lambda_block;
 use crate::formatter::braces::closing::{
     starts_post_closing_declaration, top_level_closing_brace_indent_spaces,
@@ -1602,13 +1602,10 @@ impl FormatEngine<'_> {
                     || starts_header_word(previous_trimmed, "for")
                     || previous_trimmed.starts_with("else if"))
             {
-                let tab_width = if self.options.indent_style == IndentStyle::Tabs {
-                    self.options.indent_width
-                } else {
-                    self.options.tab_width
-                };
-                let spaces =
-                    self.output.lead_width(previous_index, tab_width) + self.options.indent_width;
+                let spaces = self
+                    .output
+                    .lead_width(previous_index, self.options.tab_width)
+                    + self.options.indent_width;
                 if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces
                     || self.output[..previous_index]
                         .iter()
@@ -2951,20 +2948,6 @@ impl FormatEngine<'_> {
                 brace_layout.brace_indent_spaces + self.options.indent_width,
                 brace_layout.brace_indent_spaces,
             );
-        }
-        if self.options.indent_style == IndentStyle::Tabs
-            && layout.indent > layout.normal_indent
-            && self.token_input.token_source_line_indent
-                > layout.normal_indent * self.options.indent_width
-            && let Some(spaces) = layout.exact_indent_spaces
-            && spaces > self.token_input.token_source_line_indent
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous[..trailing_comment_split_limit(previous)]
-                .trim_end()
-                .ends_with(',')
-            && !line.trim_start().starts_with(['#', '{', '}', ')'])
-        {
-            layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
         }
         if layout.line_kind == LineKind::Normal
             && !self.options.indent_after_parens

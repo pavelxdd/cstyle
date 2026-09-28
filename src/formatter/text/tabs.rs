@@ -1,5 +1,4 @@
 use crate::formatter::lexer::raw_strings;
-use crate::formatter::text::columns::leading_whitespace_len;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Converter {
@@ -49,26 +48,6 @@ impl Converter {
 
 pub(crate) fn source_to_spaces(source: &str, tab_width: usize) -> String {
     to_spaces_stateful(source, tab_width, false, None, false, None).0
-}
-
-pub(crate) fn space_indent_to_force_tabs(line: &str, tab_width: usize) -> String {
-    let tab_width = tab_width.max(1);
-    let whitespace = leading_whitespace_len(line);
-    let tab_count = whitespace / tab_width;
-    let replace_len = tab_count * tab_width;
-    format!("{}{}", "\t".repeat(tab_count), &line[replace_len..])
-}
-
-pub(crate) fn force_tab_indent_to_spaces(line: &str, tab_width: usize) -> String {
-    let tab_width = tab_width.max(1);
-    let mut output = String::new();
-    let mut chars = line.chars().peekable();
-    while matches!(chars.peek(), Some('\t')) {
-        output.push_str(&" ".repeat(tab_width));
-        chars.next();
-    }
-    output.extend(chars);
-    output
 }
 
 fn to_spaces_stateful(
@@ -287,21 +266,5 @@ mod tests {
     #[test]
     fn keeps_leading_indent_tabs_when_requested() {
         assert_eq!(convert("\t\tx\ty;", 4, false, None, true), "\t\tx   y;");
-    }
-
-    #[test]
-    fn converts_force_tab_indent() {
-        assert_eq!(
-            force_tab_indent_to_spaces("\t\treturn x;", 2),
-            "    return x;"
-        );
-        assert_eq!(force_tab_indent_to_spaces("\treturn x;", 0), " return x;");
-        assert_eq!(
-            force_tab_indent_to_spaces("printf(\"\t\");", 4),
-            "printf(\"\t\");"
-        );
-        assert_eq!(space_indent_to_force_tabs("    x", 8), "    x");
-        assert_eq!(space_indent_to_force_tabs("        x", 8), "\tx");
-        assert_eq!(space_indent_to_force_tabs("            x", 8), "\t    x");
     }
 }

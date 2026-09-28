@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, IndentStyle};
+use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::{
     is_attachable_closing_header, is_header, same_line_nested_header_extra, starts_header_word,
 };
@@ -229,7 +229,7 @@ impl FormatEngine<'_> {
         let line_kind = layout.line_kind;
         let normal_indent = layout.normal_indent;
         let class_scope_label = layout.class_scope_label;
-        let mut indent = layout.indent;
+        let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
         let (line_closing_parens, line_opening_parens) = line_paren_imbalance(line);
         let line_closes_outer_delimiter = line_closing_parens > line_opening_parens.len();
@@ -268,9 +268,6 @@ impl FormatEngine<'_> {
             exact_indent_spaces,
         ) {
             exact_indent_spaces = Some(case_layout.exact_indent_spaces);
-            if let Some(minimum) = case_layout.minimum_indent_level {
-                indent = indent.max(minimum);
-            }
         }
         if let Some(spaces) =
             self.switch_case_frame_closing_indent_override(line, exact_indent_spaces)
@@ -285,9 +282,6 @@ impl FormatEngine<'_> {
             self.options,
         ) {
             exact_indent_spaces = Some(label_layout.indent_spaces);
-            if let Some(level) = label_layout.indent_level {
-                indent = level;
-            }
         }
         if let Some(spaces) = self.lambda_opening_brace_indent_spaces(line) {
             exact_indent_spaces = Some(spaces);
@@ -306,7 +300,6 @@ impl FormatEngine<'_> {
         {
             exact_indent_spaces = Some(spaces);
         }
-        layout.indent = indent;
         layout.exact_indent_spaces = exact_indent_spaces;
         layout
     }
@@ -320,7 +313,7 @@ impl FormatEngine<'_> {
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_kind = layout.line_kind;
-        let mut indent = layout.indent;
+        let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
         if line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['#', '(', ')', '{', '}'])
@@ -401,16 +394,6 @@ impl FormatEngine<'_> {
         if let Some(spaces) = replay.lambda_parameter_indent_spaces {
             exact_indent_spaces = Some(spaces);
         }
-        if let Some(minimum) = self.split_else_exact_tab_indent_level(exact_indent_spaces) {
-            indent = indent.max(minimum);
-        }
-        if self.options.indent_style != IndentStyle::Spaces
-            && let Some(base) = self.constructor_initializer_base_indent_spaces()
-            && exact_indent_spaces.is_some_and(|spaces| spaces >= base)
-            && base.is_multiple_of(self.options.indent_width)
-        {
-            indent = indent.max(base / self.options.indent_width);
-        }
         if line_kind == LineKind::Normal
             && !line.trim_start().starts_with(['{', '}'])
             && !starts_header_word(line.trim_start(), "switch")
@@ -427,7 +410,6 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.objc_line_indent_override(line) {
             exact_indent_spaces = Some(spaces);
         }
-        layout.indent = indent;
         layout.exact_indent_spaces = exact_indent_spaces;
         layout
     }
