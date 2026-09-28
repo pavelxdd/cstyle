@@ -6976,3 +6976,22 @@ fn allman_function_after_attribute_line_ignores_previous_function_header() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn kr_top_level_initializer_continuation_after_function_keeps_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (a)",
+        "        b();",
+        "    else",
+        "        c();",
+        "}",
+        "static const char m[] =",
+        "    N_(\"x\\n\"",
+        "       \"y\\n\");",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

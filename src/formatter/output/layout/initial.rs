@@ -798,7 +798,7 @@ impl FormatEngine<'_> {
                     .chars()
                     .next()
                     .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_digit())
-                && !previous_code.ends_with(['{', '(', ','])
+                && !previous_code.ends_with(['{', '(', ',', '='])
                 && !line_is_control_body_header(previous_code.trim_start())
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2

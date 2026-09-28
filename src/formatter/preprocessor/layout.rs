@@ -817,10 +817,10 @@ impl FormatEngine<'_> {
         line_start_active: bool,
     ) -> RecentSplitElseChainContext {
         // An else chain never reaches past the function it is in.
-        let recent = &self.output[self
-            .current_function_body_start()
-            .unwrap_or(0)
-            .min(self.output.len())..];
+        let recent = match self.current_function_body_start() {
+            Some(start) => &self.output[start.min(self.output.len())..],
+            None => self.output.scoped(),
+        };
         let chain_active = line_start_active
             || (self.output.may_have_else()
                 && recent.iter().rev().take(128).any(|line| {
