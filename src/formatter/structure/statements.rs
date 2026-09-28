@@ -18,6 +18,9 @@ pub(crate) struct Statements {
     /// statement's first token: labels are skipped, and a statement after
     /// one without its `;` (a macro call) has none.
     previous_siblings: HashMap<usize, usize>,
+    /// The `{` of the block that a statement starts, by the statement's
+    /// first token.
+    block_openings: HashMap<usize, usize>,
     /// Bodies of `else` keywords separated from them by a blank line.
     split_else_bodies: Vec<ElseBody>,
 }
@@ -42,6 +45,7 @@ impl Statements {
             else_ifs: HashMap::new(),
             braceless_headers: HashMap::new(),
             previous_siblings: HashMap::new(),
+            block_openings: HashMap::new(),
             else_bodies: Vec::new(),
             unterminated: false,
         };
@@ -50,6 +54,7 @@ impl Statements {
             else_ifs: parser.else_ifs,
             braceless_headers: parser.braceless_headers,
             previous_siblings: parser.previous_siblings,
+            block_openings: parser.block_openings,
             split_else_bodies: parser
                 .else_bodies
                 .into_iter()
@@ -81,6 +86,11 @@ impl Statements {
         self.previous_siblings.get(&index).copied()
     }
 
+    /// The `{` of the block whose first statement starts at `index`.
+    pub(crate) fn block_opening(&self, index: usize) -> Option<usize> {
+        self.block_openings.get(&index).copied()
+    }
+
     /// Whether the token `index` is in the body of an `else` that a blank
     /// line separates from its body.
     pub(crate) fn in_split_else_body(&self, index: usize) -> bool {
@@ -97,6 +107,7 @@ struct Parser<'a> {
     else_ifs: HashMap<usize, usize>,
     braceless_headers: HashMap<usize, usize>,
     previous_siblings: HashMap<usize, usize>,
+    block_openings: HashMap<usize, usize>,
     else_bodies: Vec<ElseBody>,
     /// Whether the last expression statement ended at a keyword, not `;`.
     unterminated: bool,
@@ -129,8 +140,18 @@ impl Parser<'_> {
         // The last statement of the block that is no label and ended with
         // its `;` or block.
         let mut sibling = None;
+        let mut first = true;
         while let Some(at) = self.next(position, end) {
             let label = self.is_label(at, end);
+            if first
+                && !label
+                && let Some(open) = start.checked_sub(1)
+                && self.is_symbol(open, '{')
+                && !self.crosses_conditional(open, at)
+            {
+                self.block_openings.insert(at, open);
+            }
+            first = false;
             if !label
                 && let Some(previous) = sibling
                 && !self.crosses_conditional(previous, at)

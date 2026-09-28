@@ -6886,3 +6886,23 @@ fn allman_block_after_multiline_call_takes_the_call_statement_column() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn kr_first_statement_after_multiline_condition_brace_takes_header_body_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(ok) {",
+        "        if(Curl_compareheader(header,",
+        "                              STRCONST(\"Capsule-protocol:\"),",
+        "                              STRCONST(\"?1\"))) {",
+        "            CURL_TRC_CF(data, cf, \"CONNECT-UDP Response --> Capsule-protocol: ?1\");",
+        "            done = TRUE;",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -9,6 +9,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     line_paren_imbalance, preprocessor_directive, trailing_comment_split_limit,
@@ -325,7 +326,9 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         } else if let Some(spaces) = self.braceless_body_indent() {
             layout.exact_indent_spaces = Some(spaces);
-        } else if self.sibling_confirms_indent(layout.indent * self.options.indent_width) {
+        } else if self.sibling_confirms_indent(layout.indent * self.options.indent_width)
+            || self.block_opening_confirms_indent(layout.indent * self.options.indent_width)
+        {
             // A heuristic moved the line off a structural level that its
             // sibling confirms; a sibling off that level is itself misplaced.
             layout.exact_indent_spaces = Some(layout.indent * self.options.indent_width);
@@ -412,6 +415,73 @@ impl FormatEngine<'_> {
             self.output.lead_width(if_line, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
+    }
+
+    /// Whether the block's opening confirms `structural`, the structural
+    /// indent of the line starting the block's first statement: the brace
+    /// line, or the line of the statement owning an attached brace, plus the
+    /// style's body offset.
+    fn block_opening_confirms_indent(&self, structural: usize) -> bool {
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        let Some(open) = self.tree.statements.block_opening(first) else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        if matches!(tokens[first], Token::Symbol('{'))
+            && self.should_indent_brace_line(BraceType::Command)
+        {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        let Some(group) = groups.opened_at(open) else {
+            return false;
+        };
+        if !matches!(
+            self.tree.blocks.kind(group),
+            Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+        ) {
+            return false;
+        }
+        // Switch bodies and case blocks follow astyle's case layout.
+        if self.tree.blocks.owner(group).is_some_and(|owner| {
+            matches!(&tokens[owner], Token::Word(word)
+                if matches!(word.as_str(), "switch" | "case" | "default"))
+        }) {
+            return false;
+        }
+        let width = self.options.indent_width;
+        let case_offset = self.layout.line_adjuster.total_case_unindent_depth() * width;
+        let Some(brace_line) = self.output.line_with_token(open) else {
+            return false;
+        };
+        let column = if self.output.line_tokens(brace_line).map(|span| span.first) == Some(open) {
+            let indented_brace = self.options.indent_braces
+                && self
+                    .layout
+                    .nesting
+                    .brace_type_stack
+                    .last()
+                    .is_some_and(|&brace_type| self.should_indent_brace_line(brace_type));
+            self.output.lead_width(brace_line, self.options.tab_width)
+                + if indented_brace { 0 } else { width }
+        } else {
+            // The header after a leading `}` and `else`, which can stand on
+            // an earlier line.
+            let mut header = self.tree.blocks.owner(group);
+            while let Some(index) = header
+                && (matches!(tokens[index], Token::Symbol('}'))
+                    || matches!(&tokens[index], Token::Word(word) if word == "else"))
+            {
+                header = next_code_token(tokens, index + 1);
+            }
+            let Some(owner_line) = header.and_then(|header| self.line_led_by(header)) else {
+                return false;
+            };
+            self.output.lead_width(owner_line, self.options.tab_width) + width
+        };
+        column + case_offset == structural
     }
 
     /// Whether the previous statement of the block confirms `structural`,
