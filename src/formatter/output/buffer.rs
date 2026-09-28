@@ -286,6 +286,35 @@ impl OutputBuffer {
         leading_visual_width(&self.lines[index], tab_width)
     }
 
+    /// Leading width of the line that owns the block closed by the leading
+    /// `}` of line `close_index`: the line with the matching `{`, or the
+    /// header line before a `{` that stands alone.
+    pub(crate) fn closed_block_owner_indent(
+        &self,
+        close_index: usize,
+        tab_width: usize,
+    ) -> Option<usize> {
+        let mut depth = 1usize;
+        let open_index = (0..close_index).rev().find(|&index| {
+            let meta = self.brace_meta(index);
+            depth += meta.closes;
+            if meta.opens >= depth {
+                return true;
+            }
+            depth -= meta.opens;
+            false
+        })?;
+        let owner_index = if self.code_trimmed(open_index) == "{" {
+            (0..open_index)
+                .rev()
+                .find(|&index| !self.trimmed(index).is_empty())
+                .unwrap_or(open_index)
+        } else {
+            open_index
+        };
+        Some(self.lead_width(owner_index, tab_width))
+    }
+
     pub(crate) fn current_closing_brace_open(
         &self,
         tab_width: usize,

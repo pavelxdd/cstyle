@@ -689,14 +689,13 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
             if starts_post_closing_declaration(previous_code) {
-                let closed_frame = self.layout.frame_stack.last_closed_brace().filter(|frame| {
-                    frame.close_output_line.is_some()
-                        && frame.close_output_line == self.output.last_non_empty_index()
-                });
                 let closing_indent = leading_visual_width(previous, self.options.tab_width);
-                layout.exact_indent_spaces = Some(closed_frame.map_or(closing_indent, |frame| {
-                    frame.header_indent_column.min(closing_indent)
-                }));
+                let owner_indent = self.output.last_non_empty_index().and_then(|index| {
+                    self.output
+                        .closed_block_owner_indent(index, self.options.tab_width)
+                });
+                layout.exact_indent_spaces =
+                    Some(owner_indent.map_or(closing_indent, |owner| owner.min(closing_indent)));
             }
         }
         if line.trim() == "::"

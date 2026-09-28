@@ -816,7 +816,7 @@ fn indented_brace_styles_keep_sibling_indent_after_closing_declaration() {
     for (style, source) in [
         (
             "--style=whitesmith",
-            "typedef struct a\n    {\n    int d;\n    } a;\n\nint x;\nvoid f(void)\n    {\n    struct b\n        {\n        int q;\n        } b;\n    int y;\n    }\n",
+            "typedef struct a\n    {\n    int d;\n    } a;\n\ntypedef struct\n    {\n    int x;\n    } B;\nvoid f(void)\n    {\n    struct b\n        {\n        int q;\n        } b;\n    int y;\n    }\n",
         ),
         (
             "--style=ratliff",
