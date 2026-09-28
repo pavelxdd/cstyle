@@ -766,10 +766,21 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|line| line.trim().is_empty())
             && self.output.iter().any(|line| !line.trim().is_empty())
+            && !self.previous_code_ends_statement()
         {
             layout.exact_indent_spaces = Some(self.options.indent_width);
         }
         contextual
+    }
+
+    /// Whether the last output line with code closes a statement or block, so
+    /// a following operator-led line starts a new statement.
+    fn previous_code_ends_statement(&self) -> bool {
+        (0..self.output.len())
+            .rev()
+            .map(|index| (self.output.code_trimmed(index), self.output[index].trim_start()))
+            .find(|(code, raw)| !code.is_empty() && !raw.starts_with('*'))
+            .is_some_and(|(code, _)| code.trim_end().ends_with([';', '{', '}']))
     }
 
     pub(crate) fn apply_label_else_and_conditional_contextual_layout(

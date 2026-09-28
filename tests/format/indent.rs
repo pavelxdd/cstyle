@@ -6703,3 +6703,10 @@ fn multiline_subscript_closing_bracket_aligns_with_opening_bracket() {
         "void f()\n{\n    array[index\n         ];\n}\n",
     );
 }
+
+#[test]
+fn operator_led_statement_after_blank_line_keeps_block_indent() {
+    let source = "void f(void)\n{\n    if (x)\n    {\n        a = 1;\n\n        *p = 0;\n        /* c */\n\n        !x;\n    }\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
