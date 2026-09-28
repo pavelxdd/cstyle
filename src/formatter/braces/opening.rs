@@ -286,6 +286,10 @@ impl FormatEngine<'_> {
                     )
                     && !(frame.semantic_kind == BraceSemanticKind::Namespace
                         && self.options.indent_namespaces)
+                    || matches!(
+                        frame.semantic_kind,
+                        BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
+                    ) && self.should_indent_brace_line(frame.brace_type)
             });
         Some(if self.options.brace_style == BraceStyle::Whitesmith {
             opening_indent + class_body_extra * self.options.indent_width
@@ -2552,9 +2556,28 @@ impl FormatEngine<'_> {
             return false;
         }
         match self.options.brace_style {
+            // astyle indents the braces of a type inside a function or an
+            // `extern "C"` block, and of a function inside the latter, like
+            // a statement block's.
             BraceStyle::Vtk => {
+                let enclosed_by = |types: &[BraceType]| {
+                    self.layout
+                        .nesting
+                        .brace_type_stack
+                        .iter()
+                        .any(|enclosing| types.contains(enclosing))
+                };
                 brace_type == BraceType::Command
                     || (brace_type == BraceType::Array && self.layout.indentation.indent() > 0)
+                    || matches!(
+                        brace_type,
+                        BraceType::Class | BraceType::Struct | BraceType::Union | BraceType::Enum
+                    ) && enclosed_by(&[
+                        BraceType::Definition,
+                        BraceType::Command,
+                        BraceType::Extern,
+                    ])
+                    || brace_type == BraceType::Definition && enclosed_by(&[BraceType::Extern])
             }
             BraceStyle::Whitesmith => {
                 brace_type != BraceType::Namespace || self.options.indent_namespaces

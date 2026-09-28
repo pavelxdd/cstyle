@@ -95,7 +95,7 @@ fn whitesmith_separated_definition_brace_and_body_share_column() {
 }
 
 #[test]
-fn vtk_function_brace_indent_is_independent_of_extern_context() {
+fn vtk_function_brace_inside_extern_c_indents_like_a_statement_block() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
     let actual = format_exact(
@@ -108,9 +108,9 @@ fn vtk_function_brace_indent_is_independent_of_extern_context() {
         fixture!(
             "extern \"C\" {",
             "    void run()",
-            "    {",
+            "        {",
             "        call();",
-            "    }",
+            "        }",
             "}",
         )
     );
@@ -1942,4 +1942,60 @@ fn backslash_continuation_keeps_brace_inline_without_close() {
         format_exact("alpha \\{beta\n", &options),
         "alpha \\ {beta\n",
     );
+}
+
+#[test]
+fn vtk_type_braces_inside_a_function_or_extern_c_indent_like_statement_blocks() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "#ifdef __cplusplus",
+        "extern \"C\" {",
+        "#endif",
+        "typedef enum",
+        "    {",
+        "    A = 0,",
+        "    B",
+        "    } E;",
+        "#ifdef __cplusplus",
+        "}",
+        "#endif",
+        "static void f(void)",
+        "{",
+        "    union",
+        "        {",
+        "        int a;",
+        "        } now;",
+        "}",
+        "struct b",
+        "{",
+        "    struct c",
+        "    {",
+        "        int y;",
+        "    } z;",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_comments_in_an_extern_c_enum_stay_at_the_member_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "extern \"C\" {",
+        "    typedef enum",
+        "        {",
+        "        A,",
+        "        /* c */",
+        "        B,",
+        "        /* d",
+        "         e */",
+        "        C",
+        "        } E;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
 }

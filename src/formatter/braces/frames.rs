@@ -362,7 +362,8 @@ impl FormatEngine<'_> {
                                 | BraceSemanticKind::Array
                                 | BraceSemanticKind::Initializer
                         ) || frame.semantic_kind == BraceSemanticKind::Lambda
-                            && (frame.header_indent_column > 0 || vtk_constructor_lambda))
+                            && (frame.header_indent_column > 0 || vtk_constructor_lambda)
+                            || self.should_indent_brace_line(frame.brace_type))
                     || self.options.brace_style == BraceStyle::Ratliff
                         && matches!(
                             frame.semantic_kind,
