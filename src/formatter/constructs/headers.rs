@@ -249,8 +249,10 @@ impl FormatEngine<'_> {
                 leading_visual_width(before, self.options.tab_width) + self.options.indent_width,
             );
         }
-        is_comment_line(before.trim_start())
-            .then(|| leading_visual_width(before, self.options.tab_width))
+        is_comment_line(before.trim_start()).then(|| {
+            self.output
+                .comment_indent_width(before_index, self.options.tab_width)
+        })
     }
 
     pub(crate) fn active_split_else_open_header_brace_indent_spaces(

@@ -369,6 +369,15 @@ fn top_level_comment_after_endif_ignores_preceding_block_comment_tail() {
 }
 
 #[test]
+fn conditional_body_after_multiline_block_comment_keeps_its_indent() {
+    let source = "/*\n */\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint x;\n#ifdef __cplusplus\n}\n#endif\n";
+    let nested = "void f(void)\n{\n    if (a)\n    {\n        /*\n         * c\n         */\n#ifdef A\n        x = 1;\n#endif\n    }\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    assert_eq!(format_exact(nested, &FormatOptions::default()), nested);
+}
+
+#[test]
 fn define_body_unmatched_close_brace_stays_at_body_indent() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;

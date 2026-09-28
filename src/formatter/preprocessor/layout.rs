@@ -974,11 +974,12 @@ impl FormatEngine<'_> {
             || self.recent_split_else_region_any(128, |line| {
                 line == "else" || line.ends_with("} else")
             });
-        for branch in self
+        for (branch_index, branch) in self
             .output
             .iter()
+            .enumerate()
             .rev()
-            .skip_while(|line| line.as_str() != previous.as_str())
+            .skip_while(|(_, line)| line.as_str() != previous.as_str())
             .skip(1)
         {
             let branch_code = branch[..trailing_comment_split_limit(branch)].trim_end();
@@ -1016,7 +1017,10 @@ impl FormatEngine<'_> {
             } else if split_else_branch
                 && (is_comment_line(branch_raw_trimmed) || branch_raw_trimmed.starts_with("/*"))
             {
-                return Some(leading_visual_width(branch, self.options.tab_width));
+                return Some(
+                    self.output
+                        .comment_indent_width(branch_index, self.options.tab_width),
+                );
             }
             break;
         }

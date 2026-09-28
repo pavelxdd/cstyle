@@ -322,6 +322,24 @@ impl OutputBuffer {
         self.last_non_empty_index().map(|index| &self.lines[index])
     }
 
+    /// Leading width of the comment on line `index`; a block comment
+    /// continuation line is measured at the line that opens the comment.
+    pub(crate) fn comment_indent_width(&self, index: usize, tab_width: usize) -> usize {
+        let start = if self.lines[index].trim_start().starts_with('*') {
+            self.lines[..index]
+                .iter()
+                .rposition(|line| line.contains("/*") || line.contains("*/"))
+                .filter(|&start| {
+                    let line = &self.lines[start];
+                    line.rfind("/*") > line.rfind("*/")
+                })
+                .unwrap_or(index)
+        } else {
+            index
+        };
+        leading_visual_width(&self.lines[start], tab_width)
+    }
+
     pub(crate) fn may_have_label_open(&self) -> bool {
         self.may_have_label_open
     }

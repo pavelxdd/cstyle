@@ -1109,10 +1109,16 @@ impl FormatEngine<'_> {
             if !after_blank
                 && preprocessor_directive(previous_trimmed)
                     .is_some_and(|directive| matches!(directive, "if" | "ifdef" | "ifndef"))
-                && let Some(header) = self.output.iter().rev().skip(1).find(|line| {
-                    let trimmed = line.trim_start();
-                    !trimmed.is_empty() && !trimmed.starts_with('#')
-                })
+                && let Some((header_index, header)) = self
+                    .output
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .skip(1)
+                    .find(|(_, line)| {
+                        let trimmed = line.trim_start();
+                        !trimmed.is_empty() && !trimmed.starts_with('#')
+                    })
             {
                 let header_code = header[..trailing_comment_split_limit(header)].trim_end();
                 let header_trimmed = header_code.trim_start();
@@ -1123,7 +1129,9 @@ impl FormatEngine<'_> {
                         layout.exact_indent_spaces = Some(spaces);
                     }
                 } else if is_comment_line(header.trim_start()) {
-                    let spaces = leading_visual_width(header, self.options.tab_width);
+                    let spaces = self
+                        .output
+                        .comment_indent_width(header_index, self.options.tab_width);
                     if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
                         layout.exact_indent_spaces = Some(spaces);
                     }
