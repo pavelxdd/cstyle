@@ -375,6 +375,19 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn exit_brace_state(&mut self) {
+        self.pop_brace_state();
+        // A split else never reaches past the function it is in.
+        if self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.groups.closed_at(brace))
+            .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody))
+        {
+            self.end_preprocessor_split_else();
+        }
+    }
+
+    fn pop_brace_state(&mut self) {
         let closes_scope = self.layout.nesting.has_active_brace_scope();
         self.layout.indentation.exit_block();
         if closes_scope {
@@ -396,15 +409,6 @@ impl FormatEngine<'_> {
         }
         if closes_scope {
             self.layout.frame_stack.pop_brace();
-        }
-        // A split else never reaches past the function it is in.
-        if self
-            .current
-            .active_token()
-            .and_then(|brace| self.tree.groups.closed_at(brace))
-            .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody))
-        {
-            self.end_preprocessor_split_else();
         }
     }
 

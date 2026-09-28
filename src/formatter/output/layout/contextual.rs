@@ -1913,6 +1913,7 @@ impl FormatEngine<'_> {
                 && !line.trim_start().starts_with("->")
                 && code.ends_with(')')
                 && !trimmed.starts_with('#')
+                && self.previous_code_closes_control_condition() != Some(false)
                 && let Some(header) = self.output.iter().rev().skip(1).take(8).find(|line| {
                     let code = line[..trailing_comment_split_limit(line)].trim_end();
                     let trimmed = code.trim_start();

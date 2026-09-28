@@ -44,6 +44,24 @@ impl FormatEngine<'_> {
         layout
     }
 
+    /// Whether the code before the line being laid out ends with the
+    /// condition of a control statement, as the tree reads it; `None` when
+    /// the line recorded no tokens.
+    pub(crate) fn previous_code_closes_control_condition(&self) -> Option<bool> {
+        let tokens = &self.tree.tokens;
+        let first = self.output.pending_tokens()?.first;
+        let previous = self.tree.previous_code_token(first)?;
+        if !matches!(tokens[previous], Token::Symbol(')')) {
+            return Some(false);
+        }
+        let group = self.tree.groups.closed_at(previous)?;
+        let open = self.tree.groups.get(group).open;
+        Some(self.tree.previous_code_token(open).is_some_and(|keyword| {
+            matches!(&tokens[keyword], Token::Word(word)
+                if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach" | "constexpr"))
+        }))
+    }
+
     /// Case-block unindent the line being laid out will lose; indents from
     /// published lines have lost theirs already.
     fn case_unindent_spaces(&self) -> usize {

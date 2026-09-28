@@ -6955,3 +6955,24 @@ fn gnu_preprocessor_split_else_ends_with_its_function() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_function_after_attribute_line_ignores_previous_function_header() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void report(void)",
+        "{",
+        "    if (a)",
+        "        send(1);",
+        "    x();",
+        "}",
+        "",
+        "__attribute__((format (printf, 1, 2)))",
+        "static void rp_warning(const char *err, ...)",
+        "{",
+        "    va_list params;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
