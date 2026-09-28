@@ -2738,6 +2738,7 @@ impl FormatEngine<'_> {
                 || (self.options.brace_style == BraceStyle::None
                     && self.token_input.token_begins_source_line))
                 && !self.output.is_empty()
+                && !self.is_nested_designated_init_field()
             {
                 return false;
             }

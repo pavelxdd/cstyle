@@ -918,6 +918,15 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last()
             && previous.trim_end().ends_with('{')
         {
+            if previous.trim() == "{"
+                && self
+                    .layout
+                    .frame_stack
+                    .active_brace()
+                    .is_some_and(|frame| self.should_indent_brace_line(frame.brace_type))
+            {
+                return Some(leading_visual_width(previous, self.options.tab_width));
+            }
             return Some(
                 leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
             );

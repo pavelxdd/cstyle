@@ -3708,3 +3708,19 @@ fn gnu_nested_malformed_colon_brace_uses_active_scope_on_first_pass() {
         expected,
     );
 }
+
+#[test]
+fn broken_brace_styles_keep_designated_initializer_layout() {
+    let allman = "int x;\nstatic struct p b =\n{\n    .d = 1,\n    .m = {\n        N_(\"a\"),\n        N_(\"b\")\n    },\n    .e = 2,\n};\n";
+    let whitesmith =
+        "int x;\nstatic struct p b =\n    {\n    .d = 1,\n    .e = { 1, 2 },\n    };\n";
+    for (style, source) in [
+        ("--style=allman", allman),
+        ("--style=whitesmith", whitesmith),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+
+        assert_eq!(format_exact(source, &options), source, "{style}");
+    }
+}
