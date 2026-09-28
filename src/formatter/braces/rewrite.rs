@@ -1658,6 +1658,7 @@ impl FormatEngine<'_> {
                 self.token_input.previous_input_was_adjacent = false;
                 self.token_input.previous_input_whitespace = Some(whitespace.to_string());
             }
+            self.current.set_active_token(Some(index));
             self.push_token(
                 &tokens[index],
                 TokenPushContext {

@@ -15,6 +15,8 @@ use crate::source::lex::trailing_word;
 
 impl FormatEngine<'_> {
     pub(crate) fn finish_disabled_line(&mut self) {
+        let tokens = self.current.take_tokens();
+        self.output.set_pending_tokens(tokens);
         let line = self.take_current();
         self.publish_unadjusted_line(line);
         self.layout.previous = PreviousToken::None;
@@ -22,6 +24,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn finish_line(&mut self) {
+        let tokens = self.current.take_tokens();
+        self.output.set_pending_tokens(tokens);
         let block_comment_close_paren_ends_declaration =
             self.comments.block_comment_close_paren_ends_declaration;
         self.comments.block_comment_close_paren_ends_declaration = false;

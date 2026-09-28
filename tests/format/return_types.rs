@@ -1092,3 +1092,17 @@ fn break_return_type_ignores_parentheses_inside_string_literals() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn break_return_type_splits_only_function_heads() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "-xB".to_owned(), "-xD".to_owned()],
+    )
+    .expect("valid options");
+    let source = "typedef enum {\n    NONE,     /* no headers at all exist (yet) */\n} E;\n\nint main(void)\n{\n    fprintf(stderr, \"%s %s\",\n            appname, VERSION, curl_version());\n    int helper(int);\n    return 0;\n}\n";
+    let expected = "typedef enum {\n    NONE,     /* no headers at all exist (yet) */\n} E;\n\nint\nmain(void)\n{\n    fprintf(stderr, \"%s %s\",\n            appname, VERSION, curl_version());\n    int helper(int);\n    return 0;\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+}

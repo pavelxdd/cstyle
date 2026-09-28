@@ -30,6 +30,8 @@ use crate::formatter::state::indentation::{IndentationState, LineKind};
 use crate::formatter::state::{
     CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState, next_line,
 };
+use crate::formatter::structure::SourceTree;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::language::{is_numeric_variable_word, is_type_like_pointer_word};
 use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
@@ -127,6 +129,7 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) preprocessor: preprocessor::PreprocessorState,
     pub(crate) access_modified_braces: HashSet<usize>,
     pub(crate) syntax_roles: SyntaxRoles,
+    pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
     pub(crate) extern_c_guard: ExternCGuard,
 }
@@ -190,6 +193,7 @@ impl<'a> FormatEngine<'a> {
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: HashSet::new(),
             syntax_roles: SyntaxRoles::new(0),
+            tree: SourceTree::default(),
             pending_extern: false,
             extern_c_guard: ExternCGuard::Idle,
         }
@@ -298,6 +302,7 @@ impl<'a> FormatEngine<'a> {
         } else {
             tokens
         };
+        self.tree = SourceTree::build(tokens);
         self.syntax_roles = classify_syntax(tokens);
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
@@ -360,35 +365,46 @@ impl<'a> FormatEngine<'a> {
                 index += 1;
                 continue;
             }
+            // Rewrites below push runs of tokens; their text belongs to the
+            // token they start from.
+            self.current
+                .set_active_token(is_code_token(&tokens[index]).then_some(index));
             if let Some(next_index) =
                 self.try_add_braces_to_statement(tokens, line.start, index, line.end)
             {
+                self.current.set_active_token(None);
                 index = next_index;
                 continue;
             }
             if let Some(next_index) = self.try_push_one_line_defer_block(tokens, index, line.end) {
+                self.current.set_active_token(None);
                 index = next_index;
                 continue;
             }
             if self.try_break_one_line_header(tokens, line.start, index, line.end) {
+                self.current.set_active_token(None);
                 continue;
             }
             self.try_break_else_if(tokens, index);
             if let Some(next_index) = self.try_remove_braces_from_statement(tokens, index, line.end)
             {
+                self.current.set_active_token(None);
                 index = next_index;
                 continue;
             }
             if let Some(next_index) =
                 self.try_push_one_line_initializer_block(tokens, index, line.start, line.end)
             {
+                self.current.set_active_token(None);
                 index = next_index;
                 continue;
             }
             if let Some(next_index) = self.try_push_kept_one_line_block(tokens, index, line.end) {
+                self.current.set_active_token(None);
                 index = next_index;
                 continue;
             }
+            self.current.set_active_token(None);
             if matches!(tokens[index], Token::Newline)
                 && self.try_break_braceless_header_body(tokens, index)
             {
@@ -399,7 +415,10 @@ impl<'a> FormatEngine<'a> {
                 self.observe_next_line_lead(tokens, index, line.start);
             }
             let context = self.token_push_context(tokens, index, line, &line_columns);
+            self.current
+                .set_active_token(is_code_token(&tokens[index]).then_some(index));
             self.push_token(&tokens[index], context);
+            self.current.set_active_token(None);
             if let Some((colon_index, has_action)) = multiline_case_colon
                 && colon_index == index
             {

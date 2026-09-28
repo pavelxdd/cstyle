@@ -1,15 +1,15 @@
 use crate::formatter::constructs::headers::is_header;
-use crate::formatter::constructs::labels::is_label_start;
-use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::functions::FunctionHead;
+use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
-use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, line_paren_imbalance, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    find_outside_quotes, line_ends_with_comment, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
 };
-use crate::source::lex::{is_identifier_continue, leading_identifier};
+use crate::source::lex::is_identifier_continue;
 
 impl FormatEngine<'_> {
     pub(crate) fn split_return_type_pointer_name_indent_spaces(&self, line: &str) -> Option<usize> {
@@ -217,39 +217,78 @@ impl FormatEngine<'_> {
         (spaces <= self.options.max_continuation_indent).then_some(spaces)
     }
 
-    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
-        let is_declaration = line.ends_with(';');
-        let should_attach = if is_declaration {
-            self.options.attach_return_type_decl
+    /// Whether a return type option applies to `head`: `definition_option`
+    /// for definitions, `declaration_option` for declarations.
+    fn return_type_option_applies(
+        head: &FunctionHead,
+        definition_option: bool,
+        declaration_option: bool,
+    ) -> bool {
+        if head.body.is_some() {
+            definition_option
         } else {
-            self.options.attach_return_type
+            declaration_option
+        }
+    }
+
+    /// Whether the return type of `head` can move to or from its own line:
+    /// the name must sit at the same nesting as the return type, which rules
+    /// out `void (*f(int))(void)` and `int (name)(...)`.
+    fn has_movable_return_type(&self, head: &FunctionHead) -> bool {
+        head.has_return_type()
+            && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
+    }
+
+    /// Joins a function name line to the return type on the previous output
+    /// line (`--attach-return-type`, `--attach-return-type-decl`).
+    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
         };
-        if !should_attach || !is_function_part_line(line) {
+        let Some(head) = self.tree.functions.named_at(span.first).cloned() else {
+            return false;
+        };
+        if !Self::return_type_option_applies(
+            &head,
+            self.options.attach_return_type,
+            self.options.attach_return_type_decl,
+        ) || !self.has_movable_return_type(&head)
+        {
             return false;
         }
-        let Some(previous) = self.output.pop() else {
+        let Some(previous_index) = self.output.len().checked_sub(1) else {
             return false;
         };
+        let previous_is_return_type =
+            self.output
+                .line_tokens(previous_index)
+                .is_some_and(|previous| {
+                    previous.first == head.start
+                        && self.tree.previous_code_token(head.name_start) == Some(previous.last)
+                });
+        let previous = &self.output[previous_index];
+        // AStyle attaches only return types it recognizes as types, and never
+        // a split `struct Type *`.
         let previous_trimmed = previous.trim();
-        if switch_cases::find_case_colon(previous_trimmed).is_some()
-            || (previous_trimmed.ends_with(':')
-                && is_label_start(
-                    previous_trimmed.trim_end_matches(':'),
-                    &self.options.access_labels,
-                ))
+        if !previous_is_return_type
+            || line_ends_with_comment(previous)
             || !is_return_type_line(previous_trimmed)
             || (previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
         {
-            self.output.push(previous);
             return false;
         }
-        let previous_prefix_len = previous.len() - previous.trim_start().len();
-        let previous_prefix = &previous[..previous_prefix_len];
+        let previous = self.output.pop().expect("previous line exists");
+        let previous_trimmed = previous.trim();
+        let previous_prefix = &previous[..previous.len() - previous.trim_start().len()];
         let separator = if previous_trimmed.ends_with(['*', '&', '^']) {
             ""
         } else {
             " "
         };
+        self.output.set_pending_tokens(Some(TokenSpan {
+            first: head.start,
+            last: span.last,
+        }));
         self.adjust_and_publish_line(format!(
             "{previous_prefix}{previous_trimmed}{separator}{}",
             line.trim_start()
@@ -257,77 +296,68 @@ impl FormatEngine<'_> {
         true
     }
 
+    /// Splits the return type of a function head onto its own line
+    /// (`--break-return-type`, `--break-return-type-decl`).
     pub(crate) fn try_publish_split_return_type(
         &mut self,
         line: &str,
         indent: usize,
         exact_indent_spaces: Option<usize>,
     ) -> bool {
-        let is_declaration = line.ends_with(';');
-        let should_split = if is_declaration {
-            self.options.break_return_type_decl && !self.options.attach_return_type_decl
-        } else {
-            self.options.break_return_type && !self.options.attach_return_type
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
         };
-        if !should_split || is_header(self.options, leading_identifier(line.trim_start())) {
+        let Some(head) = self.tree.functions.starting_at(span.first).cloned() else {
+            return false;
+        };
+        if !Self::return_type_option_applies(
+            &head,
+            self.options.break_return_type && !self.options.attach_return_type,
+            self.options.break_return_type_decl && !self.options.attach_return_type_decl,
+        ) || !self.has_movable_return_type(&head)
+            || !span.contains(head.name_start)
+        {
             return false;
         }
-        let Some((return_type, function_part)) = split_return_type_line(line) else {
+        let params_open = self.tree.groups.get(head.params).open;
+        let (Some(name_offset), Some(params_offset)) = (
+            self.tree
+                .token_offset_in_line(line, span.first, head.name_start),
+            self.tree
+                .token_offset_in_line(line, span.first, params_open),
+        ) else {
             return false;
         };
+        let return_type = line[..name_offset].trim_end().to_string();
+        let function_part = format!(
+            "{}{}",
+            line[name_offset..params_offset].trim_end(),
+            &line[params_offset..]
+        );
+        let return_type_last = self
+            .tree
+            .previous_code_token(head.name_start)
+            .unwrap_or(span.first);
+        let return_type_span = TokenSpan {
+            first: span.first,
+            last: return_type_last,
+        };
+        let function_span = TokenSpan {
+            first: head.name_start,
+            last: span.last,
+        };
+        self.output.set_pending_tokens(Some(return_type_span));
         if let Some(spaces) = exact_indent_spaces {
             self.push_formatted_line_exact(&return_type, indent, spaces);
+            self.output.set_pending_tokens(Some(function_span));
             self.push_formatted_line_exact(&function_part, indent, spaces);
         } else {
             self.push_formatted_line(&return_type, indent);
+            self.output.set_pending_tokens(Some(function_span));
             self.push_formatted_line(&function_part, indent);
         }
         true
     }
-}
-
-fn split_return_type_line(line: &str) -> Option<(String, String)> {
-    if line.starts_with("return ") || line.trim_start().starts_with('#') {
-        return None;
-    }
-    let open_paren = find_outside_quotes(line, "(")?;
-    if is_function_pointer_line(line, open_paren) {
-        return None;
-    }
-    let before = line[..open_paren].trim_end();
-    if before.is_empty() || language::is_header(before) || is_conversion_function_head(before) {
-        return None;
-    }
-    let name_start = function_name_start(before)?;
-    if before[..name_start].contains('=') {
-        return None;
-    }
-    let return_type = before[..name_start].trim_end();
-    let function_name = before[name_start..].trim_start();
-    if return_type.is_empty() || function_name.is_empty() || !return_type_has_code(return_type) {
-        return None;
-    }
-    if return_type.contains('.') || return_type.contains("->") || return_type.contains('}') {
-        return None;
-    }
-    let function_part = format!("{}{}", function_name, &line[open_paren..]);
-    Some((return_type.to_string(), function_part))
-}
-
-fn is_function_part_line(line: &str) -> bool {
-    if line.starts_with("return ") || line.trim_start().starts_with('#') {
-        return false;
-    }
-    let Some(open_paren) = find_outside_quotes(line, "(") else {
-        return false;
-    };
-    if is_function_pointer_line(line, open_paren) {
-        return false;
-    }
-    let before = line[..open_paren].trim_end();
-    !before.is_empty()
-        && !language::is_header(before)
-        && function_name_start(before).is_some_and(|start| start == 0)
 }
 
 pub(crate) fn is_return_type_line(line: &str) -> bool {
@@ -376,34 +406,6 @@ pub(crate) fn is_parameter_return_type_prefix(line: &str) -> bool {
                     || is_identifier_continue(ch)
                     || matches!(ch, ':' | '<' | '>' | '*' | '&')
             }))
-}
-
-fn return_type_has_code(mut text: &str) -> bool {
-    loop {
-        text = text.trim_start();
-        if text.is_empty() || text.starts_with("//") {
-            return false;
-        }
-        let Some(comment) = text.strip_prefix("/*") else {
-            return true;
-        };
-        let Some(end) = comment.find("*/") else {
-            return false;
-        };
-        text = &comment[end + 2..];
-    }
-}
-
-fn is_conversion_function_head(before_open_paren: &str) -> bool {
-    let Some(operator) = before_open_paren.rfind(language::OPERATOR) else {
-        return false;
-    };
-    let after = before_open_paren[operator + language::OPERATOR.len()..].trim_start();
-    first_operator_word(after).is_some_and(|word| !is_named_operator_word(word))
-}
-
-fn is_function_pointer_line(line: &str, open_paren: usize) -> bool {
-    line[open_paren..].starts_with("(*") || line[..open_paren].trim_end().ends_with("(*")
 }
 
 fn is_pointer_prefixed_function_part(line: &str) -> bool {

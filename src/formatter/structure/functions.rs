@@ -34,6 +34,8 @@ impl FunctionHead {
 pub(crate) struct Functions {
     heads: Vec<FunctionHead>,
     by_params: HashMap<GroupId, usize>,
+    by_start: HashMap<usize, usize>,
+    by_name_start: HashMap<usize, usize>,
 }
 
 impl Functions {
@@ -41,11 +43,26 @@ impl Functions {
         let mut functions = Self::default();
         for params in groups.ids() {
             if let Some(head) = function_head(tokens, groups, blocks, params) {
-                functions.by_params.insert(params, functions.heads.len());
+                let index = functions.heads.len();
+                functions.by_params.insert(params, index);
+                functions.by_start.insert(head.start, index);
+                functions.by_name_start.insert(head.name_start, index);
                 functions.heads.push(head);
             }
         }
         functions
+    }
+
+    /// The function head whose specifiers and return type start at `token`.
+    pub(crate) fn starting_at(&self, token: usize) -> Option<&FunctionHead> {
+        self.by_start.get(&token).map(|&index| &self.heads[index])
+    }
+
+    /// The function head whose name starts at `token`.
+    pub(crate) fn named_at(&self, token: usize) -> Option<&FunctionHead> {
+        self.by_name_start
+            .get(&token)
+            .map(|&index| &self.heads[index])
     }
 
     pub(crate) fn heads(&self) -> &[FunctionHead] {
@@ -137,21 +154,25 @@ fn function_head(
     }
     let before_params = previous_head_token(tokens, group.open)?;
     // `int (lua_gettop) (lua_State *L)` keeps the name in parentheses.
-    let (name, parenthesized_name) = match groups.closed_at(before_params) {
-        Some(id) => (
-            sole_word_in_group(tokens, groups, id)?,
-            Some(groups.get(id).open),
-        ),
-        None => (before_params, None),
-    };
+    let (name, parenthesized_name) =
+        if let Some(operator) = operator_function_name(tokens, groups, before_params) {
+            (operator, None)
+        } else if let Some(id) = groups.closed_at(before_params) {
+            (
+                sole_word_in_group(tokens, groups, id)?,
+                Some(groups.get(id).open),
+            )
+        } else {
+            (before_params, None)
+        };
     let Token::Word(name_word) = &tokens[name] else {
         return None;
     };
-    if is_non_type_keyword(name_word)
-        || is_builtin_type_word(name_word)
-        || is_header(name_word)
-        || is_attribute_word(name_word)
-        || name_word == "operator"
+    if name_word != "operator"
+        && (is_non_type_keyword(name_word)
+            || is_builtin_type_word(name_word)
+            || is_header(name_word)
+            || is_attribute_word(name_word))
     {
         return None;
     }
@@ -182,6 +203,27 @@ fn function_head(
         params,
         body,
     })
+}
+
+/// The `operator` word of an overloaded operator name that ends at `last`:
+/// `operator+`, `operator==`, `operator()`, `operator[]`, `operator new[]`.
+/// Conversion functions such as `operator bool` are not matched; they have
+/// no return type.
+fn operator_function_name(tokens: &[Token], groups: &Groups, last: usize) -> Option<usize> {
+    let mut index = last;
+    for _ in 0..3 {
+        let previous = previous_head_token(tokens, index)?;
+        if matches!(&tokens[previous], Token::Word(word) if word == "operator") {
+            let symbol = next_code_token(tokens, previous + 1)?;
+            let named = matches!(&tokens[symbol], Token::Word(word) if matches!(word.as_str(), "new" | "delete"));
+            return (named || !is_word(tokens, symbol)).then_some(previous);
+        }
+        index = match groups.closed_at(previous) {
+            Some(id) => groups.get(id).open,
+            None => previous,
+        };
+    }
+    None
 }
 
 /// First token of `Outer::Inner::name` (or `~name`) ending at `name`.
@@ -225,7 +267,15 @@ fn return_type_start(tokens: &[Token], groups: &Groups, name_start: usize) -> Op
                 start = previous;
             }
             Token::Operator(operator) if matches!(operator.as_str(), ">" | ">>") => {
-                start = template_arguments_start(tokens, previous)?;
+                let open = template_arguments_start(tokens, previous)?;
+                // `template<class T>` introduces the head; it is not part of
+                // the return type.
+                if previous_head_token(tokens, open).is_some_and(
+                    |word| matches!(&tokens[word], Token::Word(word) if word == "template"),
+                ) {
+                    break;
+                }
+                start = open;
             }
             Token::Symbol(')' | ']') => {
                 // `__attribute__((...))`, `[[...]]`, `EXPORT(int)`.
@@ -450,7 +500,7 @@ mod tests {
     fn handles_cpp_heads() {
         assert_eq!(
             heads(
-                "namespace n {\nclass C {\npublic:\n    C(int x);\n    ~C();\n    virtual int get() const = 0;\n    int (*handler)(int);\n    run(int);\n};\nstd::vector<int> C::values() const {\n}\n}\n"
+                "namespace n {\nclass C {\npublic:\n    C(int x);\n    ~C();\n    virtual int get() const = 0;\n    int (*handler)(int);\n    run(int);\n};\nstd::vector<int> C::values() const {\n}\n}\nT operator+(T a, T b) {\n}\nbool Cls::operator==(int a);\nvoid *Type::operator new(unsigned long size) {\n}\n"
             ),
             [
                 head("", "C", false),
@@ -458,6 +508,9 @@ mod tests {
                 head("virtual int", "get", false),
                 head("", "run", false),
                 head("std :: vector < int >", "C :: values", true),
+                head("T", "operator", true),
+                head("bool", "Cls :: operator", false),
+                head("void *", "Type :: operator", true),
             ]
         );
     }

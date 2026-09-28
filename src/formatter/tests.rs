@@ -340,3 +340,40 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
     assert!(!formatter.preprocessor.split_else.pending_body);
     assert!(!formatter.preprocessor.split_else.after_line);
 }
+
+#[test]
+fn output_lines_record_their_source_tokens() {
+    let source = fixture(&[
+        "static int",
+        "f(int a, char *b) {",
+        "    if (a) { return g(a, b); }",
+        "    /* note */ return 0;",
+        "}",
+    ]);
+    let tokens = tokenize(&source);
+    let options = FormatOptions::default();
+    let formatter = FormatEngine::new(&options).format_into(&tokens);
+    let code = |text: &str| -> String {
+        let tokens = tokenize(text);
+        tokens
+            .iter()
+            .filter(|token| crate::formatter::structure::blocks::is_code_token(token))
+            .map(crate::formatter::lexer::token_text)
+            .collect()
+    };
+
+    for index in 0..formatter.output.len() {
+        let line = &formatter.output[index];
+        let span = formatter.output.line_tokens(index);
+        if code(line).is_empty() {
+            continue;
+        }
+        let span = span.unwrap_or_else(|| panic!("no tokens for {line:?}"));
+        let spanned: String = tokens[span.first..=span.last]
+            .iter()
+            .filter(|token| crate::formatter::structure::blocks::is_code_token(token))
+            .map(crate::formatter::lexer::token_text)
+            .collect();
+        assert_eq!(spanned, code(line), "line {index}");
+    }
+}

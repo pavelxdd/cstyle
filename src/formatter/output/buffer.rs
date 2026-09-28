@@ -1,4 +1,5 @@
 use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::structure::TokenSpan;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_brace_imbalance, line_paren_imbalance};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
@@ -145,6 +146,10 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
 pub(crate) struct OutputBuffer {
     lines: Vec<String>,
     meta: Vec<OnceCell<LineBraceMeta>>,
+    /// Source tokens of each line, when the line came from one current line.
+    tokens: Vec<Option<TokenSpan>>,
+    /// Tokens of the current line just taken, for the next pushed line.
+    pending_tokens: Option<TokenSpan>,
     may_have_label_open: bool,
     may_have_else: bool,
     may_have_hash: bool,
@@ -180,6 +185,7 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::new());
+        self.tokens.push(self.pending_tokens.take());
     }
 
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
@@ -193,10 +199,12 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::from(meta));
+        self.tokens.push(self.pending_tokens.take());
     }
 
     pub(crate) fn pop(&mut self) -> Option<String> {
         self.meta.pop();
+        self.tokens.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -232,6 +240,7 @@ impl OutputBuffer {
 
     pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
+        self.tokens.remove(index);
         self.last_non_empty_dirty.set(true);
         self.lines.remove(index)
     }
@@ -242,6 +251,23 @@ impl OutputBuffer {
         self.meta[index] = OnceCell::new();
         self.lines[index] = line;
         self.last_non_empty_dirty.set(true);
+    }
+
+    /// Makes `tokens` the source tokens of the next pushed line.
+    pub(crate) fn set_pending_tokens(&mut self, tokens: Option<TokenSpan>) {
+        self.pending_tokens = tokens;
+    }
+
+    /// Source tokens of the line being finished, before it is pushed.
+    pub(crate) fn pending_tokens(&self) -> Option<TokenSpan> {
+        self.pending_tokens
+    }
+
+    /// Source tokens of line `index`, when known. `first` is the first code
+    /// token on the line; `last` can run past the line when the line was
+    /// split after it was formed.
+    pub(crate) fn line_tokens(&self, index: usize) -> Option<TokenSpan> {
+        self.tokens.get(index).copied().flatten()
     }
 
     pub(crate) fn as_slice(&self) -> &[String] {

@@ -1,3 +1,4 @@
+use crate::formatter::structure::TokenSpan;
 use crate::formatter::text::columns::visual_width_from;
 use std::cell::Cell;
 use std::ops::Deref;
@@ -12,6 +13,10 @@ pub(crate) struct CurrentLine {
     visual_width_from: Cell<Option<(usize, usize, usize)>>,
     last_open_brace: Cell<Option<(usize, Option<usize>)>>,
     trailing_comment: Cell<Option<TrailingCommentScan>>,
+    /// Code tokens whose text is on the line so far.
+    tokens: Option<TokenSpan>,
+    /// Code token being pushed; text added meanwhile belongs to it.
+    active_token: Option<usize>,
 }
 
 impl CurrentLine {
@@ -21,10 +26,16 @@ impl CurrentLine {
 
     pub(crate) fn push(&mut self, ch: char) {
         self.text.push(ch);
+        if !ch.is_whitespace() {
+            self.record_active_token();
+        }
     }
 
     pub(crate) fn push_str(&mut self, text: &str) {
         self.text.push_str(text);
+        if !text.trim().is_empty() {
+            self.record_active_token();
+        }
     }
 
     pub(crate) fn pop(&mut self) -> Option<char> {
@@ -46,9 +57,13 @@ impl CurrentLine {
     pub(crate) fn insert(&mut self, index: usize, ch: char) {
         self.text.insert(index, ch);
         self.invalidate();
+        if !ch.is_whitespace() {
+            self.record_active_token();
+        }
     }
 
     pub(crate) fn clear(&mut self) {
+        self.tokens = None;
         if self.text.is_empty() {
             return;
         }
@@ -59,11 +74,46 @@ impl CurrentLine {
     pub(crate) fn replace(&mut self, text: String) {
         self.text = text;
         self.invalidate();
+        if self.text.trim().is_empty() {
+            self.tokens = None;
+        } else {
+            self.record_active_token();
+        }
     }
 
     pub(crate) fn take(&mut self) -> String {
         self.invalidate();
         std::mem::take(&mut self.text)
+    }
+
+    /// Attributes text added from now on to the code token at `index`;
+    /// `None` stops attributing.
+    pub(crate) fn set_active_token(&mut self, index: Option<usize>) {
+        self.active_token = index;
+    }
+
+    fn record_active_token(&mut self) {
+        if let Some(index) = self.active_token {
+            self.record_token(index);
+        }
+    }
+
+    /// Records that the code token at `index` is part of the line.
+    fn record_token(&mut self, index: usize) {
+        self.tokens = Some(match self.tokens {
+            Some(span) => TokenSpan {
+                first: span.first.min(index),
+                last: span.last.max(index),
+            },
+            None => TokenSpan {
+                first: index,
+                last: index,
+            },
+        });
+    }
+
+    pub(crate) fn take_tokens(&mut self) -> Option<TokenSpan> {
+        self.tokens.take()
     }
 
     pub(crate) fn ensure_space(&mut self) {
