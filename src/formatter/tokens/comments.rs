@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
+use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
@@ -554,9 +555,12 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
         let frame = self.layout.frame_stack.active_brace()?;
-        let body_column = if frame.brace_type == BraceType::Namespace
-            && (!self.options.indent_namespaces
-                || self.options.brace_style == BraceStyle::Whitesmith)
+        let unindented_extern_c = frame.brace_type == BraceType::Extern
+            && self.extern_c_guard == ExternCGuard::InsideBlock;
+        let body_column = if unindented_extern_c
+            || frame.brace_type == BraceType::Namespace
+                && (!self.options.indent_namespaces
+                    || self.options.brace_style == BraceStyle::Whitesmith)
         {
             frame.sibling_indent_column
         } else if frame.semantic_kind == BraceSemanticKind::Aggregate || frame.case_block {

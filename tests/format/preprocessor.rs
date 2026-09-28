@@ -378,6 +378,13 @@ fn conditional_body_after_multiline_block_comment_keeps_its_indent() {
 }
 
 #[test]
+fn comment_first_in_guarded_extern_c_block_stays_unindented() {
+    let source = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n/*\n * c\n */\ntypedef enum\n{\n    A,\n} T;\n#ifdef __cplusplus\n}\n#endif\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn define_body_unmatched_close_brace_stays_at_body_indent() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
