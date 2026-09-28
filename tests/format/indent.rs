@@ -6867,3 +6867,22 @@ fn statement_after_multiline_else_body_keeps_its_sibling_indent() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_block_after_multiline_call_takes_the_call_statement_column() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    CURL_TRC_M(data, \"ev update call(fd=%\" FMT_SOCKET_T \", ev=%s%s)\",",
+        "               s, (comboaction & CURL_POLL_IN) ? \"IN\" : \"\",",
+        "               (comboaction & CURL_POLL_OUT) ? \"OUT\" : \"\");",
+        "    {",
+        "        struct Curl_mapi_guard guard;",
+        "        g(&guard);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

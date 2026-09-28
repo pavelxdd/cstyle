@@ -6,6 +6,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
@@ -324,12 +325,10 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         } else if let Some(spaces) = self.braceless_body_indent() {
             layout.exact_indent_spaces = Some(spaces);
-        } else if let Some(spaces) = self.statement_sibling_indent()
-            // The sibling confirms the structural level that a heuristic
-            // overrode; a sibling off that level is itself misplaced.
-            && spaces == layout.indent * self.options.indent_width
-        {
-            layout.exact_indent_spaces = Some(spaces);
+        } else if self.sibling_confirms_indent(layout.indent * self.options.indent_width) {
+            // A heuristic moved the line off a structural level that its
+            // sibling confirms; a sibling off that level is itself misplaced.
+            layout.exact_indent_spaces = Some(layout.indent * self.options.indent_width);
         }
         layout
     }
@@ -415,27 +414,42 @@ impl FormatEngine<'_> {
         )
     }
 
-    /// A line starting a statement takes the indent of the line holding the
-    /// previous statement of its block: comments, continuation lines, and
-    /// bodies in between do not count.
-    fn statement_sibling_indent(&self) -> Option<usize> {
-        let first = self.output.pending_tokens()?.first;
-        // A block's brace takes its column from the brace style.
-        if matches!(self.tree.tokens[first], Token::Symbol('{')) {
-            return None;
+    /// Whether the previous statement of the block confirms `structural`,
+    /// the structural indent of the line starting a statement: comments,
+    /// continuation lines, and bodies in between do not count. A block's
+    /// brace stands at the statement column or one level in, as its style
+    /// puts it.
+    fn sibling_confirms_indent(&self, structural: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        let Some(sibling) = self.tree.statements.previous_sibling(first) else {
+            return false;
+        };
+        let Some(line) = self.output.line_with_token(sibling) else {
+            return false;
+        };
+        if self.output.line_tokens(line).map(|span| span.first) != Some(sibling) {
+            return false;
         }
-        let sibling = self.tree.statements.previous_sibling(first)?;
-        if matches!(self.tree.tokens[sibling], Token::Symbol('{')) {
-            return None;
+        let width = self.options.indent_width;
+        let sibling_column = self.output.lead_width(line, self.options.tab_width)
+            + self.layout.line_adjuster.total_case_unindent_depth() * width;
+        let is_brace = |index: usize| matches!(tokens[index], Token::Symbol('{'));
+        // Where the style indents a block's brace, the structural level
+        // does not tell the brace column, and a brace sibling stands one
+        // level past the statement column.
+        let indented_braces = self.should_indent_brace_line(BraceType::Command);
+        if is_brace(first) && indented_braces {
+            return false;
         }
-        let line = self.output.line_with_token(sibling)?;
-        if self.output.line_tokens(line)?.first != sibling {
-            return None;
-        }
-        Some(
-            self.output.lead_width(line, self.options.tab_width)
-                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
-        )
+        let statement_column = if is_brace(sibling) && indented_braces {
+            sibling_column.checked_sub(width)
+        } else {
+            Some(sibling_column)
+        };
+        statement_column == Some(structural)
     }
 
     pub(crate) fn apply_final_recovery_floor_and_replay_layout(
