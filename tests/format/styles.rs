@@ -810,3 +810,22 @@ fn allman_attach_horstmann_and_ratliff_leave_aggregate_closing_braces_unpadded()
         );
     }
 }
+
+#[test]
+fn indented_brace_styles_keep_sibling_indent_after_closing_declaration() {
+    for (style, source) in [
+        (
+            "--style=whitesmith",
+            "typedef struct a\n    {\n    int d;\n    } a;\n\nint x;\nvoid f(void)\n    {\n    struct b\n        {\n        int q;\n        } b;\n    int y;\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "typedef struct a {\n    int d;\n    } a;\n\nint x;\nvoid f(void) {\n    struct b {\n        int q;\n        } b;\n    int y;\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+
+        assert_eq!(format_exact(source, &options), source, "{style}");
+    }
+}

@@ -689,8 +689,14 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
             if starts_post_closing_declaration(previous_code) {
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width));
+                let closed_frame = self.layout.frame_stack.last_closed_brace().filter(|frame| {
+                    frame.close_output_line.is_some()
+                        && frame.close_output_line == self.output.last_non_empty_index()
+                });
+                let closing_indent = leading_visual_width(previous, self.options.tab_width);
+                layout.exact_indent_spaces = Some(closed_frame.map_or(closing_indent, |frame| {
+                    frame.header_indent_column.min(closing_indent)
+                }));
             }
         }
         if line.trim() == "::"
