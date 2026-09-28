@@ -10,6 +10,7 @@ pub(crate) mod line_adjust;
 pub(crate) mod member_spacing;
 mod model;
 mod replay;
+mod retab;
 mod routing;
 pub(crate) mod source_indent;
 mod whitespace;

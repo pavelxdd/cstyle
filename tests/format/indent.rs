@@ -7152,3 +7152,33 @@ fn tab_indented_call_arguments_over_the_maximum_fall_back_by_visual_columns() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn tab_indent_covers_statement_indent_and_aligns_continuations_in_spaces() {
+    let options = options_from_args(&["--style=linux", "-t8", "-k1"]);
+    let source = fixture!(
+        "/* top",
+        "        body kept */",
+        "void f(void)",
+        "{",
+        "\tif(result != CURLE_OK)",
+        "\t\tfprintf(stderr, \"failed: %s\\n\",",
+        "\t\t        curl_easy_strerror(result));",
+        "\telse",
+        "\t\tx(); /* trailing",
+        "                        rows */",
+        "\tswitch(s) {",
+        "\tcase 1:",
+        "\t\tCURL_TRC_CF(data, cf, \"[%d] local window update by %d\",",
+        "\t\t            stream->id, dwsize - wsize);",
+        "\t\tbreak;",
+        "\t}",
+        "}",
+        "#define A 1 /* fail */",
+        "#define B 2 /* tell libcurl seeking cannot be done, so",
+        "                libcurl might try */",
+        "#define C 3",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

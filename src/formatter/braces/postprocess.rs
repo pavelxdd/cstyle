@@ -105,11 +105,18 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| is_namespace_or_module_block_header(line))
         {
-            let prefix = self
-                .options
-                .continuation_indent_prefix(structural_level, base_indent_width);
+            // astyle measures the written line, whose indent may be tabs.
+            let output_options = self.output_options();
+            let prefix =
+                output_options.continuation_indent_prefix(structural_level, base_indent_width);
             let next = format!("{prefix}{}", line.trim_start());
-            let fill = horstmann_run_in_fill(brace, &next, self.options);
+            let brace_width = leading_visual_width(brace, self.options.tab_width);
+            let brace_prefix = output_options.continuation_indent_prefix(
+                brace_width / self.options.indent_width.max(1),
+                brace_width,
+            );
+            let brace = format!("{brace_prefix}{{");
+            let fill = horstmann_run_in_fill(&brace, &next, &output_options);
             let run_in_width = format!("{brace}{fill}").len();
             let mut has_word_logical = false;
             let mut has_symbol_logical = false;

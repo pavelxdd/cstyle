@@ -1253,7 +1253,7 @@ fn objc_aligned_selector_continuation_uses_configured_tab_indent() {
     .expect("valid options");
     let source = "-(id)buildWithAlpha:(id)alpha\nbeta:(id)beta\n{return alpha;}\n";
     let expected =
-        "-(id)buildWithAlpha:(id)alpha\n\t           beta:(id)beta\n{\n\treturn alpha;\n}\n";
+        "-(id)buildWithAlpha:(id)alpha\n               beta:(id)beta\n{\n\treturn alpha;\n}\n";
 
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);

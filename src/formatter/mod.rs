@@ -8,7 +8,7 @@
 //! [`output`]. Brace styles that reshape whole lines are applied last by
 //! [`braces::postprocess`].
 
-use crate::config::FormatOptions;
+use crate::config::{FormatOptions, IndentStyle};
 use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
@@ -39,7 +39,15 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
         .then(|| tabs::source_to_spaces(&input, options.tab_width));
     let source = converted_source.as_deref().unwrap_or(&input);
     let tokens = tokenize(source);
-    let mut engine = FormatEngine::new(options);
+    // Tab-indented styles are laid out in spaces and get their tabs once the
+    // output is finished.
+    let spaced_options = (options.indent_style != IndentStyle::Spaces).then(|| {
+        let mut spaced = options.clone();
+        spaced.indent_style = IndentStyle::Spaces;
+        spaced
+    });
+    let mut engine = FormatEngine::new(spaced_options.as_ref().unwrap_or(options));
+    engine.output_indent_style = options.indent_style;
     engine
         .layout
         .line_adjuster

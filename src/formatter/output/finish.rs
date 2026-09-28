@@ -20,7 +20,11 @@ impl FormatEngine<'_> {
         let comments = self.current.take_comments();
         self.output.set_pending_comments(comments);
         let line = self.take_current();
+        let published = self.output.len();
         self.publish_unadjusted_line(line);
+        if self.output.len() > published {
+            self.output.mark_last_verbatim();
+        }
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }
@@ -372,6 +376,7 @@ impl FormatEngine<'_> {
         self.flush_backslash_body_parts();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();
+        self.retab_output();
         if self.output.is_empty() {
             String::new()
         } else {

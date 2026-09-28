@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, FormatOptions};
+use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::braces::rewrite::{
@@ -96,6 +96,9 @@ pub(crate) struct LayoutState {
 
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
+    /// Indent style of the finished output; the engine itself may lay out a
+    /// tab-indented style in spaces.
+    pub(crate) output_indent_style: IndentStyle,
     pub(crate) output: buffer::OutputBuffer,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
@@ -135,9 +138,21 @@ pub(crate) struct FormatEngine<'a> {
 }
 
 impl<'a> FormatEngine<'a> {
+    /// The options with the indent style of the finished output.
+    pub(crate) fn output_options(&self) -> std::borrow::Cow<'a, FormatOptions> {
+        if self.output_indent_style == self.options.indent_style {
+            std::borrow::Cow::Borrowed(self.options)
+        } else {
+            let mut options = self.options.clone();
+            options.indent_style = self.output_indent_style;
+            std::borrow::Cow::Owned(options)
+        }
+    }
+
     pub(crate) fn new(options: &'a FormatOptions) -> Self {
         Self {
             options,
+            output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -925,7 +940,11 @@ impl<'a> FormatEngine<'a> {
         if !self.current.trim().is_empty() {
             self.finish_line();
         }
+        let published = self.output.len();
         self.adjust_and_publish_line(line.to_string());
+        if self.output.len() > published {
+            self.output.mark_last_verbatim();
+        }
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }

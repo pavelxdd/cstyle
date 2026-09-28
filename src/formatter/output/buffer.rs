@@ -152,6 +152,9 @@ pub(crate) struct OutputBuffer {
     pending_tokens: Option<TokenSpan>,
     /// Block comments of each line.
     comments: Vec<LineComments>,
+    /// Lines kept as the source wrote them: disabled regions, raw lines,
+    /// and multi-line literal rows. Their whitespace is content.
+    verbatim: Vec<bool>,
     /// Comments of the current line just taken, for the next pushed line.
     pending_comments: Option<LineComments>,
     /// Block comment token being pushed; lines pushed without a current line
@@ -215,6 +218,18 @@ impl OutputBuffer {
         self.lines.push(line);
         self.meta.push(OnceCell::from(meta));
         self.push_pending_sources(blank);
+        self.mark_last_verbatim();
+    }
+
+    /// Keeps the last pushed line as written.
+    pub(crate) fn mark_last_verbatim(&mut self) {
+        if let Some(last) = self.verbatim.last_mut() {
+            *last = true;
+        }
+    }
+
+    pub(crate) fn is_verbatim(&self, index: usize) -> bool {
+        self.verbatim.get(index).copied().unwrap_or(false)
     }
 
     /// Gives the pending sources to the line just pushed; a blank line, such
@@ -226,6 +241,7 @@ impl OutputBuffer {
             self.scope_start = start;
             self.pending_scope_start = None;
         }
+        self.verbatim.push(false);
         if blank {
             self.tokens.push(None);
             self.comments.push(LineComments::default());
@@ -243,6 +259,7 @@ impl OutputBuffer {
         self.meta.pop();
         self.tokens.pop();
         self.comments.pop();
+        self.verbatim.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -280,6 +297,7 @@ impl OutputBuffer {
         self.meta.remove(index);
         self.tokens.remove(index);
         self.comments.remove(index);
+        self.verbatim.remove(index);
         self.last_non_empty_dirty.set(true);
         self.lines.remove(index)
     }
