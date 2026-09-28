@@ -30,7 +30,19 @@ impl FormatEngine<'_> {
         self.output.set_pending_tokens(tokens);
         let comments = self.current.take_comments();
         self.output.set_pending_comments(comments);
+        let published = self.output.len();
+        let first = tokens.map(|span| span.first);
         self.publish_finished_line();
+        if self.output.len() > published
+            && first.is_some()
+            && self
+                .output
+                .line_tokens(self.output.len() - 1)
+                .map(|span| span.first)
+                == first
+        {
+            self.align_comments_before_statement(self.output.len() - 1);
+        }
         // A finished blank line publishes nothing; its sources must not
         // reach the next line.
         self.output.clear_pending_sources();

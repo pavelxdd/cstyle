@@ -4212,3 +4212,56 @@ fn comment_after_nested_aggregate_close_keeps_member_indent() {
     );
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn comment_after_a_directive_takes_the_indent_of_the_next_statement() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "int main(void)",
+        "    {",
+        "    if(curl)",
+        "        {",
+        "        a();",
+        "#ifdef X",
+        "            {",
+        "            b();",
+        "            }",
+        "#else",
+        "        /* x */",
+        "        c();",
+        "#endif",
+        "        d();",
+        "        }",
+        "    return 0;",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comment_before_a_braceless_body_indents_with_its_tabs() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=linux".to_owned(), "-t8".to_owned()],
+    )
+    .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "\twhile (len) {",
+        "\t\tif (!tail) {",
+        "\t\t\tif (a)",
+        "\t\t\t\t/* no tail */",
+        "\t\t\t\treturn 1;",
+        "\t\t\tbreak;",
+        "\t\t}",
+        "\t}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

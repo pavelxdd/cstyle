@@ -44,6 +44,76 @@ impl FormatEngine<'_> {
         layout
     }
 
+    /// Standalone comments right before the statement on output line `line`
+    /// take its indent, as astyle indents a comment to the code it precedes;
+    /// a comment in column one stays there unless the style indents those.
+    pub(crate) fn align_comments_before_statement(&mut self, line: usize) {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.output.line_tokens(line).map(|span| span.first) else {
+            return;
+        };
+        let statements = &self.tree.statements;
+        if statements.previous_sibling(first).is_none()
+            && statements.block_opening(first).is_none()
+            && statements.braceless_header(first).is_none()
+        {
+            return;
+        }
+        match &tokens[first] {
+            Token::Symbol('{' | '}') => return,
+            Token::Word(word) if matches!(word.as_str(), "else" | "case" | "default") => return,
+            _ => {}
+        }
+        if next_code_token(tokens, first + 1)
+            .is_some_and(|next| matches!(tokens[next], Token::Symbol(':')))
+        {
+            return;
+        }
+        // The code line may close a comment itself.
+        if self.output.comment_start_index(line) != line {
+            return;
+        }
+        let code = &self.output.as_slice()[line];
+        let prefix = code[..code.len() - code.trim_start().len()].to_string();
+        let tab_width = self.options.tab_width.max(1);
+        let mut end = line;
+        while end > 0 {
+            let index = end - 1;
+            let text = self.output.trimmed(index);
+            if text.is_empty() {
+                end = index;
+                continue;
+            }
+            if self.output.line_tokens(index).is_some() {
+                break;
+            }
+            let start = self.output.comment_start_index(index);
+            let opener = self.output.trimmed(start);
+            if self.output.line_tokens(start).is_some()
+                || !(opener.starts_with("//") || opener.starts_with("/*"))
+                || opener.contains("*INDENT-")
+                || self.comment_runs_into_brace(start)
+            {
+                break;
+            }
+            let lead = self.output.lead_width(start, tab_width);
+            let opener_line = &self.output.as_slice()[start];
+            let opener_prefix = &opener_line[..opener_line.len() - opener_line.trim_start().len()];
+            if opener_prefix != prefix && (lead != 0 || self.options.indent_col1_comments) {
+                for offset in start..=index {
+                    let relative = self
+                        .output
+                        .lead_width(offset, tab_width)
+                        .saturating_sub(lead);
+                    let text = self.output.trimmed(offset).to_string();
+                    let line = &mut self.output.range_mut(offset..offset + 1)[0];
+                    *line = format!("{prefix}{}{text}", " ".repeat(relative));
+                }
+            }
+            end = start;
+        }
+    }
+
     /// Whether the code before the line being laid out ends with the
     /// condition of a control statement, as the tree reads it; `None` when
     /// the line recorded no tokens.

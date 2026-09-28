@@ -90,6 +90,13 @@ impl FormatEngine<'_> {
         self.comments.run_in_comment_brace_lines.push(brace_line);
     }
 
+    /// Whether the comment starting on output line `line` is to join the
+    /// brace line before it.
+    pub(crate) fn comment_runs_into_brace(&self, line: usize) -> bool {
+        line.checked_sub(1)
+            .is_some_and(|brace| self.comments.run_in_comment_brace_lines.contains(&brace))
+    }
+
     pub(crate) fn merge_run_in_comment_braces(&mut self) {
         let mut indices = std::mem::take(&mut self.comments.run_in_comment_brace_lines);
         indices.sort_unstable();
