@@ -136,6 +136,10 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         return BlockKind::Block;
     };
     let head = statement_head(tokens, groups, group.open);
+    // Inside parentheses or brackets a brace belongs to an expression.
+    if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
+        return classify_in_expression(tokens, groups, &head, previous);
+    }
     if let Some(close) = function_suffix_start(tokens, groups, &head)
         && let Some(paren) = groups.closed_at(close)
     {
@@ -177,6 +181,33 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         // A statement-like macro such as `SEH_TRY {`.
         Token::Word(_) if !BlockKind::is_declaration_scope(parent_block) => BlockKind::Control,
         _ => BlockKind::Unknown,
+    }
+}
+
+/// A brace inside an expression: a lambda body after a capture list, a
+/// compound literal after a cast, or an initializer.
+fn classify_in_expression(
+    tokens: &[Token],
+    groups: &Groups,
+    head: &[usize],
+    previous: usize,
+) -> BlockKind {
+    let has_capture = head.windows(2).any(|pair| {
+        matches!(tokens[pair[0]], Token::Symbol('['))
+            && groups
+                .opened_at(pair[0])
+                .and_then(|id| groups.get(id).close)
+                .is_some()
+            && matches!(tokens[pair[1]], Token::Symbol('('))
+    }) || head
+        .last()
+        .is_some_and(|&last| matches!(tokens[last], Token::Symbol('[')));
+    if has_capture {
+        return BlockKind::Lambda;
+    }
+    match &tokens[previous] {
+        Token::Symbol(')') => BlockKind::CompoundLiteral,
+        _ => BlockKind::Initializer,
     }
 }
 
@@ -346,6 +377,16 @@ mod tests {
     }
 
     use BlockKind::*;
+
+    #[test]
+    fn classifies_braces_inside_call_arguments_as_expressions() {
+        assert_eq!(
+            kinds(
+                "void f(void)\n{\n    call(child, &(const T) {\n        x, y\n    }, [](int v) {\n        return v;\n    }, (int[]){1});\n}\n"
+            ),
+            [FunctionBody, CompoundLiteral, Lambda, CompoundLiteral]
+        );
+    }
 
     #[test]
     fn classifies_function_bodies_and_control_blocks() {

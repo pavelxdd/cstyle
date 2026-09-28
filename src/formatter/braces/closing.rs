@@ -56,6 +56,7 @@ impl FormatEngine<'_> {
         let mut closed_blocks = 0usize;
         for opening in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -354,6 +355,7 @@ impl FormatEngine<'_> {
                 return None;
             }
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
@@ -382,6 +384,7 @@ impl FormatEngine<'_> {
             BraceStyle::Whitesmith | BraceStyle::Vtk
         ) && self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(4)
@@ -777,6 +780,7 @@ impl FormatEngine<'_> {
             });
         for opening in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -844,6 +848,7 @@ impl FormatEngine<'_> {
         }
         for opening in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -913,6 +918,7 @@ impl FormatEngine<'_> {
             && !previous_code.ends_with("};")
             && let Some(braceless_else) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -936,6 +942,7 @@ impl FormatEngine<'_> {
         let mut before_branch = None;
         for candidate in self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -988,6 +995,7 @@ impl FormatEngine<'_> {
         let mut depth = 1usize;
         let matching_open = self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -1015,6 +1023,7 @@ impl FormatEngine<'_> {
             && matching_code.ends_with('{')
             && let Some(spaces) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != matching_open.as_str())
@@ -1060,18 +1069,20 @@ impl FormatEngine<'_> {
         };
         let case_unindent_spaces =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-        let recent_adjacent_string_call = self.output.iter().rev().take(8).any(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            code.ends_with(");") && starts_string_literal_token(code.trim_start())
-        }) && self.output.iter().rev().take(8).any(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            unmatched_open_paren_column(code).is_some()
-                && !starts_string_literal_token(code.trim_start())
-                && !code.ends_with(';')
-        });
+        let recent_adjacent_string_call =
+            self.output.scoped().iter().rev().take(8).any(|line| {
+                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                code.ends_with(");") && starts_string_literal_token(code.trim_start())
+            }) && self.output.scoped().iter().rev().take(8).any(|line| {
+                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                unmatched_open_paren_column(code).is_some()
+                    && !starts_string_literal_token(code.trim_start())
+                    && !code.ends_with(';')
+            });
         let split_else_chain = structural_split_else_chain
             || self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(128)

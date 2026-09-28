@@ -251,6 +251,7 @@ impl FormatEngine<'_> {
         }
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1034,6 +1035,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
         let in_objc_dictionary_literal = self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(64)
@@ -1276,6 +1278,7 @@ impl FormatEngine<'_> {
         let in_objc_dictionary_literal = self.current.contains("@ {")
             || self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(64)
@@ -1505,6 +1508,7 @@ impl FormatEngine<'_> {
             || current.starts_with("__asm__ ")
             || self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
@@ -1583,6 +1587,7 @@ impl FormatEngine<'_> {
             return false;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .find_map(|line| {
@@ -1600,6 +1605,7 @@ impl FormatEngine<'_> {
             }
             return self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find_map(|line| {
@@ -1636,7 +1642,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        let Some(line) = self.output.iter().rev().find(|line| {
+        let Some(line) = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trim_start();
             !trimmed.is_empty()
                 && !trimmed.starts_with('#')
@@ -1661,7 +1667,7 @@ impl FormatEngine<'_> {
         if find_assignment_operator(current).is_some() {
             return TernaryOwnerRole::Assignment;
         }
-        for raw in self.output.iter().rev().take(8) {
+        for raw in self.output.scoped().iter().rev().take(8) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {

@@ -51,6 +51,7 @@ impl FormatEngine<'_> {
         let trimmed = line.trim_start();
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -62,6 +63,7 @@ impl FormatEngine<'_> {
             let previous_constructor = previous.ends_with(')')
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
@@ -83,7 +85,7 @@ impl FormatEngine<'_> {
         if trimmed.starts_with(',') {
             let previous_member_init = previous.starts_with(':')
                 || previous.starts_with(',')
-                || self.output.iter().rev().take(8).any(|line| {
+                || self.output.scoped().iter().rev().take(8).any(|line| {
                     let trimmed = line.trim_start();
                     !trimmed.starts_with('#')
                         && (trimmed.starts_with(':') || trimmed.starts_with(','))
@@ -111,6 +113,7 @@ impl FormatEngine<'_> {
         let mut skipped_comment_indent = None;
         for raw in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -327,12 +330,14 @@ impl FormatEngine<'_> {
         }
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
             && previous.trim() == "("
             && !self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -365,7 +370,7 @@ impl FormatEngine<'_> {
         }
         let mut close_pending = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.iter().rev().take(8) {
+        for previous in self.output.scoped().iter().rev().take(8) {
             let trimmed = previous.trim_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -431,6 +436,7 @@ impl FormatEngine<'_> {
         let mut closed_blocks = 0usize;
         for raw in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -456,6 +462,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -481,6 +488,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -540,6 +548,7 @@ impl FormatEngine<'_> {
     pub(super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -548,7 +557,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_lambda = false;
-        for raw in self.output.iter().rev().take(32) {
+        for raw in self.output.scoped().iter().rev().take(32) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
@@ -580,6 +589,7 @@ impl FormatEngine<'_> {
         let mut saw_asm = line.contains("asm") || line.contains("__asm__");
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(8)
@@ -831,7 +841,7 @@ impl FormatEngine<'_> {
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
             let mut saw_blank = false;
-            for raw in self.output.iter().rev().skip(1) {
+            for raw in self.output.scoped().iter().rev().skip(1) {
                 if raw.trim().is_empty() {
                     saw_blank = true;
                     continue;
@@ -870,7 +880,7 @@ impl FormatEngine<'_> {
             {
                 return Some(spaces);
             }
-            for raw in self.output.iter().rev().skip(1).take(16) {
+            for raw in self.output.scoped().iter().rev().skip(1).take(16) {
                 let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -951,7 +961,7 @@ impl FormatEngine<'_> {
             }
         }
         if current.starts_with('=') && previous_trimmed.starts_with("#if") {
-            for raw in self.output.iter().rev().skip(1) {
+            for raw in self.output.scoped().iter().rev().skip(1) {
                 let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -963,7 +973,7 @@ impl FormatEngine<'_> {
         if starts_string_literal_token(current)
             && (previous_trimmed.starts_with("#else") || previous_trimmed.starts_with("#elif"))
         {
-            for raw in self.output.iter().rev().skip(1) {
+            for raw in self.output.scoped().iter().rev().skip(1) {
                 let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() {
@@ -1052,7 +1062,7 @@ impl FormatEngine<'_> {
             && !prefix.trim_start().starts_with('{')
             && !prefix.contains(['=', '(', '@'])
         {
-            for line in self.output.iter().rev().skip(1).take(64) {
+            for line in self.output.scoped().iter().rev().skip(1).take(64) {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 if let Some(prefix) = code.strip_suffix('{') {
                     let prefix = prefix.trim_start();
@@ -1140,7 +1150,7 @@ impl FormatEngine<'_> {
             return Some(open + 1 + self.layout.line_adjuster.total_case_unindent_depth() * width);
         }
         if current.starts_with(',') && previous_trimmed.starts_with('#') {
-            for line in self.output.iter().rev().skip(1) {
+            for line in self.output.scoped().iter().rev().skip(1) {
                 let trimmed = line.trim_start();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     continue;
@@ -1155,6 +1165,7 @@ impl FormatEngine<'_> {
             let previous_indent = leading_visual_width(previous, tab_width);
             for line in self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -1199,7 +1210,7 @@ impl FormatEngine<'_> {
             && self.constructor_initializer_base_indent_spaces().is_none()
             && !current.starts_with(['#', '(', ')', '{', '}'])
         {
-            for raw in self.output.iter().rev().skip(1).take(16) {
+            for raw in self.output.scoped().iter().rev().skip(1).take(16) {
                 let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                 let trimmed_code = code.trim();
                 if trimmed_code == "(" {
@@ -1254,6 +1265,7 @@ impl FormatEngine<'_> {
         {
             let in_parameter_list = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -1292,10 +1304,17 @@ impl FormatEngine<'_> {
         {
             let previous_indent = leading_visual_width(previous, tab_width);
             if !has_unmatched_open_brace(previous_code) {
-                let inside_member_brace = self.output.iter().rev().skip(1).take(16).any(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    !code.ends_with(';') && has_unmatched_open_brace(code)
-                });
+                let inside_member_brace =
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(16)
+                        .any(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            !code.ends_with(';') && has_unmatched_open_brace(code)
+                        });
                 let target = if inside_member_brace {
                     previous_indent
                 } else {
@@ -1484,6 +1503,7 @@ impl FormatEngine<'_> {
         let previous_name = previous_code.split(':').next().unwrap_or_default().trim();
         let previous_previous_ends_question = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1506,7 +1526,7 @@ impl FormatEngine<'_> {
         }
         if current.starts_with(':')
             && previous_trimmed.starts_with("//")
-            && let Some(signature) = self.output.iter().rev().skip(1).find(|line| {
+            && let Some(signature) = self.output.scoped().iter().rev().skip(1).find(|line| {
                 let trimmed = line.trim_start();
                 !trimmed.is_empty() && !trimmed.starts_with("//")
             })
@@ -1525,6 +1545,7 @@ impl FormatEngine<'_> {
             let after_initializer_comment = current.contains('(')
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -1535,6 +1556,7 @@ impl FormatEngine<'_> {
                     .is_some_and(|line| line.trim_end().ends_with(':'));
             let after_comma_comment = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -1629,13 +1651,20 @@ impl FormatEngine<'_> {
         }
         if previous[trailing_comment_split_limit(previous)..].contains("//")
             && previous_code.ends_with(',')
-            && self.output.iter().rev().take(8).skip(1).any(|line| {
-                let limit = trailing_comment_split_limit(line);
-                let code = line[..limit].trim_end();
-                line[limit..].contains("//")
-                    && has_inline_constructor_initializer_colon(code)
-                    && code.ends_with(',')
-            })
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(8)
+                .skip(1)
+                .any(|line| {
+                    let limit = trailing_comment_split_limit(line);
+                    let code = line[..limit].trim_end();
+                    line[limit..].contains("//")
+                        && has_inline_constructor_initializer_colon(code)
+                        && code.ends_with(',')
+                })
         {
             return Some(leading_visual_width(previous, tab_width));
         }

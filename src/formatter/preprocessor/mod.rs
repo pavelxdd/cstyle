@@ -458,7 +458,7 @@ impl FormatEngine<'_> {
 
     fn preprocessor_line_follows_split_else_output(&self) -> bool {
         let mut saw_preprocessor = false;
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
@@ -486,6 +486,7 @@ impl FormatEngine<'_> {
         let directive = line.lines().next().and_then(preprocessor_directive);
         let header_before_preprocessor = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -502,6 +503,7 @@ impl FormatEngine<'_> {
         if !branch_separator
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| {
@@ -519,6 +521,7 @@ impl FormatEngine<'_> {
             && (self.layout.command_state.current_header.as_deref() == Some("else")
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -839,6 +842,7 @@ impl FormatEngine<'_> {
             && self.layout.indentation.indent() > 0
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())

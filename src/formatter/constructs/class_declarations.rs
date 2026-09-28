@@ -86,6 +86,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| is_split_export_head(line.trim()))
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -104,7 +105,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        let Some(line) = self.output.iter().rev().find(|line| {
+        let Some(line) = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trim_start();
             !trimmed.is_empty() && !trimmed.starts_with(['#', ':', ','])
         }) else {
@@ -161,6 +162,7 @@ impl FormatEngine<'_> {
             || !self.current.is_empty()
             || !self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -189,7 +191,7 @@ impl FormatEngine<'_> {
         if current == "{" || current == ";" || current.starts_with("};") {
             return None;
         }
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim();
             if trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';') {
                 break;

@@ -529,7 +529,7 @@ impl FormatEngine<'_> {
         if let Some(declaration) = self.tree_declaration_context() {
             return declaration;
         }
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
@@ -555,7 +555,7 @@ impl FormatEngine<'_> {
     }
 
     fn is_function_pointer_parameter_continuation(&self) -> bool {
-        self.output.iter().rev().take(4).any(|line| {
+        self.output.scoped().iter().rev().take(4).any(|line| {
             let trimmed = line.trim_end();
             trimmed.contains("(*") && !trimmed.ends_with(';') && !trimmed.ends_with('}')
         })
@@ -598,6 +598,7 @@ impl FormatEngine<'_> {
                 // The enclosing open paren starts this line; its head is the
                 // preceding output line.
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -661,7 +662,7 @@ impl FormatEngine<'_> {
     /// Head text of the open paren that encloses the current parameter
     /// continuation line.
     fn enclosing_open_paren_head(&self) -> Option<&str> {
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;

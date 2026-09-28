@@ -68,13 +68,21 @@ impl FormatEngine<'_> {
         self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
     }
 
-    /// An `else` starting a line takes the indent of the line holding its
-    /// `if`.
+    /// An `else` starting a line, alone or after the `}` closing the `if`
+    /// body, takes the indent of the line holding its `if`.
     fn else_matching_if_indent(&self, first: usize) -> Option<usize> {
-        if !matches!(&self.tree.tokens[first], Token::Word(word) if word == "else") {
+        let tokens = &self.tree.tokens;
+        let is_else = |index: usize| matches!(&tokens[index], Token::Word(word) if word == "else");
+        let else_token = if is_else(first) {
+            first
+        } else if matches!(tokens[first], Token::Symbol('}')) {
+            let next = next_code_token(tokens, first + 1)?;
+            let span = self.output.pending_tokens()?;
+            (is_else(next) && span.contains(next)).then_some(next)?
+        } else {
             return None;
-        }
-        let if_line = self.line_led_by(self.tree.statements.if_of_else(first)?)?;
+        };
+        let if_line = self.line_led_by(self.tree.statements.if_of_else(else_token)?)?;
         Some(self.output.lead_width(if_line, self.options.tab_width) + self.case_unindent_spaces())
     }
 

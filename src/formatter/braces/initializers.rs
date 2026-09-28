@@ -137,6 +137,7 @@ impl FormatEngine<'_> {
         }
         let recent_designator = self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -197,6 +198,7 @@ impl FormatEngine<'_> {
     pub(crate) fn recent_double_brace_indent_spaces(&self, line: &str) -> Option<usize> {
         let opening = self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(4)
@@ -229,6 +231,7 @@ impl FormatEngine<'_> {
         if line.trim() != "}"
             || !self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -299,6 +302,7 @@ impl FormatEngine<'_> {
         }
         let previous_ends_comma = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -336,6 +340,7 @@ impl FormatEngine<'_> {
             if line.trim_start().starts_with('.') {
                 let limit = self.token_input.input_source_indent.max(normal_spaces);
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
@@ -346,6 +351,7 @@ impl FormatEngine<'_> {
                     .unwrap_or(self.token_input.input_source_indent)
             } else {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -983,7 +989,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut depth = 0usize;
-        for previous in self.output.iter().rev() {
+        for previous in self.output.scoped().iter().rev() {
             let trimmed_previous = previous.trim_end();
             let mut chars = trimmed_previous.chars().rev();
             while let Some(ch) = chars.next() {
@@ -1098,6 +1104,7 @@ impl FormatEngine<'_> {
         }
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1118,6 +1125,7 @@ impl FormatEngine<'_> {
         }
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1135,6 +1143,7 @@ impl FormatEngine<'_> {
     pub(crate) fn previous_initializer_comma_indent(&self) -> Option<usize> {
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1181,6 +1190,7 @@ impl FormatEngine<'_> {
         }
         let row = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
@@ -1244,7 +1254,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let aggregate_member = self.in_aggregate_declaration_brace()
-            || self.output.iter().rev().take(16).any(|line| {
+            || self.output.scoped().iter().rev().take(16).any(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 code.trim_start().starts_with("static const struct") && code.ends_with('{')
             });

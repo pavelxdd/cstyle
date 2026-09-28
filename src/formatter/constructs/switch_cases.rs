@@ -950,7 +950,7 @@ impl FormatEngine<'_> {
         if !split_else_context || line_kind != LineKind::SwitchLabel {
             return None;
         }
-        let switch_line = self.output.iter().rev().find(|line| {
+        let switch_line = self.output.scoped().iter().rev().find(|line| {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             code.trim_start().starts_with("switch")
         })?;
@@ -974,6 +974,7 @@ impl FormatEngine<'_> {
         }
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -983,6 +984,7 @@ impl FormatEngine<'_> {
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 let follows_comment = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.as_str() != previous.as_str())
@@ -1047,7 +1049,7 @@ impl FormatEngine<'_> {
         if line.trim() != "break;" {
             return None;
         }
-        let nearest_case = self.output.iter().rev().find(|line| {
+        let nearest_case = self.output.scoped().iter().rev().find(|line| {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
             trimmed.starts_with("case ") || trimmed.starts_with("default:")
@@ -1107,6 +1109,7 @@ impl FormatEngine<'_> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let call_indent = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1204,6 +1207,7 @@ impl FormatEngine<'_> {
         }
         let previous_indent = self
             .output
+            .scoped()
             .iter()
             .rev()
             .take_while(|line| is_comment_line(line.trim_start()))
@@ -1686,7 +1690,7 @@ impl FormatEngine<'_> {
 
     fn recent_same_line_else_open_indent_spaces(&self) -> Option<usize> {
         let tab_width = self.options.tab_width;
-        for line in self.output.iter().rev().take(32) {
+        for line in self.output.scoped().iter().rev().take(32) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
@@ -1957,6 +1961,7 @@ impl FormatEngine<'_> {
                     .push(current + 1);
                 if self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -2017,6 +2022,7 @@ impl FormatEngine<'_> {
             .map(|line| leading_visual_width(line, self.options.tab_width));
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())

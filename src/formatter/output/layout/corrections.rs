@@ -109,6 +109,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trim() == "{")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -146,6 +147,7 @@ impl FormatEngine<'_> {
                 && starts_header_word(line.trim_start(), "if")
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())

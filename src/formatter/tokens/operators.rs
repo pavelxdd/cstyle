@@ -200,6 +200,7 @@ pub(crate) fn is_prefix_increment_statement(line: &str) -> bool {
 impl FormatEngine<'_> {
     fn has_continuable_previous_statement(&self) -> bool {
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -250,6 +251,7 @@ impl FormatEngine<'_> {
             && matches!(next, Some(Token::Word(_)))
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -280,6 +282,7 @@ impl FormatEngine<'_> {
         if split_rvalue_reference {
             let indent_spaces = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -321,6 +324,7 @@ impl FormatEngine<'_> {
                         .is_none()
                         .then(|| {
                             self.output
+                                .scoped()
                                 .iter()
                                 .rev()
                                 .find(|line| !line.trim().is_empty())
@@ -493,6 +497,7 @@ impl FormatEngine<'_> {
             && is_leading_continuation_operator(operator)
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -514,6 +519,7 @@ impl FormatEngine<'_> {
         {
             let stale_level = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -977,7 +983,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 break;
@@ -1044,6 +1050,7 @@ impl FormatEngine<'_> {
             return false;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())

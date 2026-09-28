@@ -200,6 +200,7 @@ impl FormatEngine<'_> {
         }
         let before = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
@@ -361,7 +362,7 @@ impl FormatEngine<'_> {
             );
         }
         if kind == LineKind::Label
-            && self.output.iter().rev().take(128).any(|line| {
+            && self.output.scoped().iter().rev().take(128).any(|line| {
                 let trimmed = line[..trailing_comment_split_limit(line)]
                     .trim_end()
                     .trim_start();
@@ -369,6 +370,7 @@ impl FormatEngine<'_> {
             })
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)

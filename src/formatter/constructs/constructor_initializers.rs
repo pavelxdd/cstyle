@@ -262,7 +262,7 @@ impl FormatEngine<'_> {
                 Some(frame.colon_line_indent_spaces + self.options.indent_width)
             }
             ConstructorInitializerLayout::Split => {
-                for raw in self.output.iter().rev().take(64) {
+                for raw in self.output.scoped().iter().rev().take(64) {
                     let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                     let trimmed = code.trim_start();
                     if trimmed.starts_with(':') && !trimmed.starts_with("::") {
@@ -355,6 +355,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -404,7 +405,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
             return None;
         }
-        let previous = self.output.iter().rev().find(|line| {
+        let previous = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trim_start();
             !trimmed.is_empty() && !trimmed.starts_with("//")
         })?;
@@ -438,6 +439,7 @@ impl FormatEngine<'_> {
         }
         if !self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?
@@ -447,7 +449,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_member = false;
-        for raw in self.output.iter().rev().skip(1).take(64) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(64) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let previous = code.trim_start();
             if previous.is_empty() || previous.starts_with('#') {
@@ -483,6 +485,7 @@ impl FormatEngine<'_> {
         let base_indent = self.constructor_initializer_base_indent_spaces();
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(64)
@@ -522,6 +525,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -545,7 +549,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut pending = trimmed.chars().take_while(|ch| *ch == ')').count();
-        for raw in self.output.iter().rev().take(128) {
+        for raw in self.output.scoped().iter().rev().take(128) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             if code.trim().is_empty() {
                 continue;
@@ -582,6 +586,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -763,6 +768,7 @@ impl FormatEngine<'_> {
             .next()
             .filter(|ch| is_identifier_start(*ch))?;
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| {

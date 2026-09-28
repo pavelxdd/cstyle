@@ -145,6 +145,7 @@ impl FormatEngine<'_> {
         ) && line.trim() == "};"
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(4)

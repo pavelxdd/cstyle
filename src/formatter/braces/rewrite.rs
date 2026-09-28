@@ -771,6 +771,7 @@ impl FormatEngine<'_> {
             || (current.is_empty()
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -885,6 +886,7 @@ impl FormatEngine<'_> {
         let previous_line_lambda_header = self.current_is_blank()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1091,6 +1093,7 @@ impl FormatEngine<'_> {
         let previous_line_lambda_header = self.current_is_blank()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1098,6 +1101,7 @@ impl FormatEngine<'_> {
         let previous_line_trailing_return_lambda_header = self.current_is_blank()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1432,6 +1436,7 @@ impl FormatEngine<'_> {
             None if braced_init
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1450,6 +1455,7 @@ impl FormatEngine<'_> {
                         || !self.preprocessor.branch_stack.is_empty()))
                     || self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())

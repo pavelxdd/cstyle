@@ -94,6 +94,7 @@ impl FormatEngine<'_> {
     pub(crate) fn reset_continuation_after_empty_line(&mut self) {
         let in_continuation = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -123,7 +124,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn recent_paren_continuation_indent_spaces(&self) -> Option<usize> {
-        for line in self.output.iter().rev().take(12) {
+        for line in self.output.scoped().iter().rev().take(12) {
             if line.trim().is_empty() {
                 return None;
             }
@@ -588,6 +589,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -689,7 +691,7 @@ impl FormatEngine<'_> {
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
         }
-        for line in self.output.iter().rev() {
+        for line in self.output.scoped().iter().rev() {
             let code = &line[..trailing_comment_split_limit(line)];
             let trimmed = code.trim();
             if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
@@ -1020,6 +1022,7 @@ impl FormatEngine<'_> {
             && self.output.last().is_some_and(|line| line.trim() == "{")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -1263,7 +1266,7 @@ impl FormatEngine<'_> {
     }
 
     fn previous_return_continuation_indent_spaces(&self) -> Option<usize> {
-        for line in self.output.iter().rev().take(8) {
+        for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -1341,6 +1344,7 @@ impl FormatEngine<'_> {
         };
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1373,6 +1377,7 @@ impl FormatEngine<'_> {
         let saw_asm = self.current.contains("asm")
             || self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
@@ -1462,6 +1467,7 @@ impl FormatEngine<'_> {
         }
         let in_enum = self
             .output
+            .scoped()
             .iter()
             .rev()
             .take_while(|line| {

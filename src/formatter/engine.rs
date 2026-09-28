@@ -634,6 +634,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             let label_spaces = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| {
@@ -706,6 +707,7 @@ impl<'a> FormatEngine<'a> {
         }
         let mut lines = self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty());
@@ -1252,7 +1254,7 @@ impl<'a> FormatEngine<'a> {
             let direct_list_sibling_column = if self.current.trim_end().ends_with("},")
                 && !self.current.trim_start().starts_with('{')
             {
-                self.output.iter().rev().take(64).find_map(|line| {
+                self.output.scoped().iter().rev().take(64).find_map(|line| {
                     let code = line[..trailing_comment_split_limit(line)].trim_end();
                     let prefix = code.strip_suffix('{')?.trim_end();
                     let prefix = prefix.trim_start();

@@ -239,6 +239,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;

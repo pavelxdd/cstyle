@@ -323,6 +323,7 @@ impl FormatEngine<'_> {
                 || text.starts_with("*\t")
         ) && self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)

@@ -92,6 +92,7 @@ impl FormatEngine<'_> {
             } else if previous_code.trim_start().starts_with("*/")
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .take_while(|line| !line.trim_start().starts_with("@end"))
@@ -106,6 +107,7 @@ impl FormatEngine<'_> {
             && previous.trim_end().ends_with(';')
             && let Some(header) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -165,6 +167,7 @@ impl FormatEngine<'_> {
                 && unmatched_open_paren_column(previous_code).is_none()
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -250,6 +253,7 @@ impl FormatEngine<'_> {
         let layout = &mut contextual.layout;
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -297,7 +301,7 @@ impl FormatEngine<'_> {
                 && self.constructor_initializer_base_indent_spaces().is_none()
                 && !current.starts_with(['#', '(', ')', '{', '}'])
             {
-                for raw in self.output.iter().rev().skip(1).take(16) {
+                for raw in self.output.scoped().iter().rev().skip(1).take(16) {
                     let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                     let trimmed_code = code.trim();
                     if trimmed_code == "(" {
@@ -400,6 +404,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(',')
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
@@ -412,6 +417,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with(':')
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
@@ -459,14 +465,21 @@ impl FormatEngine<'_> {
         if (line.trim_start().starts_with("} else if") || line.trim_start().starts_with("}else if"))
             && let Some(previous) = self.output.last_line_outside_comment()
             && preprocessor_directive(previous.trim_start()).is_some()
-            && let Some(header) = self.output.iter().rev().skip(1).take(32).find(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                let trimmed = code.trim_start();
-                code.ends_with('{')
-                    && (starts_header_word(trimmed, "if")
-                        || trimmed.starts_with("} else")
-                        || trimmed.starts_with("}else"))
-            })
+            && let Some(header) = self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(32)
+                .find(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    let trimmed = code.trim_start();
+                    code.ends_with('{')
+                        && (starts_header_word(trimmed, "if")
+                            || trimmed.starts_with("} else")
+                            || trimmed.starts_with("}else"))
+                })
         {
             layout.exact_indent_spaces = Some(leading_visual_width(header, self.options.tab_width));
         }
@@ -484,6 +497,7 @@ impl FormatEngine<'_> {
                 .ends_with("];")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(16)
@@ -596,6 +610,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with("{ ~")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(3)
@@ -680,10 +695,19 @@ impl FormatEngine<'_> {
                 .chars()
                 .next()
                 .is_some_and(is_identifier_start)
-                && self.output.iter().rev().skip(1).take(3).any(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    code.trim_start().starts_with('#') && code.contains('(') && !code.contains(')')
-                })
+                && self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(3)
+                    .any(|line| {
+                        let code = line[..trailing_comment_split_limit(line)].trim_end();
+                        code.trim_start().starts_with('#')
+                            && code.contains('(')
+                            && !code.contains(')')
+                    })
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
@@ -715,6 +739,7 @@ impl FormatEngine<'_> {
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]) && let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -742,6 +767,7 @@ impl FormatEngine<'_> {
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]) && let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -980,6 +1006,7 @@ impl FormatEngine<'_> {
         {
             let anchor = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.trim().is_empty() || is_comment_line(line.trim_start()))
@@ -992,6 +1019,7 @@ impl FormatEngine<'_> {
                     );
                 } else if let Some(header) = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.trim().is_empty() || is_comment_line(line.trim_start()))
@@ -1050,6 +1078,7 @@ impl FormatEngine<'_> {
         {
             let mut previous_lines = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty());
@@ -1093,6 +1122,7 @@ impl FormatEngine<'_> {
                 && preprocessor_directive(previous_trimmed) == Some("endif")
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -1109,6 +1139,7 @@ impl FormatEngine<'_> {
             {
                 let spaces = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -1164,7 +1195,7 @@ impl FormatEngine<'_> {
                 }
             } else if let Some(directive) = preprocessor_directive(previous_trimmed)
                 && (directive == "else" || directive == "endif" || directive.starts_with("elif"))
-                && let Some(sibling) = self.output.iter().rev().skip(1).find(|line| {
+                && let Some(sibling) = self.output.scoped().iter().rev().skip(1).find(|line| {
                     let trimmed = line.trim_start();
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
@@ -1182,13 +1213,20 @@ impl FormatEngine<'_> {
                         .flatten()
                         .unwrap_or(sibling_spaces);
                     let has_block_header = directive != "endif"
-                        || self.output.iter().rev().skip(1).take(16).any(|line| {
-                            let code = line[..trailing_comment_split_limit(line)].trim_end();
-                            code.ends_with('{')
-                                && leading_visual_width(line, self.options.tab_width)
-                                    + self.options.indent_width
-                                    == spaces
-                        });
+                        || self
+                            .output
+                            .scoped()
+                            .iter()
+                            .rev()
+                            .skip(1)
+                            .take(16)
+                            .any(|line| {
+                                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                                code.ends_with('{')
+                                    && leading_visual_width(line, self.options.tab_width)
+                                        + self.options.indent_width
+                                        == spaces
+                            });
                     if has_block_header
                         && layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces
                     {
@@ -1217,6 +1255,7 @@ impl FormatEngine<'_> {
                     || previous_trimmed.starts_with("else if"))
                 && let Some(branch) = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.as_str() != previous.as_str())
@@ -1229,6 +1268,7 @@ impl FormatEngine<'_> {
                 )
                 .is_some_and(|directive| {
                     self.output
+                        .scoped()
                         .iter()
                         .rev()
                         .skip_while(|line| line.as_str() != branch.as_str())
@@ -1264,6 +1304,7 @@ impl FormatEngine<'_> {
             let mut seen_comment = false;
             let after_braceless_else_comment = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty())
@@ -1308,6 +1349,7 @@ impl FormatEngine<'_> {
             let mut blocked = false;
             let after_braceless_else_comment = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty())
@@ -1340,6 +1382,7 @@ impl FormatEngine<'_> {
             let previous_is_closing_brace = previous_code.trim() == "}";
             let recent_preprocessor = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty())
@@ -1355,6 +1398,7 @@ impl FormatEngine<'_> {
                 if previous_code.ends_with(';')
                     && let Some(braceless_else) = self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .skip(1)
@@ -1372,6 +1416,7 @@ impl FormatEngine<'_> {
                 }
                 let recent_matching_header = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .filter(|line| !line.trim().is_empty())
@@ -1585,6 +1630,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| previous.trim() == "}")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(16)
@@ -1747,20 +1793,38 @@ impl FormatEngine<'_> {
                 && !line.trim_start().starts_with(['#', '{', '}', ')'])
                 && !is_comment_line(line.trim_start())
                 && !(previous_code.trim_start().starts_with(");")
-                    && (self.output.iter().rev().skip(1).take(8).any(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
-                        assignment_call_value_column(code, self.options.tab_width).is_some()
-                    }) || (self
+                    && (self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .skip(1)
                         .take(8)
-                        .any(|line| starts_string_literal_token(line.trim_start()))
-                        && self.output.iter().rev().skip(1).take(8).any(|line| {
+                        .any(|line| {
                             let code = line[..trailing_comment_split_limit(line)].trim_end();
-                            code.ends_with(',') && unmatched_open_paren_column(code).is_some()
-                        }))))
+                            assignment_call_value_column(code, self.options.tab_width).is_some()
+                        })
+                        || (self
+                            .output
+                            .scoped()
+                            .iter()
+                            .rev()
+                            .skip(1)
+                            .take(8)
+                            .any(|line| starts_string_literal_token(line.trim_start()))
+                            && self
+                                .output
+                                .scoped()
+                                .iter()
+                                .rev()
+                                .skip(1)
+                                .take(8)
+                                .any(|line| {
+                                    let code =
+                                        line[..trailing_comment_split_limit(line)].trim_end();
+                                    code.ends_with(',')
+                                        && unmatched_open_paren_column(code).is_some()
+                                }))))
             {
                 let previous_spaces = leading_visual_width(previous, self.options.tab_width);
                 if let Some(spaces) =
@@ -1772,6 +1836,7 @@ impl FormatEngine<'_> {
                         + self.options.indent_width
                     && !self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .skip(1)
@@ -1914,14 +1979,21 @@ impl FormatEngine<'_> {
                 && code.ends_with(')')
                 && !trimmed.starts_with('#')
                 && self.previous_code_closes_control_condition() != Some(false)
-                && let Some(header) = self.output.iter().rev().skip(1).take(8).find(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    let trimmed = code.trim_start();
-                    line_is_control_body_header(trimmed)
-                        || starts_header_word(trimmed, "for")
-                        || starts_header_word(trimmed, "while")
-                        || starts_header_word(trimmed, "if")
-                })
+                && let Some(header) =
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(8)
+                        .find(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            let trimmed = code.trim_start();
+                            line_is_control_body_header(trimmed)
+                                || starts_header_word(trimmed, "for")
+                                || starts_header_word(trimmed, "while")
+                                || starts_header_word(trimmed, "if")
+                        })
             {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(header, self.options.tab_width)
@@ -1932,14 +2004,21 @@ impl FormatEngine<'_> {
             } else if !line.trim_start().starts_with(['{', '}', '#'])
                 && code.ends_with("{")
                 && trimmed.contains(')')
-                && let Some(header) = self.output.iter().rev().skip(1).take(3).find(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    let trimmed = code.trim_start();
-                    line_is_control_body_header(trimmed)
-                        || starts_header_word(trimmed, "for")
-                        || starts_header_word(trimmed, "while")
-                        || starts_header_word(trimmed, "if")
-                })
+                && let Some(header) =
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(3)
+                        .find(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            let trimmed = code.trim_start();
+                            line_is_control_body_header(trimmed)
+                                || starts_header_word(trimmed, "for")
+                                || starts_header_word(trimmed, "while")
+                                || starts_header_word(trimmed, "if")
+                        })
             {
                 let header_indent = leading_visual_width(header, self.options.tab_width);
                 if header_indent < leading_visual_width(previous, self.options.tab_width) {
@@ -2036,7 +2115,7 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if !previous_code.ends_with('{')
                 && previous_code.trim() != "}"
-                && let Some(header) = self.output.iter().rev().take(8).find(|line| {
+                && let Some(header) = self.output.scoped().iter().rev().take(8).find(|line| {
                     let code = line[..trailing_comment_split_limit(line)].trim_end();
                     (line_is_control_body_header(code.trim_start())
                         || starts_header_word(code.trim_start(), "for")
@@ -2071,6 +2150,7 @@ impl FormatEngine<'_> {
             && (is_comment_line(line.trim_start())
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -2094,6 +2174,7 @@ impl FormatEngine<'_> {
         {
             let mut before_lines = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -2236,7 +2317,13 @@ impl FormatEngine<'_> {
     ) -> ContextualLineLayout {
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
-        if self.output.iter().rev().any(|line| !line.trim().is_empty()) {
+        if self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .any(|line| !line.trim().is_empty())
+        {
             if let Some(call_layout) = self.string_call_continuation_layout(line) {
                 layout.exact_indent_spaces = Some(call_layout.indent_spaces);
                 if let Some(spaces) = call_layout.clear_continuation_after_line {
@@ -2258,6 +2345,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| preprocessor_directive(previous.trim_start()).is_some())
             && let Some(before_preprocessor) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -2298,18 +2386,26 @@ impl FormatEngine<'_> {
                             || starts_header_word(line.trim_start(), "for")
                             || starts_header_word(line.trim_start(), "switch")
                             || is_comment_line(line.trim_start())
-                            || self.output.iter().rev().skip(1).take(16).any(|line| {
-                                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                                let trimmed = code.trim_start();
-                                code.ends_with('{')
-                                    && leading_visual_width(line, self.options.tab_width)
-                                        + self.options.indent_width
-                                        == previous_indent
-                                    && (starts_header_word(trimmed, "if")
-                                        || starts_header_word(trimmed, "for")
-                                        || starts_header_word(trimmed, "while")
-                                        || trimmed.starts_with("else"))
-                            }))))
+                            || self
+                                .output
+                                .scoped()
+                                .iter()
+                                .rev()
+                                .skip(1)
+                                .take(16)
+                                .any(|line| {
+                                    let code =
+                                        line[..trailing_comment_split_limit(line)].trim_end();
+                                    let trimmed = code.trim_start();
+                                    code.ends_with('{')
+                                        && leading_visual_width(line, self.options.tab_width)
+                                            + self.options.indent_width
+                                            == previous_indent
+                                        && (starts_header_word(trimmed, "if")
+                                            || starts_header_word(trimmed, "for")
+                                            || starts_header_word(trimmed, "while")
+                                            || trimmed.starts_with("else"))
+                                }))))
             {
                 layout.exact_indent_spaces = Some(
                     previous_indent
@@ -2625,7 +2721,7 @@ impl FormatEngine<'_> {
             let previous_trimmed = previous_code.trim_start();
             if preprocessor_directive(previous_trimmed)
                 .is_some_and(|directive| matches!(directive, "if" | "ifdef" | "ifndef"))
-                && let Some(branch) = self.output.iter().rev().skip(1).find(|line| {
+                && let Some(branch) = self.output.scoped().iter().rev().skip(1).find(|line| {
                     let trimmed = line.trim_start();
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
@@ -2949,7 +3045,7 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && line.trim_start().starts_with(')')
-            && let Some(open_line) = self.output.iter().rev().take(16).find(|line| {
+            && let Some(open_line) = self.output.scoped().iter().rev().take(16).find(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 code.trim() == "("
             })
@@ -2990,6 +3086,7 @@ impl FormatEngine<'_> {
             if preprocessor_directive(previous_code.trim_start()) == Some("endif")
                 && let Some(branch_line) = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.as_str() != previous.as_str())
@@ -3023,6 +3120,7 @@ impl FormatEngine<'_> {
             && is_comment_line(previous.trim_start())
             && let Some(before_comment) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -3139,7 +3237,7 @@ impl FormatEngine<'_> {
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
-            && self.output.iter().rev().take(16).any(|line| {
+            && self.output.scoped().iter().rev().take(16).any(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 code.contains(" new ") || code.trim_start().starts_with("new ")
             })

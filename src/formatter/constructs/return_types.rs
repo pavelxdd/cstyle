@@ -19,6 +19,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -36,6 +37,7 @@ impl FormatEngine<'_> {
         let mut in_block_comment = false;
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())

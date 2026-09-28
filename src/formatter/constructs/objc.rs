@@ -161,6 +161,7 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with("};")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(64)
@@ -169,6 +170,7 @@ impl FormatEngine<'_> {
         {
             let label_style_dictionary = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(64)
@@ -176,6 +178,7 @@ impl FormatEngine<'_> {
                 .any(|line| line_is_label_style_dictionary_key(line));
             current = if label_style_dictionary {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .take(64)
@@ -198,6 +201,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| line_is_label_style_dictionary_key(previous))
             && let Some(opener) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(64)
@@ -216,6 +220,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| previous.trim_end().ends_with(','))
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(64)
@@ -444,6 +449,7 @@ impl FormatEngine<'_> {
         if interface_member
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take_while(|line| !line.trim_start().starts_with("@end"))
@@ -480,6 +486,7 @@ impl FormatEngine<'_> {
     pub(crate) fn output_objc_method_header_indent_spaces(&self) -> Option<usize> {
         for line in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())

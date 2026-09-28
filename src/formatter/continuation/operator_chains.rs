@@ -543,6 +543,7 @@ impl FormatEngine<'_> {
         }
         let before_comment = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
@@ -574,6 +575,7 @@ impl FormatEngine<'_> {
         }
         let before_comment = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
@@ -658,6 +660,7 @@ impl FormatEngine<'_> {
         }
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -935,7 +938,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut question_indent = None;
-        for raw in self.output.iter().rev().take(12) {
+        for raw in self.output.scoped().iter().rev().take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             if code.contains('?') {
                 question_indent = Some(leading_visual_width(raw, self.options.tab_width));
@@ -961,6 +964,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -969,7 +973,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));
-        for raw in self.output.iter().rev().skip(1).take(12) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -999,6 +1003,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1007,7 +1012,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));
-        for raw in self.output.iter().rev().skip(1).take(12) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -1031,6 +1036,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1038,7 +1044,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with('(') {
             return None;
         }
-        for raw in self.output.iter().rev().skip(1).take(12) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -1067,27 +1073,30 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let in_preprocessor_else_context = self.output.iter().rev().take(128).any(|line| {
-            let trimmed = line[..trailing_comment_split_limit(line)]
-                .trim_end()
-                .trim_start();
-            trimmed == "else" || trimmed.ends_with("} else")
-        }) && self
-            .output
-            .iter()
-            .rev()
-            .take_while(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                !(leading_visual_width(line, self.options.tab_width) == 0
-                    && code.ends_with('{')
-                    && !code.trim_start().starts_with('#'))
-            })
-            .take(128)
-            .any(|line| line.trim_start().starts_with('#'));
+        let in_preprocessor_else_context =
+            self.output.scoped().iter().rev().take(128).any(|line| {
+                let trimmed = line[..trailing_comment_split_limit(line)]
+                    .trim_end()
+                    .trim_start();
+                trimmed == "else" || trimmed.ends_with("} else")
+            }) && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take_while(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    !(leading_visual_width(line, self.options.tab_width) == 0
+                        && code.ends_with('{')
+                        && !code.trim_start().starts_with('#'))
+                })
+                .take(128)
+                .any(|line| line.trim_start().starts_with('#'));
         (in_preprocessor_else_context
             && previous_code.ends_with(',')
             && unmatched_open_paren_column(previous_code).is_some())
@@ -1142,6 +1151,7 @@ impl FormatEngine<'_> {
         }
         let follows_ternary_argument = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1164,7 +1174,7 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let mut candidate_indent = leading_visual_width(previous, tab_width);
         let mut saw_question = previous.contains('?');
-        for line in self.output.iter().rev().skip(1) {
+        for line in self.output.scoped().iter().rev().skip(1) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
@@ -1215,6 +1225,7 @@ impl FormatEngine<'_> {
             && previous_code.ends_with(')')
             && let Some(call_indent) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -1259,6 +1270,7 @@ impl FormatEngine<'_> {
             && (self.layout.nesting.paren_depth > 0
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -1296,6 +1308,7 @@ impl FormatEngine<'_> {
             && !previous_code.contains('?')
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -1421,6 +1434,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn line_follows_logical_operator(&self) -> bool {
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1446,7 +1460,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn line_follows_preprocessor_guarded_header_body(&self) -> bool {
         let mut saw_preprocessor = false;
-        for line in self.output.iter().rev() {
+        for line in self.output.scoped().iter().rev() {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
@@ -1481,6 +1495,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1499,12 +1514,20 @@ impl FormatEngine<'_> {
                 return Some(previous_indent + self.options.indent_width);
             }
             if closes > 0
-                && let Some(sibling) = self.output.iter().rev().skip(1).take(16).find(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    let trimmed = code.trim_start();
-                    (trimmed.starts_with("&&") || trimmed.starts_with("||"))
-                        && leading_visual_width(line, self.options.tab_width) < previous_indent
-                })
+                && let Some(sibling) =
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(16)
+                        .find(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            let trimmed = code.trim_start();
+                            (trimmed.starts_with("&&") || trimmed.starts_with("||"))
+                                && leading_visual_width(line, self.options.tab_width)
+                                    < previous_indent
+                        })
             {
                 return Some(leading_visual_width(sibling, self.options.tab_width));
             }
@@ -1558,7 +1581,7 @@ impl FormatEngine<'_> {
     }
 
     fn previous_statement_is_braceless_ternary(&self) -> bool {
-        for raw in self.output.iter().rev().skip(1).take(12) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
@@ -1579,7 +1602,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '{', '}']) {
             return None;
         }
-        if !self.output.iter().rev().take(8).any(|line| {
+        if !self.output.scoped().iter().rev().take(8).any(|line| {
             let trimmed = line.trim_start();
             trimmed.starts_with("if ") || trimmed.starts_with("while ")
         }) {
@@ -1587,6 +1610,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1601,15 +1625,22 @@ impl FormatEngine<'_> {
                 return None;
             }
             if code.ends_with(") ||")
-                && self.output.iter().rev().skip(1).take(8).any(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
-                    let trimmed = code.trim_start();
-                    trimmed.starts_with('(')
-                        && code.ends_with(',')
-                        && trimmed
-                            .split_once(',')
-                            .is_some_and(|(head, _)| head.contains(')'))
-                })
+                && self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(8)
+                    .any(|line| {
+                        let code = line[..trailing_comment_split_limit(line)].trim_end();
+                        let trimmed = code.trim_start();
+                        trimmed.starts_with('(')
+                            && code.ends_with(',')
+                            && trimmed
+                                .split_once(',')
+                                .is_some_and(|(head, _)| head.contains(')'))
+                    })
             {
                 return Some(standard);
             }
@@ -1667,7 +1698,7 @@ impl FormatEngine<'_> {
     }
 
     fn parenthesized_logical_operand_indent_after_call_tail(&self) -> Option<usize> {
-        for previous in self.output.iter().rev().skip(1).take(8) {
+        for previous in self.output.scoped().iter().rev().skip(1).take(8) {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -1687,7 +1718,7 @@ impl FormatEngine<'_> {
         if !line.trim_start().starts_with('?') {
             return None;
         }
-        for previous in self.output.iter().rev().take(12) {
+        for previous in self.output.scoped().iter().rev().take(12) {
             let code = previous.trim_start();
             let code = code[..trailing_comment_split_limit(code)].trim_end();
             if code.is_empty() || code.starts_with('#') {
@@ -1723,6 +1754,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ternary_operator_tail_indent_spaces(&self, line: &str) -> Option<usize> {
         self.output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1748,6 +1780,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1757,12 +1790,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let question_indent = self.output.iter().rev().skip(1).take(8).find_map(|line| {
-            line[..trailing_comment_split_limit(line)]
-                .trim_start()
-                .starts_with('?')
-                .then(|| leading_visual_width(line, self.options.tab_width))
-        })?;
+        let question_indent =
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    line[..trailing_comment_split_limit(line)]
+                        .trim_start()
+                        .starts_with('?')
+                        .then(|| leading_visual_width(line, self.options.tab_width))
+                })?;
         let indent = leading_visual_width(line, self.options.tab_width);
         if indent != question_indent {
             return None;
@@ -1781,6 +1821,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2004,13 +2045,14 @@ impl FormatEngine<'_> {
                     return Some(frame.question_indent_spaces + case_unindent);
                 }
                 if frame.parent_delimiter.is_some()
-                    && let Some(return_line) = self.output.iter().rev().take(8).find(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
-                        let trimmed = code.trim_start();
-                        trimmed.starts_with("return ")
-                            && !trimmed.contains('?')
-                            && unmatched_open_paren_column(code).is_none()
-                    })
+                    && let Some(return_line) =
+                        self.output.scoped().iter().rev().take(8).find(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            let trimmed = code.trim_start();
+                            trimmed.starts_with("return ")
+                                && !trimmed.contains('?')
+                                && unmatched_open_paren_column(code).is_none()
+                        })
                 {
                     return Some(
                         leading_visual_width(return_line, self.options.tab_width)
@@ -2051,11 +2093,12 @@ impl FormatEngine<'_> {
                     return Some(frame.question_indent_spaces + case_unindent);
                 }
                 if frame.parent_delimiter.is_some()
-                    && let Some(question_line) = self.output.iter().rev().take(8).find(|line| {
-                        line[..trailing_comment_split_limit(line)]
-                            .trim_start()
-                            .starts_with('?')
-                    })
+                    && let Some(question_line) =
+                        self.output.scoped().iter().rev().take(8).find(|line| {
+                            line[..trailing_comment_split_limit(line)]
+                                .trim_start()
+                                .starts_with('?')
+                        })
                 {
                     return Some(
                         leading_visual_width(question_line, self.options.tab_width) + case_unindent,
@@ -2079,6 +2122,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2129,6 +2173,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -2154,6 +2199,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -2185,7 +2231,7 @@ impl FormatEngine<'_> {
             && (current.starts_with("&&") || current.starts_with("||"))
             && (previous_code.ends_with("&&") || previous_code.ends_with("||"))
         {
-            return self.output.iter().rev().take(8).find_map(|line| {
+            return self.output.scoped().iter().rev().take(8).find_map(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 assignment_value_column(code, self.options.tab_width)
             });
@@ -2277,7 +2323,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(");") || !previous_code.contains(" ? ") {
             return None;
         }
-        self.output.iter().rev().find_map(|line| {
+        self.output.scoped().iter().rev().find_map(|line| {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
                 .then_some(leading_visual_width(line, self.options.tab_width))
@@ -2300,7 +2346,7 @@ impl FormatEngine<'_> {
         let mut spaces = if (current.starts_with("&&") || current.starts_with("||"))
             && (previous_code.ends_with("&&") || previous_code.ends_with("||"))
         {
-            self.output.iter().rev().take(8).find_map(|line| {
+            self.output.scoped().iter().rev().take(8).find_map(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 assignment_value_column(code, self.options.tab_width)
             })
@@ -2308,12 +2354,18 @@ impl FormatEngine<'_> {
             && previous_code.trim_start().starts_with("||")
             && previous_code.ends_with(')')
         {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                code.trim_start()
-                    .starts_with("&& (")
-                    .then_some(leading_visual_width(line, self.options.tab_width))
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    code.trim_start()
+                        .starts_with("&& (")
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                })
         } else {
             None
         };
@@ -2359,20 +2411,33 @@ impl FormatEngine<'_> {
             || previous_code.trim_start().starts_with("&&"))
             && previous_code.ends_with(';')
         {
-            return self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                find_assignment_operator(code)
-                    .is_some()
-                    .then_some(leading_visual_width(line, self.options.tab_width))
-            });
+            return self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    find_assignment_operator(code)
+                        .is_some()
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                });
         }
         previous_code.ends_with(';').then(|| {
-            self.output.iter().rev().skip(1).take(4).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                ((code.ends_with("||") || code.ends_with("&&"))
-                    && find_assignment_operator(code).is_some())
-                .then_some(leading_visual_width(line, self.options.tab_width))
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(4)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    ((code.ends_with("||") || code.ends_with("&&"))
+                        && find_assignment_operator(code).is_some())
+                    .then_some(leading_visual_width(line, self.options.tab_width))
+                })
         })?
     }
 
@@ -2384,6 +2449,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
+            .scoped()
             .iter()
             .rev()
             .take_while(|line| {
@@ -2407,16 +2473,28 @@ impl FormatEngine<'_> {
         }
         let current = line.trim_start();
         let statement = if current.starts_with("||") || current.starts_with("&&") {
-            self.output.iter().rev().skip(1).take(8).find(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                find_assignment_operator(code).is_some()
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    find_assignment_operator(code).is_some()
+                })
         } else if self.recent_split_else_logical_statement_region_active() {
-            self.output.iter().rev().skip(1).take(4).find(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (code.ends_with("||") || code.ends_with("&&"))
-                    && find_assignment_operator(code).is_some()
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(4)
+                .find(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    (code.ends_with("||") || code.ends_with("&&"))
+                        && find_assignment_operator(code).is_some()
+                })
         } else {
             None
         };

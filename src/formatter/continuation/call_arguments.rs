@@ -215,21 +215,35 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if let Some(value_column) = self.output.iter().rev().skip(1).take(8).find_map(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            assignment_call_value_column(code, self.options.tab_width)
-        }) {
+        if let Some(value_column) =
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    assignment_call_value_column(code, self.options.tab_width)
+                })
+        {
             return Some(SplitElseCallLineLayout {
                 indent_spaces: value_column + self.options.indent_width,
                 clear_continuation_after_line: None,
             });
         }
         let clear_continuation_after_line = if line.trim_end().ends_with(");") {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
-                    .then_some(leading_visual_width(line, self.options.tab_width))
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                })
         } else {
             None
         };
@@ -349,11 +363,17 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         previous_code.trim_start().starts_with(");").then(|| {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
-                    .then(|| leading_visual_width(line, self.options.tab_width) + case_unindent)
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
+                        .then(|| leading_visual_width(line, self.options.tab_width) + case_unindent)
+                })
         })?
     }
 
@@ -374,6 +394,7 @@ impl FormatEngine<'_> {
             .map(|open| open + 1)
             .or_else(|| {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -397,37 +418,50 @@ impl FormatEngine<'_> {
         let call = if line.trim_start().starts_with(");")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
                 .any(|line| starts_string_literal_token(line.trim_start()))
         {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                if starts_string_literal_token(code.trim_start()) {
-                    return None;
-                }
-                unmatched_open_paren_columns(code)
-                    .last()
-                    .copied()
-                    .map(|open| {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    if starts_string_literal_token(code.trim_start()) {
+                        return None;
+                    }
+                    unmatched_open_paren_columns(code)
+                        .last()
+                        .copied()
+                        .map(|open| {
+                            (
+                                leading_visual_width(line, self.options.tab_width),
+                                assignment_call_value_column(code, self.options.tab_width)
+                                    .unwrap_or(open),
+                            )
+                        })
+                })
+        } else {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    assignment_call_value_column(code, self.options.tab_width).map(|value_column| {
                         (
                             leading_visual_width(line, self.options.tab_width),
-                            assignment_call_value_column(code, self.options.tab_width)
-                                .unwrap_or(open),
+                            value_column,
                         )
                     })
-            })
-        } else {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                assignment_call_value_column(code, self.options.tab_width).map(|value_column| {
-                    (
-                        leading_visual_width(line, self.options.tab_width),
-                        value_column,
-                    )
                 })
-            })
         }?;
         Some(SplitElseCallLineLayout {
             indent_spaces: call.1,
@@ -449,11 +483,17 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         previous_code.trim_start().starts_with(");").then(|| {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                assignment_call_value_column(code, self.options.tab_width)
-                    .map(|_| leading_visual_width(line, self.options.tab_width))
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    assignment_call_value_column(code, self.options.tab_width)
+                        .map(|_| leading_visual_width(line, self.options.tab_width))
+                })
         })?
     }
 
@@ -474,14 +514,22 @@ impl FormatEngine<'_> {
             return None;
         }
         if starts_string_literal_token(previous_code.trim_start()) {
-            return self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
-                    .then_some(leading_visual_width(line, self.options.tab_width))
-            });
+            return self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                });
         }
         let call_start = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -493,17 +541,24 @@ impl FormatEngine<'_> {
         }
         (self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
             .take(8)
             .any(|line| starts_string_literal_token(line.trim_start())))
         .then(|| {
-            self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
-                    .then_some(leading_visual_width(line, self.options.tab_width))
-            })
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                })
         })?
     }
 
@@ -520,11 +575,18 @@ impl FormatEngine<'_> {
         if !starts_string_literal_token(previous_code.trim_start()) {
             return None;
         }
-        let call_start = self.output.iter().rev().skip(1).take(16).find(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            !unmatched_open_paren_columns(code).is_empty()
-                && !starts_string_literal_token(code.trim_start())
-        })?;
+        let call_start = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(16)
+            .find(|line| {
+                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                !unmatched_open_paren_columns(code).is_empty()
+                    && !starts_string_literal_token(code.trim_start())
+            })?;
         let call_code = call_start[..trailing_comment_split_limit(call_start)].trim_end();
         assignment_call_value_column(call_code, self.options.tab_width)
             .is_none()
@@ -549,12 +611,18 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        self.output.iter().rev().skip(1).take(16).find_map(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            (!unmatched_open_paren_columns(code).is_empty()
-                && !starts_string_literal_token(code.trim_start()))
-            .then_some(leading_visual_width(line, self.options.tab_width))
-        })
+        self.output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(16)
+            .find_map(|line| {
+                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                (!unmatched_open_paren_columns(code).is_empty()
+                    && !starts_string_literal_token(code.trim_start()))
+                .then_some(leading_visual_width(line, self.options.tab_width))
+            })
     }
 
     pub(crate) fn split_else_adjacent_string_call_close_indent_spaces(
@@ -565,7 +633,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_string = false;
-        for previous in self.output.iter().rev().take(16) {
+        for previous in self.output.scoped().iter().rev().take(16) {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
@@ -581,6 +649,7 @@ impl FormatEngine<'_> {
                 }
                 let adjacent_strings = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .take(8)
@@ -589,6 +658,7 @@ impl FormatEngine<'_> {
                     > 1
                     || self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .take(4)
@@ -640,6 +710,7 @@ impl FormatEngine<'_> {
         if current.starts_with(',') && starts_string_literal_token(previous_code.trim_start()) {
             let clear_continuation_after_line = line.trim_end().ends_with(';').then(|| {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -665,6 +736,7 @@ impl FormatEngine<'_> {
         {
             let indent_spaces = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -708,20 +780,22 @@ impl FormatEngine<'_> {
                 .any(|header| header.as_deref() == Some("case"))
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
                 .any(|line| starts_string_literal_token(line.trim_start()))
-            && let Some((call_line, open)) = self.output.iter().rev().take(16).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                if starts_string_literal_token(code.trim_start()) {
-                    return None;
-                }
-                unmatched_open_paren_columns(code)
-                    .last()
-                    .copied()
-                    .map(|open| (line, open))
-            })
+            && let Some((call_line, open)) =
+                self.output.scoped().iter().rev().take(16).find_map(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    if starts_string_literal_token(code.trim_start()) {
+                        return None;
+                    }
+                    unmatched_open_paren_columns(code)
+                        .last()
+                        .copied()
+                        .map(|open| (line, open))
+                })
         {
             let call_code = call_line[..trailing_comment_split_limit(call_line)].trim_end();
             let target = if call_code.ends_with('(') {
@@ -737,6 +811,7 @@ impl FormatEngine<'_> {
         }
         if (self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(8)
@@ -745,11 +820,12 @@ impl FormatEngine<'_> {
             > 1
             || self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(4)
                 .any(|line| line.trim_start().starts_with(',')))
-            && let Some(call_line) = self.output.iter().rev().take(16).find(|line| {
+            && let Some(call_line) = self.output.scoped().iter().rev().take(16).find(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 code.ends_with('(')
                     && !starts_string_literal_token(code.trim_start())
@@ -840,6 +916,7 @@ impl FormatEngine<'_> {
             && first_string_literal_start(previous_code.trim_start()).is_some()
             && let Some(open) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take_while(|line| {
@@ -895,7 +972,7 @@ impl FormatEngine<'_> {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         if structural_context {
-            return self.output.iter().rev().take(16).find_map(|line| {
+            return self.output.scoped().iter().rev().take(16).find_map(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 (!starts_string_literal_token(code.trim_start())).then(|| {
                     assignment_call_value_column(code, self.options.tab_width)
@@ -924,21 +1001,34 @@ impl FormatEngine<'_> {
             return Some(open + 1);
         }
         if starts_string_literal_token(previous_code.trim_start())
-            && let Some(open) = self.output.iter().rev().skip(1).take(16).find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
-                (!starts_string_literal_token(code.trim_start()))
-                    .then(|| unmatched_open_paren_columns(code).last().copied())?
-            })
+            && let Some(open) =
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(16)
+                    .find_map(|line| {
+                        let code = line[..trailing_comment_split_limit(line)].trim_end();
+                        (!starts_string_literal_token(code.trim_start()))
+                            .then(|| unmatched_open_paren_columns(code).last().copied())?
+                    })
         {
             return Some(open + 1);
         }
         assignment_call_value_column(previous_code, self.options.tab_width)
             .or_else(|| {
                 starts_string_literal_token(previous_code.trim_start()).then(|| {
-                    self.output.iter().rev().skip(1).take(8).find_map(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
-                        assignment_call_value_column(code, self.options.tab_width)
-                    })
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(8)
+                        .find_map(|line| {
+                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            assignment_call_value_column(code, self.options.tab_width)
+                        })
                 })?
             })
             .map(|column| column + self.options.indent_width)
@@ -968,6 +1058,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1010,6 +1101,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1068,7 +1160,7 @@ impl FormatEngine<'_> {
         }
         let mut close_pending = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.iter().rev().take(8) {
+        for previous in self.output.scoped().iter().rev().take(8) {
             let trimmed = previous.trim_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -1109,7 +1201,7 @@ impl FormatEngine<'_> {
     pub(crate) fn enclosing_macro_call_output_context(&self) -> bool {
         let mut close_pending = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.iter().rev().take(8) {
+        for previous in self.output.scoped().iter().rev().take(8) {
             let trimmed = previous.trim_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -1160,6 +1252,7 @@ impl FormatEngine<'_> {
         }
         let has_split_opener = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1191,6 +1284,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
             .or_else(|| {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1237,7 +1331,7 @@ impl FormatEngine<'_> {
         let mut close_pending = 0usize;
         let mut brace_depth = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.iter().rev().take(32) {
+        for previous in self.output.scoped().iter().rev().take(32) {
             let trimmed = previous.trim_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -1315,6 +1409,7 @@ impl FormatEngine<'_> {
         }
         let Some(spaces) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1336,6 +1431,7 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1343,7 +1439,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') {
             return None;
         }
-        for line in self.output.iter().rev().take(16) {
+        for line in self.output.scoped().iter().rev().take(16) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim_start();
             if code.ends_with(';') || code.ends_with('{') || trimmed == "}" {
@@ -1367,6 +1463,7 @@ impl FormatEngine<'_> {
     fn new_over_max_call_base_indent_spaces(&self) -> Option<usize> {
         for line in self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(64)
@@ -1425,6 +1522,7 @@ impl FormatEngine<'_> {
         let base_indent = self.new_over_max_call_base_indent_spaces()?;
         let comment_string_spaces = if starts_string_literal_token(line.trim_start()) {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1437,6 +1535,7 @@ impl FormatEngine<'_> {
         };
         let comma_after_string_spaces = if line.trim_start().starts_with(',') {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1450,12 +1549,13 @@ impl FormatEngine<'_> {
         let adjacent_string_call_close = if line.trim_start().starts_with(");")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(8)
                 .any(|line| starts_string_literal_token(line.trim_start()))
         {
-            self.output.iter().rev().take(8).find_map(|line| {
+            self.output.scoped().iter().rev().take(8).find_map(|line| {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 if starts_string_literal_token(code.trim_start()) {
                     return None;
@@ -1491,6 +1591,7 @@ impl FormatEngine<'_> {
     fn new_empty_call_base_indent_spaces(&self) -> Option<usize> {
         for line in self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(64)
@@ -1569,6 +1670,7 @@ impl FormatEngine<'_> {
         }
         let before_paren = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous)
@@ -1676,7 +1778,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
-        for line in self.output.iter().rev().skip(1).take(8) {
+        for line in self.output.scoped().iter().rev().skip(1).take(8) {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let trimmed = code.trim();
             if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
@@ -1717,7 +1819,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if unmatched_open_paren_column(previous_code).is_none() {
-            for line in self.output.iter().rev().skip(1).take(12) {
+            for line in self.output.scoped().iter().rev().skip(1).take(12) {
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
                     break;
@@ -1753,6 +1855,7 @@ impl FormatEngine<'_> {
         let open = unmatched_open_paren_column(previous_code)?;
         let mut nonempty = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip(1)
@@ -1799,6 +1902,7 @@ impl FormatEngine<'_> {
     fn split_new_call_paren_indent_spaces(&self) -> Option<usize> {
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1810,6 +1914,7 @@ impl FormatEngine<'_> {
         }
         let mut nonempty = self
             .output
+            .scoped()
             .iter()
             .rev()
             .take(64)
@@ -1881,6 +1986,7 @@ impl FormatEngine<'_> {
         let anchor = argument.sibling_anchor_column?;
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -1900,13 +2006,14 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if previous_code.ends_with("),") {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            for raw in self.output.iter().rev().skip(1).take(8) {
+            for raw in self.output.scoped().iter().rev().skip(1).take(8) {
                 let code = raw[..trailing_comment_split_limit(raw)].trim_end();
                 let trimmed = code.trim();
                 if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
@@ -1958,6 +2065,7 @@ impl FormatEngine<'_> {
         let mut close_pending = 0usize;
         for raw in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -2042,6 +2150,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2145,6 +2254,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2186,6 +2296,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2193,7 +2304,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') || !line_paren_imbalance(previous_code).1.is_empty() {
             return None;
         }
-        for raw in self.output.iter().rev().skip(1).take(12) {
+        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             if !line_paren_imbalance(code).1.is_empty() {
                 return Some(leading_visual_width(raw, self.options.tab_width));
@@ -2216,6 +2327,7 @@ impl FormatEngine<'_> {
         }
         let previous = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -2230,6 +2342,7 @@ impl FormatEngine<'_> {
         let mut depth = 0usize;
         for raw in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())

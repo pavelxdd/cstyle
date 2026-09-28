@@ -70,6 +70,7 @@ impl FormatEngine<'_> {
         }
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -154,6 +155,7 @@ impl FormatEngine<'_> {
         let current_label = || {
             let line = if self.current.trim().is_empty() {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
@@ -180,6 +182,7 @@ impl FormatEngine<'_> {
                 self.has_pending_case_label_brace()
                     || self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| {
@@ -234,7 +237,7 @@ impl FormatEngine<'_> {
                     base + visual_width_from(&self.current[..offset], base, self.options.tab_width)
                 })
                 .or_else(|| {
-                    self.output.iter().rev().find_map(|line| {
+                    self.output.scoped().iter().rev().find_map(|line| {
                         case_label_token_offset(line, header).map(|offset| {
                             visual_width_from(&line[..offset], 0, self.options.tab_width)
                         })
@@ -384,6 +387,16 @@ impl FormatEngine<'_> {
             .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody))
         {
             self.end_preprocessor_split_else();
+            // The engine agrees that no function or statement block is open.
+            if !self
+                .layout
+                .nesting
+                .brace_type_stack
+                .iter()
+                .any(|brace_type| matches!(brace_type, BraceType::Definition | BraceType::Command))
+            {
+                self.output.set_scope_start(self.output.len());
+            }
         }
     }
 

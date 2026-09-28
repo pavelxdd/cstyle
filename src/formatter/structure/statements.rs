@@ -290,6 +290,8 @@ impl Parser<'_> {
             let Some(after) = self.after_condition(condition, end) else {
                 break self.simple(at, end);
             };
+            // astyle reads no header in `if MACRO(x)`, and pairs no `else`.
+            let parenthesized = self.after_parens(condition, end).is_some();
             self.unterminated = false;
             let after_body = self.body(at, after, end);
             let Some(next) = self.next(after_body, end) else {
@@ -300,7 +302,7 @@ impl Parser<'_> {
             }
             // Without its `;` (a macro call) astyle does not see the body
             // end, and neither pairs the `else`.
-            if !self.unterminated {
+            if !self.unterminated && parenthesized {
                 self.else_ifs.insert(next, at);
             }
             let Some(following) = self.next(next + 1, end) else {
@@ -527,6 +529,12 @@ mod tests {
     fn statements_link_to_previous_siblings_past_comments_and_bodies() {
         let source = "void f(void)\n{\n    a();\n    /* c */\n    if (x)\n        b();\n    switch (y) {\n    case 1:\n        c();\n        break;\n    }\n    FOO(z)\n    d();\n}\n";
         assert_eq!(sibling_lines(source), [(4, 2), (6, 4), (9, 8), (11, 6)]);
+    }
+
+    #[test]
+    fn else_after_macro_condition_stays_unpaired() {
+        let source = "void f(void)\n{\n    if EQ(\"\") return 0;\n    else if EQ(\"x\") {\n        g();\n    }\n}\n";
+        assert_eq!(else_lines(source), [None]);
     }
 
     #[test]

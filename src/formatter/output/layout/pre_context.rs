@@ -311,7 +311,12 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if trailing_word(previous_code) == "return"
                 && !previous_code.trim_start().starts_with("return")
-                && let Some(open) = self.output.iter().rev().find(|line| line.trim() == "{")
+                && let Some(open) = self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .find(|line| line.trim() == "{")
             {
                 let spaces = leading_visual_width(open, self.options.tab_width);
                 layout.exact_indent_spaces = Some(spaces);
@@ -381,10 +386,11 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             } else if previous_code.trim_start().starts_with('#')
                 && previous_code.ends_with(']')
-                && let Some(before_preprocessor) = self.output.iter().rev().skip(1).find(|line| {
-                    let trimmed = line.trim_start();
-                    !trimmed.is_empty() && !trimmed.starts_with('#')
-                })
+                && let Some(before_preprocessor) =
+                    self.output.scoped().iter().rev().skip(1).find(|line| {
+                        let trimmed = line.trim_start();
+                        !trimmed.is_empty() && !trimmed.starts_with('#')
+                    })
             {
                 layout.exact_indent_spaces = Some(leading_visual_width(
                     before_preprocessor,

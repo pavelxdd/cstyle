@@ -242,6 +242,7 @@ impl FormatEngine<'_> {
         if spaces.is_some()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -290,6 +291,7 @@ impl FormatEngine<'_> {
             && starts_header_word(line.trim_start(), "if")
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -410,6 +412,7 @@ impl FormatEngine<'_> {
             && previous.trim_end().ends_with(';')
             && let Some(header) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -589,6 +592,7 @@ impl FormatEngine<'_> {
             let mut comment_indent = None;
             for previous in self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty())
@@ -626,6 +630,7 @@ impl FormatEngine<'_> {
                     && let Some(spaces) = comment_indent
                     && self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .skip_while(|line| line.as_str() != previous.as_str())
@@ -661,6 +666,7 @@ impl FormatEngine<'_> {
             let mut seen_comment = false;
             let after_braceless_else_comment = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .filter(|line| !line.trim().is_empty())
@@ -728,6 +734,7 @@ impl FormatEngine<'_> {
             } else if previous_code.trim_start() == "#else"
                 && let Some(header_line) = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip(1)
@@ -739,7 +746,7 @@ impl FormatEngine<'_> {
                         + self.options.indent_width * 2,
                 );
             } else if (line.trim() == "?"
-                && self.output.iter().rev().take(8).any(|line| {
+                && self.output.scoped().iter().rev().take(8).any(|line| {
                     let trimmed = line.trim_start();
                     trimmed == "}" || trimmed.starts_with("} ")
                 }))
@@ -766,6 +773,7 @@ impl FormatEngine<'_> {
                     <= self.options.indent_width / 2
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.as_str() != previous.as_str())
@@ -796,6 +804,7 @@ impl FormatEngine<'_> {
                     <= self.options.indent_width / 2
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .skip_while(|line| line.as_str() != previous.as_str())
@@ -839,6 +848,7 @@ impl FormatEngine<'_> {
                 || previous.trim_start().starts_with("for("))
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -870,6 +880,7 @@ impl FormatEngine<'_> {
             && previous[..trailing_comment_split_limit(previous)].trim() == "},"
             && let Some(first_lambda) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -901,6 +912,7 @@ impl FormatEngine<'_> {
         if matches!(line.trim_start(), "@private" | "@public" | "@protected")
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .any(|previous| previous.trim_start().starts_with("@interface "))
@@ -938,6 +950,7 @@ impl FormatEngine<'_> {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let before_comment = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -1168,6 +1181,7 @@ impl FormatEngine<'_> {
             && previous.trim_end().ends_with(',')
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(4)
@@ -1179,7 +1193,7 @@ impl FormatEngine<'_> {
         if !line.trim_start().starts_with(['{', '}'])
             && let Some(previous) = self.output.last_line_outside_comment()
             && previous.trim_end().ends_with(',')
-            && self.output.iter().rev().take(4).any(|line| {
+            && self.output.scoped().iter().rev().take(4).any(|line| {
                 line.contains("std::conditional <") || line.contains("std::conditional<")
             })
         {
@@ -1218,6 +1232,7 @@ impl FormatEngine<'_> {
         }
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1225,6 +1240,7 @@ impl FormatEngine<'_> {
             let previous_trimmed = previous.trim_start();
             let macro_before_previous = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous)
@@ -1246,6 +1262,7 @@ impl FormatEngine<'_> {
                         && previous_trimmed.contains("noexcept(")
                         && self
                             .output
+                            .scoped()
                             .iter()
                             .rev()
                             .take(4)
@@ -1346,6 +1363,7 @@ impl FormatEngine<'_> {
             } else if previous_code.ends_with('/')
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .take(4)
@@ -1382,6 +1400,7 @@ impl FormatEngine<'_> {
             if let Some(column) = self.current_inline_array_column()
                 && let Some(previous) = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1437,6 +1456,7 @@ impl FormatEngine<'_> {
             let block_comment_after_statement = line.trim_start().starts_with("/*")
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1466,6 +1486,7 @@ impl FormatEngine<'_> {
             && previous.trim_end().ends_with(';')
             && let Some(header) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())

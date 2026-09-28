@@ -157,6 +157,12 @@ pub(crate) struct OutputBuffer {
     /// Block comment token being pushed; lines pushed without a current line
     /// meanwhile hold its text.
     active_comment: Option<usize>,
+    /// First line of the current top-level construct: the line closing the
+    /// previous function body.
+    scope_start: usize,
+    /// Line that starts the next construct once a later line is pushed, so
+    /// the closing line's own layout still sees its function.
+    pending_scope_start: Option<usize>,
     may_have_label_open: bool,
     may_have_else: bool,
     may_have_hash: bool,
@@ -214,6 +220,12 @@ impl OutputBuffer {
     /// Gives the pending sources to the line just pushed; a blank line, such
     /// as one inserted before the line they belong to, holds none.
     fn push_pending_sources(&mut self, blank: bool) {
+        if let Some(start) = self.pending_scope_start
+            && self.lines.len() > start + 1
+        {
+            self.scope_start = start;
+            self.pending_scope_start = None;
+        }
         if blank {
             self.tokens.push(None);
             self.comments.push(LineComments::default());
@@ -385,6 +397,23 @@ impl OutputBuffer {
             depth = depth.saturating_sub(meta.opens);
         }
         None
+    }
+
+    /// Lines from the start of the current top-level construct on: layout
+    /// looking back never needs the inside of an earlier function.
+    pub(crate) fn scoped(&self) -> &[String] {
+        &self.lines[self.scope_start.min(self.lines.len())..]
+    }
+
+    pub(crate) fn clear_scope(&mut self) {
+        self.scope_start = 0;
+        self.pending_scope_start = None;
+    }
+
+    /// Starts a new top-level construct at line `index` once a line after
+    /// it is pushed.
+    pub(crate) fn set_scope_start(&mut self, index: usize) {
+        self.pending_scope_start = Some(index);
     }
 
     pub(crate) fn last_non_empty_index(&self) -> Option<usize> {

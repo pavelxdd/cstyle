@@ -180,6 +180,7 @@ impl FormatEngine<'_> {
         }
         let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())

@@ -227,6 +227,7 @@ impl FormatEngine<'_> {
         let mut comment_indent = None;
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -306,6 +307,7 @@ impl FormatEngine<'_> {
         }
         let mut before_lines = self
             .output
+            .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
@@ -345,6 +347,7 @@ impl FormatEngine<'_> {
         if trimmed.trim_start().starts_with("/*") {
             let follows_switch = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -590,6 +593,7 @@ impl FormatEngine<'_> {
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
         let line = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
@@ -743,6 +747,7 @@ impl FormatEngine<'_> {
             .flatten();
         let previous_line_ends_operator = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| {
@@ -847,6 +852,7 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.active_brace().is_none()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -865,6 +871,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -888,6 +895,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -909,6 +917,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -921,7 +930,7 @@ impl FormatEngine<'_> {
                     || comment_starts_header_word(previous_trimmed, "for")
                     || previous_trimmed.starts_with("else if")
                     || previous_trimmed.starts_with("} else"))
-                && self.output.iter().rev().take(64).any(|line| {
+                && self.output.scoped().iter().rev().take(64).any(|line| {
                     let trimmed = line[..trailing_comment_split_limit(line)]
                         .trim_end()
                         .trim_start();
@@ -929,6 +938,7 @@ impl FormatEngine<'_> {
                 })
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .take_while(|line| {
@@ -953,6 +963,7 @@ impl FormatEngine<'_> {
             && self.preprocessor.split_else.extra_indent
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -970,6 +981,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1001,12 +1013,14 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
             && preprocessor_directive(previous.trim_start()) == Some("endif")
             && let Some(header) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
@@ -1037,6 +1051,7 @@ impl FormatEngine<'_> {
                 == 0
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1057,6 +1072,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1075,6 +1091,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1087,6 +1104,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1102,6 +1120,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1128,6 +1147,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1152,6 +1172,7 @@ impl FormatEngine<'_> {
             && (self.preprocessor.split_else.extra_indent || self.preprocessor_split_else_active())
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1169,6 +1190,7 @@ impl FormatEngine<'_> {
         }
         let follows_objc_interface = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -1178,6 +1200,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && !self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1194,6 +1217,7 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| {
                     self.output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -1222,6 +1246,7 @@ impl FormatEngine<'_> {
                 .or_else(|| self.current_inline_array_column())
                 .or_else(|| {
                     self.output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -1233,6 +1258,7 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| {
                     self.output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -1256,6 +1282,7 @@ impl FormatEngine<'_> {
             }
             if self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1461,6 +1488,7 @@ impl FormatEngine<'_> {
             {
                 let after_post_closing_declaration = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1573,6 +1601,7 @@ impl FormatEngine<'_> {
                 && self.current.trim().is_empty()
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1595,6 +1624,7 @@ impl FormatEngine<'_> {
                         .is_some_and(|whitespace| whitespace.matches('\n').count() > 1);
                 let previous_indent = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1623,6 +1653,7 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty())
         .then(|| {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1650,6 +1681,7 @@ impl FormatEngine<'_> {
             .then(|| {
                 let line = self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())?;
@@ -1680,6 +1712,7 @@ impl FormatEngine<'_> {
             }
             let pending_header_line = if self.current.trim().is_empty() {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
@@ -1718,6 +1751,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty());
@@ -1737,7 +1771,7 @@ impl FormatEngine<'_> {
                 );
             }
             if preprocessor_directive(trimmed) == Some("endif")
-                && let Some(header) = self.output.iter().rev().skip(1).find(|line| {
+                && let Some(header) = self.output.scoped().iter().rev().skip(1).find(|line| {
                     let trimmed = line.trim_start();
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
@@ -1759,6 +1793,7 @@ impl FormatEngine<'_> {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             let after_braceless_header = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip_while(|candidate| candidate.as_str() != line.as_str())
@@ -1957,7 +1992,7 @@ impl FormatEngine<'_> {
         if assignment_value_indent.is_some() && self.previous_line_assigns_same_left_side(code) {
             return assignment_value_indent;
         }
-        if self.output.iter().rev().take(16).any(|line| {
+        if self.output.scoped().iter().rev().take(16).any(|line| {
             preprocessor_directive(line.trim_start())
                 .is_some_and(|directive| matches!(directive, "if" | "ifdef" | "ifndef"))
         }) {
@@ -1985,6 +2020,7 @@ impl FormatEngine<'_> {
         !left.is_empty()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .skip(1)
@@ -2000,6 +2036,7 @@ impl FormatEngine<'_> {
     fn preprocessor_split_braceless_comment_indent_spaces(&self) -> Option<usize> {
         if !self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?
@@ -2008,7 +2045,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        for line in self.output.iter().rev().skip(1) {
+        for line in self.output.scoped().iter().rev().skip(1) {
             let trimmed = line.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -2095,6 +2132,7 @@ impl FormatEngine<'_> {
         let mut opener_prefix = if unindented_namespace_run_in_comment {
             let spaces = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -2118,6 +2156,7 @@ impl FormatEngine<'_> {
             self.options.continuation_indent_prefix(0, spaces)
         } else if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -2129,6 +2168,7 @@ impl FormatEngine<'_> {
             " ".repeat(leading_visual_width(previous, self.options.tab_width))
         } else if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -2155,6 +2195,7 @@ impl FormatEngine<'_> {
                 None => {
                     if self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -2174,6 +2215,7 @@ impl FormatEngine<'_> {
         };
         if let Some(previous) = self
             .output
+            .scoped()
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
@@ -2211,6 +2253,7 @@ impl FormatEngine<'_> {
             .is_some_and(|header| header.as_deref() == Some("case"))
             && let Some(previous) = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())

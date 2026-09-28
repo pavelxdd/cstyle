@@ -199,6 +199,7 @@ impl FormatEngine<'_> {
         let previous_namespace_header = self.current_is_blank()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -354,6 +355,7 @@ impl FormatEngine<'_> {
         let mut lines = Vec::new();
         for line in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -406,7 +408,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn current_ends_definition_header(&self) -> bool {
         let source = if self.current_is_blank() {
-            match self.output.iter().rev().find(|line| {
+            match self.output.scoped().iter().rev().find(|line| {
                 let trimmed = line.trim_start();
                 !trimmed.is_empty() && !is_comment_only_line(trimmed)
             }) {
@@ -422,6 +424,7 @@ impl FormatEngine<'_> {
     fn aggregate_header_ends_with_paren_group(&self) -> bool {
         let header = if self.current_is_blank() {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())

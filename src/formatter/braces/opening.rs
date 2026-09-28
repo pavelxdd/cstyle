@@ -358,7 +358,7 @@ impl FormatEngine<'_> {
         if current.is_empty() || current.starts_with('#') {
             return None;
         }
-        for previous in self.output.iter().rev().take(8) {
+        for previous in self.output.scoped().iter().rev().take(8) {
             let trimmed = previous.trim_start();
             if trimmed.is_empty() {
                 continue;
@@ -448,7 +448,7 @@ impl FormatEngine<'_> {
             && !line_is_control_body_header(previous_code.trim_start());
         let previous_definition_brace_spaces = (!self.output_ends_objc_method_header())
             .then(|| {
-                let owner = self.output.iter().rev().find(|line| {
+                let owner = self.output.scoped().iter().rev().find(|line| {
                     let trimmed = line.trim_start();
                     !trimmed.is_empty() && !is_comment_only_line(trimmed)
                 })?;
@@ -509,6 +509,7 @@ impl FormatEngine<'_> {
         let mut in_block_comment = false;
         for previous in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -568,6 +569,7 @@ impl FormatEngine<'_> {
             if previous_code.ends_with('/')
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .take(4)
@@ -681,6 +683,7 @@ impl FormatEngine<'_> {
         }
         for raw in self
             .output
+            .scoped()
             .iter()
             .rev()
             .filter(|line| !line.trim().is_empty())
@@ -1087,6 +1090,7 @@ impl FormatEngine<'_> {
             }
             let previous_closing_header_indent = self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
@@ -1146,6 +1150,7 @@ impl FormatEngine<'_> {
                 .is_some_and(is_semicolonless_call_line)
                 || self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1175,6 +1180,7 @@ impl FormatEngine<'_> {
             && line_ends_compound_literal_cast(self.current.trim_end())
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -1517,6 +1523,7 @@ impl FormatEngine<'_> {
                     .is_some_and(is_break_blocks_closing_header)
                     || self
                         .output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -1668,6 +1675,7 @@ impl FormatEngine<'_> {
                 || matches!(next, Some(Token::Operator(operator)) if operator == "~"))
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .take(3)
@@ -1972,6 +1980,7 @@ impl FormatEngine<'_> {
             || (header_text.trim().is_empty()
                 && self
                     .output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
@@ -1988,6 +1997,7 @@ impl FormatEngine<'_> {
             .then(|| {
                 let header_spaces = if self.current_is_blank() {
                     self.output
+                        .scoped()
                         .iter()
                         .rev()
                         .find(|line| !line.trim().is_empty())
@@ -2029,6 +2039,7 @@ impl FormatEngine<'_> {
             ))
         .then(|| {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -2051,6 +2062,7 @@ impl FormatEngine<'_> {
             ))
         .then(|| {
             self.output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
@@ -2065,6 +2077,7 @@ impl FormatEngine<'_> {
             .current_is_blank()
             .then(|| {
                 self.output
+                    .scoped()
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
@@ -2125,6 +2138,7 @@ impl FormatEngine<'_> {
         if self.current_is_blank()
             && self
                 .output
+                .scoped()
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
