@@ -2925,7 +2925,9 @@ impl FormatEngine<'_> {
                 }
                 let previous_trimmed = previous_code.trim_start();
                 if base > self.options.indent_width * 2
-                    && !opens.is_empty()
+                    && opens.last().is_some_and(|&open| {
+                        open.saturating_sub(base) >= self.options.max_continuation_indent
+                    })
                     && previous_trimmed
                         .split_once('(')
                         .is_some_and(|(callee, _)| is_macro_like_word(callee.trim()))

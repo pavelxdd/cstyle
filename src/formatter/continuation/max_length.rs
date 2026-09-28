@@ -9,6 +9,8 @@ use crate::formatter::constructs::switch_cases::max_length_inline_case_body_inde
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
+use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
@@ -170,6 +172,7 @@ impl FormatEngine<'_> {
         } else {
             structural_level
         };
+        let source_tokens = self.output.pending_tokens();
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
@@ -220,12 +223,46 @@ impl FormatEngine<'_> {
             {
                 following_indent = ContinuationIndent::Spaces(floor);
             }
+            self.set_split_part_tokens(source_tokens, line, &tail);
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
             tail = split.tail;
             next_indent = following_indent;
         }
         if !tail.trim().is_empty() {
+            self.set_split_part_tokens(source_tokens, line, &tail);
             self.push_output_line_with_indent(&tail, next_structural_level, next_indent);
+        }
+    }
+
+    /// Gives the part of the split `line` that starts with `part` the source
+    /// tokens from its first one on.
+    fn set_split_part_tokens(&mut self, source: Option<TokenSpan>, line: &str, part: &str) {
+        let Some(source) = source else {
+            return;
+        };
+        let part = part.trim_start();
+        if !line.ends_with(part) {
+            return;
+        }
+        let from = line.len() - part.len();
+        let mut cursor = 0;
+        for index in source.first..=source.last {
+            let token = &self.tree.tokens[index];
+            if !is_code_token(token) {
+                continue;
+            }
+            let text = token_text(token);
+            let Some(offset) = line[cursor..].find(&text) else {
+                return;
+            };
+            if cursor + offset >= from {
+                self.output.set_pending_tokens(Some(TokenSpan {
+                    first: index,
+                    last: source.last,
+                }));
+                return;
+            }
+            cursor += offset + text.len();
         }
     }
 

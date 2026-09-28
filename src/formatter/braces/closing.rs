@@ -1,7 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
-    ExternCGuard, contains_one_line_block, is_lambda_body_header,
-    is_namespace_or_module_block_header,
+    ExternCGuard, is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
@@ -652,17 +651,19 @@ impl FormatEngine<'_> {
             return false;
         }
 
+        // Only a lone `}` joins the header; any other line stays published,
+        // with the sources it was published with.
+        if self
+            .output
+            .last()
+            .is_none_or(|previous| previous.trim() != "}")
+        {
+            return false;
+        }
         let Some(previous) = self.take_last_output_line_for_attach() else {
             return false;
         };
         let previous_trimmed = previous.trim();
-        if previous_trimmed.is_empty()
-            || previous_trimmed != "}"
-            || contains_one_line_block(previous_trimmed)
-        {
-            self.restore_last_output_line_after_attach(previous);
-            return false;
-        }
 
         self.current.push_str(previous_trimmed);
         self.current.push(' ');
@@ -672,10 +673,6 @@ impl FormatEngine<'_> {
 
     fn take_last_output_line_for_attach(&mut self) -> Option<String> {
         self.output.pop()
-    }
-
-    fn restore_last_output_line_after_attach(&mut self, line: String) {
-        self.publish_ready_line(line);
     }
 
     pub(crate) fn split_else_body_closing_indent_spaces(&self, line: &str) -> Option<usize> {

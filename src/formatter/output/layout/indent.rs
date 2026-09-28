@@ -1411,7 +1411,8 @@ impl FormatEngine<'_> {
         }
         if !current.starts_with([')', '}'])
             && let Some(open) = unmatched_open_paren_column(previous_code)
-            && open > self.options.max_continuation_indent
+            && open.saturating_sub(leading_visual_width(previous, tab_width))
+                > self.options.max_continuation_indent
         {
             let previous_indent = leading_visual_width(previous, tab_width);
             let head = previous_code[..open].trim_start();

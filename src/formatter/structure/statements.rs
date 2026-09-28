@@ -248,7 +248,10 @@ impl Parser<'_> {
                     && self.is_symbol(colon, ':')
                 {
                     return match self.next(colon + 1, end) {
-                        Some(next) if !self.is_symbol(next, '}') => self.statement(next, end),
+                        Some(next) if !self.is_symbol(next, '}') => {
+                            self.block_statements.insert(next);
+                            self.statement(next, end)
+                        }
                         _ => colon + 1,
                     };
                 }
