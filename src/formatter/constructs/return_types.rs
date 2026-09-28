@@ -6,8 +6,8 @@ use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like
 use crate::formatter::syntax::{first_operator_word, function_name_start, is_named_operator_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    find_outside_quotes, line_paren_imbalance, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, leading_identifier};
 
@@ -290,7 +290,7 @@ fn split_return_type_line(line: &str) -> Option<(String, String)> {
     if line.starts_with("return ") || line.trim_start().starts_with('#') {
         return None;
     }
-    let open_paren = line.find('(')?;
+    let open_paren = find_outside_quotes(line, "(")?;
     if is_function_pointer_line(line, open_paren) {
         return None;
     }
@@ -318,7 +318,7 @@ fn is_function_part_line(line: &str) -> bool {
     if line.starts_with("return ") || line.trim_start().starts_with('#') {
         return false;
     }
-    let Some(open_paren) = line.find('(') else {
+    let Some(open_paren) = find_outside_quotes(line, "(") else {
         return false;
     };
     if is_function_pointer_line(line, open_paren) {
@@ -412,7 +412,7 @@ fn is_pointer_prefixed_function_part(line: &str) -> bool {
     if rest == line {
         return false;
     }
-    let Some(open_paren) = rest.find('(') else {
+    let Some(open_paren) = find_outside_quotes(rest, "(") else {
         return false;
     };
     let before = rest[..open_paren].trim_end();

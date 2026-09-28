@@ -1082,3 +1082,13 @@ fn break_return_type_decl_still_splits_function_declaration() {
 
     assert_eq!(format_exact("int foo();\n", &options), "int\nfoo();\n");
 }
+
+#[test]
+fn break_return_type_ignores_parentheses_inside_string_literals() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned(), "-xB".to_owned()])
+        .expect("valid options");
+    let source = "static void\nu(const char *msg)\n{\n    f(stderr,\n      \"a\\n\"\n      \"  -V x (h, h) y\\n\"\n     );\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}
