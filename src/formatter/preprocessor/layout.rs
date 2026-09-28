@@ -1013,7 +1013,9 @@ impl FormatEngine<'_> {
                     leading_visual_width(branch, self.options.tab_width)
                         + self.options.indent_width,
                 );
-            } else if is_comment_line(branch_raw_trimmed) || branch_raw_trimmed.starts_with("/*") {
+            } else if split_else_branch
+                && (is_comment_line(branch_raw_trimmed) || branch_raw_trimmed.starts_with("/*"))
+            {
                 return Some(leading_visual_width(branch, self.options.tab_width));
             }
             break;

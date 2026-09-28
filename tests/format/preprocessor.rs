@@ -362,6 +362,13 @@ fn top_level_comment_and_declaration_after_preprocessor_stay_unindented() {
 }
 
 #[test]
+fn top_level_comment_after_endif_ignores_preceding_block_comment_tail() {
+    let source = "/*\n */\n#ifdef A\n#endif\n/* b */\nint x;\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn define_body_unmatched_close_brace_stays_at_body_indent() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
