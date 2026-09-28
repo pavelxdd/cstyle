@@ -201,7 +201,7 @@ impl FormatEngine<'_> {
                         && before_string[open + 1..].contains(',')
                     {
                         return Some(
-                            open + 1
+                            column_after(before_string, open, self.options.tab_width)
                                 + self.layout.line_adjuster.total_case_unindent_depth()
                                     * self.options.indent_width,
                         );
@@ -226,10 +226,13 @@ impl FormatEngine<'_> {
                                 .chars()
                                 .take_while(|ch| ch.is_whitespace())
                                 .collect::<String>();
-                            let padding_width =
-                                visual_width_from(&padding, open + 1, self.options.tab_width);
+                            let padding_width = visual_width_from(
+                                &padding,
+                                column_after(before_string, open, self.options.tab_width),
+                                self.options.tab_width,
+                            );
                             return Some(
-                                open + 1
+                                column_after(before_string, open, self.options.tab_width)
                                     + padding_width
                                     + self.layout.line_adjuster.total_case_unindent_depth()
                                         * self.options.indent_width,
@@ -848,7 +851,7 @@ impl FormatEngine<'_> {
                     continue;
                 }
                 if saw_blank && raw.trim_start().starts_with(':') {
-                    return Some(open + 1);
+                    return Some(column_after(previous_code, open, self.options.tab_width));
                 }
                 break;
             }
@@ -1200,7 +1203,7 @@ impl FormatEngine<'_> {
             && previous_code[..capture_end].contains('=')
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            let aligned = open + 1;
+            let aligned = column_after(previous_code, open, self.options.tab_width);
             if matches!(
                 self.options.brace_style,
                 BraceStyle::Allman
@@ -1227,7 +1230,7 @@ impl FormatEngine<'_> {
                     return Some(leading_visual_width(raw, tab_width) + width);
                 }
                 if let Some(open) = unmatched_open_paren_column(code) {
-                    return Some(open + 1);
+                    return Some(column_after(code, open, self.options.tab_width));
                 }
                 if trimmed_code.ends_with(';') || trimmed_code == "{" || trimmed_code == "}" {
                     break;
@@ -1243,7 +1246,7 @@ impl FormatEngine<'_> {
             && has_unmatched_open_brace(previous_code)
             && let Some(open) = line_paren_imbalance(previous_code).1.last()
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, *open, self.options.tab_width));
         }
         if starts_string_literal_token(current)
             && (previous_code.ends_with('+')
@@ -1357,7 +1360,11 @@ impl FormatEngine<'_> {
             && previous_trimmed.contains("ASSERT")
             && let Some(open) = unmatched_open_paren_column(previous.trim_end())
         {
-            return Some(open + 1);
+            return Some(column_after(
+                previous.trim_end(),
+                open,
+                self.options.tab_width,
+            ));
         }
         if let Some(spaces) = self.contextual_ternary_arm_indent_spaces(line, previous) {
             return Some(spaces);
@@ -1422,7 +1429,7 @@ impl FormatEngine<'_> {
             && previous_trimmed.starts_with("return ")
             && let Some(open) = unmatched_open_paren_column(previous_code)
         {
-            return Some(open + 1);
+            return Some(column_after(previous_code, open, self.options.tab_width));
         }
         if current.starts_with('.')
             && !current.starts_with("...")
@@ -1628,12 +1635,12 @@ impl FormatEngine<'_> {
                     break;
                 }
                 if let Some(open) = unmatched_open_paren_column(code) {
-                    open_info = Some((line_index, open));
+                    open_info =
+                        Some((line_index, column_after(code, open, self.options.tab_width)));
                     break;
                 }
             }
-            if let Some((line_index, open)) = open_info {
-                let target = open + 1;
+            if let Some((line_index, target)) = open_info {
                 let before_open = self.output[..line_index].iter().rev();
                 let mut saw_blank = false;
                 let mut after_ternary = false;

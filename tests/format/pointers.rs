@@ -3470,3 +3470,16 @@ fn unpad_paren_keeps_space_before_declarator_groups() {
         "int (*fp)(int);\nvoid (name)(int);\nx = foo(a);\n"
     );
 }
+
+#[test]
+fn align_pointer_type_keeps_dereference_after_logical_operator() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=linux".to_owned(), "-k1".to_owned()],
+    )
+    .expect("valid options");
+
+    let source = "int f(void)\n{\n    return gc->data.size == 1 && *gc->data.data == ' ';\n}\n";
+    assert_eq!(format_exact(source, &options), source);
+}

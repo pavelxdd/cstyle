@@ -268,6 +268,16 @@ impl FormatEngine<'_> {
         }
         self.reset_stale_leading_operator_continuation(operator);
 
+        // After a binary operator a `*` or `&` is unary, whatever spacing the
+        // text around it suggests.
+        if matches!(operator, "*" | "&")
+            && operator_role == OperatorRole::UnaryOperator
+            && self.follows_expression_operator(token_index)
+        {
+            self.push_unary_prefix(operator);
+            return;
+        }
+
         self.push_operator_by_kind(
             operator,
             next,
@@ -276,6 +286,45 @@ impl FormatEngine<'_> {
             operator_role,
             split_rvalue_reference,
         );
+    }
+
+    /// Whether the code token before `token_index` is a binary operator, so
+    /// what follows starts an operand.
+    fn follows_expression_operator(&self, token_index: usize) -> bool {
+        self.tree
+            .previous_code_token(token_index)
+            .is_some_and(|previous| match &self.tree.tokens[previous] {
+                Token::Operator(operator) => matches!(
+                    operator.as_str(),
+                    "&&" | "||"
+                        | "=="
+                        | "!="
+                        | "<="
+                        | ">="
+                        | "="
+                        | "+="
+                        | "-="
+                        | "*="
+                        | "/="
+                        | "%="
+                        | "&="
+                        | "|="
+                        | "^="
+                        | "<<="
+                        | ">>="
+                        | "+"
+                        | "-"
+                        | "/"
+                        | "%"
+                        | "!"
+                        | "?"
+                        | "|"
+                        | "^"
+                        | "<<"
+                        | ">>"
+                ),
+                _ => false,
+            })
     }
 
     fn set_leading_operator_continuation(&mut self, operator: &str, split_rvalue_reference: bool) {

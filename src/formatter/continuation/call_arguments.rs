@@ -63,7 +63,16 @@ pub(crate) fn casted_assignment_value_column(line: &str, tab_width: usize) -> Op
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
                     let after_cast = value_start + offset + ch.len_utf8();
+                    // astyle aligns `(T *) f(a,` to the call's paren, but
+                    // keeps the cast column for `(T)f(a,` and `(T *) f (a,`.
                     let rest = line[after_cast..].trim_start();
+                    let spaced_cast = rest.len() < line[after_cast..].len();
+                    let callee_end = rest
+                        .find(|ch: char| !is_identifier_continue(ch))
+                        .unwrap_or(rest.len());
+                    if spaced_cast && rest[callee_end..].starts_with('(') {
+                        return None;
+                    }
                     return (rest.chars().next().is_some_and(is_identifier_start)
                         && rest.contains('('))
                     .then(|| visual_width_from(&line[..value_start], 0, tab_width));

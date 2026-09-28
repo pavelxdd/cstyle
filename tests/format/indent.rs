@@ -7003,3 +7003,19 @@ fn tab_indented_macro_call_arguments_align_after_the_paren_column() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn spaced_cast_before_call_aligns_arguments_to_the_call_paren() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    b->last = (u_char *) ngx_encode(b->last, 0,",
+        "                                    NGX_STATUS);",
+        "    weights = (const unsigned char *) _NL_CURRENT (LC_COLLATE,",
+        "              _NL_COLLATE_WEIGHTMB);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
