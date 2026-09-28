@@ -6839,3 +6839,31 @@ fn kr_braceless_body_after_else_if_takes_one_level_past_its_header() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn statement_after_multiline_else_body_keeps_its_sibling_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static CURLcode dupset(struct Curl_easy *dst, struct Curl_easy *src)",
+        "{",
+        "    /* Copy src->set into dst->set first, then deal with the strings",
+        "       afterwards */",
+        "#endif",
+        "    /* clear all dest string and blob pointers first, in case we error out",
+        "    /* duplicate memory areas pointed to */",
+        "    if(src->set.str_copypostfields) {",
+        "        if(src->set.postfieldsize == -1)",
+        "            dst->set.str_copypostfields = curlx_strdup(src->set.str_copypostfields);",
+        "        else",
+        "            dst->set.str_copypostfields =",
+        "                curlx_memdup0(src->set.str_copypostfields,",
+        "                              curlx_sotouz(src->set.postfieldsize));",
+        "        if(!dst->set.str_copypostfields)",
+        "            return CURLE_OUT_OF_MEMORY;",
+        "    }",
+        "    return CURLE_OK;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -324,6 +324,12 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         } else if let Some(spaces) = self.braceless_body_indent() {
             layout.exact_indent_spaces = Some(spaces);
+        } else if let Some(spaces) = self.statement_sibling_indent()
+            // The sibling confirms the structural level that a heuristic
+            // overrode; a sibling off that level is itself misplaced.
+            && spaces == layout.indent * self.options.indent_width
+        {
+            layout.exact_indent_spaces = Some(spaces);
         }
         layout
     }
@@ -405,6 +411,29 @@ impl FormatEngine<'_> {
         // the `if` line has had it taken off already.
         Some(
             self.output.lead_width(if_line, self.options.tab_width)
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+        )
+    }
+
+    /// A line starting a statement takes the indent of the line holding the
+    /// previous statement of its block: comments, continuation lines, and
+    /// bodies in between do not count.
+    fn statement_sibling_indent(&self) -> Option<usize> {
+        let first = self.output.pending_tokens()?.first;
+        // A block's brace takes its column from the brace style.
+        if matches!(self.tree.tokens[first], Token::Symbol('{')) {
+            return None;
+        }
+        let sibling = self.tree.statements.previous_sibling(first)?;
+        if matches!(self.tree.tokens[sibling], Token::Symbol('{')) {
+            return None;
+        }
+        let line = self.output.line_with_token(sibling)?;
+        if self.output.line_tokens(line)?.first != sibling {
+            return None;
+        }
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
         )
     }
