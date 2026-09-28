@@ -3724,3 +3724,22 @@ fn broken_brace_styles_keep_designated_initializer_layout() {
         assert_eq!(format_exact(source, &options), source, "{style}");
     }
 }
+
+#[test]
+fn initializer_rows_after_block_comments_keep_their_indent() {
+    let mut allman = FormatOptions::default();
+    apply_command_line_args(&mut allman, &["--style=allman".to_owned()]).expect("valid options");
+    let allman_source =
+        "static T t[] =\n{\n    /*\n     * a\n     */\n\n    {\n        \"opera\",\n    },\n};\n";
+
+    let mut whitesmith = FormatOptions::default();
+    apply_command_line_args(&mut whitesmith, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let whitesmith_source = "static T t[] =\n    {\n        { A, \"a\" },\n    /* (many different) strings:\n\n       B\n     */\n        { B, \"b\" },\n    };\n";
+
+    assert_eq!(format_exact(allman_source, &allman), allman_source);
+    assert_eq!(
+        format_exact(whitesmith_source, &whitesmith),
+        whitesmith_source
+    );
+}

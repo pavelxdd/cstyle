@@ -215,7 +215,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_non_empty_line()?;
+        let previous_index = self.output.last_non_empty_index()?;
+        // The ` */` of a block comment is no operator-led continuation.
+        if self.output.comment_start_index(previous_index) != previous_index {
+            return None;
+        }
+        let previous = &self.output[previous_index];
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if previous_code.trim_start().starts_with([':', ',']) {
             return Some(self.layout.indentation.indent() * self.options.indent_width);

@@ -1453,25 +1453,6 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        if !line.trim_start().starts_with('}')
-            && let Some(previous_index) = self.output.last_non_empty_index()
-            && is_comment_line(self.output[previous_index].trim_start())
-            && let comment_start = self.output.comment_start_index(previous_index)
-            // A standalone comment, not the tail of `int x /* ... */`.
-            && is_comment_line(self.output[comment_start].trim_start())
-            && let Some(before_comment) = self.output[..comment_start]
-                .iter()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-        {
-            let code = before_comment[..trailing_comment_split_limit(before_comment)].trim_end();
-            if code.ends_with(',') {
-                layout.exact_indent_spaces = Some(
-                    self.output
-                        .comment_indent_width(previous_index, self.options.tab_width),
-                );
-            }
-        }
         if starts_prefix_increment(line.trim_start())
             && let Some(previous) = self.output.last_non_empty_line()
             && is_prefix_increment_statement(previous.trim_start())
