@@ -19,7 +19,7 @@ use crate::formatter::preprocessor::{
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_column,
@@ -339,7 +339,8 @@ impl FormatEngine<'_> {
                 && previous_code.ends_with(',')
                 && let Some(open) = unmatched_open_paren_column(previous_code)
             {
-                let target = open + 1 + self.adjusted_line_indent_delta(previous);
+                let target = column_after(previous_code, open, self.options.tab_width)
+                    + self.adjusted_line_indent_delta(previous);
                 if layout.exact_indent_spaces.unwrap_or(0) < target {
                     layout.exact_indent_spaces = Some(target);
                 }
@@ -352,7 +353,8 @@ impl FormatEngine<'_> {
             if previous_code.ends_with(',')
                 && let Some(open) = unmatched_open_paren_column(previous_code)
             {
-                let target = open + 1 + self.adjusted_line_indent_delta(previous);
+                let target = column_after(previous_code, open, self.options.tab_width)
+                    + self.adjusted_line_indent_delta(previous);
                 if layout.exact_indent_spaces.unwrap_or(0) < target {
                     layout.exact_indent_spaces = Some(target);
                 }

@@ -2167,6 +2167,14 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
+        // Byte offsets in the line are its columns once its indent's tabs
+        // are spaces.
+        let expanded = format!(
+            "{}{}",
+            " ".repeat(leading_visual_width(previous, self.options.tab_width)),
+            previous.trim_start()
+        );
+        let previous = expanded.as_str();
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !previous_code.ends_with(',')
             || previous_code.contains(" new ")
@@ -2226,10 +2234,13 @@ impl FormatEngine<'_> {
                     });
                 let spaces =
                     visual_width_from(&previous_code[..value_start], 0, self.options.tab_width);
+                // astyle falls back to two levels past the line, but never
+                // before the assigned value's column.
+                let fallback = base + self.options.indent_width * 2;
                 if spaces.saturating_sub(base) > self.options.max_continuation_indent {
-                    return Some(base + self.options.indent_width * 2);
+                    return Some(fallback);
                 }
-                return Some(spaces);
+                return Some(spaces.max(fallback));
             }
             if over_statement_max {
                 return Some(base + self.options.indent_width * 2);

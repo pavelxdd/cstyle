@@ -7136,3 +7136,19 @@ fn whitesmith_statement_after_a_directive_opening_a_block_keeps_its_comment_and_
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn tab_indented_call_arguments_over_the_maximum_fall_back_by_visual_columns() {
+    let options = options_from_args(&["--style=linux", "-t8", "-k1"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "\tstruct curl_slist* host = curl_slist_append(NULL,",
+        "\t                          \"example.com:443:127.0.0.1\");",
+        "\tg_source_remove(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(progress_bar),",
+        "\t                                \"pulse_id\")));",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
