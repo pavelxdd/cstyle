@@ -62,6 +62,25 @@ impl FormatEngine<'_> {
         }))
     }
 
+    /// Whether the last non-empty output line starts with a `}` that closes
+    /// a block inside another block, from the structure tree, or, for a line
+    /// that recorded no tokens, from the engine's open blocks.
+    pub(crate) fn last_line_closes_nested_block(&self) -> bool {
+        let Some(span) = self
+            .output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+        else {
+            return !self.layout.nesting.brace_type_stack.is_empty();
+        };
+        let groups = &self.tree.groups;
+        matches!(self.tree.tokens[span.first], Token::Symbol('}'))
+            && groups
+                .closed_at(span.first)
+                .and_then(|group| groups.get(group).parent)
+                .is_some_and(|parent| self.tree.blocks.kind(parent).is_some())
+    }
+
     /// Case-block unindent the line being laid out will lose; indents from
     /// published lines have lost theirs already.
     fn case_unindent_spaces(&self) -> usize {

@@ -4187,3 +4187,28 @@ fn allman_block_after_unstarred_comment_continuation_keeps_statement_indent() {
     );
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn comment_after_nested_aggregate_close_keeps_member_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    let source = fixture!(
+        "struct ip {",
+        "    union netaddr {",
+        "        int a;",
+        "    } netaddr;",
+        "    /* IP bits to match against.",
+        "     * This is equal to the CIDR notation.",
+        "     */",
+        "    int maskbits;",
+        "};",
+        "",
+        "struct top {",
+        "    int x;",
+        "} value;",
+        "/* after a top-level declaration */",
+        "int y;",
+    );
+    assert_eq!(format_exact(source, &options), source);
+}

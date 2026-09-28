@@ -407,6 +407,18 @@ impl FormatEngine<'_> {
         true
     }
 
+    /// Whether the last non-empty output line is `} name` closing a block at
+    /// file scope, which a following comment belongs after.
+    fn last_line_closes_top_level_declaration(&self) -> bool {
+        self.output
+            .scoped()
+            .iter()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .is_some_and(|line| post_closing_declaration_owns_comment(line))
+            && !self.last_line_closes_nested_block()
+    }
+
     pub(crate) fn push_inline_comment(&mut self, comment: &str) {
         if self.token_input.previous_input_was_adjacent {
             self.trim_current_end();
@@ -1089,13 +1101,7 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| post_closing_declaration_owns_comment(line))
+            && self.last_line_closes_top_level_declaration()
         {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
@@ -1198,13 +1204,7 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
             && !comment.contains('\n')
-            && !self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| post_closing_declaration_owns_comment(line))
+            && !self.last_line_closes_top_level_declaration()
             && let Some(spaces) = case_label_comment_indent
                 .or(control_header_comment_indent)
                 .or(user_label_comment_indent)
@@ -1486,13 +1486,7 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|whitespace| whitespace.contains('\n'))
             {
-                let after_post_closing_declaration = self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trim().is_empty())
-                    .is_some_and(|line| post_closing_declaration_owns_comment(line));
+                let after_post_closing_declaration = self.last_line_closes_top_level_declaration();
                 self.finish_line();
                 if after_post_closing_declaration {
                     self.layout.continuation_indent.next_line_indent = None;
@@ -1785,7 +1779,10 @@ impl FormatEngine<'_> {
                     );
                 }
             }
-            if trimmed.starts_with("} ") && !trimmed.ends_with('{') {
+            if trimmed.starts_with("} ")
+                && !trimmed.ends_with('{')
+                && !self.last_line_closes_nested_block()
+            {
                 return Some(0);
             }
         }
