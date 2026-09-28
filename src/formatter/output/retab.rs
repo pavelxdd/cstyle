@@ -30,7 +30,7 @@ impl FormatEngine<'_> {
                 let line = &self.output[index];
                 let text = line.trim_start_matches([' ', '\t']);
                 if self.output.is_verbatim(index)
-                    || text.is_empty()
+                    || line.is_empty()
                     || !self.options.indent_preproc_define
                         && self.directive_of_continuation(index).is_some()
                     || self.continues_column_one_comment(index)
@@ -40,6 +40,8 @@ impl FormatEngine<'_> {
                 let width = self.output.lead_width(index, tab_width);
                 let tab_columns = match self.output_indent_style {
                     IndentStyle::ForceTabs => width / tab_width * tab_width,
+                    // A filled empty line holds its level's indent.
+                    _ if text.is_empty() => width / indent_width * indent_width,
                     _ => self.tab_columns(index, width),
                 };
                 Some((width, tab_columns))

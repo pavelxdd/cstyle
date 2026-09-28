@@ -1439,3 +1439,22 @@ fn break_blocks_does_not_cross_indent_on_marker() {
         "void run()\n{\n// *INDENT-OFF*\nif(alpha){call();}\n// *INDENT-ON*\n    if(beta)\n    {\n        call();\n    }\n}\n",
     );
 }
+
+#[test]
+fn filled_empty_lines_take_tabs_in_tab_indent_styles() {
+    for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                "--style=kr".to_owned(),
+                indent.to_owned(),
+                "--fill-empty-lines".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let source = "void f(void)\n{\n\tif (a) {\n\t\tx();\n\t\t\n\t\ty();\n\t}\n}\n";
+
+        assert_eq!(format_exact(source, &options), source);
+    }
+}
