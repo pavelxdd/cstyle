@@ -24,6 +24,7 @@ mod lexer;
 mod output;
 mod preprocessor;
 mod state;
+mod structure;
 mod syntax;
 mod text;
 mod tokens;
