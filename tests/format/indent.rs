@@ -7182,3 +7182,103 @@ fn tab_indent_covers_statement_indent_and_aligns_continuations_in_spaces() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn labels_initializer_strings_and_continued_directives_keep_statement_columns() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void g(void)",
+        "{",
+        "    if(r) {",
+        "    } else",
+        "        p++;",
+        "    if(q) {",
+        "        int qbuf;",
+        "nomem:",
+        "        free(encp);",
+        "    }",
+        "}",
+        "const struct e x = {",
+        "    .name = \"a\",",
+        "    .usage = \"b \"",
+        "    \"c\",",
+        "    .v = f(a,",
+        "           b),",
+        "    .w = a +",
+        "    b,",
+        "};",
+        "struct e y = {",
+        "    1, \"b \"",
+        "    \"c\",",
+        "};",
+        "void f(void)",
+        "{",
+        "    if(",
+        "#if defined(A) && \\",
+        "  (B == 1)",
+        "        have_clock_gettime &&",
+        "#endif",
+        "        (c == 0)) {",
+        "        x();",
+        "    }",
+        "}",
+        "#if A",
+        "int x;",
+        "#elif defined(B) || \\",
+        "  defined(C)",
+        "",
+        "void f(void)",
+        "{",
+        "    x();",
+        "}",
+        "#endif",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn label_after_braceless_header_chain_takes_the_inner_block_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (t)",
+        "        for (i = 0; i < N; ++i)",
+        "            n[i] = 0;",
+        "    else",
+        "        y();",
+        "    if (size)",
+        "        for (;;) {",
+        "            while (tp) {",
+        "            }",
+        "found:",
+        "            if (b) {",
+        "                c();",
+        "            }",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn block_closer_after_else_split_by_endif_stays_with_its_opener() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef A",
+        "    if (x) {",
+        "        a();",
+        "    } else",
+        "#endif",
+        "        do {",
+        "            b();",
+        "        } while (c);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

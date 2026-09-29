@@ -181,6 +181,8 @@ impl FormatEngine<'_> {
                     if before_string.trim().is_empty()
                         || (before_string.contains(',')
                             && unmatched_open_paren_column(before_string).is_none())
+                        || (self.pending_row_in_initializer_brace()
+                            && unmatched_open_paren_column(before_string).is_none())
                     {
                         return Some(leading + case_unindent);
                     }

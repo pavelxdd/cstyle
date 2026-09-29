@@ -150,9 +150,11 @@ impl Parser<'_> {
         // The last statement of the block that is no label and ended with
         // its `;` or block, as its first token and the index after it.
         let mut sibling: Option<(usize, usize)> = None;
-        // The sibling before each open conditional group: each branch, and
-        // the code after the group, follow the code before it.
-        let mut branch_siblings: Vec<Option<(usize, usize)>> = Vec::new();
+        // The sibling before each open conditional group, and whether the
+        // group has an alternative branch: each branch follows the code
+        // before the group, and so does the code after a group with
+        // alternatives; after a lone branch, its code comes last.
+        let mut branch_siblings: Vec<(Option<(usize, usize)>, bool)> = Vec::new();
         let mut first = true;
         while let Some(at) = self.next(position, end) {
             for index in position..at {
@@ -160,11 +162,22 @@ impl Parser<'_> {
                     continue;
                 };
                 match preprocessor_directive(&directive.text) {
-                    Some("if" | "ifdef" | "ifndef") => branch_siblings.push(sibling),
+                    Some("if" | "ifdef" | "ifndef") => branch_siblings.push((sibling, false)),
                     Some("else" | "elif" | "elifdef" | "elifndef") => {
-                        sibling = branch_siblings.last().copied().flatten();
+                        if let Some((before, alternatives)) = branch_siblings.last_mut() {
+                            *alternatives = true;
+                            sibling = *before;
+                        } else {
+                            sibling = None;
+                        }
                     }
-                    Some("endif") => sibling = branch_siblings.pop().flatten(),
+                    Some("endif") => {
+                        if let Some((before, alternatives)) = branch_siblings.pop()
+                            && alternatives
+                        {
+                            sibling = before;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -177,7 +190,7 @@ impl Parser<'_> {
                 && !fresh
                 && let Some(open) = start.checked_sub(1)
                 && self.is_symbol(open, '{')
-                && !self.crosses_conditional(open, at)
+                && !self.crosses_branch(open, at)
             {
                 self.block_openings.insert(at, open);
             }
@@ -186,7 +199,7 @@ impl Parser<'_> {
             // another; it anchors nothing.
             if !fresh
                 && let Some((previous, previous_end)) = sibling
-                && !self.crosses_conditional(previous, previous_end)
+                && !self.crosses_branch(previous, previous_end)
             {
                 self.previous_siblings.insert(at, previous);
             }
@@ -211,6 +224,18 @@ impl Parser<'_> {
         self.tokens[from..to].iter().any(|token| {
             matches!(token, Token::Preprocessor(directive)
                 if preprocessor_directive(&directive.text).is_some_and(is_conditional_preprocessor))
+        })
+    }
+
+    /// Whether an alternative branch of a conditional group starts between
+    /// the tokens `from` and `to`: code on both sides of it never meets.
+    fn crosses_branch(&self, from: usize, to: usize) -> bool {
+        self.tokens[from..to].iter().any(|token| {
+            matches!(token, Token::Preprocessor(directive)
+            if matches!(
+                preprocessor_directive(&directive.text),
+                Some("else" | "elif" | "elifdef" | "elifndef")
+            ))
         })
     }
 
@@ -568,7 +593,10 @@ mod tests {
     #[test]
     fn conditional_branches_and_the_code_after_them_follow_the_code_before() {
         let source = "void f(void)\n{\n    a();\n#if X\n    b();\n#else\n    c();\n#endif\n    d();\n    if (x\n#if Y\n        && y\n#endif\n       )\n        e();\n    g();\n}\n";
-        assert_eq!(sibling_lines(source), [(4, 2), (6, 2), (8, 2), (9, 8)]);
+        assert_eq!(
+            sibling_lines(source),
+            [(4, 2), (6, 2), (8, 2), (9, 8), (15, 9)]
+        );
     }
 
     #[test]

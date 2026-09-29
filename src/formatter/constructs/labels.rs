@@ -174,7 +174,10 @@ impl FormatEngine<'_> {
             && self.layout.pending_braceless_block_bias.is_none()
             && !self.in_initializer_brace()
             && self.current_inline_array_column().is_none())
-        .then_some(self.options.indent_width)
+        .then(|| {
+            self.label_statement_column()
+                .unwrap_or(self.options.indent_width)
+        })
     }
 
     pub(crate) fn following_label_body_indent_spaces(
