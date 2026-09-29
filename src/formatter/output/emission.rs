@@ -152,12 +152,9 @@ impl FormatEngine<'_> {
         let line = self.align_adjacent_block_comments_before_adjustment(line);
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
-        let brace_indent_before_adjustment =
-            (line.trim() == "{").then(|| leading_visual_width(&line, self.options.tab_width));
         self.layout.previous_pre_adjust_line = Some(line.clone());
         let line = self.layout.line_adjuster.adjust_line(line);
-        let line =
-            self.align_else_opening_brace_after_adjustment(line, brace_indent_before_adjustment);
+        let line = self.align_else_opening_brace_after_adjustment(line);
         self.publish_ready_line(line);
     }
 

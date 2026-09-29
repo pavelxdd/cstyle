@@ -39,6 +39,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self
             .else_matching_if_indent(first)
             .or_else(|| self.braceless_body_indent(first))
+            .or_else(|| self.split_else_if_indent(first))
             .or_else(|| self.statement_expression_indent(first))
             .or_else(|| self.return_value_indent(first))
             .or_else(|| self.ternary_arm_in_parens_indent(first))
@@ -785,6 +786,27 @@ impl FormatEngine<'_> {
         matches!(&self.tree.tokens[keyword], Token::Word(word)
             if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach"))
         .then_some(keyword)
+    }
+
+    /// An `if` that a line break separates from its `else` nests one level
+    /// past the `else` line, as a body would.
+    fn split_else_if_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if self.options.no_indent_if_after_else
+            || !matches!(&tokens[first], Token::Word(word) if word == "if")
+        {
+            return None;
+        }
+        let keyword = self.tree.previous_code_token(first)?;
+        if !matches!(&tokens[keyword], Token::Word(word) if word == "else") {
+            return None;
+        }
+        let line = self.line_led_by(keyword)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// A braceless body starting a line takes one level past the line

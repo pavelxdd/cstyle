@@ -646,11 +646,9 @@ impl FormatEngine<'_> {
             .map(|frame| frame.header_indent_column + self.options.indent_width)
     }
 
-    pub(crate) fn align_else_opening_brace_after_adjustment(
-        &self,
-        line: String,
-        brace_indent_before_adjustment: Option<usize>,
-    ) -> String {
+    /// A `{` alone after an `else` line stands at least where the style
+    /// puts it, from the adjusted `else` line.
+    pub(crate) fn align_else_opening_brace_after_adjustment(&self, line: String) -> String {
         if line.trim() != "{" {
             return line;
         }
@@ -676,11 +674,8 @@ impl FormatEngine<'_> {
         } else {
             else_indent
         };
-        let target_indent = brace_indent_before_adjustment
-            .unwrap_or(style_indent)
-            .max(style_indent);
-        if leading_visual_width(&line, self.options.tab_width) < target_indent {
-            format!("{}{{", " ".repeat(target_indent))
+        if leading_visual_width(&line, self.options.tab_width) < style_indent {
+            format!("{}{{", " ".repeat(style_indent))
         } else {
             line
         }

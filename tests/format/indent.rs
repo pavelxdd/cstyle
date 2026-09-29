@@ -7464,3 +7464,31 @@ fn condition_and_ternary_continuations_skip_the_comments_between_their_lines() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_else_brace_in_case_block_takes_the_case_unindent() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    switch(info)",
+        "        {",
+        "        case 1:",
+        "        {",
+        "            if(!m)",
+        "                {",
+        "                    if(data->set.opt_no_body)",
+        "                        m = \"HEAD\";",
+        "                    else",
+        "                        {",
+        "                            g();",
+        "                        }",
+        "                }",
+        "            break;",
+        "        }",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
