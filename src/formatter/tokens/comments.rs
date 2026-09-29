@@ -13,6 +13,7 @@ use crate::formatter::preprocessor::PreprocessorRegion;
 use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
@@ -1653,6 +1654,17 @@ impl FormatEngine<'_> {
                 .is_none()
             && self.current.trim().is_empty())
         .then(|| {
+            let index = (0..self.output.len())
+                .rev()
+                .find(|&index| !self.output.trimmed(index).is_empty())?;
+            // Comment text that reads like a call is no header.
+            if !self
+                .output
+                .line_tokens(index)
+                .is_some_and(|span| is_code_token(&self.tree.tokens[span.first]))
+            {
+                return None;
+            }
             self.output
                 .scoped()
                 .iter()

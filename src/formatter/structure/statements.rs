@@ -238,16 +238,6 @@ impl Parser<'_> {
         }
     }
 
-    /// Whether a conditional directive lies between the tokens `from` and
-    /// `to`: the branches of `#if` parse one after another, so statements
-    /// across one need not follow each other.
-    fn crosses_conditional(&self, from: usize, to: usize) -> bool {
-        self.tokens[from..to].iter().any(|token| {
-            matches!(token, Token::Preprocessor(directive)
-                if preprocessor_directive(&directive.text).is_some_and(is_conditional_preprocessor))
-        })
-    }
-
     /// Whether an alternative branch of a conditional group starts between
     /// the tokens `from` and `to`: code on both sides of it never meets.
     /// Branches holding only directives, such as alternative `#define`s,
@@ -337,7 +327,7 @@ impl Parser<'_> {
     fn body(&mut self, header: usize, from: usize, end: usize) -> usize {
         match self.next(from, end) {
             Some(at) => {
-                if !self.is_symbol(at, '{') && !self.crosses_conditional(header, at) {
+                if !self.is_symbol(at, '{') && !self.crosses_branch(header, at) {
                     self.braceless_headers.insert(at, header);
                 }
                 self.statement(at, end)

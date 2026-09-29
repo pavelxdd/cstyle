@@ -715,7 +715,7 @@ impl FormatEngine<'_> {
                 )
             });
         }
-        if previous_starts_operator {
+        if previous_starts_operator && self.pending_line_in_previous_line_group() {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         if previous_code.ends_with(',') {

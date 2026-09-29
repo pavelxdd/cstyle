@@ -7282,3 +7282,185 @@ fn block_closer_after_else_split_by_endif_stays_with_its_opener() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn ternary_chain_arms_in_call_parentheses_share_the_content_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "",
+        "static void getcurlcodestr(char *buf, size_t len, int cc)",
+        "{",
+        "    curl_msnprintf(buf, len, \"%s (%d)\",",
+        "                   (cc == SANITIZE_ERR_OK ? \"SANITIZE_ERR_OK\" :",
+        "                    cc == SANITIZE_ERR_BAD_ARGUMENT ? \"SANITIZE_ERR_BAD_ARGUMENT\" :",
+        "                    cc == SANITIZE_ERR_INVALID_PATH ? \"SANITIZE_ERR_INVALID_PATH\" :",
+        "                    cc == SANITIZE_ERR_OUT_OF_MEMORY ? \"SANITIZE_ERR_OUT_OF_MEMORY\" :",
+        "                    \"unexpected error code - add name\"), cc);",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn return_value_after_a_comment_takes_one_level() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int g(void)",
+        "{",
+        "    return",
+        "        /* c */",
+        "        a + b;",
+        "}",
+        "int h(void)",
+        "{",
+        "    return",
+        "#if A",
+        "        a +",
+        "#endif",
+        "        b;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn adjacent_string_after_assignment_aligns_with_the_value_in_case_body() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(int v)",
+        "{",
+        "    switch(v) {",
+        "    case 1:",
+        "        *p = CIPHERS \":-VERS-SSL3.0:\"",
+        "             \"+VERS-TLS1.0\";",
+        "        return;",
+        "    }",
+        "    q = CIPHERS \":-VERS-SSL3.0:\"",
+        "        \"+VERS-TLS1.0\";",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn switch_closer_with_trailing_comment_after_case_block() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch (m) {",
+        "    case 1: {",
+        "        if (d)",
+        "            e();",
+        "    }",
+        "    } /* switch */",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comment_text_reading_like_a_call_sets_no_header_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "/* Note that this example",
+        "   GnuTLS (and this program). */",
+        "",
+        "/* Requires: X */",
+        "",
+        "int x;",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn gnu_nested_condition_operators_follow_their_parentheses() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (tre_isctype(c, class)",
+        "            || ((cflags & REG_ICASE)",
+        "                && (tre_isctype(tre_tolower(c), class)",
+        "                    || tre_isctype(tre_toupper(c), class))))",
+        "        x();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_file_scope_initializer_brace_opens_flush() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "static const struct entry hosts[] =",
+        "{",
+        "    { \"a\", \"b\" },",
+        "    { \"c\", \"d\" },",
+        "    { NULL, NULL }",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn designated_initializer_rows_and_values_after_designators_keep_the_member_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static struct patch_mode patch_mode_add = {",
+        "    .diff_cmd = { \"diff-files\", NULL },",
+        "    .apply_args = { \"--cached\", NULL },",
+        "    .apply_check_args = { \"--cached\", NULL },",
+        "    .prompt_mode = {",
+        "        N_(\"Stage mode change%s [y,n,q,a,d%s,?]? \"),",
+        "        N_(\"Stage deletion%s [y,n,q,a,d%s,?]? \"),",
+        "        N_(\"Stage addition%s [y,n,q,a,d%s,?]? \"),",
+        "        N_(\"Stage this hunk%s [y,n,q,a,d%s,?]? \")",
+        "    },",
+        "    .edit_hunk_hint = N_(\"If the patch applies cleanly, the edited hunk \"",
+        "                         \"will immediately be marked for staging.\"),",
+        "    .help_patch_text =",
+        "    N_(\"y - stage this hunk\\n\"",
+        "       \"n - do not stage this hunk\\n\"",
+        "       \"q - quit; do not stage this hunk or any of the remaining \"",
+        "       \"ones\\n\"",
+        "       \"a - stage this hunk and all later hunks in the file\\n\"",
+        "       \"d - do not stage this hunk or any of the later hunks in \"",
+        "       \"the file\\n\")",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn condition_and_ternary_continuations_skip_the_comments_between_their_lines() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(data->conn->bits.reuse && ftpc->entrypath &&",
+        "            /* no need to go to entrypath when we have an absolute path */",
+        "            !(ftpc->dirdepth && ftpc->rawpath[0] == '/')) {",
+        "        x();",
+        "    }",
+        "    confirm_record_size(n,",
+        "                        /* Is the allocation from the third batch? */",
+        "                        i + c - OPT_ALLOC_MAX >= 3 * OPT_ALLOC_MAX ?",
+        "                        /* If yes, then it's just recorded. */",
+        "                        i + c - OPT_ALLOC_MAX :",
+        "                        /*",
+        "                         * Otherwise, it should come from the first batch.",
+        "                         */",
+        "                        i + c - 2 * OPT_ALLOC_MAX);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

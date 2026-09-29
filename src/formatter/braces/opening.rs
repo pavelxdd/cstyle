@@ -2539,7 +2539,14 @@ impl FormatEngine<'_> {
                 BraceType::Initializer | BraceType::CompoundLiteral
             )
         {
-            return self.layout.indentation.indent() > 0;
+            // An initializer at file scope opens flush, however its
+            // declaration continued.
+            let at_file_scope = self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.groups.opened_at(brace))
+                .is_some_and(|group| self.tree.groups.get(group).parent.is_none());
+            return !at_file_scope && self.layout.indentation.indent() > 0;
         }
         if self.options.brace_style == BraceStyle::Ratliff && brace_type == BraceType::Initializer {
             return true;

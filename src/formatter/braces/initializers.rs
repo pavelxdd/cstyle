@@ -260,6 +260,16 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // VTK indents only initializer braces nested in a block.
+        if self.options.brace_style == BraceStyle::Vtk
+            && self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.groups.opened_at(span.first))
+                .is_some_and(|group| self.tree.groups.get(group).parent.is_none())
+        {
+            return None;
+        }
         let brace = self.layout.frame_stack.active_brace().filter(|frame| {
             matches!(
                 frame.semantic_kind,

@@ -6,13 +6,15 @@
 //! links it to: the `if` of an `else`, the header of a braceless body, the
 //! previous statement of the block, and the block's opening.
 
+use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
+use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::preprocessor_directive;
 
 impl FormatEngine<'_> {
@@ -21,6 +23,13 @@ impl FormatEngine<'_> {
         line: &str,
         mut layout: LineLayout,
     ) -> LineLayout {
+        if layout.line_kind == LineKind::SwitchLabel
+            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && let Some(spaces) = self.sibling_case_label_column(first)
+        {
+            layout.exact_indent_spaces = Some(spaces);
+            return layout;
+        }
         if layout.line_kind != LineKind::Normal || line.trim_start().starts_with('#') {
             return layout;
         }
@@ -31,6 +40,11 @@ impl FormatEngine<'_> {
             .else_matching_if_indent(first)
             .or_else(|| self.braceless_body_indent(first))
             .or_else(|| self.statement_expression_indent(first))
+            .or_else(|| self.return_value_indent(first))
+            .or_else(|| self.ternary_arm_in_parens_indent(first))
+            .or_else(|| self.assigned_string_continuation_indent(first))
+            .or_else(|| self.comment_interrupted_continuation_indent(first))
+            .or_else(|| self.initializer_row_indent(first))
         {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -52,6 +66,293 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = sibling;
         }
         layout
+    }
+
+    /// An initializer element starting a line after the `,` that ends the
+    /// element before it takes that element's column, when that element
+    /// starts its own line; a value after a designator's `=` takes the
+    /// designator's.
+    fn initializer_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            return None;
+        }
+        let comma = self.tree.previous_code_token(first)?;
+        if groups.enclosing(comma) != Some(group) {
+            return None;
+        }
+        // A value after a designator's `=` at a line end stays at the
+        // designator: astyle continues no `=` inside an initializer.
+        if matches!(&tokens[comma], Token::Operator(operator) if operator == "=") {
+            let line = self.output.line_with_token(comma)?;
+            return (self.output.line_tokens(line)?.last == comma).then(|| {
+                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+            });
+        }
+        if !matches!(tokens[comma], Token::Symbol(',')) {
+            return None;
+        }
+        // The engine places continuation rows from the row's own layout;
+        // only a row that ends on its line, or at a designator's `=` whose
+        // value line follows the row, moves alone.
+        let close = groups.get(group).close?;
+        let end = (first..close)
+            .find(|&index| {
+                matches!(tokens[index], Token::Symbol(','))
+                    && groups.enclosing(index) == Some(group)
+            })
+            .unwrap_or(close);
+        if let Some(newline) = (first..end).find(|&index| matches!(tokens[index], Token::Newline))
+            && !self.tree.previous_code_token(newline).is_some_and(|last| {
+                matches!(&tokens[last], Token::Operator(operator) if operator == "=")
+                    && groups.enclosing(last) == Some(group)
+            })
+        {
+            return None;
+        }
+        let open = groups.get(group).open;
+        let separator = (open..comma).rev().find(|&index| {
+            index == open
+                || (matches!(tokens[index], Token::Symbol(','))
+                    && groups.enclosing(index) == Some(group))
+        })?;
+        let element = next_code_token(tokens, separator + 1)?;
+        // Styles that indent initializer braces move brace rows alone.
+        let is_brace = |index: usize| matches!(tokens[index], Token::Symbol('{'));
+        if is_brace(element) != is_brace(first) {
+            return None;
+        }
+        let line = self.output.line_with_token(element)?;
+        (self.output.line_tokens(line)?.first == element).then(|| {
+            self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+        })
+    }
+
+    /// Visual column of the code token `token` on its output line, found
+    /// by walking the line's token texts in order.
+    fn token_column(&self, token: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let line = self.output.line_with_token(token)?;
+        let span = self.output.line_tokens(line)?;
+        let text = &self.output.as_slice()[line];
+        let mut position = 0;
+        for (index, piece_token) in tokens.iter().enumerate().take(token + 1).skip(span.first) {
+            if !is_code_token(piece_token) {
+                continue;
+            }
+            let piece = token_text(piece_token);
+            let offset = text.get(position..)?.find(piece.as_str())?;
+            if index == token {
+                return Some(visual_width_from(
+                    &text[..position + offset],
+                    0,
+                    self.options.tab_width,
+                ));
+            }
+            position += offset + piece.len();
+        }
+        None
+    }
+
+    /// A continuation line inside parentheses that comments separate from
+    /// the code before it lays out as if they were not there: at the line
+    /// continuing the same parentheses above, or at the parentheses'
+    /// content, past a control condition's floor.
+    fn comment_interrupted_continuation_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        if !self.continues_parentheses_past_comments(first) {
+            return None;
+        }
+        let previous = self.tree.previous_code_token(first)?;
+        let group = groups.enclosing(first)?;
+        let previous_line = self.output.line_with_token(previous)?;
+        let previous_first = self.output.line_tokens(previous_line)?.first;
+        let column = if groups.enclosing(previous_first) == Some(group) {
+            self.output
+                .lead_width(previous_line, self.options.tab_width)
+        } else {
+            let open = groups.get(group).open;
+            let content = self.token_column(next_code_token(tokens, open + 1)?)?;
+            let condition = self.tree.previous_code_token(open).is_some_and(|keyword| {
+                matches!(&tokens[keyword], Token::Word(word)
+                    if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+            });
+            match self.control_condition_header_indent().filter(|_| condition) {
+                Some(header) => content.max(header + min_conditional_indent_spaces(self.options)),
+                None => content,
+            }
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// A string literal continuing an assigned value's adjacent literals
+    /// from the line before stands at the value's first token.
+    fn assigned_string_continuation_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let is_string = |index: usize| matches!(tokens[index], Token::StringLiteral(_));
+        let previous = self.tree.previous_code_token(first)?;
+        if !is_string(first) || !is_string(previous) {
+            return None;
+        }
+        // Only statements align to the value: astyle continues no `=`
+        // inside an initializer, and declarations at file scope keep their
+        // continuation indent.
+        let group = Some(groups.enclosing(first)?);
+        if group.is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer)) {
+            return None;
+        }
+        let mut index = previous;
+        let assign = loop {
+            index = self.tree.previous_code_token(index)?;
+            if groups.enclosing(index) != group {
+                return None;
+            }
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "=" => break index,
+                Token::StringLiteral(_) | Token::Word(_) => {}
+                _ => return None,
+            }
+        };
+        // The value's line is published: the literal continues it.
+        let value = next_code_token(tokens, assign + 1)?;
+        Some(self.token_column(value)? + self.case_unindent_spaces())
+    }
+
+    /// Whether the code token `first` continues a control condition or a
+    /// ternary inside parentheses past standalone comments: astyle lays
+    /// out other arguments after a comment its own way.
+    fn continues_parentheses_past_comments(&self, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(previous) = self.tree.previous_code_token(first) else {
+            return false;
+        };
+        let standalone_comment = tokens[previous + 1..first].windows(2).any(|pair| {
+            matches!(pair[0], Token::Newline) && matches!(pair[1], Token::Comment(_, _))
+        }) || tokens[previous + 1..first].windows(3).any(|triple| {
+            matches!(triple[0], Token::Newline)
+                && matches!(triple[1], Token::Whitespace(_))
+                && matches!(triple[2], Token::Comment(_, _))
+        });
+        let Some(group) = groups.enclosing(first) else {
+            return false;
+        };
+        standalone_comment
+            && groups.get(group).delimiter == Delimiter::Paren
+            && groups.enclosing(previous) == Some(group)
+            && (self.control_condition_of(first).is_some()
+                || matches!(tokens[previous], Token::Symbol('?' | ':')))
+    }
+
+    /// A ternary arm starting a line after a `:` inside parentheses takes
+    /// the column of the parentheses' content.
+    fn ternary_arm_in_parens_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(first)?;
+        if groups.get(group).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let colon = self.tree.previous_code_token(first)?;
+        let open = groups.get(group).open;
+        if !matches!(tokens[colon], Token::Symbol(':'))
+            || groups.enclosing(colon) != Some(group)
+            || !(open + 1..colon).any(|index| {
+                matches!(tokens[index], Token::Symbol('?'))
+                    && groups.enclosing(index) == Some(group)
+            })
+        {
+            return None;
+        }
+        // A control condition keeps its own floor.
+        if self.control_condition_header_indent().is_some() {
+            return None;
+        }
+        // An arm under a line continuing the same parentheses takes its
+        // column, as capped continuations do.
+        let previous_line = self.output.line_with_token(colon)?;
+        let previous_first = self.output.line_tokens(previous_line)?.first;
+        if groups.enclosing(previous_first) == Some(group) {
+            return Some(
+                self.output
+                    .lead_width(previous_line, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
+        }
+        let content = next_code_token(tokens, open + 1)?;
+        Some(self.token_column(content)? + self.case_unindent_spaces())
+    }
+
+    /// A `return` value starting a line after the keyword takes one level
+    /// past the keyword's line, past comments and directives between.
+    fn return_value_indent(&self, first: usize) -> Option<usize> {
+        let keyword = self.tree.previous_code_token(first)?;
+        if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return") {
+            return None;
+        }
+        let line = self.line_led_by(keyword)?;
+        (self.output.line_tokens(line)?.last == keyword).then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.indent_width
+                + self.case_unindent_spaces()
+        })
+    }
+
+    /// Column of the case label before the one at `first` in the same
+    /// switch body, from the line it leads.
+    fn sibling_case_label_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let is_label = |index: usize| matches!(&tokens[index], Token::Word(word) if matches!(word.as_str(), "case" | "default"));
+        if !is_label(first) {
+            return None;
+        }
+        let body = groups.enclosing(first)?;
+        let open = groups.get(body).open;
+        let earlier = (open + 1..first).rev().find(|&index| {
+            is_label(index)
+                && groups.enclosing(index) == Some(body)
+                && self.tree.statements.starts_block_statement(index)
+        });
+        let Some(earlier) = earlier else {
+            return self.first_case_label_column(body);
+        };
+        let line = self.output.line_with_token(earlier)?;
+        (self.output.line_tokens(line)?.first == earlier).then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width
+        })
+    }
+
+    /// Column of the first case label of the switch body `body`: its brace
+    /// line, or the `switch` line for an attached brace, one level in
+    /// where the style indents switches.
+    fn first_case_label_column(&self, body: GroupId) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let open = self.tree.groups.get(body).open;
+        let owner = self.tree.blocks.owner(body)?;
+        // Indented switch braces take their labels after layout.
+        if !matches!(&tokens[owner], Token::Word(word) if word == "switch")
+            || self.should_indent_brace_line(BraceType::Command)
+        {
+            return None;
+        }
+        let brace_line = self.output.line_with_token(open)?;
+        let line = if self.output.line_tokens(brace_line)?.first == open {
+            brace_line
+        } else {
+            self.line_led_by(owner)?
+        };
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (usize::from(self.options.indent_switches)
+                    + self.layout.line_adjuster.pending_case_unindent())
+                    * self.options.indent_width,
+        )
     }
 
     /// Standalone comments right before the statement on output line `line`
@@ -76,7 +377,11 @@ impl FormatEngine<'_> {
             return;
         };
         let statements = &self.tree.statements;
-        if !statements.starts_block_statement(first) && statements.braceless_header(first).is_none()
+        // A continuation inside parentheses takes the comments inside them.
+        let continues_parens = self.continues_parentheses_past_comments(first);
+        if !statements.starts_block_statement(first)
+            && statements.braceless_header(first).is_none()
+            && !continues_parens
         {
             return;
         }
@@ -174,6 +479,27 @@ impl FormatEngine<'_> {
             .is_some_and(|group| groups.get(group).delimiter != Delimiter::Brace)
     }
 
+    /// Whether the line being laid out starts in the same parentheses, as
+    /// the tree reads them, as the last code line before it: braces aside.
+    pub(crate) fn pending_line_in_previous_line_group(&self) -> bool {
+        let groups = &self.tree.groups;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return true;
+        };
+        let Some(previous) = (0..self.output.len())
+            .rev()
+            .find_map(|line| self.output.line_tokens(line))
+        else {
+            return true;
+        };
+        let parens = |index: usize| {
+            groups
+                .enclosing(index)
+                .filter(|&group| groups.get(group).delimiter != Delimiter::Brace)
+        };
+        parens(first) == parens(previous.first)
+    }
+
     /// Whether the line being laid out is a row of an initializer brace
     /// opened on an earlier line: astyle aligns no continuation to a `=`
     /// there.
@@ -190,21 +516,25 @@ impl FormatEngine<'_> {
     /// Leading width of the line holding the control header whose condition
     /// the line being laid out continues, from the structure tree.
     pub(crate) fn control_condition_header_indent(&self) -> Option<usize> {
+        let first = self.output.pending_tokens()?.first;
+        let keyword = self.control_condition_of(first)?;
+        let line = self.line_led_by(keyword)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
+    /// The control keyword whose condition holds the token `index`, through
+    /// any parentheses nested in it.
+    fn control_condition_of(&self, index: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        let first = self.output.pending_tokens()?.first;
         let condition = groups
-            .ancestors(groups.enclosing(first)?)
+            .ancestors(groups.enclosing(index)?)
             .take_while(|&id| groups.get(id).delimiter == Delimiter::Paren)
             .last()?;
         let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
-        if !matches!(&tokens[keyword], Token::Word(word)
+        matches!(&tokens[keyword], Token::Word(word)
             if matches!(word.as_str(), "if" | "for" | "while" | "switch"))
-        {
-            return None;
-        }
-        let line = self.line_led_by(keyword)?;
-        Some(self.output.lead_width(line, self.options.tab_width))
+        .then_some(keyword)
     }
 
     /// Whether the code before the line being laid out ends with the
@@ -273,10 +603,6 @@ impl FormatEngine<'_> {
     fn closing_brace_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         if !matches!(tokens[first], Token::Symbol('}')) {
-            return None;
-        }
-        // Case blocks move lines after layout; their closers stay with it.
-        if self.case_unindent_spaces() > 0 {
             return None;
         }
         let groups = &self.tree.groups;
@@ -362,7 +688,11 @@ impl FormatEngine<'_> {
                 self.line_led_by(owner)?
             }
         };
-        Some(self.output.lead_width(line, self.options.tab_width) + extra)
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + extra
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// A `{` on its own line after a control header stands at the header's

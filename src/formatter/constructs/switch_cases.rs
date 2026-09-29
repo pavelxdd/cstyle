@@ -1582,12 +1582,22 @@ impl FormatEngine<'_> {
         if !closing_line_needs_unindent || self.options.indent_cases {
             return None;
         }
-        if line.trim() == "}" {
+        // A switch body's closer lines up however a comment trails it; a
+        // commented case block closer keeps astyle's extra level.
+        let closes_switch = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.closed_at(span.first))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(
+                |owner| matches!(&self.tree.tokens[owner], Token::Word(word) if word == "switch"),
+            );
+        let code = line[..trailing_comment_split_limit(line)].trim();
+        if line.trim() == "}" || (closes_switch && code == "}") {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
 
-        let trimmed = line.trim_start();
-        let after_brace = trimmed.strip_prefix("} ")?.trim_start();
+        let after_brace = line.trim_start().strip_prefix("} ")?.trim_start();
         let indent =
             if starts_header_word(after_brace, "case") || after_brace.starts_with("default:") {
                 self.layout.indentation.indent().saturating_sub(1)

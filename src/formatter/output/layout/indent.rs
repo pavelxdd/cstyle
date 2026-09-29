@@ -1274,21 +1274,10 @@ impl FormatEngine<'_> {
             && !previous_code.ends_with("<=")
             && !previous_code.ends_with(">=")
             && !previous_code.contains('(')
+            && self.pending_line_in_parens()
+            && !current.starts_with(['#', '{'])
         {
-            let in_parameter_list = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .skip(1)
-                .take_while(|line| {
-                    let trimmed = line.trim_end();
-                    !trimmed.ends_with(';') && trimmed != "{" && trimmed != "}"
-                })
-                .any(|line| unmatched_open_paren_column(line.trim_end()).is_some());
-            if in_parameter_list && !current.starts_with(['#', '{']) {
-                return Some(leading_visual_width(previous, tab_width) + width);
-            }
+            return Some(leading_visual_width(previous, tab_width) + width);
         }
         if let Some(spaces) = self.argument_after_split_new_call_opener_indent_spaces(line) {
             return Some(spaces);
