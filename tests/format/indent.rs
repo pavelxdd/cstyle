@@ -7492,3 +7492,21 @@ fn gnu_else_brace_in_case_block_takes_the_case_unindent() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_unary_operator_arguments_stay_in_their_call_parentheses() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "void timer_cb(struct GlobalInfo *g)",
+        "{",
+        "    mresult = curl_multi_socket_action(g->multi, CURL_SOCKET_TIMEOUT, 0,",
+        "                                       &g->still_running);",
+        "    if (a",
+        "            || !b)",
+        "        x(&y,",
+        "          -z);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

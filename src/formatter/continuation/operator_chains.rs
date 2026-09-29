@@ -695,6 +695,10 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // After a comma or an opener the operator is unary, as in `&x`.
+        if self.pending_line_starts_unary_operator() {
+            return None;
+        }
         if let Some(stream) = self.layout.frame_stack.active_stream() {
             return Some(if self.options.indent_after_parens {
                 (normal_indent + self.options.continuation_indent) * self.options.indent_width
