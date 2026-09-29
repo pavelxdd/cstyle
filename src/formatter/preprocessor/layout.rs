@@ -1091,16 +1091,15 @@ impl FormatEngine<'_> {
             return None;
         }
         let branch_body_spaces = self.split_else_preprocessor_branch_body_indent_spaces()?;
-        let nearest_body_spaces = self
-            .output
-            .scoped()
-            .iter()
+        let scope_start = self.output.len() - self.output.scoped().len();
+        let nearest_body_spaces = (scope_start..self.output.len())
             .rev()
             .skip(1)
-            .find_map(|line| {
+            .find_map(|index| {
+                let line = &self.output[index];
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 let trimmed = code.trim_start();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
+                if trimmed.is_empty() || self.output.is_directive_line(index) {
                     return None;
                 }
                 let spaces = leading_visual_width(line, self.options.tab_width);

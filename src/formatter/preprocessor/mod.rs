@@ -585,9 +585,7 @@ impl FormatEngine<'_> {
                 &mut continued_line_comment,
             );
         }
-        if (is_define && !line.trim_end().ends_with('\\'))
-            || (!is_define && directive.is_some() && parts.len() > 1)
-        {
+        if is_define && !line.trim_end().ends_with('\\') {
             if !(is_define && self.preprocessor_split_else_active()) {
                 self.layout.continuation_indent.clear_next_line();
             }

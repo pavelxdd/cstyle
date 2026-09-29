@@ -466,6 +466,25 @@ impl OutputBuffer {
             .map(|index| &self.lines[index])
     }
 
+    /// The directive line that line `index` continues through
+    /// backslash-newlines.
+    pub(crate) fn directive_of_continuation(&self, index: usize) -> Option<usize> {
+        let mut line = index;
+        while line > 0 && self.code_trimmed(line - 1).ends_with('\\') {
+            line -= 1;
+            if self.trimmed(line).starts_with('#') {
+                return Some(line);
+            }
+        }
+        None
+    }
+
+    /// Whether line `index` belongs to a directive, on its first line or on
+    /// a backslash-continued one.
+    pub(crate) fn is_directive_line(&self, index: usize) -> bool {
+        self.trimmed(index).starts_with('#') || self.directive_of_continuation(index).is_some()
+    }
+
     /// Index of the line that opens the comment on line `index`: a block
     /// comment continuation line maps to the line holding its `/*`.
     pub(crate) fn comment_start_index(&self, index: usize) -> usize {

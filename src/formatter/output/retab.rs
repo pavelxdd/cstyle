@@ -32,7 +32,7 @@ impl FormatEngine<'_> {
                 if self.output.is_verbatim(index)
                     || line.is_empty()
                     || !self.options.indent_preproc_define
-                        && self.directive_of_continuation(index).is_some()
+                        && self.output.directive_of_continuation(index).is_some()
                     || self.continues_column_one_comment(index)
                 {
                     return None;
@@ -136,7 +136,7 @@ impl FormatEngine<'_> {
         if text.starts_with('#') {
             return None;
         }
-        if let Some(directive) = self.directive_of_continuation(index) {
+        if let Some(directive) = self.output.directive_of_continuation(index) {
             // An indented macro body stands one level past its directive and
             // keeps its alignment in spaces.
             return Some(
@@ -166,19 +166,6 @@ impl FormatEngine<'_> {
             return Some(opener);
         }
         self.open_comment_line(index)
-    }
-
-    /// The directive line that output line `index` continues through
-    /// backslash-newlines.
-    fn directive_of_continuation(&self, index: usize) -> Option<usize> {
-        let mut line = index;
-        while line > 0 && self.output.code_trimmed(line - 1).ends_with('\\') {
-            line -= 1;
-            if self.output.trimmed(line).starts_with('#') {
-                return Some(line);
-            }
-        }
-        None
     }
 
     /// The line whose `/*` opens a block comment still open at the start of
