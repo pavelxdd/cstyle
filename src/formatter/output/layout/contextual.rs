@@ -74,6 +74,8 @@ impl FormatEngine<'_> {
                     })
                     && unmatched_open_paren_column(previous_code).is_none()
             }
+            // An initializer list never continues inside parentheses.
+            && !self.pending_line_in_parens()
             && let Some(base) = self.same_line_constructor_initializer_base_indent_spaces()
         {
             layout.exact_indent_spaces = Some(base);

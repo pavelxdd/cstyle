@@ -1,6 +1,6 @@
 //! Statements: which `if` each `else` belongs to.
 
-use super::blocks::{BlockKind, Blocks, next_code_token};
+use super::blocks::{BlockKind, Blocks, is_code_token, next_code_token};
 use super::groups::Groups;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
@@ -36,6 +36,8 @@ struct ElseBody {
     start: usize,
     /// Index after the body.
     end: usize,
+    /// Whether an empty line, not just a directive line, splits it off.
+    after_blank_line: bool,
 }
 
 impl Statements {
@@ -68,6 +70,17 @@ impl Statements {
                         .filter(|token| matches!(token, Token::Newline))
                         .count()
                         > 1
+                })
+                .map(|body| ElseBody {
+                    after_blank_line: tokens[body.keyword..body.start]
+                        .iter()
+                        .filter(|token| !matches!(token, Token::Whitespace(_)))
+                        .collect::<Vec<_>>()
+                        .windows(2)
+                        .any(|pair| {
+                            matches!(pair[0], Token::Newline) && matches!(pair[1], Token::Newline)
+                        }),
+                    ..body
                 })
                 .collect(),
         }
@@ -106,6 +119,14 @@ impl Statements {
         self.split_else_bodies
             .iter()
             .any(|body| (body.start..body.end).contains(&index))
+    }
+
+    /// Whether the token `index` is in the body of an `else` that an empty
+    /// line separates from its body; a directive line alone does not.
+    pub(crate) fn in_else_body_after_blank_line(&self, index: usize) -> bool {
+        self.split_else_bodies
+            .iter()
+            .any(|body| body.after_blank_line && (body.start..body.end).contains(&index))
     }
 }
 
@@ -229,14 +250,24 @@ impl Parser<'_> {
 
     /// Whether an alternative branch of a conditional group starts between
     /// the tokens `from` and `to`: code on both sides of it never meets.
+    /// Branches holding only directives, such as alternative `#define`s,
+    /// split no code.
     fn crosses_branch(&self, from: usize, to: usize) -> bool {
-        self.tokens[from..to].iter().any(|token| {
-            matches!(token, Token::Preprocessor(directive)
-            if matches!(
-                preprocessor_directive(&directive.text),
-                Some("else" | "elif" | "elifdef" | "elifndef")
-            ))
-        })
+        let mut branch_has_code = false;
+        for token in &self.tokens[from..to] {
+            if let Token::Preprocessor(directive) = token {
+                match preprocessor_directive(&directive.text) {
+                    Some("else" | "elif" | "elifdef" | "elifndef") if branch_has_code => {
+                        return true;
+                    }
+                    Some(name) if is_conditional_preprocessor(name) => branch_has_code = false,
+                    _ => {}
+                }
+            } else if is_code_token(token) {
+                branch_has_code = true;
+            }
+        }
+        false
     }
 
     fn is_label(&self, at: usize, end: usize) -> bool {
@@ -379,6 +410,7 @@ impl Parser<'_> {
                 keyword,
                 start,
                 end: chain_end,
+                after_blank_line: false,
             });
         }
         chain_end

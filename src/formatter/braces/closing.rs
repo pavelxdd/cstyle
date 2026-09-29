@@ -11,6 +11,7 @@ use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     line_brace_imbalance, preprocessor_directive, trailing_comment_split_limit,
@@ -298,7 +299,22 @@ impl FormatEngine<'_> {
             self.previous_was_newline = false;
             return;
         }
-        self.finish_line();
+        // A statement expression's `}` written after its last statement
+        // stays there, as in `_a * 2; })`.
+        let attached_statement_expression = !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && !self.token_input.token_begins_source_line
+            && !self.current_is_blank()
+            && self
+                .current
+                .active_token()
+                .is_some_and(|brace| self.closes_statement_expression(brace));
+        if attached_statement_expression {
+            self.ensure_space();
+        } else {
+            self.finish_line();
+        }
         self.layout.pending_braceless_block_bias = None;
         self.layout.inline_nested_header_braceless_bias = None;
         self.prepare_case_closing_brace();
@@ -340,6 +356,37 @@ impl FormatEngine<'_> {
             closing_lambda_body,
             move_one_line_block_comment,
         );
+    }
+
+    fn closes_statement_expression(&self, brace: usize) -> bool {
+        self.tree
+            .groups
+            .closed_at(brace)
+            .and_then(|group| self.tree.blocks.kind(group))
+            == Some(BlockKind::StatementExpression)
+    }
+
+    /// Whether the token after the `;` being pushed is a statement
+    /// expression's `}` on the same source line.
+    pub(crate) fn attached_statement_expression_closer_follows(&self) -> bool {
+        // These styles attach every closer already.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) {
+            return false;
+        }
+        let tokens = &self.tree.tokens;
+        let Some(semicolon) = self.current.active_token() else {
+            return false;
+        };
+        let Some(next) = next_code_token(tokens, semicolon + 1) else {
+            return false;
+        };
+        self.closes_statement_expression(next)
+            && !tokens[semicolon + 1..next]
+                .iter()
+                .any(|token| matches!(token, Token::Newline | Token::Comment(_, _)))
     }
 
     fn closing_brace_sibling_indent_column(&self) -> Option<usize> {

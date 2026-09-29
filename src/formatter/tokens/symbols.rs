@@ -889,9 +889,10 @@ impl FormatEngine<'_> {
                 || matches!(next, Some(Token::Symbol('.')))
             {
                 self.emit_trailing_source_space();
-            } else if self.options.brace_style == BraceStyle::Pico
+            } else if (self.options.brace_style == BraceStyle::Pico
                 && (self.token_input.token_line_opens_with_brace
-                    || self.output.last().is_some_and(|line| line.trim() == "{"))
+                    || self.output.last().is_some_and(|line| line.trim() == "{")))
+                || self.attached_statement_expression_closer_follows()
             {
                 self.emit_trailing_source_space_or_ensure();
             } else if break_expanded_lisp_header

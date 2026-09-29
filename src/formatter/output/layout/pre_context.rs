@@ -279,9 +279,11 @@ impl FormatEngine<'_> {
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if previous_code.trim() == "{" {
+                // Output lines already carry the case-block unindent.
                 layout.exact_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
+                        + self.options.indent_width
+                        + self.case_unindent_spaces(),
                 );
             }
         }

@@ -900,6 +900,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous_code.trim_start();
         let adjusted_delta = self.adjusted_line_indent_delta(previous);
         let target = if previous_code.ends_with('{')
+            && !line.trim_start().starts_with('}')
             && !previous_trimmed.starts_with("case ")
             && !previous_trimmed.starts_with("default:")
             && !previous_trimmed.starts_with("switch")
@@ -1979,6 +1980,7 @@ impl FormatEngine<'_> {
     pub(crate) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
         if line.trim_start().starts_with(['#', '{', '}', '/'])
             || find_case_colon(line).is_some()
+            || self.pending_line_is_label(line)
             || self
                 .layout
                 .nesting

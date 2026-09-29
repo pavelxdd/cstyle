@@ -376,6 +376,9 @@ impl FormatEngine<'_> {
         self.flush_backslash_body_parts();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();
+        self.fuse_adjacent_braces();
+        self.attach_statement_expression_braces();
+        self.align_comments_before_case_labels();
         self.retab_output();
         if self.output.is_empty() {
             String::new()

@@ -302,6 +302,25 @@ impl OutputBuffer {
         self.lines.remove(index)
     }
 
+    /// Appends the text of line `from` to line `into`, after `separator`,
+    /// and removes line `from`; `into` then holds the tokens of both.
+    pub(crate) fn join_into(&mut self, into: usize, from: usize, separator: &str) {
+        let text = self.lines[from].trim().to_string();
+        let span = match (self.tokens[into], self.tokens[from]) {
+            (Some(a), Some(b)) => Some(TokenSpan {
+                first: a.first.min(b.first),
+                last: a.last.max(b.last),
+            }),
+            (a, b) => a.or(b),
+        };
+        self.remove(from);
+        let mut line = self.lines[into].trim_end().to_string();
+        line.push_str(separator);
+        line.push_str(&text);
+        self.set(into, line);
+        self.tokens[into] = span;
+    }
+
     pub(crate) fn set(&mut self, index: usize, line: String) {
         let hints = output_line_hints(&line);
         self.record_hints(&line, hints);

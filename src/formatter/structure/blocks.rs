@@ -25,6 +25,8 @@ pub(crate) enum BlockKind {
     ExternC,
     /// A nested compound statement: `{` that starts a statement.
     Block,
+    /// GNU `({ ... })`: statements whose last value is the expression's.
+    StatementExpression,
     Unknown,
 }
 
@@ -224,8 +226,33 @@ fn classify_in_expression(
     }
     match &tokens[previous] {
         Token::Symbol(')') => BlockKind::CompoundLiteral,
+        Token::Symbol('(') if holds_statement(tokens, groups, previous) => {
+            BlockKind::StatementExpression
+        }
         _ => BlockKind::Initializer,
     }
+}
+
+/// Whether the brace right after the `(` at `paren`, on its line, ends a
+/// statement with `;` at its own level: a brace on the next line is a
+/// macro's block argument.
+fn holds_statement(tokens: &[Token], groups: &Groups, paren: usize) -> bool {
+    let Some(open) = next_code_token(tokens, paren + 1) else {
+        return false;
+    };
+    if tokens[paren + 1..open]
+        .iter()
+        .any(|token| !matches!(token, Token::Whitespace(_)))
+    {
+        return false;
+    }
+    let Some(close) = groups.opened_at(open).and_then(|id| groups.get(id).close) else {
+        return false;
+    };
+    let brace = groups.opened_at(open);
+    (open + 1..close).any(|index| {
+        matches!(tokens[index], Token::Symbol(';')) && groups.enclosing(index) == brace
+    })
 }
 
 fn classify_after_paren(

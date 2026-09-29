@@ -1999,3 +1999,276 @@ fn vtk_comments_in_an_extern_c_enum_stay_at_the_member_column() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+fn style(name: &str) -> FormatOptions {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &[format!("--style={name}")]).expect("valid options");
+    options
+}
+
+#[test]
+fn back_to_back_blocks_nest_one_level() {
+    let source = fixture!("void f(void)", "{{{{", "", "   code;", "", "}}}}");
+
+    assert_eq!(
+        format_exact(source, &style("kr")),
+        fixture!("void f(void)", "{{{{", "", "    code;", "", "}}}}"),
+    );
+    assert_eq!(
+        format_exact(source, &style("whitesmith")),
+        fixture!("void f(void)", "    {{{{", "", "    code;", "", "    }}}}"),
+    );
+}
+
+#[test]
+fn back_to_back_blocks_close_together_past_empty_statements() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x) {{",
+        "        a();",
+        "    }}",
+        "    {{{{",
+        "        code;",
+        "        more(1);",
+        "    };};};}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("kr")), source);
+}
+
+#[test]
+fn blocks_on_separate_lines_keep_their_levels() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    {",
+        "        {",
+        "            code;",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("kr")), source);
+}
+
+#[test]
+fn statement_expression_body_nests_one_level() {
+    let source = fixture!(
+        "int f(int x)",
+        "{",
+        "    int y = __extension__({ int _a = x;",
+        "    _a * 2; });",
+        "    return ({",
+        "        int t = y;",
+        "        t + 1;",
+        "    });",
+        "}",
+    );
+
+    assert_eq!(
+        format_exact(source, &style("kr")),
+        fixture!(
+            "int f(int x)",
+            "{",
+            "    int y = __extension__({ int _a = x;",
+            "        _a * 2; });",
+            "    return ({",
+            "        int t = y;",
+            "        t + 1;",
+            "    });",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn label_in_case_block_stays_in_column_one() {
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    switch (x) {",
+        "    case 1: {",
+        "        if (a) {",
+        "            x();",
+        "        }",
+        "",
+        "jump:",
+        "        y();",
+        "        break;",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("kr")), source);
+}
+
+#[test]
+fn gnu_label_in_case_block_stays_in_column_one() {
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    switch (x)",
+        "        {",
+        "        case 1:",
+        "        {",
+        "            if (a)",
+        "                {",
+        "                    x();",
+        "                }",
+        "",
+        "jump:",
+        "            y();",
+        "            break;",
+        "        }",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("gnu")), source);
+}
+
+#[test]
+fn allman_nested_blocks_in_case_block_keep_their_levels() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch( op )",
+        "    {",
+        "    case 1:",
+        "    {",
+        "        {",
+        "            {",
+        "            }",
+        "        }",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("allman")), source);
+}
+
+#[test]
+fn allman_blocks_after_else_split_by_endif_in_case_block() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    {",
+        "        switch( pOp->opcode )",
+        "        {",
+        "        case OP_ParseSchema:",
+        "        {",
+        "#ifdef SQLITE_DEBUG",
+        "            {",
+        "            }",
+        "#endif",
+        "            iDb = pOp->p1;",
+        "            assert( DbHasProperty(db, iDb, DB_SchemaLoaded)",
+        "                    || (CORRUPT_DB && (db->flags & SQLITE_NoSchemaError)!=0) );",
+        "#ifndef SQLITE_OMIT_ALTERTABLE",
+        "            if( pOp->p4.z==0 )",
+        "            {",
+        "            }",
+        "            else",
+        "#endif",
+        "            {",
+        "                assert( pOp->p5==0 );",
+        "                {",
+        "                    {",
+        "                    }",
+        "                }",
+        "            }",
+        "            {",
+        "                {",
+        "                }",
+        "            }",
+        "        }",
+        "#if !defined(SQLITE_OMIT_ANALYZE)",
+        "        {",
+        "        }",
+        "#endif /* !defined(SQLITE_OMIT_ANALYZE) */",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("allman")), source);
+}
+
+#[test]
+fn whitesmith_plain_block_after_if_block_takes_brace_indent() {
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if (x)",
+        "        {",
+        "        a();",
+        "        }",
+        "        {",
+        "        b();",
+        "        }",
+        "    c();",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &style("whitesmith")), source);
+}
+
+#[test]
+fn comments_before_case_label_take_its_column() {
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    switch (x) {",
+        "    case -2:",
+        "        a = 1;",
+        "    /*",
+        "     * We return 0 nevertheless",
+        "     */",
+        "    /* fallthrough */",
+        "    case 0:",
+        "        return 0;",
+        "    case 1:",
+        "        b();",
+        "    // next",
+        "    default:",
+        "        break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("kr")), source);
+}
+
+#[test]
+fn statement_expression_opener_stays_whole_in_broken_brace_styles() {
+    let source = fixture!(
+        "int f(int x)",
+        "{",
+        "    int y = ({",
+        "        int a = x;",
+        "        a * 2;",
+        "    });",
+        "    return y;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &style("allman")), source);
+    assert_eq!(
+        format_exact(source, &style("whitesmith")),
+        fixture!(
+            "int f(int x)",
+            "    {",
+            "    int y = ({",
+            "        int a = x;",
+            "        a * 2;",
+            "    });",
+            "    return y;",
+            "    }",
+        ),
+    );
+}
