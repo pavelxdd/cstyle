@@ -224,20 +224,22 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the code token `first` continues a control condition or a
-    /// ternary inside parentheses past standalone comments: astyle lays
-    /// out other arguments after a comment its own way.
+    /// ternary inside parentheses past standalone comments or blank lines:
+    /// astyle lays out other arguments after a comment its own way.
     fn continues_parentheses_past_comments(&self, first: usize) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let Some(previous) = self.tree.previous_code_token(first) else {
             return false;
         };
-        let standalone_comment = tokens[previous + 1..first].windows(2).any(|pair| {
-            matches!(pair[0], Token::Newline) && matches!(pair[1], Token::Comment(_, _))
-        }) || tokens[previous + 1..first].windows(3).any(|triple| {
-            matches!(triple[0], Token::Newline)
-                && matches!(triple[1], Token::Whitespace(_))
-                && matches!(triple[2], Token::Comment(_, _))
+        // Standalone comments or blank lines: tokens on lines of their own.
+        let between: Vec<&Token> = tokens[previous + 1..first]
+            .iter()
+            .filter(|token| !matches!(token, Token::Whitespace(_)))
+            .collect();
+        let standalone_comment = between.windows(2).any(|pair| {
+            matches!(pair[0], Token::Newline)
+                && matches!(pair[1], Token::Comment(_, _) | Token::Newline)
         });
         let Some(group) = groups.enclosing(first) else {
             return false;
