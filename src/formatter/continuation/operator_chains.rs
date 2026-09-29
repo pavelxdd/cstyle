@@ -2124,16 +2124,36 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// Visual column of the `(` that the first of `closes` unmatched `)` on
+    /// output line `line` closes, searching the lines above it within the
+    /// statement.
+    fn opener_column_above(&self, line: usize, mut closes: usize) -> Option<usize> {
+        let scope_start = self.output.len() - self.output.scoped().len();
+        for index in (scope_start..line).rev() {
+            let text = &self.output[index];
+            if text.trim().is_empty() || self.output.is_directive_line(index) {
+                continue;
+            }
+            let code = text[..trailing_comment_split_limit(text)].trim_end();
+            if code.ends_with([';', '{', '}']) {
+                return None;
+            }
+            let (line_closes, opens) = line_paren_imbalance(code);
+            if opens.len() >= closes {
+                let open = opens[opens.len() - closes];
+                return Some(column_after(code, open, self.options.tab_width) - 1);
+            }
+            closes = closes - opens.len() + line_closes;
+        }
+        None
+    }
+
     pub(crate) fn ternary_first_arm_indent_spaces(&self, current: &str) -> Option<usize> {
         if current.is_empty() || current.starts_with(['#', '?', ':', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())?;
+        let previous_index = self.output.last_non_empty_index()?;
+        let previous = &self.output[previous_index];
         let code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if !code.ends_with('?') {
             return None;
@@ -2161,6 +2181,14 @@ impl FormatEngine<'_> {
             } else if let Some((operator_index, operator)) = find_assignment_operator(condition) {
                 let after = &condition[operator_index + operator.len()..];
                 operator_index + operator.len() + (after.len() - after.trim_start().len())
+            } else if let (closes @ 1.., _) = line_paren_imbalance(condition)
+                && let Some(column) = self.opener_column_above(previous_index, closes)
+            {
+                // The condition closes a group opened on an earlier line; the
+                // arms align with that group.
+                return Some(
+                    column + self.layout.line_adjuster.total_case_unindent_depth() * indent_width,
+                );
             } else {
                 return Some(
                     leading_visual_width(condition, self.options.tab_width)

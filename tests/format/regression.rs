@@ -2014,7 +2014,7 @@ fn initializer_member_ternary_arm_aligns_to_value_column() {
 }
 
 #[test]
-fn ternary_arm_after_call_question_line_keeps_column() {
+fn ternary_arm_after_closing_the_condition_group_aligns_with_its_paren() {
     check(
         "void f(void)\n{\n    const struct clock_value time = (view != nullptr &&\n                                     view->clock.valid &&\n                                     view->clock.rtc_valid &&\n                                     clock_value_valid(&view->clock.time)) ?\n                                     view->clock.time : default_time;\n    use(time);\n}\n",
         &[
@@ -2025,7 +2025,7 @@ fn ternary_arm_after_call_question_line_keeps_column() {
             "--pad-oper",
             "--break-after-logical",
         ],
-        "void f(void)\n{\n    const struct clock_value time = (view != nullptr &&\n                                     view->clock.valid &&\n                                     view->clock.rtc_valid &&\n                                     clock_value_valid(&view->clock.time)) ?\n                                     view->clock.time : default_time;\n    use(time);\n}\n",
+        "void f(void)\n{\n    const struct clock_value time = (view != nullptr &&\n                                     view->clock.valid &&\n                                     view->clock.rtc_valid &&\n                                     clock_value_valid(&view->clock.time)) ?\n                                    view->clock.time : default_time;\n    use(time);\n}\n",
     );
 }
 
