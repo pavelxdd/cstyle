@@ -7440,6 +7440,27 @@ fn designated_initializer_rows_and_values_after_designators_keep_the_member_colu
 }
 
 #[test]
+fn initializer_brace_row_after_a_continued_row_keeps_the_row_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    struct option opts[] = {",
+        "        OPT_STRING(0, \"prefix\", &base, N_(\"prefix\"),",
+        "                   N_(\"prepend\")),",
+        "        {",
+        "            .type = OPTION_CALLBACK,",
+        "            .value = args,",
+        "        },",
+        "        OPT_END()",
+        "    };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn condition_and_ternary_continuations_skip_the_comments_between_their_lines() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

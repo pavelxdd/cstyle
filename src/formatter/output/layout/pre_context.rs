@@ -300,6 +300,7 @@ impl FormatEngine<'_> {
                 }
             }
             if paren_depth < 0
+                && !self.pending_line_starts_initializer_element()
                 && !previous_code.ends_with(')')
                 && previous_code.chars().any(is_identifier_start)
             {

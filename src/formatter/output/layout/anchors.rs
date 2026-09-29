@@ -482,6 +482,26 @@ impl FormatEngine<'_> {
             .is_some_and(|group| groups.get(group).delimiter != Delimiter::Brace)
     }
 
+    /// Whether the line being laid out starts an initializer element after
+    /// a comma.
+    pub(crate) fn pending_line_starts_initializer_element(&self) -> bool {
+        let groups = &self.tree.groups;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        let Some(group) = groups.enclosing(first) else {
+            return false;
+        };
+        self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
+            && self
+                .tree
+                .previous_code_token(first)
+                .is_some_and(|previous| {
+                    matches!(self.tree.tokens[previous], Token::Symbol(','))
+                        && groups.enclosing(previous) == Some(group)
+                })
+    }
+
     /// Whether the line being laid out starts an argument with a unary
     /// operator, as in `&x` after a comma inside parentheses.
     pub(crate) fn pending_line_starts_unary_operator(&self) -> bool {
