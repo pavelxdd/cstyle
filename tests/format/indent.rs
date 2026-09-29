@@ -7461,6 +7461,57 @@ fn initializer_brace_row_after_a_continued_row_keeps_the_row_column() {
 }
 
 #[test]
+fn declarations_after_macros_with_control_statements_stay_flush() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "#define UNLOCK(c)       \\",
+        "  do {                  \\",
+        "    if(c) {             \\",
+        "      if(KEEP(c))       \\",
+        "        unlock(c);      \\",
+        "    }                   \\",
+        "  } while(0)",
+        "",
+        "/* A set */",
+        "struct bundle",
+        "    {",
+        "    int ids;",
+        "    };",
+        "",
+        "#define CHECK(c) \\",
+        "  do {           \\",
+        "    if(c)        \\",
+        "        f(c);    \\",
+        "  } while(0)",
+        "",
+        "struct other",
+        "    {",
+        "    int ids;",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn arguments_after_multiline_trailing_comments_keep_the_argument_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static int getftpresponse(struct Curl_easy *data,",
+        "                          size_t *nreadp, /* return number of bytes",
+        "                                             read */",
+        "                          int *ftpcodep) /* return the ftp-code */",
+        "{",
+        "    call(a, /* first",
+        "               second */",
+        "         b);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn condition_and_ternary_continuations_skip_the_comments_between_their_lines() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

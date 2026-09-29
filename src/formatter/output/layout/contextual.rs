@@ -1976,7 +1976,10 @@ impl FormatEngine<'_> {
             } else if !line.trim_start().starts_with(['{', '}', '#', ':'])
                 && !line.trim_start().starts_with("->")
                 && code.ends_with(')')
-                && !trimmed.starts_with('#')
+                && !self
+                    .output
+                    .last_non_empty_index()
+                    .is_some_and(|index| self.output.is_directive_line(index))
                 && self.previous_code_closes_control_condition() != Some(false)
                 && let Some(header) =
                     self.output

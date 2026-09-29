@@ -45,6 +45,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.ternary_arm_in_parens_indent(first))
             .or_else(|| self.assigned_string_continuation_indent(first))
             .or_else(|| self.comment_interrupted_continuation_indent(first))
+            .or_else(|| self.argument_after_trailing_block_comment_indent(first))
             .or_else(|| self.initializer_row_indent(first))
         {
             layout.exact_indent_spaces = Some(spaces);
@@ -185,6 +186,37 @@ impl FormatEngine<'_> {
                 Some(header) => content.max(header + min_conditional_indent_spaces(self.options)),
                 None => content,
             }
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// An argument after a comma whose trailing block comment runs onto
+    /// later lines keeps the argument column: the comment's lines break
+    /// the engine's continuation.
+    fn argument_after_trailing_block_comment_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        let previous = self.tree.previous_code_token(first)?;
+        let group = groups.enclosing(first)?;
+        if !matches!(tokens[previous], Token::Symbol(','))
+            || groups.enclosing(previous) != Some(group)
+            || groups.get(group).delimiter != Delimiter::Paren
+        {
+            return None;
+        }
+        let comment =
+            (previous + 1..first).find(|&index| !matches!(tokens[index], Token::Whitespace(_)))?;
+        if !matches!(&tokens[comment], Token::Comment(_, text) if text.contains('\n')) {
+            return None;
+        }
+        let previous_line = self.output.line_with_token(previous)?;
+        let previous_first = self.output.line_tokens(previous_line)?.first;
+        let column = if groups.enclosing(previous_first) == Some(group) {
+            self.output
+                .lead_width(previous_line, self.options.tab_width)
+        } else {
+            let open = groups.get(group).open;
+            self.token_column(next_code_token(tokens, open + 1)?)?
         };
         Some(column + self.case_unindent_spaces())
     }
@@ -581,7 +613,9 @@ impl FormatEngine<'_> {
     pub(crate) fn previous_code_closes_control_condition(&self) -> Option<bool> {
         let tokens = &self.tree.tokens;
         let first = self.output.pending_tokens()?.first;
-        let previous = self.tree.previous_code_token(first)?;
+        let Some(previous) = self.tree.previous_code_token(first) else {
+            return Some(false);
+        };
         if !matches!(tokens[previous], Token::Symbol(')')) {
             return Some(false);
         }

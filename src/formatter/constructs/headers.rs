@@ -785,14 +785,21 @@ impl FormatEngine<'_> {
         if !comment.trim_start().starts_with("/*") {
             return None;
         }
-        let header = self
-            .output
-            .scoped()
+        let scoped = self.output.scoped();
+        let comment_index = scoped
             .iter()
-            .rev()
-            .skip_while(|line| line.as_str() != comment.as_str())
-            .skip(1)
-            .find(|line| !line.trim().is_empty())?;
+            .rposition(|line| line.as_str() == comment.as_str())?;
+        let header_index = scoped[..comment_index]
+            .iter()
+            .rposition(|line| !line.trim().is_empty())?;
+        // A directive's continued lines hold no header.
+        if self
+            .output
+            .is_directive_line(self.output.len() - scoped.len() + header_index)
+        {
+            return None;
+        }
+        let header = &scoped[header_index];
         let header_code = header[..trailing_comment_split_limit(header)].trim_end();
         let header_trimmed = header_code.trim_start();
         if header_code.ends_with('{')
