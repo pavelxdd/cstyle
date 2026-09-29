@@ -124,6 +124,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn recent_paren_continuation_indent_spaces(&self) -> Option<usize> {
+        // An open paren in comment text continues nothing.
+        if self.output.pending_tokens().is_some() && !self.pending_line_in_parens() {
+            return None;
+        }
         for line in self.output.scoped().iter().rev().take(12) {
             if line.trim().is_empty() {
                 return None;

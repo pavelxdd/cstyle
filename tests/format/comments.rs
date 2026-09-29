@@ -4281,3 +4281,18 @@ fn block_comment_text_does_not_read_as_a_member_initializer_colon() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn open_paren_in_block_comment_text_continues_no_code() {
+    let source = fixture!(
+        "/**",
+        "   See also: cmpp_dx (the class which",
+        "   with the most).",
+        "*/",
+        "struct cmpp {",
+        "    int a;",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
