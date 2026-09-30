@@ -2107,30 +2107,45 @@ impl FormatEngine<'_> {
     fn first_case_label_column(&self, body: GroupId) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let open = self.tree.groups.get(body).open;
-        let owner = self.tree.blocks.owner(body)?;
+        // A Whitesmith switch nested in a case block owns its body too.
+        let owner = self
+            .tree
+            .previous_code_token(open)
+            .filter(|_| self.options.brace_style == BraceStyle::Whitesmith)
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|condition| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(condition).open)
+            })
+            .filter(|&keyword| matches!(&tokens[keyword], Token::Word(word) if word == "switch"))
+            .or_else(|| self.tree.blocks.owner(body))?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "switch") {
             return None;
         }
         let brace_line = self.output.line_with_token(open)?;
         // Indented switch braces take their labels after layout, except a
         // brace on its own line, whose column the labels share.
+        let brace_leads = self.output.line_tokens(brace_line)?.first == open;
+        // Whitesmith labels share the column of the indented brace.
+        let whitesmith = self.options.brace_style == BraceStyle::Whitesmith && brace_leads;
         if self.should_indent_brace_line(BraceType::Command)
+            && !whitesmith
             && !(self.options.brace_style == BraceStyle::Vtk
                 && !self.options.indent_switches
                 && self.layout.line_adjuster.pending_case_unindent() == 0
-                && self.output.line_tokens(brace_line)?.first == open)
+                && brace_leads)
         {
             return None;
         }
-        let line = if self.output.line_tokens(brace_line)?.first == open {
+        let line = if brace_leads {
             brace_line
         } else {
             self.line_led_by(owner)?
         };
+        let switch_level = usize::from(self.options.indent_switches && !whitesmith);
         Some(
             self.output.lead_width(line, self.options.tab_width)
-                + (usize::from(self.options.indent_switches)
-                    + self.layout.line_adjuster.pending_case_unindent())
+                + (switch_level + self.layout.line_adjuster.pending_case_unindent())
                     * self.options.indent_width,
         )
     }

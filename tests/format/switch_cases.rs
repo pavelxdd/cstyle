@@ -1468,3 +1468,32 @@ fn allman_statement_after_a_label_in_a_case_block_after_a_directive_keeps_the_bl
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_switch_nested_in_a_case_block_keeps_labels_at_its_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch (*f)",
+        "        {",
+        "        case 2:",
+        "            {",
+        "            while (1)",
+        "                {",
+        "                switch (*f)",
+        "                    {",
+        "                    case 3:",
+        "                        x = 1;",
+        "                        break;",
+        "                    }",
+        "                }",
+        "            }",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
