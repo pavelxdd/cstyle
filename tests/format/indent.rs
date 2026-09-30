@@ -9191,3 +9191,18 @@ fn ternary_chain_value_after_an_assignment_line_stays_at_the_stack_top() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_leading_operator_of_a_return_value_stands_at_the_value() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "unsigned long f(unsigned long size)",
+        "{",
+        "    return size + (size >> 5) + (size >> 7) + (size >> 11)",
+        "           + 7 + 18;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

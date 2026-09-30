@@ -2285,42 +2285,6 @@ impl FormatEngine<'_> {
                 })
     }
 
-    /// Whether the line being laid out starts an argument with a unary
-    /// operator, as in `&x` after a comma inside parentheses.
-    pub(crate) fn pending_line_starts_unary_operator(&self) -> bool {
-        let tokens = &self.tree.tokens;
-        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
-            return false;
-        };
-        matches!(tokens[first], Token::Operator(_))
-            && self.pending_line_in_parens()
-            && self
-                .tree
-                .previous_code_token(first)
-                .is_some_and(|previous| matches!(tokens[previous], Token::Symbol(',' | '(')))
-    }
-
-    /// Whether the line being laid out starts in the same parentheses, as
-    /// the tree reads them, as the last code line before it: braces aside.
-    pub(crate) fn pending_line_in_previous_line_group(&self) -> bool {
-        let groups = &self.tree.groups;
-        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
-            return true;
-        };
-        let Some(previous) = (0..self.output.len())
-            .rev()
-            .find_map(|line| self.output.line_tokens(line))
-        else {
-            return true;
-        };
-        let parens = |index: usize| {
-            groups
-                .enclosing(index)
-                .filter(|&group| groups.get(group).delimiter != Delimiter::Brace)
-        };
-        parens(first) == parens(previous.first)
-    }
-
     /// Whether the line being laid out is a row of an initializer brace
     /// opened on an earlier line: astyle aligns no continuation to a `=`
     /// there.

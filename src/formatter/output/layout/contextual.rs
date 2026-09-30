@@ -569,14 +569,6 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
             self.update_current_brace_indent_columns(spaces + self.options.indent_width, spaces);
         }
-        if let Some(spaces) = self.gnu_leading_operator_indent_spaces(
-            line,
-            layout.line_kind,
-            layout.normal_indent,
-            layout.exact_indent_spaces,
-        ) {
-            layout.exact_indent_spaces = Some(spaces);
-        }
         if let Some(spaces) = self.allman_operator_or_preprocessor_indent_spaces(
             line,
             layout.line_kind,
