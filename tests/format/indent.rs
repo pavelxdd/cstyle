@@ -3235,7 +3235,7 @@ fn return_trailing_logical_chain_keeps_sibling_alignment() {
 
 // Interior source whitespace does not change the semantic continuation level.
 #[test]
-fn return_logical_continuation_after_tab_keeps_single_continuation_level() {
+fn return_logical_continuation_after_tab_aligns_with_the_value() {
     let mut options = FormatOptions::default();
     let args = ["--style=linux", "--mode=c"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
@@ -3245,7 +3245,7 @@ fn return_logical_continuation_after_tab_keeps_single_continuation_level() {
             "int f(struct s *p)\n{\n\treturn\tp->type == MAX ||\n\t\tg(p) == p->id;\n}\n",
             &options,
         ),
-        "int f(struct s *p)\n{\n    return\tp->type == MAX ||\n        g(p) == p->id;\n}\n",
+        "int f(struct s *p)\n{\n    return\tp->type == MAX ||\n            g(p) == p->id;\n}\n",
     );
 }
 
@@ -6550,13 +6550,13 @@ fn nested_logical_group_continuations_keep_operand_columns() {
     );
 }
 #[test]
-fn long_call_after_braceless_ternary_keeps_argument_rows_aligned_to_open_paren() {
+fn long_call_after_braceless_ternary_falls_back_past_the_maximum_indent() {
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  if (message == EVENT_SCROLL)\n    direction = (((short) HIGH_WORD (value)) > 0)\n                  ? DIRECTION_UP\n                  : DIRECTION_DOWN;\n\n  event = very_long_event_factory_name_with_suffix (surface,\n                                                    pointer,\n                                                    NULL,\n                                                    tick,\n                                                    state,\n                                                    direction,\n                                                    unknown);\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    if (message == EVENT_SCROLL)\n        direction = (((short) HIGH_WORD (value)) > 0)\n                    ? DIRECTION_UP\n                    : DIRECTION_DOWN;\n\n    event = very_long_event_factory_name_with_suffix (surface,\n                                                      pointer,\n                                                      NULL,\n                                                      tick,\n                                                      state,\n                                                      direction,\n                                                      unknown);\n}\n",
+        "void f(void)\n{\n    if (message == EVENT_SCROLL)\n        direction = (((short) HIGH_WORD (value)) > 0)\n                    ? DIRECTION_UP\n                    : DIRECTION_DOWN;\n\n    event = very_long_event_factory_name_with_suffix (surface,\n            pointer,\n            NULL,\n            tick,\n            state,\n            direction,\n            unknown);\n}\n",
     );
 }
 #[test]
@@ -8436,6 +8436,215 @@ fn parameter_after_a_directive_aligns_with_the_first_parameter() {
         "                           u_char *id, int len, int *copy)",
         "{",
         "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn call_arguments_in_an_else_if_condition_keep_the_call_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x)",
+        "        g();",
+        "    else if (recurse &&",
+        "             add_directory_to_archiver(archiver_args,",
+        "                                       buf.buf, recurse) < 0)",
+        "        h();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn over_max_call_arguments_after_an_assignment_in_parens_align_with_the_value() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (a) {",
+        "        x();",
+        "    } else if ((result = download_bundle_list(r, &list_from_bundle,",
+        "                         global_list, depth)))",
+        "        y();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comments_before_ternary_arms_take_the_arm_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x)",
+        "        a = 1;",
+        "    else",
+        "        *unit = humanise_rate ?",
+        "                /* TRANSLATORS: s */",
+        "                Q_(\"byte/s\", \"bytes/s\", bytes) :",
+        "                /* TRANSLATORS: b */",
+        "                Q_(\"byte\", \"bytes\", bytes);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn gnu_comparison_after_split_call_arguments_takes_the_condition_continuation() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (ngx_array_init(&curr_names, hinit->temp_pool, nelts,",
+        "                       sizeof(ngx_hash_key_t))",
+        "            != NGX_OK)",
+        "        {",
+        "            return;",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn ternary_arm_after_a_split_first_arm_aligns_with_the_first_arm() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    rc = cert_blob ?",
+        "         use_chain_buffer(ctx,",
+        "                          cert_blob->data,",
+        "                          (long)cert_blob->len) :",
+        "         use_chain_file(ctx, cert_file);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn dangling_else_after_a_nested_block_brace_stays_at_the_brace() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (y = d1) {",
+        "        if (k = g(&y))",
+        "            if (k >= 16) {",
+        "                i = 2;",
+        "            } else {",
+        "                i = 3;",
+        "            } else {",
+        "            i = 1;",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn attached_else_brace_after_a_split_else_closes_at_the_else() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (!result)",
+        "        switch (progress) {",
+        "#ifndef A",
+        "            if (a)",
+        "                r = 1;",
+        "            else",
+        "#endif",
+        "                if (b)",
+        "                    /* note */",
+        "                    r = 2;",
+        "                else {",
+        "                    r = 3;",
+        "                }",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn semicolon_line_ending_a_continued_return_stays_at_the_continuation() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static int f(int code, int result)",
+        "{",
+        "    return /* first */",
+        "        (result == 1) ||",
+        "        /* second */",
+        "        (code == 404)",
+        "        ;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn value_after_a_trailing_chained_assignment_stacks_on_the_values() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    a = b = c =",
+        "                1;",
+        "    a->x = b->y = cc->zzzzzzzzzzzzzzzzzzzzzzzzzzz = dd->wwwwwwwwwwwww =",
+        "                      2;",
+        "    x[1] = y[2] =",
+        "               3;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn adjacent_string_argument_past_the_maximum_indent_takes_the_assigned_value() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    redisReply *reply = CLUSTER_MANAGER_COMMAND(node1, \"CLUSTER \"",
+        "                        \"SETSLOT %d %s %s\",",
+        "                        slot, status,",
+        "                        (char *) node2->name);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn line_after_an_assigned_value_past_the_maximum_takes_two_levels() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    *((const struct Curl_sockaddr_ex **)pres2) = cf->connected ?",
+        "            &ctx->addr : NULL;",
+        "    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx = cf->connected ?",
+        "            a : b;",
+        "    switch (o) {",
+        "    default:",
+        "        ;",
+        "    }",
         "}",
     );
 

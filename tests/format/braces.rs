@@ -2272,3 +2272,27 @@ fn statement_expression_opener_stays_whole_in_broken_brace_styles() {
         ),
     );
 }
+
+#[test]
+fn whitesmith_indents_the_brace_of_a_statement_like_macro_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if (x)",
+        "        {",
+        "        struct string_list_item *item;",
+        "        for_each_string_list_item(item, &update_refs)",
+        "            {",
+        "            register_checked_out_branch(\"\", item->string,",
+        "                                        wt->path,",
+        "                                        BRANCH_CHECKOUT_KIND_UPDATE_REF);",
+        "            }",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -21,6 +21,7 @@ use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
@@ -791,7 +792,9 @@ impl FormatEngine<'_> {
             if !attach_to_previous {
                 return false;
             }
-            self.current.replace(self.output.pop().unwrap_or_default());
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
         }
         if !self.current.ends_with([' ', '\t']) {
             self.current.push_str("   ");
@@ -862,7 +865,9 @@ impl FormatEngine<'_> {
             breaks_before_call: lambda.breaks_before_call,
         };
         if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
-            self.current.replace(self.output.pop().unwrap_or_default());
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
             self.token_input.token_begins_source_line = false;
             self.open_multiline_attached_initializer_brace(
                 brace.header.take(),
@@ -1512,7 +1517,9 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|line| line.trim_end().ends_with('['))
         {
-            self.current.replace(self.output.pop().unwrap_or_default());
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
             self.current.push_str(" {");
             self.layout.command_state.observe_char('{');
             self.previous_was_newline = false;
@@ -1614,7 +1621,8 @@ impl FormatEngine<'_> {
                     && !is_header(self.options, first)
             })
         {
-            let mut line = self.output.pop().unwrap_or_default();
+            let (mut line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.republish_tokens(tokens);
             line.push('{');
             if let Some(Token::Comment(CommentKind::Line, comment)) = next {
                 line.push(' ');
@@ -1632,7 +1640,9 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|line| line.trim_end().ends_with('['))
         {
-            self.current.replace(self.output.pop().unwrap_or_default());
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
             self.current.push_str(" {");
             self.layout.command_state.observe_char('{');
             self.previous_was_newline = false;
@@ -1709,12 +1719,31 @@ impl FormatEngine<'_> {
 
     /// Attaches the brace to the last output line and returns whether that
     /// line is a case label.
+    /// Gives the line published next the tokens of the output line taken
+    /// back, with the `{` being attached to it.
+    fn republish_tokens(&mut self, tokens: Option<TokenSpan>) {
+        let brace = self.current.active_token();
+        let span = match (tokens, brace) {
+            (Some(span), Some(brace)) => Some(TokenSpan {
+                first: span.first.min(brace),
+                last: span.last.max(brace),
+            }),
+            (span, None) => span,
+            (None, Some(brace)) => Some(TokenSpan {
+                first: brace,
+                last: brace,
+            }),
+        };
+        self.output.set_pending_tokens(span);
+    }
+
     fn attach_open_brace_to_output_line(
         &mut self,
         brace_type: BraceType,
         next: Option<&Token>,
     ) -> bool {
-        let line = self.output.pop().unwrap_or_default();
+        let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+        self.republish_tokens(tokens);
         let case_label_line = attach_case_label_brace_to_line(&line, &self.options.access_labels);
         let attached_case_label_output_brace = case_label_line.is_some();
         let line_with_brace_before_comment = case_label_line

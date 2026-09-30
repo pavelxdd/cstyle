@@ -1,0 +1,410 @@
+//! astyle's continuation indent stack, replayed over a statement's
+//! published lines.
+//!
+//! astyle indents a continuation line at the top of a stack of registered
+//! indents: an opening paren registers the column of what follows it, an
+//! assignment the column of its value, `return` the column of the returned
+//! value; a closing paren drops what its paren registered. A registered
+//! column past the maximum falls back to two levels past the line's own
+//! continuation, and a paren at a line end registers one continuation
+//! level past the indent before.
+
+use crate::formatter::continuation::min_conditional_indent_spaces;
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
+use crate::formatter::structure::groups::{Delimiter, GroupId};
+use crate::formatter::syntax::language::is_header;
+
+/// Statements longer than this are left to the engine.
+const MAX_REPLAYED_TOKENS: usize = 4000;
+
+struct Replay {
+    stack: Vec<usize>,
+    sizes: Vec<usize>,
+    parens: Vec<usize>,
+    paren_statements: Vec<bool>,
+    continuation: bool,
+    depth: usize,
+    line_space: usize,
+    assigned_this_line: bool,
+    header: bool,
+}
+
+impl FormatEngine<'_> {
+    /// A line starting inside parentheses stands at the top of astyle's
+    /// continuation stack.
+    pub(super) fn stacked_argument_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        if self.options.indent_after_parens {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        if groups.get(group).delimiter != Delimiter::Paren
+            || matches!(tokens[first], Token::Symbol('['))
+            || tokens[groups.get(group).open..groups.get(group).close.unwrap_or(tokens.len())]
+                .iter()
+                .any(|token| matches!(token, Token::Symbol('{' | '}')))
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
+    /// A line continuing a `return` statement outside its parentheses
+    /// stands at the top of astyle's continuation stack.
+    pub(super) fn stacked_return_indent(&self, first: usize) -> Option<usize> {
+        let start = self.stack_statement_start(first)?;
+        if !matches!(&self.tree.tokens[start], Token::Word(word) if word == "return")
+            || self.tree.groups.enclosing(first) != self.tree.groups.enclosing(start)
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
+    /// The indent astyle's continuation stack gives the line starting at
+    /// `first`, replayed from the start of its statement.
+    fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        // Lines that the code length splits are placed by the engine alone;
+        // replaying only the lines of the source would place them apart.
+        if self.options.max_code_length.is_some()
+            || matches!(tokens[first], Token::Symbol(')' | ']' | '{' | '}' | ','))
+            || tokens[first..]
+                .iter()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .any(|token| matches!(token, Token::Symbol('{' | '}')))
+        {
+            return None;
+        }
+        let start = self.stack_statement_start(first)?;
+        // Lambda bodies continue their statements past astyle's stack.
+        if let Some(group) = self.tree.groups.enclosing(start)
+            && self.tree.groups.ancestors(group).any(|id| {
+                self.tree.blocks.kind(id) == Some(BlockKind::Lambda)
+                    || (self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody)
+                        && self.header_holds_braces(self.tree.groups.get(id).open))
+            })
+        {
+            return None;
+        }
+        if first - start > MAX_REPLAYED_TOKENS {
+            return None;
+        }
+        let start_line = self.output.line_with_token(start)?;
+        if next_code_token(tokens, self.output.line_tokens(start_line)?.first)? != start {
+            return None;
+        }
+        // astyle takes a bare block brace after a directive for an array
+        // brace and registers no assignment in it.
+        if let Some(block) = self.tree.groups.enclosing(start)
+            && self.tree.blocks.kind(block) == Some(BlockKind::Block)
+            && let open = self.tree.groups.get(block).open
+            && tokens[self
+                .tree
+                .previous_code_token(open)
+                .map_or(0, |before| before + 1)..open]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        let block_lead = self.output.lead_width(start_line, self.options.tab_width);
+        let mut replay = Replay {
+            stack: Vec::new(),
+            sizes: Vec::new(),
+            parens: Vec::new(),
+            paren_statements: Vec::new(),
+            continuation: false,
+            depth: 0,
+            line_space: 0,
+            assigned_this_line: false,
+            header: false,
+        };
+        let mut line = None;
+        let mut saw_question = false;
+        let mut index = start;
+        while index < first {
+            let token = &tokens[index];
+            if !is_code_token(token) {
+                index += 1;
+                continue;
+            }
+            let token_line = self.output.line_with_token(index)?;
+            let starts_line = line != Some(token_line);
+            if starts_line {
+                line = Some(token_line);
+                replay.line_space = replay.stack.last().copied().unwrap_or(0);
+                replay.assigned_this_line = false;
+            }
+            let relative = |index: usize| -> Option<usize> {
+                self.token_column(index)?.checked_sub(block_lead)
+            };
+            let next_on_line = self
+                .next_code_token_before(index, first)
+                .filter(|&next| self.output.line_with_token(next) == Some(token_line));
+            match token {
+                Token::Symbol('(' | '[') => {
+                    if replay.depth == 0 {
+                        replay.paren_statements.push(replay.continuation);
+                        replay.continuation = true;
+                    }
+                    replay.depth += 1;
+                    replay.sizes.push(replay.stack.len());
+                    self.register(&mut replay, index, next_on_line, true, &relative)?;
+                }
+                Token::Symbol(')' | ']') => {
+                    replay.depth = replay.depth.checked_sub(1)?;
+                    if replay.depth == 0 {
+                        replay.continuation = replay.paren_statements.pop()?;
+                    }
+                    let size = replay.sizes.pop()?;
+                    replay.stack.truncate(size);
+                    let popped = replay.parens.pop()?;
+                    if starts_line {
+                        replay.line_space = popped;
+                    }
+                }
+                Token::Symbol(',') => {
+                    if replay.depth > 0 {
+                        let size = *replay.sizes.last()?;
+                        replay.stack.truncate(size + 1);
+                    } else if next_on_line.is_none() && !replay.continuation {
+                        return None;
+                    }
+                }
+                Token::Symbol('?') => saw_question = true,
+                Token::Operator(operator) if operator == "?" => saw_question = true,
+                Token::Symbol(':') if saw_question => {}
+                Token::Symbol(';') if replay.depth > 0 => {
+                    let size = *replay.sizes.last()?;
+                    replay.stack.truncate(size + 1);
+                }
+                Token::Symbol('{' | '}' | ';' | ':') => return None,
+                _ if index == start && is_control_keyword(token) => replay.header = true,
+                Token::Operator(operator) if matches!(operator.as_str(), "<<" | ">>") => {
+                    return None;
+                }
+                Token::Operator(operator)
+                    if operator.ends_with('=')
+                        && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
+                {
+                    let previous = self.tree.previous_code_token(index)?;
+                    if operator == "="
+                        && !matches!(tokens[previous], Token::Symbol(']'))
+                        && self.statement_ends_with_comma(index, token_line, first)
+                    {
+                        if !replay.assigned_this_line {
+                            replay.assigned_this_line = true;
+                            let indent = match tokens[previous] {
+                                Token::Word(_) | Token::Number(_) => relative(previous)?,
+                                _ => replay.line_space,
+                            };
+                            replay.stack.push(indent);
+                            replay.continuation = true;
+                        }
+                    } else {
+                        self.register(&mut replay, index, next_on_line, false, &relative)?;
+                        replay.continuation = true;
+                    }
+                }
+                Token::Word(word) if word == "return" => {
+                    self.register(&mut replay, index, next_on_line, false, &relative)?;
+                    replay.continuation = true;
+                }
+                Token::Word(word) if word == "new" => {
+                    if replay.continuation
+                        && self
+                            .tree
+                            .previous_code_token(index)
+                            .is_some_and(|previous| matches!(&tokens[previous], Token::Operator(operator) if operator == "="))
+                        && let Some(top) = replay.stack.last_mut()
+                    {
+                        *top = 0;
+                    }
+                }
+                Token::Word(word)
+                    if is_header(word)
+                        || matches!(
+                            word.as_str(),
+                            "operator"
+                                | "template"
+                                | "case"
+                                | "default"
+                                | "else"
+                                | "do"
+                                | "struct"
+                                | "union"
+                                | "class"
+                                | "enum"
+                        ) =>
+                {
+                    return None;
+                }
+                Token::StringLiteral(text) | Token::CharLiteral(text) if !literal_closed(text) => {
+                    return None;
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        let top = replay.stack.last().copied()?;
+        Some(block_lead + top + self.case_unindent_spaces())
+    }
+
+    /// Whether the declaration before the body opening at `open` holds
+    /// braces, such as `= {}` default arguments, which leave astyle in an
+    /// array state for the body.
+    fn header_holds_braces(&self, open: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut index = open;
+        while let Some(before) = self.tree.previous_code_token(index) {
+            if self.tree.groups.enclosing(before).is_none()
+                && matches!(tokens[before], Token::Symbol(';' | '}'))
+            {
+                break;
+            }
+            if matches!(tokens[before], Token::Symbol('{')) {
+                return true;
+            }
+            index = before;
+        }
+        false
+    }
+
+    /// Pushes the indent astyle registers at `index`: the column of the
+    /// code after it on its line, or a continuation level past the indent
+    /// before when it ends the line.
+    fn register(
+        &self,
+        replay: &mut Replay,
+        index: usize,
+        next_on_line: Option<usize>,
+        paren: bool,
+        relative: &dyn Fn(usize) -> Option<usize>,
+    ) -> Option<()> {
+        let indent_width = self.options.indent_width;
+        let max = self.options.max_continuation_indent;
+        let Some(next) = next_on_line.filter(|_| !self.options.indent_after_parens) else {
+            let previous = replay.stack.last().copied().unwrap_or(replay.line_space);
+            let mut indent = self.options.continuation_indent * indent_width + previous;
+            if indent > max {
+                indent = 2 * indent_width + replay.line_space;
+            }
+            replay.stack.push(indent);
+            if paren {
+                replay.parens.push(previous);
+            }
+            return Some(());
+        };
+        if paren {
+            replay.parens.push(relative(index)?);
+        }
+        let mut indent = relative(next)?;
+        // Parens of a control header hold at least the minimum
+        // conditional indent.
+        let min_conditional = min_conditional_indent_spaces(self.options);
+        if paren && replay.header && indent < min_conditional {
+            indent = min_conditional + replay.line_space;
+        }
+        if indent > max {
+            indent = 2 * indent_width + replay.line_space;
+        }
+        if let Some(&top) = replay.stack.last() {
+            indent = indent.max(top);
+        }
+        replay.stack.push(indent);
+        Some(())
+    }
+
+    fn next_code_token_before(&self, index: usize, end: usize) -> Option<usize> {
+        next_code_token(&self.tree.tokens, index + 1).filter(|&next| next < end)
+    }
+
+    /// Whether the line holding the `=` at `assign` ends at a `,` with no
+    /// paren left open after the `=`.
+    fn statement_ends_with_comma(&self, assign: usize, line: usize, end: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut depth = 0isize;
+        let mut last = None;
+        let mut index = assign + 1;
+        while index < end {
+            if is_code_token(&tokens[index]) {
+                if self.output.line_with_token(index) != Some(line) {
+                    break;
+                }
+                match tokens[index] {
+                    Token::Symbol('(') => depth += 1,
+                    Token::Symbol(')') => depth -= 1,
+                    _ => {}
+                }
+                last = Some(index);
+            }
+            index += 1;
+        }
+        depth <= 0 && last.is_some_and(|last| matches!(tokens[last], Token::Symbol(',')))
+    }
+
+    /// The first token of the statement holding `index`, past parens,
+    /// brackets, and initializer braces around it.
+    fn stack_statement_start(&self, index: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        let is_block = |group: GroupId| {
+            groups.get(group).delimiter == Delimiter::Brace
+                && !matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+        };
+        let mut start = index;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if let Some(closed) = groups.closed_at(before) {
+                let header = self
+                    .tree
+                    .previous_code_token(groups.get(closed).open)
+                    .is_some_and(|keyword| is_control_keyword(&tokens[keyword]));
+                if is_block(closed) || header {
+                    break;
+                }
+                start = groups.get(closed).open;
+                continue;
+            }
+            if groups.opened_at(before).is_some_and(is_block)
+                || matches!(tokens[before], Token::Symbol(';'))
+                || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
+            {
+                break;
+            }
+            start = before;
+        }
+        (start != index).then_some(start)
+    }
+}
+
+/// Whether a string or character literal ends at its closing quote.
+pub(super) fn literal_closed(text: &str) -> bool {
+    let Some(quote) = text
+        .chars()
+        .last()
+        .filter(|quote| matches!(quote, '"' | '\''))
+    else {
+        return false;
+    };
+    let body = &text[..text.len() - 1];
+    let Some(open) = body.find(quote) else {
+        return false;
+    };
+    let escapes = body[open + 1..]
+        .chars()
+        .rev()
+        .take_while(|ch| *ch == '\\')
+        .count();
+    escapes % 2 == 0
+}
+
+fn is_control_keyword(token: &Token) -> bool {
+    matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+}

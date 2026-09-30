@@ -255,6 +255,12 @@ impl OutputBuffer {
         self.comments.push(comments);
     }
 
+    /// Removes the last line with the code tokens it held.
+    pub(crate) fn pop_with_tokens(&mut self) -> Option<(String, Option<TokenSpan>)> {
+        let tokens = self.tokens.last().copied().flatten();
+        self.pop().map(|line| (line, tokens))
+    }
+
     pub(crate) fn pop(&mut self) -> Option<String> {
         self.meta.pop();
         self.tokens.pop();

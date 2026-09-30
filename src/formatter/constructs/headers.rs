@@ -594,6 +594,17 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
             || !self.output.may_have_else()
+            // A line inside parentheses nested in the condition keeps theirs.
+            || self.output.pending_tokens().is_some_and(|span| {
+                self.tree
+                    .groups
+                    .enclosing(span.first)
+                    .and_then(|group| self.tree.previous_code_token(self.tree.groups.get(group).open))
+                    .is_some_and(|before| {
+                        !matches!(&self.tree.tokens[before], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                    })
+            })
         {
             return None;
         }

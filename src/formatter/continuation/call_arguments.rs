@@ -2247,6 +2247,18 @@ impl FormatEngine<'_> {
         if outer.saturating_sub(max_base) > self.options.max_continuation_indent {
             return Some(base + self.options.indent_width * 2);
         }
+        // An assignment in the outer parentheses puts the arguments at its
+        // value.
+        if let Some((eq, operator)) = find_assignment_operator(&previous_code[outer..inner])
+            && let Some(offset) = previous_code[outer + eq + operator.len()..inner]
+                .find(|ch: char| !ch.is_whitespace())
+        {
+            return Some(visual_width_from(
+                &previous_code[..outer + eq + operator.len() + offset],
+                0,
+                self.options.tab_width,
+            ));
+        }
         Some(outer)
     }
 

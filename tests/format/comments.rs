@@ -4315,3 +4315,25 @@ fn horstmann_run_in_block_comment_closer_keeps_its_source_offset() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn horstmann_run_in_block_comment_stars_keep_their_source_offset() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()]).expect("valid style");
+    let source = fixture!(
+        "void f(void)",
+        "{   if (x)",
+        "    {   g();",
+        "    }",
+        "    else",
+        "    {   /*",
+        "        * Populate a and",
+        "        * b. We might get nothing.",
+        "        */",
+        "        h(t);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

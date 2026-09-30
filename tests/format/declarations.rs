@@ -2195,6 +2195,43 @@ fn multiline_macro_arg_with_struct_does_not_indent_following_function() {
 }
 
 #[test]
+fn declarators_after_a_comma_stand_where_the_first_assignment_registers() {
+    let actual = format_exact(
+        fixture!(
+            "void f(void)",
+            "{",
+            "    int c, d = 1,",
+            "    e;",
+            "    int x[2] = {1, 2},",
+            "    y;",
+            "    static const char lower[] = \"abc\",",
+            "    upper[] = \"ABC\";",
+            "    int a = 1, /* note */",
+            "    b;",
+            "}",
+        ),
+        &FormatOptions::default(),
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "void f(void)",
+            "{",
+            "    int c, d = 1,",
+            "           e;",
+            "    int x[2] = {1, 2},",
+            "               y;",
+            "    static const char lower[] = \"abc\",",
+            "                                upper[] = \"ABC\";",
+            "    int a = 1, /* note */",
+            "        b;",
+            "}",
+        )
+    );
+}
+
+#[test]
 fn pointer_declarators_after_assigned_declarator_use_base_indent() {
     let actual = format_exact(
         fixture!(
@@ -2632,6 +2669,81 @@ fn horstmann_run_in_enum_brace_stays_on_its_own_line() {
         "enum connection_filter_t",
         "{   CONNECTION_FILTER_BLACKLIST,",
         "    CONNECTION_FILTER_WHITELIST",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_indents_aggregate_members_of_unions() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid style");
+    let source = fixture!(
+        "typedef union",
+        "{",
+        "    enum",
+        "        {",
+        "        A = 0,",
+        "        B",
+        "        } total;",
+        "    struct",
+        "        {",
+        "        int x;",
+        "        } s;",
+        "    int y;",
+        "} u;",
+        "struct o",
+        "{",
+        "    struct i",
+        "    {",
+        "        int z;",
+        "    } in;",
+        "};",
+        "void f(void)",
+        "{",
+        "    struct l",
+        "        {",
+        "        int q;",
+        "        } v;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_keeps_aggregate_members_of_structs_at_their_keyword() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid style");
+    let source = fixture!(
+        "struct o",
+        "{",
+        "    enum",
+        "    {",
+        "        A",
+        "    } t;",
+        "};",
+        "typedef struct",
+        "{",
+        "    enum",
+        "    {",
+        "        B",
+        "    } t;",
+        "} x;",
+        "typedef struct n",
+        "{",
+        "    enum",
+        "    {",
+        "        C",
+        "    } t;",
+        "} y;",
+        "union u",
+        "{",
+        "    struct",
+        "        {",
+        "        int a;",
+        "        } s;",
         "};",
     );
 

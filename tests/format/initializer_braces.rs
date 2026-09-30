@@ -3846,3 +3846,49 @@ fn comment_and_element_after_a_split_element_keep_the_element_column() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_function_scope_initializer_rows_keep_values_at_the_brace_and_indent_brace_rows() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "int main(void)",
+        "{",
+        "    struct FtpFile ftpfile =",
+        "        {",
+        "        \"curl.tar.gz\", /* name */",
+        "        NULL",
+        "        };",
+        "    static const struct testcase tests[] =",
+        "        {",
+        "            { \"a\", \"b\", 0 },",
+        "            { \"c\", \"d\", 1 }",
+        "        };",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_file_scope_brace_rows_start_at_the_element_column() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "const struct helptxt helptext[] =",
+        "{",
+        "    {",
+        "        \"a\",",
+        "        \"b\",",
+        "        1",
+        "    },",
+        "    {",
+        "        \"c\",",
+        "        \"d\",",
+        "        2",
+        "    },",
+        "    { NULL, NULL, 0 }",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

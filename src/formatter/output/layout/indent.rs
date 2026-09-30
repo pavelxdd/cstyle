@@ -220,7 +220,11 @@ impl FormatEngine<'_> {
                     }
                     if let Some(&open) = call_opens.last() {
                         let after_open = before_string[open + 1..].to_string();
-                        if after_open.contains(',') {
+                        if after_open.contains(',')
+                            && column_after(before_string, open, self.options.tab_width)
+                                .saturating_sub(leading)
+                                <= self.options.max_continuation_indent
+                        {
                             let padding = after_open
                                 .chars()
                                 .take_while(|ch| ch.is_whitespace())

@@ -2455,7 +2455,8 @@ impl FormatEngine<'_> {
                         let body_offset = if decorative_closer && is_last_line {
                             0
                         } else if trimmed_kept.starts_with('*') {
-                            1
+                            // A star keeps its source offset from the `/*`.
+                            source_line_column.saturating_sub(trim_amount).min(1)
                         } else {
                             source_line_column.saturating_sub(trim_amount)
                         };

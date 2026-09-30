@@ -765,6 +765,33 @@ impl FormatEngine<'_> {
                 stream.chain_anchor_column
             });
         }
+        // An operand of a condition after a line of arguments nested in it
+        // takes the condition's continuation.
+        if let Some(span) = self.output.pending_tokens()
+            && let Some(group) = self.tree.groups.enclosing(span.first)
+            && self
+                .tree
+                .previous_code_token(self.tree.groups.get(group).open)
+                .is_some_and(|keyword| {
+                    matches!(&self.tree.tokens[keyword], Token::Word(word)
+                        if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                })
+            && self
+                .output
+                .last_non_empty_index()
+                .and_then(|index| self.output.line_tokens(index))
+                .and_then(|previous| self.tree.groups.enclosing(previous.first))
+                .is_some_and(|previous_group| {
+                    previous_group != group
+                        && self
+                            .tree
+                            .groups
+                            .ancestors(previous_group)
+                            .any(|id| id == group)
+                })
+        {
+            return None;
+        }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_starts_operator = previous_code.trim_start().starts_with([

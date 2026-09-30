@@ -784,8 +784,9 @@ impl FormatEngine<'_> {
                 code.contains("](") || code.contains("] (")
             });
         if parameterized_lambda_initializer_close {
-            if let Some(previous) = self.output.pop() {
+            if let Some((previous, tokens)) = self.output.pop_with_tokens() {
                 self.current.replace(previous);
+                self.current.restore_tokens(tokens);
             }
         } else if self.token_input.token_begins_source_line {
             if !self.current_is_blank() {

@@ -144,6 +144,14 @@ impl CurrentLine {
         });
     }
 
+    /// Adds the code tokens of a published line taken back into this one.
+    pub(crate) fn restore_tokens(&mut self, span: Option<TokenSpan>) {
+        if let Some(span) = span {
+            self.record_token(span.first);
+            self.record_token(span.last);
+        }
+    }
+
     pub(crate) fn take_tokens(&mut self) -> Option<TokenSpan> {
         self.tokens.take()
     }

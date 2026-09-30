@@ -1309,3 +1309,57 @@ fn horstmann_case_assignment_value_and_comment_before_else_keep_their_levels() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn ratliff_break_after_an_attached_case_block_stands_at_the_label() {
+    let options = options_from_args(&["--style=ratliff"]);
+    let source = fixture!(
+        "void f(void) {",
+        "    switch(x) {",
+        "        case A: {",
+        "            int y = 1;",
+        "            g(y);",
+        "            }",
+        "        break;",
+        "        case B: { /* c */",
+        "            int y = 1;",
+        "            }",
+        "        break;",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn case_body_after_a_comment_block_stands_a_level_past_its_label() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch( t ) {",
+        "#ifndef A",
+        "    case 1: {",
+        "        if( z==0 ) {",
+        "            if( (mask & W)!=0",
+        "              ) {",
+        "            }",
+        "        }",
+        "        break;",
+        "    }",
+        "#endif",
+        "    /*",
+        "    ** c",
+        "    */",
+        "    case 2:",
+        "        if( zRight ) {",
+        "            y();",
+        "        }",
+        "        break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

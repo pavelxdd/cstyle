@@ -719,7 +719,9 @@ impl FormatEngine<'_> {
     }
 
     fn take_last_output_line_for_attach(&mut self) -> Option<String> {
-        self.output.pop()
+        let (line, tokens) = self.output.pop_with_tokens()?;
+        self.current.restore_tokens(tokens);
+        Some(line)
     }
 
     pub(crate) fn split_else_body_closing_indent_spaces(&self, line: &str) -> Option<usize> {
