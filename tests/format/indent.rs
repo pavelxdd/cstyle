@@ -7945,6 +7945,40 @@ fn enum_members_and_comments_after_declarations_keep_their_columns() {
 }
 
 #[test]
+fn ratliff_file_scope_items_and_nested_closers_keep_their_columns() {
+    let options = options_from_args(&["--style=ratliff"]);
+    let source = fixture!(
+        "static void timer_cb(uv_timer_t* handle) {",
+        "    x();",
+        "    }",
+        "",
+        "",
+        "TEST_IMPL(active) {",
+        "    int r;",
+        "    }",
+        "",
+        "typedef union {",
+        "    enum {",
+        "        A = 0",
+        "        } size;",
+        "    } v;",
+        "",
+        "static const struct option options[] = {",
+        "    OPT_CALLBACK_F(0, \"n\", &buf, N_(\"m\"),",
+        "                   N_(\"x\"), 0,",
+        "                   cb),",
+        "        {",
+        "        .type = OPTION_STRING,",
+        "        .flags = 0,",
+        "        },",
+        "    OPT_END()",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

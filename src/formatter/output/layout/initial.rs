@@ -754,6 +754,7 @@ impl FormatEngine<'_> {
                 }))
                 || (self.layout.indentation.indent() == 0
                     && self.layout.nesting.brace_type_stack.is_empty()
+                    && !line.trim_start().starts_with('}')
                     && previous_code.trim_start().starts_with("} ")
                     && !previous_code.ends_with('{')
                     && !previous_code.trim_start().starts_with("} while")

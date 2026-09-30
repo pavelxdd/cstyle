@@ -52,6 +52,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.leading_ternary_in_condition_indent(first))
             .or_else(|| self.enum_value_after_split_member_indent(first))
             .or_else(|| self.initializer_row_indent(first))
+            .or_else(|| self.initializer_closing_brace_indent(first))
             .or_else(|| self.indented_block_brace_indent(first))
         {
             layout.exact_indent_spaces = Some(spaces);
@@ -173,6 +174,29 @@ impl FormatEngine<'_> {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// A `}` closing an initializer whose `{` starts its own line stands at
+    /// that line.
+    fn initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
+        // VTK, GNU and Horstmann close some initializers their own way.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Vtk | BraceStyle::Gnu | BraceStyle::Horstmann
+        ) || !matches!(self.tree.tokens[first], Token::Symbol('}'))
+        {
+            return None;
+        }
+        let group = self.tree.groups.closed_at(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            return None;
+        }
+        let open = self.tree.groups.get(group).open;
+        let line = self.output.line_with_token(open)?;
+        // A brace attached to the line before after layout closes its way.
+        (self.output.line_tokens(line)?.first == open
+            && self.output.as_slice()[line].trim_start().starts_with('{'))
+        .then(|| self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// Visual column of the code token `token` on its output line, found
@@ -818,6 +842,13 @@ impl FormatEngine<'_> {
                     matches!(self.tree.tokens[previous], Token::Symbol(','))
                         && groups.enclosing(previous) == Some(group)
                 })
+    }
+
+    /// Whether the line being laid out starts outside every block.
+    pub(crate) fn pending_line_at_file_scope(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .is_some_and(|span| self.tree.groups.enclosing(span.first).is_none())
     }
 
     /// Whether the line being laid out starts an enum member after a comma.

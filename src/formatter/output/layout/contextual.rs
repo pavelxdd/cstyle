@@ -2880,6 +2880,7 @@ impl FormatEngine<'_> {
                 .trim_start()
                 .split_once('(')
                 .is_some_and(|(word, _)| is_macro_like_word(word.trim()))
+            && !self.pending_line_at_file_scope()
             && let Some(previous) = self.output.last_line_outside_comment()
             && previous.trim() == "}"
         {
