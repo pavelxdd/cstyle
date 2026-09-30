@@ -4033,3 +4033,67 @@ fn whitesmith_compound_literal_rows_in_a_designated_initializer_stand_past_their
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_rows_after_a_comment_on_their_line_keep_the_row_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "static const struct",
+        "{",
+        "    u8 nName;",
+        "    char zName[7];",
+        "} aXformType[] =",
+        "{",
+        "    /* 0 */ { 6, \"second\" },",
+        "    /* 1 */ { 6, \"minute\" },",
+        "    /* 2 */ { 4, \"hour\" },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_rows_led_by_a_comment_stay_at_the_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    static const u8 trans[2][2] =",
+        "        {",
+        "        /* State: */",
+        "        /* 0 */ { 1, 0, },",
+        "        /* 1 */ { 1, 1, },",
+        "        };",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn first_row_led_by_a_comment_stands_a_level_past_the_brace_line() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x) {",
+        "    } else",
+        "#ifdef A",
+        "        if (y) {",
+        "        } else",
+        "#endif",
+        "            if (z) {",
+        "                const u8 aMoveOp[] = {",
+        "                    /* TK_GT */  OP_SeekGT,",
+        "                    /* TK_LE */  OP_SeekLE",
+        "                };",
+        "            }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

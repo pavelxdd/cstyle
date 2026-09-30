@@ -297,10 +297,13 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(element)?;
         // A row of several elements places the next row from its first.
         let row = self.output.line_tokens(line)?.first;
-        if !self.output.as_slice()[line]
-            .trim_start()
-            .starts_with(token_text(&tokens[row]).as_str())
-        {
+        // The row may follow a comment on its line.
+        let text = self.output.as_slice()[line].trim_start();
+        let text = text
+            .strip_prefix("/*")
+            .and_then(|rest| rest.split_once("*/"))
+            .map_or(text, |(_, rest)| rest.trim_start());
+        if !text.starts_with(token_text(&tokens[row]).as_str()) {
             return None;
         }
         if row != element
@@ -407,11 +410,19 @@ impl FormatEngine<'_> {
         }
         // A `{` starting its line stands a level in; at file scope, a row
         // of the outer braces that starts with its elements stays at them.
+        // A row led by a comment stays at the elements.
+        let after_comment = tokens[..first]
+            .iter()
+            .rev()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Comment(..)));
         let brace_alone = tokens[first + 1..]
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
             .is_none_or(|token| matches!(token, Token::Newline));
-        let indented = matches!(tokens[first], Token::Symbol('{')) && (brace_alone || !flush_outer);
+        let indented = matches!(tokens[first], Token::Symbol('{'))
+            && !after_comment
+            && (brace_alone || !flush_outer);
         let spaces = if indented {
             content + self.options.indent_width
         } else {
@@ -806,13 +817,18 @@ impl FormatEngine<'_> {
         {
             return line;
         }
-        let spaces = self.braceless_body_indent(code).or_else(|| {
-            self.tree
-                .statements
-                .starts_block_statement(code)
-                .then(|| self.sibling_statement_column(code))
-                .flatten()
-        });
+        let spaces = self
+            .braceless_body_indent(code)
+            .or_else(|| {
+                self.tree
+                    .statements
+                    .starts_block_statement(code)
+                    .then(|| self.sibling_statement_column(code))
+                    .flatten()
+            })
+            .or_else(|| self.vtk_array_element_indent(code))
+            .or_else(|| self.initializer_row_indent(code))
+            .or_else(|| self.initializer_first_row_indent(code));
         let Some(spaces) = spaces else {
             return line;
         };
@@ -821,6 +837,44 @@ impl FormatEngine<'_> {
             .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces);
         output.push_str(trimmed);
         output
+    }
+
+    /// The first row of an initializer whose `{` ends a line stands a level
+    /// past that line.
+    fn initializer_first_row_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(first)?;
+        let open = groups.get(group).open;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
+            || self.tree.previous_code_token(first) != Some(open)
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        let span = self.output.line_tokens(line)?;
+        if span.last != open {
+            return None;
+        }
+        // Rows stand at an indented brace starting its line, and at the
+        // indented closing brace of a struct body before them.
+        let indented_brace = match &self.tree.tokens[span.first] {
+            Token::Symbol('{') => self.should_indent_brace_line(BraceType::Initializer),
+            Token::Symbol('}') => matches!(
+                self.options.brace_style,
+                BraceStyle::Ratliff | BraceStyle::Whitesmith
+            ),
+            _ => false,
+        };
+        let level = if indented_brace {
+            0
+        } else {
+            self.options.indent_width
+        };
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + level
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Whether the innermost group around `index` is a `switch` body.

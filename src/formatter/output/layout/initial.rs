@@ -629,7 +629,9 @@ impl FormatEngine<'_> {
                             + self.layout.line_adjuster.total_case_unindent_depth()
                                 * self.options.indent_width,
                     );
-                } else if previous_code == "{"
+                } else if previous.trim() == "{"
+                    // Horstmann runs the comment into the brace line later.
+                    && self.options.brace_style != BraceStyle::Horstmann
                     && let Some(spaces) = comment_indent
                     && self
                         .output

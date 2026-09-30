@@ -4371,3 +4371,30 @@ fn braceless_body_after_a_leading_comment_keeps_its_level() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn allman_case_block_statement_after_multiline_comment_keeps_the_block_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(int c)",
+        "{",
+        "    switch( c )",
+        "    {",
+        "    case 'a':",
+        "    {",
+        "        /*",
+        "        ** auto",
+        "        */",
+        "        if( c==0 )",
+        "        {",
+        "            g();",
+        "        }",
+        "        break;",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
