@@ -7902,6 +7902,22 @@ fn else_if_blocks_in_indented_switch_cases_keep_their_level() {
 }
 
 #[test]
+fn ternary_arms_in_a_for_header_assignment_stand_at_the_value() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    for(head = (conn->peer && data->sep) ?",
+        "               data->proxyheaders : data->headers;",
+        "            head; head = head->next)",
+        "        x();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

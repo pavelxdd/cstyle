@@ -11,6 +11,7 @@ use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
@@ -159,15 +160,19 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        // A `?` in a literal asks nothing.
+        // A `?` in a literal asks nothing; one inside parentheses leaves
+        // its arms to the parentheses' continuation.
         let asks = self
             .output
             .last_non_empty_index()
             .and_then(|index| self.output.line_tokens(index))
             .is_none_or(|span| {
-                self.tree.tokens[span.first..=span.last.min(self.tree.tokens.len() - 1)]
-                    .iter()
-                    .any(|token| matches!(token, Token::Symbol('?')))
+                (span.first..=span.last.min(self.tree.tokens.len() - 1)).any(|index| {
+                    matches!(self.tree.tokens[index], Token::Symbol('?'))
+                        && self.tree.groups.enclosing(index).is_none_or(|group| {
+                            self.tree.groups.get(group).delimiter != Delimiter::Paren
+                        })
+                })
             });
         (asks
             && previous_code.contains('?')
@@ -2185,7 +2190,23 @@ impl FormatEngine<'_> {
         }
         let condition = code[..code.len() - 1].trim_end();
         let anchor = if let Some(open) = unmatched_open_paren_column(condition) {
-            visual_width_from(&condition[..open + 1], 0, self.options.tab_width)
+            // An assignment inside the open parentheses, as in a `for`
+            // header, continues at its value.
+            let inner = &condition[open + 1..];
+            match find_assignment_operator(inner) {
+                Some((operator_index, operator))
+                    if unmatched_open_paren_column(&inner[..operator_index]).is_none() =>
+                {
+                    let value = open + 1 + operator_index + operator.len();
+                    let after = &condition[value..];
+                    visual_width_from(
+                        &condition[..value + (after.len() - after.trim_start().len())],
+                        0,
+                        self.options.tab_width,
+                    )
+                }
+                _ => visual_width_from(&condition[..open + 1], 0, self.options.tab_width),
+            }
         } else {
             let trimmed = condition.trim_start();
             let lead = condition.len() - trimmed.len();
