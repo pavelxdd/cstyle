@@ -7761,6 +7761,48 @@ fn whitesmith_block_braces_in_alternative_branches_stay_indented() {
 }
 
 #[test]
+fn vtk_block_body_after_a_blank_line_stays_at_the_brace() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "static bool f(void)",
+        "{",
+        "    if((a) &&",
+        "            (b))",
+        "        {",
+        "",
+        "        if(c)",
+        "            return TRUE;",
+        "        }",
+        "    return FALSE;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_alternative_branch_after_a_definition_keeps_file_scope() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "#ifdef _WIN32",
+        "",
+        "TEST_IMPL(eintr_handling)",
+        "    {",
+        "    RETURN_SKIP(\"x\");",
+        "    }",
+        "",
+        "#else",
+        "",
+        "#include <string.h>",
+        "",
+        "static uv_loop_t* loop;",
+        "#endif",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

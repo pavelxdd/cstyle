@@ -646,7 +646,10 @@ impl FormatEngine<'_> {
         if !is_preprocessor_branch_body(line) {
             return;
         }
-        let body_indent_spaces = if self.pending_line_opens_indented_plain_block() {
+        // A style indenting braces sets a `{` a level past its body.
+        let body_indent_spaces = if line.trim_start().starts_with('{')
+            && self.should_indent_brace_line(BraceType::Command)
+        {
             emitted_indent_spaces.saturating_sub(self.options.indent_width)
         } else {
             emitted_indent_spaces

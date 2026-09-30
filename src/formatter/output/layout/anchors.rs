@@ -6,6 +6,7 @@
 //! links it to: the `if` of an `else`, the header of a braceless body, the
 //! previous statement of the block, and the block's opening.
 
+use crate::config::BraceStyle;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text};
@@ -49,6 +50,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
             .or_else(|| self.initializer_row_indent(first))
+            .or_else(|| self.indented_block_brace_indent(first))
         {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -1049,6 +1051,31 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// A `{` on its own line after a control header stands a level past the
+    /// header's line in styles that indent block braces.
+    fn indented_block_brace_indent(&self, first: usize) -> Option<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk
+        ) || !matches!(self.tree.tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
+        let group = self.tree.groups.opened_at(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Control)
+            || !self.should_indent_brace_line(BraceType::Command)
+            || self.tree.statements.in_else_body_after_blank_line(first)
+        {
+            return None;
+        }
+        let (line, levels) = self.header_chain_before(first)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + levels * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
     /// Statements of a GNU statement expression `({ ... })` take one level
     /// past the line holding its `(`, and a `}` starting a line closes at
     /// that line.
@@ -1285,13 +1312,17 @@ impl FormatEngine<'_> {
         let width = self.options.indent_width;
         let brace_line = self.output.line_with_token(open)?;
         let column = if self.output.line_tokens(brace_line)?.first == open {
-            let indented_brace = self.options.indent_braces
-                && self
-                    .layout
-                    .nesting
-                    .brace_type_stack
-                    .last()
-                    .is_some_and(|&brace_type| self.should_indent_brace_line(brace_type));
+            let brace_type = if self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody) {
+                BraceType::Definition
+            } else {
+                BraceType::Command
+            };
+            let indented_brace = (self.options.indent_braces
+                || matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Vtk
+                ))
+                && self.should_indent_brace_line(brace_type);
             self.output.lead_width(brace_line, self.options.tab_width)
                 + if indented_brace { 0 } else { width }
         } else {
