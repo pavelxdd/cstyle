@@ -3910,3 +3910,25 @@ fn whitesmith_brace_row_after_a_directive_stands_past_the_plain_rows() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_last_split_brace_row_after_a_one_line_row_stays_at_the_rows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "static const struct testparams testparams[] = {",
+        "    { F_A,  CURLE_OK },",
+        "    {",
+        "        F_RESUME | F_HTTP416,",
+        "        CURLE_RANGE_ERROR",
+        "    },",
+        "    { F_C,  CURLE_OK },",
+        "    {",
+        "        F_RESUME | F_HTTP416,",
+        "        CURLE_OK",
+        "    }",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

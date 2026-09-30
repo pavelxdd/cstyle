@@ -206,9 +206,17 @@ impl FormatEngine<'_> {
             && matches!(tokens[first], Token::Symbol('{'))
             && self.should_indent_brace_line(BraceType::Initializer)
             && !(self.options.brace_style == BraceStyle::Vtk
-                && self.in_code(first)
-                && (open_of_row_before(tokens, groups, group, comma)
-                    .is_some_and(|element| matches!(tokens[element], Token::Symbol('{')))))
+                && open_of_row_before(tokens, groups, group, comma).is_some_and(|element| {
+                    matches!(tokens[element], Token::Symbol('{'))
+                        && (self.in_code(first)
+                            || groups
+                                .opened_at(element)
+                                .and_then(|row| groups.get(row).close)
+                                .is_some_and(|close| {
+                                    self.output.line_with_token(close)
+                                        == self.output.line_with_token(element)
+                                }))
+                }))
         {
             return None;
         }
