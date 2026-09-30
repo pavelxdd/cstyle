@@ -1,5 +1,7 @@
 //! Preprocessor directives, macro bodies, and backslash-continued lines.
 
+use crate::formatter::text::line_scan::has_hash_outside_literals;
+
 use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::constructs::headers::HeaderParenState;
@@ -596,7 +598,7 @@ impl FormatEngine<'_> {
         }
         if directive == Some("endif")
             && let Some(previous) = self.output.last()
-            && previous.contains('#')
+            && has_hash_outside_literals(previous)
             && !previous.trim_start().starts_with('#')
         {
             self.layout.continuation_indent.next_line_indent = None;

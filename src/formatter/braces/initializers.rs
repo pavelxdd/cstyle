@@ -12,6 +12,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
 };
@@ -110,7 +111,9 @@ impl FormatEngine<'_> {
             .frames
             .last()
             .and_then(|frame| self.output.get(frame.output_line))
-            .is_some_and(|line| line.contains('#') && !line.trim_start().starts_with('#'))
+            .is_some_and(|line| {
+                has_hash_outside_literals(line) && !line.trim_start().starts_with('#')
+            })
         {
             self.inline_array.frames.pop();
             if matches!(

@@ -10,6 +10,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
 };
@@ -344,7 +345,7 @@ impl FormatEngine<'_> {
             || !(kind == LineKind::Label
                 || is_user_label_candidate(line, &self.options.access_labels)
                     && line_indent_spaces == 0
-                || line.contains('#') && !line.trim_start().starts_with('#'))
+                || has_hash_outside_literals(line) && !line.trim_start().starts_with('#'))
         {
             return;
         }

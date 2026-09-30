@@ -24,6 +24,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_line, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
@@ -654,7 +655,7 @@ impl FormatEngine<'_> {
             if line.trim_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~',
             ]) && previous.trim_end().ends_with(':')
-                && previous.contains('#')
+                && has_hash_outside_literals(previous)
                 && !previous.trim_start().starts_with('#')
             {
                 layout.exact_indent_spaces = Some(
@@ -864,7 +865,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-            if previous_code.contains('#')
+            if has_hash_outside_literals(previous_code)
                 && !previous_code.trim_start().starts_with('#')
                 && head_ends_binary_operator(previous_code)
             {
@@ -893,7 +894,7 @@ impl FormatEngine<'_> {
                 }
             }
             if self.token_input.token_source_line_indent > 0
-                && line.contains('#')
+                && has_hash_outside_literals(line)
                 && !line.trim_start().starts_with('#')
                 && previous_code.ends_with('~')
             {
@@ -943,7 +944,8 @@ impl FormatEngine<'_> {
             if previous_code.ends_with("&&")
                 && (0..self.output.len()).rev().take(4).any(|index| {
                     let code = self.output.code(index);
-                    code.contains('#') && !self.output.code_trimmed(index).starts_with('#')
+                    has_hash_outside_literals(code)
+                        && !self.output.code_trimmed(index).starts_with('#')
                 })
             {
                 layout.exact_indent_spaces = Some(

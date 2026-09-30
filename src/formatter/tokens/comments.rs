@@ -18,6 +18,7 @@ use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
 };
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_ends_with_comment, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_column,
@@ -790,7 +791,8 @@ impl FormatEngine<'_> {
             && !(standalone_line_comment
                 && comment.trim_end().ends_with(':')
                 && !previous_line_ends_operator)
-            && (!self.current.contains('#') || self.current.trim_start().starts_with('#'))
+            && (!has_hash_outside_literals(&self.current)
+                || self.current.trim_start().starts_with('#'))
             && self.is_continuation_break())
         .then(|| {
             open_paren_comment_indent
@@ -2622,7 +2624,7 @@ impl FormatEngine<'_> {
             return;
         }
         if kind == CommentKind::Line
-            && self.current.contains('#')
+            && has_hash_outside_literals(&self.current)
             && !self.current.trim_start().starts_with('#')
         {
             if gap.is_empty() {

@@ -633,6 +633,14 @@ pub(crate) fn advance_quoted_literal(ch: char, quote: &mut Option<char>, escaped
     }
 }
 
+pub(crate) fn has_hash_outside_literals(line: &str) -> bool {
+    line.contains('#')
+        && tokenize(line).iter().any(|token| match token {
+            Token::StringLiteral(_) | Token::CharLiteral(_) | Token::Comment(..) => false,
+            other => token_text(other).contains('#'),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

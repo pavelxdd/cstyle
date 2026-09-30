@@ -6,6 +6,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column,
@@ -384,7 +385,9 @@ impl FormatEngine<'_> {
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width / 2,
                 );
-            } else if previous_code.contains('#') && !previous_code.trim_start().starts_with('#') {
+            } else if has_hash_outside_literals(previous_code)
+                && !previous_code.trim_start().starts_with('#')
+            {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             } else if previous_code.trim_start().starts_with('#')
@@ -559,7 +562,7 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
                     let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                    code.contains('#') && !code.trim_start().starts_with('#')
+                    has_hash_outside_literals(code) && !code.trim_start().starts_with('#')
                 })
             && self.stream_chain_frame_indent_spaces(line).is_none()
             && let Some(spaces) = layout.exact_indent_spaces

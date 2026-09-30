@@ -10,6 +10,7 @@ use crate::formatter::syntax::language::{
 };
 use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column,
@@ -210,7 +211,7 @@ impl FormatEngine<'_> {
                 !matches!(
                     trimmed.trim_start(),
                     "break" | "continue" | "throw" | "goto" | "co_return" | "co_yield" | "co_await"
-                ) && !trimmed.contains('#')
+                ) && !has_hash_outside_literals(trimmed)
                     && !trimmed.ends_with(';')
                     && !trimmed.ends_with('{')
                     && !trimmed.ends_with('}')

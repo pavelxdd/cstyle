@@ -20,6 +20,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_column,
@@ -728,7 +729,7 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(spaces);
             } else if line.trim_start().starts_with(':')
-                && line.contains('#')
+                && has_hash_outside_literals(line)
                 && previous_code.trim() == "}"
             {
                 layout.exact_indent_spaces =
@@ -829,7 +830,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(self.options.indent_width);
             }
             if previous_code.trim_start().starts_with("return ")
-                && previous_code.contains('#')
+                && has_hash_outside_literals(previous_code)
                 && !previous_code.ends_with(';')
             {
                 layout.exact_indent_spaces =
@@ -1293,7 +1294,8 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-            if previous_code.contains('#') && head_ends_binary_operator(previous_code) {
+            if has_hash_outside_literals(previous_code) && head_ends_binary_operator(previous_code)
+            {
                 let previous_trimmed = previous_code.trim_start();
                 layout.exact_indent_spaces =
                     Some(if self.token_input.token_source_line_indent > 0 {
@@ -1370,7 +1372,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take(4)
-                    .any(|line| line.contains('#'))
+                    .any(|line| has_hash_outside_literals(line))
             {
                 layout.exact_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)

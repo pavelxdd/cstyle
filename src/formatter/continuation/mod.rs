@@ -1,5 +1,7 @@
 //! Indentation of continuation lines and maximum-length line splitting.
 
+use crate::formatter::text::line_scan::has_hash_outside_literals;
+
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::constructs::class_declarations::code_opens_class_base_clause;
 use crate::formatter::constructs::headers::is_header;
@@ -268,7 +270,7 @@ impl FormatEngine<'_> {
         let line_comment_limit = line_comment_split_limit(trimmed);
         let code_before_line_comment = trimmed[..line_comment_limit].trim_end();
         if line_comment_limit < trimmed.len()
-            && code_before_line_comment.contains('#')
+            && has_hash_outside_literals(code_before_line_comment)
             && !code_before_line_comment.trim_start().starts_with('#')
         {
             return false;

@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
@@ -167,7 +168,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty());
-        if previous.is_some_and(|line| line.contains('#')) {
+        if previous.is_some_and(|line| has_hash_outside_literals(line)) {
             return;
         }
         let spaces = previous

@@ -8045,6 +8045,22 @@ fn allman_string_arguments_after_a_hash_in_a_literal_keep_the_argument_column() 
 }
 
 #[test]
+fn returned_call_arguments_after_a_hash_in_a_literal_align_with_the_call() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    if (add_index_entry(istate, new_ce, ADD_CACHE_SKIP_DFCHECK))",
+        "        return error(_(\"%s: cannot drop to stage #0\"),",
+        "                     new_ce->name);",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

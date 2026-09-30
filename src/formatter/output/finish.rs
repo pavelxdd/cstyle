@@ -7,6 +7,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, line_comment_split_limit, preprocessor_directive, trailing_comment_split_limit,
 };
@@ -250,13 +251,14 @@ impl FormatEngine<'_> {
                         .any(|token| matches!(token, Token::Preprocessor(_)))
                 });
             let embedded_preprocessor = holds_directive
-                && (output_code.contains('#') && !output_code.trim_start().starts_with('#')
+                && (has_hash_outside_literals(output_code)
+                    && !output_code.trim_start().starts_with('#')
                     || (line_comment_limit < line.len() || line.trim_end().ends_with(':'))
-                        && code_before_line_comment.contains('#')
+                        && has_hash_outside_literals(code_before_line_comment)
                         && !code_before_line_comment.trim_start().starts_with('#'));
             if output_code.trim_start().starts_with("return ")
                 && holds_directive
-                && output_code.contains('#')
+                && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')
             {
                 self.layout.continuation_indent.next_line_indent = None;
@@ -357,7 +359,7 @@ impl FormatEngine<'_> {
             let output_line = &self.output[line_index];
             let output_code = output_line[..trailing_comment_split_limit(output_line)].trim_end();
             if output_code.trim_start().starts_with("return ")
-                && output_code.contains('#')
+                && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')
             {
                 self.layout.continuation_indent.next_line_indent = None;

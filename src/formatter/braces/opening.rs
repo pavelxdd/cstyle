@@ -25,6 +25,7 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
+use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
     reverse_scan_skips_block_comment, trailing_comment_split_limit,
@@ -585,7 +586,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take(4)
-                    .any(|line| line.contains('#'))
+                    .any(|line| has_hash_outside_literals(line))
             {
                 self.options.indent_width
             } else {
@@ -1897,7 +1898,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Pico
             );
         let gnu_macro_open_brace =
-            self.options.brace_style == BraceStyle::Gnu && self.current.contains('#');
+            self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
             && self.current.trim_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
