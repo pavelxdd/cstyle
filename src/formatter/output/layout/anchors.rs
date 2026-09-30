@@ -634,6 +634,48 @@ impl FormatEngine<'_> {
         self.enclosing_block_body_column(first)
     }
 
+    /// A line that opens with a block comment and continues with a
+    /// statement stands where the tree puts the statement: the engine lays
+    /// such lines out as comments.
+    pub(crate) fn comment_led_statement_line(&self, line: String) -> String {
+        let tokens = &self.tree.tokens;
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with("/*") {
+            return line;
+        }
+        let Some(code) = self.output.pending_tokens().map(|span| span.first) else {
+            return line;
+        };
+        // Only a comment that closes on the line, with the statement after it.
+        let Some(close) = trimmed.find("*/") else {
+            return line;
+        };
+        if !is_code_token(&tokens[code])
+            || !trimmed[close + 2..]
+                .trim_start()
+                .starts_with(token_text(&tokens[code]).as_str())
+            || matches!(&tokens[code], Token::Word(word) if word == "case" || word == "default")
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+        {
+            return line;
+        }
+        let spaces = self.braceless_body_indent(code).or_else(|| {
+            self.tree
+                .statements
+                .starts_block_statement(code)
+                .then(|| self.sibling_statement_column(code))
+                .flatten()
+        });
+        let Some(spaces) = spaces else {
+            return line;
+        };
+        let mut output = self
+            .options
+            .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces);
+        output.push_str(trimmed);
+        output
+    }
+
     /// Whether the innermost group around `index` is a `switch` body.
     fn in_switch_body(&self, index: usize) -> bool {
         let groups = &self.tree.groups;

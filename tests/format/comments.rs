@@ -4356,3 +4356,18 @@ fn comment_inside_parentheses_takes_the_level_of_the_line_after_it() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn braceless_body_after_a_leading_comment_keeps_its_level() {
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    n = S->wds;",
+        "    /*debug*/ if (b->wds > n)",
+        "        /*debug*/\tBug(\"oversize b in quorem\");",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

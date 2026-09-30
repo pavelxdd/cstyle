@@ -149,6 +149,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn adjust_and_publish_line(&mut self, line: String) {
+        let line = self.comment_led_statement_line(line);
         let line = self.align_adjacent_block_comments_before_adjustment(line);
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
