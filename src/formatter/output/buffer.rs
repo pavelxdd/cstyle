@@ -427,6 +427,10 @@ impl OutputBuffer {
     ) -> Option<(usize, OpenBraceShape, &str)> {
         let mut depth = 0usize;
         for index in (0..self.lines.len()).rev() {
+            // The body of a block comment holds no braces.
+            if self.comment_start_index(index) != index {
+                continue;
+            }
             let meta = self.brace_meta(index);
             let trimmed = self.code_trimmed(index);
             if depth == 0

@@ -4451,3 +4451,23 @@ fn open_paren_and_colon_in_a_block_comment_leave_the_next_function_alone() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_brace_in_a_block_comment_leaves_the_function_close_alone() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    while (x)",
+        "        {",
+        "            /* a",
+        "             * b { c */",
+        "        }",
+        "    /* d",
+        "     * e */",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

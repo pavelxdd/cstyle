@@ -71,6 +71,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.assignment_continuation_indent(first))
             .or_else(|| self.assigned_operand_indent(first))
             .or_else(|| self.leading_operator_assigned_value_indent(first))
+            .or_else(|| self.stacked_assignment_indent(first))
             .or_else(|| self.leading_ternary_in_condition_indent(first))
             .or_else(|| self.leading_ternary_in_argument_indent(first))
             .or_else(|| self.ternary_second_arm_indent(first))

@@ -9175,3 +9175,19 @@ fn statements_after_a_braceless_chain_closed_by_an_empty_block_keep_their_level(
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn ternary_chain_value_after_an_assignment_line_stays_at_the_stack_top() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    const char *disability =",
+        "        h->u.configured.event_disabled ? \"event-disabled\\t\" :",
+        "        h->u.configured.disabled       ? \"disabled\\t\"       :",
+        "        \"\";",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

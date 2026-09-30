@@ -84,6 +84,10 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
+            // The body of a block comment holds no braces.
+            if self.output.comment_start_index(index) != index {
+                continue;
+            }
             let meta = self.output.brace_meta(index);
             if depth == 0 && meta.code_starts_with_hash {
                 return None;

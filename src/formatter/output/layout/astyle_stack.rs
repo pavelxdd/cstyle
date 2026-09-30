@@ -88,6 +88,33 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// A line continuing an assignment outside its parentheses stands at
+    /// the top of astyle's continuation stack.
+    pub(super) fn stacked_assignment_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let start = self.stack_statement_start(first)?;
+        let group = groups.enclosing(first);
+        if groups.enclosing(start) != group
+            || group.is_some_and(|group| {
+                !matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                )
+            })
+            || tokens[start..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || !(start..first).any(|index| {
+                groups.enclosing(index) == group
+                    && matches!(&tokens[index], Token::Operator(operator) if operator == "=")
+            })
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
     /// The indent astyle's continuation stack gives the line starting at
     /// `first`, replayed from the start of its statement.
     fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
