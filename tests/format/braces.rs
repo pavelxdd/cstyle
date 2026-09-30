@@ -2323,3 +2323,22 @@ fn whitesmith_function_brace_after_a_colon_comment_line_stands_past_the_head() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn horstmann_runs_a_nested_brace_row_into_its_first_element() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "const struct helptxt helptext[] =",
+        "{   {   \"a\",",
+        "        \"b\"",
+        "    },",
+        "    {   \"c\",",
+        "        \"d\"",
+        "    },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

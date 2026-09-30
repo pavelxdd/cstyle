@@ -331,27 +331,49 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
     let mut index = 0usize;
     while index < input.len() {
         let line = input[index];
-        if !raw_lines[index]
-            && line.trim() == "{"
-            && let Some(next) = input.get(index + 1)
-            && !next.trim().is_empty()
-            && !next.trim_start().starts_with('#')
-            && !next.trim_start().starts_with('}')
-            && !next.starts_with("//")
-            && !next.contains("*INDENT-OFF*")
-            && !run_in_next_line_is_access_label(line, next, options)
-            && !previous_line_is_namespace_header(&input, index)
-        {
-            let fill = horstmann_run_in_fill(line, next, options);
-            let next = next.trim_start();
-            let next = if options.strip_comment_prefix {
-                next.strip_prefix("/*  ")
-                    .map_or_else(|| next.to_string(), |rest| format!("/* {rest}"))
-            } else {
-                next.to_string()
-            };
-            lines.push(format!("{line}{fill}{next}"));
-            index += 2;
+        let runs_in = |brace: &str, at: usize| {
+            !raw_lines[at - 1]
+                && brace.trim() == "{"
+                && input.get(at).is_some_and(|next| {
+                    !next.trim().is_empty()
+                        && !next.trim_start().starts_with('#')
+                        && !next.trim_start().starts_with('}')
+                        && !next.starts_with("//")
+                        && !next.contains("*INDENT-OFF*")
+                        && !run_in_next_line_is_access_label(brace, next, options)
+                })
+        };
+        if runs_in(line, index + 1) && !previous_line_is_namespace_header(&input, index) {
+            // A `{` that runs in may carry a nested `{` whose own first line
+            // runs in after it.
+            let mut joined = line.to_string();
+            let mut brace = line.to_string();
+            let mut at = index + 1;
+            loop {
+                let next = input[at];
+                let fill = horstmann_run_in_fill(&brace, next, options);
+                let next = next.trim_start();
+                let next = if options.strip_comment_prefix {
+                    next.strip_prefix("/*  ")
+                        .map_or_else(|| next.to_string(), |rest| format!("/* {rest}"))
+                } else {
+                    next.to_string()
+                };
+                joined.push_str(&fill);
+                joined.push_str(&next);
+                at += 1;
+                if next != "{" {
+                    break;
+                }
+                let column =
+                    visual_width_from(&joined[..joined.len() - 1], 0, options.tab_width.max(1));
+                brace = format!("{}{{", " ".repeat(column));
+                if !runs_in(&brace, at) {
+                    break;
+                }
+            }
+            lines.push(joined);
+            index = at;
         } else {
             lines.push(line.to_string());
             index += 1;
