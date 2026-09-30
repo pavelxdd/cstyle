@@ -317,7 +317,7 @@ impl FormatEngine<'_> {
             .checked_sub(brace_offset)
     }
 
-    /// VTK lays out an array initializer whose braces start their lines
+    /// VTK and whitesmith lay out an array initializer whose braces start their lines
     /// like blocks: the elements of a group stand at its `{`, and a nested
     /// `{` starting its line one level past them. At file scope the outer
     /// `{` stays in column one while its elements take the level of an
@@ -326,7 +326,10 @@ impl FormatEngine<'_> {
     fn vtk_array_element_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        if self.options.brace_style != BraceStyle::Vtk {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Vtk | BraceStyle::Whitesmith
+        ) {
             return None;
         }
         let is_aggregate = |id: GroupId| {
@@ -396,7 +399,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let flush_outer = group == outer && !self.in_code(open);
+        let flush_outer =
+            self.options.brace_style == BraceStyle::Vtk && group == outer && !self.in_code(open);
         let mut content = self.output.lead_width(open_line, self.options.tab_width);
         if flush_outer {
             content += self.options.indent_width;

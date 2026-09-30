@@ -4007,3 +4007,29 @@ fn vtk_compound_literal_rows_in_a_designated_initializer_stand_past_their_cast()
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_compound_literal_rows_in_a_designated_initializer_stand_past_their_cast() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    RedisModuleCommandInfo info =",
+        "        {",
+        "        .arity = -5,",
+        "        .key_specs = (RedisModuleCommandKeySpec[])",
+        "            {",
+        "                {",
+        "                .flags = 1,",
+        "                .fk.range = {0,1,0}",
+        "                },",
+        "                {0}",
+        "            },",
+        "        };",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
