@@ -7873,6 +7873,35 @@ fn operands_after_a_parenthesized_returned_value_stand_at_the_value() {
 }
 
 #[test]
+fn else_if_blocks_in_indented_switch_cases_keep_their_level() {
+    let options = options_from_args(&["--style=allman", "--indent-switches"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(s)",
+        "    {",
+        "        case 1:",
+        "            if(p == 1)",
+        "                x();",
+        "            else if(p == 2)",
+        "            {",
+        "                y();",
+        "            }",
+        "            break;",
+        "    }",
+        "    if(p == 1)",
+        "        x();",
+        "    else if(p == 2)",
+        "    {",
+        "        y();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

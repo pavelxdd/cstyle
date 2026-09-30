@@ -258,7 +258,10 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent = Some(level);
                 self.layout.continuation_indent.next_line_indent_spaces =
                     (indent_spaces != level * self.options.indent_width).then_some(indent_spaces);
-                self.layout.inline_nested_header_braceless_bias = Some(level);
+                // The bias counts the engine's levels, which leave out the
+                // case body level that indented switches add on output.
+                self.layout.inline_nested_header_braceless_bias =
+                    Some(level.saturating_sub(self.case_body_indent_extra(LineKind::Normal)));
             }
         } else if word == "else"
             && self.current_is_blank()
