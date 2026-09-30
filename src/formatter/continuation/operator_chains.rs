@@ -6,6 +6,7 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
@@ -158,7 +159,18 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        (previous_code.contains('?')
+        // A `?` in a literal asks nothing.
+        let asks = self
+            .output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .is_none_or(|span| {
+                self.tree.tokens[span.first..=span.last.min(self.tree.tokens.len() - 1)]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol('?')))
+            });
+        (asks
+            && previous_code.contains('?')
             && !previous_code.trim_start().starts_with('#')
             && !previous_code.contains(':')
             && !previous_code.ends_with(';'))
@@ -2303,6 +2315,14 @@ impl FormatEngine<'_> {
                                 .map(|column| column + 1)
                                 .unwrap_or_else(|| {
                                     leading_visual_width(previous, self.options.tab_width)
+                                        + if starts_header_word(
+                                            previous_code.trim_start(),
+                                            "return",
+                                        ) {
+                                            "return ".len()
+                                        } else {
+                                            0
+                                        }
                                 })
                         }
                     },

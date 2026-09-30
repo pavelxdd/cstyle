@@ -121,6 +121,14 @@ impl Statements {
             .any(|body| (body.start..body.end).contains(&index))
     }
 
+    /// Whether an `else` before the token `index` is split from its body
+    /// by a directive or an empty line.
+    pub(crate) fn split_else_before(&self, index: usize) -> bool {
+        self.split_else_bodies
+            .iter()
+            .any(|body| body.keyword < index)
+    }
+
     /// Whether the token `index` is in the body of an `else` that an empty
     /// line separates from its body; a directive line alone does not.
     pub(crate) fn in_else_body_after_blank_line(&self, index: usize) -> bool {
@@ -128,6 +136,18 @@ impl Statements {
             .iter()
             .any(|body| body.after_blank_line && (body.start..body.end).contains(&index))
     }
+}
+
+/// A conditional group open while parsing a block's statements.
+struct OpenConditional {
+    /// The sibling before the group: each branch follows it, and so does
+    /// the code after a group with alternatives; after a lone branch, its
+    /// code comes last.
+    sibling: Option<(usize, usize)>,
+    /// Whether the group has an alternative branch.
+    alternatives: bool,
+    /// Whether the group opens the block: each of its branches does.
+    opens_block: bool,
 }
 
 struct Parser<'a> {
@@ -171,32 +191,34 @@ impl Parser<'_> {
         // The last statement of the block that is no label and ended with
         // its `;` or block, as its first token and the index after it.
         let mut sibling: Option<(usize, usize)> = None;
-        // The sibling before each open conditional group, and whether the
-        // group has an alternative branch: each branch follows the code
-        // before the group, and so does the code after a group with
-        // alternatives; after a lone branch, its code comes last.
-        let mut branch_siblings: Vec<(Option<(usize, usize)>, bool)> = Vec::new();
+        let mut conditionals: Vec<OpenConditional> = Vec::new();
         let mut first = true;
+        let mut first_in_branch = false;
         while let Some(at) = self.next(position, end) {
             for index in position..at {
                 let Token::Preprocessor(directive) = &self.tokens[index] else {
                     continue;
                 };
                 match preprocessor_directive(&directive.text) {
-                    Some("if" | "ifdef" | "ifndef") => branch_siblings.push((sibling, false)),
+                    Some("if" | "ifdef" | "ifndef") => conditionals.push(OpenConditional {
+                        sibling,
+                        alternatives: false,
+                        opens_block: first || first_in_branch,
+                    }),
                     Some("else" | "elif" | "elifdef" | "elifndef") => {
-                        if let Some((before, alternatives)) = branch_siblings.last_mut() {
-                            *alternatives = true;
-                            sibling = *before;
+                        if let Some(conditional) = conditionals.last_mut() {
+                            conditional.alternatives = true;
+                            sibling = conditional.sibling;
+                            first_in_branch = conditional.opens_block && !first;
                         } else {
                             sibling = None;
                         }
                     }
                     Some("endif") => {
-                        if let Some((before, alternatives)) = branch_siblings.pop()
-                            && alternatives
+                        if let Some(conditional) = conditionals.pop()
+                            && conditional.alternatives
                         {
-                            sibling = before;
+                            sibling = conditional.sibling;
                         }
                     }
                     _ => {}
@@ -207,15 +229,16 @@ impl Parser<'_> {
             // elsewhere; the code after that stray `}` starts afresh too.
             let fresh = self.is_label(at, end) || self.is_symbol(at, '}');
             self.block_statements.insert(at);
-            if first
+            if (first || first_in_branch)
                 && !fresh
                 && let Some(open) = start.checked_sub(1)
                 && self.is_symbol(open, '{')
-                && !self.crosses_branch(open, at)
+                && (first_in_branch || !self.crosses_branch(open, at))
             {
                 self.block_openings.insert(at, open);
             }
             first = false;
+            first_in_branch = false;
             // A statement that a directive splits parses one branch after
             // another; it anchors nothing.
             if !fresh

@@ -4,6 +4,7 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
@@ -611,14 +612,30 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        is_preprocessor_branch_body(line).then(|| {
+        let spaces = is_preprocessor_branch_body(line).then(|| {
             self.preprocessor.branch_stack.last().and_then(|branch| {
                 branch
                     .restore_body_indent
                     .then_some(branch.first_body_indent_spaces)
                     .flatten()
             })
-        })?
+        })??;
+        // A style indenting braces sets a block's `{` a level past the body.
+        Some(if self.pending_line_opens_indented_plain_block() {
+            spaces + self.options.indent_width
+        } else {
+            spaces
+        })
+    }
+
+    /// Whether the line being laid out opens a nested `{ ... }` block in a
+    /// style that sets its brace a level past the body.
+    fn pending_line_opens_indented_plain_block(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.opened_at(span.first))
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block))
+            && self.should_indent_brace_line(BraceType::Command)
     }
 
     pub(crate) fn record_preprocessor_branch_body_indent(
@@ -629,9 +646,14 @@ impl FormatEngine<'_> {
         if !is_preprocessor_branch_body(line) {
             return;
         }
+        let body_indent_spaces = if self.pending_line_opens_indented_plain_block() {
+            emitted_indent_spaces.saturating_sub(self.options.indent_width)
+        } else {
+            emitted_indent_spaces
+        };
         if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
             if branch.first_body_indent_spaces.is_none() {
-                branch.first_body_indent_spaces = Some(emitted_indent_spaces);
+                branch.first_body_indent_spaces = Some(body_indent_spaces);
             }
             branch.restore_body_indent = false;
         }
@@ -729,6 +751,13 @@ impl FormatEngine<'_> {
     }
 
     fn recent_output_has_split_else(&self, limit: usize) -> bool {
+        // Only an `else` split from its body starts a split-else region.
+        if self
+            .current_source_token()
+            .is_some_and(|token| !self.tree.statements.split_else_before(token))
+        {
+            return false;
+        }
         (0..self.output.len()).rev().take(limit).any(|index| {
             let trimmed = self.output.code_trimmed(index);
             trimmed == "else" || trimmed.ends_with("} else")

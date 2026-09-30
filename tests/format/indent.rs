@@ -7506,6 +7506,278 @@ fn arguments_after_multiline_trailing_comments_keep_the_argument_column() {
         "               second */",
         "         b);",
         "}",
+        "",
+        "CURLcode Curl_rand_bytes(struct Curl_easy *data,",
+        "#ifdef DEBUGBUILD",
+        "                         bool env_override,",
+        "#endif",
+        "                         unsigned char *rnd, size_t num)",
+        "{",
+        "    return 0;",
+        "}",
+        "",
+        "static ngx_ssl_session_t *ngx_ssl_get_cached_session(ngx_ssl_conn_t *ssl_conn,",
+        "#if OPENSSL_VERSION_NUMBER >= 0x10100003L",
+        "        const",
+        "#endif",
+        "        u_char *id, int len, int *copy);",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn code_after_an_else_directly_before_its_body_leaves_split_else_layout_alone() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(!netrcfile) {",
+        "        retcode = 1;",
+        "#ifdef _WIN32",
+        "        if(retcode == NETRC_FILE_MISSING) {",
+        "            x();",
+        "        }",
+        "#endif",
+        "    } else",
+        "        retcode = netrc_scan_file(",
+        "                      data, store);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn first_statement_of_an_alternative_branch_at_block_start_takes_the_body_column() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if(curl)",
+        "        {",
+        "#ifdef USE_CHUNKED",
+        "            {",
+        "            a();",
+        "            }",
+        "#else",
+        "        b();",
+        "#endif",
+        "        d();",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comments_between_arguments_after_a_hash_in_a_string_keep_the_argument_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void g(void)",
+        "{",
+        "    fprintf(out,",
+        "            a ? \"#b\" : \"\",",
+        "            /*",
+        "             * Make sure",
+        "             */",
+        "            b);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn blocks_of_an_if_chain_in_a_braceless_loop_body_close_at_their_header() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    for (i = 0; i < nfd; i++)",
+        "        if (a)",
+        "            b = 0;",
+        "        else {",
+        "            c = 1;",
+        "            if (h) {",
+        "                rc++;",
+        "            }",
+        "        }",
+        "    return rc;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn over_maximum_arguments_in_a_directive_branch_keep_the_assigned_value_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef _LIBC",
+        "    if (nrules) {",
+        "        symb_table = (const int32_t *) _NL_CURRENT (LC_COLLATE,",
+        "                     _NL_COLLATE_SYMB_TABLEMB);",
+        "    }",
+        "#endif",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn initializer_rows_after_continued_rows_and_brace_rows_keep_the_row_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static fs_vfs_t fs_vfs = {",
+        "    {",
+        "        1,                  /* iVersion */",
+        "        0                   /* xCurrentTimeInt64 */",
+        "    },",
+        "    0,                      /* pFileList */",
+        "    0                       /* pParent */",
+        "};",
+        "void f(void)",
+        "{",
+        "    const struct option options[] = {",
+        "        OPT_ALIAS(0, \"mailmap\", \"use-mailmap\"),",
+        "        OPT_CALLBACK_F(0, \"decorate\", cfg, NULL, N_(\"decorate options\"),",
+        "                       PARSE_OPT_OPTARG, decorate_callback),",
+        "        OPT_CALLBACK('L', NULL, &line_cb, \"range:file\",",
+        "                     N_(\"trace the evolution of line range\"),",
+        "                     log_line_range_callback),",
+        "        OPT_END()",
+        "    };",
+        "    int x[] = {",
+        "        1, 2,",
+        "        3",
+        "    };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn question_marks_in_literals_start_no_ternary_arm() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static struct userdiff_driver builtin_drivers[] = {",
+        "    IPATTERN(\"ada\",",
+        "             \"|<<=?|>>=?\"),",
+        "    PATTERNS(\"scheme\",",
+        "             \"y\"),",
+        "    { .name = \"default\", .binary = -1 },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn logical_operands_line_up_within_their_chain_and_parentheses() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    if(!result &&",
+        "            data->state.use_range &&",
+        "            ((rtspreq == RTSPREQ_PLAY) ||",
+        "             (rtspreq == RTSPREQ_PAUSE) ||",
+        "             (rtspreq == RTSPREQ_RECORD)) &&",
+        "            !Curl_checkheaders(data, STRCONST(\"Range\"))) {",
+        "        x();",
+        "    }",
+        "    if(!domain ||",
+        "            (is_ip &&",
+        "             (curlx_strlen(val) == strlen(domain))) ||",
+        "            (!is_ip && cookie_tailmatch(curlx_str(val),",
+        "                                        curlx_strlen(val), domain))) {",
+        "        x();",
+        "    }",
+        "    is_tcp = (ctx->addr.family == AF_INET ||",
+        "              ctx->addr.family == AF_INET6) &&",
+        "             cf_socktype(ctx->addr.socktype) == SOCK_STREAM;",
+        "    return Curl_xfer_is_secure(data) ||",
+        "           curl_strequal(\"localhost\", host) ||",
+        "           !strcmp(host, \"127.0.0.1\") ||",
+        "           !strcmp(host, \"::1\");",
+        "}",
+        "int g(void)",
+        "{",
+        "    return !data->req.done &&",
+        "           !Curl_rlimit_is_blocked(&data->progress.ul.rlimit) &&",
+        "           (CURL_REQ_WANT_SEND(data) ||",
+        "            !Curl_req_sendbuf_empty(data) ||",
+        "            Curl_xfer_needs_flush(data));",
+        "}",
+        "int h(void)",
+        "{",
+        "    return server.masterhost || /* not ok */",
+        "           !server.lag || /* Min */",
+        "           server.count >= server.min; /* check */",
+        "}",
+        "int k(void)",
+        "{",
+        "    return prefix_len && prefix &&",
+        "           /*",
+        "            * We expect `prefix` to be NUL terminated.",
+        "            */",
+        "           strcspn(prefix, \" \") >= prefix_len &&",
+        "           (prefix_len != 1 ||",
+        "            *prefix != '?');",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_block_braces_in_alternative_branches_stay_indented() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    if(x)",
+        "        {",
+        "#ifdef A",
+        "        a();",
+        "#elif defined(B)",
+        "        /* note */",
+        "            {",
+        "            int k = 1;",
+        "            }",
+        "#endif",
+        "        b();",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(int value)",
+        "{",
+        "    n = (ssize_t)recvfrom(sock, (char *)inbuffer, sizeof(inbuffer), 0,",
+        "                          &from.sa, &fromlen);",
+        "    x = (Value_Number_long_long)readvalue_long(c,",
+        "            d);",
+        "    switch (value) {",
+        "    case TEXT_ID: {",
+        "        Value_Number len = readvalue_long_name_xx(c, data + off,",
+        "                           c.is_small, to_value(size), 0);",
+        "        break;",
+        "    }",
+        "    }",
+        "}",
     );
 
     assert_eq!(format_exact(source, &options), source);

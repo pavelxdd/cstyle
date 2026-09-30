@@ -4,6 +4,7 @@ use crate::formatter::constructs::switch_cases::{
 };
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
@@ -239,12 +240,22 @@ impl FormatEngine<'_> {
             let output_code = output_line[..trailing_comment_split_limit(output_line)].trim_end();
             let line_comment_limit = line_comment_split_limit(line);
             let code_before_line_comment = line[..line_comment_limit].trim_end();
-            let embedded_preprocessor = output_code.contains('#')
-                && !output_code.trim_start().starts_with('#')
-                || (line_comment_limit < line.len() || line.trim_end().ends_with(':'))
-                    && code_before_line_comment.contains('#')
-                    && !code_before_line_comment.trim_start().starts_with('#');
+            // A `#` in a literal is no directive.
+            let holds_directive = self
+                .output
+                .line_tokens(output_line_index)
+                .is_none_or(|span| {
+                    self.tree.tokens[span.first..=span.last.min(self.tree.tokens.len() - 1)]
+                        .iter()
+                        .any(|token| matches!(token, Token::Preprocessor(_)))
+                });
+            let embedded_preprocessor = holds_directive
+                && (output_code.contains('#') && !output_code.trim_start().starts_with('#')
+                    || (line_comment_limit < line.len() || line.trim_end().ends_with(':'))
+                        && code_before_line_comment.contains('#')
+                        && !code_before_line_comment.trim_start().starts_with('#'));
             if output_code.trim_start().starts_with("return ")
+                && holds_directive
                 && output_code.contains('#')
                 && !output_code.ends_with(';')
             {

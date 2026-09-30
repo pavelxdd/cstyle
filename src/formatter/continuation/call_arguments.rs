@@ -22,7 +22,7 @@ use crate::formatter::tokens::literals::{first_string_literal_start, starts_stri
 use crate::formatter::tokens::operators::{
     find_assignment_operator, starts_ternary_arm, starts_with_chain_operator,
 };
-use crate::source::lex::{is_identifier_continue, is_identifier_start};
+use crate::source::lex::is_identifier_continue;
 
 pub(crate) struct SplitElseCallLineLayout {
     pub(crate) indent_spaces: usize,
@@ -40,48 +40,6 @@ pub(crate) fn assignment_call_value_column(line: &str, tab_width: usize) -> Opti
         .find(|(_, ch)| !ch.is_whitespace())
         .map_or(line.len(), |(offset, _)| after_operator + offset);
     Some(visual_width_from(&line[..value_start], 0, tab_width))
-}
-
-pub(crate) fn casted_assignment_value_column(line: &str, tab_width: usize) -> Option<usize> {
-    if !line.trim_end().ends_with(',') || unmatched_open_paren_column(line).is_none() {
-        return None;
-    }
-    let (assignment, operator) = find_assignment_operator(line)?;
-    let after_operator = assignment + operator.len();
-    let value_start = line[after_operator..]
-        .char_indices()
-        .find(|(_, ch)| !ch.is_whitespace())
-        .map_or(line.len(), |(offset, _)| after_operator + offset);
-    if !line[value_start..].starts_with('(') {
-        return None;
-    }
-    let mut depth = 0usize;
-    for (offset, ch) in line[value_start..].char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    let after_cast = value_start + offset + ch.len_utf8();
-                    // astyle aligns `(T *) f(a,` to the call's paren, but
-                    // keeps the cast column for `(T)f(a,` and `(T *) f (a,`.
-                    let rest = line[after_cast..].trim_start();
-                    let spaced_cast = rest.len() < line[after_cast..].len();
-                    let callee_end = rest
-                        .find(|ch: char| !is_identifier_continue(ch))
-                        .unwrap_or(rest.len());
-                    if spaced_cast && rest[callee_end..].starts_with('(') {
-                        return None;
-                    }
-                    return (rest.chars().next().is_some_and(is_identifier_start)
-                        && rest.contains('('))
-                    .then(|| visual_width_from(&line[..value_start], 0, tab_width));
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
 
 fn line_starts_call_expression(line: &str) -> bool {
@@ -2115,6 +2073,7 @@ impl FormatEngine<'_> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous_code.trim_start();
         if !previous_code.ends_with("),")
+            || self.pending_line_starts_initializer_element()
             || previous_trimmed.starts_with(':')
             || previous_code.contains('<')
             || current.contains('>')
@@ -2202,11 +2161,33 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
+        // The columns come from output lines, which already carry the
+        // case-block unindent.
+        self.over_max_argument_output_column(
+            previous_code,
+            &columns,
+            base,
+            statement_base,
+            over_statement_max,
+        )
+        .map(|column| column + self.case_unindent_spaces())
+    }
+
+    fn over_max_argument_output_column(
+        &self,
+        previous_code: &str,
+        columns: &[usize],
+        base: usize,
+        statement_base: usize,
+        over_statement_max: bool,
+    ) -> Option<usize> {
+        let inner = *columns.last()?;
         if columns.len() < 2 {
             if previous_code.contains(" new ") || previous_code.contains("(new ") {
                 return None;
             }
             if base >= self.options.indent_width * 2
+                && self.pending_line_in_plain_block()
                 && (!self.preprocessor.branch_stack.is_empty()
                     || output_has_active_preprocessor_branch(self.output.as_slice()))
             {

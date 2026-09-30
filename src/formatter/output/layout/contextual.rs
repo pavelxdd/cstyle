@@ -15,9 +15,7 @@ use crate::formatter::constructs::template_declarations::{
     is_template_declaration_head_line, template_continuation_indent_spaces,
     template_declaration_line_complete,
 };
-use crate::formatter::continuation::call_arguments::{
-    assignment_call_value_column, casted_assignment_value_column,
-};
+use crate::formatter::continuation::call_arguments::assignment_call_value_column;
 use crate::formatter::continuation::operator_chains::nested_ternary_colon_sibling_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
@@ -3185,15 +3183,6 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(spaces);
             }
             if let Some(spaces) =
-                casted_assignment_value_column(previous_code, self.options.tab_width)
-            {
-                layout.exact_indent_spaces = Some(
-                    spaces
-                        + self.layout.line_adjuster.total_case_unindent_depth()
-                            * self.options.indent_width,
-                );
-            }
-            if let Some(spaces) =
                 self.active_split_else_comma_argument_indent_spaces(line, layout.line_kind)
             {
                 layout.exact_indent_spaces = Some(spaces);
@@ -3297,7 +3286,11 @@ impl FormatEngine<'_> {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let natural = layout.indent * self.options.indent_width;
             // An indented brace already stands at its body column.
-            let body_offset = if self.options.indent_braces
+            let body_offset = if (self.options.indent_braces
+                || matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Vtk
+                ))
                 && self
                     .layout
                     .nesting
