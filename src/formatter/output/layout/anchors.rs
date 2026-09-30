@@ -1460,7 +1460,18 @@ impl FormatEngine<'_> {
                     && (matches!(&tokens[previous], Token::Operator(operator) if operator == "=")
                         || matches!(&tokens[previous], Token::Word(word) if word == "return"))
             });
+        // A line inside parentheses: comments before it share its level of
+        // the continuation.
+        let in_parens = groups
+            .enclosing(first)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+            && !matches!(tokens[first], Token::Symbol(')' | '['))
+            && !tokens[first..]
+                .iter()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .any(|token| matches!(token, Token::Symbol('{' | '}')));
         if !statements.starts_block_statement(first)
+            && !in_parens
             && !initializer_element
             && !is_else
             && !ternary_arm

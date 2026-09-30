@@ -4337,3 +4337,22 @@ fn horstmann_run_in_block_comment_stars_keep_their_source_offset() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn comment_inside_parentheses_takes_the_level_of_the_line_after_it() {
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    if (a && (",
+        "                /*",
+        "                 * Check.",
+        "                 */",
+        "                next == b)) {",
+        "        return 1;",
+        "    }",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

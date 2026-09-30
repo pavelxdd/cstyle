@@ -43,6 +43,10 @@ impl FormatEngine<'_> {
         let group = groups.enclosing(first)?;
         if groups.get(group).delimiter != Delimiter::Paren
             || matches!(tokens[first], Token::Symbol('['))
+            || self
+                .tree
+                .previous_code_token(groups.get(group).open)
+                .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
             || tokens[groups.get(group).open..groups.get(group).close.unwrap_or(tokens.len())]
                 .iter()
                 .any(|token| matches!(token, Token::Symbol('{' | '}')))
@@ -74,8 +78,18 @@ impl FormatEngine<'_> {
             || matches!(tokens[first], Token::Symbol(')' | ']' | '{' | '}' | ','))
             || tokens[first..]
                 .iter()
-                .take_while(|token| !matches!(token, Token::Newline))
-                .any(|token| matches!(token, Token::Symbol('{' | '}')))
+                .enumerate()
+                .take_while(|&(offset, token)| {
+                    !matches!(token, Token::Newline)
+                        && self.tree.groups.enclosing(first).is_none_or(|group| {
+                            self.tree
+                                .groups
+                                .get(group)
+                                .close
+                                .is_none_or(|close| first + offset < close)
+                        })
+                })
+                .any(|(_, token)| matches!(token, Token::Symbol('{' | '}')))
         {
             return None;
         }
