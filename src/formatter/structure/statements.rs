@@ -267,14 +267,26 @@ impl Parser<'_> {
     /// split no code.
     fn crosses_branch(&self, from: usize, to: usize) -> bool {
         let mut branch_has_code = false;
+        // Conditional groups opened and closed inside the range hold both
+        // of their branches.
+        let mut nested = 0usize;
         for token in &self.tokens[from..to] {
             if let Token::Preprocessor(directive) = token {
                 match preprocessor_directive(&directive.text) {
-                    Some("else" | "elif" | "elifdef" | "elifndef") if branch_has_code => {
+                    Some("if" | "ifdef" | "ifndef") => nested += 1,
+                    Some("endif") if nested > 0 => nested -= 1,
+                    Some("else" | "elif" | "elifdef" | "elifndef")
+                        if nested == 0 && branch_has_code =>
+                    {
                         return true;
                     }
-                    Some(name) if is_conditional_preprocessor(name) => branch_has_code = false,
                     _ => {}
+                }
+                if nested == 0
+                    && preprocessor_directive(&directive.text)
+                        .is_some_and(is_conditional_preprocessor)
+                {
+                    branch_has_code = false;
                 }
             } else if is_code_token(token) {
                 branch_has_code = true;

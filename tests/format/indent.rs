@@ -7803,6 +7803,61 @@ fn whitesmith_alternative_branch_after_a_definition_keeps_file_scope() {
 }
 
 #[test]
+fn conditional_groups_inside_a_branchs_blocks_leave_statements_linked() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef _WIN32",
+        "    if(a)",
+        "        {",
+        "#ifndef UWP",
+        "        rc = sread(x);",
+        "#else",
+        "        warnf(\"x\");",
+        "#endif",
+        "        }",
+        "    else",
+        "#endif",
+        "        {",
+        "        if(rc < 0)",
+        "            {",
+        "            x();",
+        "            }",
+        "        }",
+        "    if(c)",
+        "        {",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comments_and_ternaries_keep_enum_members_and_condition_arms_in_place() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "enum maintenance_type {",
+        "    /* As invoked via `git maintenance run --schedule=`. */",
+        "    MAINTENANCE_TYPE_SCHEDULED = (1 << 0),",
+        "    MAINTENANCE_TYPE_MANUAL    = (1 << 1),",
+        "};",
+        "",
+        "void f(void)",
+        "{",
+        "    if (!(config_file",
+        "            ? git_configset_get_string_multi(&cs, key, &list)",
+        "            : repo_config_get_string_multi(the_repository, key, &list))) {",
+        "        x();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

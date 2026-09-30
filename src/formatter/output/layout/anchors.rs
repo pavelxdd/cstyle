@@ -49,6 +49,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.argument_after_interruption_indent(first))
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
+            .or_else(|| self.leading_ternary_in_condition_indent(first))
             .or_else(|| self.initializer_row_indent(first))
             .or_else(|| self.indented_block_brace_indent(first))
         {
@@ -519,6 +520,34 @@ impl FormatEngine<'_> {
         }
         let content = next_code_token(tokens, open + 1)?;
         Some(self.token_column(content)? + self.case_unindent_spaces())
+    }
+
+    /// A `?` or `:` leading a line inside parentheses nested in a control
+    /// condition aligns with the parentheses' first operand, but never
+    /// before the condition's continuation indent.
+    fn leading_ternary_in_condition_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(tokens[first], Token::Symbol('?' | ':')) {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        let open = groups.get(group).open;
+        if groups.get(group).delimiter != Delimiter::Paren
+            || self.control_condition_of(first).is_none()
+            || self.control_condition_of(open).is_none()
+        {
+            return None;
+        }
+        let content = next_code_token(tokens, open + 1)?;
+        if self.output.line_with_token(content)? != self.output.line_with_token(open)? {
+            return None;
+        }
+        let header = self.control_condition_header_indent()?;
+        let column = self
+            .token_column(content)?
+            .max(header + min_conditional_indent_spaces(self.options));
+        Some(column + self.case_unindent_spaces())
     }
 
     /// A `return` value starting a line after the keyword takes one level

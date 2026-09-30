@@ -1448,6 +1448,9 @@ impl FormatEngine<'_> {
 
     pub(crate) fn enum_member_missing_comma_indent_spaces(&self, previous: &str) -> Option<usize> {
         let previous_content = previous.trim_start();
+        if previous_content.starts_with("/*") || previous_content.starts_with("//") {
+            return None;
+        }
         let mut comment_limit = previous_content
             .find("//")
             .unwrap_or(previous_content.len());
