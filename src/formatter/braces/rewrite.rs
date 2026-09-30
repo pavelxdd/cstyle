@@ -1087,7 +1087,10 @@ impl FormatEngine<'_> {
                 .split_whitespace()
                 .next()
                 .is_some_and(is_macro_like_word)
-            && self.current.split_whitespace().count() == 1;
+            && self.current.split_whitespace().count() == 1
+            || token_begins_line(tokens, start)
+                && self.current_is_blank()
+                && self.macro_line_before_directives();
         let backslash_continuation_block =
             !token_begins_line(tokens, start) && self.current.trim_end().ends_with('\\');
         let previous_line_lambda_header = self.current_is_blank()
@@ -1202,9 +1205,19 @@ impl FormatEngine<'_> {
             self.classify_opening_brace(brace_header, self.pending_extern)
         };
         if token_begins_line(tokens, start) && self.current_is_blank() {
+            // Styles that indent braces indent a block kept after a macro,
+            // unless it is empty.
+            let brace_indent = usize::from(
+                source_separate_macro_block
+                    && !is_empty_block
+                    && matches!(
+                        self.options.brace_style,
+                        BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+                    ),
+            );
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent());
+                .set_next_line_level(self.layout.indentation.indent() + brace_indent);
         }
         let source_gap = match tokens.get(start.wrapping_sub(1)) {
             Some(Token::Whitespace(gap)) => Some(gap.as_str()),
@@ -1339,6 +1352,20 @@ impl FormatEngine<'_> {
             }
         }
         Some(close_index + 1)
+    }
+
+    /// Whether the output ends with directive lines after a line holding
+    /// one macro-like word, which astyle reads past as it does the lines.
+    fn macro_line_before_directives(&self) -> bool {
+        for (directives, line) in self.output.scoped().iter().rev().enumerate() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with('#') || trimmed.ends_with('\\') {
+                return directives > 0
+                    && trimmed.split_whitespace().count() == 1
+                    && is_macro_like_word(trimmed);
+            }
+        }
+        false
     }
 
     fn push_attached_one_line_block(

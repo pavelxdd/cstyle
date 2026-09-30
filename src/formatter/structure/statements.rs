@@ -148,6 +148,9 @@ struct OpenConditional {
     alternatives: bool,
     /// Whether the group opens the block: each of its branches does.
     opens_block: bool,
+    /// Whether a statement opens the group: code in its alternative
+    /// branches continues that statement.
+    in_statement: bool,
 }
 
 struct Parser<'a> {
@@ -204,11 +207,12 @@ impl Parser<'_> {
                         sibling,
                         alternatives: false,
                         opens_block: first || first_in_branch,
+                        in_statement: false,
                     }),
                     Some("else" | "elif" | "elifdef" | "elifndef") => {
                         if let Some(conditional) = conditionals.last_mut() {
                             conditional.alternatives = true;
-                            sibling = conditional.sibling;
+                            sibling = conditional.sibling.filter(|_| !conditional.in_statement);
                             first_in_branch = conditional.opens_block && !first;
                         } else {
                             sibling = None;
@@ -249,6 +253,30 @@ impl Parser<'_> {
             }
             self.unterminated = false;
             position = self.statement(at, end).max(at + 1);
+            // Directives inside a statement, such as an `if` chain whose
+            // `else` a directive splits, open and close groups too.
+            for token in &self.tokens[at..position] {
+                let Token::Preprocessor(directive) = token else {
+                    continue;
+                };
+                match preprocessor_directive(&directive.text) {
+                    Some("if" | "ifdef" | "ifndef") => conditionals.push(OpenConditional {
+                        sibling: Some((at, position)),
+                        alternatives: false,
+                        opens_block: false,
+                        in_statement: true,
+                    }),
+                    Some("else" | "elif" | "elifdef" | "elifndef") => {
+                        if let Some(conditional) = conditionals.last_mut() {
+                            conditional.alternatives = true;
+                        }
+                    }
+                    Some("endif") => {
+                        conditionals.pop();
+                    }
+                    _ => {}
+                }
+            }
             sibling = (!fresh && !self.unterminated).then_some((at, position));
         }
     }

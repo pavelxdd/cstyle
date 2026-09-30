@@ -855,7 +855,7 @@ impl FormatEngine<'_> {
         closing: bool,
     ) -> Option<usize> {
         let starts_member_opener =
-            !closing && line.trim_start().starts_with('.') && line.contains('{');
+            !closing && line.trim_start().starts_with(['.', '[']) && line.contains('{');
         let frame = if closing {
             let trimmed = line.trim_start();
             let previous_closes_brace = self

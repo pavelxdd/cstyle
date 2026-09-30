@@ -2266,3 +2266,98 @@ fn split_ternary_false_arm_in_case_block_keeps_continuation_column() {
     let input = "void test(int kind)\n{\n    switch (kind) {\n        case 1:\n            value = a ? b :\n                    c;\n            next();\n            break;\n        default:\n            break;\n    }\n}\n";
     check(input, TEST_SAMPLE_OPTIONS, input);
 }
+
+#[test]
+fn else_in_alternative_branch_of_split_else_chain_keeps_chain_level() {
+    let input = "void f(void)\n{\n#if defined(X)\n    if(q)\n        h = 1;\n#endif\n#ifdef R\n    if(a)\n    {\n    }\n    else\n#endif\n        if(b)\n        {\n        }\n#ifdef H\n        else\n        {\n        }\n#else\n        else\n        {\n        }\n#endif\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn statement_after_braceless_body_split_by_branches_follows_the_header() {
+    let input = "void f(void)\n{\n    for (; i < n; i++)\n        if (x)\n        {\n            if (!fail)\n#ifndef W\n                a(\"%s\",\n                  s);\n#else\n                a(\"%ls\",\n                  s);\n#endif\n            b();\n            fail = 1;\n        }\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn gnu_brace_after_split_else_chain_statement_follows_its_header() {
+    let input = "{\n#if A\n    if(q)\n        {\n        }\n    else\n#endif\n        if(c)   /* it is missing */\n            {\n#ifndef P\n                if(cf)\n                    {\n                        result = 1;\n                    }\n                else\n#endif\n                    {\n                    }\n                if(result)\n                    {\n                        g();\n                    }\n            }\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn gnu_comment_alone_in_split_else_block_stands_at_its_body() {
+    let input = "void f(void)\n{\n#ifdef A\n    if(x)\n        {\n            m = 1;\n        }\n    else\n#endif\n#ifdef B\n        if(z)\n            {\n                m = 2;\n            }\n        else\n#endif\n            {\n                /* required */\n            }\n\n    if(y)\n        g();\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn comment_before_directives_takes_the_statement_level() {
+    let input = "void f(void)\n{\n    switch(c)\n        {\n        case 213:\n        {\n            if(x)\n                {\n                }\n            /* If we asked\n               we emulate */\n#if A\n#endif\n            if(y)\n                {\n                }\n        }\n        }\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn gnu_dangling_else_block_indents_its_braces() {
+    let input = "void f(void)\n{\n    if(p)\n        switch(action)\n            {\n            case deny:\n                break;\n            }\n    else\n        {\n            /* If they */\n            if(action == set)\n                protoset[0] = NULL;\n            return PARAM_BAD_USE;\n        }\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn statement_after_labeled_switch_in_case_body_keeps_case_body_column() {
+    let input = "void f(void)\n{\n    switch (c)\n        {\n        case '\\0':\n            i = 0;\nsegment_start:\n            switch (*path)\n                {\n                case 'a':\n                    break;\n                default:\n                    continue;\n                }\n            /*\n             * So far\n             */\n            i++;\n            break;\n        }\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn one_line_block_after_macro_and_line_directive_stays_on_its_line() {
+    let input = "int f(void)\n{\n    switch (x) {\n    case 1:\n        YY_RULE_SETUP\n#line 41 \"src/lexer.l\"\n        { yy_push_state(IN_COMMENT, yyscanner); }\n        YY_BREAK\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn whitesmith_indents_one_line_block_kept_after_macro() {
+    let input = "int f(void)\n    {\n    switch (x)\n        {\n        case 4:\n            YY_RULE_SETUP\n                { return NEQ; }\n            YY_BREAK\n        }\n    MAC2\n        { b(); }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn bracket_designator_row_after_one_line_row_keeps_row_column() {
+    check(
+        "static struct e s[] = {\n    { \"x\", \"y\" },\n    [B] = { \"x\",\n        \"y\"\n    },\n    [C] = 1,\n};\n",
+        &["--style=kr"],
+        "static struct e s[] = {\n    { \"x\", \"y\" },\n    [B] = {\n        \"x\",\n        \"y\"\n    },\n    [C] = 1,\n};\n",
+    );
+}
+
+#[test]
+fn leading_assignment_in_indented_brace_block_continues_its_target() {
+    let input = "void f(void)\n{\n    if (a)\n        {\n        x[1]\n            = y;\n        }\n    z[1]\n        = y;\n}\n";
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn horstmann_comment_ending_block_in_case_stands_at_block_body() {
+    let input = "void f(void)\n{   switch (c)\n    {   case 't':\n        {   enum object_type e = t(x);\n            {   struct object_id blob_oid;\n                {   char *buffer = odb_read_object(the_repository->objects,\n                                                   &oid, &type, &size);\n                }\n                /*\n                 * we attempted to dereference a tag to a blob\n                 */\n            }\n        }\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
+fn block_of_later_else_if_in_braceless_loop_body_keeps_its_body_level() {
+    let input = "void f(void)\n    {\n    for (i = 0; i < 8; i++)\n        if (a)\n            return 0;\n        else if (b)\n            {\n            c();\n            }\n        else if (d)\n            {\n            e();\n            }\n        else\n            return 0;\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+    let horstmann = "void f(void)\n{   for (i = 0; i < 8; i++)\n        if (a)\n            return 0;\n        else if (b)\n        {   c();\n        }\n        else if (d)\n        {   e();\n        }\n        else\n            return 0;\n}\n";
+    check(horstmann, &["--style=horstmann"], horstmann);
+}
+
+#[test]
+fn whitesmith_member_after_comment_following_nested_struct_keeps_member_column() {
+    let input = "struct SingleRequest\n    {\n    struct\n        {\n        BIT(paused);\n        } writer;\n    /* Client Reader stack, handles\n     * checks. */\n    struct\n        {\n        struct Curl_creader *stack;\n        } reader;\n    int x;\n    };\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn vtk_file_scope_struct_array_keeps_brace_rows_at_its_rows() {
+    let input = "static const struct t tests[] = {\n    { /* a */\n        \"a\",\n        TRUE\n    },\n    { /* b */\n        \"b\",\n        FALSE\n    }\n};\n";
+    check(input, &["--style=vtk"], input);
+}
