@@ -2951,3 +2951,14 @@ fn source_space_after_a_sign_following_a_cast_is_kept() {
         "void f(void)\n{\n    d = (size_t) - 7;\n    d = (foo_t) - 7;\n    e = (bitsizeof(size_t) - 7);\n}\n"
     );
 }
+
+#[test]
+fn spaces_between_a_cast_and_a_number_keep_their_source_width() {
+    let source = fixture!(
+        "static struct bpf_insn code[] = {",
+        "    { 0x79,   BPF_REG_2,   BPF_REG_1, (int16_t)      0,        0x0 },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

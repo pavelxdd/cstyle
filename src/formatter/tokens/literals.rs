@@ -203,7 +203,7 @@ impl FormatEngine<'_> {
             self.emit_source_space();
         } else if self.current_ends_cast() {
             if self.options.pad_parens_outside || self.space_after_cast {
-                self.ensure_space();
+                self.emit_source_space_or_ensure();
             } else {
                 self.emit_source_space();
             }

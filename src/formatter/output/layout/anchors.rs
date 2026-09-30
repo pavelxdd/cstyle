@@ -445,18 +445,6 @@ impl FormatEngine<'_> {
             return None;
         }
         let lead = self.output.lead_width(line, self.options.tab_width);
-        // astyle takes the brace of a `WORD {` block for an array brace and
-        // continues no assignment inside.
-        if self.in_array_like_block(start) {
-            return (tokens[start..=last]
-                .iter()
-                .any(|token| matches!(token, Token::Operator(_)))
-                && (start..=last).any(is_assignment)
-                && !tokens[start..first]
-                    .iter()
-                    .any(|token| matches!(token, Token::Symbol('(' | '[' | '{'))))
-            .then(|| lead + self.case_unindent_spaces());
-        }
         let max = self.options.max_continuation_indent;
         let mut stack: Vec<usize> = Vec::new();
         let mut index = start;

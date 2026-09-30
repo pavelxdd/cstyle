@@ -81,7 +81,6 @@ impl FormatEngine<'_> {
         }
         let start = self.stack_statement_start(first)?;
         // Lambda bodies continue their statements past astyle's stack.
-        let array_like = self.in_array_like_block(start);
         if let Some(group) = self.tree.groups.enclosing(start)
             && self.tree.groups.ancestors(group).any(|id| {
                 self.tree.blocks.kind(id) == Some(BlockKind::Lambda)
@@ -191,8 +190,7 @@ impl FormatEngine<'_> {
                     return None;
                 }
                 Token::Operator(operator)
-                    if !array_like
-                        && operator.ends_with('=')
+                    if operator.ends_with('=')
                         && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
                 {
                     let previous = self.tree.previous_code_token(index)?;
@@ -258,33 +256,6 @@ impl FormatEngine<'_> {
         }
         let top = replay.stack.last().copied()?;
         Some(block_lead + top + self.case_unindent_spaces())
-    }
-
-    /// Whether a block around `index` opens after a bare word, such as a
-    /// `DOIT {` macro or a `YY_DECL` function head, which astyle takes for
-    /// an array brace: it registers no assignment continuation inside.
-    pub(super) fn in_array_like_block(&self, index: usize) -> bool {
-        let groups = &self.tree.groups;
-        let tokens = &self.tree.tokens;
-        groups.enclosing(index).is_some_and(|group| {
-            groups.ancestors(group).any(|id| {
-                matches!(
-                    self.tree.blocks.kind(id),
-                    Some(
-                        BlockKind::FunctionBody
-                            | BlockKind::Control
-                            | BlockKind::Block
-                            | BlockKind::Unknown
-                    )
-                ) && self
-                    .tree
-                    .previous_code_token(groups.get(id).open)
-                    .is_some_and(|before| {
-                        matches!(&tokens[before], Token::Word(word)
-                            if !is_header(word) && !matches!(word.as_str(), "else" | "do" | "try"))
-                    })
-            })
-        })
     }
 
     /// Whether the declaration before the body opening at `open` holds

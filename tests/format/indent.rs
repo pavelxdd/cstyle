@@ -8719,16 +8719,18 @@ fn every_statement_of_a_dangling_else_block_stays_at_the_block() {
     assert_eq!(format_exact(source, &options), source);
 }
 
+// astyle takes the `{` after a bare word for an array brace and continues
+// no assignment inside; the block continues its assignments as any other.
 #[test]
-fn value_after_an_assignment_in_a_word_brace_block_is_not_continued() {
+fn value_after_an_assignment_in_a_word_brace_block_is_continued() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(
         "void f(void)",
         "{",
         "    DOIT {",
         "        FILE * const fp =",
-        "        /* c */",
-        "        1 ? a : b;",
+        "            /* c */",
+        "            1 ? a : b;",
         "    }",
         "}",
         "int g(void)",
