@@ -81,6 +81,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.vtk_anonymous_member_aggregate_brace_indent(first))
             .or_else(|| self.statement_after_case_block_indent(first))
             .or_else(|| self.first_statement_after_case_label_indent(first))
+            .or_else(|| self.statement_after_labeled_statement_indent(first))
             .or_else(|| self.case_block_statement_indent(first))
             .or_else(|| self.block_closing_brace_indent(first))
             .or_else(|| self.assigned_value_in_case_block_indent(first))
@@ -551,6 +552,52 @@ impl FormatEngine<'_> {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
+    }
+
+    /// A statement after a labeled statement, which links to no sibling,
+    /// stands at the statements of its block.
+    fn statement_after_labeled_statement_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let statements = &self.tree.statements;
+        if !statements.starts_block_statement(first)
+            || statements.previous_sibling(first).is_some()
+            || statements.block_opening(first).is_some()
+            || matches!(tokens[first], Token::Symbol('{' | '}'))
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+        {
+            return None;
+        }
+        let group = groups.enclosing(first);
+        let statement_before = |end: usize| {
+            (0..end).rev().find(|&index| {
+                statements.starts_block_statement(index) && groups.enclosing(index) == group
+            })
+        };
+        let is_label = |index: usize| {
+            matches!(&tokens[index], Token::Word(word)
+                if !matches!(word.as_str(), "case" | "default"))
+                && next_code_token(tokens, index + 1)
+                    .is_some_and(|colon| matches!(tokens[colon], Token::Symbol(':')))
+        };
+        let previous = statement_before(first)?;
+        let label = if is_label(previous) {
+            previous
+        } else {
+            let label = statement_before(previous)?;
+            let colon = next_code_token(tokens, label + 1)?;
+            if !is_label(label) || next_code_token(tokens, colon + 1) != Some(previous) {
+                return None;
+            }
+            label
+        };
+        if tokens[label..first]
+            .iter()
+            .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        self.enclosing_block_body_column(first)
     }
 
     /// Whether the innermost group around `index` is a `switch` body.

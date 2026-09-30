@@ -8839,3 +8839,24 @@ fn gnu_unary_operator_arguments_stay_in_their_call_parentheses() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn statement_after_a_labeled_block_statement_stands_at_the_block() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    uc = g();",
+        "fail:",
+        "    if(rc)",
+        "        {",
+        "        return rc;",
+        "        }",
+        "",
+        "    DEBUGASSERT(!x);",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
