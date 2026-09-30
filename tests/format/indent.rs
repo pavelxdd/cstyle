@@ -8748,6 +8748,24 @@ fn value_after_an_assignment_in_a_word_brace_block_is_continued() {
 }
 
 #[test]
+fn closing_paren_after_a_paren_ending_its_line_returns_to_the_line_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static int shift(",
+        "    Fts3Table *pTab,                /* table */",
+        "    u64 *pHlmask                    /* mask */",
+        ")",
+        "{",
+        "    return call(a,",
+        "                b",
+        "               );",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

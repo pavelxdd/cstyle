@@ -60,6 +60,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.string_concatenation_indent(first))
             .or_else(|| self.stacked_argument_indent(first))
             .or_else(|| self.stacked_return_indent(first))
+            .or_else(|| self.stacked_closing_paren_indent(first))
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
             .or_else(|| self.declarator_after_comma_indent(first))

@@ -56,6 +56,26 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// A `)` starting its line stands where astyle saved its paren: the
+    /// paren's column when code follows it, else the indent before.
+    pub(super) fn stacked_closing_paren_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let group = self.tree.groups.closed_at(first)?;
+        if self.options.indent_after_parens
+            || !matches!(tokens[first], Token::Symbol(')'))
+            || self
+                .tree
+                .previous_code_token(self.tree.groups.get(group).open)
+                .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
+            || tokens[self.tree.groups.get(group).open..first]
+                .iter()
+                .any(|token| matches!(token, Token::Symbol('{' | '}')))
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
     /// A line continuing a `return` statement outside its parentheses
     /// stands at the top of astyle's continuation stack.
     pub(super) fn stacked_return_indent(&self, first: usize) -> Option<usize> {
@@ -75,7 +95,7 @@ impl FormatEngine<'_> {
         // Lines that the code length splits are placed by the engine alone;
         // replaying only the lines of the source would place them apart.
         if self.options.max_code_length.is_some()
-            || matches!(tokens[first], Token::Symbol(')' | ']' | '{' | '}' | ','))
+            || matches!(tokens[first], Token::Symbol(']' | '{' | '}' | ','))
             || tokens[first..]
                 .iter()
                 .enumerate()
@@ -268,7 +288,12 @@ impl FormatEngine<'_> {
             }
             index += 1;
         }
-        let top = replay.stack.last().copied()?;
+        // A `)` starting its line takes the indent its paren saved.
+        let top = if matches!(tokens[first], Token::Symbol(')')) {
+            replay.parens.last().copied()?
+        } else {
+            replay.stack.last().copied()?
+        };
         Some(block_lead + top + self.case_unindent_spaces())
     }
 
