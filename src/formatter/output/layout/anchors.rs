@@ -641,49 +641,31 @@ impl FormatEngine<'_> {
         if self.output.line_tokens(start_line)?.first != start {
             return None;
         }
-        // Each line of the statement holding an `=` and ending at a `,`
-        // stacks an indent; the latest one holds.
-        let mut line = self.output.line_with_token(comma)?;
+        // astyle stacks an indent at each line holding an `=` and ending at
+        // a `,`, drifting pointer declarators a column per line; only the
+        // statement's first line holds here.
+        let span = self.output.line_tokens(start_line)?;
+        let line_end = (start..=span.last)
+            .rev()
+            .find(|&index| is_code_token(&tokens[index]))?;
+        if !matches!(tokens[line_end], Token::Symbol(',')) || groups.enclosing(line_end) != group {
+            return None;
+        }
+        let mut index = start;
         let assign = loop {
-            let span = self.output.line_tokens(line)?;
-            let line_first = next_code_token(tokens, span.first)?;
-            let line_end = (line_first..=span.last)
-                .rev()
-                .find(|&index| is_code_token(&tokens[index]))?;
-            if groups.enclosing(line_first) != group
-                || !matches!(tokens[line_end], Token::Symbol(','))
-                || groups.enclosing(line_end) != group
-            {
+            if index >= line_end {
                 return None;
             }
-            let mut index = line_first;
-            let mut found = None;
-            while index < line_end {
-                match &tokens[index] {
-                    Token::Operator(operator) if operator == "=" => {
-                        found = Some(index);
-                        break;
-                    }
-                    Token::Symbol('(') => return None,
-                    _ => {}
-                }
-                index = match groups.opened_at(index) {
-                    Some(opened) => groups.get(opened).close?,
-                    None => index,
-                };
-                index = next_code_token(tokens, index + 1)?;
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "=" => break index,
+                Token::Symbol('(') => return None,
+                _ => {}
             }
-            if let Some(found) = found {
-                break found;
-            }
-            if line == start_line {
-                return None;
-            }
-            line = (start_line..line).rev().find(|&line| {
-                self.output.line_tokens(line).is_some_and(|span| {
-                    (span.first..=span.last).any(|index| is_code_token(&tokens[index]))
-                })
-            })?;
+            index = match groups.opened_at(index) {
+                Some(opened) => groups.get(opened).close?,
+                None => index,
+            };
+            index = next_code_token(tokens, index + 1)?;
         };
         // astyle drops the indent of an `=` whose value starts with `new`.
         if next_code_token(tokens, assign + 1)
@@ -1326,13 +1308,20 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let open = self.tree.groups.get(body).open;
         let owner = self.tree.blocks.owner(body)?;
-        // Indented switch braces take their labels after layout.
-        if !matches!(&tokens[owner], Token::Word(word) if word == "switch")
-            || self.should_indent_brace_line(BraceType::Command)
-        {
+        if !matches!(&tokens[owner], Token::Word(word) if word == "switch") {
             return None;
         }
         let brace_line = self.output.line_with_token(open)?;
+        // Indented switch braces take their labels after layout, except a
+        // brace on its own line, whose column the labels share.
+        if self.should_indent_brace_line(BraceType::Command)
+            && !(self.options.brace_style == BraceStyle::Vtk
+                && !self.options.indent_switches
+                && self.layout.line_adjuster.pending_case_unindent() == 0
+                && self.output.line_tokens(brace_line)?.first == open)
+        {
+            return None;
+        }
         let line = if self.output.line_tokens(brace_line)?.first == open {
             brace_line
         } else {

@@ -2749,3 +2749,20 @@ fn vtk_keeps_aggregate_members_of_structs_at_their_keyword() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+// astyle 3.1 moves each further pointer declarator a column right; the
+// declarators keep the first line's column instead.
+#[test]
+fn pointer_declarators_after_assigned_lines_do_not_drift() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    unsigned char *p0 = first(lp),",
+        "                   *p1 = next(lp, p0),",
+        "                   *p2 = next(lp, p1),",
+        "                   *p3 = next(lp, p2);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

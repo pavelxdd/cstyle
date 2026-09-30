@@ -196,7 +196,9 @@ impl FormatEngine<'_> {
                         && !matches!(tokens[previous], Token::Symbol(']'))
                         && self.statement_ends_with_comma(index, token_line, first)
                     {
-                        if !replay.assigned_this_line {
+                        // astyle registers again at each such line and
+                        // drifts pointer declarators; the first holds.
+                        if !replay.assigned_this_line && !replay.continuation {
                             replay.assigned_this_line = true;
                             let indent = match tokens[previous] {
                                 Token::Word(_) | Token::Number(_) => relative(previous)?,
