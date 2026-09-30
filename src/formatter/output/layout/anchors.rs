@@ -17,7 +17,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
-use crate::formatter::text::columns::visual_width_from;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::preprocessor_directive;
 
 impl FormatEngine<'_> {
@@ -79,6 +79,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.enum_value_after_split_member_indent(first))
             .or_else(|| self.indented_assigned_brace_row_indent(first))
             .or_else(|| self.member_after_directive_indent(first))
+            .or_else(|| self.member_declarator_after_comma_indent(first))
             .or_else(|| self.vtk_array_element_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
             .or_else(|| self.whitesmith_brace_row_indent(first))
@@ -1029,6 +1030,83 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Declarators of a member continued after the `,` ending its first line
+    /// stand at the member's second word, shifted as astyle counts the tabs
+    /// before that comma.
+    fn member_declarator_after_comma_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let body = groups.enclosing(first)?;
+        let comma = self.tree.previous_code_token(first)?;
+        if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate)
+            || !matches!(tokens[comma], Token::Symbol(','))
+            || groups.enclosing(comma) != Some(body)
+        {
+            return None;
+        }
+        let open = groups.get(body).open;
+        // Enumerators are no declarators.
+        let mut head = open;
+        while let Some(before) = self.tree.previous_code_token(head) {
+            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
+                break;
+            }
+            if matches!(&tokens[before], Token::Word(word) if word == "enum") {
+                return None;
+            }
+            head = before;
+        }
+        let mut start = comma;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if before == open
+                || matches!(tokens[before], Token::Symbol(';'))
+                    && groups.enclosing(before) == Some(body)
+            {
+                break;
+            }
+            start = groups
+                .closed_at(before)
+                .map_or(before, |group| groups.get(group).open);
+        }
+        let line = self.output.line_with_token(start)?;
+        let span = self.output.line_tokens(line)?;
+        let registering = (start..=span.last)
+            .rev()
+            .find(|&index| is_code_token(&tokens[index]))?;
+        let second = next_code_token(tokens, start + 1)?;
+        if span.first != start
+            || !matches!(tokens[registering], Token::Symbol(','))
+            || !matches!(&tokens[start], Token::Word(word)
+                if !matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
+            || !matches!(tokens[second], Token::Word(_))
+            || second >= registering
+            || tokens[start..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        // astyle adds the widths its tabs gain before the comma.
+        let text = &self.output.as_slice()[line];
+        let lead = self.output.lead_width(line, self.options.tab_width);
+        let comma_column = self.token_column(registering)?;
+        let mut column = lead;
+        let mut chars = 0;
+        for ch in text.trim_start().chars() {
+            if column >= comma_column {
+                break;
+            }
+            column = if ch == '\t' {
+                (column / self.options.tab_width + 1) * self.options.tab_width
+            } else {
+                column + 1
+            };
+            chars += 1;
+        }
+        let tab_gain = (comma_column - lead).saturating_sub(chars);
+        Some(self.token_column(second)? + tab_gain + self.case_unindent_spaces())
+    }
+
     /// A member of a struct body after a directive stands at the member
     /// before it.
     fn member_after_directive_indent(&self, first: usize) -> Option<usize> {
@@ -1132,6 +1210,60 @@ impl FormatEngine<'_> {
         (self.output.line_tokens(line)?.first == open).then(|| {
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
         })
+    }
+
+    /// Allman puts a control block's `{` on its own line at its header's
+    /// line, wherever the tree anchored that line.
+    pub(crate) fn align_allman_control_brace_to_header(&self, line: String) -> String {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        // Case bodies move their lines after publishing.
+        if self.options.brace_style != BraceStyle::Allman
+            || self.options.indent_blocks
+            || self.options.indent_braces
+            || line.trim() != "{"
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
+        {
+            return line;
+        }
+        let Some(open) = self.output.pending_tokens().map(|span| span.first) else {
+            return line;
+        };
+        if !groups
+            .opened_at(open)
+            .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::Control))
+        {
+            return line;
+        }
+        let Some(mut header) = self.tree.previous_code_token(open) else {
+            return line;
+        };
+        if let Some(condition) = groups.closed_at(header)
+            && let Some(keyword) = self.tree.previous_code_token(groups.get(condition).open)
+        {
+            header = keyword;
+        }
+        if !matches!(&tokens[header], Token::Word(word)
+            if matches!(word.as_str(), "if" | "for" | "while" | "switch"))
+        {
+            return line;
+        }
+        let Some(header_line) = self.output.line_with_token(header) else {
+            return line;
+        };
+        if self
+            .output
+            .line_tokens(header_line)
+            .is_none_or(|span| span.first != header)
+        {
+            return line;
+        }
+        let spaces = self.output.lead_width(header_line, self.options.tab_width);
+        if leading_visual_width(&line, self.options.tab_width) == spaces {
+            return line;
+        }
+        format!("{}{{", " ".repeat(spaces))
     }
 
     /// Whether the innermost group around `index` is a `switch` body.
@@ -2074,8 +2206,20 @@ impl FormatEngine<'_> {
                 .iter()
                 .take_while(|token| !matches!(token, Token::Newline))
                 .any(|token| matches!(token, Token::Symbol('{' | '}')));
+        // A declarator continuing a struct member after a comma.
+        let member_continuation = groups.enclosing(first).is_some_and(|group| {
+            self.tree.blocks.kind(group) == Some(BlockKind::Aggregate)
+                && self
+                    .tree
+                    .previous_code_token(first)
+                    .is_some_and(|previous| {
+                        matches!(tokens[previous], Token::Symbol(','))
+                            && groups.enclosing(previous) == Some(group)
+                    })
+        });
         if !statements.starts_block_statement(first)
             && !in_parens
+            && !member_continuation
             && !initializer_element
             && !is_else
             && !ternary_arm
@@ -2096,6 +2240,7 @@ impl FormatEngine<'_> {
                         || !self.should_indent_brace_line(BraceType::Initializer)) => {}
             Token::Symbol('{' | '}') => return,
             _ if !is_case_label
+                && !member_continuation
                 && next_code_token(tokens, first + 1)
                     .is_some_and(|next| matches!(tokens[next], Token::Symbol(':'))) =>
             {
@@ -3420,15 +3565,21 @@ impl FormatEngine<'_> {
                 return None;
             }
             let is_word = |index: usize, text: &str| matches!(&tokens[index], Token::Word(word) if word == text);
+            let same_line = |a: usize, b: usize| {
+                self.output.line_with_token(a).is_some()
+                    && self.output.line_with_token(a) == self.output.line_with_token(b)
+            };
             if is_word(header, "if")
                 && let Some(before) = self.tree.previous_code_token(header)
                 && is_word(before, "else")
+                && same_line(before, header)
             {
                 header = before;
             }
             if is_word(header, "else")
                 && let Some(before) = self.tree.previous_code_token(header)
                 && matches!(tokens[before], Token::Symbol('}'))
+                && same_line(before, header)
             {
                 header = before;
             }
@@ -3608,6 +3759,32 @@ impl FormatEngine<'_> {
         }
         self.enclosing_block_body_column(first)
             .or_else(|| self.earlier_statement_column(first))
+            .or_else(|| self.brace_line_body_column(first))
+    }
+
+    /// The body column of the block holding `first` from its `{` when that
+    /// starts a line.
+    fn brace_line_body_column(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let block = groups.enclosing(first)?;
+        let open = groups.get(block).open;
+        if groups.get(block).delimiter != Delimiter::Brace {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        if self.output.line_tokens(line)?.first != open {
+            return None;
+        }
+        let offset = if self.should_indent_brace_line(BraceType::Command) {
+            0
+        } else {
+            self.options.indent_width
+        };
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + offset
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Column of the nearest earlier statement of the block holding the

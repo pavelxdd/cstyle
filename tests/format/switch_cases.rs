@@ -1434,3 +1434,37 @@ fn allman_block_closing_brace_after_a_directive_in_a_case_block_keeps_its_brace_
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_statement_after_a_label_in_a_case_block_after_a_directive_keeps_the_block_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(int op)",
+        "{",
+        "    switch( op )",
+        "    {",
+        "    case 1:",
+        "        break;",
+        "#ifndef X",
+        "    case 2:",
+        "    {",
+        "        g();",
+        "        break;",
+        "    }",
+        "#endif",
+        "    default:",
+        "    {",
+        "default_expr:",
+        "        if( a )",
+        "        {",
+        "            g();",
+        "        }",
+        "        break;",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

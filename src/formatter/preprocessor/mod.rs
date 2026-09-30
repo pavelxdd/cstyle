@@ -104,6 +104,9 @@ pub(crate) struct PreprocessorBranchState {
     pub(crate) inline_array: InlineArrayState,
     pub(crate) pending_extern: bool,
     pub(crate) extern_c_guard: ExternCGuard,
+    /// The state at the end of the first branch, which astyle continues
+    /// from after `#endif`.
+    first_branch_end: Option<Box<PreprocessorBranchState>>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -918,6 +921,17 @@ impl FormatEngine<'_> {
                 self.preprocessor.branch_stack.push(self.branch_snapshot());
             }
             Some("else" | "elif" | "elifdef" | "elifndef") => {
+                if self
+                    .preprocessor
+                    .branch_stack
+                    .last()
+                    .is_some_and(|branch| branch.first_branch_end.is_none())
+                {
+                    let end = Box::new(self.branch_snapshot());
+                    if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
+                        branch.first_branch_end = Some(end);
+                    }
+                }
                 if let Some(snapshot) = self.preprocessor.branch_stack.last().cloned() {
                     self.restore_branch_snapshot(snapshot);
                     if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
@@ -926,7 +940,18 @@ impl FormatEngine<'_> {
                 }
             }
             Some("endif") => {
-                self.preprocessor.branch_stack.pop();
+                // Branches that leave different braces open continue from the
+                // first, as astyle does.
+                if let Some(end) = self
+                    .preprocessor
+                    .branch_stack
+                    .pop()
+                    .and_then(|branch| branch.first_branch_end)
+                    && end.layout.nesting.brace_type_stack.len()
+                        != self.layout.nesting.brace_type_stack.len()
+                {
+                    self.restore_branch_snapshot(*end);
+                }
                 self.layout.indentation.pop_preprocessor_indent();
                 if self.preprocessor.indented_block_stack.pop() == Some(true) {
                     self.layout.indentation.exit_block();
@@ -983,6 +1008,7 @@ impl FormatEngine<'_> {
             inline_array: self.inline_array.clone(),
             pending_extern: self.pending_extern,
             extern_c_guard: self.extern_c_guard,
+            first_branch_end: None,
         }
     }
 
@@ -997,6 +1023,7 @@ impl FormatEngine<'_> {
             inline_array,
             pending_extern,
             extern_c_guard,
+            first_branch_end: _,
         } = snapshot;
         self.layout = layout;
         self.preprocessor.split_else =

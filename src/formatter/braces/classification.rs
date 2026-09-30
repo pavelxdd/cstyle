@@ -316,6 +316,27 @@ impl FormatEngine<'_> {
             && unmatched_open_paren_column(self.current.trim_end()).is_some()
         {
             BraceType::NonStatement
+        } else if self.layout.nesting.brace_type_stack.is_empty()
+            && !self.current.trim().is_empty()
+            && self.current.trim().chars().all(is_word_char)
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_none_or(|previous| {
+                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    code.is_empty()
+                        || code.ends_with([';', '}'])
+                        || code.trim_start().starts_with('#')
+                })
+            && (self.token_input.token_begins_source_line
+                || self
+                    .token_input
+                    .previous_input_whitespace
+                    .as_deref()
+                    .is_some_and(|whitespace| !whitespace.is_empty()))
+        {
+            // A macro standing for a function head at file scope.
+            BraceType::Definition
         } else if !self.current_is_blank() {
             BraceType::Initializer
         } else {

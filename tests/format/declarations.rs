@@ -2836,3 +2836,23 @@ fn allman_bracket_in_a_define_string_leaves_the_next_function_alone() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn bitfield_declarators_after_a_tab_stand_where_astyle_counts_the_tab() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "struct rev_info {",
+        "    unsigned int\tdense:1,",
+        "                prune:1,",
+        "",
+        "                /* True if --ancestry-path was specified without an",
+        "                 * argument.",
+        "                 */",
+        "                no_walk:1;",
+        "    unsigned int dense2:1,",
+        "             prune2:1;",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

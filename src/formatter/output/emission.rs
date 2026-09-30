@@ -158,6 +158,7 @@ impl FormatEngine<'_> {
         self.observe_raw_output_comment_frame(&line);
         self.layout.previous_pre_adjust_line = Some(line.clone());
         let line = self.layout.line_adjuster.adjust_line(line);
+        let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);
         self.publish_ready_line(line);
     }

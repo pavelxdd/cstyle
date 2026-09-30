@@ -2380,3 +2380,77 @@ fn allman_function_brace_after_a_variadic_parameter_line_stays_in_column_one() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_brace_of_an_if_after_a_split_else_stands_at_the_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if( a )",
+        "    {",
+        "        g();",
+        "    }",
+        "    else",
+        "",
+        "        /* comment",
+        "        */",
+        "        if( b )",
+        "        {",
+        "            h();",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn attached_closing_brace_of_an_if_after_a_split_else_stands_at_the_if() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if( a ) {",
+        "        g();",
+        "    } else",
+        "",
+        "        /* c2 */",
+        "        if( c ) {",
+        "            k();",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn horstmann_macro_function_head_keeps_its_run_in_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "/** doc",
+        " */",
+        "YY_DECL",
+        "{   int yy_act;",
+        "",
+        "    if ( !yyg->yy_init )",
+        "    {   yyg->yy_init = 1;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn kr_macro_function_head_breaks_its_brace_like_a_function() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let source = fixture!("FOO", "{", "    int a;", "}",);
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -2586,7 +2586,7 @@ fn preprocessor_with_gnu_preserves_column_one_block_comment() {
 }
 
 #[test]
-fn preprocessor_branches_restore_structural_indentation() {
+fn preprocessor_branches_leaving_braces_open_continue_from_the_first() {
     let actual = format(fixture!(
         "void f(){",
         "#if A",
@@ -2616,8 +2616,8 @@ fn preprocessor_branches_restore_structural_indentation() {
             "        return 2;",
             "    }",
             "#endif",
-            "    return 0;",
-            "}",
+            "        return 0;",
+            "    }",
         )
     );
 }
@@ -2878,7 +2878,7 @@ fn inline_new_call_after_split_else_preprocessor_aligns_to_open_paren() {
 }
 
 #[test]
-fn preprocessor_elif_branches_restore_structural_indentation() {
+fn preprocessor_elif_branches_leaving_braces_open_continue_from_the_first() {
     let actual = format(fixture!(
         "void f(){",
         "#if A",
@@ -2915,8 +2915,8 @@ fn preprocessor_elif_branches_restore_structural_indentation() {
             "        return 3;",
             "    }",
             "#endif",
-            "    return 0;",
-            "}",
+            "        return 0;",
+            "    }",
         )
     );
 }
