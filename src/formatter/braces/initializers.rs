@@ -922,7 +922,7 @@ impl FormatEngine<'_> {
         }
         if !closing
             && designator
-            && let Some(previous) = self.output.last()
+            && let Some(previous) = self.output.last_code_line_in_scope()
             && previous.trim_start().starts_with("},")
         {
             return Some(leading_visual_width(previous, self.options.tab_width));

@@ -441,6 +441,7 @@ impl FormatEngine<'_> {
                         + self.options.indent_width / 2,
                 );
             } else if !previous_trimmed.starts_with(['#', '{', '}'])
+                && !self.pending_line_starts_call_argument()
                 && !self
                     .output
                     .last_non_empty_index()

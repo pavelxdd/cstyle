@@ -2,7 +2,9 @@ use crate::config::FormatOptions;
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -332,6 +334,20 @@ impl FormatEngine<'_> {
     }
 
     fn colon_line_is_ternary_arm(&self, colon_index: usize) -> bool {
+        if let Some(span) = self.output.line_tokens(colon_index)
+            && let Some(colon) =
+                (span.first..=span.last).find(|&index| is_code_token(&self.tree.tokens[index]))
+            && matches!(self.tree.tokens[colon], Token::Symbol(':'))
+        {
+            let group = self.tree.groups.enclosing(colon);
+            return (0..colon)
+                .rev()
+                .filter(|&index| self.tree.groups.enclosing(index) == group)
+                .take_while(|&index| {
+                    !matches!(self.tree.tokens[index], Token::Symbol(';' | '{' | '}'))
+                })
+                .any(|index| matches!(self.tree.tokens[index], Token::Symbol('?')));
+        }
         for index in (0..colon_index).rev() {
             let code =
                 self.output[index][..trailing_comment_split_limit(&self.output[index])].trim_end();

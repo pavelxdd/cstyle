@@ -1235,3 +1235,29 @@ fn whitesmith_case_after_its_case_block_continues_at_the_label() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn nested_switch_case_block_in_a_case_block_indents_from_its_label() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static void read_string (LexState *ls, int del, SemInfo *seminfo)",
+        "{",
+        "    while (ls->current != del) {",
+        "        switch (ls->current) {",
+        "        case '\\\\': {",
+        "            switch (ls->current) {",
+        "            default: {",
+        "                if (!isdigit(ls->current))",
+        "                    save_and_next(ls);  /* handles \\\\, \\\", \\', and \\? */",
+        "                else {  /* \\xxx */",
+        "                }",
+        "            }",
+        "            }",
+        "        }",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

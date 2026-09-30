@@ -195,7 +195,7 @@ fn repeated_wrapped_calls_keep_logical_chain_indent() {
 }
 
 #[test]
-fn source_aligned_logical_calls_preserve_explicit_columns() {
+fn logical_calls_after_split_call_arguments_align_with_the_first_operand() {
     let source = fixture!(
         "int helper(void)",
         "{",
@@ -209,8 +209,21 @@ fn source_aligned_logical_calls_preserve_explicit_columns() {
         "    }",
         "}",
     );
+    let expected = fixture!(
+        "int helper(void)",
+        "{",
+        "    if (mount_path(root, source, target, \"none\",",
+        "                   FLAG_BIND, NULL) ||",
+        "        mount_path(\"\", \"\", target, \"none\",",
+        "                   FLAG_READONLY, NULL) ||",
+        "        mount_path(\"\", \"\", target, \"none\",",
+        "                   FLAG_PRIVATE, NULL)) {",
+        "        return -1;",
+        "    }",
+        "}",
+    );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), expected);
 }
 
 #[test]
@@ -8054,6 +8067,257 @@ fn returned_call_arguments_after_a_hash_in_a_literal_align_with_the_call() {
         "        return error(_(\"%s: cannot drop to stage #0\"),",
         "                     new_ce->name);",
         "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn logical_operands_in_nested_parens_align_after_a_bracketed_ternary() {
+    let options = options_from_args(&["--style=linux"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    x[a ? 5 : 3] = 0;",
+        "    if(!utf8 &&",
+        "       (host.encalloc ||",
+        "        !Curl_is_ASCII_name(address) ||",
+        "        !Curl_is_ASCII_name(host.name)))",
+        "        utf8 = TRUE;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn numeric_arguments_after_a_voided_call_in_a_case_align_with_the_call() {
+    let options = options_from_args(&["--style=linux"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(x) {",
+        "    case A:",
+        "        (void)sendto(state->sockfd, data,",
+        "                     4, SEND_4TH_ARG);",
+        "        break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn statement_after_an_attached_case_block_stands_at_the_label() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(c) {",
+        "    case A: {",
+        "        if(x) {",
+        "        } else",
+        "            y = 1;",
+        "    }",
+        "    break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn assigned_value_in_a_case_block_indents_one_level_past_the_statement() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(c) {",
+        "    case 213: {",
+        "        /* a",
+        "           b */",
+        "        h =",
+        "            g(x);",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn assigned_value_in_a_switch_body_after_a_comment_indents_one_level() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch(timer)",
+        "        {",
+        "        case A:",
+        "            d.s =",
+        "                g(x);",
+        "            /* c */",
+        "            d.q =",
+        "                d.s;",
+        "            break;",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn arguments_of_an_assigned_call_split_at_its_paren_indent_past_the_call() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch(t)",
+        "        {",
+        "        case A:",
+        "            if(!rc)",
+        "                {",
+        "                sc.matches_host = curl_strequal(",
+        "                                      sc.hostname, g(x));",
+        "                }",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn call_arguments_after_a_negated_argument_in_a_directive_block_keep_the_argument_column() {
+    let options = options_from_args(&["--style=linux"]);
+    let source = fixture!(
+        "#ifdef CURLVERBOSE",
+        "int Curl_nghttp2_fr_print(const nghttp2_frame *frame, char *buffer,",
+        "                          size_t blen)",
+        "{",
+        "    switch(frame->hd.type) {",
+        "    case A: {",
+        "        return curl_msnprintf(buffer, blen,",
+        "                              \"FRAME[DATA, len=%d, eos=%d, padlen=%d]\",",
+        "                              (int)frame->hd.length,",
+        "                              !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM),",
+        "                              (int)frame->data.padlen);",
+        "    }",
+        "    }",
+        "}",
+        "#endif",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn braceless_else_body_follows_the_alternative_branch_of_its_conditional() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifndef X",
+        "    if(a) {",
+        "        g();",
+        "    } else",
+        "#else",
+        "    (void)b;",
+        "#endif",
+        "        /* we are done */",
+        "        done = 1;",
+        "",
+        "    h();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn condition_operands_after_a_split_header_paren_indent_past_the_header() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef A",
+        "    if(x) {",
+        "        g();",
+        "    } else",
+        "#endif",
+        "#ifdef B",
+        "        if(y) {",
+        "            if(",
+        "#ifndef C",
+        "                (p && q) ||",
+        "#endif",
+        "                (r && s)) {",
+        "                h();",
+        "            }",
+        "        }",
+        "#endif",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn unary_ternary_arm_after_a_trailing_colon_aligns_with_the_condition() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(a) {",
+        "        curlnegotiate *negstate = proxy ? &conn->proxy_negotiate_state :",
+        "                                  &conn->http_negotiate_state;",
+        "        int x = p ? 1 :",
+        "                2;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn call_arguments_after_a_ternary_colon_line_keep_the_argument_column() {
+    let options = options_from_args(&["--style=linux"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(g) {",
+        "#ifdef U",
+        "        if(s)",
+        "            l = s ? s",
+        "                : \"x\";",
+        "#endif",
+        "",
+        "        logmsg(\"a %s\",",
+        "               t, e,",
+        "               l, x);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn call_argument_line_of_a_statement_ternary_arm_keeps_the_call_column() {
+    let options = options_from_args(&["--style=linux"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    tidyAttrValue(attr) ? printf(\"=\\\"%s\\\" \",",
+        "                                 tidyAttrValue(attr)) : printf(\" \");",
+        "    x ? g(a,",
+        "          b) : h();",
         "}",
     );
 

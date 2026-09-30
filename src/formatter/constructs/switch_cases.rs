@@ -1770,7 +1770,7 @@ impl FormatEngine<'_> {
         &mut self,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::SwitchLabel {
+        if line_kind != LineKind::SwitchLabel || self.pending_line_in_switch_body() {
             return None;
         }
         let indent_width = self.options.indent_width;
@@ -1808,6 +1808,7 @@ impl FormatEngine<'_> {
             || has_owned_continuation
             || follows_ternary_arm
             || line.trim_start().starts_with([')', ']', '}'])
+            || self.pending_line_continues_statement()
         {
             return None;
         }

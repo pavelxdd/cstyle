@@ -181,7 +181,14 @@ impl FormatEngine<'_> {
                         "sizeof" | "alignof" | "_Alignof"
                     ) && is_type_like_pointer_word(ty.trim())
                 });
-            if cast_type.is_some() {
+            // astyle keeps a space the source put after the sign.
+            if cast_type.is_some()
+                && self
+                    .token_input
+                    .previous_input_whitespace
+                    .as_ref()
+                    .is_none_or(|ws| ws.is_empty())
+            {
                 self.trim_current_end();
             }
         }

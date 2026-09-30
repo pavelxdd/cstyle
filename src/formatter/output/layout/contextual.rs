@@ -268,6 +268,7 @@ impl FormatEngine<'_> {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
             if let Some(base) = self.constructor_initializer_base_indent_spaces()
                 && previous_code.ends_with(',')
+                && !self.pending_line_starts_call_argument()
                 && !current.starts_with(['#', ':', ',', '{', '}'])
                 && current
                     .chars()
@@ -319,17 +320,6 @@ impl FormatEngine<'_> {
                     if trimmed_code.ends_with(';') || trimmed_code == "{" || trimmed_code == "}" {
                         break;
                     }
-                }
-            }
-            if previous_code.ends_with(',')
-                && previous_trimmed.starts_with('(')
-                && current.chars().next().is_some_and(|ch| ch.is_ascii_digit())
-            {
-                let previous_indent = leading_visual_width(previous, self.options.tab_width);
-                if self.token_input.token_source_line_indent >= previous_indent
-                    && previous_indent > self.options.indent_width
-                {
-                    layout.exact_indent_spaces = Some(previous_indent);
                 }
             }
             let case_unindent =

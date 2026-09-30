@@ -1490,6 +1490,7 @@ impl FormatEngine<'_> {
             || line.trim_start().starts_with(['#', '}', ':'])
             || is_header(self.options, leading_identifier(line.trim_start()))
             || self.pending_line_in_parens()
+            || self.pending_line_continues_statement()
         {
             return None;
         }

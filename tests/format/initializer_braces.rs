@@ -3743,3 +3743,41 @@ fn initializer_rows_after_block_comments_keep_their_indent() {
         whitesmith_source
     );
 }
+
+#[test]
+fn designated_element_after_a_comment_keeps_the_element_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static const struct s t[] = {",
+        "    [A] = {",
+        "        .type = 1,",
+        "    },",
+        "    /*",
+        "     * c",
+        "     */",
+        "    [B] = {",
+        "        .type = 2,",
+        "    },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_indents_the_closing_brace_of_a_nested_designated_element() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "static const struct s t[] = {",
+        "    [A] = {",
+        "        .type = 1,",
+        "        },",
+        "    [B] = {",
+        "        .type = 2,",
+        "        },",
+        "    [C] = 3,",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

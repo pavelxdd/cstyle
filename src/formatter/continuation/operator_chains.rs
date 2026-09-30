@@ -161,7 +161,12 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         // A `?` in a literal asks nothing; one inside parentheses leaves
-        // its arms to the parentheses' continuation.
+        // its arms to the parentheses' continuation, as does an arm whose
+        // line continues parentheses opened after the `?`.
+        let pending_group = self
+            .output
+            .pending_tokens()
+            .map(|span| self.tree.groups.enclosing(span.first));
         let asks = self
             .output
             .last_non_empty_index()
@@ -172,6 +177,8 @@ impl FormatEngine<'_> {
                         && self.tree.groups.enclosing(index).is_none_or(|group| {
                             self.tree.groups.get(group).delimiter != Delimiter::Paren
                         })
+                        && pending_group
+                            .is_none_or(|group| group == self.tree.groups.enclosing(index))
                 })
             });
         (asks
@@ -277,6 +284,20 @@ impl FormatEngine<'_> {
             || !line.trim_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~',
             ])
+        {
+            return None;
+        }
+        // After the `:`, a sign, `&`, `*`, `!`, or `~` opens the arm.
+        if line
+            .trim_start()
+            .starts_with(['&', '*', '-', '+', '!', '~'])
+            && self.output.pending_tokens().is_some_and(|span| {
+                self.tree
+                    .previous_code_token(span.first)
+                    .is_some_and(|previous| {
+                        matches!(self.tree.tokens[previous], Token::Symbol(':'))
+                    })
+            })
         {
             return None;
         }
@@ -699,7 +720,12 @@ impl FormatEngine<'_> {
             return;
         };
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        if previous_code.contains('?') && previous_code.ends_with(':') {
+        if previous_code.contains('?')
+            && previous_code.ends_with(':')
+            && !line[..trailing_comment_split_limit(line)]
+                .trim_end()
+                .ends_with(';')
+        {
             self.layout
                 .continuation_indent
                 .set_next_line_spaces(current_spaces);
@@ -2364,7 +2390,15 @@ impl FormatEngine<'_> {
         }
         (in_split_preprocessor_context
             && previous_code.ends_with('(')
-            && !current.starts_with(['}', ')', ']']))
+            && !current.starts_with(['}', ')', ']'])
+            && self.output.pending_tokens().is_none_or(|span| {
+                self.tree.statements.in_split_else_body(span.first)
+                    || self
+                        .tree
+                        .groups
+                        .enclosing(span.first)
+                        .is_some_and(|group| self.tree.functions.is_parameter_list(group))
+            }))
         .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 

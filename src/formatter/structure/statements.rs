@@ -362,6 +362,18 @@ impl Parser<'_> {
     fn body(&mut self, header: usize, from: usize, end: usize) -> usize {
         match self.next(from, end) {
             Some(at) => {
+                // astyle carries the first branch of a conditional group past
+                // its alternatives: a header ending that branch takes its
+                // body after the `#endif`.
+                if let Some(endif) = self.alternative_branch_end(header, at, end)
+                    && let Some(body) = self.next(endif, end)
+                    && !self.is_symbol(body, '{')
+                    && !self.is_symbol(body, '}')
+                {
+                    self.items(at, endif);
+                    self.braceless_headers.insert(body, header);
+                    return self.statement(body, end);
+                }
                 if !self.is_symbol(at, '{') && !self.crosses_branch(header, at) {
                     self.braceless_headers.insert(at, header);
                 }
@@ -369,6 +381,40 @@ impl Parser<'_> {
             }
             None => end,
         }
+    }
+
+    /// The `#endif` closing a conditional group whose branch ends between
+    /// the tokens `header` and `at` with an `#else` or `#elif`, when the
+    /// alternative branches hold code.
+    fn alternative_branch_end(&self, header: usize, at: usize, end: usize) -> Option<usize> {
+        let mut nested = 0usize;
+        let mut alternative = false;
+        for token in &self.tokens[header..at] {
+            if let Token::Preprocessor(directive) = token {
+                match preprocessor_directive(&directive.text) {
+                    Some("if" | "ifdef" | "ifndef") => nested += 1,
+                    Some("endif") => nested = nested.checked_sub(1)?,
+                    Some("else" | "elif" | "elifdef" | "elifndef") if nested == 0 => {
+                        alternative = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if !alternative || nested != 0 {
+            return None;
+        }
+        (at..end).find(|&index| {
+            if let Token::Preprocessor(directive) = &self.tokens[index] {
+                match preprocessor_directive(&directive.text) {
+                    Some("if" | "ifdef" | "ifndef") => nested += 1,
+                    Some("endif") if nested == 0 => return true,
+                    Some("endif") => nested -= 1,
+                    _ => {}
+                }
+            }
+            false
+        })
     }
 
     /// Index after the parenthesized group starting at the first code token

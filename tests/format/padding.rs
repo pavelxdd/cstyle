@@ -2937,3 +2937,17 @@ fn pad_paren_out_does_not_pad_empty_function_calls() {
         "void run()\n{\n    if (alpha) {\n        first();\n    }\n}\n",
     );
 }
+
+#[test]
+fn source_space_after_a_sign_following_a_cast_is_kept() {
+    let source = "void f(void)\n{\n    d = (size_t) - 7;\n    d = (foo_t)- 7;\n    e = (bitsizeof(size_t) - 7);\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options_from_args(&["--style=linux"])),
+        source
+    );
+    assert_eq!(
+        format_exact(source, &options_from_args(&["--style=linux", "--pad-oper"])),
+        "void f(void)\n{\n    d = (size_t) - 7;\n    d = (foo_t) - 7;\n    e = (bitsizeof(size_t) - 7);\n}\n"
+    );
+}
