@@ -438,10 +438,14 @@ impl FormatEngine<'_> {
                         + self.options.indent_width / 2,
                 );
             } else if !previous_trimmed.starts_with(['#', '{', '}'])
-                && (0..self.output.len())
-                    .rev()
-                    .take(4)
-                    .any(|index| self.output.code_trimmed(index).starts_with([';', '!', ',']))
+                && !self
+                    .output
+                    .last_non_empty_index()
+                    .is_some_and(|index| self.output.is_directive_line(index))
+                && (0..self.output.len()).rev().take(4).any(|index| {
+                    self.output.code_trimmed(index).starts_with([';', '!', ','])
+                        && !self.output.is_directive_line(index)
+                })
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));

@@ -7979,6 +7979,32 @@ fn ratliff_file_scope_items_and_nested_closers_keep_their_columns() {
 }
 
 #[test]
+fn directive_continuations_and_open_paren_comments_leave_code_in_place() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "#if defined(_AIX) || \\",
+        "    !defined(PTHREAD_BARRIER_SERIAL_THREAD)",
+        "int uv_barrier_init(uv_barrier_t* barrier, unsigned int count)",
+        "{",
+        "#ifdef _WIN32",
+        "    if (barrier == NULL || count == 0)",
+        "        return UV_ENOMEM;",
+        "#endif",
+        "}",
+        "#endif",
+        "",
+        "void f(void)",
+        "{",
+        "    const __m256i shuffle = _mm256_setr_epi8( //",
+        "                                4, 5, 6, -1",
+        "                            );",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

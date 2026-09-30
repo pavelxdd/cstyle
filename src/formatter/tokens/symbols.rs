@@ -6,7 +6,7 @@ use crate::formatter::constructs::constructor_initializers::constructor_initiali
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
@@ -390,7 +390,12 @@ impl FormatEngine<'_> {
             .then(|| self.current_line_indent_spaces());
         let inline_brace_call_indent = self.inline_brace_call_indent_spaces(&self.current);
         let paren_indent_spaces =
-            if matches!(next, None | Some(Token::Newline)) || self.options.indent_after_parens {
+            // A line comment after the `(` ends its line as well.
+            if matches!(
+                next,
+                None | Some(Token::Newline | Token::Comment(CommentKind::Line, _))
+            ) || self.options.indent_after_parens
+            {
                 inline_brace_call_indent
                     .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
                     .unwrap_or_else(|| {
