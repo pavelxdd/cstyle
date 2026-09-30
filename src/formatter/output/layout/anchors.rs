@@ -2263,7 +2263,7 @@ impl FormatEngine<'_> {
         {
             let offset = if matches!(
                 self.options.brace_style,
-                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Gnu
+                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Gnu | BraceStyle::Ratliff
             ) {
                 self.options.indent_width
             } else {
@@ -3074,7 +3074,9 @@ impl FormatEngine<'_> {
                     self.options.brace_style,
                     BraceStyle::Whitesmith | BraceStyle::Vtk
                 ))
-                && self.should_indent_brace_line(brace_type);
+                && self.should_indent_brace_line(brace_type)
+                || self.options.brace_style == BraceStyle::Ratliff
+                    && brace_type == BraceType::Command;
             self.output.lead_width(brace_line, self.options.tab_width)
                 + if indented_brace { 0 } else { width }
         } else {
