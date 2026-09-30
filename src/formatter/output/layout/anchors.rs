@@ -75,6 +75,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.ternary_second_arm_indent(first))
             .or_else(|| self.leading_logical_in_parens_indent(first))
             .or_else(|| self.enum_value_after_split_member_indent(first))
+            .or_else(|| self.vtk_array_element_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
             .or_else(|| self.whitesmith_brace_row_indent(first))
             .or_else(|| self.initializer_row_indent(first))
@@ -314,6 +315,97 @@ impl FormatEngine<'_> {
         }
         (self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
             .checked_sub(brace_offset)
+    }
+
+    /// VTK lays out an array initializer whose braces start their lines
+    /// like blocks: the elements of a group stand at its `{`, and a nested
+    /// `{` starting its line one level past them. At file scope the outer
+    /// `{` stays in column one while its elements take the level of an
+    /// indented brace. Aggregates of a `struct` keep their rows at the
+    /// elements.
+    fn vtk_array_element_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Vtk
+            || matches!(tokens[first], Token::Symbol('}'))
+        {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            return None;
+        }
+        let open = groups.get(group).open;
+        let previous = self.tree.previous_code_token(first)?;
+        if !(previous == open
+            || matches!(tokens[previous], Token::Symbol(','))
+                && groups.enclosing(previous) == Some(group))
+        {
+            return None;
+        }
+        // The outermost initializer and the declaration it belongs to.
+        let outer = groups
+            .ancestors(group)
+            .take_while(|&id| self.tree.blocks.kind(id) == Some(BlockKind::Initializer))
+            .last()?;
+        // Compound literals inside keep their own layout.
+        if groups
+            .ancestors(group)
+            .take_while(|&id| id != outer)
+            .chain([outer])
+            .any(|id| {
+                self.tree
+                    .previous_code_token(groups.get(id).open)
+                    .is_some_and(|before| matches!(tokens[before], Token::Symbol(')')))
+            })
+        {
+            return None;
+        }
+        let outer_open = groups.get(outer).open;
+        // Only the initializer of an assignment.
+        if !self.tree.previous_code_token(outer_open).is_some_and(
+            |before| matches!(&tokens[before], Token::Operator(operator) if operator == "="),
+        ) {
+            return None;
+        }
+        let mut start = outer_open;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
+                break;
+            }
+            if matches!(&tokens[before], Token::Word(word)
+                if matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
+            {
+                return None;
+            }
+            start = before;
+        }
+        let open_line = self.output.line_with_token(open)?;
+        if self.output.line_tokens(open_line)?.first != open
+            || tokens[open..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        let flush_outer = group == outer && !self.in_code(open);
+        let mut content = self.output.lead_width(open_line, self.options.tab_width);
+        if flush_outer {
+            content += self.options.indent_width;
+        }
+        // A `{` starting its line stands a level in; at file scope, a row
+        // of the outer braces that starts with its elements stays at them.
+        let brace_alone = tokens[first + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+            .is_none_or(|token| matches!(token, Token::Newline));
+        let indented = matches!(tokens[first], Token::Symbol('{')) && (brace_alone || !flush_outer);
+        let spaces = if indented {
+            content + self.options.indent_width
+        } else {
+            content
+        };
+        Some(spaces + self.case_unindent_spaces())
     }
 
     /// VTK places the first element of an assigned initializer whose `{`

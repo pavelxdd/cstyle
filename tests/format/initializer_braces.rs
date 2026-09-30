@@ -3932,3 +3932,53 @@ fn vtk_last_split_brace_row_after_a_one_line_row_stays_at_the_rows() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_file_scope_array_brace_rows_stand_a_level_past_the_elements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "static int codes[256][16] =",
+        "{",
+        "    /* 0 */",
+        "        {",
+        "            {0x04, 0}, {0x05, 0}",
+        "        },",
+        "        {",
+        "            {0x04, 0}, {0x05, 0}",
+        "        }",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_array_brace_rows_in_a_function_stand_a_level_past_their_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    static int codes[256][16] =",
+        "        {",
+        "            {",
+        "                {0x04, 0}, {0x05, 0}",
+        "            },",
+        "            {",
+        "            0x04, 0x05",
+        "            }",
+        "        };",
+        "    int a[] =",
+        "        {",
+        "        1, 2",
+        "        };",
+        "}",
+        "int b[] =",
+        "{",
+        "    1, 2",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
