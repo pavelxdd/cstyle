@@ -7858,6 +7858,21 @@ fn comments_and_ternaries_keep_enum_members_and_condition_arms_in_place() {
 }
 
 #[test]
+fn operands_after_a_parenthesized_returned_value_stand_at_the_value() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "bool f(void)",
+        "{",
+        "    return (!rcvd_eagain &&",
+        "            conn->scheme->protocol & (CURLPROTO_SCP | CURLPROTO_SFTP)) ||",
+        "           Curl_conn_data_pending(data, FIRSTSOCKET);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

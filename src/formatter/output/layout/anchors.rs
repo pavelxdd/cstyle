@@ -369,6 +369,16 @@ impl FormatEngine<'_> {
             {
                 return Some(self.token_column(start?)? + self.case_unindent_spaces());
             }
+            // So do those of a parenthesized returned value one space past
+            // the keyword; the engine lays out the others.
+            if matches!(&tokens[before], Token::Word(word) if word == "return")
+                && let Some(start) = start
+                && start == before + 2
+                && matches!(tokens[start], Token::Symbol('('))
+                && matches!(&tokens[before + 1], Token::Whitespace(space) if space == " ")
+            {
+                return Some(self.token_column(start)? + self.case_unindent_spaces());
+            }
             if groups.enclosing(before) != Some(group)
                 || matches!(
                     tokens[before],
