@@ -1770,7 +1770,7 @@ impl FormatEngine<'_> {
         &mut self,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::SwitchLabel || self.pending_line_in_switch_body() {
+        if line_kind != LineKind::SwitchLabel {
             return None;
         }
         let indent_width = self.options.indent_width;

@@ -1261,3 +1261,51 @@ fn nested_switch_case_block_in_a_case_block_indents_from_its_label() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn block_after_several_case_labels_belongs_to_its_statement() {
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch(v)",
+        "        {",
+        "        case 11:",
+        "#ifdef A",
+        "        case 30:",
+        "#endif",
+        "            /* c */",
+        "            if(a &&",
+        "                    (b != c))",
+        "                {",
+        "                failf(d);",
+        "                }",
+        "        }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn horstmann_case_assignment_value_and_comment_before_else_keep_their_levels() {
+    let options = options_from_args(&["--style=horstmann"]);
+    let source = fixture!(
+        "int f(int c)",
+        "{   switch(c)",
+        "    {   case 1:",
+        "            if(c / 100 == 2)",
+        "                /* enabled */",
+        "                use =",
+        "                    (g(c) != 3);",
+        "            /* rejected */",
+        "            else if(g(c) > 3)",
+        "                return 1;",
+        "            break;",
+        "    }",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

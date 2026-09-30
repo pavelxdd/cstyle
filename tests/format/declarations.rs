@@ -2622,3 +2622,18 @@ fn bit_field_after_a_comment_keeps_its_colon_spacing() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn horstmann_run_in_enum_brace_stays_on_its_own_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()]).expect("valid style");
+    let source = fixture!(
+        "int x;",
+        "enum connection_filter_t",
+        "{   CONNECTION_FILTER_BLACKLIST,",
+        "    CONNECTION_FILTER_WHITELIST",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

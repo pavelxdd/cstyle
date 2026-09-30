@@ -8325,6 +8325,124 @@ fn call_argument_line_of_a_statement_ternary_arm_keeps_the_call_column() {
 }
 
 #[test]
+fn value_after_a_trailing_assignment_in_call_parens_indents_past_the_first_argument() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    VERBOSE(bool tls_upgraded =",
+        "                (a &&",
+        "                 b));",
+        "    g(x =",
+        "          y);",
+        "    if (a =",
+        "                b)",
+        "        c();",
+        "    h(1, x =",
+        "          y);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn gnu_statement_starting_with_a_dereference_after_a_labeled_if_is_no_continuation() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    int r;",
+        "    r = 1;",
+        "out:",
+        "    if(r && q)",
+        "        g(q);",
+        "    *p = r ? 0 : q;",
+        "    return r;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn leading_ternary_in_call_arguments_aligns_with_its_argument() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    g(a,",
+        "      b",
+        "      ? c : d);",
+        "    x = h(p, q",
+        "          ? r",
+        "          : s);",
+        "    return error(_(\"x\"),",
+        "                 n",
+        "                 ? m : k);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comment_after_a_statement_expression_macro_keeps_the_statement_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    DEBUG_OUT({",
+        "        g(stderr, \"x\");",
+        "    });",
+        "",
+        "    /* c */",
+        "    if(a) {",
+        "        b();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn string_concatenation_after_a_multiline_comment_keeps_the_string_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    size = g(buf, n,",
+        "             \"%c%c\"  /* session key allocated space",
+        "                       (unknown purpose) */",
+        "             \"%c%c\"  /* 2 zeroes */",
+        "             \"%c\",",
+        "             x);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn parameter_after_a_directive_aligns_with_the_first_parameter() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "static ngx_ssl_session_t *",
+        "ngx_ssl_get_cached_session(ngx_ssl_conn_t *ssl_conn,",
+        "#if OPENSSL_VERSION_NUMBER >= 0x10100003L",
+        "                           const",
+        "#endif",
+        "                           u_char *id, int len, int *copy)",
+        "{",
+        "    return 0;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

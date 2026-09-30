@@ -4296,3 +4296,22 @@ fn open_paren_in_block_comment_text_continues_no_code() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn horstmann_run_in_block_comment_closer_keeps_its_source_offset() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()]).expect("valid style");
+    let source = fixture!(
+        "void f(void)",
+        "{   if (x)",
+        "    {   /*",
+        "         * a",
+        "         * b",
+        "        */",
+        "        int pos = 1;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

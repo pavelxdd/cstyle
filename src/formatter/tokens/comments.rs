@@ -2424,6 +2424,7 @@ impl FormatEngine<'_> {
                                 (previous.trim_start().starts_with('*')
                                     && if self.token_input.token_line_opens_with_brace {
                                         leading >= opener_output_column
+                                            && source_closer_leading > trim_amount
                                     } else {
                                         source_closer_leading < trim_amount
                                             && leading == source_closer_leading

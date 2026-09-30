@@ -75,11 +75,25 @@ impl Blocks {
                                 .get(2)
                                 .is_some_and(|&next| matches!(tokens[next], Token::Symbol(':')))
                     });
-                let owner = head
+                let mut owner = head
                     .iter()
                     .position(|&index| matches!(tokens[index], Token::Symbol(':')))
                     .filter(|_| case_label || label)
-                    .and_then(|colon| head.get(colon + 1))
+                    .map(|colon| colon + 1);
+                // Further case labels before the statement belong to it too.
+                while let Some(position) = owner
+                    && head
+                        .get(position)
+                        .and_then(|&index| word_at(tokens, index))
+                        .is_some_and(|word| matches!(word, "case" | "default"))
+                    && let Some(colon) = (position..head.len())
+                        .find(|&next| matches!(tokens[head[next]], Token::Symbol(':')))
+                    && colon + 1 < head.len()
+                {
+                    owner = Some(colon + 1);
+                }
+                let owner = owner
+                    .and_then(|position| head.get(position))
                     .or(head.first());
                 blocks.owners[id.index()] = Some(owner.copied().unwrap_or(group.open));
             }

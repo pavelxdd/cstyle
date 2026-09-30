@@ -742,6 +742,10 @@ impl FormatEngine<'_> {
         let current = line.trim_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::Gnu
+            || self
+                .output
+                .pending_tokens()
+                .is_some_and(|span| self.tree.statements.starts_block_statement(span.first))
             || current.starts_with("//")
             || current.starts_with("/*")
             || !current.starts_with([
@@ -2324,6 +2328,17 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn split_else_operator_indent_spaces(&self, line: &str) -> Option<usize> {
+        // Outside the body of a split `else`, the tree places the line.
+        if self.output.pending_tokens().is_some_and(|span| {
+            !self.tree.statements.in_split_else_body(span.first)
+                && !self
+                    .tree
+                    .groups
+                    .enclosing(span.first)
+                    .is_some_and(|group| self.tree.functions.is_parameter_list(group))
+        }) {
+            return None;
+        }
         let current = line.trim_start();
         if !current.starts_with([
             '<', '>', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~', '&', '|',
@@ -2390,15 +2405,7 @@ impl FormatEngine<'_> {
         }
         (in_split_preprocessor_context
             && previous_code.ends_with('(')
-            && !current.starts_with(['}', ')', ']'])
-            && self.output.pending_tokens().is_none_or(|span| {
-                self.tree.statements.in_split_else_body(span.first)
-                    || self
-                        .tree
-                        .groups
-                        .enclosing(span.first)
-                        .is_some_and(|group| self.tree.functions.is_parameter_list(group))
-            }))
+            && !current.starts_with(['}', ')', ']']))
         .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 

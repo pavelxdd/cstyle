@@ -3781,3 +3781,68 @@ fn whitesmith_indents_the_closing_brace_of_a_nested_designated_element() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_file_scope_nested_brace_rows_indent_their_elements() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "static const struct t l[] =",
+        "{",
+        "    /* c */",
+        "    {",
+        "        \"a\", \"\",",
+        "        0",
+        "    },",
+        "    {",
+        "        \"b\", \"\",",
+        "        1",
+        "    },",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_function_scope_nested_brace_rows_keep_elements_at_the_brace() {
+    let options = options_from_args(&["--style=vtk"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    static const struct",
+        "        {",
+        "        const char *c;",
+        "        } tests[] =",
+        "        {",
+        "            { \"a\", 1 },",
+        "            {",
+        "            \"b\",",
+        "            2",
+        "            },",
+        "            { \"c\", 3 },",
+        "        };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn comment_and_element_after_a_split_element_keep_the_element_column() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    struct option o[] = {",
+        "        OPT_FILENAME(0, \"b\", &s,",
+        "                     N_(\"build a temporary index based on embedded index information\")),",
+        "        /* Think twice before adding \"--nul\" synonym to this */",
+        "        OPT_SET_INT(1, NULL, &l,",
+        "                    N_(\"x\"), 2),",
+        "        OPT_END()",
+        "    };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

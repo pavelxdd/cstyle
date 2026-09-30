@@ -1481,6 +1481,9 @@ impl FormatEngine<'_> {
         ) && self.current.trim_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]);
+        // An enum brace that starts its source line stays broken.
+        let source_broken_enum =
+            brace_type == BraceType::Enum && self.token_input.token_begins_source_line;
         if (matches!(
             brace_type,
             BraceType::Array | BraceType::CompoundLiteral | BraceType::Enum
@@ -1488,6 +1491,7 @@ impl FormatEngine<'_> {
             && !non_attaching_lambda_body
             && !self.current_is_blank()
             && !operator_led_broken_brace
+            && !source_broken_enum
             && !matches!(next, None | Some(Token::Newline))
             && !self.comments.next_comment_ends_line
         {
