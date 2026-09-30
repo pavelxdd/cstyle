@@ -8931,3 +8931,49 @@ fn statement_after_a_labeled_block_statement_stands_at_the_block() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_nested_split_else_blocks_keep_their_levels() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "static CURLcode f(struct Curl_cfilter *cf)",
+        "{",
+        "    if(ctx->state < CF_SETUP_CNNCT_SSL)",
+        "        {",
+        "#if defined(USE_HTTP3)",
+        "            if(ctx->transport == TRNSPRT_QUIC)",
+        "                {",
+        "                    result = quic(cf);",
+        "                }",
+        "            else",
+        "#endif",
+        "#ifdef USE_SSL",
+        "                if(ctx->ssl_mode == CURL_CF_SSL_ENABLE)",
+        "                    {",
+        "",
+        "#ifndef CURL_DISABLE_PROXY",
+        "                        if(cf->conn->bits.origin_is_proxy)",
+        "                            {",
+        "                                result = proxy(cf);",
+        "                            }",
+        "                        else",
+        "#endif",
+        "                            {",
+        "                                /* FTP */",
+        "                                result = ssl(cf);",
+        "                            }",
+        "                        if(result)",
+        "                            {",
+        "                                return result;",
+        "                            }",
+        "                        trace(cf);",
+        "                    }",
+        "#endif",
+        "            ctx->state = CF_SETUP_CNNCT_SSL;",
+        "        }",
+        "    return result;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

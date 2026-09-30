@@ -50,6 +50,8 @@ impl FormatEngine<'_> {
             .else_matching_if_indent(first)
             .or_else(|| self.braceless_body_indent(first))
             .or_else(|| self.do_while_indent(first))
+            .or_else(|| self.split_else_block_statement_indent(first))
+            .or_else(|| self.statement_after_split_else_indent(first))
             .or_else(|| self.dangling_else_block_indent(first))
             .or_else(|| self.split_else_if_indent(first))
             .or_else(|| self.statement_expression_indent(first))
@@ -2218,6 +2220,75 @@ impl FormatEngine<'_> {
                 + self.options.indent_width
                 + self.case_unindent_spaces()
         })
+    }
+
+    /// A statement after an `if` chain whose `else` a directive splits from
+    /// its body stands at that chain: the engine keeps the level of the
+    /// body.
+    fn statement_after_split_else_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if matches!(tokens[first], Token::Symbol('{' | '}'))
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+        {
+            return None;
+        }
+        let sibling = self.tree.statements.previous_sibling(first)?;
+        let split = (sibling..first).any(|index| {
+            matches!(&tokens[index], Token::Word(word) if word == "else")
+                && tokens[index + 1..]
+                    .iter()
+                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                    .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
+        });
+        if !split {
+            return None;
+        }
+        self.sibling_statement_column(first)
+    }
+
+    /// Statements of a block whose `{` follows its `else` past a directive
+    /// stand at the block's body column: the engine keeps the level of the
+    /// branch before the directive.
+    fn split_else_block_statement_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        // The `{` itself stands at its `else`, a level in where the style
+        // indents block braces.
+        if matches!(tokens[first], Token::Symbol('{'))
+            && self.layout.line_adjuster.total_case_unindent_depth() == 0
+            && let Some(keyword) = self.tree.previous_code_token(first)
+            && matches!(&tokens[keyword], Token::Word(word) if word == "else")
+            && tokens[keyword..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            let offset = if matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Gnu
+            ) {
+                self.options.indent_width
+            } else {
+                0
+            };
+            let line = self.line_led_by(keyword)?;
+            return Some(self.output.lead_width(line, self.options.tab_width) + offset);
+        }
+        if matches!(tokens[first], Token::Symbol('{' | '}'))
+            || !self.tree.statements.starts_block_statement(first)
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+        {
+            return None;
+        }
+        let block = self.enclosing_block(first)?;
+        let open = self.tree.groups.get(block).open;
+        let keyword = self.tree.previous_code_token(open)?;
+        if !matches!(&tokens[keyword], Token::Word(word) if word == "else")
+            || !tokens[keyword..open]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        self.enclosing_block_body_column(first)
     }
 
     /// The `while` of a `do` block starting its line stands at the `do`.
