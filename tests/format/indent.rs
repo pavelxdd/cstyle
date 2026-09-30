@@ -8030,6 +8030,21 @@ fn leading_logical_operators_in_parentheses_align_with_the_first_operand() {
 }
 
 #[test]
+fn allman_string_arguments_after_a_hash_in_a_literal_keep_the_argument_column() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    DEBUGF(infof(data, \"connection #%\" FMT_OFF_T",
+        "                 \", shutdown protocol handler (aborted=%d)\",",
+        "                 conn->connection_id));",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

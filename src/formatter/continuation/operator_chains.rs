@@ -6,7 +6,7 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
@@ -351,7 +351,19 @@ impl FormatEngine<'_> {
                 _ => previous_indent,
             });
         }
+        // A `#` in a literal is no directive.
+        let hash_only_in_literals = self.output.line_tokens(previous_index).is_some_and(|span| {
+            let tokens = &self.tree.tokens[span.first..=span.last.min(self.tree.tokens.len() - 1)];
+            tokens.iter().any(|token| {
+                matches!(token, Token::StringLiteral(text) | Token::CharLiteral(text) if text.contains('#'))
+            }) && !tokens.iter().any(|token| match token {
+                Token::Preprocessor(_) => true,
+                Token::StringLiteral(_) | Token::CharLiteral(_) | Token::Comment(..) => false,
+                other => token_text(other).contains('#'),
+            })
+        });
         if previous_code.contains('#')
+            && !hash_only_in_literals
             && !previous_trimmed.starts_with(['#', '/'])
             && !previous_trimmed.starts_with("return ")
         {
