@@ -3982,3 +3982,28 @@ fn vtk_array_brace_rows_in_a_function_stand_a_level_past_their_brace() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn vtk_compound_literal_rows_in_a_designated_initializer_stand_past_their_cast() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    RedisModuleCommandInfo info =",
+        "        {",
+        "        .arity = -5,",
+        "        .key_specs = (RedisModuleCommandKeySpec[])",
+        "            {",
+        "                {",
+        "                .flags = 1,",
+        "                .fk.range = {0,1,0}",
+        "                },",
+        "                {0}",
+        "            },",
+        "        };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

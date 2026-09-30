@@ -326,59 +326,67 @@ impl FormatEngine<'_> {
     fn vtk_array_element_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        if self.options.brace_style != BraceStyle::Vtk
-            || matches!(tokens[first], Token::Symbol('}'))
-        {
+        if self.options.brace_style != BraceStyle::Vtk {
             return None;
         }
-        let group = groups.enclosing(first)?;
-        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
-            return None;
-        }
-        let open = groups.get(group).open;
-        let previous = self.tree.previous_code_token(first)?;
-        if !(previous == open
-            || matches!(tokens[previous], Token::Symbol(','))
-                && groups.enclosing(previous) == Some(group))
-        {
-            return None;
-        }
-        // The outermost initializer and the declaration it belongs to.
-        let outer = groups
-            .ancestors(group)
-            .take_while(|&id| self.tree.blocks.kind(id) == Some(BlockKind::Initializer))
-            .last()?;
-        // Compound literals inside keep their own layout.
-        if groups
-            .ancestors(group)
-            .take_while(|&id| id != outer)
-            .chain([outer])
-            .any(|id| {
-                self.tree
-                    .previous_code_token(groups.get(id).open)
-                    .is_some_and(|before| matches!(tokens[before], Token::Symbol(')')))
-            })
-        {
-            return None;
-        }
-        let outer_open = groups.get(outer).open;
-        // Only the initializer of an assignment.
-        if !self.tree.previous_code_token(outer_open).is_some_and(
-            |before| matches!(&tokens[before], Token::Operator(operator) if operator == "="),
-        ) {
-            return None;
-        }
-        let mut start = outer_open;
-        while let Some(before) = self.tree.previous_code_token(start) {
-            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
-                break;
-            }
-            if matches!(&tokens[before], Token::Word(word)
-                if matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
+        let is_aggregate = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        // A `}` starting its line closes at its `{` when that starts a line.
+        if matches!(tokens[first], Token::Symbol('}')) {
+            let closed = groups.closed_at(first)?;
+            let open = groups.get(closed).open;
+            let line = self.output.line_with_token(open)?;
+            if !is_aggregate(closed)
+                || self.output.line_tokens(line)?.first != open
+                || self.vtk_array_outer(closed).is_none()
+                || closed == self.vtk_array_outer(closed)?
             {
                 return None;
             }
-            start = before;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces(),
+            );
+        }
+        // A compound literal's `{` starting its line after its cast stands
+        // a level past the line of the cast.
+        let (group, cast_brace) = match groups.opened_at(first) {
+            Some(literal)
+                if is_aggregate(literal)
+                    && self
+                        .tree
+                        .previous_code_token(first)
+                        .is_some_and(|close| matches!(tokens[close], Token::Symbol(')'))) =>
+            {
+                (groups.enclosing(first)?, true)
+            }
+            _ => (groups.enclosing(first)?, false),
+        };
+        if !is_aggregate(group) {
+            return None;
+        }
+        let open = groups.get(group).open;
+        if !cast_brace {
+            let previous = self.tree.previous_code_token(first)?;
+            if !(previous == open
+                || matches!(tokens[previous], Token::Symbol(','))
+                    && groups.enclosing(previous) == Some(group))
+            {
+                return None;
+            }
+        }
+        let outer = self.vtk_array_outer(group)?;
+        if cast_brace {
+            let close = self.tree.previous_code_token(first)?;
+            let line = self.output.line_with_token(close)?;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
         }
         let open_line = self.output.line_with_token(open)?;
         if self.output.line_tokens(open_line)?.first != open
@@ -406,6 +414,41 @@ impl FormatEngine<'_> {
             content
         };
         Some(spaces + self.case_unindent_spaces())
+    }
+
+    /// The outermost initializer around `group` when it is the assigned
+    /// initializer of a declaration without an aggregate keyword.
+    fn vtk_array_outer(&self, group: GroupId) -> Option<GroupId> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let outer = groups
+            .ancestors(group)
+            .take_while(|&id| {
+                matches!(
+                    self.tree.blocks.kind(id),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+            .last()?;
+        let outer_open = groups.get(outer).open;
+        if !self.tree.previous_code_token(outer_open).is_some_and(
+            |before| matches!(&tokens[before], Token::Operator(operator) if operator == "="),
+        ) {
+            return None;
+        }
+        let mut start = outer_open;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
+                break;
+            }
+            if matches!(&tokens[before], Token::Word(word)
+                if matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
+            {
+                return None;
+            }
+            start = before;
+        }
+        Some(outer)
     }
 
     /// VTK places the first element of an assigned initializer whose `{`
