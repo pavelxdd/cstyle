@@ -50,6 +50,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
             .or_else(|| self.leading_ternary_in_condition_indent(first))
+            .or_else(|| self.leading_logical_in_parens_indent(first))
             .or_else(|| self.enum_value_after_split_member_indent(first))
             .or_else(|| self.initializer_row_indent(first))
             .or_else(|| self.initializer_closing_brace_indent(first))
@@ -614,6 +615,42 @@ impl FormatEngine<'_> {
         (groups.enclosing(member) == Some(group)).then(|| {
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
         })
+    }
+
+    /// A `&&` or `||` leading a line inside parentheses aligns with the
+    /// parentheses' first operand, but never before a control condition's
+    /// continuation indent.
+    fn leading_logical_in_parens_indent(&self, first: usize) -> Option<usize> {
+        if self.options.indent_after_parens {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(&tokens[first], Token::Operator(operator) if operator == "&&" || operator == "||")
+        {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        if groups.get(group).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let open = groups.get(group).open;
+        let content = next_code_token(tokens, open + 1)?;
+        let open_line = self.output.line_with_token(open)?;
+        if self.output.line_with_token(content)? != open_line {
+            return None;
+        }
+        let mut column = self.token_column(content)?;
+        let open_lead = self.output.lead_width(open_line, self.options.tab_width);
+        if column >= open_lead + self.options.max_continuation_indent {
+            return None;
+        }
+        if self.control_condition_of(first).is_some()
+            && let Some(header) = self.control_condition_header_indent()
+        {
+            column = column.max(header + min_conditional_indent_spaces(self.options));
+        }
+        Some(column + self.case_unindent_spaces())
     }
 
     /// A `return` value starting a line after the keyword takes one level

@@ -8005,6 +8005,31 @@ fn directive_continuations_and_open_paren_comments_leave_code_in_place() {
 }
 
 #[test]
+fn leading_logical_operators_in_parentheses_align_with_the_first_operand() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x)",
+        "    {",
+        "        in_vain = 0;",
+        "    }",
+        "    else if (!args->stateless_rpc",
+        "             || ack != ACK_common)",
+        "        in_vain = 0;",
+        "    if (ecf->connections > (ngx_uint_t) rlmt.rlim_cur",
+        "            && (ccf->rlimit_nofile == NGX_CONF_UNSET",
+        "                || ecf->connections > (ngx_uint_t) ccf->rlimit_nofile))",
+        "    {",
+        "        y();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(
