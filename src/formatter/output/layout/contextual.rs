@@ -757,10 +757,12 @@ impl FormatEngine<'_> {
         }
         if line.trim_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]) && (0..self.output.len()).rev().take(8).any(|index| {
-            let previous_code = self.output.code(index);
-            starts_post_closing_declaration(previous_code)
-        }) {
+        ]) && !is_comment_line(line.trim_start())
+            && (0..self.output.len()).rev().take(8).any(|index| {
+                let previous_code = self.output.code(index);
+                starts_post_closing_declaration(previous_code)
+            })
+        {
             layout.exact_indent_spaces = Some(self.options.indent_width);
         }
         if line.trim_start().starts_with([

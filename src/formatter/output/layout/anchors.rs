@@ -50,6 +50,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
             .or_else(|| self.leading_ternary_in_condition_indent(first))
+            .or_else(|| self.enum_value_after_split_member_indent(first))
             .or_else(|| self.initializer_row_indent(first))
             .or_else(|| self.indented_block_brace_indent(first))
         {
@@ -560,6 +561,37 @@ impl FormatEngine<'_> {
         Some(column + self.case_unindent_spaces())
     }
 
+    /// An enum member's `=` leading a line after a macro call stays at the
+    /// member's column, as astyle lays it out.
+    fn enum_value_after_split_member_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(&tokens[first], Token::Operator(operator) if operator == "=") {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        let open = groups.get(group).open;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Aggregate)
+            || !self.tree.blocks.owner(group).is_some_and(|owner| {
+                tokens[owner..open]
+                    .iter()
+                    .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+            })
+        {
+            return None;
+        }
+        // Only after a macro call such as a deprecation marker.
+        let previous = self.tree.previous_code_token(first)?;
+        if !matches!(tokens[previous], Token::Symbol(')')) {
+            return None;
+        }
+        let line = self.output.line_with_token(previous)?;
+        let member = self.output.line_tokens(line)?.first;
+        (groups.enclosing(member) == Some(group)).then(|| {
+            self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+        })
+    }
+
     /// A `return` value starting a line after the keyword takes one level
     /// past the keyword's line, past comments and directives between.
     fn return_value_indent(&self, first: usize) -> Option<usize> {
@@ -784,6 +816,32 @@ impl FormatEngine<'_> {
                 .previous_code_token(first)
                 .is_some_and(|previous| {
                     matches!(self.tree.tokens[previous], Token::Symbol(','))
+                        && groups.enclosing(previous) == Some(group)
+                })
+    }
+
+    /// Whether the line being laid out starts an enum member after a comma.
+    pub(crate) fn pending_line_starts_enum_member(&self) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        let Some(group) = groups.enclosing(first) else {
+            return false;
+        };
+        let open = groups.get(group).open;
+        self.tree.blocks.kind(group) == Some(BlockKind::Aggregate)
+            && self.tree.blocks.owner(group).is_some_and(|owner| {
+                tokens[owner..open]
+                    .iter()
+                    .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+            })
+            && self
+                .tree
+                .previous_code_token(first)
+                .is_some_and(|previous| {
+                    matches!(tokens[previous], Token::Symbol(','))
                         && groups.enclosing(previous) == Some(group)
                 })
     }

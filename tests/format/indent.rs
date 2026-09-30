@@ -7918,6 +7918,33 @@ fn ternary_arms_in_a_for_header_assignment_stand_at_the_value() {
 }
 
 #[test]
+fn enum_members_and_comments_after_declarations_keep_their_columns() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "struct s {",
+        "    int a;",
+        "} v;",
+        "",
+        "#define X Y",
+        "",
+        "/* deprecated names: */",
+        "int z;",
+        "",
+        "typedef enum {",
+        "    CURLOPTDEPRECATED(CURLOPT_IOCTLFUNCTION, CURLOPTTYPE_FUNCTIONPOINT, 130,",
+        "                      7.18.0, \"Use CURLOPT_SEEKFUNCTION\"),",
+        "    CURLOPTDEPRECATED(CURLOPT_IOCTLDATA, CURLOPTTYPE_CBPOINT, 131,",
+        "                      7.18.0, \"Use CURLOPT_SEEKDATA\"),",
+        "    CURLINFO_SIZE_UPLOAD CURL_DEPRECATED(7.55.0, \"Use CURLINFO_SIZE_UPLOAD_T\")",
+        "    = CURLINFO_DOUBLE + 7,",
+        "    CURLINFO_SIZE_UPLOAD_T = CURLINFO_OFF_T + 7",
+        "} CURLoption;",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

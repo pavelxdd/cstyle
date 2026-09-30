@@ -2074,6 +2074,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous_code.trim_start();
         if !previous_code.ends_with("),")
             || self.pending_line_starts_initializer_element()
+            || self.pending_line_starts_enum_member()
             || previous_trimmed.starts_with(':')
             || previous_code.contains('<')
             || current.contains('>')
