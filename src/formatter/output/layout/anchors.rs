@@ -82,7 +82,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.member_after_directive_indent(first))
             .or_else(|| self.member_declarator_after_comma_indent(first))
             .or_else(|| self.vtk_array_element_indent(first))
-            .or_else(|| self.vtk_aggregate_array_brace_row_indent(first))
+            .or_else(|| self.vtk_aggregate_array_row_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
             .or_else(|| self.whitesmith_brace_row_indent(first))
             .or_else(|| self.initializer_row_indent(first))
@@ -517,13 +517,13 @@ impl FormatEngine<'_> {
         Some(spaces + self.case_unindent_spaces())
     }
 
-    /// VTK leaves the brace rows of a file-scope initializer declared with
-    /// an aggregate keyword at its rows, a level past its `{` line.
-    fn vtk_aggregate_array_brace_row_indent(&self, first: usize) -> Option<usize> {
+    /// VTK leaves the rows of a file-scope initializer declared with an
+    /// aggregate keyword, brace rows too, a level past its `{` line.
+    fn vtk_aggregate_array_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         if self.options.brace_style != BraceStyle::Vtk
-            || !matches!(tokens[first], Token::Symbol('{'))
+            || matches!(tokens[first], Token::Symbol('}'))
         {
             return None;
         }
@@ -1215,15 +1215,31 @@ impl FormatEngine<'_> {
         if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate)
             || !matches!(tokens[semicolon], Token::Symbol(';'))
             || groups.enclosing(semicolon) != Some(body)
-            || !tokens[semicolon..first].iter().any(|token| match token {
-                Token::Preprocessor(directive) => preprocessor_directive(&directive.text)
-                    .is_some_and(|name| {
-                        matches!(name, "if" | "ifdef" | "ifndef" | "elif" | "else" | "endif")
-                    }),
-                Token::Comment(..) => true,
-                _ => false,
-            })
         {
+            return None;
+        }
+        let after_directive = tokens[semicolon..first].iter().any(|token| {
+            matches!(token, Token::Preprocessor(directive)
+            if preprocessor_directive(&directive.text).is_some_and(|name| {
+                matches!(name, "if" | "ifdef" | "ifndef" | "elif" | "else" | "endif")
+            }))
+        });
+        let after_comment = tokens[semicolon..first]
+            .iter()
+            .any(|token| matches!(token, Token::Comment(..)));
+        // After a comment, only a nested aggregate member leads.
+        let closes_aggregate = |index: usize| {
+            groups
+                .closed_at(index)
+                .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Aggregate))
+        };
+        let last = self.tree.previous_code_token(semicolon)?;
+        let after_nested_aggregate = closes_aggregate(last)
+            || self
+                .tree
+                .previous_code_token(last)
+                .is_some_and(closes_aggregate);
+        if !(after_directive || after_comment && after_nested_aggregate) {
             return None;
         }
         let open = groups.get(body).open;
@@ -2367,8 +2383,13 @@ impl FormatEngine<'_> {
                             && groups.enclosing(previous) == Some(group)
                     })
         });
-        // Comments that end a block stand at its body column.
-        let block_body_column = self.block_comment_column(first);
+        // Comments that end a block stand at its body column; comments
+        // before an `else` whose `if` is the body of an `else` that a
+        // directive splits stand at that outer `else`.
+        let split_chain_column = is_else
+            .then(|| self.split_chain_else_column(first))
+            .flatten();
+        let block_body_column = self.block_comment_column(first).or(split_chain_column);
         if !statements.starts_block_statement(first)
             && block_body_column.is_none()
             && !in_parens
@@ -2428,7 +2449,7 @@ impl FormatEngine<'_> {
             // Directives change no indent, alternative branches aside; a
             // label or an `else` may move off the level of the code before.
             if !is_case_label
-                && !is_else
+                && (!is_else || split_chain_column.is_some())
                 && text.starts_with('#')
                 && !text.ends_with('\\')
                 && !matches!(
@@ -3974,6 +3995,22 @@ impl FormatEngine<'_> {
         self.enclosing_block_body_column(first)
             .or_else(|| self.earlier_statement_column(first))
             .or_else(|| self.brace_line_body_column(first))
+    }
+
+    /// The column of the outer `else` of the `else` at `first`, when that
+    /// one's `if` forms the outer `else`'s body past a directive or a blank
+    /// line.
+    fn split_chain_else_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let if_token = self.tree.statements.if_of_else(first)?;
+        let outer = self.tree.previous_code_token(if_token)?;
+        if !matches!(&tokens[outer], Token::Word(word) if word == "else")
+            || !self.tree.statements.in_split_else_body(if_token)
+        {
+            return None;
+        }
+        let line = self.line_led_by(outer)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
     }
 
     /// The body column of the block that the `}` at `first` closes: that of

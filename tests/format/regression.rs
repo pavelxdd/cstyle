@@ -2361,3 +2361,9 @@ fn vtk_file_scope_struct_array_keeps_brace_rows_at_its_rows() {
     let input = "static const struct t tests[] = {\n    { /* a */\n        \"a\",\n        TRUE\n    },\n    { /* b */\n        \"b\",\n        FALSE\n    }\n};\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn whitesmith_comment_before_else_of_split_chain_stands_at_outer_else() {
+    let input = "void f(void)\n    {\n#ifdef R\n    if(a)\n        {\n        x();\n        }\n    else\n#endif\n\n        if(\n#if defined(Q) && \\\n  (Z == 1)\n            q &&\n#endif\n            b)\n            {\n            y();\n            }\n    /*\n     * Even when\n     */\n#ifdef H\n        else\n            {\n            z();\n            }\n#else\n        else\n            {\n            w();\n            }\n#endif\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
