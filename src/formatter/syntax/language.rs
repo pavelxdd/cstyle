@@ -109,6 +109,9 @@ pub fn is_type_like_pointer_word(word: &str) -> bool {
 
 pub fn is_macro_like_word(word: &str) -> bool {
     word.len() > 1
+        && word
+            .chars()
+            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
         && word.chars().any(|ch| ch == '_' || ch.is_ascii_uppercase())
         && !word.chars().any(|ch| ch.is_ascii_lowercase())
 }

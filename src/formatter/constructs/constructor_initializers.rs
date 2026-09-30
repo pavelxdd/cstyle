@@ -296,6 +296,10 @@ impl FormatEngine<'_> {
         let total = self.output.len();
         for offset in 0..total.min(64) {
             let index = total - 1 - offset;
+            // The body of a block comment holds no code.
+            if self.output.comment_start_index(index) != index {
+                continue;
+            }
             let raw = &self.output[index];
             let code = raw[..trailing_comment_split_limit(raw)].trim_end();
             let trimmed = code.trim_start();
@@ -500,12 +504,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let base_indent = self.constructor_initializer_base_indent_spaces();
-        for previous in self
-            .output
-            .scoped()
-            .iter()
+        let total = self.output.len();
+        for previous in (total - self.output.scoped().len()..total)
             .rev()
             .take(64)
+            .filter(|&index| self.output.comment_start_index(index) == index)
+            .map(|index| &self.output[index])
             .filter(|line| !line.trim().is_empty())
         {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();

@@ -2342,3 +2342,41 @@ fn horstmann_runs_a_nested_brace_row_into_its_first_element() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_function_brace_after_conditional_headers_is_indented() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "#if (A)",
+        "void",
+        "f(int level, ...)",
+        "#else",
+        "void",
+        "f(int level, va_list args)",
+        "#endif",
+        "    {",
+        "    g();",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn allman_function_brace_after_a_variadic_parameter_line_stays_in_column_one() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void clar__assert_compare_u(",
+        "    const char *error,",
+        "    const char *description,",
+        "    ...)",
+        "{",
+        "    int fulfilled;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -1,7 +1,9 @@
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{line_brace_imbalance, line_paren_imbalance};
+use crate::formatter::text::line_scan::{
+    line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+};
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell};
@@ -472,6 +474,15 @@ impl OutputBuffer {
     /// tail of a comment is no code, whatever its words.
     pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {
         let index = self.last_non_empty_index()?;
+        // A backslash-continued macro body is no code of the lines after it.
+        if self
+            .directive_of_continuation(index)
+            .is_some_and(|directive| {
+                preprocessor_directive(self.trimmed(directive)) == Some("define")
+            })
+        {
+            return None;
+        }
         (self.comment_start_index(index) == index).then(|| &self.lines[index])
     }
 

@@ -4398,3 +4398,56 @@ fn allman_case_block_statement_after_multiline_comment_keeps_the_block_level() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_file_scope_comment_with_parens_after_a_function_stays_in_column_one() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "int f(void)",
+        "    {",
+        "    }",
+        "",
+        "/* TODO(x) share with linux.c */",
+        "int g(void)",
+        "    {",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn argument_line_led_by_comments_stands_at_the_argument_column() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (x) {",
+        "        edata = pac_alloc_real(tsdn, pac, ehooks, size_with_guards,",
+        "                               /* alignment */ PAGE, zero, /* guarded */ false);",
+        "        safety_check_fail_sized_dealloc(/* current_dealloc */ true, ptr,",
+        "                /* true_size */ edata_usize_get(edata), input_size);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn open_paren_and_colon_in_a_block_comment_leave_the_next_function_alone() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "/*",
+        " * a (b, c,",
+        " * - (Array) of two:",
+        " */",
+        "void g(int c)",
+        "{",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

@@ -496,6 +496,7 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
         && !trimmed.starts_with(':')
         && !trimmed.starts_with("::")
         && !trimmed.contains('?')
+        && !is_operator_expression(before_colon)
         && unmatched_open_paren_column(before_colon).is_none()
         && !before_colon.ends_with(')')
         && !matches!(
@@ -504,6 +505,12 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
         )
         && find_case_colon(trimmed).is_none()
         && !is_access_label(trimmed, access_labels)
+}
+
+/// Text with operators between names continues an expression; no label.
+fn is_operator_expression(text: &str) -> bool {
+    text.contains(['|', '&', '+', '^', '%', '<', '>', '=', '!', '~', ','])
+        && text.chars().any(is_identifier_continue)
 }
 
 fn is_plain_label(line: &str, access_labels: &[String]) -> bool {

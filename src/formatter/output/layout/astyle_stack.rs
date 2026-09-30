@@ -109,7 +109,13 @@ impl FormatEngine<'_> {
                                 .is_none_or(|close| first + offset < close)
                         })
                 })
-                .any(|(_, token)| matches!(token, Token::Symbol('{' | '}')))
+                // The block brace after a closing paren opens no group of
+                // the line.
+                .any(|(offset, token)| {
+                    matches!(token, Token::Symbol('{' | '}'))
+                        && !(next_code_token(tokens, first + 1) == Some(first + offset)
+                            && self.paren_ends_its_line(first))
+                })
         {
             return None;
         }
@@ -154,6 +160,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let block_lead = self.output.lead_width(start_line, self.options.tab_width);
+        // astyle registers no `=` of a designator in an initializer.
+        let in_initializer = self
+            .tree
+            .groups
+            .enclosing(start)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer));
         let mut replay = Replay {
             stack: Vec::new(),
             sizes: Vec::new(),
@@ -232,6 +244,8 @@ impl FormatEngine<'_> {
                     return None;
                 }
                 Token::Operator(operator)
+                    if operator == "=" && in_initializer && replay.depth == 0 => {}
+                Token::Operator(operator)
                     if operator.ends_with('=')
                         && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
                 {
@@ -303,6 +317,18 @@ impl FormatEngine<'_> {
             replay.stack.last().copied()?
         };
         Some(block_lead + top + self.case_unindent_spaces())
+    }
+
+    /// Whether `close` is a `)` whose `(` ends its line.
+    fn paren_ends_its_line(&self, close: usize) -> bool {
+        matches!(self.tree.tokens[close], Token::Symbol(')'))
+            && self.tree.groups.closed_at(close).is_some_and(|group| {
+                let open = self.tree.groups.get(group).open;
+                self.output
+                    .line_with_token(open)
+                    .and_then(|line| self.output.line_tokens(line))
+                    .is_some_and(|span| span.last == open)
+            })
     }
 
     /// Whether the declaration before the body opening at `open` holds
@@ -423,8 +449,27 @@ impl FormatEngine<'_> {
                 start = groups.get(closed).open;
                 continue;
             }
-            if groups.opened_at(before).is_some_and(is_block)
+            // astyle stacks nothing for the braces of an array whose `{`
+            // ends its line: each row starts afresh.
+            let row_array = |group: GroupId| {
+                self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
+                    && self
+                        .output
+                        .line_with_token(groups.get(group).open)
+                        .is_some_and(|line| {
+                            self.output
+                                .line_tokens(line)
+                                .is_some_and(|span| span.last == groups.get(group).open)
+                        })
+            };
+            if groups.opened_at(before).is_some_and(|group| is_block(group) || row_array(group))
+                || matches!(tokens[before], Token::Symbol(','))
+                    && groups.enclosing(before).is_some_and(row_array)
+                // The `;` of a `for` header stays inside its statement.
                 || matches!(tokens[before], Token::Symbol(';'))
+                    && groups
+                        .enclosing(before)
+                        .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
             {
                 break;

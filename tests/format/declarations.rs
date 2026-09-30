@@ -2782,3 +2782,40 @@ fn declarators_after_an_assigned_middle_line_keep_the_first_line_column() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn bracket_in_a_char_literal_opens_no_message_alignment() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "enum last_seen {",
+        "    JV_LAST_OPEN_ARRAY = '[',",
+        "    JV_LAST_OPEN_OBJECT = '{',",
+        "    JV_LAST_COLON = ':',",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_member_after_a_conditional_nested_struct_stands_at_the_members() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "struct ctx",
+        "    {",
+        "    int a;",
+        "#if defined(X)",
+        "    struct",
+        "        {",
+        "        int channel;",
+        "        } rr;",
+        "#endif",
+        "    BIT(processed_A);",
+        "    BIT(processed_AAAA);",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

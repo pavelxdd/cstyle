@@ -1363,3 +1363,20 @@ fn case_body_after_a_comment_block_stands_a_level_past_its_label() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn case_label_continued_over_lines_keeps_its_continuation_and_body() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "int f(int mask)",
+        "{",
+        "    switch (mask) {",
+        "    case WINDOW_PANES_BORDER_L|WINDOW_PANES_BORDER_R|",
+        "            WINDOW_PANES_BORDER_U|WINDOW_PANES_BORDER_D:",
+        "        return (CELL_LRUD);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

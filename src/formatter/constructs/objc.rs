@@ -106,8 +106,21 @@ pub(crate) fn objc_message_following_keyword_column(line: &str) -> Option<usize>
     let chars: Vec<char> = line.chars().collect();
     let is_space = |ch: char| ch == ' ' || ch == '\t';
     let mut open_brackets = Vec::new();
-    for (index, ch) in chars.iter().enumerate() {
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, &ch) in chars.iter().enumerate() {
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+            continue;
+        }
         match ch {
+            '"' | '\'' => quote = Some(ch),
             '[' => open_brackets.push(index),
             ']' => {
                 open_brackets.pop();

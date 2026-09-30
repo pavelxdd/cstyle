@@ -232,6 +232,14 @@ impl FormatEngine<'_> {
             previous_code.ends_with(')') && self.layout.frame_stack.active_header().is_some();
         if previous_code.contains("#define")
             || is_header_condition_continuation
+            // A variadic `...` parameter leads with no operator.
+            || previous_code.trim_start().starts_with("...")
+            // Nor does an argument led by a unary operator.
+            || self.output.line_tokens(previous_index).is_some_and(|span| {
+                self.tree.previous_code_token(span.first).is_some_and(|before| {
+                    matches!(self.tree.tokens[before], Token::Symbol(',' | '('))
+                })
+            })
             || !(head_ends_binary_operator(previous_code)
                 || previous_code.ends_with("->")
                 || previous_code.trim_start().starts_with([

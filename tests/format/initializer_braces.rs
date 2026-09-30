@@ -4097,3 +4097,77 @@ fn first_row_led_by_a_comment_stands_a_level_past_the_brace_line() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn element_continued_in_a_one_line_brace_stands_at_the_first_element() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    const char *keys[] = { \"key1\", ignore_case ? \"FOObarFrotz\" :",
+        "                           \"fooBarFrotz\"",
+        "                         };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn leading_comma_after_a_conditional_element_stands_at_the_element() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "static const char * const disabled[] = {",
+        "    \"bindlocal: \"",
+        "#ifdef A",
+        "    \"OFF\"",
+        "#endif",
+        "    ,",
+        "    \"cookies: \"",
+        "#ifdef B",
+        "    \"OFF\"",
+        "#endif",
+        "    ,",
+        "    NULL",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn whitesmith_one_line_initializer_after_an_assignment_line_is_indented() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "static const char *a[] =",
+        "    {\"index-pack\", \"--stdin\", NULL};",
+        "void f(void)",
+        "    {",
+        "    static const char *c[] =",
+        "        {\"call\", \"return\"};",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn call_arguments_in_an_array_row_stack_from_the_row() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    x = {",
+        "        OPT_CALLBACK_F(1, \"reflog\", &reflog_base, N_(\"<n>\"),",
+        "                       N_(\"show <n> most recent ref-log entries starting at \"",
+        "                          \"base\"),",
+        "                       PARSE_OPT_OPTARG | PARSE_OPT_NONEG,",
+        "                       parse_reflog_param),",
+        "    };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

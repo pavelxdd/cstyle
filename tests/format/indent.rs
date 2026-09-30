@@ -9044,3 +9044,108 @@ fn gnu_else_brace_after_a_split_else_region_stands_past_its_else() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn for_header_condition_after_its_initializer_line_stays_in_the_parens() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    for(",
+        "        pp=&list;",
+        "        *pp && (*pp)->x!=db->x;",
+        "        pp=&(*pp)->pNext",
+        "    );",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn declarators_after_a_split_type_keep_the_continuation() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    struct lookahead_action",
+        "        *aAction,",
+        "        *aLookahead;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn leading_operator_in_a_case_body_stands_at_the_assigned_value() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(int x)",
+        "{",
+        "    switch (x) {",
+        "    case 1:",
+        "        len = sizeof(a)",
+        "              + 64 + sizeof(b) - 1",
+        "              + sizeof(c);",
+        "        break;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn directive_continuation_ending_in_a_header_leaves_the_next_line_alone() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "#define uv__queue_foreach(q, h) \\",
+        "  for ((q) = (h)->next; (q) != (h); (q) = (q)->next)",
+        "",
+        "static inline void uv__queue_init(struct uv__queue* q)",
+        "{",
+        "    q->next = q;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn assigned_value_after_a_split_else_body_stands_a_level_past_it() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (a) {",
+        "        g();",
+        "    } else",
+        "#endif",
+        "        addr =",
+        "            &((struct sockaddr_in *)(void *)iface->ifa_addr)->sin_addr;",
+        "    res = 1;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn closing_paren_of_a_split_for_header_before_its_brace_takes_the_saved_indent() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    for(",
+        "        iOff=PENDING_BYTE+pgszSrc;",
+        "        rc==SQLITE_OK && iOff<iEnd;",
+        "        iOff+=pgszSrc",
+        "    ) {",
+        "        g();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
