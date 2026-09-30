@@ -82,6 +82,12 @@ impl FormatEngine<'_> {
             .or_else(|| self.vtk_initializer_first_element_indent(first))
             .or_else(|| self.whitesmith_brace_row_indent(first))
             .or_else(|| self.initializer_row_indent(first))
+            // Horstmann runs the first row into its brace only later.
+            .or_else(|| {
+                (self.options.brace_style == BraceStyle::Horstmann)
+                    .then(|| self.initializer_first_row_indent(first))
+                    .flatten()
+            })
             .or_else(|| self.initializer_element_continuation_indent(first))
             .or_else(|| self.initializer_leading_comma_indent(first))
             .or_else(|| self.initializer_closing_brace_indent(first))
@@ -126,6 +132,21 @@ impl FormatEngine<'_> {
             // A heuristic moved the line off a structural level that the
             // tree confirms; an anchor off that level is itself misplaced.
             layout.exact_indent_spaces = Some(structural);
+        } else if !matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        ) && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
+            && self.tree.statements.braceless_header(first).is_none()
+            && !self.tree.tokens[self.tree.previous_code_token(first).unwrap_or(first)..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+            && sibling.is_some()
+            && sibling == block
+            && layout.exact_indent_spaces != sibling
+        {
+            // The statement's sibling and its block agree on a column the
+            // engine missed, as after a braceless chain closed by `{}`.
+            layout.exact_indent_spaces = block;
         } else if matches!(self.tree.tokens[first], Token::Symbol('{'))
             && sibling == Some(structural + self.options.indent_width)
         {
@@ -236,7 +257,15 @@ impl FormatEngine<'_> {
         let after_comment = tokens[comma..first]
             .iter()
             .any(|token| matches!(token, Token::Comment(..)));
+        // So does a row after a nested VTK group closed at its elements.
+        let after_block_like_close = self.options.brace_style == BraceStyle::Vtk
+            && self
+                .tree
+                .previous_code_token(comma)
+                .and_then(|close| groups.closed_at(close))
+                .is_some_and(|nested| self.vtk_nested_rows_like_blocks(nested));
         if !after_comment
+            && !after_block_like_close
             && let Some(newline) =
                 (first..end).find(|&index| matches!(tokens[index], Token::Newline))
             && !self.tree.previous_code_token(newline).is_some_and(|last| {
@@ -302,6 +331,10 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(element)?;
         // A row of several elements places the next row from its first.
         let row = self.output.line_tokens(line)?.first;
+        // Elements run in after the group's brace stand at the first.
+        if row == open && next_code_token(tokens, open + 1) == Some(element) {
+            return Some(self.token_column(element)? + self.case_unindent_spaces());
+        }
         // The row may follow a comment on its line.
         let text = self.output.as_slice()[line].trim_start();
         let text = text
@@ -436,6 +469,17 @@ impl FormatEngine<'_> {
         Some(spaces + self.case_unindent_spaces())
     }
 
+    /// Whether VTK lays out the nested initializer `group` like a block:
+    /// in code, or in an array of no aggregate keyword.
+    fn vtk_nested_rows_like_blocks(&self, group: GroupId) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .get(group)
+            .parent
+            .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            && (self.in_code(groups.get(group).open) || self.vtk_array_outer(group).is_some())
+    }
+
     /// The outermost initializer around `group` when it is the assigned
     /// initializer of a declaration without an aggregate keyword.
     fn vtk_array_outer(&self, group: GroupId) -> Option<GroupId> {
@@ -561,16 +605,19 @@ impl FormatEngine<'_> {
     /// so from the second level of nesting.
     fn nested_initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
-        let depth = match self.options.brace_style {
-            BraceStyle::Whitesmith | BraceStyle::Ratliff => 1,
-            BraceStyle::Vtk => 2,
-            _ => return None,
-        };
         if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
         let group = groups.closed_at(first)?;
         let open = groups.get(group).open;
+        // VTK closes a nested group at its elements in code and in arrays
+        // of no aggregate keyword.
+        let depth = match self.options.brace_style {
+            BraceStyle::Whitesmith | BraceStyle::Ratliff => 1,
+            BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => 1,
+            BraceStyle::Vtk => 2,
+            _ => return None,
+        };
         if groups
             .ancestors(group)
             .take(depth + 1)
@@ -592,15 +639,20 @@ impl FormatEngine<'_> {
     /// A `}` closing an initializer whose `{` starts its own line stands at
     /// that line.
     fn initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
-        // VTK, GNU and Horstmann close some initializers their own way.
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Vtk | BraceStyle::Gnu | BraceStyle::Horstmann
-        ) || !matches!(self.tree.tokens[first], Token::Symbol('}'))
-        {
+        // VTK, GNU and Horstmann close some initializers their own way;
+        // VTK closes a nested row at its brace like a block.
+        if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
         let group = self.tree.groups.closed_at(first)?;
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Gnu | BraceStyle::Horstmann
+        ) || self.options.brace_style == BraceStyle::Vtk
+            && !self.vtk_nested_rows_like_blocks(group)
+        {
+            return None;
+        }
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
             return None;
         }

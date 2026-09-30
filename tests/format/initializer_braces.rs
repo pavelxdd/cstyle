@@ -4171,3 +4171,57 @@ fn call_arguments_in_an_array_row_stack_from_the_row() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn horstmann_rows_after_a_run_in_initializer_brace_stand_at_the_first_row() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void f(int c)",
+        "{   switch (c)",
+        "    {   case 1:",
+        "        {   const struct decoration_options opts =",
+        "            {   .prefix = (char *) \"\",",
+        "                .suffix = (char *) \"\",",
+        "            };",
+        "            g();",
+        "            break;",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn vtk_nested_initializer_in_code_closes_at_its_elements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    struct path_walk_context ctx =",
+        "        {",
+        "        .repo = 1,",
+        "        .path_stack = {",
+        "            .compare = 2,",
+        "            .cb_data = &ctx",
+        "            },",
+        "        .x = 3",
+        "        };",
+        "    struct option options[] =",
+        "        {",
+        "        OPT_X(1),",
+        "            {",
+        "            .type = 1,",
+        "            .short_name = 2,",
+        "            },",
+        "        OPT_END()",
+        "        };",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

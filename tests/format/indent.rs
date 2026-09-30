@@ -9149,3 +9149,29 @@ fn closing_paren_of_a_split_for_header_before_its_brace_takes_the_saved_indent()
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn statements_after_a_braceless_chain_closed_by_an_empty_block_keep_their_level() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if( nIn<0 ) for(nIn=0; zIn[nIn]; nIn++) {}",
+        "    while( iWidth>nIn ) {",
+        "        zBuf[(*pnUsed)++] = 1;",
+        "        iWidth--;",
+        "    }",
+        "    for (i = 0; i < nfd; i++)",
+        "        if (pfd[i].fd < 0)",
+        "            pfd[i].revents = 0;",
+        "        else {",
+        "            if (happened) {",
+        "                pfd[i].revents = happened;",
+        "                rc++;",
+        "            }",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
