@@ -9003,3 +9003,44 @@ fn allman_else_if_brace_in_a_braceless_loop_body_stands_at_the_else() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn gnu_else_brace_after_a_split_else_region_stands_past_its_else() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    if (a)",
+        "        {",
+        "#ifdef X",
+        "            if (b)",
+        "                {",
+        "                    m = 1;",
+        "                }",
+        "            else",
+        "#endif",
+        "                {",
+        "                    /* none */",
+        "                }",
+        "        }",
+        "    if (c)",
+        "        {",
+        "            if (d)",
+        "                {",
+        "                    r = 1;",
+        "                }",
+        "            else",
+        "                {",
+        "                    r = 2;",
+        "                }",
+        "        }",
+        "    else",
+        "        {",
+        "            r = 3;",
+        "        }",
+        "    return r;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

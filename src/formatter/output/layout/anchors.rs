@@ -82,6 +82,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.nested_initializer_closing_brace_indent(first))
             .or_else(|| self.indented_block_brace_indent(first))
             .or_else(|| self.broken_control_brace_indent(first))
+            .or_else(|| self.gnu_else_brace_indent(first))
             .or_else(|| self.whitesmith_bare_block_brace_indent(first))
             .or_else(|| self.whitesmith_macro_block_brace_indent(first))
             .or_else(|| self.whitesmith_function_brace_indent(first))
@@ -2138,6 +2139,32 @@ impl FormatEngine<'_> {
                 + levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// GNU indents the `{` of an `else` block starting its line one level
+    /// past the `else`.
+    fn gnu_else_brace_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if self.options.brace_style != BraceStyle::Gnu
+            || !matches!(tokens[first], Token::Symbol('{'))
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
+        {
+            return None;
+        }
+        let keyword = self.tree.previous_code_token(first)?;
+        if !matches!(&tokens[keyword], Token::Word(word) if word == "else")
+            || self
+                .tree
+                .groups
+                .opened_at(first)
+                .and_then(|group| self.tree.blocks.kind(group))
+                != Some(BlockKind::Control)
+        {
+            return None;
+        }
+        let line = self.line_led_by(keyword)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
     }
 
     /// A control block's `{` starting its line stands at its header where
