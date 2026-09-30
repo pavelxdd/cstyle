@@ -8652,6 +8652,97 @@ fn line_after_an_assigned_value_past_the_maximum_takes_two_levels() {
 }
 
 #[test]
+fn only_the_paren_after_a_control_header_takes_the_minimum_conditional_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if(",
+        "        (proxy && conn->x &&",
+        "         yy) ||",
+        "        (z)) {",
+        "        a();",
+        "    }",
+        "    if ((proxy && conn->x &&",
+        "            yy) ||",
+        "            (z)) {",
+        "        a();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn body_of_braceless_headers_chained_on_one_line_nests_per_header() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    for (b=b0+4; b<b0+8; b++) if (*b!=DECFENCE)",
+        "            printf(\"=== Corrupt byte [%02x] at offset %d from %ld ===\\n\", *b,",
+        "                   b-b0-8, (LI)b0);",
+        "    while (x) for (;;) if (c)",
+        "                y();",
+        "    z();",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn every_statement_of_a_dangling_else_block_stays_at_the_block() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (y = d1) {",
+        "        if (k = lo0bits(C, &y))",
+        "            if (k >= 16) {",
+        "                i = 2;",
+        "            } else {",
+        "                i = 3;",
+        "            } else {",
+        "            x[0] = y & 0xffff;",
+        "            x[1] = y >> 16;",
+        "            i = 3;",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn value_after_an_assignment_in_a_word_brace_block_is_not_continued() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    DOIT {",
+        "        FILE * const fp =",
+        "        /* c */",
+        "        1 ? a : b;",
+        "    }",
+        "}",
+        "int g(void)",
+        "{",
+        "    return",
+        "#if defined(WIN32)",
+        "        /* note */",
+        "        c != 1 &&",
+        "#endif",
+        "        h(c);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

@@ -444,6 +444,18 @@ impl FormatEngine<'_> {
             return None;
         }
         let lead = self.output.lead_width(line, self.options.tab_width);
+        // astyle takes the brace of a `WORD {` block for an array brace and
+        // continues no assignment inside.
+        if self.in_array_like_block(start) {
+            return (tokens[start..=last]
+                .iter()
+                .any(|token| matches!(token, Token::Operator(_)))
+                && (start..=last).any(is_assignment)
+                && !tokens[start..first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol('(' | '[' | '{'))))
+            .then(|| lead + self.case_unindent_spaces());
+        }
         let max = self.options.max_continuation_indent;
         let mut stack: Vec<usize> = Vec::new();
         let mut index = start;
@@ -1387,10 +1399,20 @@ impl FormatEngine<'_> {
                         .any(|index| matches!(tokens[index], Token::Symbol('?')))
                     || matches!(tokens[previous], Token::Symbol('?'))
             });
+        // A value after a trailing `=` or `return`.
+        let value_after_line_end = self
+            .tree
+            .previous_code_token(first)
+            .is_some_and(|previous| {
+                groups.enclosing(previous) == groups.enclosing(first)
+                    && (matches!(&tokens[previous], Token::Operator(operator) if operator == "=")
+                        || matches!(&tokens[previous], Token::Word(word) if word == "return"))
+            });
         if !statements.starts_block_statement(first)
             && !initializer_element
             && !is_else
             && !ternary_arm
+            && !value_after_line_end
             && statements.braceless_header(first).is_none()
             && !continues_parens
         {
@@ -1798,9 +1820,12 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         let (block, extra) = if matches!(tokens[first], Token::Symbol('}')) {
             (groups.closed_at(first)?, 0)
-        } else {
-            let open = self.tree.statements.block_opening(first)?;
+        } else if let Some(open) = self.tree.statements.block_opening(first) {
             (groups.opened_at(open)?, self.options.indent_width)
+        } else if self.tree.statements.starts_block_statement(first) {
+            (groups.enclosing(first)?, self.options.indent_width)
+        } else {
+            return None;
         };
         let else_token = self.tree.previous_code_token(groups.get(block).open)?;
         if !matches!(&tokens[else_token], Token::Word(word) if word == "else")
@@ -2228,6 +2253,17 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // `for (...) if (...)` nests a header per braceless header on the
+        // line.
+        let mut outer = header;
+        let mut chained = 0;
+        while let Some(enclosing) = self.tree.statements.braceless_header(outer)
+            && self.output.line_with_token(enclosing) == self.output.line_with_token(outer)
+        {
+            outer = enclosing;
+            chained += 1;
+        }
+        let header = outer;
         let line = self.line_led_by(header)?;
         // `else while (x)` nests two headers on one line; `else if` is one.
         let nested = !matches!(&tokens[header], Token::Word(word) if word == "if")
@@ -2238,7 +2274,7 @@ impl FormatEngine<'_> {
                     matches!(&tokens[previous], Token::Word(word) if word == "else")
                         && self.output.line_with_token(previous) == Some(line)
                 });
-        let levels = 1 + usize::from(nested);
+        let levels = 1 + chained + usize::from(nested);
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + levels * self.options.indent_width

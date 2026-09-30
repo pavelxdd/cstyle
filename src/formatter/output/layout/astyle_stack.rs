@@ -28,7 +28,7 @@ struct Replay {
     depth: usize,
     line_space: usize,
     assigned_this_line: bool,
-    header: bool,
+    header_paren: Option<usize>,
 }
 
 impl FormatEngine<'_> {
@@ -81,6 +81,7 @@ impl FormatEngine<'_> {
         }
         let start = self.stack_statement_start(first)?;
         // Lambda bodies continue their statements past astyle's stack.
+        let array_like = self.in_array_like_block(start);
         if let Some(group) = self.tree.groups.enclosing(start)
             && self.tree.groups.ancestors(group).any(|id| {
                 self.tree.blocks.kind(id) == Some(BlockKind::Lambda)
@@ -121,7 +122,7 @@ impl FormatEngine<'_> {
             depth: 0,
             line_space: 0,
             assigned_this_line: false,
-            header: false,
+            header_paren: None,
         };
         let mut line = None;
         let mut saw_question = false;
@@ -183,12 +184,15 @@ impl FormatEngine<'_> {
                     replay.stack.truncate(size + 1);
                 }
                 Token::Symbol('{' | '}' | ';' | ':') => return None,
-                _ if index == start && is_control_keyword(token) => replay.header = true,
+                _ if index == start && is_control_keyword(token) => {
+                    replay.header_paren = next_code_token(tokens, index + 1);
+                }
                 Token::Operator(operator) if matches!(operator.as_str(), "<<" | ">>") => {
                     return None;
                 }
                 Token::Operator(operator)
-                    if operator.ends_with('=')
+                    if !array_like
+                        && operator.ends_with('=')
                         && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
                 {
                     let previous = self.tree.previous_code_token(index)?;
@@ -256,6 +260,28 @@ impl FormatEngine<'_> {
         Some(block_lead + top + self.case_unindent_spaces())
     }
 
+    /// Whether a block around `index` opens after a bare word, such as a
+    /// `DOIT {` macro, which astyle takes for an array brace: it registers
+    /// no assignment continuation inside.
+    pub(super) fn in_array_like_block(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        groups.enclosing(index).is_some_and(|group| {
+            groups.ancestors(group).any(|id| {
+                matches!(
+                    self.tree.blocks.kind(id),
+                    Some(BlockKind::Control | BlockKind::Block)
+                ) && self
+                    .tree
+                    .previous_code_token(groups.get(id).open)
+                    .is_some_and(|before| {
+                        matches!(&tokens[before], Token::Word(word)
+                            if !is_header(word) && !matches!(word.as_str(), "else" | "do" | "try"))
+                    })
+            })
+        })
+    }
+
     /// Whether the declaration before the body opening at `open` holds
     /// braces, such as `= {}` default arguments, which leave astyle in an
     /// array state for the body.
@@ -305,10 +331,10 @@ impl FormatEngine<'_> {
             replay.parens.push(relative(index)?);
         }
         let mut indent = relative(next)?;
-        // Parens of a control header hold at least the minimum
-        // conditional indent.
+        // The paren right after a control header holds at least the
+        // minimum conditional indent.
         let min_conditional = min_conditional_indent_spaces(self.options);
-        if paren && replay.header && indent < min_conditional {
+        if paren && replay.header_paren == Some(index) && indent < min_conditional {
             indent = min_conditional + replay.line_space;
         }
         if indent > max {
