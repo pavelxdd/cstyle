@@ -666,7 +666,24 @@ impl FormatEngine<'_> {
         let mut index = start;
         let assign = loop {
             if index >= line_end {
-                return None;
+                // No `=`: the `,` ending the line registers the second word,
+                // and that indent holds for the lines after.
+                let second = next_code_token(tokens, start + 1)?;
+                let second_line = self.output.line_with_token(comma)?;
+                return (second_line != start_line
+                    && self.tree.previous_code_token(start).is_none_or(|before| {
+                        matches!(tokens[before], Token::Symbol(';' | '{' | '}'))
+                    })
+                    && matches!(&tokens[start], Token::Word(word)
+                        if !matches!(word.as_str(), "class" | "struct" | "union" | "enum"))
+                    && !tokens[start..line_end]
+                        .iter()
+                        .any(|token| matches!(token, Token::Symbol(':')))
+                    && matches!(tokens[second], Token::Word(_))
+                    && second < line_end)
+                    .then(|| self.token_column(second))
+                    .flatten()
+                    .map(|column| column + self.case_unindent_spaces());
             }
             match &tokens[index] {
                 Token::Operator(operator) if operator == "=" => break index,
@@ -2127,6 +2144,17 @@ impl FormatEngine<'_> {
         }
         let block = self.tree.groups.opened_at(first)?;
         let owner = self.tree.blocks.owner(block)?;
+        // A brace after a bare word is an array brace to astyle.
+        if !self
+            .tree
+            .previous_code_token(first)
+            .is_some_and(|close| matches!(tokens[close], Token::Symbol(')')))
+            || tokens[owner..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
         if self.tree.blocks.kind(block) != Some(BlockKind::Control)
             || !matches!(&tokens[owner], Token::Word(word)
                 if !is_header(word) && !matches!(word.as_str(), "else" | "do" | "try"))
@@ -2259,6 +2287,7 @@ impl FormatEngine<'_> {
         let mut chained = 0;
         while let Some(enclosing) = self.tree.statements.braceless_header(outer)
             && self.output.line_with_token(enclosing) == self.output.line_with_token(outer)
+            && !matches!(&tokens[enclosing], Token::Word(word) if word == "else")
         {
             outer = enclosing;
             chained += 1;

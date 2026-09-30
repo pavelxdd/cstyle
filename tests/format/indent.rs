@@ -8685,7 +8685,10 @@ fn body_of_braceless_headers_chained_on_one_line_nests_per_header() {
         "                   b-b0-8, (LI)b0);",
         "    while (x) for (;;) if (c)",
         "                y();",
-        "    z();",
+        "    if (a)",
+        "        z();",
+        "    else if (b)",
+        "        z();",
         "}",
     );
 

@@ -2766,3 +2766,19 @@ fn pointer_declarators_after_assigned_lines_do_not_drift() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+// astyle registers again at `j1=0,` and moves the next declarators to `j1`;
+// the second word of the first line holds instead.
+#[test]
+fn declarators_after_an_assigned_middle_line_keep_the_first_line_column() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    int bbits, b2, b5,",
+        "        j, j1=0, k,",
+        "        spec_case, try_quick;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

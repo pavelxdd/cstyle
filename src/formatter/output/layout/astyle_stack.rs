@@ -261,8 +261,8 @@ impl FormatEngine<'_> {
     }
 
     /// Whether a block around `index` opens after a bare word, such as a
-    /// `DOIT {` macro, which astyle takes for an array brace: it registers
-    /// no assignment continuation inside.
+    /// `DOIT {` macro or a `YY_DECL` function head, which astyle takes for
+    /// an array brace: it registers no assignment continuation inside.
     pub(super) fn in_array_like_block(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
@@ -270,7 +270,12 @@ impl FormatEngine<'_> {
             groups.ancestors(group).any(|id| {
                 matches!(
                     self.tree.blocks.kind(id),
-                    Some(BlockKind::Control | BlockKind::Block)
+                    Some(
+                        BlockKind::FunctionBody
+                            | BlockKind::Control
+                            | BlockKind::Block
+                            | BlockKind::Unknown
+                    )
                 ) && self
                     .tree
                     .previous_code_token(groups.get(id).open)
