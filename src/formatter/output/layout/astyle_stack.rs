@@ -128,7 +128,15 @@ impl FormatEngine<'_> {
             return None;
         }
         let start_line = self.output.line_with_token(start)?;
-        if next_code_token(tokens, self.output.line_tokens(start_line)?.first)? != start {
+        // The start leads its line, after at most `}` and `else`.
+        let mut line_first = next_code_token(tokens, self.output.line_tokens(start_line)?.first)?;
+        while line_first < start
+            && (matches!(tokens[line_first], Token::Symbol('}'))
+                || matches!(&tokens[line_first], Token::Word(word) if word == "else"))
+        {
+            line_first = next_code_token(tokens, line_first + 1)?;
+        }
+        if line_first != start {
             return None;
         }
         // astyle takes a bare block brace after a directive for an array

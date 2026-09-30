@@ -8766,6 +8766,27 @@ fn closing_paren_after_a_paren_ending_its_line_returns_to_the_line_indent() {
 }
 
 #[test]
+fn else_if_condition_after_a_comment_takes_its_paren_continuation() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    if (a) {",
+        "        i = 1;",
+        "    } else if (",
+        "        /* \"in\" is short */",
+        "        j >= in_len &&",
+        "        /* not end */",
+        "        in_off < in_len) {",
+        "        g();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(
