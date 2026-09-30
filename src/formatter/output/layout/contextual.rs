@@ -27,7 +27,8 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_line, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::tokens::operators::{
@@ -3325,7 +3326,9 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-            if previous_code.contains('[') && !previous_code.contains(']') {
+            if !previous_code.trim_start().starts_with('#')
+                && unmatched_open_bracket_column(previous_code).is_some()
+            {
                 let previous_indent = leading_visual_width(previous, self.options.tab_width);
                 let target = if previous_code.trim_start().starts_with("}[") {
                     self.options.indent_width

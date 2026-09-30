@@ -2819,3 +2819,20 @@ fn whitesmith_member_after_a_conditional_nested_struct_stands_at_the_members() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_bracket_in_a_define_string_leaves_the_next_function_alone() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "#define SPECIALS\t\"^$*+?.([%-\"",
+        "",
+        "",
+        "static int check_capture (MatchState *ms, int l)",
+        "{",
+        "    return l;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

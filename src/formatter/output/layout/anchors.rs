@@ -105,6 +105,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.statement_after_labeled_statement_indent(first))
             .or_else(|| self.case_block_statement_indent(first))
             .or_else(|| self.block_closing_brace_indent(first))
+            .or_else(|| self.case_block_closing_brace_indent(first))
             .or_else(|| self.assigned_value_in_case_block_indent(first))
             .or_else(|| self.argument_after_assigned_call_paren_indent(first))
             .or_else(|| self.assigned_value_in_call_indent(first))
@@ -162,8 +163,10 @@ impl FormatEngine<'_> {
     fn whitesmith_brace_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        if self.options.brace_style != BraceStyle::Whitesmith
-            || !matches!(tokens[first], Token::Symbol('{'))
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Ratliff
+        ) || !matches!(tokens[first], Token::Symbol('{'))
         {
             return None;
         }
@@ -1101,6 +1104,34 @@ impl FormatEngine<'_> {
                 + level
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// The `};` of a case block starting its line stands at the block's `{`
+    /// when that starts a line.
+    fn case_block_closing_brace_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        if !matches!(self.tree.tokens[first], Token::Symbol('}'))
+            || !next_code_token(&self.tree.tokens, first + 1)
+                .is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol(';')))
+        {
+            return None;
+        }
+        let block = groups.closed_at(first)?;
+        let open = groups.get(block).open;
+        // A block holding labels of its own closes as astyle's labels leave it.
+        if self.tree.blocks.kind(block) != Some(BlockKind::Block)
+            || !self.in_switch_body(open)
+            || (open..first).any(|index| {
+                groups.enclosing(index) == Some(block)
+                    && matches!(&self.tree.tokens[index], Token::Word(word) if word == "case" || word == "default")
+            })
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        (self.output.line_tokens(line)?.first == open).then(|| {
+            self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+        })
     }
 
     /// Whether the innermost group around `index` is a `switch` body.
@@ -2843,7 +2874,12 @@ impl FormatEngine<'_> {
         }
         let close = self.tree.previous_code_token(first)?;
         let block = self.tree.groups.closed_at(close)?;
-        let owner = self.tree.blocks.owner(block)?;
+        // The `do` right before the block owns it, even as a braceless body.
+        let owner = self
+            .tree
+            .previous_code_token(self.tree.groups.get(block).open)
+            .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "do"))
+            .or_else(|| self.tree.blocks.owner(block))?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "do")
             || tokens[close..first]
                 .iter()
@@ -3302,10 +3338,7 @@ impl FormatEngine<'_> {
 
     /// The `}` of a block whose `{` starts its line stands at the `{`.
     fn block_closing_brace_indent(&self, first: usize) -> Option<usize> {
-        if !matches!(self.tree.tokens[first], Token::Symbol('}'))
-            || self.layout.line_adjuster.total_case_unindent_depth() > 0
-            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
-        {
+        if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
         let block = self.tree.groups.closed_at(first)?;
@@ -3316,6 +3349,13 @@ impl FormatEngine<'_> {
             return None;
         }
         let open = self.tree.groups.get(block).open;
+        // Inside a case body only blocks within the case close here.
+        if (self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0)
+            && self.in_switch_body(open)
+        {
+            return None;
+        }
         let tokens = &self.tree.tokens;
         // A `{` right after a directive stands where the branches leave it.
         if self.tree.previous_code_token(open).is_some_and(|header| {
@@ -3407,12 +3447,14 @@ impl FormatEngine<'_> {
             {
                 return None;
             }
-            return Some(self.output.lead_width(line, self.options.tab_width));
+            return Some(
+                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces(),
+            );
         }
         if !self.output.as_slice()[line].trim_start().starts_with('{') {
             return None;
         }
-        Some(self.output.lead_width(line, self.options.tab_width))
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// Statements of a case block whose brace is attached to its label

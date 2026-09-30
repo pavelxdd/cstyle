@@ -9206,3 +9206,36 @@ fn gnu_leading_operator_of_a_return_value_stands_at_the_value() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn ratliff_while_of_a_do_body_of_a_braceless_if_stands_at_the_do() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void) {",
+        "    if (x)",
+        "        do {",
+        "            ptr += 2;",
+        "            }",
+        "        while (ptr < top - 1);",
+        "    *data = top;",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn shifts_inside_parens_keep_the_argument_stack() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    expect_zu_eq(rb, (ra >> ((ZU(1) << (3 + LG_SIZEOF_PTR)) -",
+        "                             lg_range)), \"Expected high order bits of full-width \"",
+        "                 \"result, lg_range=%u\", lg_range);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

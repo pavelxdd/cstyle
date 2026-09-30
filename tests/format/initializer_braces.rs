@@ -4225,3 +4225,20 @@ fn vtk_nested_initializer_in_code_closes_at_its_elements() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn ratliff_brace_row_after_a_directive_is_indented_past_plain_rows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "static const struct feat features_table[] = {",
+        "    FEATURE(\"a\", NULL, 1),",
+        "#ifdef HAVE_ZSTD",
+        "    FEATURE(\"zstd\", NULL, 2),",
+        "#endif",
+        "        {NULL, NULL, 0}",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

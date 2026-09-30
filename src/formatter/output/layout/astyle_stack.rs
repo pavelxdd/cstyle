@@ -267,7 +267,10 @@ impl FormatEngine<'_> {
                 _ if index == start && is_control_keyword(token) => {
                     replay.header_paren = next_code_token(tokens, index + 1);
                 }
-                Token::Operator(operator) if matches!(operator.as_str(), "<<" | ">>") => {
+                // Stream chains align their own way; shifts in parens do not.
+                Token::Operator(operator)
+                    if matches!(operator.as_str(), "<<" | ">>") && replay.depth == 0 =>
+                {
                     return None;
                 }
                 Token::Operator(operator)

@@ -1380,3 +1380,57 @@ fn case_label_continued_over_lines_keeps_its_continuation_and_body() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_case_block_closed_with_a_semicolon_keeps_its_brace_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(int x)",
+        "{",
+        "    switch (x)",
+        "    {",
+        "    case 1:",
+        "    {",
+        "        g();",
+        "        break;",
+        "    };",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn allman_block_closing_brace_after_a_directive_in_a_case_block_keeps_its_brace_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    switch( x )",
+        "    {",
+        "    case 1:",
+        "    {",
+        "        if( a )",
+        "        {",
+        "            b = 0;",
+        "        }",
+        "        else",
+        "        {",
+        "            c = 1;",
+        "#ifndef X",
+        "            pWin = 1 ? 2 : 0;",
+        "#else",
+        "            pWin = 0;",
+        "#endif",
+        "        }",
+        "        g();",
+        "    }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
