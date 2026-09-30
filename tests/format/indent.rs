@@ -8787,6 +8787,36 @@ fn else_if_condition_after_a_comment_takes_its_paren_continuation() {
 }
 
 #[test]
+fn do_while_after_a_split_else_stands_at_its_do() {
+    let options = options_from_args(&["--style=gnu"]);
+    let source = fixture!(
+        "{",
+        "#ifdef _WIN32",
+        "    if(isatty(fileno(outs->stream)) &&",
+        "            GetConsoleScreenBufferInfo((HANDLE)fhnd, &console_info))",
+        "        {",
+        "        }",
+        "    else",
+        "#endif",
+        "        {",
+        "            if(per->hdrcbdata.headlist &&",
+        "                    tool_write_headers(&per->hdrcbdata, outs->stream))",
+        "                return CURL_WRITEFUNC_ERROR;",
+        "        }",
+        "    if(config->readbusy)",
+        "        {",
+        "            do",
+        "                {",
+        "                }",
+        "            while(res && errno == EINTR);",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn casted_calls_align_arguments_to_the_call_until_the_maximum_indent() {
     let options = options_from_args(&["--style=kr"]);
     let source = fixture!(

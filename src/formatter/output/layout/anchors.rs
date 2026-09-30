@@ -49,6 +49,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self
             .else_matching_if_indent(first)
             .or_else(|| self.braceless_body_indent(first))
+            .or_else(|| self.do_while_indent(first))
             .or_else(|| self.dangling_else_block_indent(first))
             .or_else(|| self.split_else_if_indent(first))
             .or_else(|| self.statement_expression_indent(first))
@@ -2217,6 +2218,26 @@ impl FormatEngine<'_> {
                 + self.options.indent_width
                 + self.case_unindent_spaces()
         })
+    }
+
+    /// The `while` of a `do` block starting its line stands at the `do`.
+    fn do_while_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !matches!(&tokens[first], Token::Word(word) if word == "while") {
+            return None;
+        }
+        let close = self.tree.previous_code_token(first)?;
+        let block = self.tree.groups.closed_at(close)?;
+        let owner = self.tree.blocks.owner(block)?;
+        if !matches!(&tokens[owner], Token::Word(word) if word == "do")
+            || tokens[close..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        let line = self.line_led_by(owner)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// Whitesmith indents the `{` of a function body starting its line one
