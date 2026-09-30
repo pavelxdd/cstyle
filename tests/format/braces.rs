@@ -2296,3 +2296,30 @@ fn whitesmith_indents_the_brace_of_a_statement_like_macro_block() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_function_brace_after_a_colon_comment_line_stands_past_the_head() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "void g(void)",
+        "    {",
+        "    switch(b)",
+        "        {",
+        "        case (A | B):",
+        "            break;",
+        "        }",
+        "    }",
+        "/* RFC",
+        "   :   Payload   :",
+        " */",
+        "static int f(int a,",
+        "             int b)",
+        "    {",
+        "    int x = 0;",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

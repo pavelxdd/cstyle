@@ -80,6 +80,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.indented_block_brace_indent(first))
             .or_else(|| self.whitesmith_bare_block_brace_indent(first))
             .or_else(|| self.whitesmith_macro_block_brace_indent(first))
+            .or_else(|| self.whitesmith_function_brace_indent(first))
             .or_else(|| self.vtk_anonymous_member_aggregate_brace_indent(first))
             .or_else(|| self.statement_after_case_block_indent(first))
             .or_else(|| self.first_statement_after_case_label_indent(first))
@@ -2215,6 +2216,49 @@ impl FormatEngine<'_> {
             self.output.lead_width(line, self.options.tab_width)
                 + self.options.indent_width
                 + self.case_unindent_spaces()
+        })
+    }
+
+    /// Whitesmith indents the `{` of a function body starting its line one
+    /// level past the first line of the function's head.
+    fn whitesmith_function_brace_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Whitesmith
+            || !matches!(tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
+        let body = groups.opened_at(first)?;
+        if self.tree.blocks.kind(body) != Some(BlockKind::FunctionBody)
+            || groups.get(body).parent.is_some()
+        {
+            return None;
+        }
+        let mut start = first;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if let Some(closed) = groups.closed_at(before) {
+                if groups.get(closed).delimiter == Delimiter::Brace {
+                    break;
+                }
+                start = groups.get(closed).open;
+                continue;
+            }
+            if matches!(tokens[before], Token::Symbol(';' | '}' | '{')) {
+                break;
+            }
+            start = before;
+        }
+        if start == first
+            || tokens[start..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(start)?;
+        (self.output.line_tokens(line)?.first == start).then(|| {
+            self.output.lead_width(line, self.options.tab_width) + self.options.indent_width
         })
     }
 
