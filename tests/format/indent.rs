@@ -8977,3 +8977,29 @@ fn gnu_nested_split_else_blocks_keep_their_levels() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn allman_else_if_brace_in_a_braceless_loop_body_stands_at_the_else() {
+    let options = options_from_args(&["--style=allman"]);
+    let source = fixture!(
+        "int f(void)",
+        "{",
+        "    for (i = 0; i < 8; i++)",
+        "        if (a)",
+        "            return 0;",
+        "        else if (b)",
+        "        {",
+        "            x();",
+        "        }",
+        "        else if (c)",
+        "        {",
+        "            y();",
+        "        }",
+        "        else",
+        "            return 1;",
+        "    return 2;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

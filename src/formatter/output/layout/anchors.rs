@@ -81,6 +81,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.initializer_closing_brace_indent(first))
             .or_else(|| self.nested_initializer_closing_brace_indent(first))
             .or_else(|| self.indented_block_brace_indent(first))
+            .or_else(|| self.broken_control_brace_indent(first))
             .or_else(|| self.whitesmith_bare_block_brace_indent(first))
             .or_else(|| self.whitesmith_macro_block_brace_indent(first))
             .or_else(|| self.whitesmith_function_brace_indent(first))
@@ -2137,6 +2138,31 @@ impl FormatEngine<'_> {
                 + levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// A control block's `{` starting its line stands at its header where
+    /// the style does not indent braces.
+    fn broken_control_brace_indent(&self, first: usize) -> Option<usize> {
+        if !matches!(self.tree.tokens[first], Token::Symbol('{'))
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::None
+                    | BraceStyle::Attach
+                    | BraceStyle::OneTrueBrace
+            )
+            || self.options.indent_braces
+            || self.options.indent_blocks
+            || self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
+        {
+            return None;
+        }
+        let group = self.tree.groups.opened_at(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Control) {
+            return None;
+        }
+        self.opening_brace_indent(first)
     }
 
     /// VTK indents the braces and members of a struct, union, or enum that
