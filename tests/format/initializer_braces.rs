@@ -3892,3 +3892,21 @@ fn vtk_file_scope_brace_rows_start_at_the_element_column() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn whitesmith_brace_row_after_a_directive_stands_past_the_plain_rows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let source = fixture!(
+        "static const struct f table[] = {",
+        "    FEATURE(\"a\", NULL, 1),",
+        "#ifdef X",
+        "    FEATURE(\"b\", NULL, 2),",
+        "#endif",
+        "        {NULL, NULL, 0}",
+        "    };",
+    );
+
+    assert_eq!(format_exact(source, &options), source);
+}

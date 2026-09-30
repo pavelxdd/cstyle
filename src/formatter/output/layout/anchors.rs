@@ -73,6 +73,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.leading_logical_in_parens_indent(first))
             .or_else(|| self.enum_value_after_split_member_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
+            .or_else(|| self.whitesmith_brace_row_indent(first))
             .or_else(|| self.initializer_row_indent(first))
             .or_else(|| self.initializer_closing_brace_indent(first))
             .or_else(|| self.nested_initializer_closing_brace_indent(first))
@@ -120,6 +121,44 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = sibling;
         }
         layout
+    }
+
+    /// Whitesmith indents a brace row a level past the plain element row
+    /// before it, as it indents braces past their statements.
+    fn whitesmith_brace_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Whitesmith
+            || !matches!(tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        let comma = self.tree.previous_code_token(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
+            || !matches!(tokens[comma], Token::Symbol(','))
+            || groups.enclosing(comma) != Some(group)
+        {
+            return None;
+        }
+        let open = groups.get(group).open;
+        let separator = (open..comma).rev().find(|&index| {
+            index == open
+                || (matches!(tokens[index], Token::Symbol(','))
+                    && groups.enclosing(index) == Some(group))
+        })?;
+        let element = next_code_token(tokens, separator + 1)?;
+        let line = self.output.line_with_token(element)?;
+        if matches!(tokens[element], Token::Symbol('{'))
+            || self.output.line_tokens(line)?.first != element
+        {
+            return None;
+        }
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// An initializer element starting a line after the `,` that ends the
