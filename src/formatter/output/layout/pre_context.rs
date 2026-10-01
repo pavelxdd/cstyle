@@ -131,8 +131,10 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(spaces);
         }
+        // A comment's body line continues no assignment.
         if layout.line_kind == LineKind::Normal
             && line.trim_start().starts_with('*')
+            && self.output.pending_tokens().is_some()
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();

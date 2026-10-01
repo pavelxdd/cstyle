@@ -66,6 +66,8 @@ impl FormatEngine<'_> {
             .or_else(|| self.stacked_closing_paren_indent(first))
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
+            .or_else(|| self.declarator_after_initializer_indent(first))
+            .or_else(|| self.later_declarator_brace_indent(first))
             .or_else(|| self.declarator_after_comma_indent(first))
             .or_else(|| self.leading_semicolon_indent(first))
             .or_else(|| self.assignment_continuation_indent(first))
@@ -1543,6 +1545,63 @@ impl FormatEngine<'_> {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// A declarator after the `,` that follows an initialized declarator
+    /// starting its line stands at that declarator.
+    fn declarator_after_initializer_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        if !matches!(tokens[first], Token::Word(_)) {
+            return None;
+        }
+        let comma = self.tree.previous_code_token(first)?;
+        let close = self.tree.previous_code_token(comma)?;
+        let initializer = groups.closed_at(close)?;
+        if !matches!(tokens[comma], Token::Symbol(','))
+            || groups.enclosing(comma) != groups.enclosing(first)
+            || self.tree.blocks.kind(initializer) != Some(BlockKind::Initializer)
+        {
+            return None;
+        }
+        let assign = self
+            .tree
+            .previous_code_token(groups.get(initializer).open)?;
+        let name = self.tree.previous_code_token(assign)?;
+        if !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+            || !matches!(tokens[name], Token::Word(_))
+        {
+            return None;
+        }
+        let line = self.line_led_by(name)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// Styles that indent braces put the `{` of a later declarator's
+    /// initializer, alone on its line, a level past the declarator.
+    fn later_declarator_brace_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !(self.options.brace_style == BraceStyle::Whitesmith
+            || self.options.brace_style == BraceStyle::Vtk && self.in_code(first))
+            || !matches!(tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
+        let assign = self.tree.previous_code_token(first)?;
+        let name = self.tree.previous_code_token(assign)?;
+        let comma = self.tree.previous_code_token(name)?;
+        if !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+            || !matches!(tokens[name], Token::Word(_))
+            || !matches!(tokens[comma], Token::Symbol(','))
+        {
+            return None;
+        }
+        let line = self.line_led_by(name)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// A declarator after a `,` of a statement whose first line holds an

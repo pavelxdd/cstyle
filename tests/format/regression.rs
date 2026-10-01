@@ -2446,3 +2446,9 @@ fn whitesmith_designator_row_after_nested_close_keeps_row_column() {
     let input = "static struct patch_mode patch_mode_add =\n    {\n    .diff_cmd = { \"diff-files\", NULL },\n    .prompt_mode = {\n        N_(\"Stage mode change%s [y,n,q,a,d%s,?]? \"),\n        N_(\"Stage this hunk%s [y,n,q,a,d%s,?]? \")\n        },\n    .edit_hunk_hint = N_(\"If the patch applies cleanly, the edited hunk \"\n                         \"will immediately be marked for staging.\"),\n    .help_patch_text =\n    N_(\"y - stage this hunk\\n\"\n       \"n - do not stage this hunk\\n\")\n    };\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn later_initialized_declarators_do_not_drift() {
+    let input = "static const RedisModuleEvent\nRedisModuleEvent_A =\n    {\n    REDISMODULE_EVENT_A,\n    1\n    },\nRedisModuleEvent_B =\n    {\n    REDISMODULE_EVENT_B,\n    1\n    },\nRedisModuleEvent_C =\n    {\n    REDISMODULE_EVENT_C,\n    1\n    };\n";
+    check(input, &["--style=whitesmith"], input);
+}
