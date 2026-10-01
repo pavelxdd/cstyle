@@ -356,12 +356,14 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.active_brace().is_some_and(|frame| {
                 self.options.brace_style == BraceStyle::Whitesmith
                     || self.options.brace_style == BraceStyle::Vtk
-                        && (matches!(
-                            frame.semantic_kind,
-                            BraceSemanticKind::Command
-                                | BraceSemanticKind::Array
-                                | BraceSemanticKind::Initializer
-                        ) || frame.semantic_kind == BraceSemanticKind::Lambda
+                        && (frame.semantic_kind == BraceSemanticKind::Command
+                            // A file-scope brace stays in column one, off
+                            // its rows.
+                            || matches!(
+                                frame.semantic_kind,
+                                BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                            ) && sibling > 0
+                            || frame.semantic_kind == BraceSemanticKind::Lambda
                             && (frame.header_indent_column > 0 || vtk_constructor_lambda)
                             || self.should_indent_brace_line(frame.brace_type))
                     || self.options.brace_style == BraceStyle::Ratliff
