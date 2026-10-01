@@ -2759,3 +2759,9 @@ fn condition_continuation_in_a_case_body_follows_astyles_stack() {
     let input = "void f(void)\n{\n    switch (x)\n    {\n    case 1:\n        if (ngx_quic_handle(c, pkt,\n                            &frame)\n                != NGX_OK)\n        {\n            return NGX_ERROR;\n        }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn condition_continuation_after_sizeof_struct_follows_astyles_stack() {
+    let input = "void f(void)\n{\n    x();\n    if (setsockopt(fd,\n                   &af, sizeof(struct accept_filter_arg))\n            == -1)\n    {\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
