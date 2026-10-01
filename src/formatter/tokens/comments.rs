@@ -1378,6 +1378,14 @@ impl FormatEngine<'_> {
                                 }
                         })
                 });
+            // A group opened outside the block holding the comment, as an
+            // include guard, sets no column inside the block.
+            let preprocessor_indent = preprocessor_indent.filter(|&spaces| {
+                self.layout.line_state.column1_line_comment
+                    || self
+                        .active_body_comment_indent_spaces()
+                        .is_none_or(|body| body <= spaces)
+            });
             let spaces = preprocessor_indent
                 .or(control_header_comment_indent)
                 .or(definition_header_comment_indent)

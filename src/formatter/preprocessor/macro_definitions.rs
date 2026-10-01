@@ -368,6 +368,12 @@ fn define_body_is_expression_continuation(parts: &[&str]) -> bool {
             && !trimmed.starts_with("//")
             && !trimmed.starts_with("/*")
             && !trimmed.contains(['{', '}', ';'])
+            // A control header starts statements, not an expression.
+            && !["if", "for", "while", "switch", "do", "else"].iter().any(|header| {
+                trimmed.strip_prefix(header).is_some_and(|rest| {
+                    rest.is_empty() || rest.starts_with([' ', '\t', '('])
+                })
+            })
     })
 }
 
@@ -674,6 +680,7 @@ impl FormatEngine<'_> {
         }
         let mut continuation_column =
             define_expression_continuation_spaces(first_line, self.options.tab_width);
+        let mut open_parens = 0isize;
         let mut in_comment = false;
         let mut comment_source_open_column = 0usize;
         let mut comment_output_open_column = 0usize;
@@ -858,6 +865,7 @@ impl FormatEngine<'_> {
                 starts_with_open,
                 starts_with_assignment,
             );
+            open_parens = open_parens_after(open_parens, content);
 
             let line_open_paren = unmatched_open_paren_column(&emitted)
                 .map(|column| visual_width_from(&emitted[..column], 0, self.options.tab_width));
@@ -872,7 +880,9 @@ impl FormatEngine<'_> {
             } else if is_structural {
                 None
             } else if info.ends_semicolon && line_open_paren.is_none() {
-                if continuation_column.is_some() && content.starts_with('(') {
+                // Inside the parentheses of a `for` header the next row keeps
+                // their column.
+                if continuation_column.is_some() && (content.starts_with('(') || open_parens > 0) {
                     continuation_column
                 } else {
                     None
@@ -892,4 +902,32 @@ impl FormatEngine<'_> {
 
 fn define_assignment_row_anchor(options: &FormatOptions, line: &str) -> Option<usize> {
     define_assignment_continuation_indent(line, options.tab_width)
+}
+
+/// The parentheses left open after a define body row, starting from
+/// `open`; a brace starts statements that no outer parenthesis continues.
+fn open_parens_after(open: isize, text: &str) -> isize {
+    let mut balance = open;
+    let mut quote = None;
+    let mut escaped = false;
+    for ch in text.chars() {
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' => balance += 1,
+            ')' => balance = (balance - 1).max(0),
+            '{' | '}' => balance = 0,
+            _ => {}
+        }
+    }
+    balance
 }

@@ -2878,3 +2878,19 @@ fn max_code_length_keeps_initializer_rows_whole() {
     let input = "static const int t[] = {\n    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,\n};\n";
     check(input, &["--max-code-length=80"], input);
 }
+
+#[test]
+fn indented_comment_in_a_block_under_an_include_guard_keeps_the_body() {
+    let input = "#ifndef BYTECODE_H\n#define BYTECODE_H\nstruct o {\n    int flags;\n\n    // length\n    int length;\n};\n#endif\n";
+    check(input, &["--indent-col1-comments"], input);
+}
+
+#[test]
+fn indented_define_bodies_keep_braceless_bodies_and_header_parens() {
+    let input = "#define for_each(it, queue) \\\n    for (size_t pq_ix_ = (queue)->get_pending; \\\n         pq_ix_ < (queue)->nr_; \\\n         pq_ix_++)\n\n#define C()  \\\n    if(s < 0) \\\n        s = in\n\nint x;\n";
+    check(
+        input,
+        &["--style=1tbs", "--indent-preproc-define", "--pad-header"],
+        input,
+    );
+}
