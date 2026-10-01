@@ -1154,7 +1154,34 @@ impl FormatEngine<'_> {
     }
 
     fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {
-        matches!(next, Some(Token::Number(_))) && self.current_ends_numeric_cast()
+        matches!(next, Some(Token::Number(_)))
+            && (self.current_ends_numeric_cast() || self.current_ends_builtin_pointer_cast())
+    }
+
+    /// Whether the current line ends with a cast to a pointer to a builtin
+    /// type, as `(void *)`.
+    fn current_ends_builtin_pointer_cast(&self) -> bool {
+        let current = self.current.trim_end();
+        self.current_ends_pointer_cast()
+            && current.rfind('(').is_some_and(|open| {
+                current[open + 1..]
+                    .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+                    .find(|word| !word.is_empty() && *word != "const")
+                    .is_some_and(|word| {
+                        matches!(
+                            word,
+                            "void"
+                                | "char"
+                                | "short"
+                                | "int"
+                                | "long"
+                                | "float"
+                                | "double"
+                                | "signed"
+                                | "unsigned"
+                        )
+                    })
+            })
     }
 
     fn is_sizeof_typedef_unary_sign(&self, next: Option<&Token>) -> bool {

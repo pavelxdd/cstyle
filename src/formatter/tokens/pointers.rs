@@ -7,6 +7,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{DeclarationFrame, PointerRole};
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
@@ -157,6 +158,10 @@ impl FormatEngine<'_> {
         if !matches!(operator, "*" | "&" | "^") {
             return false;
         }
+        // Right after `[` a `*` or `&` starts an index expression.
+        if self.layout.previous == PreviousToken::OpenBracket && matches!(operator, "*" | "&") {
+            return false;
+        }
         if self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
@@ -184,6 +189,18 @@ impl FormatEngine<'_> {
                 word.as_str(),
                 "sizeof" | "return" | "case" | "new" | "delete" | "throw"
             )
+            // A C name such as `new` ends a declarator.
+            && !(matches!(word.as_str(), "new" | "delete")
+                && self
+                    .current
+                    .active_token()
+                    .filter(|&index| index < self.tree.tokens.len())
+                    .and_then(|index| next_code_token(&self.tree.tokens, index + 1))
+                    .and_then(|name| next_code_token(&self.tree.tokens, name + 1))
+                    .is_some_and(|after| {
+                        matches!(self.tree.tokens[after], Token::Symbol(';' | ',' | ')' | '['))
+                            || matches!(&self.tree.tokens[after], Token::Operator(operator) if operator == "=")
+                    }))
         {
             return false;
         }
@@ -326,11 +343,12 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
         {
-            if self.looks_like_pointer_declaration_context() {
-                return true;
-            }
+            // A constant-like name after the operator is an operand.
             if matches!(next, Some(Token::Word(word)) if is_macro_like_word(word)) {
                 return false;
+            }
+            if self.looks_like_pointer_declaration_context() {
+                return true;
             }
             if let Some(following_operator) = following_operator
                 && !matches!(following_operator, "*" | "&")

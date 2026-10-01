@@ -2858,3 +2858,17 @@ fn added_braces_leave_a_directive_after_a_case_label_alone() {
     let input = "void f(void)\n{\n    if(!result)\n        switch(progress) {\n        case SASL_IDLE:\n#ifndef X\n            if(a)\n                /* APOP */\n            {\n                r = 1;\n            }\n#endif\n            break;\n        }\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn padded_operators_keep_unary_signs_and_derefs_attached() {
+    let input = "void f(void)\n{\n    struct commit_extra_header *new;\n    remote_dir_exists[*parent] = 1;\n    if (*types == (void *) -1) {\n        return;\n    }\n    for (; cf && q; cf = cf->next) {\n    }\n    return g(data,\n             (q & CURL_DNSQ_ADDR), t);\n}\n";
+    check(
+        input,
+        &[
+            "--pad-oper",
+            "--align-pointer=name",
+            "--align-reference=name",
+        ],
+        input,
+    );
+}
