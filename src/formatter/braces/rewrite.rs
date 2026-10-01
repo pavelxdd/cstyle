@@ -619,8 +619,10 @@ impl FormatEngine<'_> {
         // An empty statement gets no braces and keeps its own line.
         let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'));
         if adding_braces && !body_is_nested_header && !body_is_empty {
+            // A body with no `;` of its own, as a macro loop over a block,
+            // gets no braces either.
             let body_is_multi_line = find_statement_semicolon(tokens, body_index, tokens.len())
-                .is_some_and(|semicolon| {
+                .is_none_or(|semicolon| {
                     tokens[body_index..semicolon]
                         .iter()
                         .any(|token| matches!(token, Token::Newline))

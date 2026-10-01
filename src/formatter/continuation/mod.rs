@@ -133,6 +133,8 @@ impl FormatEngine<'_> {
         let len = self.output.len();
         let scoped = self.output.scoped();
         let start = len - scoped.len();
+        // Parens that later lines close match the last opens before them.
+        let mut later_closes = 0usize;
         for (offset, line) in scoped.iter().enumerate().rev().take(12) {
             if line.trim().is_empty() {
                 return None;
@@ -153,7 +155,16 @@ impl FormatEngine<'_> {
             if is_comment_line(line.trim_start()) || code.trim().is_empty() {
                 continue;
             }
-            if let Some(open) = unmatched_open_paren_column(code) {
+            let (closes, mut opens) = line_paren_imbalance(code);
+            let matched = later_closes.min(opens.len());
+            opens.truncate(opens.len() - matched);
+            later_closes = later_closes - matched + closes;
+            // An open paren ending its line sets no column.
+            if let Some(&open) = opens
+                .iter()
+                .rev()
+                .find(|&&open| code[open + 1..].chars().any(|ch| !ch.is_whitespace()))
+            {
                 let after_open = &code[open + 1..];
                 let content_offset = after_open
                     .char_indices()

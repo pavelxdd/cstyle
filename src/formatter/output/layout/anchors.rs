@@ -3833,11 +3833,15 @@ impl FormatEngine<'_> {
     /// A braceless body starting a line takes one level past the line
     /// holding its header.
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
-        // Added braces make the body a block.
-        if self.options.add_braces || self.options.add_one_line_braces {
+        let tokens = &self.tree.tokens;
+        // Added braces make the body a block; an empty statement or a
+        // nested header gets none.
+        if (self.options.add_braces || self.options.add_one_line_braces)
+            && !matches!(tokens[first], Token::Symbol(';'))
+            && !matches!(&tokens[first], Token::Word(word) if is_header(word))
+        {
             return None;
         }
-        let tokens = &self.tree.tokens;
         let header = self.tree.statements.braceless_header(first)?;
         // astyle loses track of a body after a block in its header, such as
         // a lambda in the condition.

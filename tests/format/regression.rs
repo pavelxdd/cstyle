@@ -2894,3 +2894,9 @@ fn indented_define_bodies_keep_braceless_bodies_and_header_parens() {
         input,
     );
 }
+
+#[test]
+fn added_braces_keep_empty_bodies_and_comments_after_split_conditions() {
+    let input = "int f(void)\n{\n    if (c)\n        for (v = p; *v == 32; v++)\n            ;\n    if(!data->set.low_speed_time || !data->set.low_speed_limit ||\n            paused(data))\n        /* A paused transfer is not qualified */\n    {\n        return CURLE_OK;\n    }\n    return 1;\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
