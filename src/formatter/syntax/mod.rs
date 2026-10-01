@@ -367,6 +367,9 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
             {
                 OperatorRole::PointerDeclarator
             }
+            Token::Operator(operator) if operator == "*" && in_declared_star_run(tokens, index) => {
+                OperatorRole::PointerDeclarator
+            }
             Token::Operator(operator) if operator == "*" => {
                 classify_star_operator(tokens, index, &roles)
             }
@@ -520,6 +523,52 @@ fn line_ends_after_token(tokens: &[Token], index: usize) -> bool {
         cursor += 1;
     }
     matches!(tokens.get(cursor), None | Some(Token::Newline))
+}
+
+/// Whether the `*` at `index` is in a run of two or more stars that
+/// declares a name at the start of a statement or a `for` header, as in
+/// `for (const char **p = argv;`.
+fn in_declared_star_run(tokens: &[Token], index: usize) -> bool {
+    let is_star =
+        |index: usize| matches!(&tokens[index], Token::Operator(operator) if operator == "*");
+    let mut first = index;
+    while let Some(previous) = previous_non_layout_token_index(tokens, first)
+        && is_star(previous)
+    {
+        first = previous;
+    }
+    let mut last = index;
+    while let Some(next) = next_non_layout_token_index(tokens, last + 1)
+        && is_star(next)
+    {
+        last = next;
+    }
+    if first == last {
+        return false;
+    }
+    let declares_name = next_non_layout_token_index(tokens, last + 1)
+        .filter(|&name| matches!(tokens[name], Token::Word(_)))
+        .and_then(|name| next_non_layout_token_index(tokens, name + 1))
+        .is_some_and(|after| {
+            matches!(tokens[after], Token::Symbol(';' | ',' | '['))
+                || matches!(&tokens[after], Token::Operator(operator) if operator == "=")
+        });
+    if !declares_name {
+        return false;
+    }
+    let mut words = 0;
+    let mut cursor = first;
+    while let Some(previous) = previous_non_layout_token_index(tokens, cursor) {
+        match &tokens[previous] {
+            Token::Word(word) if !is_non_type_keyword(word) => {
+                words += 1;
+                cursor = previous;
+            }
+            Token::Symbol('(' | ';' | '{' | '}') => return words > 0,
+            _ => return false,
+        }
+    }
+    words > 0
 }
 
 fn classify_star_operator(tokens: &[Token], index: usize, roles: &SyntaxRoles) -> OperatorRole {

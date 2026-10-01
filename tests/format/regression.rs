@@ -2825,3 +2825,36 @@ fn added_braces_leave_an_empty_statement_on_its_own_line() {
     let input = "void f(void)\n{\n    for (last = list; last->next; last = last->next)\n        ;\n    if (uc)\n        ; /* nothing */\n    else {\n        x = 1;\n    }\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn double_pointer_declared_in_a_for_header_keeps_its_stars_together() {
+    let input = "void f(void)\n{\n    for (const char **argp = argv; *argp; argp++) {\n        x();\n    }\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--pad-oper", "--align-pointer=name"],
+        input,
+    );
+    check(
+        input,
+        &["--style=1tbs", "--pad-oper", "--align-pointer=middle"],
+        &input.replace("char **argp", "char ** argp"),
+    );
+}
+
+#[test]
+fn added_braces_keep_a_switch_body_on_its_own_line() {
+    let input = "void f(void)\n{\n    if (!tracking.matches)\n        switch (track) {\n        case 1:\n            goto cleanup;\n        }\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
+
+#[test]
+fn indented_define_keeps_a_trailing_comment_continuation() {
+    let input = "#define MAX_PROTOS 34\n#define MAX_PROTOSTRING (MAX_PROTOS * 11)  /* Room for MAX_PROTOS number of\n                                              10-chars proto names. */\n\nint x;\n";
+    check(input, &["--indent-preproc-define"], input);
+}
+
+#[test]
+fn added_braces_leave_a_directive_after_a_case_label_alone() {
+    let input = "void f(void)\n{\n    if(!result)\n        switch(progress) {\n        case SASL_IDLE:\n#ifndef X\n            if(a)\n                /* APOP */\n            {\n                r = 1;\n            }\n#endif\n            break;\n        }\n}\n";
+    check(input, &["--style=1tbs"], input);
+}

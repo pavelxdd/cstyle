@@ -564,9 +564,15 @@ impl FormatEngine<'_> {
                 let part = part.trim_end();
                 preprocessor_directive(part).is_some() && !part.ends_with('\\')
             });
+        // Lines a block comment carries past an unbroken directive continue
+        // no define body.
+        let continued_by_backslashes = parts
+            .first()
+            .is_some_and(|part| part.trim_end().ends_with('\\'));
         if self.options.indent_preproc_define
             && is_define
             && parts.len() > 1
+            && continued_by_backslashes
             && !continued_define_contains_directive
             && opaque_literal_line_ranges.is_empty()
         {

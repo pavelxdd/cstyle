@@ -38,6 +38,17 @@ impl FormatEngine<'_> {
         if !(self.options.add_braces || self.options.add_one_line_braces) {
             return None;
         }
+        // A label such as `case X:` before a directive takes no body.
+        if self.layout.command_state.preprocessor_after_header
+            && !self
+                .layout
+                .command_state
+                .current_header
+                .as_deref()
+                .is_some_and(is_standard_add_braces_header)
+        {
+            self.layout.command_state.preprocessor_after_header = false;
+        }
         if self.layout.command_state.preprocessor_after_header {
             if self.layout.nesting.paren_depth > 0
                 || matches!(tokens.get(start), Some(Token::Symbol('{')))
@@ -602,8 +613,9 @@ impl FormatEngine<'_> {
             }
             _ => {}
         }
-        let body_is_nested_header =
-            matches!(&tokens[body_index], Token::Word(word) if is_standard_add_braces_header(word));
+        // Added braces skip a body that is itself a header, as `switch`.
+        let body_is_nested_header = matches!(&tokens[body_index], Token::Word(word)
+            if is_standard_add_braces_header(word) || language::is_header(word));
         // An empty statement gets no braces and keeps its own line.
         let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'));
         if adding_braces && !body_is_nested_header && !body_is_empty {
