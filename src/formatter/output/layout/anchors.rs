@@ -104,6 +104,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.whitesmith_macro_block_brace_indent(first))
             .or_else(|| self.one_line_block_after_macro_indent(first))
             .or_else(|| self.whitesmith_function_brace_indent(first))
+            .or_else(|| self.vtk_knr_function_brace_indent(first))
             .or_else(|| self.vtk_anonymous_member_aggregate_brace_indent(first))
             .or_else(|| self.statement_after_case_block_indent(first))
             .or_else(|| self.first_statement_after_case_label_indent(first))
@@ -913,6 +914,7 @@ impl FormatEngine<'_> {
         if matches!(tokens[first], Token::Symbol('{' | '}'))
             || self.layout.line_adjuster.total_case_unindent_depth() > 0
             || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
+            || self.layout.line_adjuster.pending_case_unindent() > 0
         {
             return None;
         }
@@ -3300,6 +3302,29 @@ impl FormatEngine<'_> {
         }
         let line = self.line_led_by(owner)?;
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// VTK keeps the braces of a file-scope function with K&R parameter
+    /// declarations in column one, as for any function.
+    fn vtk_knr_function_brace_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Vtk {
+            return None;
+        }
+        let body = match tokens[first] {
+            Token::Symbol('{') => groups.opened_at(first)?,
+            Token::Symbol('}') => groups.closed_at(first)?,
+            _ => return None,
+        };
+        let open = groups.get(body).open;
+        (self.tree.blocks.kind(body) == Some(BlockKind::FunctionBody)
+            && groups.get(body).parent.is_none()
+            && self
+                .tree
+                .previous_code_token(open)
+                .is_some_and(|before| matches!(tokens[before], Token::Symbol(';'))))
+        .then_some(0)
     }
 
     /// Whitesmith indents the `{` of a function body starting its line one

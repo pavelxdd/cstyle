@@ -2379,3 +2379,15 @@ fn whitesmith_label_in_case_block_keeps_comments_and_statement_after_its_switch(
     let input = "void f(void)\n    {\n    while (true)\n        {\n        switch (*f)\n            {\n            case '%':\n                {\n                f++;\n                /* Width. */\nlabel_width:\n                switch (*f)\n                    {\n                    case '*':\n                        f++;\n                        break;\n                    default:\n                        break;\n                    }\n                /* Width/precision separator. */\n                if (*f == '.')\n                    {\n                    f++;\n                    }\n                else\n                    {\n                    goto label_length;\n                    }\n                break;\n                }\n            default:\n                break;\n            }\n        }\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn trailing_comment_on_case_body_statement_keeps_it_before_next_label() {
+    let input = "void *f(int n)\n{\n    switch (t)\n    {\n    case 1:    /* C closure */\n    {\n        if (n)\n            return a;\n        /* else */\n        }  /* FALLTHROUGH */\n    case 2:\n        return NULL;  /* light */\n    default:\n    {\n        g();\n        return NULL;\n    }\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn vtk_knr_function_braces_stay_in_column_one() {
+    let input = "char *\nre_comp (s)\nconst char *s;\n{\n    int x;\n    return 0;\n}\n";
+    check(input, &["--style=vtk"], input);
+}

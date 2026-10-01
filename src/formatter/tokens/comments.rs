@@ -498,6 +498,10 @@ impl FormatEngine<'_> {
                 return false;
             }
             let mut start = end - 1;
+            // A statement whose trailing comment ends the output stays put.
+            if last.contains("/*") && !last.starts_with('}') {
+                return false;
+            }
             while start > 0 && !self.output[start].trim_start().starts_with("/*") {
                 let text = self.output[start].trim();
                 if text.is_empty()
