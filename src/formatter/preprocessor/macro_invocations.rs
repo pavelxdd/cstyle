@@ -90,7 +90,7 @@ impl FormatEngine<'_> {
         if tokens.len() == self.tree.tokens.len() {
             let mut code = (line_start..line_end).filter(|&index| is_code_token(&tokens[index]));
             if let Some(first) = code.next() {
-                let last = code.last().unwrap_or(first);
+                let last = code.next_back().unwrap_or(first);
                 self.output
                     .set_pending_tokens(Some(TokenSpan { first, last }));
             }
