@@ -2656,9 +2656,10 @@ impl FormatEngine<'_> {
                     .filter(|frame| {
                         frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_some()
                     })
-                    .map_or(layout.normal_indent * self.options.indent_width, |frame| {
-                        frame.sibling_indent_column
-                    }),
+                    .map_or(
+                        layout.normal_indent.max(layout.indent) * self.options.indent_width,
+                        |frame| frame.sibling_indent_column,
+                    ),
             );
         }
         if let Some(spaces) = self.ratliff_closing_brace_indent_spaces(line, layout.normal_indent) {

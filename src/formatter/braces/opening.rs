@@ -2667,6 +2667,10 @@ impl FormatEngine<'_> {
             return false;
         };
         let last = last.trim_end();
+        // A directive line takes no brace.
+        if last.trim_start().starts_with('#') {
+            return false;
+        }
         if matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && last.ends_with('=')
             && matches!(

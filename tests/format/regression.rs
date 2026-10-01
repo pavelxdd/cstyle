@@ -2518,3 +2518,15 @@ fn statement_after_labeled_block_with_directive_keeps_its_level() {
     let input = "void *f(void)\n{\n    x();\n    return o;\n\nfail:\n    if(o)\n        {\n#ifndef A\n            g(o);\n#endif\n            h(o);\n        }\n\n    LEAVE(&guard);\n    return NULL;\n}\n";
     check(input, &["--style=gnu"], input);
 }
+
+#[test]
+fn ratliff_block_brace_after_directive_stays_off_the_directive() {
+    let input = "int f(void) {\n    for (i = 0; i < n; i++) {\n        if (user) {\n            continue;\n            }\n\n#if !(NGX_WIN32)\n            {\n            int fi;\n            g(fi);\n            }\n#endif\n        }\n    return 0;\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn ratliff_function_brace_after_endif_indents_with_its_body() {
+    let input = "#ifdef A\nint\ng(int a, int b)\n#else\nint\ng(int a)\n#endif\n    {\n    return h(a);\n    }\n\nint\nk(int a) {\n    return 0;\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
