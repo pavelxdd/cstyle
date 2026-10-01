@@ -952,9 +952,17 @@ impl FormatEngine<'_> {
             {
                 return Some(leading_visual_width(previous, self.options.tab_width));
             }
-            return Some(
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
-            );
+            // Ratliff closes the aggregate a declaration defines at its
+            // body; the rows stand a level past the declaration.
+            let lead = leading_visual_width(previous, self.options.tab_width);
+            let lead = if self.options.brace_style == BraceStyle::Ratliff
+                && previous.trim_start().starts_with('}')
+            {
+                lead.saturating_sub(self.options.indent_width)
+            } else {
+                lead
+            };
+            return Some(lead + self.options.indent_width);
         }
         if closing
             && let Some(previous) = self.output.last()
@@ -1029,7 +1037,10 @@ impl FormatEngine<'_> {
                             }
                         }
                         let prefix_len = leading_visual_width(previous, self.options.tab_width);
-                        let inner_levels = levels - usize::from(closing);
+                        // Ratliff closes a group opened after code at its rows.
+                        let closes_at_rows = self.options.brace_style == BraceStyle::Ratliff
+                            && !previous.trim_start().starts_with(['{', '}']);
+                        let inner_levels = levels - usize::from(closing && !closes_at_rows);
                         return Some(prefix_len + inner_levels * self.options.indent_width);
                     }
                     '{' => depth = depth.saturating_sub(1),

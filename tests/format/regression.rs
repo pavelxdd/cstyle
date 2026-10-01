@@ -2627,3 +2627,29 @@ fn macro_word_heading_a_block_keeps_the_block() {
     let input = "int f(Wal *pWal)\n{   int rc;\n    SEH_TRY\n    {   rc = g(pWal);\n    }\n    SEH_EXCEPT( rc = 1; )\n    return rc;\n}\n";
     check(input, &["--style=horstmann"], input);
 }
+
+#[test]
+fn ratliff_initializer_after_struct_close_nests_from_the_declaration() {
+    let input = "static const struct {\n    const char *key;\n    int level;\n    } advice_setting[] = {\n    [A]\t= { \"a\" },\n    [B]\t= { \"b\" },\n    };\nstatic const struct {\n    const char *string;\n    int key;\n    } key_string_table[] = {\n    /* Function keys. */\n        { \"F1\", 1 },\n        { \"F2\", 2 },\n\n    /* Arrow keys. */\n        { \"Up\", 3 },\n    };\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn nested_compound_literal_brace_rows_follow_the_style() {
+    let ratliff = "static T a[] = {\n        {\n        .x = 1\n        },\n        {0}\n    };\nvoid f(void) {\n    g(&(T) {\n        .k = (S[]) {\n                {\n                .x = 1\n                },\n                {0}\n            },\n        });\n    }\n";
+    check(ratliff, &["--style=ratliff"], ratliff);
+    let whitesmith = "static T a[] = {\n        {\n        .x = 1\n        },\n        {0}\n    };\nvoid f(void)\n    {\n    g(&(T)\n        {\n        .k = (S[])\n            {\n                {\n                .x = 1\n                },\n                {0}\n            },\n        });\n    }\n";
+    check(whitesmith, &["--style=whitesmith"], whitesmith);
+}
+
+#[test]
+fn ratliff_rows_after_a_split_brace_row_close_at_the_row() {
+    let input = "void f(void) {\n    T info = {\n        .k = (S[]) {\n                {\n                .a = 1,\n                .b = {0,1,0}\n                }, {\n                .c = 2,\n                /* Omitted is RANGE {0,1,0} */\n                },\n                {0}\n            }\n        };\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn vtk_comment_before_indented_brace_row_stays_at_the_rows() {
+    let input = "static const T st[][16] =\n{\n    /* 0 */\n        {\n            {0x00, 0x03}, {0x01, 0x04}\n        },\n    /* 5 */\n        {\n            {0x03, 0x01}, {0x06, 0x01}\n        }\n};\n";
+    check(input, &["--style=vtk"], input);
+}

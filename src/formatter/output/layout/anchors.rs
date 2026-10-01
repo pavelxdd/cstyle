@@ -88,6 +88,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.vtk_aggregate_array_row_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
             .or_else(|| self.whitesmith_brace_row_indent(first))
+            .or_else(|| self.ratliff_first_brace_row_indent(first))
             .or_else(|| self.initializer_row_indent(first))
             // Horstmann runs the first row into its brace only later.
             .or_else(|| {
@@ -282,6 +283,52 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Ratliff indents a first brace row a level past the rows of an
+    /// initializer whose `{` ends a line.
+    fn ratliff_first_brace_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Ratliff
+            || !matches!(tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
+        let group = groups.enclosing(first)?;
+        let open = groups.get(group).open;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
+            || self.tree.previous_code_token(first) != Some(open)
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        let span = self.output.line_tokens(line)?;
+        if span.first == open || span.last != open {
+            return None;
+        }
+        // An aggregate closed on the line stands at its body; a declaration
+        // split over lines starts on its first.
+        let lead = if matches!(tokens[span.first], Token::Symbol('}')) {
+            self.output
+                .lead_width(line, self.options.tab_width)
+                .saturating_sub(self.options.indent_width)
+        } else {
+            let mut start = line;
+            while start > 0 {
+                let code = self.output.code(start - 1).trim_end();
+                if code.is_empty()
+                    || self.output.line_tokens(start - 1).is_none()
+                    || code.ends_with([';', '{', '}', ','])
+                    || code.trim_start().starts_with('#')
+                {
+                    break;
+                }
+                start -= 1;
+            }
+            self.output.lead_width(start, self.options.tab_width)
+        };
+        Some(lead + 2 * self.options.indent_width + self.case_unindent_spaces())
+    }
+
     /// An initializer element starting a line after the `,` that ends the
     /// element before it takes that element's column, when that element
     /// starts its own line; a value after a designator's `=` takes the
@@ -317,9 +364,22 @@ impl FormatEngine<'_> {
         });
         // Styles that indent initializer braces lay out a last brace row
         // their own way.
+        // A last brace row after a brace row spanning lines stands at it.
+        let after_split_brace_row = self.options.brace_style != BraceStyle::Vtk
+            && open_of_row_before(tokens, groups, group, comma)
+                .filter(|&element| matches!(tokens[element], Token::Symbol('{')))
+                .and_then(|element| {
+                    let close = groups.get(groups.opened_at(element)?).close?;
+                    Some(
+                        self.output.line_with_token(close)?
+                            != self.output.line_with_token(element)?,
+                    )
+                })
+                .unwrap_or(false);
         if separated.is_none()
             && matches!(tokens[first], Token::Symbol('{'))
             && self.should_indent_brace_line(BraceType::Initializer)
+            && !after_split_brace_row
             && !(self.options.brace_style == BraceStyle::Vtk
                 && open_of_row_before(tokens, groups, group, comma).is_some_and(|element| {
                     matches!(tokens[element], Token::Symbol('{'))
@@ -448,7 +508,15 @@ impl FormatEngine<'_> {
         if !text.starts_with(token_text(&tokens[row]).as_str()) {
             return None;
         }
+        // A `}, {` row closes the row before it on the element's line.
+        let closes_row_before = matches!(tokens[row], Token::Symbol('}'))
+            && groups
+                .closed_at(row)
+                .is_some_and(|closed| groups.get(closed).parent == Some(group))
+            && next_code_token(tokens, row + 1)
+                .is_some_and(|comma| next_code_token(tokens, comma + 1) == Some(element));
         if row != element
+            && !closes_row_before
             && !(groups.enclosing(row) == Some(group)
                 && self.tree.previous_code_token(row).is_some_and(|before| {
                     before == open
@@ -812,9 +880,15 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
+        // A group opened on a `}, {` row closes at that row.
+        let row_extra = if matches!(self.tree.tokens[span.first], Token::Symbol('}')) {
+            0
+        } else {
+            self.options.indent_width
+        };
         (span.first != open && span.last == open).then(|| {
             self.output.lead_width(line, self.options.tab_width)
-                + self.options.indent_width
+                + row_extra
                 + self.case_unindent_spaces()
         })
     }
@@ -2566,10 +2640,25 @@ impl FormatEngine<'_> {
         } else {
             self.label_comment_column(first)
         };
+        // VTK indents a file-scope brace row past the rows; comments before
+        // it stay at the rows.
+        let vtk_brace_row_column = (self.options.brace_style == BraceStyle::Vtk
+            && initializer_element
+            && matches!(tokens[first], Token::Symbol('{'))
+            && !self.in_code(first))
+        .then(|| {
+            let open = groups.get(groups.enclosing(first)?).open;
+            let open_line = self.output.line_with_token(open)?;
+            let rows = self.output.lead_width(open_line, self.options.tab_width)
+                + self.options.indent_width;
+            (self.output.lead_width(line, self.options.tab_width) > rows).then_some(rows)
+        })
+        .flatten();
         let block_body_column = self
             .block_comment_column(first)
             .or(split_chain_column)
-            .or(label_column);
+            .or(label_column)
+            .or(vtk_brace_row_column);
         if !statements.starts_block_statement(first)
             && block_body_column.is_none()
             && !in_parens

@@ -370,6 +370,21 @@ impl FormatEngine<'_> {
                             BraceSemanticKind::Array | BraceSemanticKind::Initializer
                         )
             });
+        // Ratliff closes the aggregate a declaration defines at its body:
+        // an initializer opened on that line nests from the declaration.
+        let sibling = if self.options.brace_style == BraceStyle::Ratliff
+            && code.starts_with('}')
+            && code.ends_with('{')
+            && self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                matches!(
+                    frame.semantic_kind,
+                    BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                )
+            }) {
+            sibling.saturating_sub(self.options.indent_width)
+        } else {
+            sibling
+        };
         let body = if body_uses_brace_column {
             sibling
         } else {
