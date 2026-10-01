@@ -2795,3 +2795,9 @@ fn comment_after_a_switch_brace_before_a_statement_stands_at_the_body() {
     let input = "void f(void)\n{\n    switch (code) {\n        /* These mappings are the same. */\n        VK_CASE(VK_INSERT,  \"[2~\")\n    default:\n        return NULL;\n    }\n    switch (x) {\n    /* first */\n    case 1:\n        break;\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn whitesmith_function_after_a_typedef_and_a_block_comment_starts_the_line() {
+    let input = "typedef struct\n    {\n    int state;\n    } set_rand_t;\n/* note\n   more. */\nstatic void set_seed(int seed)\n    {\n    g = 1;\n    h = 2;\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}

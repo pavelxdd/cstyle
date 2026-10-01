@@ -22,6 +22,7 @@ use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineRepl
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -705,6 +706,42 @@ impl FormatEngine<'_> {
                         + self.case_unindent_spaces(),
                 );
             }
+        } else if !line.trim_start().starts_with(['}', '#'])
+            // After a block comment, the code line before it decides.
+            && self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| self.output.comment_start_index(index) != index)
+            && let Some(index) = (0..self.output.len())
+                .rev()
+                .find(|&index| {
+                    self.output
+                        .line_tokens(index)
+                        .is_some_and(|span| is_code_token(&self.tree.tokens[span.first]))
+                })
+            && starts_post_closing_declaration(self.output.code(index))
+        {
+            // The declaration starts at the line of its `{` or, for a `{`
+            // alone, the line before.
+            let owner = self.output.line_tokens(index).and_then(|span| {
+                let open = self
+                    .tree
+                    .groups
+                    .get(self.tree.groups.closed_at(span.first)?)
+                    .open;
+                let mut line = self.output.line_with_token(open)?;
+                if self.output.trimmed(line) == "{" {
+                    line = (0..line)
+                        .rev()
+                        .find(|&line| self.output.line_tokens(line).is_some())?;
+                }
+                Some(self.output.lead_width(line, self.options.tab_width))
+            });
+            let closing_indent = self.output.lead_width(index, self.options.tab_width);
+            layout.exact_indent_spaces = Some(
+                owner.map_or(closing_indent, |owner| owner.min(closing_indent))
+                    + self.case_unindent_spaces(),
+            );
         }
         if line.trim() == "::"
             && let Some(previous) = self.output.last_line_outside_comment()
