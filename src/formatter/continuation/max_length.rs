@@ -10,6 +10,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
 use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
@@ -65,7 +66,19 @@ impl FormatEngine<'_> {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
-        if should_skip_split(line) {
+        // Rows of an initializer stay whole, as astyle keeps them.
+        let initializer_row = self
+            .output
+            .pending_tokens()
+            .filter(|span| span.first < self.tree.tokens.len())
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            });
+        if should_skip_split(line) || initializer_row {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         }
