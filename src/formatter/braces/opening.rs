@@ -472,7 +472,14 @@ impl FormatEngine<'_> {
             })
             .flatten();
         Some(match self.layout.frame_stack.active_brace() {
-            Some(frame) if frame.class_base => frame.sibling_indent_column,
+            // A class body's brace stands a level past the enclosing body.
+            Some(frame) if frame.class_base => frame.sibling_indent_column.max(
+                self.layout
+                    .frame_stack
+                    .enclosing_brace()
+                    .map_or(0, |enclosing| enclosing.body_indent_column)
+                    + self.options.indent_width,
+            ),
             Some(frame) if frame.semantic_kind == BraceSemanticKind::Lambda => {
                 frame.body_indent_column
             }

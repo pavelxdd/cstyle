@@ -2653,3 +2653,9 @@ fn vtk_comment_before_indented_brace_row_stays_at_the_rows() {
     let input = "static const T st[][16] =\n{\n    /* 0 */\n        {\n            {0x00, 0x03}, {0x01, 0x04}\n        },\n    /* 5 */\n        {\n            {0x03, 0x01}, {0x06, 0x01}\n        }\n};\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn whitesmith_class_with_base_list_on_its_line_indents_its_brace() {
+    let input = "class gzfilebuf : public streambuf\n    {\n\n    public:\n\n        gzfilebuf( );\n        int x;\n    };\n\nclass A\n    {\n    public:\n        int y;\n    };\n";
+    check(input, &["--style=whitesmith"], input);
+}
