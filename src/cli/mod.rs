@@ -66,7 +66,7 @@ fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), CliError> {
     let args = args.into_iter().collect::<Vec<_>>();
     let errors_to_stdout = args::requests_errors_to_stdout(&args);
     match args::parse(args).map_err(|error| error.with_stdout(errors_to_stdout))? {
-        Command::Help => help::print(DISPLAY_NAME),
+        Command::Help => help::print(DISPLAY_NAME, VERSION),
         Command::Version => {
             writeln!(io::stdout().lock(), "{} {}", PROGRAM_NAME, VERSION).map_err(CliError::stdout)
         }
