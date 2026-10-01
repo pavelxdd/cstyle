@@ -81,6 +81,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.indented_assigned_brace_row_indent(first))
             .or_else(|| self.member_after_directive_indent(first))
             .or_else(|| self.member_declarator_after_comma_indent(first))
+            .or_else(|| self.run_in_nested_array_row_indent(first))
             .or_else(|| self.vtk_array_element_indent(first))
             .or_else(|| self.vtk_aggregate_array_row_indent(first))
             .or_else(|| self.vtk_initializer_first_element_indent(first))
@@ -517,6 +518,55 @@ impl FormatEngine<'_> {
         Some(spaces + self.case_unindent_spaces())
     }
 
+    /// Styles that indent braces lay out the rows of an initializer whose
+    /// attached `{` runs a nested `{` in as if the outer `{` stood on its
+    /// own line: rows two levels past the declaration, the `}` one.
+    fn run_in_nested_array_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Ratliff | BraceStyle::Vtk
+        ) {
+            return None;
+        }
+        let (group, levels) = if matches!(tokens[first], Token::Symbol('}')) {
+            (groups.closed_at(first)?, 1)
+        } else {
+            let group = groups.enclosing(first)?;
+            let previous = self.tree.previous_code_token(first)?;
+            if !matches!(tokens[previous], Token::Symbol(','))
+                || groups.enclosing(previous) != Some(group)
+            {
+                return None;
+            }
+            (group, 2)
+        };
+        let open = groups.get(group).open;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
+            || groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            || (self.options.brace_style == BraceStyle::Vtk && !self.in_code(open))
+            || !next_code_token(tokens, open + 1)
+                .is_some_and(|element| matches!(tokens[element], Token::Symbol('{')))
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        let span = self.output.line_tokens(line)?;
+        let element = next_code_token(tokens, open + 1)?;
+        if span.first == open || self.output.line_with_token(element) != Some(line) {
+            return None;
+        }
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + levels * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
     /// VTK leaves the rows of a file-scope initializer declared with an
     /// aggregate keyword, brace rows too, a level past its `{` line.
     fn vtk_aggregate_array_row_indent(&self, first: usize) -> Option<usize> {
@@ -948,11 +998,19 @@ impl FormatEngine<'_> {
         }
         let in_switch = group
             .and_then(|group| self.tree.blocks.owner(group))
-            .is_some_and(|owner| matches!(&tokens[owner], Token::Word(word) if word == "switch"));
+            .is_some_and(|owner| match &tokens[owner] {
+                Token::Word(word) if word == "switch" => true,
+                // Horstmann runs case blocks in at their labels.
+                Token::Word(word) if word == "case" || word == "default" => {
+                    self.options.brace_style != BraceStyle::Horstmann
+                }
+                _ => false,
+            });
         if !in_switch {
             return self.enclosing_block_body_column(first);
         }
-        // In a switch, the statements of the case body before the label.
+        // In a switch or a case block, the statements of the case body
+        // before the label.
         let mut index = label;
         loop {
             let before = statement_before(index)?;
@@ -2389,7 +2447,13 @@ impl FormatEngine<'_> {
         let split_chain_column = is_else
             .then(|| self.split_chain_else_column(first))
             .flatten();
-        let block_body_column = self.block_comment_column(first).or(split_chain_column);
+        let label_column = (!case_labels)
+            .then(|| self.label_comment_column(first))
+            .flatten();
+        let block_body_column = self
+            .block_comment_column(first)
+            .or(split_chain_column)
+            .or(label_column);
         if !statements.starts_block_statement(first)
             && block_body_column.is_none()
             && !in_parens
@@ -2416,6 +2480,7 @@ impl FormatEngine<'_> {
             Token::Symbol('{' | '}') => return,
             _ if !is_case_label
                 && !member_continuation
+                && label_column.is_none()
                 && next_code_token(tokens, first + 1)
                     .is_some_and(|next| matches!(tokens[next], Token::Symbol(':'))) =>
             {
@@ -2446,16 +2511,13 @@ impl FormatEngine<'_> {
                 end = index;
                 continue;
             }
-            // Directives change no indent, alternative branches aside; a
-            // label or an `else` may move off the level of the code before.
+            // Directives change no indent: branches between the comments
+            // and the code hold directives only. A label or an `else` may
+            // move off the level of the code before.
             if !is_case_label
                 && (!is_else || split_chain_column.is_some())
                 && text.starts_with('#')
                 && !text.ends_with('\\')
-                && !matches!(
-                    preprocessor_directive(text),
-                    Some("else" | "elif" | "elifdef" | "elifndef" | "define")
-                )
                 && (index == 0 || !self.output.trimmed(index - 1).ends_with('\\'))
             {
                 end = index;
@@ -3995,6 +4057,32 @@ impl FormatEngine<'_> {
         self.enclosing_block_body_column(first)
             .or_else(|| self.earlier_statement_column(first))
             .or_else(|| self.brace_line_body_column(first))
+    }
+
+    /// The column of the statements before the statement label at `first`
+    /// in its block, which comments before the label keep.
+    fn label_comment_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let statements = &self.tree.statements;
+        if !matches!(&tokens[first], Token::Word(word) if !matches!(word.as_str(), "case" | "default"))
+            || !next_code_token(tokens, first + 1)
+                .is_some_and(|colon| matches!(tokens[colon], Token::Symbol(':')))
+            || statements.braceless_header(first).is_some()
+        {
+            return None;
+        }
+        let block = groups.enclosing(first)?;
+        let open = groups.get(block).open;
+        let earlier = (open + 1..first).rev().find(|&index| {
+            statements.starts_block_statement(index)
+                && groups.enclosing(index) == Some(block)
+                && statements.braceless_header(index).is_none()
+                && !next_code_token(tokens, index + 1)
+                    .is_some_and(|next| matches!(tokens[next], Token::Symbol(':')))
+        })?;
+        let line = self.line_led_by(earlier)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
     }
 
     /// The column of the outer `else` of the `else` at `first`, when that

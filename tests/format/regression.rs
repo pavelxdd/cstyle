@@ -2367,3 +2367,15 @@ fn whitesmith_comment_before_else_of_split_chain_stands_at_outer_else() {
     let input = "void f(void)\n    {\n#ifdef R\n    if(a)\n        {\n        x();\n        }\n    else\n#endif\n\n        if(\n#if defined(Q) && \\\n  (Z == 1)\n            q &&\n#endif\n            b)\n            {\n            y();\n            }\n    /*\n     * Even when\n     */\n#ifdef H\n        else\n            {\n            z();\n            }\n#else\n        else\n            {\n            w();\n            }\n#endif\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn whitesmith_rows_after_run_in_nested_brace_stand_as_if_the_brace_were_broken() {
+    let input = "void f(void)\n    {\n    const char *a[][2] = { { \"k1\", \"v1\" },\n            { \"k2\", \"v2\" }\n        };\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn whitesmith_label_in_case_block_keeps_comments_and_statement_after_its_switch() {
+    let input = "void f(void)\n    {\n    while (true)\n        {\n        switch (*f)\n            {\n            case '%':\n                {\n                f++;\n                /* Width. */\nlabel_width:\n                switch (*f)\n                    {\n                    case '*':\n                        f++;\n                        break;\n                    default:\n                        break;\n                    }\n                /* Width/precision separator. */\n                if (*f == '.')\n                    {\n                    f++;\n                    }\n                else\n                    {\n                    goto label_length;\n                    }\n                break;\n                }\n            default:\n                break;\n            }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
