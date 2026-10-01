@@ -493,7 +493,14 @@ impl FormatEngine<'_> {
                 .or_else(|| self.split_definition_brace_indent_spaces())
                 .or(previous_definition_brace_spaces)
                 .unwrap_or(frame.header_indent_column + self.options.indent_width),
-            _ => match self.layout.frame_stack.active_header() {
+            // A block after a statement in a switch body belongs to that
+            // statement, not to the switch.
+            _ => match self
+                .layout
+                .frame_stack
+                .active_header()
+                .filter(|_| !self.directly_in_switch_body())
+            {
                 Some(header)
                     if previous_is_header_continuation
                         || self

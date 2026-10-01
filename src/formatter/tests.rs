@@ -247,7 +247,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
     let mut formatter = FormatEngine::new(&options);
     formatter.layout.line_state.operator_padding_disabled = true;
     formatter.layout.run_in_state.current_run_in_indent = Some(3);
-    formatter.update_case_body_indent(LineKind::SwitchLabel);
+    formatter.update_case_body_indent(LineKind::SwitchLabel, "case 1:");
     formatter.update_case_brace_unindent(LineKind::SwitchLabel, "case 1:");
     let expected_switch_case_layout = formatter.layout.switch_case_layout.clone();
     formatter.layout.in_class_base_clause = true;

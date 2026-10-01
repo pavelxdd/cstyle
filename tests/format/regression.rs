@@ -2590,3 +2590,9 @@ fn vtk_block_after_split_macro_loop_head_stands_past_its_start() {
     let input = "void f(void)\n{\n    x();\n    RB_FOREACH_SAFE(watcher_list, watcher_root,\n                    uv__inotify_watchers(loop), tmp_watcher_list_iter)\n        {\n        watcher_list->iterating = 1;\n        y();\n        }\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn whitesmith_statements_before_the_first_label_stand_in_the_case_body() {
+    let input = "void f(void)\n    {\n    switch( iSub )\n        {\n            CASE(0, \"x\")\n                {\n                int nCol;\n                nCol = g();\n                break;\n                }\n            /* Next */\n            CASE(1, \"y\")\n                {\n                int nRow;\n                break;\n                }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}

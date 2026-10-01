@@ -1575,7 +1575,7 @@ impl FormatEngine<'_> {
         layout.indent = objc_alignment.indent_level;
         layout.exact_indent_spaces = objc_alignment.exact_indent_spaces;
         let restore_objc_message_align = objc_alignment.restore_message_align;
-        self.update_case_body_indent(layout.line_kind);
+        self.update_case_body_indent(layout.line_kind, line);
         let case_unindent_closing_line = self.case_closing_line_needs_unindent();
         self.update_case_brace_unindent(layout.line_kind, line);
         if self.try_publish_attached_return_type(line)

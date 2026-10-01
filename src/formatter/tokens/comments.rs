@@ -1629,7 +1629,7 @@ impl FormatEngine<'_> {
                     .last_closed_brace()
                     .is_some_and(|frame| {
                         frame.semantic_kind == BraceSemanticKind::Command
-                            && frame.header.as_deref().is_some_and(|header| {
+                            && frame.header.as_deref().is_none_or(|header| {
                                 !matches!(header, "case" | "default" | "switch")
                             })
                     })

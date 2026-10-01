@@ -1916,8 +1916,12 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind) {
-        if line_kind == LineKind::SwitchLabel {
+    pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind, line: &str) {
+        // A statement before the first label stands in the case body too.
+        let statement_in_switch_body = line_kind == LineKind::Normal
+            && !line.trim_start().starts_with(['{', '}', '#', '/'])
+            && self.directly_in_switch_body();
+        if line_kind == LineKind::SwitchLabel || statement_in_switch_body {
             let current = self.layout.nesting.brace_header_stack.len();
             if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
                 self.layout
@@ -1926,6 +1930,14 @@ impl FormatEngine<'_> {
                     .push(current);
             }
         }
+    }
+
+    pub(crate) fn directly_in_switch_body(&self) -> bool {
+        self.layout
+            .nesting
+            .brace_header_stack
+            .last()
+            .is_some_and(|header| header.as_deref() == Some("switch"))
     }
 
     pub(crate) fn update_case_brace_unindent(&mut self, line_kind: LineKind, line: &str) {

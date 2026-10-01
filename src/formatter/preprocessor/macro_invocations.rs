@@ -69,6 +69,9 @@ impl FormatEngine<'_> {
             return false;
         }
         self.finish_line();
+        if self.directly_in_switch_body() {
+            self.update_case_body_indent(LineKind::Normal, trimmed);
+        }
         let indent =
             self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
         let exact_indent_spaces =
