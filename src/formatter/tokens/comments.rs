@@ -1864,6 +1864,31 @@ impl FormatEngine<'_> {
             {
                 return Some(0);
             }
+            // A macro call that closes all its parens at file scope ends its
+            // statement without `;`.
+            if self.layout.nesting.brace_type_stack.is_empty()
+                && self.layout.nesting.paren_depth == 0
+                && code.ends_with(')')
+            {
+                let lines = self.output.scoped();
+                let paren_balance = |line: &str| {
+                    let code = &line[..trailing_comment_split_limit(line)];
+                    code.matches('(').count() as isize - code.matches(')').count() as isize
+                };
+                let mut balance = 0isize;
+                for line in lines.iter().rev() {
+                    if line.trim().is_empty() {
+                        break;
+                    }
+                    balance += paren_balance(line);
+                    if balance >= 0 {
+                        break;
+                    }
+                }
+                if balance == 0 {
+                    return Some(0);
+                }
+            }
         }
         let previous_statement_indent = previous_line.and_then(|line| {
             let code = line[..trailing_comment_split_limit(line)].trim_end();

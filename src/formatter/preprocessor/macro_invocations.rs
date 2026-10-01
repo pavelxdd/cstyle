@@ -3,6 +3,8 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::SyntaxRole;
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
@@ -84,6 +86,15 @@ impl FormatEngine<'_> {
                             + self.options.indent_width
                     })
                 });
+        // The line holds its tokens for the anchors of the code after it.
+        if tokens.len() == self.tree.tokens.len() {
+            let mut code = (line_start..line_end).filter(|&index| is_code_token(&tokens[index]));
+            if let Some(first) = code.next() {
+                let last = code.last().unwrap_or(first);
+                self.output
+                    .set_pending_tokens(Some(TokenSpan { first, last }));
+            }
+        }
         if let Some(spaces) = exact_indent_spaces {
             self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), spaces);
         } else {
