@@ -432,7 +432,11 @@ impl FormatEngine<'_> {
         // A row of several elements places the next row from its first.
         let row = self.output.line_tokens(line)?.first;
         // Elements run in after the group's brace stand at the first.
-        if row == open && next_code_token(tokens, open + 1) == Some(element) {
+        if (row == open
+            || matches!(&tokens[element], Token::Symbol('.'))
+                && self.output.line_with_token(open) == Some(line))
+            && next_code_token(tokens, open + 1) == Some(element)
+        {
             return Some(self.token_column(element)? + self.case_unindent_spaces());
         }
         // The row may follow a comment on its line.

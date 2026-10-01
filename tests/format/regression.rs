@@ -2506,3 +2506,9 @@ fn closing_brace_after_braces_opened_in_both_directive_branches_finds_its_opener
     let input = "void f(void)\n{\n    for (;;)\n    {\n        for (;;)\n        {\n#ifdef A\n            if (a)\n            {\n#else\n            if (b)\n            {\n#endif\n                x();\n            }\n        }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn designator_rows_after_run_in_first_element_align_with_it() {
+    let input = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n    x();\n}\n";
+    check(input, &["--style=kr"], input);
+}
