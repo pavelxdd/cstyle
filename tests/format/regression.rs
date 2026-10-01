@@ -2720,3 +2720,22 @@ fn vtk_compound_literal_after_a_dereferenced_assignment_indents_its_brace() {
     let input = "void f(void)\n{\n    *r = (A)\n        {\n        .name = name,\n        .desc = desc,\n        };\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn whitesmith_blocks_in_an_else_body_after_a_blank_line_follow_their_headers() {
+    let input = "void f(void)\n    {\n    if( a )\n        b();\n    else\n\n#ifndef X\n        if( c )\n            {\n            for(;;)\n                {\n                g();\n                }\n            }\n#endif\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+    check(
+        input,
+        &["--style=vtk"],
+        &input
+            .replacen("    {\n    if", "{\n    if", 1)
+            .replacen("#endif\n    }", "#endif\n}", 1),
+    );
+}
+
+#[test]
+fn whitesmith_case_block_in_an_else_body_after_a_blank_line_keeps_its_statements() {
+    let input = "void f(void)\n    {\n    if( a )\n        b();\n    else\n\n        if( c )\n            {\n            switch( op )\n                {\n                case X:\n                    {\n                    g();\n                    for(;;)\n                        {\n                        h();\n                        }\n                    break;\n                    }\n                }\n            }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}

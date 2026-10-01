@@ -141,13 +141,17 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
         ) && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
-            && sibling.is_some()
-            && sibling == block
-            && self
-                .tree
-                .groups
-                .enclosing(first)
-                .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+            && block.is_some()
+            && (sibling.is_some() && sibling == block
+                && self
+                    .tree
+                    .groups
+                    .enclosing(first)
+                    .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+                // The engine loses levels in an `else` body split off by an
+                // empty line; the tree places its blocks.
+                || sibling.is_none_or(|sibling| Some(sibling) == block)
+                    && self.tree.statements.in_else_body_after_blank_line(first))
         {
             layout.exact_indent_spaces = block;
             return layout;
@@ -3302,12 +3306,12 @@ impl FormatEngine<'_> {
         }
         // GNU braces nested deeper in such a body stand at their headers.
         if self.tree.statements.in_else_body_after_blank_line(first)
-            && (self.options.brace_style != BraceStyle::Gnu
-                || self.header_keyword_before(first).is_none_or(|keyword| {
-                    self.tree
-                        .statements
-                        .starts_else_body_after_blank_line(keyword)
-                }))
+            && self.options.brace_style == BraceStyle::Gnu
+            && self.header_keyword_before(first).is_none_or(|keyword| {
+                self.tree
+                    .statements
+                    .starts_else_body_after_blank_line(keyword)
+            })
         {
             return None;
         }
@@ -4260,7 +4264,15 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let open = self.tree.statements.block_opening(first)?;
+        // Where the engine loses levels, in an `else` body split off by an
+        // empty line, every statement of the block stands at its brace.
+        let open = self.tree.statements.block_opening(first).or_else(|| {
+            (self.tree.statements.starts_block_statement(first)
+                && self.tree.statements.in_else_body_after_blank_line(first))
+            .then(|| self.tree.groups.enclosing(first))
+            .flatten()
+            .map(|group| self.tree.groups.get(group).open)
+        })?;
         let block = self.tree.groups.opened_at(open)?;
         let owner = self.tree.blocks.owner(block)?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "case" || word == "default")
