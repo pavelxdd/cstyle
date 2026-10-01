@@ -185,6 +185,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|open| {
                     self.brace_stands_at_its_header(open)
                         || self.brace_attached_to_control_header(open)
+                        || self.tree.statements.branch_header_of_block(open).is_some()
                 })
             && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
             && Some(layout.exact_indent_spaces.unwrap_or(structural)) < block
@@ -343,12 +344,24 @@ impl FormatEngine<'_> {
             .iter()
             .any(|token| matches!(token, Token::Comment(..)));
         // So does a row after a nested VTK group closed at its elements.
-        let after_block_like_close = self.options.brace_style == BraceStyle::Vtk
-            && self
-                .tree
-                .previous_code_token(comma)
-                .and_then(|close| groups.closed_at(close))
-                .is_some_and(|nested| self.vtk_nested_rows_like_blocks(nested));
+        // Whitesmith and Ratliff indent such a `}` on its own line past the
+        // rows, which the engine would follow.
+        let after_block_like_close = self
+            .tree
+            .previous_code_token(comma)
+            .and_then(|close| groups.closed_at(close).map(|nested| (close, nested)))
+            .is_some_and(|(close, nested)| match self.options.brace_style {
+                BraceStyle::Vtk => self.vtk_nested_rows_like_blocks(nested),
+                BraceStyle::Whitesmith | BraceStyle::Ratliff => {
+                    self.tree.blocks.kind(nested) == Some(BlockKind::Initializer)
+                        && self.output.line_with_token(close).is_some_and(|line| {
+                            self.output
+                                .line_tokens(line)
+                                .is_some_and(|span| span.first == close)
+                        })
+                }
+                _ => false,
+            });
         if !after_comment
             && !after_block_like_close
             && let Some(newline) =
@@ -3097,6 +3110,18 @@ impl FormatEngine<'_> {
             return None;
         }
         let group = self.tree.groups.opened_at(first)?;
+        // A block after a group whose first branch ends with a control
+        // header is that header's body to astyle.
+        if self.options.brace_style == BraceStyle::Gnu
+            && let Some(header) = self.tree.statements.branch_header_of_block(first)
+        {
+            let line = self.line_led_by(header)?;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        }
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)
             || (self.options.brace_style != BraceStyle::Gnu
                 && !self.should_indent_brace_line(BraceType::Command))

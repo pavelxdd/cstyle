@@ -14,6 +14,9 @@ pub(crate) struct Statements {
     /// Keyword of the control statement whose braceless body starts at a
     /// token, by the body's first token.
     braceless_headers: HashMap<usize, usize>,
+    /// Control keyword whose header ends the first branch of a conditional
+    /// group, by the `{` after the group that astyle reads as its body.
+    branch_header_blocks: HashMap<usize, usize>,
     /// First token of the previous statement in the same block, by a
     /// statement's first token: labels are skipped, and a statement after
     /// one without its `;` (a macro call) has none.
@@ -48,6 +51,7 @@ impl Statements {
             blocks,
             else_ifs: HashMap::new(),
             braceless_headers: HashMap::new(),
+            branch_header_blocks: HashMap::new(),
             previous_siblings: HashMap::new(),
             block_openings: HashMap::new(),
             block_statements: HashSet::new(),
@@ -58,6 +62,7 @@ impl Statements {
         Self {
             else_ifs: parser.else_ifs,
             braceless_headers: parser.braceless_headers,
+            branch_header_blocks: parser.branch_header_blocks,
             previous_siblings: parser.previous_siblings,
             block_openings: parser.block_openings,
             block_statements: parser.block_statements,
@@ -95,6 +100,12 @@ impl Statements {
     /// token `index`.
     pub(crate) fn braceless_header(&self, index: usize) -> Option<usize> {
         self.braceless_headers.get(&index).copied()
+    }
+
+    /// The control keyword whose header ends the first branch of the
+    /// conditional group before the `{` at `index`.
+    pub(crate) fn branch_header_of_block(&self, index: usize) -> Option<usize> {
+        self.branch_header_blocks.get(&index).copied()
     }
 
     /// First token of the statement before the one starting at `index`, in
@@ -167,6 +178,7 @@ struct Parser<'a> {
     blocks: &'a Blocks,
     else_ifs: HashMap<usize, usize>,
     braceless_headers: HashMap<usize, usize>,
+    branch_header_blocks: HashMap<usize, usize>,
     previous_siblings: HashMap<usize, usize>,
     block_openings: HashMap<usize, usize>,
     block_statements: HashSet<usize>,
@@ -401,6 +413,12 @@ impl Parser<'_> {
                 // astyle carries the first branch of a conditional group past
                 // its alternatives: a header ending that branch takes its
                 // body after the `#endif`.
+                if let Some(endif) = self.alternative_branch_end(header, at, end)
+                    && let Some(body) = self.next(endif, end)
+                    && self.is_symbol(body, '{')
+                {
+                    self.branch_header_blocks.insert(body, header);
+                }
                 if let Some(endif) = self.alternative_branch_end(header, at, end)
                     && let Some(body) = self.next(endif, end)
                     && !self.is_symbol(body, '{')

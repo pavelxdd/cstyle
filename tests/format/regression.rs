@@ -2434,3 +2434,15 @@ fn gnu_nested_brace_in_blank_split_else_body_stands_past_its_header() {
     let input = "int f(void)\n{\n    if( a )\n        {\n            x();\n        }\n    else\n\n        /* changeset FILENAME concat */\n        if( strcmp(argv[2],\"concat\")==0 )\n            {\n                int szB;\n                if( out==0 )\n                    {\n                        exit(1);\n                    }\n                fclose(out);\n            }\n    return 0;\n}\n";
     check(input, &["--style=gnu"], input);
 }
+
+#[test]
+fn gnu_block_after_branches_ending_with_header_is_the_header_body() {
+    let input = "static void f(int argc)\n{\n    int *p = 0;\n#ifdef SQLITE_ENABLE_STAT4\n    int eCall = 1;\n    if( eCall==STAT_GET_STAT1 )\n#else\n    assert( argc==1 );\n#endif\n        {\n            /* Return the value */\n            x();\n            y();\n        }\n    z();\n}\n";
+    check(input, &["--style=gnu"], input);
+}
+
+#[test]
+fn whitesmith_designator_row_after_nested_close_keeps_row_column() {
+    let input = "static struct patch_mode patch_mode_add =\n    {\n    .diff_cmd = { \"diff-files\", NULL },\n    .prompt_mode = {\n        N_(\"Stage mode change%s [y,n,q,a,d%s,?]? \"),\n        N_(\"Stage this hunk%s [y,n,q,a,d%s,?]? \")\n        },\n    .edit_hunk_hint = N_(\"If the patch applies cleanly, the edited hunk \"\n                         \"will immediately be marked for staging.\"),\n    .help_patch_text =\n    N_(\"y - stage this hunk\\n\"\n       \"n - do not stage this hunk\\n\")\n    };\n";
+    check(input, &["--style=whitesmith"], input);
+}
