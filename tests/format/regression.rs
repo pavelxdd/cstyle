@@ -2671,3 +2671,9 @@ fn comment_after_file_scope_macro_call_starts_at_column_one() {
     let input = "CTL_RO_CGEN(config_stats, a,\n            b, uint64_t)\n/*\n * Note.\n */\nCTL_RO_CGEN(config_stats, c,\n            d, uint64_t)\n\n/* Lock profiling related APIs below. */\n#define X 1\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn whitesmith_compound_literal_brace_in_nested_block_follows_its_statement() {
+    let input = "void f(void)\n    {\n    if (x)\n        {\n        *promise = (P)\n            {\n            .ref_count = 2,\n            .c = c,\n            };\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}

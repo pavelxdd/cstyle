@@ -441,6 +441,20 @@ impl FormatEngine<'_> {
             .then_some(0)
     }
 
+    /// Whether the `{` the pending line holds opens a value: a compound
+    /// literal or an initializer continuing its statement.
+    fn pending_brace_opens_value(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.opened_at(span.first))
+            .is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::CompoundLiteral | BlockKind::Initializer)
+                )
+            })
+    }
+
     pub(crate) fn whitesmith_definition_or_command_opening_brace_indent_spaces(
         &self,
         line: &str,
@@ -449,6 +463,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
+        if self.pending_brace_opens_value() {
+            return Some(
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
+            );
+        }
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         if is_namespace_or_module_block_header(previous_code) && !self.options.indent_namespaces {
             return None;
