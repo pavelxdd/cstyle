@@ -501,12 +501,47 @@ impl FormatEngine<'_> {
                         .enclosing(before)
                         .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
+                || self.ends_case_label(before)
             {
                 break;
             }
             start = before;
         }
         (start != index).then_some(start)
+    }
+
+    /// Whether the token `colon` is the `:` ending a `case` or `default`
+    /// label.
+    fn ends_case_label(&self, colon: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(tokens[colon], Token::Symbol(':')) {
+            return false;
+        }
+        let group = groups.enclosing(colon);
+        let mut index = colon;
+        while let Some(before) = self.tree.previous_code_token(index) {
+            if groups.enclosing(before) != group {
+                let Some(closed) = groups.closed_at(before) else {
+                    return false;
+                };
+                index = groups.get(closed).open;
+                continue;
+            }
+            match &tokens[before] {
+                Token::Symbol(';' | '{' | '}' | '?') => return false,
+                Token::Word(word) if word == "case" || word == "default" => {
+                    return self
+                        .tree
+                        .previous_code_token(before)
+                        .is_none_or(|previous| {
+                            matches!(tokens[previous], Token::Symbol(';' | '{' | '}' | ':'))
+                        });
+                }
+                _ => index = before,
+            }
+        }
+        false
     }
 }
 

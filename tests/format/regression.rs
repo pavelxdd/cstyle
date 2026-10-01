@@ -2753,3 +2753,9 @@ fn brace_after_a_struct_declarator_in_a_case_block_keeps_the_body() {
     let input = "void f(void)\n{\n    switch (x)\n    {\n    case 11:\n    {\n        struct O\n        {\n            int opt;\n        } aOpt[] =\n        {\n            { 0, 0 }\n        };\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn condition_continuation_in_a_case_body_follows_astyles_stack() {
+    let input = "void f(void)\n{\n    switch (x)\n    {\n    case 1:\n        if (ngx_quic_handle(c, pkt,\n                            &frame)\n                != NGX_OK)\n        {\n            return NGX_ERROR;\n        }\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}

@@ -977,7 +977,7 @@ fn fallthrough_after_braced_case_block_uses_case_label_indent() {
 }
 
 #[test]
-fn braced_case_return_ternary_at_return_column_stays_at_return_column() {
+fn braced_case_return_ternary_aligns_with_its_paren() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -1011,8 +1011,8 @@ fn braced_case_return_ternary_at_return_column_stays_at_return_column() {
             "        {",
             "        case inner:",
             "            return (value == 0)",
-            "            ? positive()",
-            "            : negative();",
+            "                   ? positive()",
+            "                   : negative();",
             "        }",
             "    }",
             "    }",
