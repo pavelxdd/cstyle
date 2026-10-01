@@ -83,6 +83,9 @@ impl FormatEngine<'_> {
         }
         let tab_width = self.options.tab_width;
         let mut depth = 0usize;
+        // Depths at each enclosing `#endif`: a later branch of a group
+        // repeats the braces of the first one.
+        let mut group_depths = Vec::new();
         for index in (0..self.output.len()).rev() {
             // The body of a block comment holds no braces.
             if self.output.comment_start_index(index) != index {
@@ -91,6 +94,20 @@ impl FormatEngine<'_> {
             let meta = self.output.brace_meta(index);
             if depth == 0 && meta.code_starts_with_hash {
                 return None;
+            }
+            if meta.code_starts_with_hash {
+                match preprocessor_directive(self.output.trimmed(index)) {
+                    Some("endif") => group_depths.push(depth),
+                    Some("else" | "elif" | "elifdef" | "elifndef") => {
+                        if let Some(&group_depth) = group_depths.last() {
+                            depth = group_depth;
+                        }
+                    }
+                    Some("if" | "ifdef" | "ifndef") => {
+                        group_depths.pop();
+                    }
+                    _ => {}
+                }
             }
             depth += meta.closes;
             if meta.opens > depth {

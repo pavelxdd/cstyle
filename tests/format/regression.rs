@@ -2500,3 +2500,9 @@ fn else_after_braced_loop_in_braceless_if_body_closes_the_body() {
     let input = "int f(void)\n{\n    if (t)\n        while (a)\n        {\n            b();\n        }\n    else\n        /* other */\n        while (c)\n        {\n            d();\n        }\n    return 0;\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn closing_brace_after_braces_opened_in_both_directive_branches_finds_its_opener() {
+    let input = "void f(void)\n{\n    for (;;)\n    {\n        for (;;)\n        {\n#ifdef A\n            if (a)\n            {\n#else\n            if (b)\n            {\n#endif\n                x();\n            }\n        }\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
