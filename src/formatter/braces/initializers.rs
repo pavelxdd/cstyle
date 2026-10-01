@@ -14,7 +14,7 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_brace_imbalance, preprocessor_directive,
+    has_unmatched_open_brace, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit,
 };
 use crate::formatter::tokens::operators::{starts_ternary_arm, starts_with_chain_operator};
@@ -1173,6 +1173,27 @@ impl FormatEngine<'_> {
         self.previous_initializer_comma_indent().is_some()
     }
 
+    /// The indent of the line where the element ending at `previous`, the
+    /// last output line, starts: a call split over lines starts above.
+    fn element_start_indent(&self, previous: &str) -> usize {
+        let lines = self.output.scoped();
+        let paren_balance = |line: &str| {
+            let (closes, opens) = line_paren_imbalance(&line[..trailing_comment_split_limit(line)]);
+            opens.len() as isize - closes as isize
+        };
+        let mut index = lines.len() - 1;
+        let mut balance = paren_balance(&lines[index]);
+        while balance < 0 && index > 0 {
+            index -= 1;
+            balance += paren_balance(&lines[index]);
+        }
+        if balance == 0 {
+            leading_visual_width(&lines[index], self.options.tab_width)
+        } else {
+            leading_visual_width(previous, self.options.tab_width)
+        }
+    }
+
     pub(crate) fn previous_initializer_comma_indent(&self) -> Option<usize> {
         let previous = self
             .output
@@ -1197,7 +1218,7 @@ impl FormatEngine<'_> {
                     '}' => closed += 1,
                     '{' if closed > 0 => closed -= 1,
                     '{' if self.output_line_opens_initializer(index, code) => {
-                        return Some(leading_visual_width(previous, self.options.tab_width));
+                        return Some(self.element_start_indent(previous));
                     }
                     _ => {}
                 }

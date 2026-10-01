@@ -2906,3 +2906,9 @@ fn lisp_keeps_labels_with_statements_and_brace_literal_case_labels() {
     let input = "void g(char c) {\n    switch (c) {\n    case '{': d = 1; break; } }\nvoid h(void) {\n    x();\nnext: z(); }\n";
     check(input, &["--style=lisp"], input);
 }
+
+#[test]
+fn initializer_row_after_a_split_call_row_starts_at_the_row() {
+    let input = "int f(void)\n{\n    struct option opts[] = {\n        OPT_STRING(0, \"prefix\", &tree_prefix, N_(\"<prefix>/\"),\n                   N_(\"write tree object\")),\n        {\n            .type = OPTION_BIT,\n            .long_name = \"ignore\",\n        },\n        OPT_END()\n    };\n}\n";
+    check(input, &["--min-conditional-indent=0"], input);
+}
