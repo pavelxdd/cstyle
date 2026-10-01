@@ -74,6 +74,8 @@ impl FormatEngine<'_> {
         if self.directly_in_switch_body() {
             self.update_case_body_indent(LineKind::Normal, trimmed);
         }
+        // The line comes between a case label and a brace after it.
+        self.update_case_brace_unindent(LineKind::Normal, trimmed);
         let indent =
             self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
         let exact_indent_spaces =

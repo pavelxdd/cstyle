@@ -2739,3 +2739,11 @@ fn whitesmith_case_block_in_an_else_body_after_a_blank_line_keeps_its_statements
     let input = "void f(void)\n    {\n    if( a )\n        b();\n    else\n\n        if( c )\n            {\n            switch( op )\n                {\n                case X:\n                    {\n                    g();\n                    for(;;)\n                        {\n                        h();\n                        }\n                    break;\n                    }\n                }\n            }\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn macro_loop_brace_after_a_case_label_is_no_case_block() {
+    let input = "void f(void)\n{\n    switch (x)\n        {\n        case A:\n            RB_FOREACH_SAFE(field, json_fields, &node->fields, field1)\n            {\n                g(field);\n            }\n            break;\n        }\n}\n";
+    check(input, &["--style=gnu"], input);
+    let input = "void f(void)\n{\n    switch (x)\n        {\n        case A:\n            RB_FOREACH_SAFE(field, json_fields, &node->fields, field1)\n                {\n                g(field);\n                }\n            break;\n        }\n}\n";
+    check(input, &["--style=vtk"], input);
+}

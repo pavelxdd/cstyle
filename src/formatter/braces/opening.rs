@@ -667,9 +667,18 @@ impl FormatEngine<'_> {
         }
         let brace = self.layout.frame_stack.active_brace()?;
         let header = self.layout.frame_stack.active_header()?;
+        // A brace after a statement in a case body is no case block.
+        let after_statement = matches!(header.header.as_str(), "case" | "default")
+            && !brace.case_block
+            && self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.previous_code_token(span.first))
+                .is_some_and(|previous| !matches!(self.tree.tokens[previous], Token::Symbol(':')));
         (brace.semantic_kind == BraceSemanticKind::Command
-            && brace.header.as_deref() == Some(header.header.as_str()))
-        .then_some(header.body_indent_spaces)
+            && brace.header.as_deref() == Some(header.header.as_str())
+            && !after_statement)
+            .then_some(header.body_indent_spaces)
     }
 
     pub(crate) fn vtk_or_ratliff_headerless_command_opening_brace_indent_spaces(
