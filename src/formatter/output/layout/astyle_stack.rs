@@ -174,25 +174,29 @@ impl FormatEngine<'_> {
         }
         // astyle takes a bare block brace after a directive for an array
         // brace and registers no assignment in it.
-        if let Some(block) = self.tree.groups.enclosing(start)
-            && self.tree.blocks.kind(block) == Some(BlockKind::Block)
-            && let open = self.tree.groups.get(block).open
-            && tokens[self
-                .tree
-                .previous_code_token(open)
-                .map_or(0, |before| before + 1)..open]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
-        {
+        let directive_block = self.tree.groups.enclosing(start).is_some_and(|block| {
+            let open = self.tree.groups.get(block).open;
+            self.tree.blocks.kind(block) == Some(BlockKind::Block)
+                && tokens[self
+                    .tree
+                    .previous_code_token(open)
+                    .map_or(0, |before| before + 1)..open]
+                    .iter()
+                    .any(|token| matches!(token, Token::Preprocessor(_)))
+        });
+        // Only ternary arms are known to follow its parentheses there.
+        let ternary_arm = matches!(tokens[first], Token::Symbol('?' | ':'))
+            || matches!(&tokens[first], Token::Operator(operator) if matches!(operator.as_str(), "?" | ":"));
+        if directive_block && !ternary_arm {
             return None;
         }
         let block_lead = self.output.lead_width(start_line, self.options.tab_width);
         // astyle registers no `=` of a designator in an initializer.
-        let in_initializer = self
-            .tree
-            .groups
-            .enclosing(start)
-            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer));
+        let in_initializer =
+            directive_block
+                || self.tree.groups.enclosing(start).is_some_and(|group| {
+                    self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
+                });
         let mut replay = Replay {
             stack: Vec::new(),
             sizes: Vec::new(),
