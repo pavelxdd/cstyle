@@ -2239,7 +2239,10 @@ impl FormatEngine<'_> {
         let runin_comment = if attach_runin_comment {
             match next {
                 Some(Token::Comment(CommentKind::Line, comment)) => Some(comment.as_str()),
-                Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n') => {
+                // A block comment before the first element stays with it.
+                Some(Token::Comment(CommentKind::Block, comment))
+                    if !comment.contains('\n') && self.comments.next_comment_ends_line =>
+                {
                     Some(comment.as_str())
                 }
                 _ => None,

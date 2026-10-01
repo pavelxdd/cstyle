@@ -337,6 +337,23 @@ impl FormatEngine<'_> {
         {
             // A macro standing for a function head at file scope.
             BraceType::Definition
+        } else if self.token_input.token_begins_source_line
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            )
+            && !self.current.trim().is_empty()
+            && self.current.trim().chars().all(is_word_char)
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_none_or(|previous| {
+                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    code.ends_with([';', '{', '}']) || code.trim_start().starts_with('#')
+                })
+        {
+            // A macro word heading a block in code, as `SEH_TRY`.
+            BraceType::Command
         } else if !self.current_is_blank() {
             BraceType::Initializer
         } else {

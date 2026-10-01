@@ -2615,3 +2615,15 @@ fn tab_after_return_still_sets_the_value_column() {
         "int g(void)\n{\n    return\t(uint16_t)p[0] << 8 |\n            (uint16_t)p[1] << 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn block_comment_before_first_initializer_element_stays_with_it() {
+    let input = "static const u8 statemap[8] =\n{   /* 0 INVALID */ 1,\n    /* 1 START   */ 0,\n    /* 2 NORMAL  */ 1,\n};\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
+fn macro_word_heading_a_block_keeps_the_block() {
+    let input = "int f(Wal *pWal)\n{   int rc;\n    SEH_TRY\n    {   rc = g(pWal);\n    }\n    SEH_EXCEPT( rc = 1; )\n    return rc;\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
