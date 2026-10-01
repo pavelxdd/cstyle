@@ -2771,3 +2771,9 @@ fn ternary_arms_in_a_block_after_a_directive_follow_their_parens() {
     let input = "void f(void)\n{\n# ifdef X\n    {\n        wchar_t wc;\n\n        start_ch = ((start_elem->type == SB_CHAR) ? start_elem->opr.ch\n                    : ((start_elem->type == COLL_SYM) ? start_elem->opr.name[0]\n                       : 0));\n    }\n# endif\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn bracket_operand_after_a_typedef_struct_keeps_its_bracket_column() {
+    let input = "typedef struct {\n    int x;\n} a_t;\ntypedef struct {\n    u_char key[LEN\n               - sizeof(k)];\n} b_t;\n";
+    check(input, &["--style=kr"], input);
+}
