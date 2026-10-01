@@ -2029,7 +2029,15 @@ impl FormatEngine<'_> {
                 let body_indent = if source_attached_initializer_line {
                     self.current_line_indent_spaces() + self.options.indent_width
                 } else {
-                    leading_visual_width(self.current.trim_start(), self.options.tab_width)
+                    // The line publishes as it stands, so it takes its
+                    // indent here.
+                    let lead = self.current_line_indent_spaces();
+                    if !self.current.starts_with([' ', '\t']) {
+                        for _ in 0..lead {
+                            self.current.insert(0, ' ');
+                        }
+                    }
+                    leading_visual_width(&self.current, self.options.tab_width)
                         + self.options.indent_width * 2
                 };
                 self.current_is_preindented = true;

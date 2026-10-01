@@ -2677,3 +2677,10 @@ fn whitesmith_compound_literal_brace_in_nested_block_follows_its_statement() {
     let input = "void f(void)\n    {\n    if (x)\n        {\n        *promise = (P)\n            {\n            .ref_count = 2,\n            .c = c,\n            };\n        }\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn source_attached_nested_initializer_brace_keeps_its_statement_indent() {
+    let input = "void f(void)\n{\n    int y;\n    struct r r1[] = { {\n            .a = 1,\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=gnu"], input);
+}
