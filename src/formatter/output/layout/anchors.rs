@@ -137,6 +137,21 @@ impl FormatEngine<'_> {
         let structural = layout.indent * self.options.indent_width;
         let sibling = self.sibling_statement_column(first);
         let block = self.block_body_column(first);
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        ) && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
+            && sibling.is_some()
+            && sibling == block
+            && self
+                .tree
+                .groups
+                .enclosing(first)
+                .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+        {
+            layout.exact_indent_spaces = block;
+            return layout;
+        }
         let brace = self
             .closing_brace_indent(first)
             .or_else(|| self.opening_brace_indent(first));
@@ -3186,14 +3201,18 @@ impl FormatEngine<'_> {
     /// Whether the `}` at `first` closes a block inside an `if` chain that
     /// is itself the braceless body of a control statement.
     fn inside_braced_chain_of_braceless_body(&self, first: usize) -> bool {
+        self.tree
+            .groups
+            .closed_at(first)
+            .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+    }
+
+    fn group_in_braced_chain_of_braceless_body(&self, group: GroupId) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let statements = &self.tree.statements;
         let is_word =
             |index: usize, text: &str| matches!(&tokens[index], Token::Word(word) if word == text);
-        let Some(group) = groups.closed_at(first) else {
-            return false;
-        };
         groups.ancestors(group).any(|id| {
             if self.tree.blocks.kind(id) != Some(BlockKind::Control) {
                 return false;

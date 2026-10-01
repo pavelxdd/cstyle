@@ -2702,3 +2702,9 @@ fn ratliff_case_block_closed_with_semicolon_stays_at_its_body() {
     let input = "void f(void) {\n    switch (x) {\n        case A: {\n            g();\n            break;\n            };\n\n        case B:\n            break;\n        }\n    }\n";
     check(input, &["--style=ratliff"], input);
 }
+
+#[test]
+fn ratliff_statements_in_a_braced_chain_of_a_braceless_body_keep_their_block() {
+    let input = "void f(void) {\n    for (;;)\n        if (a)\n            b = 0;\n        else {\n            if (h) {\n                c = h;\n                rc++;\n                }\n            }\n    return rc;\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
