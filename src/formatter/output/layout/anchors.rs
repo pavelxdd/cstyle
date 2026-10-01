@@ -3832,13 +3832,29 @@ impl FormatEngine<'_> {
 
     /// A braceless body starting a line takes one level past the line
     /// holding its header.
+    /// Whether the statement starting at `first` ends on a later source
+    /// line than it starts.
+    fn statement_spans_lines(&self, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let group = self.tree.groups.enclosing(first);
+        tokens[first..]
+            .iter()
+            .enumerate()
+            .take_while(|&(offset, token)| {
+                !(matches!(token, Token::Symbol(';' | '{' | '}'))
+                    && self.tree.groups.enclosing(first + offset) == group)
+            })
+            .any(|(_, token)| matches!(token, Token::Newline))
+    }
+
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        // Added braces make the body a block; an empty statement or a
-        // nested header gets none.
+        // Added braces make the body a block; an empty statement, a
+        // nested header or a statement over several lines gets none.
         if (self.options.add_braces || self.options.add_one_line_braces)
             && !matches!(tokens[first], Token::Symbol(';'))
             && !matches!(&tokens[first], Token::Word(word) if is_header(word))
+            && !self.statement_spans_lines(first)
         {
             return None;
         }

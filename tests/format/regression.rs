@@ -2912,3 +2912,9 @@ fn initializer_row_after_a_split_call_row_starts_at_the_row() {
     let input = "int f(void)\n{\n    struct option opts[] = {\n        OPT_STRING(0, \"prefix\", &tree_prefix, N_(\"<prefix>/\"),\n                   N_(\"write tree object\")),\n        {\n            .type = OPTION_BIT,\n            .long_name = \"ignore\",\n        },\n        OPT_END()\n    };\n}\n";
     check(input, &["--min-conditional-indent=0"], input);
 }
+
+#[test]
+fn added_braces_keep_a_multi_line_body_after_else_if_at_its_level() {
+    let input = "void f(void)\n{\n    if (a) {\n        if (r)\n            die_errno(_(\"renaming\"),\n                      fname);\n    } else if (b)\n        die(_(\"pack-objects\"),\n            name);\n    else if (c) {\n        y();\n    }\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
