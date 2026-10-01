@@ -2900,3 +2900,9 @@ fn added_braces_keep_empty_bodies_and_comments_after_split_conditions() {
     let input = "int f(void)\n{\n    if (c)\n        for (v = p; *v == 32; v++)\n            ;\n    if(!data->set.low_speed_time || !data->set.low_speed_limit ||\n            paused(data))\n        /* A paused transfer is not qualified */\n    {\n        return CURLE_OK;\n    }\n    return 1;\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn lisp_keeps_labels_with_statements_and_brace_literal_case_labels() {
+    let input = "void g(char c) {\n    switch (c) {\n    case '{': d = 1; break; } }\nvoid h(void) {\n    x();\nnext: z(); }\n";
+    check(input, &["--style=lisp"], input);
+}

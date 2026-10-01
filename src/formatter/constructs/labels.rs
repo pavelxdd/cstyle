@@ -19,7 +19,7 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_id
 pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
     if find_case_colon(line).is_some() {
         LineKind::SwitchLabel
-    } else if is_plain_label(line, access_labels) {
+    } else if is_plain_label(line, access_labels) || leads_with_goto_label(line) {
         LineKind::Label
     } else {
         LineKind::Normal
@@ -479,6 +479,42 @@ fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
         return false;
     };
     !rest.starts_with(':') && is_access_label_start(label.trim_end(), access_labels)
+}
+
+/// Whether the line starts with a goto label that a statement follows on
+/// the line, as `next: x(); }` where the style keeps one-line statements.
+fn leads_with_goto_label(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    let Some((label, rest)) = trimmed.split_once(':') else {
+        return false;
+    };
+    !label.is_empty()
+        && is_single_identifier(label)
+        && !matches!(
+            label,
+            "case" | "default" | "public" | "protected" | "private" | "signals" | "slots"
+        )
+        && !label.starts_with(|ch: char| ch.is_ascii_digit())
+        && rest.starts_with([' ', '\t', ';'])
+        && !rest.trim_start().starts_with(['{', ':', '/'])
+        // A statement follows; message arguments and base lists do not.
+        && !rest.contains([']', '['])
+        && !matches!(
+            leading_identifier(rest.trim_start()),
+            "public" | "protected" | "private" | "virtual"
+        )
+        && strip_trailing_comment(rest).trim_end().ends_with([';', '}'])
+        // A bit-field width is a constant; a statement calls, assigns or
+        // jumps.
+        && {
+            let statement = rest.trim_start();
+            statement.starts_with(';')
+                || statement.contains(['(', '='])
+                || matches!(
+                    leading_identifier(statement),
+                    "return" | "break" | "continue" | "goto"
+                )
+        }
 }
 
 pub(crate) fn is_attached_user_label(line: &str) -> bool {

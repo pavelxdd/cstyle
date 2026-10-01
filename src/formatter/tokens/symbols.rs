@@ -1402,13 +1402,7 @@ impl FormatEngine<'_> {
             && self.is_bit_field_colon(next);
         let has_question = self.layout.nesting.has_question_in_current_brace();
         let is_range_for = !has_question && self.is_range_for_colon();
-        let label_text = self
-            .current
-            .trim()
-            .rsplit(['{', ';'])
-            .next()
-            .unwrap_or_default()
-            .trim();
+        let label_text = text_after_last_statement_boundary(self.current.trim()).trim();
         let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
@@ -1778,4 +1772,29 @@ fn is_semicolonless_macro_call_name(name: &str) -> bool {
         && macro_part
             .chars()
             .any(|ch| ch.is_ascii_uppercase() || ch == '_')
+}
+
+/// The text after the last `{` or `;` outside literals.
+fn text_after_last_statement_boundary(text: &str) -> &str {
+    let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, ch) in text.char_indices() {
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '{' | ';' => start = index + 1,
+            _ => {}
+        }
+    }
+    &text[start..]
 }
