@@ -2714,3 +2714,9 @@ fn vtk_comment_ending_a_file_scope_array_stays_at_its_rows() {
     let input = "const unsigned char sane_ctype[256] =\n{\n    A, X,\t\t/* 112..127 */\n    /* Nothing in the 128.. range */\n};\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn vtk_compound_literal_after_a_dereferenced_assignment_indents_its_brace() {
+    let input = "void f(void)\n{\n    *r = (A)\n        {\n        .name = name,\n        .desc = desc,\n        };\n}\n";
+    check(input, &["--style=vtk"], input);
+}
