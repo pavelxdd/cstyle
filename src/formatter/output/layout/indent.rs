@@ -499,6 +499,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())
+            .filter(|previous| !is_comment_text_line(previous))
             .and_then(|previous| {
                 let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
                 let (operator_start, operator) = find_assignment_operator(previous_code)?;
@@ -1691,4 +1692,14 @@ impl FormatEngine<'_> {
         }
         None
     }
+}
+
+// `*p =` dereferences; `* text =` and `** text =` are comment body lines.
+fn is_comment_text_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("/*")
+        || trimmed.starts_with("//")
+        || trimmed
+            .strip_prefix('*')
+            .is_some_and(|rest| rest.trim_start_matches('*').starts_with([' ', '\t']))
 }

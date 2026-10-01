@@ -2452,3 +2452,9 @@ fn later_initialized_declarators_do_not_drift() {
     let input = "static const RedisModuleEvent\nRedisModuleEvent_A =\n    {\n    REDISMODULE_EVENT_A,\n    1\n    },\nRedisModuleEvent_B =\n    {\n    REDISMODULE_EVENT_B,\n    1\n    },\nRedisModuleEvent_C =\n    {\n    REDISMODULE_EVENT_C,\n    1\n    };\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn comment_line_after_comment_text_ending_in_assignment_keeps_its_column() {
+    let input = "void f(void)\n{\n    switch( x ) {\n    case A: {\n        break;\n    }\n\n    /*\n    **  PRAGMA [schema.]journal_mode =\n    **                      (delete|persist|off)\n    */\n    case B: {\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
