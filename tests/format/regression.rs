@@ -2801,3 +2801,27 @@ fn whitesmith_function_after_a_typedef_and_a_block_comment_starts_the_line() {
     let input = "typedef struct\n    {\n    int state;\n    } set_rand_t;\n/* note\n   more. */\nstatic void set_seed(int seed)\n    {\n    g = 1;\n    h = 2;\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn padded_commas_keep_a_double_pointer_declarator_attached() {
+    let input = "void f(void)\n{\n    struct C *tail, **pnext;\n    int a, **b;\n}\n";
+    check(input, &["--style=1tbs", "--pad-comma"], input);
+}
+
+#[test]
+fn padded_operators_keep_the_spacing_of_an_ampersand_after_a_paren() {
+    let input = "void f()\n{\n    g((LPVOID)&vals);\n    x = (a) &b;\n    x = (a) & (b);\n    x = (a) & 0xff;\n}\n";
+    check(input, &["--style=1tbs", "--pad-oper"], input);
+}
+
+#[test]
+fn label_address_operands_stay_attached() {
+    let input = "static const void *const disptab[] = {\n    &&L_OP_MOVE,\n    &&L_OP_LOADI,\n};\nvoid f()\n{\n    goto *&&L_X;\n    p = &&L_A;\n    y = a && b;\n}\n";
+    check(input, &["--style=1tbs", "--pad-oper"], input);
+}
+
+#[test]
+fn added_braces_leave_an_empty_statement_on_its_own_line() {
+    let input = "void f(void)\n{\n    for (last = list; last->next; last = last->next)\n        ;\n    if (uc)\n        ; /* nothing */\n    else {\n        x = 1;\n    }\n}\n";
+    check(input, &["--style=1tbs"], input);
+}

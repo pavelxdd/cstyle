@@ -5,6 +5,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
@@ -277,6 +278,62 @@ impl FormatEngine<'_> {
             && self.follows_expression_operator(token_index)
         {
             self.push_unary_prefix(operator);
+            return;
+        }
+        // `&&label` takes a label's address where an operand starts.
+        if operator == "&&"
+            && token_index < self.tree.tokens.len()
+            && self
+                .tree
+                .previous_code_token(token_index)
+                .is_some_and(|previous| match &self.tree.tokens[previous] {
+                    Token::Symbol('{' | ',' | '(' | '[' | ':' | '?') => true,
+                    Token::Operator(operator) if operator == "*" => self
+                        .tree
+                        .previous_code_token(previous)
+                        .is_some_and(|keyword| matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "goto")),
+                    Token::Operator(operator) => matches!(operator.as_str(), "=" | "?" | ":"),
+                    Token::Word(word) => word == "return",
+                    _ => false,
+                })
+            && next_code_token(&self.tree.tokens, token_index + 1)
+                .is_some_and(|next| matches!(self.tree.tokens[next], Token::Word(_)))
+        {
+            self.push_unary_prefix(operator);
+            self.layout.command_state.observe_text(operator);
+            self.previous_was_newline = false;
+            return;
+        }
+        // After `)` a `&` before a name may take an address after a cast or
+        // join two operands; its spacing stays as written.
+        if operator == "&"
+            && self.layout.previous == PreviousToken::CloseParen
+            && token_index < self.tree.tokens.len()
+            && !self.options.pad_parens_outside
+            && !self
+                .tree
+                .groups
+                .enclosing(token_index)
+                .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            && self
+                .tree
+                .previous_code_token(token_index)
+                .is_some_and(|previous| matches!(self.tree.tokens[previous], Token::Symbol(')')))
+            && next_code_token(&self.tree.tokens, token_index + 1).is_some_and(|next| {
+                match &self.tree.tokens[next] {
+                    Token::Word(word) => word.starts_with(|ch: char| !ch.is_ascii_digit()),
+                    Token::StringLiteral(_) => true,
+                    Token::Operator(operator) => operator == "*",
+                    _ => false,
+                }
+            })
+        {
+            self.emit_source_space();
+            self.current.push_str(operator);
+            self.emit_trailing_source_space();
+            self.layout.command_state.observe_text(operator);
+            self.layout.previous = PreviousToken::Operator;
+            self.previous_was_newline = false;
             return;
         }
         if operator == "*"
@@ -1207,6 +1264,7 @@ impl FormatEngine<'_> {
         }
         self.current.push_str(operator);
         self.emit_trailing_source_space();
+        self.layout.previous = PreviousToken::Operator;
     }
 
     fn stream_line_follows_multiline_braced_operand(&self) -> bool {

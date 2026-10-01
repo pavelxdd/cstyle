@@ -604,7 +604,9 @@ impl FormatEngine<'_> {
         }
         let body_is_nested_header =
             matches!(&tokens[body_index], Token::Word(word) if is_standard_add_braces_header(word));
-        if adding_braces && !body_is_nested_header {
+        // An empty statement gets no braces and keeps its own line.
+        let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'));
+        if adding_braces && !body_is_nested_header && !body_is_empty {
             let body_is_multi_line = find_statement_semicolon(tokens, body_index, tokens.len())
                 .is_some_and(|semicolon| {
                     tokens[body_index..semicolon]
