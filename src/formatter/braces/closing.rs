@@ -67,6 +67,10 @@ impl FormatEngine<'_> {
             if opens > closes + closed_blocks && !code.trim_start().starts_with('{') {
                 return Some(leading_visual_width(opening, self.options.tab_width));
             }
+            // A sibling `}, {` opened the element this line closes.
+            if closed_blocks == 0 && code.trim_start().starts_with('}') && code.ends_with('{') {
+                return Some(leading_visual_width(opening, self.options.tab_width));
+            }
             closed_blocks += closes;
             closed_blocks = closed_blocks.saturating_sub(opens);
         }

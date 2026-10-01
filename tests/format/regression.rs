@@ -2777,3 +2777,9 @@ fn bracket_operand_after_a_typedef_struct_keeps_its_bracket_column() {
     let input = "typedef struct {\n    int x;\n} a_t;\ntypedef struct {\n    u_char key[LEN\n               - sizeof(k)];\n} b_t;\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn later_sibling_rows_in_a_compound_literal_stay_with_the_first() {
+    let input = "void f(void)\n{\n    T info = {\n        .version = 1,\n        .key_specs = (K[])\n        {\n            {\n                .flags = 1,\n            }, {\n                .flags = 2,\n                .x = 2,\n            }, {\n                .flags = 3,\n            },\n            {0}\n        }\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
