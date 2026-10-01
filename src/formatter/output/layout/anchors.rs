@@ -3528,7 +3528,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.line_led_by(owner)?;
+        let Some(line) = self.line_led_by(owner) else {
+            // A `do` run in as the braceless body of a header on its line
+            // closes at that body's level.
+            let header = self.tree.statements.braceless_header(owner)?;
+            let line = self
+                .line_led_by(header)
+                .filter(|&line| self.output.line_with_token(owner) == Some(line))?;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        };
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 

@@ -2690,3 +2690,15 @@ fn struct_with_broken_brace_in_case_block_indents_members_once() {
     let input = "void f(void)\n{\n    switch (op)\n    {\n    case A:\n    {\n        struct\n        {\n            int m;\n        } k;\n    }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn ratliff_braced_do_as_braceless_body_puts_while_at_the_body() {
+    let input = "void f(void) {\n    if (left) do {\n            g();\n            }\n        while (left);\n    h();\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn ratliff_case_block_closed_with_semicolon_stays_at_its_body() {
+    let input = "void f(void) {\n    switch (x) {\n        case A: {\n            g();\n            break;\n            };\n\n        case B:\n            break;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}

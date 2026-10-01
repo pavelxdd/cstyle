@@ -1294,17 +1294,19 @@ impl FormatEngine<'_> {
                 .current_closing_brace_open(self.options.tab_width)
                 .map(|(width, ..)| width)
         } else {
-            self.output.last_line_outside_comment().and_then(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim();
-                let width = leading_visual_width(previous, self.options.tab_width);
-                // A first member under a brace on its own line sits a
-                // level past it.
-                match code {
-                    "{" => Some(width + self.options.indent_width),
-                    _ if code.ends_with('{') => None,
-                    _ => Some(width),
-                }
-            })
+            self.output
+                .last_line_outside_comment()
+                .and_then(|previous| {
+                    let code = previous[..trailing_comment_split_limit(previous)].trim();
+                    let width = leading_visual_width(previous, self.options.tab_width);
+                    // A first member under a brace on its own line sits a
+                    // level past it.
+                    match code {
+                        "{" => Some(width + self.options.indent_width),
+                        _ if code.ends_with('{') => None,
+                        _ => Some(width),
+                    }
+                })
         };
         if reference.is_some_and(|width| width + case_unindent_spaces == current_spaces) {
             return None;
