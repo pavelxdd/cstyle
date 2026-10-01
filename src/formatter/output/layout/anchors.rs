@@ -1046,10 +1046,11 @@ impl FormatEngine<'_> {
             }
             label
         };
-        if tokens[label..first]
-            .iter()
-            .any(|token| matches!(token, Token::Preprocessor(_)))
-        {
+        // Directives inside the labeled statement's own blocks leave its
+        // level alone.
+        if (label..first).any(|index| {
+            matches!(tokens[index], Token::Preprocessor(_)) && groups.enclosing(index) == group
+        }) {
             return None;
         }
         let in_switch = group

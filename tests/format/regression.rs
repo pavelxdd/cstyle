@@ -2512,3 +2512,9 @@ fn designator_rows_after_run_in_first_element_align_with_it() {
     let input = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n    x();\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn statement_after_labeled_block_with_directive_keeps_its_level() {
+    let input = "void *f(void)\n{\n    x();\n    return o;\n\nfail:\n    if(o)\n        {\n#ifndef A\n            g(o);\n#endif\n            h(o);\n        }\n\n    LEAVE(&guard);\n    return NULL;\n}\n";
+    check(input, &["--style=gnu"], input);
+}
