@@ -58,6 +58,11 @@ pub(crate) fn reconcile_line_kind(
     if kind == LineKind::Label && (context.in_initializer || context.in_ternary) {
         kind = LineKind::Normal;
     }
+    // The last line of an expression continued over lines, as a case label
+    // `case A |\n B:`, is no label.
+    if kind == LineKind::Label && context.previous_line.is_some_and(ends_with_binary_operator) {
+        kind = LineKind::Normal;
+    }
     if kind == LineKind::Label
         && !line.trim_end().ends_with(':')
         && context.previous_line.is_some_and(|previous| {
@@ -93,6 +98,12 @@ pub(crate) fn class_scope_indent(
         ));
     }
     Some(ContinuationIndent::Level(current_indent.saturating_sub(1)))
+}
+
+/// Whether `line` ends its code with an operator the next line continues.
+pub(crate) fn ends_with_binary_operator(line: &str) -> bool {
+    let code = line[..trailing_comment_split_limit(line)].trim_end();
+    code.ends_with(['|', '&', '+', '-', '*', '/', '^', '<', '>', '=']) && !code.ends_with("->")
 }
 
 pub(crate) fn candidate_line_indent_spaces(

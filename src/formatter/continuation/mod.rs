@@ -142,7 +142,8 @@ impl FormatEngine<'_> {
                 continue;
             }
             let code = line[..trailing_comment_split_limit(line)].trim_end();
-            if code.trim_start().starts_with('#')
+            // Neither does a directive, nor the lines it continues over.
+            if self.output.is_directive_line(start + offset)
                 || code.ends_with(';')
                 || code.ends_with('{')
                 || code.ends_with('}')
@@ -1631,6 +1632,22 @@ impl FormatEngine<'_> {
             return None;
         }
         let base = self.continuation_base_indent() * self.options.indent_width;
+        let gap = after_return.len() - after_return.trim_start().len();
+        // A tab between `return` and its value still sets the value's column.
+        if !after_return.trim_start().is_empty()
+            && !after_return.trim_start().contains('\t')
+            && after_return[..gap].contains('\t')
+        {
+            let start = base + (line.len() - trimmed.len());
+            return Some(
+                start
+                    + visual_width_from(
+                        &trimmed[.."return".len() + gap],
+                        start,
+                        self.options.tab_width,
+                    ),
+            );
+        }
         if after_return.is_empty() || after_return.contains('\t') {
             return Some(base + self.options.continuation_indent * self.options.indent_width);
         }

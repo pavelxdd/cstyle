@@ -1,5 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, raw_strings, token_text};
 use crate::formatter::preprocessor::is_conditional_preprocessor;
@@ -1520,6 +1521,10 @@ impl FormatEngine<'_> {
         let trimmed = line.trim_start();
         if self.layout.line_adjuster.switch_depth() == 0
             || trimmed.starts_with('#')
+            || self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| labels::ends_with_binary_operator(previous))
             || trimmed.starts_with("case ")
             || trimmed.starts_with("default")
             || trimmed.starts_with("} while")

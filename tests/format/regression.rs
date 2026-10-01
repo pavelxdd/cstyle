@@ -2596,3 +2596,22 @@ fn whitesmith_statements_before_the_first_label_stand_in_the_case_body() {
     let input = "void f(void)\n    {\n    switch( iSub )\n        {\n            CASE(0, \"x\")\n                {\n                int nCol;\n                nCol = g();\n                break;\n                }\n            /* Next */\n            CASE(1, \"y\")\n                {\n                int nRow;\n                break;\n                }\n        }\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn last_line_of_a_case_label_split_over_lines_continues_it() {
+    let input = "void f(void)\n{\n    switch (flags & (A |\n                     B)) {\n    case A |\n            B |\n            C:\n        set = 1;\n        break;\n    case A:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comment_after_continued_define_ignores_its_parens() {
+    let input = "#define SYN\t\t\t\t\\\n  (_A  | B\t\t\t\\\n   | C)\n/* [[[end syntaxes]]] */\n\n\n/* Maximum number of duplicates.  Some\n   systems.  */\n# ifdef RE_DUP_MAX\n#  undef RE_DUP_MAX\n# endif\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn tab_after_return_still_sets_the_value_column() {
+    let input =
+        "int g(void)\n{\n    return\t(uint16_t)p[0] << 8 |\n            (uint16_t)p[1] << 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}

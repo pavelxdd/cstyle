@@ -823,12 +823,17 @@ impl FormatEngine<'_> {
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
+        let continues_expression = self
+            .output
+            .last_line_outside_comment()
+            .is_some_and(|previous| labels::ends_with_binary_operator(previous));
         if let Some(spaces) = labels::candidate_line_indent_spaces(
             line,
             self.options,
             self.layout.frame_stack.active_ternary().is_some()
                 || self.in_initializer_brace()
-                || self.current_inline_array_column().is_some(),
+                || self.current_inline_array_column().is_some()
+                || continues_expression,
         ) {
             layout.exact_indent_spaces = Some(spaces);
         }
