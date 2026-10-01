@@ -14,6 +14,7 @@ use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFra
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{
     drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
@@ -1811,6 +1812,22 @@ impl FormatEngine<'_> {
         .flatten()
     }
 
+    /// Whether the comment being pushed comes right after a `switch` brace
+    /// and before a statement that is no case label: it stands at the body.
+    fn comment_precedes_switch_statement(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        !self.options.indent_cases
+            && self
+                .current
+                .active_comment()
+                .and_then(|comment| next_code_token(tokens, comment + 1))
+                .is_some_and(|next| match &tokens[next] {
+                    Token::Word(word) => !matches!(word.as_str(), "case" | "default"),
+                    Token::Symbol('}' | '#') | Token::Preprocessor(_) => false,
+                    _ => true,
+                })
+    }
+
     fn standalone_block_comment_indent_spaces(
         &self,
         kind: CommentKind,
@@ -1833,7 +1850,12 @@ impl FormatEngine<'_> {
                 return Some(leading_visual_width(line, self.options.tab_width));
             }
             if trimmed.starts_with("switch") && code.ends_with('{') {
-                return Some(leading_visual_width(line, self.options.tab_width));
+                return Some(
+                    leading_visual_width(line, self.options.tab_width)
+                        + usize::from(self.comment_precedes_switch_statement())
+                            * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
+                            * self.options.indent_width,
+                );
             }
             if trimmed.starts_with("} else") {
                 return Some(
@@ -2266,7 +2288,12 @@ impl FormatEngine<'_> {
                 code.trim_start().starts_with("switch") && code.ends_with('{')
             }
         {
-            " ".repeat(leading_visual_width(previous, self.options.tab_width))
+            " ".repeat(
+                leading_visual_width(previous, self.options.tab_width)
+                    + usize::from(self.comment_precedes_switch_statement())
+                        * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
+                        * self.options.indent_width,
+            )
         } else if let Some(previous) = self
             .output
             .scoped()

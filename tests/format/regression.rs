@@ -2789,3 +2789,9 @@ fn assigned_value_split_by_directives_keeps_its_continuation() {
     let input = "void f(void)\n{\n    switch(x) {\n    case 1:\n        *p =\n#ifdef A\n            0\n#else\n            y\n#endif\n            ;\n        break;\n    }\n    *p =\n#ifdef A\n        0\n#else\n        y\n#endif\n        ;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn comment_after_a_switch_brace_before_a_statement_stands_at_the_body() {
+    let input = "void f(void)\n{\n    switch (code) {\n        /* These mappings are the same. */\n        VK_CASE(VK_INSERT,  \"[2~\")\n    default:\n        return NULL;\n    }\n    switch (x) {\n    /* first */\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

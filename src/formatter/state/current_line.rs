@@ -106,6 +106,11 @@ impl CurrentLine {
         self.active_token
     }
 
+    /// Block comment token being pushed, if any.
+    pub(crate) fn active_comment(&self) -> Option<usize> {
+        self.active_comment
+    }
+
     /// Attributes text added from now on to the block comment token at
     /// `index`; `None` stops attributing.
     pub(crate) fn set_active_comment(&mut self, index: Option<usize>) {
