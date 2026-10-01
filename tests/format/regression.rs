@@ -2397,3 +2397,16 @@ fn vtk_continued_first_statement_of_broken_case_block_keeps_body_column() {
     let input = "int f(const nghttp2_frame *frame, char *buffer,\n      size_t blen)\n{\n    switch(frame->hd.type)\n        {\n        case NGHTTP2_DATA:\n            {\n            return g(buffer, blen,\n                     (int)frame->data.padlen);\n            }\n        case NGHTTP2_HEADERS:\n            {\n            return 1;\n            }\n        }\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn comment_before_directive_ahead_of_case_label_stays_in_case_body() {
+    let input = "int f(int ch)\n    {\n    switch (x)\n        {\n        case OP_A:\n            return 1;\n#ifdef RE_ENABLE_I18N\n        case OP_UTF8_PERIOD:\n            if (ch >= 0x80)\n                return 0;\n            /* FALLTHROUGH */\n#endif\n        case OP_PERIOD:\n            return 2;\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn paren_in_comment_body_line_continues_no_comment_after_it() {
+    let input =
+        "/* Define.\n   (The x comments, so\n   do not delete them!)  */\n/* begin syntaxes */\n";
+    check(input, &["--style=kr"], input);
+}

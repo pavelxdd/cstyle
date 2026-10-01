@@ -130,9 +130,16 @@ impl FormatEngine<'_> {
         if self.output.pending_tokens().is_some() && !self.pending_line_in_parens() {
             return None;
         }
-        for line in self.output.scoped().iter().rev().take(12) {
+        let len = self.output.len();
+        let scoped = self.output.scoped();
+        let start = len - scoped.len();
+        for (offset, line) in scoped.iter().enumerate().rev().take(12) {
             if line.trim().is_empty() {
                 return None;
+            }
+            // Lines a comment spans hold no code.
+            if self.output.comment_start_index(start + offset) != start + offset {
+                continue;
             }
             let code = line[..trailing_comment_split_limit(line)].trim_end();
             if code.trim_start().starts_with('#')

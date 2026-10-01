@@ -2450,9 +2450,11 @@ impl FormatEngine<'_> {
         let split_chain_column = is_else
             .then(|| self.split_chain_else_column(first))
             .flatten();
-        let label_column = (!case_labels)
-            .then(|| self.label_comment_column(first))
-            .flatten();
+        let label_column = if case_labels {
+            self.case_body_comment_column(first)
+        } else {
+            self.label_comment_column(first)
+        };
         let block_body_column = self
             .block_comment_column(first)
             .or(split_chain_column)
@@ -2517,7 +2519,7 @@ impl FormatEngine<'_> {
             // Directives change no indent: branches between the comments
             // and the code hold directives only. A label or an `else` may
             // move off the level of the code before.
-            if !is_case_label
+            if (!is_case_label || label_column.is_some())
                 && (!is_else || split_chain_column.is_some())
                 && text.starts_with('#')
                 && !text.ends_with('\\')
@@ -4112,6 +4114,36 @@ impl FormatEngine<'_> {
         self.enclosing_block_body_column(first)
             .or_else(|| self.earlier_statement_column(first))
             .or_else(|| self.brace_line_body_column(first))
+    }
+
+    /// Comments between a case body's last statement and the next case
+    /// label at `first` stay in that body, a level past its label, when a
+    /// directive separates them from the label: astyle indents only a
+    /// comment right before a label at the label.
+    fn case_body_comment_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default") {
+            return None;
+        }
+        let switch_body = groups.enclosing(first)?;
+        let end = self.tree.previous_code_token(first)?;
+        if !matches!(tokens[end], Token::Symbol(';'))
+            || groups.enclosing(end) != Some(switch_body)
+            || !tokens[end..first]
+                .iter()
+                .rev()
+                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        let label = (0..end).rev().find(|&index| {
+            matches!(&tokens[index], Token::Word(word) if word == "case" || word == "default")
+                && groups.enclosing(index) == Some(switch_body)
+        })?;
+        let line = self.line_led_by(label)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
     }
 
     /// The column of the statements before the statement label at `first`
