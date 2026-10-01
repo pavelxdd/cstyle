@@ -1590,8 +1590,10 @@ impl FormatEngine<'_> {
         if !closing_line_needs_unindent || self.options.indent_cases {
             return None;
         }
-        // A switch body's closer lines up however a comment trails it; a
-        // commented case block closer keeps astyle's extra level.
+        // A switch body's closer lines up however a comment trails it, as
+        // does a case block closer whose `{` stands alone at its label; one
+        // closing a block opened on its label, or VTK's and Horstmann's
+        // indented case block, keeps astyle's extra level.
         let closes_switch = self
             .output
             .pending_tokens()
@@ -1600,8 +1602,15 @@ impl FormatEngine<'_> {
             .is_some_and(
                 |owner| matches!(&self.tree.tokens[owner], Token::Word(word) if word == "switch"),
             );
+        let opened_alone = !matches!(
+            self.options.brace_style,
+            BraceStyle::Vtk | BraceStyle::Horstmann
+        ) && self
+            .output
+            .current_closing_brace_open(self.options.tab_width)
+            .is_some_and(|(_, _, opener)| opener == "{");
         let code = line[..trailing_comment_split_limit(line)].trim();
-        if line.trim() == "}" || (closes_switch && code == "}") {
+        if line.trim() == "}" || ((closes_switch || opened_alone) && code == "}") {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
 

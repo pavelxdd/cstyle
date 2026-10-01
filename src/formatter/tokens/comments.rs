@@ -20,8 +20,8 @@ use crate::formatter::text::columns::{
 };
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_ends_with_comment, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    is_comment_line, is_comment_only_line, line_brace_imbalance, line_ends_with_comment,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -1621,6 +1621,22 @@ impl FormatEngine<'_> {
                     .iter()
                     .any(|header| header.as_deref() == Some("switch")))
             .then(|| {
+                // After a control block in the case body the comment stands
+                // at the block's header, wherever the style put its `}`.
+                if self
+                    .layout
+                    .frame_stack
+                    .last_closed_brace()
+                    .is_some_and(|frame| {
+                        frame.semantic_kind == BraceSemanticKind::Command
+                            && frame.header.as_deref().is_some_and(|header| {
+                                !matches!(header, "case" | "default" | "switch")
+                            })
+                    })
+                    && let Some(spaces) = self.closed_block_header_lead()
+                {
+                    return spaces + self.case_unindent_spaces();
+                }
                 let after_blank = self
                     .output
                     .last()
@@ -1648,6 +1664,41 @@ impl FormatEngine<'_> {
                 }
             })
         })
+    }
+
+    /// Lead of the header line of the block the last code line closes.
+    fn closed_block_header_lead(&self) -> Option<usize> {
+        let lines = self.output.scoped();
+        let close = lines.iter().rposition(|line| !line.trim().is_empty())?;
+        let mut depth = 0usize;
+        for index in (0..=close).rev() {
+            let line = &lines[index];
+            let code = line[..trailing_comment_split_limit(line)].trim();
+            let (closes, opens) = line_brace_imbalance(code);
+            depth += closes;
+            if index < close && opens >= depth {
+                let mut header = if code == "{" {
+                    lines[..index]
+                        .iter()
+                        .rposition(|line| !line.trim().is_empty())?
+                } else {
+                    index
+                };
+                // A header split over lines starts where its parens open.
+                let paren_balance = |line: &str| {
+                    let code = &line[..trailing_comment_split_limit(line)];
+                    code.matches('(').count() as isize - code.matches(')').count() as isize
+                };
+                let mut balance = paren_balance(&lines[header]);
+                while balance < 0 && header > 0 {
+                    header -= 1;
+                    balance += paren_balance(&lines[header]);
+                }
+                return Some(leading_visual_width(&lines[header], self.options.tab_width));
+            }
+            depth = depth.saturating_sub(opens);
+        }
+        None
     }
 
     fn definition_header_comment_indent_spaces(&self) -> Option<usize> {

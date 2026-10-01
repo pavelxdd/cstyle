@@ -488,6 +488,8 @@ impl<'a> FormatEngine<'a> {
         self.next_line.leads_with_comma = matches!(following, Some(Token::Symbol(',')));
         self.next_line.leads_with_open_brace = matches!(following, Some(Token::Symbol('{')));
         self.next_line.leads_with_close_brace = matches!(following, Some(Token::Symbol('}')));
+        self.next_line.leads_with_else =
+            matches!(following, Some(Token::Word(word)) if word == "else");
         self.next_line.leads_with_open_paren = matches!(following, Some(Token::Symbol('(')));
         self.next_line.word_followed_by_open_paren = matches!(
             (following, after_following),
@@ -1455,6 +1457,10 @@ impl<'a> FormatEngine<'a> {
                 self.layout.frame_stack.clear_header();
             }
             self.layout.objc.method_continuation = false;
+            self.previous_was_newline = true;
+        } else if self.next_line.leads_with_else {
+            // A body without `;`, as a macro call, still ends before `else`.
+            self.finish_line();
             self.previous_was_newline = true;
         } else {
             self.ensure_space();

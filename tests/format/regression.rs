@@ -2560,3 +2560,27 @@ fn enumerator_value_after_comment_continues_past_its_assignment() {
     let input = "enum e {\n    A = 1,\n    /* c */\n    B    = 0\n           | C\n           | D,\n    E = 1\n};\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn commented_case_block_closer_lines_up_with_its_label() {
+    let input = "void f(void)\n{\n    switch (r)\n    {\n    case 1:\n    {\n        x();\n        break;\n    } // r-d\n    case 2:\n    {\n        break;\n    } // r-h-d\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn else_after_semicolonless_macro_body_starts_its_own_line() {
+    let input = "static void\nf(char *a, int swaptype)\n{\n\n    if (swaptype <= 1)\n        swapcode(long, a, b, n)\n    else\n        swapcode(char, a, b, n)\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comment_after_block_in_case_body_stands_at_the_block_header() {
+    let input = "void f(void)\n{\n    switch(t)\n        {\n        case A:\n            if (!z)\n                {\n                r();\n                return NULL;\n                }\n            /* Convert to ziplist encoded hash. This must be deprecated\n             * when loading dumps. */\n                {\n                unsigned char *lp = lpNew(0);\n                }\n            break;\n        }\n}\n";
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn commented_switch_closer_after_else_switch_keeps_the_body_level() {
+    let input = "void f(void)\n{\n    if (a) {\n        b = 1;\n    } else switch (r) {\n        case 1: {\n            break;\n        } // r-d\n        default: {\n            break;\n        }\n        } // switch\n    x();\n}\n";
+    check(input, &["--style=kr"], input);
+}
