@@ -2548,3 +2548,15 @@ fn whitesmith_do_block_after_commented_braceless_if_in_case_keeps_its_body() {
     let input = "void f(void)\n    {\n    switch (x)\n        {\n        case 1:\n            if (put < end)\n                {\n                if (num)\n                    // Insert\n                    do\n                        {\n                        buf += 1;\n                        putc(buf, out);\n                        }\n                    while (put < end);\n                else\n                    {\n                    put = end;\n                    }\n                }\n        }\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn designator_row_after_closed_nested_initializer_keeps_its_level() {
+    let input = "static const T e = {\n    .db = {\n        .dbh = 0\n    },\n    .dx = 0,\n    .delim = {\n        .d = 1\n    },\n    .x = 1\n};\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn enumerator_value_after_comment_continues_past_its_assignment() {
+    let input = "enum e {\n    A = 1,\n    /* c */\n    B    = 0\n           | C\n           | D,\n    E = 1\n};\n";
+    check(input, &["--style=kr"], input);
+}

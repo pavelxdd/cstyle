@@ -978,7 +978,11 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.logical_continuation_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
+            // An enumerator's pending column, set by a comment before it, is
+            // the line's own: its value continues past its `=`.
+            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
+                && !self.in_enum_declaration_brace()
+            {
                 return ContinuationIndent::Spaces(spaces);
             }
             if let Some(spaces) = self.operator_led_return_continuation_indent_spaces() {

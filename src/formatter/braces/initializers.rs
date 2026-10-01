@@ -14,7 +14,8 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
+    has_unmatched_open_brace, line_brace_imbalance, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::formatter::tokens::operators::{starts_ternary_arm, starts_with_chain_operator};
 use crate::source::lex::is_identifier_continue;
@@ -978,9 +979,15 @@ impl FormatEngine<'_> {
                     spaces =
                         spaces.max(self.layout.indentation.indent() * self.options.indent_width);
                 }
+                // Nested groups closed before the row hold no opener of it.
+                let mut depth = 0usize;
                 for (index, previous) in self.output.iter().enumerate().rev() {
                     let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                    if code.ends_with('{') && self.output_line_opens_initializer(index, code) {
+                    let (closes, opens) = line_brace_imbalance(code);
+                    if depth == 0
+                        && code.ends_with('{')
+                        && self.output_line_opens_initializer(index, code)
+                    {
                         spaces = spaces.max(
                             leading_visual_width(previous, self.options.tab_width)
                                 + self.options.indent_width,
@@ -990,6 +997,7 @@ impl FormatEngine<'_> {
                     if code.ends_with(';') || code.ends_with('}') {
                         break;
                     }
+                    depth = (depth + closes).saturating_sub(opens);
                 }
             }
             return Some(spaces);
