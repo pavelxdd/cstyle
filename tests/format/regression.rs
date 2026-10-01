@@ -2584,3 +2584,9 @@ fn commented_switch_closer_after_else_switch_keeps_the_body_level() {
     let input = "void f(void)\n{\n    if (a) {\n        b = 1;\n    } else switch (r) {\n        case 1: {\n            break;\n        } // r-d\n        default: {\n            break;\n        }\n        } // switch\n    x();\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn vtk_block_after_split_macro_loop_head_stands_past_its_start() {
+    let input = "void f(void)\n{\n    x();\n    RB_FOREACH_SAFE(watcher_list, watcher_root,\n                    uv__inotify_watchers(loop), tmp_watcher_list_iter)\n        {\n        watcher_list->iterating = 1;\n        y();\n        }\n}\n";
+    check(input, &["--style=vtk"], input);
+}

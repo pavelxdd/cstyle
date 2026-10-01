@@ -653,7 +653,28 @@ impl FormatEngine<'_> {
             .filter(|frame| {
                 frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_none()
             })
-            .map(|frame| frame.header_indent_column + self.options.indent_width)
+            .map(|frame| {
+                // A head split over lines, as a macro loop's arguments, starts
+                // where its parens open.
+                let lines = self.output.scoped();
+                let paren_balance = |line: &str| {
+                    let code = &line[..trailing_comment_split_limit(line)];
+                    code.matches('(').count() as isize - code.matches(')').count() as isize
+                };
+                lines
+                    .iter()
+                    .rposition(|line| !line.trim().is_empty())
+                    .filter(|&index| paren_balance(&lines[index]) < 0)
+                    .map_or(frame.header_indent_column, |mut index| {
+                        let mut balance = paren_balance(&lines[index]);
+                        while balance < 0 && index > 0 {
+                            index -= 1;
+                            balance += paren_balance(&lines[index]);
+                        }
+                        leading_visual_width(&lines[index], self.options.tab_width)
+                    })
+                    + self.options.indent_width
+            })
     }
 
     /// A `{` alone after an `else` line stands at least where the style
