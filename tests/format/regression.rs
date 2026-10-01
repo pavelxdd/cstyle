@@ -2391,3 +2391,9 @@ fn vtk_knr_function_braces_stay_in_column_one() {
     let input = "char *\nre_comp (s)\nconst char *s;\n{\n    int x;\n    return 0;\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn vtk_continued_first_statement_of_broken_case_block_keeps_body_column() {
+    let input = "int f(const nghttp2_frame *frame, char *buffer,\n      size_t blen)\n{\n    switch(frame->hd.type)\n        {\n        case NGHTTP2_DATA:\n            {\n            return g(buffer, blen,\n                     (int)frame->data.padlen);\n            }\n        case NGHTTP2_HEADERS:\n            {\n            return 1;\n            }\n        }\n}\n";
+    check(input, &["--style=vtk"], input);
+}

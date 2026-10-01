@@ -110,6 +110,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.first_statement_after_case_label_indent(first))
             .or_else(|| self.statement_after_labeled_statement_indent(first))
             .or_else(|| self.case_block_statement_indent(first))
+            .or_else(|| self.broken_case_block_first_statement_indent(first))
             .or_else(|| self.block_closing_brace_indent(first))
             .or_else(|| self.case_block_closing_brace_indent(first))
             .or_else(|| self.assigned_value_in_case_block_indent(first))
@@ -3925,6 +3926,35 @@ impl FormatEngine<'_> {
             );
         }
         if !self.output.as_slice()[line].trim_start().starts_with('{') {
+            return None;
+        }
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// Styles that indent braces put the first statement of a case block
+    /// whose `{` starts a line at the brace.
+    fn broken_case_block_first_statement_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk
+        ) || matches!(tokens[first], Token::Symbol('{' | '}'))
+        {
+            return None;
+        }
+        let open = self.tree.statements.block_opening(first)?;
+        let block = self.tree.groups.opened_at(open)?;
+        let owner = self.tree.blocks.owner(block)?;
+        if !matches!(&tokens[owner], Token::Word(word) if word == "case" || word == "default")
+            || self
+                .tree
+                .previous_code_token(open)
+                .is_none_or(|colon| !matches!(tokens[colon], Token::Symbol(':')))
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        if self.output.line_tokens(line)?.first != open {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
