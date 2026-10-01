@@ -1260,11 +1260,31 @@ impl FormatEngine<'_> {
 
     pub(crate) fn aggregate_member_case_indent_spaces(
         &self,
+        line: &str,
         current_spaces: usize,
         normal_indent: usize,
         case_unindent_spaces: usize,
     ) -> Option<usize> {
         if case_unindent_spaces == 0 || current_spaces > normal_indent * self.options.indent_width {
+            return None;
+        }
+        // A sibling member or closing brace already placed in pre-unindent
+        // columns stays.
+        let reference = if line.trim_start().starts_with('}') {
+            self.output
+                .current_closing_brace_open(self.options.tab_width)
+                .map(|(width, ..)| width)
+        } else {
+            self.output
+                .last_line_outside_comment()
+                .filter(|previous| {
+                    !previous[..trailing_comment_split_limit(previous)]
+                        .trim_end()
+                        .ends_with('{')
+                })
+                .map(|previous| leading_visual_width(previous, self.options.tab_width))
+        };
+        if reference.is_some_and(|width| width + case_unindent_spaces == current_spaces) {
             return None;
         }
         let aggregate_member = self.in_aggregate_declaration_brace()

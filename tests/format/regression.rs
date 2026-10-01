@@ -2458,3 +2458,27 @@ fn comment_line_after_comment_text_ending_in_assignment_keeps_its_column() {
     let input = "void f(void)\n{\n    switch( x ) {\n    case A: {\n        break;\n    }\n\n    /*\n    **  PRAGMA [schema.]journal_mode =\n    **                      (delete|persist|off)\n    */\n    case B: {\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn comment_in_empty_else_inside_case_block_keeps_body_indent() {
+    let input = "void f(void)\n{\n    switch( x ) {\n    case A: {\n        if( a ) {\n        } else if( b ) {\n            /* c */\n        } else {\n            /* d */\n        }\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn struct_in_case_block_keeps_member_and_closing_columns() {
+    let input = "void f(void)\n{\n    switch( x ) {\n    case A: {\n        static const struct EncName {\n            char *zName;\n            u8 enc;\n        } encnames[] = {\n            { \"UTF8\", 1 },\n            { 0, 0 }\n        };\n        x();\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn case_block_after_comment_led_label_closes_at_label() {
+    let input = "void f(void)\n{\n    switch( x ) {\n    case A: {\n        break;\n    }\n    /*case B*/ default: {\n        if( z ) {\n            y();\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comment_after_endif_past_finished_one_line_if_keeps_statement_column() {
+    let input = "int f(void)\n{\n#if (A >= 1)\n    g(x != NULL);\n#else\n    if (x == NULL) return 1;\n#endif\n\n    /* Fill */\n    {\n        size_t pos = 0;\n    }\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}

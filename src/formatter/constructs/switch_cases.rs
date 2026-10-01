@@ -1370,7 +1370,15 @@ impl FormatEngine<'_> {
             let meta = self.output.brace_meta(index);
             depth += meta.closes;
             if meta.opens > depth {
-                let trimmed = self.output.code_trimmed(index);
+                let mut trimmed = self.output.code_trimmed(index);
+                // Ratliff closes a case block at its body, past the label.
+                while self.options.brace_style != BraceStyle::Ratliff
+                    && let Some(rest) = trimmed
+                        .strip_prefix("/*")
+                        .and_then(|rest| rest.split_once("*/"))
+                {
+                    trimmed = rest.1.trim_start();
+                }
                 return trimmed.ends_with('{')
                     && (trimmed.starts_with("case ") || trimmed.starts_with("default:"));
             }

@@ -1079,8 +1079,9 @@ impl FormatEngine<'_> {
             } else if branch_trimmed == "else"
                 || branch_trimmed.ends_with("} else")
                 || branch_trimmed.ends_with(" else")
-                || is_braceless_header_line(branch_trimmed)
-                || starts_header_word(branch_trimmed, "if")
+                || (is_braceless_header_line(branch_trimmed)
+                    || starts_header_word(branch_trimmed, "if"))
+                    && !branch_code.ends_with([';', '}'])
             {
                 return Some(
                     leading_visual_width(branch, self.options.tab_width)

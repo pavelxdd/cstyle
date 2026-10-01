@@ -1786,7 +1786,9 @@ impl FormatEngine<'_> {
             }
             if trimmed.starts_with("} else") {
                 return Some(
-                    leading_visual_width(line, self.options.tab_width) + self.options.indent_width,
+                    leading_visual_width(line, self.options.tab_width)
+                        + self.options.indent_width
+                        + self.case_unindent_spaces(),
                 );
             }
             if preprocessor_directive(trimmed) == Some("endif")
@@ -1800,7 +1802,8 @@ impl FormatEngine<'_> {
                 if trimmed == "else" || trimmed.ends_with("} else") {
                     return Some(
                         leading_visual_width(header, self.options.tab_width)
-                            + self.options.indent_width,
+                            + self.options.indent_width
+                            + self.case_unindent_spaces(),
                     );
                 }
             }

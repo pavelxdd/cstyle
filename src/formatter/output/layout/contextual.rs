@@ -2572,6 +2572,7 @@ impl FormatEngine<'_> {
                 {
                     *spaces = adjusted;
                 } else if let Some(adjusted) = self.aggregate_member_case_indent_spaces(
+                    line,
                     *spaces,
                     layout.normal_indent,
                     case_unindent,
