@@ -129,6 +129,14 @@ impl Statements {
             .any(|body| body.keyword < index)
     }
 
+    /// Whether the token `index` starts the body of an `else` that an
+    /// empty line separates from it.
+    pub(crate) fn starts_else_body_after_blank_line(&self, index: usize) -> bool {
+        self.split_else_bodies
+            .iter()
+            .any(|body| body.after_blank_line && body.start == index)
+    }
+
     /// Whether the token `index` is in the body of an `else` that an empty
     /// line separates from its body; a directive line alone does not.
     pub(crate) fn in_else_body_after_blank_line(&self, index: usize) -> bool {

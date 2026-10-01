@@ -2428,3 +2428,9 @@ fn statements_after_directive_groups_in_braceless_do_body_keep_their_level() {
     let input = "int f(void)\n{\n    if (!decCheckMath(rhs, set, &status)) do { // protect malloc\n#if DECSUBSET\n            if (!set->extended) {\n                x();\n            } // extended=0\n#endif\n\n            decContextDefault(&aset, DEC_INIT_DECIMAL64); // clean context\n\n            if (!(rhs->bits&(DECNEG|DECSPECIAL)) && !ISZERO(rhs)) {\n                Int residue=0;               // (no residue)\n                if (!(copystat&DEC_Inexact) && w->lsu[0]==1) {\n                    // the exponent, conveniently, is the power of 10\n                    decNumberFromInt32(w, w->exponent);\n                    break;\n                } // not a power of 10\n            } // not a candidate for exact\n            decNumberZero(w);                   // set up 10...\n#if DECDPUN==1\n            w->lsu[1]=1;\n#else\n            w->lsu[0]=10;                       // ..\n#endif\n            w->digits=2;                        // ..\n        } while(0);                         // [for break]\n    return 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn gnu_nested_brace_in_blank_split_else_body_stands_past_its_header() {
+    let input = "int f(void)\n{\n    if( a )\n        {\n            x();\n        }\n    else\n\n        /* changeset FILENAME concat */\n        if( strcmp(argv[2],\"concat\")==0 )\n            {\n                int szB;\n                if( out==0 )\n                    {\n                        exit(1);\n                    }\n                fclose(out);\n            }\n    return 0;\n}\n";
+    check(input, &["--style=gnu"], input);
+}

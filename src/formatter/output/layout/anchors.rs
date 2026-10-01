@@ -3100,7 +3100,17 @@ impl FormatEngine<'_> {
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)
             || (self.options.brace_style != BraceStyle::Gnu
                 && !self.should_indent_brace_line(BraceType::Command))
-            || self.tree.statements.in_else_body_after_blank_line(first)
+        {
+            return None;
+        }
+        // GNU braces nested deeper in such a body stand at their headers.
+        if self.tree.statements.in_else_body_after_blank_line(first)
+            && (self.options.brace_style != BraceStyle::Gnu
+                || self.header_keyword_before(first).is_none_or(|keyword| {
+                    self.tree
+                        .statements
+                        .starts_else_body_after_blank_line(keyword)
+                }))
         {
             return None;
         }
