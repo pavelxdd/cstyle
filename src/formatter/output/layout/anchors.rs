@@ -4060,8 +4060,33 @@ impl FormatEngine<'_> {
     fn assigned_value_in_case_block_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        let assign = self.tree.previous_code_token(first)?;
         let block = groups.enclosing(first)?;
+        // A `;` on its own line ends the value and stands with it.
+        let assign = if matches!(tokens[first], Token::Symbol(';')) {
+            let mut index = first;
+            loop {
+                index = self.tree.previous_code_token(index)?;
+                if groups.enclosing(index) != Some(block) {
+                    index = groups.get(groups.closed_at(index)?).open;
+                    continue;
+                }
+                match &tokens[index] {
+                    Token::Operator(operator) if operator == "=" => break index,
+                    Token::Symbol(';' | '{' | '}') => return None,
+                    _ => {}
+                }
+            }
+        } else {
+            self.tree.previous_code_token(first)?
+        };
+        // Only a value split off its `=` takes the level.
+        if matches!(tokens[first], Token::Symbol(';'))
+            && next_code_token(tokens, assign + 1)
+                .and_then(|next| self.output.line_with_token(next))
+                == self.output.line_with_token(assign)
+        {
+            return None;
+        }
         if !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
             || matches!(tokens[first], Token::Symbol('{'))
             || groups.enclosing(assign) != Some(block)

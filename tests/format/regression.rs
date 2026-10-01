@@ -2783,3 +2783,9 @@ fn later_sibling_rows_in_a_compound_literal_stay_with_the_first() {
     let input = "void f(void)\n{\n    T info = {\n        .version = 1,\n        .key_specs = (K[])\n        {\n            {\n                .flags = 1,\n            }, {\n                .flags = 2,\n                .x = 2,\n            }, {\n                .flags = 3,\n            },\n            {0}\n        }\n    };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn assigned_value_split_by_directives_keeps_its_continuation() {
+    let input = "void f(void)\n{\n    switch(x) {\n    case 1:\n        *p =\n#ifdef A\n            0\n#else\n            y\n#endif\n            ;\n        break;\n    }\n    *p =\n#ifdef A\n        0\n#else\n        y\n#endif\n        ;\n}\n";
+    check(input, &["--style=kr"], input);
+}
