@@ -2410,3 +2410,21 @@ fn paren_in_comment_body_line_continues_no_comment_after_it() {
         "/* Define.\n   (The x comments, so\n   do not delete them!)  */\n/* begin syntaxes */\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn do_block_as_braceless_if_body_closes_at_do_level_after_directives() {
+    let input = "void f(void)\n{\n    if (!decCheckMath(rhs, set, &status)) do { // protect allocation\n#if DECSUBSET\n            if (!set->extended) {\n                x();\n            }\n#endif\n            decExpOp(res, rhs, set, &status);\n        } while(0);                         // end protected\n    g();\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comment_before_directive_ahead_of_case_label_stands_past_the_label() {
+    let input = "int f(int op)\n{\n    switch( op ) {\n\n        /* Mutex configuration options are only available in a threadsafe\n        ** compile.\n        */\n#if defined(SQLITE_THREADSAFE)\n    case 1: {\n        x();\n        break;\n    }\n#endif\n        /* EVIDENCE heap */\n#if defined(A)\n    case 2: {\n        y();\n        break;\n    }\n#endif\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn statements_after_directive_groups_in_braceless_do_body_keep_their_level() {
+    let input = "int f(void)\n{\n    if (!decCheckMath(rhs, set, &status)) do { // protect malloc\n#if DECSUBSET\n            if (!set->extended) {\n                x();\n            } // extended=0\n#endif\n\n            decContextDefault(&aset, DEC_INIT_DECIMAL64); // clean context\n\n            if (!(rhs->bits&(DECNEG|DECSPECIAL)) && !ISZERO(rhs)) {\n                Int residue=0;               // (no residue)\n                if (!(copystat&DEC_Inexact) && w->lsu[0]==1) {\n                    // the exponent, conveniently, is the power of 10\n                    decNumberFromInt32(w, w->exponent);\n                    break;\n                } // not a power of 10\n            } // not a candidate for exact\n            decNumberZero(w);                   // set up 10...\n#if DECDPUN==1\n            w->lsu[1]=1;\n#else\n            w->lsu[0]=10;                       // ..\n#endif\n            w->digits=2;                        // ..\n        } while(0);                         // [for break]\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
