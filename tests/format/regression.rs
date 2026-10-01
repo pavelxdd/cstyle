@@ -2684,3 +2684,9 @@ fn source_attached_nested_initializer_brace_keeps_its_statement_indent() {
     check(input, &["--style=allman"], input);
     check(input, &["--style=gnu"], input);
 }
+
+#[test]
+fn struct_with_broken_brace_in_case_block_indents_members_once() {
+    let input = "void f(void)\n{\n    switch (op)\n    {\n    case A:\n    {\n        struct\n        {\n            int m;\n        } k;\n    }\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
