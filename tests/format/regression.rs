@@ -2482,3 +2482,21 @@ fn comment_after_endif_past_finished_one_line_if_keeps_statement_column() {
     let input = "int f(void)\n{\n#if (A >= 1)\n    g(x != NULL);\n#else\n    if (x == NULL) return 1;\n#endif\n\n    /* Fill */\n    {\n        size_t pos = 0;\n    }\n    return 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn else_block_in_braceless_loop_body_keeps_its_statements_together() {
+    let input = "void f(void)\n    {\n    while (o)\n        if (a)\n            {\n            b = 1;\n            }\n        else\n            {\n            b = NULL;\n            o = NULL;\n            o = NULL;\n            }\n    x();\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn comment_after_finished_else_before_directive_keeps_statement_column() {
+    let input = "void f(void)\n    {\n    if (a)\n        b = 1;\n    else\n        c |= 2;\n\n#ifndef NDEBUG\n    /* Validate */\n        {\n        DWORD mode;\n        }\n#endif\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn else_after_braced_loop_in_braceless_if_body_closes_the_body() {
+    let input = "int f(void)\n{\n    if (t)\n        while (a)\n        {\n            b();\n        }\n    else\n        /* other */\n        while (c)\n        {\n            d();\n        }\n    return 0;\n}\n";
+    check(input, &["--style=allman"], input);
+}

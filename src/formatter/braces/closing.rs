@@ -616,6 +616,26 @@ impl FormatEngine<'_> {
     }
 
     fn braceless_body_continues(&self, next: Option<&Token>) -> bool {
+        // An `else` on a later line continues the body when it belongs to
+        // the `if` whose block just closed.
+        if matches!(next, Some(Token::Newline | Token::Whitespace(_))) {
+            let tokens = &self.tree.tokens;
+            return self.layout.nesting.last_closed_brace_header.as_deref() == Some("if")
+                && self
+                    .current
+                    .active_token()
+                    .and_then(|brace| {
+                        (brace + 1..tokens.len()).find(|&index| {
+                            !matches!(
+                                tokens[index],
+                                Token::Newline | Token::Whitespace(_) | Token::Comment(_, _)
+                            )
+                        })
+                    })
+                    .is_some_and(
+                        |index| matches!(&tokens[index], Token::Word(word) if word == "else"),
+                    );
+        }
         match next {
             Some(Token::Word(word)) if word == "else" || word == "catch" => true,
             Some(Token::Word(word)) if word == "while" => {

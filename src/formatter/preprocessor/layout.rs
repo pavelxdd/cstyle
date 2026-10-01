@@ -1023,9 +1023,10 @@ impl FormatEngine<'_> {
                     }
                     break;
                 }
-                if let Some((open_spaces, _, _)) = self
-                    .output
-                    .current_closing_brace_open(self.options.tab_width)
+                if active_split_else
+                    && let Some((open_spaces, _, _)) = self
+                        .output
+                        .current_closing_brace_open(self.options.tab_width)
                 {
                     return Some(
                         self.current_closing_multiline_header_indent()
