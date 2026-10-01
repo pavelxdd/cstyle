@@ -1188,7 +1188,10 @@ impl FormatEngine<'_> {
         if let Some(level) = self.layout.pending_braceless_block_bias.take()
             && brace_type == BraceType::Command
         {
-            let delta = level.saturating_sub(self.layout.indentation.indent());
+            // The bias counts the case body level the indentation lacks.
+            let delta = level.saturating_sub(
+                self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal),
+            );
             if delta > 0 {
                 self.layout.indentation.enter_braceless_block(delta);
             }

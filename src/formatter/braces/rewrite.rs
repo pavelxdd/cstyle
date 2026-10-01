@@ -636,7 +636,11 @@ impl FormatEngine<'_> {
         let (header_indent, exact_body_indent) =
             if self.layout.command_state.header_broken_before_comment {
                 self.layout.command_state.header_broken_before_comment = false;
-                (self.layout.indentation.indent(), None)
+                (
+                    self.layout.indentation.indent()
+                        + self.case_body_indent_extra(LineKind::Normal),
+                    None,
+                )
             } else if let Some((line_indent, body_indent)) = semantic_header {
                 (
                     line_indent / self.options.indent_width,

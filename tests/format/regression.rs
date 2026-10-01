@@ -2530,3 +2530,21 @@ fn ratliff_function_brace_after_endif_indents_with_its_body() {
     let input = "#ifdef A\nint\ng(int a, int b)\n#else\nint\ng(int a)\n#endif\n    {\n    return h(a);\n    }\n\nint\nk(int a) {\n    return 0;\n    }\n";
     check(input, &["--style=ratliff"], input);
 }
+
+#[test]
+fn horstmann_braceless_do_while_in_case_block_closes_at_the_do() {
+    let input = "void f(void)\n{   switch (x)\n    {   case 2:\n        {   /* Read */\n            for (;;)\n            {   do\n                    r = recv(s);\n                while (r == -1);\n\n                if (r <= 0)\n                    break;\n            }\n            break;\n        }\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
+fn whitesmith_braceless_chain_block_in_case_body_keeps_one_level() {
+    let input = "int f(void)\n    {\n    switch (x)\n        {\n        case 2:\n            if (a)\n                return 1;\n            else\n                {\n                ret = g();\n\n                if (ret == 0)\n                    for (i = 0; i < 2; i++)\n                        {\n                        h(i);\n                        k(i);\n                        }\n                }\n\n            return ret;\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn whitesmith_do_block_after_commented_braceless_if_in_case_keeps_its_body() {
+    let input = "void f(void)\n    {\n    switch (x)\n        {\n        case 1:\n            if (put < end)\n                {\n                if (num)\n                    // Insert\n                    do\n                        {\n                        buf += 1;\n                        putc(buf, out);\n                        }\n                    while (put < end);\n                else\n                    {\n                    put = end;\n                    }\n                }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}

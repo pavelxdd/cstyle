@@ -3422,6 +3422,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let close = self.tree.previous_code_token(first)?;
+        if matches!(tokens[close], Token::Symbol(';')) {
+            return self.braceless_do_while_indent(close);
+        }
         let block = self.tree.groups.closed_at(close)?;
         // The `do` right before the block owns it, even as a braceless body.
         let owner = self
@@ -3438,6 +3441,37 @@ impl FormatEngine<'_> {
         }
         let line = self.line_led_by(owner)?;
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// The `while` after a braceless `do` body ending at `semicolon` stands
+    /// at the `do`.
+    fn braceless_do_while_indent(&self, semicolon: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let group = self.tree.groups.enclosing(semicolon);
+        let do_token = (0..semicolon)
+            .rev()
+            .filter(|&index| self.tree.groups.enclosing(index) == group)
+            .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
+            .find_map(|index| self.tree.statements.braceless_header(index))
+            .filter(|&header| matches!(&tokens[header], Token::Word(word) if word == "do"))?;
+        if tokens[do_token..semicolon]
+            .iter()
+            .any(|token| matches!(token, Token::Preprocessor(_)))
+        {
+            return None;
+        }
+        // Only a `do` leading its line, or run in after a `{`, places it.
+        let first = self
+            .output
+            .line_tokens(self.output.line_with_token(do_token)?)?
+            .first;
+        if first != do_token
+            && !(matches!(tokens[first], Token::Symbol('{'))
+                && next_code_token(tokens, first + 1) == Some(do_token))
+        {
+            return None;
+        }
+        Some(self.token_column(do_token)? + self.case_unindent_spaces())
     }
 
     /// VTK keeps the braces of a file-scope function with K&R parameter
