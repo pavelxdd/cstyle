@@ -700,7 +700,8 @@ impl FormatEngine<'_> {
                 let closing_indent = leading_visual_width(previous, self.options.tab_width);
                 layout.exact_indent_spaces = Some(
                     self.closed_block_owner_indent()
-                        .map_or(closing_indent, |owner| owner.min(closing_indent)),
+                        .map_or(closing_indent, |owner| owner.min(closing_indent))
+                        + self.case_unindent_spaces(),
                 );
             }
         }

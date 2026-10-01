@@ -2747,3 +2747,9 @@ fn macro_loop_brace_after_a_case_label_is_no_case_block() {
     let input = "void f(void)\n{\n    switch (x)\n        {\n        case A:\n            RB_FOREACH_SAFE(field, json_fields, &node->fields, field1)\n                {\n                g(field);\n                }\n            break;\n        }\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn brace_after_a_struct_declarator_in_a_case_block_keeps_the_body() {
+    let input = "void f(void)\n{\n    switch (x)\n    {\n    case 11:\n    {\n        struct O\n        {\n            int opt;\n        } aOpt[] =\n        {\n            { 0, 0 }\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
