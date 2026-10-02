@@ -3012,3 +3012,15 @@ fn define_header_body_after_a_split_condition_takes_the_body_level() {
     let input = "#define CHECK(x, y)                \\\n    do {                           \\\n        if(result &&               \\\n           result != OTHER)        \\\n            goto error;            \\\n    } while(0)\n";
     check(input, &["--indent-preproc-define"], input);
 }
+
+#[test]
+fn member_declarator_rows_after_a_commented_row_keep_its_column() {
+    let input = "struct acttab {\n    int nAction;\n    struct lookahead_action\n        *aAction,                  /* The table */\n        *aLookahead;               /* A set */\n    int mnLookahead;\n};\nstruct s {\n    robj *a,\n         *b, /* x */\n         *c;\n};\n";
+    check(input, &["--style=linux"], input);
+}
+
+#[test]
+fn chained_assignment_rows_align_with_the_last_assigned_value() {
+    let input = "void f(void)\n{\n    *l1 = *l2 = (v) |\n                (v << 16) |\n                (v << 32);\n}\n";
+    check(input, &["--style=linux"], input);
+}

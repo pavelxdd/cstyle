@@ -1374,6 +1374,33 @@ impl FormatEngine<'_> {
                 .closed_at(before)
                 .map_or(before, |group| groups.get(group).open);
         }
+        // A declarator row after a row that continues the declaration
+        // stands at that row.
+        if let Some(comma_line) = self.output.line_with_token(comma)
+            && let Some(row_first) = self
+                .output
+                .line_tokens(comma_line)
+                .and_then(|span| next_code_token(tokens, span.first))
+            && row_first < comma
+            && row_first > start
+            && (matches!(&tokens[row_first], Token::Operator(operator)
+                    if matches!(operator.as_str(), "*" | "**" | "&" | "&&"))
+                || self
+                    .tree
+                    .previous_code_token(row_first)
+                    .is_some_and(|before| {
+                        matches!(tokens[before], Token::Symbol(','))
+                            && groups.enclosing(before) == Some(body)
+                    }))
+            && !(start..comma).any(|index| {
+                matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == Some(body)
+            })
+        {
+            return Some(
+                self.output.lead_width(comma_line, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
+        }
         let line = self.output.line_with_token(start)?;
         let span = self.output.line_tokens(line)?;
         let registering = (start..=span.last)
@@ -2154,13 +2181,15 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // The first `=` of a chained assignment holds the value.
+        // The last `=` of a chained assignment holds the value.
         let mut assign = None;
         let mut index = previous;
         while let Some(before) = self.tree.previous_code_token(index) {
             if groups.enclosing(before) == Some(group) {
                 match &tokens[before] {
-                    Token::Operator(operator) if operator == "=" => assign = Some(before),
+                    Token::Operator(operator) if operator == "=" => {
+                        assign = assign.or(Some(before));
+                    }
                     Token::Symbol(';' | ',' | '{' | '}' | '?' | ':') => break,
                     Token::Word(word) if word == "return" => return None,
                     _ => {}
