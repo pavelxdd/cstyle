@@ -3111,3 +3111,9 @@ fn break_one_line_headers_keeps_a_one_line_block_on_its_own_line() {
         input,
     );
 }
+
+#[test]
+fn remove_comment_prefix_leaves_rows_of_a_trailing_comment_in_place() {
+    let input = "struct s {\n    unsigned int action;  /* CURL_POLL_IN we last told the\n                             libcurl application */\n    int x;      /* first\n                   second */\n};\n";
+    check(input, &["--style=kr", "--remove-comment-prefix"], input);
+}

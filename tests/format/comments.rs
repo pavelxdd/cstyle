@@ -4129,7 +4129,7 @@ fn remove_comment_prefix_strips_unterminated_body_prefix() {
 
     assert_eq!(
         format_exact("void run(){\ncall(); /* unterminated\n * body\n", &options,),
-        "void run()\n{\n    call(); /* unterminated\n        body\n",
+        "void run()\n{\n    call(); /* unterminated\n    body\n",
     );
 }
 

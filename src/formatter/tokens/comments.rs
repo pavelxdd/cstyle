@@ -2471,14 +2471,29 @@ impl FormatEngine<'_> {
             let last_line_has_trailing_token = self.token_input.has_next_meaningful_token;
             while let Some(line) = lines.next() {
                 let shifted = if self.options.strip_comment_prefix {
-                    let opener_prefix = " ".repeat(self.current_line_indent_spaces());
-                    strip_block_comment_line(
-                        self.options,
-                        line,
-                        false,
-                        &opener_prefix,
-                        self.token_input.token_source_column,
+                    // astyle keeps the text of a row of a comment opened
+                    // after code at its column, past a leading `*`, and no
+                    // further left than the code.
+                    let tab_width = self.options.tab_width.max(1);
+                    let text = line.trim_start();
+                    let body = if text.starts_with('*') && !text.starts_with("*/") {
+                        &text[1..]
+                    } else {
+                        text
+                    };
+                    let column = visual_width_from(
+                        &line[..line.len() - body.trim_start().len()],
+                        0,
+                        tab_width,
                     )
+                    .max(self.current_line_indent_spaces());
+                    if body.trim().is_empty() {
+                        String::new()
+                    } else if text.starts_with("*/") {
+                        line.trim_end().to_string()
+                    } else {
+                        format!("{}{}", " ".repeat(column), body.trim())
+                    }
                 } else {
                     line.trim_end().to_string()
                 };
