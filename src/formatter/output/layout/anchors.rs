@@ -4520,8 +4520,8 @@ impl FormatEngine<'_> {
         if !branches.is_empty() {
             return None;
         }
-        let line = self.output.line_with_token(open)?;
-        let line_first = self.output.line_tokens(line)?.first;
+        let mut line = self.output.line_with_token(open)?;
+        let mut line_first = self.output.line_tokens(line)?.first;
         if line_first != open {
             // An attached `{` closes at its header's line where the style
             // aligns closing braces with headers.
@@ -4529,6 +4529,14 @@ impl FormatEngine<'_> {
             let mut header = self.tree.previous_code_token(open)?;
             if let Some(condition) = groups.closed_at(header) {
                 header = self.tree.previous_code_token(groups.get(condition).open)?;
+            }
+            // A condition split over lines leaves the `{` on a later line.
+            if let Some(header_line) = self.output.line_with_token(header)
+                && header_line < line
+                && self.output.line_tokens(header_line)?.first == header
+            {
+                line = header_line;
+                line_first = header;
             }
             if !matches!(&tokens[header], Token::Word(word)
                 if matches!(word.as_str(), "if" | "else" | "for" | "while" | "switch" | "do"))

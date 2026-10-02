@@ -3862,3 +3862,11 @@ fn run_in_brace_of_a_split_else_body_aligns_to_its_header() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn split_else_body_with_a_multiline_condition_closes_at_its_header() {
+    let input = "void f(void)\n{\n  if(a) {\n    x = 1;\n  }\n  else\n\n  if(c &&\n     d) {\n    y = 1;\n  }\n  z = 2;\n}\n";
+    let expected = "void f(void)\n{\n    if(a) {\n        x = 1;\n    } else\n\n        if(c &&\n                d) {\n            y = 1;\n        }\n    z = 2;\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
