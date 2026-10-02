@@ -790,6 +790,12 @@ impl FormatEngine<'_> {
     fn take_last_output_line_for_attach(&mut self) -> Option<String> {
         let (line, tokens) = self.output.pop_with_tokens()?;
         self.current.restore_tokens(tokens);
+        // The line adjuster sees the brace again with the header.
+        if let Some((index, adjuster)) = self.adjuster_before_lone_brace.take()
+            && index == self.output.len()
+        {
+            self.layout.line_adjuster = adjuster;
+        }
         Some(line)
     }
 

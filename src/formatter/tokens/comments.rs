@@ -2877,11 +2877,13 @@ impl FormatEngine<'_> {
             .count();
         let code_len = self.current_char_len() - out_indent;
         let gap_chars = gap.chars().count();
-        if kind == CommentKind::Line && gap_chars >= self.options.indent_width * 2 {
+        let space_pad = (code_len + gap_chars) as isize - target_column as isize;
+        // A wide gap before a line comment only shrinks.
+        if kind == CommentKind::Line && gap_chars >= self.options.indent_width * 2 && space_pad < 0
+        {
             self.current.push_str(&gap);
             return;
         }
-        let space_pad = (code_len + gap_chars) as isize - target_column as isize;
         if gap.contains('\t') {
             self.current.push_str(&gap);
         } else if space_pad < 0 {

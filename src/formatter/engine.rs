@@ -119,6 +119,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) current_is_preindented: bool,
     /// The current line is a comment row astyle writes as it stands.
     pub(crate) current_is_verbatim: bool,
+    /// The line adjuster before it saw the lone `}` published at the
+    /// index, restored when a closing header takes that line back.
+    pub(crate) adjuster_before_lone_brace: Option<(usize, line_adjust::LineAdjuster)>,
     pub(crate) unmatched_closing_brace_recovery: bool,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
@@ -197,6 +200,7 @@ impl<'a> FormatEngine<'a> {
             disabled_formatting: None,
             current_is_preindented: false,
             current_is_verbatim: false,
+            adjuster_before_lone_brace: None,
             unmatched_closing_brace_recovery: false,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,

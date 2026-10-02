@@ -3649,3 +3649,25 @@ fn control_header_indexing_an_array_breaks_its_one_line_block() {
     let expected = "int f(void)\n{\n    while( n>0 && p->aAction[n-1].lookahead<0 ) {\n        n--;\n    }\n    return n;\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn label_after_a_comment_line_splits_from_its_statement() {
+    let input = "void f(int c)\n{\n  switch (c) {\n    case 1:\n      x();\n      /* go through */\n    no_save: break;\n  }\n  x();\n  /* c */\nlbl: y();\n}\n";
+    let expected = "void f(int c)\n{\n    switch (c) {\n    case 1:\n        x();\n        /* go through */\nno_save:\n        break;\n    }\n    x();\n    /* c */\nlbl:\n    y();\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn wide_gap_before_a_line_comment_shrinks_by_added_padding() {
+    let input =
+        "void f(void)\n{\n  a=b;        // c\n  uInt targar[4]={0,0,0,0};        // target\n}\n";
+    let expected = "void f(void)\n{\n    a = b;      // c\n    uInt targar[4] = {0, 0, 0, 0};   // target\n}\n";
+    check(input, &["--pad-oper"], expected);
+}
+
+#[test]
+fn else_joined_from_its_own_line_keeps_the_case_block_closing_brace() {
+    let input = "void f(void)\n{\n  switch (t) {\n    case 1: {\n\tif (a) {\n\t    x();\n\t}\n\telse {\n\t    y();\n\t}\n\tbreak;\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{\n    switch (t) {\n    case 1: {\n        if (a) {\n            x();\n        } else {\n            y();\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+}

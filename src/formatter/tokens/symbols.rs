@@ -21,8 +21,8 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, trailing_comment_split_limit, trailing_matching_parens,
-    unmatched_open_paren_column,
+    has_unclosed_delimiter_after, is_comment_only_line, trailing_comment_split_limit,
+    trailing_matching_parens, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1419,11 +1419,17 @@ impl FormatEngine<'_> {
             && !is_range_for
             && !access_label_candidate
             && (is_asm_operand_colon || find_assignment_operator(&self.current).is_none())
+            // A comment line before a statement leaves its column pending,
+            // which continues nothing.
             && (self
                 .layout
                 .continuation_indent
                 .next_line_indent_spaces
                 .is_some()
+                && !self
+                    .output
+                    .last_non_empty_index()
+                    .is_some_and(|index| is_comment_only_line(self.output[index].trim_start()))
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some());
         let is_label = !has_question
