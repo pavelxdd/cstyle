@@ -480,9 +480,16 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
     None
 }
 
-fn update_define_expression_paren_anchors(line: &str, anchors: &mut Vec<usize>, tab_width: usize) {
+/// Records for each open paren its column and the column its rows align
+/// at.
+fn update_define_expression_paren_anchors(
+    line: &str,
+    anchors: &mut Vec<(usize, usize)>,
+    tab_width: usize,
+) {
     let (body, _) = strip_define_backslash(line);
     let chars: Vec<char> = body.chars().collect();
+    let full: Vec<char> = line.trim_end().chars().collect();
     let mut index = 0usize;
     let mut quote = None;
     let mut escaped = false;
@@ -517,7 +524,18 @@ fn update_define_expression_paren_anchors(line: &str, anchors: &mut Vec<usize>, 
             continue;
         }
         match ch {
-            '(' => anchors.push(visual_column_at(&chars, index + 1, tab_width)),
+            // astyle aligns at the first character after the paren, a
+            // continuing backslash included.
+            '(' => {
+                let next = full[index + 1..]
+                    .iter()
+                    .position(|ch| !ch.is_whitespace())
+                    .map_or(index + 1, |offset| index + 1 + offset);
+                anchors.push((
+                    visual_column_at(&full, index, tab_width),
+                    visual_column_at(&full, next, tab_width),
+                ));
+            }
             ')' => {
                 anchors.pop();
             }
@@ -601,10 +619,16 @@ impl FormatEngine<'_> {
                 let current = strip_define_backslash(part).0.trim_start();
                 line_spaces = if let Some(anchor) = paren_anchors
                     .last()
-                    .copied()
+                    .map(|&(paren, align)| {
+                        if current.starts_with(')') {
+                            paren
+                        } else {
+                            align
+                        }
+                    })
                     .filter(|column| *column <= self.options.max_continuation_indent)
                 {
-                    anchor.saturating_sub(usize::from(current.starts_with(')')))
+                    anchor
                 } else {
                     next_define_expression_indent(previous, spaces, self.options)
                 };
@@ -629,22 +653,26 @@ impl FormatEngine<'_> {
         let mut assignment_anchor = None;
         let mut line_spaces = base_spaces;
         for (index, part) in body_parts.iter().enumerate() {
-            if index > 0 {
-                let current = strip_define_backslash(part).0.trim_start();
-                let current_starts_assignment =
-                    current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
-                line_spaces = if current_starts_assignment {
-                    base_spaces + self.options.indent_width
-                } else {
-                    assignment_anchor
-                        .or_else(|| {
-                            paren_anchors
-                                .last()
-                                .copied()
-                                .filter(|column| *column <= self.options.max_continuation_indent)
-                        })
-                        .unwrap_or(base_spaces)
-                };
+            let current = strip_define_backslash(part).0.trim_start();
+            let current_starts_assignment =
+                current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
+            if current_starts_assignment {
+                line_spaces = base_spaces + self.options.indent_width;
+            } else if index > 0 {
+                line_spaces = assignment_anchor
+                    .or_else(|| {
+                        paren_anchors
+                            .last()
+                            .map(|&(paren, align)| {
+                                if current.starts_with(')') {
+                                    paren
+                                } else {
+                                    align
+                                }
+                            })
+                            .filter(|column| *column <= self.options.max_continuation_indent)
+                    })
+                    .unwrap_or(base_spaces);
             }
             let prefix = self
                 .options

@@ -3141,3 +3141,15 @@ fn attach_return_type_aligns_parameters_of_a_struct_head_left_split() {
     let input = "struct style *\nstyle_add(struct grid_cell *gc, struct options *oo, const char *name,\n          struct format_tree *ft)\n{\n    x();\n}\n";
     check(input, &["--style=gnu", "--attach-return-type"], input);
 }
+
+#[test]
+fn define_body_row_led_by_assignment_takes_a_continuation_level() {
+    let input = "#define C(x) na B(v) \\\n        = c\n";
+    check(input, &["--indent-preproc-define"], input);
+}
+
+#[test]
+fn define_rows_align_with_the_first_character_after_a_paren() {
+    let input = "#define DIFF_PAIR_BROKEN(p) \\\n    ( (!DIFF_FILE_VALID((p)->one) != !DIFF_FILE_VALID((p)->two)) && \\\n      ((p)->broken_pair != 0) )\n";
+    check(input, &["--indent-preproc-define"], input);
+}
