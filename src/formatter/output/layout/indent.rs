@@ -24,16 +24,16 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{
     first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
     starts_string_literal_token, string_literal_has_opening_context,
 };
 use crate::formatter::tokens::operators::{
-    find_assignment_operator, head_ends_binary_operator, starts_with_chain_operator,
-    trailing_binary_operator_column,
+    array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
+    starts_with_chain_operator,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -308,10 +308,10 @@ impl FormatEngine<'_> {
     pub(super) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
         let previous = self.output.last()?;
         let trimmed = previous.trim_end();
-        if !head_ends_binary_operator(trimmed) || unmatched_open_bracket_column(trimmed).is_none() {
+        if !head_ends_binary_operator(trimmed) {
             return None;
         }
-        trailing_binary_operator_column(trimmed)
+        array_bound_operator_column(trimmed)
     }
 
     pub(crate) fn adjusted_line_indent_delta(&self, adjusted: &str) -> usize {

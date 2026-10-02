@@ -3893,3 +3893,11 @@ fn max_code_length_splits_at_the_last_bitwise_operator_not_after_a_unary_one() {
     check(input, &["--max-code-length=80"], expected);
     check(expected, &["--max-code-length=80"], expected);
 }
+
+#[test]
+fn array_bound_row_after_a_closed_bracket_aligns_past_the_open_bracket() {
+    let input = "void f(void)\n{\n    buf[k] = special[my_random() %\n        ARRAY_SIZE(special)];\n    x = a[b() %\n        c];\n}\n";
+    let expected = "void f(void)\n{\n    buf[k] = special[my_random() %\n                     ARRAY_SIZE(special)];\n    x = a[b() %\n              c];\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}

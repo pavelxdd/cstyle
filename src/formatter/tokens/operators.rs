@@ -171,6 +171,18 @@ pub(crate) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
         .filter(|_| !head.ends_with("++") && !head.ends_with("--") && !head.ends_with("->"))
 }
 
+/// Column where a row continuing an array bound after `head` starts:
+/// astyle aligns it under the trailing operator, or past the open `[`
+/// once a bracket closed earlier on the line.
+pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
+    let open = crate::formatter::text::line_scan::unmatched_open_bracket_column(head)?;
+    if head[..open].contains(']') {
+        let after = &head[open + 1..];
+        return Some(open + 1 + after.len() - after.trim_start().len());
+    }
+    trailing_binary_operator_column(head)
+}
+
 pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
     let head = head.trim_end();
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]

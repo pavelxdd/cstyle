@@ -20,12 +20,12 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
-    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::{
-    find_assignment_operator, head_ends_binary_operator, head_starts_binary_operator,
-    starts_with_chain_operator, trailing_binary_operator_column,
+    array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
+    head_starts_binary_operator, starts_with_chain_operator,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_word_char};
@@ -1549,10 +1549,10 @@ impl FormatEngine<'_> {
 
     pub(crate) fn array_bound_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trim_end();
-        if !head_ends_binary_operator(line) || unmatched_open_bracket_column(line).is_none() {
+        if !head_ends_binary_operator(line) {
             return None;
         }
-        Some(self.current_line_indent_spaces() + trailing_binary_operator_column(line)?)
+        Some(self.current_line_indent_spaces() + array_bound_operator_column(line)?)
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
