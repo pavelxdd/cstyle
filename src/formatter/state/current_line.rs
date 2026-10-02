@@ -157,6 +157,10 @@ impl CurrentLine {
         }
     }
 
+    pub(crate) fn tokens(&self) -> Option<TokenSpan> {
+        self.tokens
+    }
+
     pub(crate) fn take_tokens(&mut self) -> Option<TokenSpan> {
         self.tokens.take()
     }

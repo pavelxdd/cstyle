@@ -1184,6 +1184,30 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// An argument after a comma ending the line before stands at the first
+    /// argument when that follows its paren. The stack replay places these
+    /// unless the code length is limited.
+    fn argument_after_comma_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.options.max_code_length?;
+        let group = groups.enclosing(first)?;
+        let previous = self.tree.previous_code_token(first)?;
+        if groups.get(group).delimiter != Delimiter::Paren
+            || !matches!(tokens[previous], Token::Symbol(','))
+            || groups.enclosing(previous) != Some(group)
+        {
+            return None;
+        }
+        let open = groups.get(group).open;
+        let argument = next_code_token(tokens, open + 1)?;
+        let line = self.output.line_with_token(open)?;
+        if self.output.line_with_token(argument)? != line || argument >= first {
+            return None;
+        }
+        Some(self.token_column(argument)? + self.case_unindent_spaces())
+    }
+
     /// A line that opens with a block comment and continues with a
     /// statement stands where the tree puts the statement: the engine lays
     /// such lines out as comments.
@@ -1217,7 +1241,8 @@ impl FormatEngine<'_> {
             .or_else(|| self.vtk_array_element_indent(code))
             .or_else(|| self.initializer_row_indent(code))
             .or_else(|| self.initializer_first_row_indent(code))
-            .or_else(|| self.stacked_argument_indent(code));
+            .or_else(|| self.stacked_argument_indent(code))
+            .or_else(|| self.argument_after_comma_column(code));
         let spaces = spaces?;
         let mut output = self
             .options

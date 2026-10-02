@@ -265,21 +265,18 @@ impl FormatEngine<'_> {
             })
     }
 
-    /// Joins a function name line to the return type on the previous output
-    /// line (`--attach-return-type`, `--attach-return-type-decl`).
-    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
-        let Some(span) = self.output.pending_tokens() else {
-            return false;
-        };
-        let Some(head) = self.tree.functions.named_at(span.first).cloned() else {
+    /// Whether the function name line starting at token `first` joins the
+    /// return type on the last output line.
+    pub(crate) fn attaches_return_type(&self, first: usize) -> bool {
+        let Some(head) = self.tree.functions.named_at(first) else {
             return false;
         };
         if !Self::return_type_option_applies(
-            &head,
+            head,
             self.options.attach_return_type,
             self.options.attach_return_type_decl,
-        ) || !self.has_movable_return_type(&head)
-            || !self.head_starts_statement(&head)
+        ) || !self.has_movable_return_type(head)
+            || !self.head_starts_statement(head)
         {
             return false;
         }
@@ -297,13 +294,24 @@ impl FormatEngine<'_> {
         // AStyle attaches only return types it recognizes as types, and never
         // a split `struct Type *`.
         let previous_trimmed = previous.trim();
-        if !previous_is_return_type
-            || line_ends_with_comment(previous)
-            || !is_return_type_line(previous_trimmed)
-            || (previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
-        {
+        previous_is_return_type
+            && !line_ends_with_comment(previous)
+            && is_return_type_line(previous_trimmed)
+            && !(previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
+    }
+
+    /// Joins a function name line to the return type on the previous output
+    /// line (`--attach-return-type`, `--attach-return-type-decl`).
+    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        if !self.attaches_return_type(span.first) {
             return false;
         }
+        let Some(head) = self.tree.functions.named_at(span.first).cloned() else {
+            return false;
+        };
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trim();
         let previous_prefix = &previous[..previous.len() - previous.trim_start().len()];

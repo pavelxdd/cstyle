@@ -1167,10 +1167,12 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last()?;
         let previous_trimmed = previous.trim();
-        // A split `struct Type *` stays on its line.
         if previous_trimmed.ends_with(':')
             || !is_return_type_line(previous_trimmed)
-            || previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*')
+            || self
+                .current
+                .tokens()
+                .is_some_and(|span| !self.attaches_return_type(span.first))
         {
             return None;
         }

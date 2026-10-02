@@ -3153,3 +3153,15 @@ fn define_rows_align_with_the_first_character_after_a_paren() {
     let input = "#define DIFF_PAIR_BROKEN(p) \\\n    ( (!DIFF_FILE_VALID((p)->one) != !DIFF_FILE_VALID((p)->two)) && \\\n      ((p)->broken_pair != 0) )\n";
     check(input, &["--indent-preproc-define"], input);
 }
+
+#[test]
+fn comment_led_argument_row_under_a_code_length_limit_aligns_with_the_arguments() {
+    let input = "void f(void)\n{\n    x = g(a,\n          /* c */ b, /* d */ e);\n}\n";
+    check(input, &["--style=kr", "--max-code-length=109"], input);
+}
+
+#[test]
+fn parameters_after_an_unattached_return_type_align_with_their_paren() {
+    let input = "JEMALLOC_FORMAT_PRINTF(3, 4)\nstatic void\nprof_dump_printf(write_cb_t *prof_dump_write, void *cbopaque,\n                 const char *format, ...)\n{\n    va_list ap;\n}\n";
+    check(input, &["--style=kr", "--attach-return-type"], input);
+}
