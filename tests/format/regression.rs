@@ -3749,3 +3749,13 @@ fn initializer_brace_after_its_assignment_line_stands_at_the_statement() {
         expected,
     );
 }
+
+#[test]
+fn unpadding_parens_drops_the_space_after_a_negation() {
+    let input =
+        "void f(void)\n{\n    if (! (i == argc - 1))\n        x = ~ (c);\n    y = a + (b);\n}\n";
+    let expected =
+        "void f(void)\n{\n    if(!(i == argc - 1))\n        x = ~(c);\n    y = a + (b);\n}\n";
+    check(input, &["--unpad-paren"], expected);
+    check(expected, &["--unpad-paren"], expected);
+}

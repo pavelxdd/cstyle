@@ -367,9 +367,12 @@ impl FormatEngine<'_> {
             && self.current.ends_with([' ', '\t'])
             && !self.current_is_blank()
         {
-            // Unpadding leaves at most one space before the paren.
+            // Unpadding leaves at most one space before the paren, none
+            // after a negation.
             self.trim_current_end();
-            self.current.push(' ');
+            if !self.current.ends_with(['!', '~']) {
+                self.current.push(' ');
+            }
         } else if !handled_objc_return_paren
             && !handled_objc_param_paren
             && !self.options.unpad_parens
