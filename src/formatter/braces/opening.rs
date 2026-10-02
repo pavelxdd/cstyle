@@ -2416,7 +2416,15 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_spaces(spaces + self.options.indent_width);
         }
-        if self.options.brace_style == BraceStyle::None
+        // Every style runs a brace into a nested brace that follows it;
+        // run-in styles do that for all braces later.
+        let runs_into_nested_brace = matches!(next, Some(Token::Symbol('{')))
+            && matches!(brace_type, BraceType::Array | BraceType::Initializer)
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            );
+        if (self.options.brace_style == BraceStyle::None || runs_into_nested_brace)
             && brace_type != BraceType::Namespace
             && self.token_input.token_begins_source_line
             && !previous_line_opens_lambda_body

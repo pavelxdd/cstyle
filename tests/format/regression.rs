@@ -3808,3 +3808,13 @@ fn case_block_initializer_rows_align_to_the_first_element() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn every_style_runs_a_brace_into_a_nested_brace() {
+    let input = "static const Node d = {\n  {{NULL}, LUA_VEMPTY,  /* value */\n   LUA_TDEADKEY, 0, {NULL}}  /* key */\n};\n";
+    let expected = "static const Node d = {\n    {   {NULL}, LUA_VEMPTY,  /* value */\n        LUA_TDEADKEY, 0, {NULL}\n    }  /* key */\n};\n";
+    for style in ["--style=1tbs", "--style=allman", "--style=kr"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
