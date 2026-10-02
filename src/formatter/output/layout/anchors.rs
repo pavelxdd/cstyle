@@ -680,9 +680,18 @@ impl FormatEngine<'_> {
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
             .is_none_or(|token| matches!(token, Token::Newline));
+        // A row split over lines breaks after its `{`.
+        let row_spans_lines = groups
+            .opened_at(first)
+            .and_then(|row| groups.get(row).close)
+            .is_some_and(|close| {
+                tokens[first..close]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            });
         let indented = matches!(tokens[first], Token::Symbol('{'))
             && !after_comment
-            && (brace_alone || !flush_outer);
+            && (brace_alone || row_spans_lines || !flush_outer);
         let spaces = if indented {
             content + self.options.indent_width
         } else {

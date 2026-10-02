@@ -3924,3 +3924,11 @@ fn vtk_initializer_brace_after_a_local_struct_stands_at_its_close() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn vtk_breaks_multiline_rows_of_file_scope_arrays_a_level_in() {
+    let input = "static ngx_command_t  cmds[] = {\n\n    { ngx_string(\"slice\"),\n      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,\n      ngx_conf_set_size_slot,\n      0,\n      NULL },\n\n      ngx_null_command\n};\n\nstatic T x[] = {\n    { a, b },\n    { c,\n      d },\n};\n";
+    let expected = "static ngx_command_t  cmds[] = {\n\n        {\n        ngx_string(\"slice\"),\n        NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,\n        ngx_conf_set_size_slot,\n        0,\n        NULL\n        },\n\n    ngx_null_command\n};\n\nstatic T x[] =\n{\n    { a, b },\n        {\n        c,\n        d\n        },\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
