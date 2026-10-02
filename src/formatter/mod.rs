@@ -87,17 +87,54 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
 fn refill_empty_lines(output: &str, line_break: &str) -> String {
     let mut lead = "";
     let mut lines = Vec::new();
+    // The rest of a block comment keeps the indent of its first line.
+    let mut in_block_comment = false;
     for line in output.split(line_break) {
-        if line.trim().is_empty() {
+        if line.contains('\u{c}') {
+            lines.push(line);
+        } else if line.trim().is_empty() {
             lines.push(if line.is_empty() { "" } else { lead });
         } else {
-            if !line.trim_start().starts_with('#') {
+            if !in_block_comment && !line.trim_start().starts_with('#') {
                 lead = &line[..line.len() - line.trim_start().len()];
             }
+            in_block_comment = ends_inside_block_comment(line, in_block_comment);
             lines.push(line);
         }
     }
     lines.join(line_break)
+}
+
+/// Whether a block comment is open at the end of `line`, given whether one
+/// was open at its start.
+fn ends_inside_block_comment(line: &str, mut in_block_comment: bool) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if in_block_comment {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                in_block_comment = false;
+            }
+        } else if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+        } else if ch == '/' && chars.peek() == Some(&'/') {
+            break;
+        } else if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            in_block_comment = true;
+        } else if matches!(ch, '"' | '\'') {
+            quote = Some(ch);
+        }
+    }
+    in_block_comment
 }
 
 fn case_adjustments_needed_for_tokens(tokens: &[Token], options: &FormatOptions) -> bool {

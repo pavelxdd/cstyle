@@ -811,6 +811,15 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
             }
+            // A `*` closing a type name before a `,` in parentheses, as in a
+            // macro's type argument, is a pointer.
+            "*" if matches!(next, Some(Token::Symbol(',')))
+                && self.layout.previous == PreviousToken::Word
+                && self.layout.nesting.paren_depth > 0
+                && !self.active_token_in_brackets() =>
+            {
+                self.push_pointer_run(operator, next, next_is_adjacent);
+            }
             // Between brackets a `*` after a name or value multiplies; after
             // a `)` it may follow a cast.
             "*" if matches!(

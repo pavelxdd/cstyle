@@ -611,15 +611,15 @@ fn indent_preproc_block_column_one_comment_does_not_disable_code_indent() {
         &options,
     );
 
-    // Column-one comments do not suppress code indentation.
+    // Column-one comments indent with the block and do not suppress it.
     assert_eq!(
         actual,
-        fixture!("#if ENABLED", "// comment", "    int value;", "#endif",)
+        fixture!("#if ENABLED", "    // comment", "    int value;", "#endif",)
     );
 }
 
 #[test]
-fn indent_preproc_block_preserves_column_one_comment_in_namespace() {
+fn indent_preproc_block_indents_column_one_comment_in_namespace() {
     let mut options = FormatOptions::default();
     options.indent_preproc_block = true;
     let actual = format_with(
@@ -634,14 +634,14 @@ fn indent_preproc_block_preserves_column_one_comment_in_namespace() {
         &options,
     );
 
-    // Column-one comments move only when `indent_col1_comments` is enabled.
+    // An indented preprocessor block indents its column-one comments.
     assert_eq!(
         actual,
         fixture!(
             "namespace alpha",
             "{",
             "#if ENABLED",
-            "// comment",
+            "    // comment",
             "    int value;",
             "#endif",
             "}",
@@ -3808,7 +3808,7 @@ fn sibling_preprocessor_block_comment_keeps_branch_body_indent() {
             "namespace sample{\n#if ALPHA\n// first\nint value;\n#else\n/* second */\nint other;\n#endif\n}\n",
             &options,
         ),
-        "namespace sample\n{\n#if ALPHA\n// first\n    int value;\n#else\n    /* second */\n    int other;\n#endif\n}\n",
+        "namespace sample\n{\n#if ALPHA\n    // first\n    int value;\n#else\n    /* second */\n    int other;\n#endif\n}\n",
     );
 }
 

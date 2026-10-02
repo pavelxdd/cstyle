@@ -140,6 +140,8 @@ impl FormatEngine<'_> {
             if self.layout.line_state.column1_line_comment
                 && !self.options.indent_col1_comments
                 && line.starts_with("//")
+                && !(self.options.indent_preproc_block
+                    && self.preprocessor.indented_block_stack.last() == Some(&true))
             {
                 if self.take_block_spacing_blank(line) {
                     self.push_empty_line();
@@ -398,10 +400,19 @@ impl FormatEngine<'_> {
         let mut depth = 0isize;
         let mut branch_depths = Vec::new();
         let mut previous_lead = String::new();
+        // The braces of a directive's continued lines open no block.
+        let mut continues_directive = false;
         for index in 0..self.output.len() {
             let line = &self.output[index];
+            let in_directive = continues_directive;
+            continues_directive = (in_directive || line.trim_start().starts_with('#'))
+                && line.trim_end().ends_with('\\');
+            if in_directive {
+                continue;
+            }
             if line.trim().is_empty() {
-                if !self.output.is_verbatim(index) {
+                // A form feed stays as the page break it marks.
+                if !self.output.is_verbatim(index) && !line.contains('\u{c}') {
                     let fill = if depth > 0 {
                         previous_lead.clone()
                     } else {

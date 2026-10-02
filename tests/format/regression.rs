@@ -3499,3 +3499,99 @@ fn define_return_continues_at_its_value() {
     let input = "#define X(a) \\\n    return a +\\\n           b;\n";
     check(input, &["--indent-preproc-define"], input);
 }
+
+#[test]
+fn max_code_length_keeps_initializer_continuation_rows_whole() {
+    let input = "static struct option opts[] = {\n    OPT_CMDMODE_F(0, \"config-sections\", &cmd_mode, \"\", HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION, PARSE_OPT_HIDDEN),\n    OPT_CMDMODE_F(0, \"config-sections\", &cmd_mode, \"\",\n        HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION, PARSE_OPT_HIDDEN),\n};\n";
+    let expected = "static struct option opts[] = {\n    OPT_CMDMODE_F(0, \"config-sections\", &cmd_mode, \"\", HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION, PARSE_OPT_HIDDEN),\n    OPT_CMDMODE_F(0, \"config-sections\", &cmd_mode, \"\",\n                  HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION, PARSE_OPT_HIDDEN),\n};\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn max_code_length_splits_no_unpadded_bitwise_or_multiplicative_operator() {
+    let input = "void f(void)\n{\n    chmod(dst, S_IRUSR|S_IRGRP|S_IROTH|S_IRUSR|S_IRGRP|S_IROTH|S_IRUSR|S_IRGRP);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa*bbbbbbbbbbbbbbbbbbbbbbbbbbb*ccccccccccc);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa<bbbbbbbbbbbbbbbbbbbbbbbbbbb<ccccccccccc);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa+bbbbbbbbbbbbbbbbbbbbbbbbbbb+ccccccccccc);\n}\n";
+    let expected = "void f(void)\n{\n    chmod(dst,\n          S_IRUSR|S_IRGRP|S_IROTH|S_IRUSR|S_IRGRP|S_IROTH|S_IRUSR|S_IRGRP);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa*bbbbbbbbbbbbbbbbbbbbbbbbbbb*ccccccccccc);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa<bbbbbbbbbbbbbbbbbbbbbbbbbbb<ccccccccccc);\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n         +bbbbbbbbbbbbbbbbbbbbbbbbbbb+ccccccccccc);\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn max_code_length_operator_split_in_parens_after_assignment_aligns_at_the_paren() {
+    let input = "void f(void)\n{\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa==bbbbbbbbbbbbbbbbbbbbbbbbbbb==ccccccccccc);\n    x = g(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbb + ccccccccccc);\n    x = aaaaaaaaaaaaaaaaa + g(bbbbbbbbbbbbbbbbbbbbbbbbbbb) + ccccccccccccccccc;\n}\n";
+    let expected = "void f(void)\n{\n    x = (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa==\n         bbbbbbbbbbbbbbbbbbbbbbbbbbb==ccccccccccc);\n    x = g(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n          bbbbbbbbbbbbbbbbbbbbbbbbbbb + ccccccccccc);\n    x = aaaaaaaaaaaaaaaaa + g(bbbbbbbbbbbbbbbbbbbbbbbbbbb) +\n        ccccccccccccccccc;\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn max_code_length_splits_a_declaration_before_its_pointer_at_the_statement() {
+    let input = "void f(void)\n{\n    FileChunk *pNext; /* Next chunk in the journal xxxxxxxxxxxxxxxxxxx */\n    FileChunkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk *pNexttttttttttttttttttttttttttt;\n    FileChunkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk *pNextttttttttttt = gggggggggggggggggggg;\n    struct FileChunkkkkkkkkkkkkkkkkkkkkkkkkkk *pNextttttttttttttttttttttt(int a);\n    unsigned int xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;\n    static const struct FileChunkkkkkkkkkkkkkkkkkkkk pNextttttttttttttttttttttt;\n}\nstruct F\n{\n    FileChunk *pNext;               /* Next chunk in the journal */\n    long long stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];\n};\n";
+    let expected = "void f(void)\n{\n    FileChunk *pNext; /* Next chunk in the journal xxxxxxxxxxxxxxxxxxx */\n    FileChunkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\n    *pNexttttttttttttttttttttttttttt;\n    FileChunkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk *pNextttttttttttt =\n        gggggggggggggggggggg;\n    struct FileChunkkkkkkkkkkkkkkkkkkkkkkkkkk\n    *pNextttttttttttttttttttttt(int a);\n    unsigned int\n    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;\n    static const struct FileChunkkkkkkkkkkkkkkkkkkkk\n        pNextttttttttttttttttttttt;\n}\nstruct F\n{\n    FileChunk *pNext;               /* Next chunk in the journal */\n    long long stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];\n};\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn max_code_length_splits_after_no_bracket() {
+    let input = "void f(void)\n{\n    xxxxxxxxxxxxxxxxxxxxxxx = stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];\n}\n";
+    let expected = "void f(void)\n{\n    xxxxxxxxxxxxxxxxxxxxxxx =\n        stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn leading_assignment_before_a_block_initializer_stands_at_its_statement() {
+    let input = "static ngx_http_module_t  ngx_http_headers_filter_module_ctx\n=\n{\n    NULL,\n    ngx_http_headers_filter_init,\n};\nvoid f(void)\n{\n    static ngx_http_module_t  ctx\n    =\n    {\n        NULL,\n    };\n    int a[]\n        = { 1, 2 };\n}\n";
+    let expected = "static ngx_http_module_t  ngx_http_headers_filter_module_ctx\n=\n{\n    NULL,\n    ngx_http_headers_filter_init,\n};\nvoid f(void)\n{\n    static ngx_http_module_t  ctx\n    =\n    {\n        NULL,\n    };\n    int a[]\n        = { 1, 2 };\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn function_brace_after_a_parameter_split_before_its_pointer_stays_at_the_function() {
+    let input = "static int remove_available_paths(struct string_list_item\n                                  *item, void *cb_data)\n{\n    struct string_list *available_paths = cb_data;\n    return 0;\n}\n";
+    let expected = "static int remove_available_paths(struct string_list_item\n                                  *item, void *cb_data)\n{\n    struct string_list *available_paths = cb_data;\n    return 0;\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn continued_conditional_in_an_indented_block_continues_a_level_past_it() {
+    let input = "int x;\n#ifdef U\n#include <a.h>\n#if B || \\\n  C\n#define X 1\n#elif C || \\\n  D\n#define X 2\n#endif\n#endif\n";
+    let expected = "int x;\n#ifdef U\n    #include <a.h>\n    #if B || \\\n        C\n        #define X 1\n    #elif C || \\\n        D\n        #define X 2\n    #endif\n#endif\n";
+    check(input, &["--indent-preproc-block"], expected);
+    check(expected, &["--indent-preproc-block"], expected);
+}
+
+#[test]
+fn conditional_with_parens_across_its_lines_leaves_its_blocks_unindented() {
+    let input = "int x;\n#ifdef U\n#if (B || \\\n  C)\n#define X 1\n#endif\n#endif\n#ifdef V\n#  include <a.h>\n#  if A ||  \\\n     (B &&  \\\n      C)\n#    define Y 1\n#  endif\n#endif\n";
+    let expected = "int x;\n#ifdef U\n#if (B || \\\n  C)\n#define X 1\n#endif\n#endif\n#ifdef V\n#  include <a.h>\n#  if A ||  \\\n     (B &&  \\\n      C)\n#    define Y 1\n#  endif\n#endif\n";
+    check(input, &["--indent-preproc-block"], expected);
+    check(expected, &["--indent-preproc-block"], expected);
+}
+
+#[test]
+fn indented_preprocessor_block_indents_column_one_comments() {
+    let input = "int x;\n#if A && \\\n  B\n/* c */\n#define T 50\n// d\n#endif\n";
+    let expected = "int x;\n#if A && \\\n    B\n    /* c */\n    #define T 50\n    // d\n#endif\n";
+    check(input, &["--indent-preproc-block"], expected);
+    check(expected, &["--indent-preproc-block"], expected);
+}
+
+#[test]
+fn type_with_a_star_before_a_comma_in_parens_is_a_pointer() {
+    let input = "void f(void)\n{\n    x = GLOBAL(BtShared*, y);\n    x = GLOBAL(BtShared *, y);\n    h(sizeof(BtShared*), a*b);\n}\n";
+    let expected = "void f(void)\n{\n    x = GLOBAL(BtShared*, y);\n    x = GLOBAL(BtShared *, y);\n    h(sizeof(BtShared*), a * b);\n}\n";
+    check(input, &["--pad-oper"], expected);
+    check(expected, &["--pad-oper"], expected);
+}
+
+#[test]
+fn type_with_a_star_before_a_comma_aligns_as_a_pointer() {
+    let input = "void f(void)\n{\n    x = GLOBAL(BtShared*, y);\n}\n";
+    let expected = "void f(void)\n{\n    x = GLOBAL(BtShared *, y);\n}\n";
+    check(input, &["--pad-oper", "--align-pointer=name"], expected);
+    check(expected, &["--pad-oper", "--align-pointer=name"], expected);
+}

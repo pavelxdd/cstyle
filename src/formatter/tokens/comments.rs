@@ -1428,6 +1428,9 @@ impl FormatEngine<'_> {
                 .current_preprocessor_indent()
                 .is_some()
             && self.preprocessor_region(false) == PreprocessorRegion::TopLevel
+            // An indented preprocessor block indents its comments.
+            && !(self.options.indent_preproc_block
+                && self.preprocessor.indented_block_stack.last() == Some(&true))
         {
             self.clear_current();
             self.current_is_preindented = true;

@@ -135,6 +135,9 @@ struct PreprocessorLineParts<'a> {
     opaque_literal_line_ranges: &'a [(usize, usize)],
     branch_separator_after_else: bool,
     indent_continued_conditional: bool,
+    /// The directive is a conditional that indenting preprocessor blocks
+    /// indents: its continued lines stand a level past it.
+    indent_continued_block_conditional: bool,
 }
 
 impl FormatEngine<'_> {
@@ -271,6 +274,17 @@ fn is_indentable_preprocessor_block(
         match token {
             Token::Preprocessor(preprocessor) => {
                 let line = &preprocessor.text;
+                // A condition whose parentheses span its continued lines
+                // leaves astyle unbalanced: no block around it indents.
+                if preprocessor_directive(line)
+                    .is_some_and(|directive| matches!(directive, "if" | "elif"))
+                    && line.lines().nth(1).is_some()
+                    && line
+                        .lines()
+                        .any(|part| part.matches('(').count() != part.matches(')').count())
+                {
+                    return false;
+                }
                 match preprocessor_directive(line) {
                     Some(directive @ ("if" | "ifdef" | "ifndef")) => {
                         depth += 1;
@@ -520,6 +534,10 @@ impl FormatEngine<'_> {
             });
         let indent_continued_conditional = self.options.indent_preproc_conditional
             && directive.is_some_and(is_conditional_preprocessor);
+        let indent_continued_block_conditional = self.options.indent_preproc_block
+            && directive.is_some_and(|directive| {
+                matches!(directive, "if" | "ifdef" | "ifndef") || directive.starts_with("elif")
+            });
         let branch_separator =
             directive.is_some_and(|directive| directive == "else" || directive.starts_with("elif"));
         if !branch_separator
@@ -609,6 +627,7 @@ impl FormatEngine<'_> {
                     opaque_literal_line_ranges,
                     branch_separator_after_else,
                     indent_continued_conditional,
+                    indent_continued_block_conditional,
                 },
                 &mut continued_line_comment,
             );
@@ -670,6 +689,7 @@ impl FormatEngine<'_> {
             opaque_literal_line_ranges,
             branch_separator_after_else,
             indent_continued_conditional,
+            indent_continued_block_conditional,
         } = *parts;
         let line_is_continued_comment = *continued_line_comment;
         let is_opaque_literal_line = opaque_literal_line_ranges
@@ -712,6 +732,13 @@ impl FormatEngine<'_> {
             None
         } else if index > 0 && indent_continued_conditional {
             Some(self.current_preprocessor_indent(false))
+        } else if index > 0
+            && indent_continued_block_conditional
+            && self.preprocessor.indented_block_stack.last() == Some(&true)
+        {
+            Some(PreprocessorLineIndent::Level(
+                self.preprocessor_base_level(),
+            ))
         } else if directive == Some("endif")
             && self.preprocessor.branch_stack.is_empty()
             && self.token_input.token_source_line_indent > 0

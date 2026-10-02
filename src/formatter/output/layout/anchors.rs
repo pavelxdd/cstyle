@@ -83,6 +83,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.assignment_continuation_indent(first))
             .or_else(|| self.assigned_operand_indent(first))
             .or_else(|| self.leading_operator_assigned_value_indent(first))
+            .or_else(|| self.assignment_before_initializer_block_indent(first))
             .or_else(|| self.leading_assignment_indent(first))
             .or_else(|| self.stacked_assignment_indent(first))
             .or_else(|| self.leading_ternary_in_condition_indent(first))
@@ -2139,6 +2140,73 @@ impl FormatEngine<'_> {
     /// A line leading with the `=` of a statement whose target fills the
     /// line before stands a continuation level past that line; an
     /// initializer's `= {` does not continue.
+    /// A `=` leading its line before an initializer whose `{` ends a line
+    /// continues nothing in astyle: it and a `{` alone after it stand at
+    /// the statement.
+    fn assignment_before_initializer_block_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let is_assignment =
+            |index: usize| matches!(&tokens[index], Token::Operator(operator) if operator == "=");
+        let (assign, open) = if is_assignment(first) {
+            (first, next_code_token(tokens, first + 1)?)
+        } else if matches!(tokens[first], Token::Symbol('{')) {
+            (self.tree.previous_code_token(first)?, first)
+        } else {
+            return None;
+        };
+        if !is_assignment(assign)
+            || !matches!(tokens[open], Token::Symbol('{'))
+            || self
+                .tree
+                .groups
+                .opened_at(open)
+                .is_none_or(|group| self.tree.blocks.kind(group) != Some(BlockKind::Initializer))
+            || !self
+                .tree
+                .groups
+                .enclosing(assign)
+                .is_none_or(|group| {
+                    matches!(
+                        self.tree.blocks.kind(group),
+                        Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                    )
+                })
+            // The `{` ends its source line.
+            || !next_code_token(tokens, open + 1).is_some_and(|next| {
+                tokens[open + 1..next]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
+        {
+            return None;
+        }
+        let statement_line = if first == assign {
+            self.output
+                .line_with_token(self.tree.previous_code_token(assign)?)?
+        } else {
+            let line = self.output.line_with_token(assign)?;
+            if self.output.line_tokens(line)?.first != assign {
+                return None;
+            }
+            self.output
+                .line_with_token(self.tree.previous_code_token(assign)?)?
+        };
+        // Only a statement's declaration line leads it.
+        let start = self.output.line_tokens(statement_line)?.first;
+        if self
+            .tree
+            .previous_code_token(start)
+            .is_some_and(|before| !matches!(tokens[before], Token::Symbol(';' | '{' | '}')))
+        {
+            return None;
+        }
+        Some(
+            self.output
+                .lead_width(statement_line, self.options.tab_width)
+                + self.case_unindent_spaces(),
+        )
+    }
+
     fn leading_assignment_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;

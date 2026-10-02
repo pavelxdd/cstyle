@@ -12,6 +12,7 @@ use crate::formatter::lexer::{token_text, tokenize};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
@@ -72,6 +73,12 @@ impl FormatEngine<'_> {
             .pending_tokens()
             .filter(|span| span.first < self.tree.tokens.len())
             .and_then(|span| self.tree.groups.enclosing(span.first))
+            .and_then(|group| {
+                self.tree
+                    .groups
+                    .ancestors(group)
+                    .find(|&id| self.tree.groups.get(id).delimiter == Delimiter::Brace)
+            })
             .is_some_and(|group| {
                 matches!(
                     self.tree.blocks.kind(group),
@@ -512,6 +519,24 @@ fn continuation_indent_for_split(
         ..
     } = *inputs;
     let head = split.head.as_str();
+    // A declaration split at the whitespace before its name continues
+    // nothing astyle registered, unless an aggregate keyword leads it.
+    if !following_split
+        && head.chars().all(|ch| {
+            is_identifier_continue(ch)
+                || ch.is_whitespace()
+                || matches!(ch, '*' | '&' | ':' | '<' | '>')
+        })
+        && head.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>'))
+        && !head
+            .split(|ch: char| !is_identifier_continue(ch))
+            .any(|word| {
+                matches!(word, "return" | "case" | "goto")
+                    || matches!(word, "struct" | "union" | "enum" | "class") && !line.contains('(')
+            })
+    {
+        return Some(ContinuationIndent::Spaces(base_indent_width));
+    }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
     if let Some(spaces) = lambda_parameter_continuation_indent(
         head,
@@ -570,9 +595,16 @@ fn continuation_indent_for_split(
             | SplitKind::ArithmeticOperator
             | SplitKind::StringConcat
     ) && !head.trim_end().ends_with(['(', '[']);
+    // A paren opened after the assignment stacks past its value.
+    let paren_after_assignment = top_level_assignment_index(line).is_some_and(|assignment| {
+        unmatched_open_paren_columns(head)
+            .iter()
+            .any(|&open| open > assignment)
+    });
     if operator_split {
         if let Some(spaces) = assignment_value_indent(line, base_indent_width)
             && !head_ends_assignment_operator(head)
+            && !paren_after_assignment
         {
             return Some(ContinuationIndent::Spaces(spaces));
         }
@@ -964,8 +996,9 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
             .or_else(|| pointer_whitespace_split_point(line, index, ch, width));
         // astyle takes no split point within its minimum code length; the
         // narrow widths below its smallest code length only arise in tests.
+        // astyle measures a whitespace split point at the whitespace.
         if let Some((split_at, priority)) = candidate
-            && (split_at >= ASTYLE_MIN_CODE_LENGTH || width < 50)
+            && (split_at - usize::from(priority == 10) >= ASTYLE_MIN_CODE_LENGTH || width < 50)
             && split_at < comment_limit
             && inline_brace_pair.is_none_or(|(start, end)| {
                 if inline_brace_header_fits {
@@ -1241,6 +1274,22 @@ fn split_point_at(
         {
             return None;
         }
+        // astyle splits at an unpadded operator only for `+`, `-`, the
+        // logical and the comparison operators other than `<` and `>`, or
+        // at a paren beside it.
+        let unpadded = line[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|ch| !ch.is_whitespace() && !matches!(ch, ')' | ']'))
+            && line[end..]
+                .chars()
+                .next()
+                .is_some_and(|ch| !ch.is_whitespace() && ch != '(');
+        if unpadded && matches!(operator, "<" | ">" | "|" | "&" | "^" | "*" | "/" | "%")
+            || is_declarator_pointer(line, start, end)
+        {
+            return None;
+        }
         return if matches!(operator, "&&" | "||") {
             if prefer_logical_operator {
                 Some((end, 80))
@@ -1295,15 +1344,21 @@ fn split_point_at(
         '(' if is_single_string_call_at(line, index) => None,
         '(' if is_lambda_capture_header(line[..index].trim_end()) => Some((end, 75)),
         '(' if is_function_call_split(line, index) => Some((end, 55)),
-        '[' if is_objc_message_open(line, index) => None,
-        '(' | '[' => Some((end, 40)),
+        // astyle splits after no bracket.
+        '[' => None,
+        '(' => Some((end, 40)),
         ' ' | '\t'
             if unmatched_open_bracket_column(&line[..index])
                 .is_some_and(|open| is_objc_message_open(line, open)) =>
         {
             Some((end, 39))
         }
-        ' ' | '\t' if !whitespace_touches_pointer_operator(line, index) => Some((end, 10)),
+        ' ' | '\t'
+            if !whitespace_touches_pointer_operator(line, index)
+                || declarator_pointer_follows(line, index) =>
+        {
+            Some((end, 10))
+        }
         _ => None,
     }
 }
@@ -1469,6 +1524,38 @@ fn whitespace_precedes_pointer_operator(line: &str, index: usize) -> bool {
     matches!(ch, '*' | '&' | '^') && is_pointer_split_operator(line, start, end, &line[start..end])
 }
 
+/// Whether the `*` or `&` at `start..end` binds to the name of a
+/// statement-level declaration, as in `Type *name`: astyle splits before
+/// it at the whitespace, never after it.
+fn is_declarator_pointer(line: &str, start: usize, end: usize) -> bool {
+    let before = &line[..start];
+    matches!(&line[start..end], "*" | "&")
+        && before.ends_with([' ', '\t'])
+        && line[end..]
+            .chars()
+            .next()
+            .is_some_and(|ch| is_identifier_start(ch) || ch == '*')
+        && unmatched_open_paren_column(before).is_none()
+        && top_level_assignment_index(before).is_none()
+        && {
+            let word = trailing_word(before.trim_end());
+            !word.is_empty()
+                && before.trim_end().ends_with(word)
+                && !language::is_non_type_keyword(word)
+        }
+}
+
+/// Whether a declarator pointer follows the whitespace at `index`.
+fn declarator_pointer_follows(line: &str, index: usize) -> bool {
+    line[index..]
+        .char_indices()
+        .find(|(_, ch)| !ch.is_whitespace())
+        .is_some_and(|(offset, ch)| {
+            let start = index + offset;
+            is_declarator_pointer(line, start, start + ch.len_utf8())
+        })
+}
+
 fn whitespace_touches_pointer_operator(line: &str, index: usize) -> bool {
     let previous = line[..index]
         .char_indices()
@@ -1547,7 +1634,10 @@ mod tests {
             split_pair("call(alpha beta)", 6, false),
             Some(("call(".to_string(), "alpha beta)".to_string()))
         );
-        assert_eq!(split_pair("char *name other", 7, false), None);
+        assert_eq!(
+            split_pair("char *name other", 7, false),
+            Some(("char".to_string(), "*name other".to_string()))
+        );
         assert_eq!(
             split_pair("alpha * beta", 8, false),
             Some(("alpha *".to_string(), "beta".to_string()))

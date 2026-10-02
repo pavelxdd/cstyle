@@ -23,6 +23,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
@@ -234,6 +235,20 @@ impl FormatEngine<'_> {
             || is_header_condition_continuation
             // A variadic `...` parameter leads with no operator.
             || previous_code.trim_start().starts_with("...")
+            // Nor a parameter's declarator split from its type.
+            || self.output.line_tokens(previous_index).is_some_and(|span| {
+                let tokens = &self.tree.tokens;
+                (matches!(&tokens[span.first], Token::Operator(operator)
+                    if operator == "*" || operator == "&")
+                    || matches!(tokens[span.first], Token::Symbol('*' | '&')))
+                    && self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                        self.tree.groups.get(group).delimiter == Delimiter::Paren
+                    })
+                    && self
+                        .tree
+                        .previous_code_token(span.first)
+                        .is_some_and(|before| matches!(tokens[before], Token::Word(_)))
+            })
             // Nor does an argument or a statement led by a unary operator.
             || self.output.line_tokens(previous_index).is_some_and(|span| {
                 self.tree.previous_code_token(span.first).is_some_and(|before| {
