@@ -2867,9 +2867,6 @@ impl FormatEngine<'_> {
                 .push_str(formatter_gap.as_deref().unwrap_or_default());
             return;
         }
-        if kind == CommentKind::Block && gap.is_empty() {
-            return;
-        }
         let out_indent = self
             .current
             .chars()
@@ -2877,6 +2874,14 @@ impl FormatEngine<'_> {
             .count();
         let code_len = self.current_char_len() - out_indent;
         let gap_chars = gap.chars().count();
+        // A block comment set against the code stays there unless padding
+        // moved the code into its column, when astyle parts them.
+        if kind == CommentKind::Block && gap.is_empty() {
+            if code_len > target_column {
+                self.ensure_space();
+            }
+            return;
+        }
         let space_pad = (code_len + gap_chars) as isize - target_column as isize;
         // A wide gap before a line comment only shrinks.
         if kind == CommentKind::Line && gap_chars >= self.options.indent_width * 2 && space_pad < 0

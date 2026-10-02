@@ -329,6 +329,17 @@ impl FormatEngine<'_> {
                 || outside_pad;
             if force_space {
                 self.pad_before_open_paren_space();
+            } else if keep_unpad_space && self.options.unpad_parens {
+                // Unpadding leaves at most one space before the paren.
+                if self
+                    .token_input
+                    .previous_input_whitespace
+                    .as_deref()
+                    .is_some_and(|whitespace| !whitespace.is_empty())
+                {
+                    self.trim_current_end();
+                    self.current.push(' ');
+                }
             } else if keep_unpad_space {
                 self.emit_source_space();
             } else if self.options.unpad_parens {
@@ -348,6 +359,17 @@ impl FormatEngine<'_> {
             }
         } else if outside_pad {
             self.pad_before_open_paren_space();
+        } else if self.options.unpad_parens
+            && matches!(
+                self.layout.previous,
+                PreviousToken::Operator | PreviousToken::Comma
+            )
+            && self.current.ends_with([' ', '\t'])
+            && !self.current_is_blank()
+        {
+            // Unpadding leaves at most one space before the paren.
+            self.trim_current_end();
+            self.current.push(' ');
         } else if !handled_objc_return_paren
             && !handled_objc_param_paren
             && !self.options.unpad_parens

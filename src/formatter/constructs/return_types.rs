@@ -287,7 +287,9 @@ impl FormatEngine<'_> {
             self.output
                 .line_tokens(previous_index)
                 .is_some_and(|previous| {
-                    previous.first == head.start
+                    // astyle sees only the line before the name, wherever
+                    // the head starts.
+                    previous.first >= head.start
                         && self.tree.previous_code_token(head.name_start) == Some(previous.last)
                 });
         let previous = &self.output[previous_index];
@@ -296,7 +298,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous.trim();
         previous_is_return_type
             && !line_ends_with_comment(previous)
-            && is_return_type_line(previous_trimmed)
+            && is_attachable_return_type_line(previous_trimmed)
             && !(previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
     }
 
@@ -398,6 +400,20 @@ impl FormatEngine<'_> {
         }
         true
     }
+}
+
+/// A line astyle attaches a function name to: words and pointer marks
+/// only, any word naming a type.
+fn is_attachable_return_type_line(line: &str) -> bool {
+    is_return_type_line(line)
+        || !line.is_empty()
+            && line.chars().all(|ch| {
+                is_identifier_continue(ch) || ch.is_whitespace() || matches!(ch, '*' | '&' | ':')
+            })
+            && line
+                .split(|ch: char| !is_identifier_continue(ch))
+                .filter(|part| !part.is_empty())
+                .all(|part| !language::is_non_type_keyword(part))
 }
 
 pub(crate) fn is_return_type_line(line: &str) -> bool {

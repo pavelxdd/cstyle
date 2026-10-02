@@ -3709,3 +3709,43 @@ fn broken_one_line_function_body_comment_keeps_the_gap_before_its_brace() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn attach_return_type_sees_only_the_line_before_the_name() {
+    let input = "int x;\nTEST_END\nstatic void *\nthd_start(void *varg)\n{\n}\nint y;\nstatic\nvoid *\ng(void *varg)\n{\n}\nint z;\nu_char *\nngx_run(int s)\n{\n}\n";
+    let expected = "int x;\nTEST_END\nstatic void *thd_start(void *varg)\n{\n}\nint y;\nstatic\nvoid *g(void *varg)\n{\n}\nint z;\nu_char *ngx_run(int s)\n{\n}\n";
+    check(input, &["--attach-return-type"], expected);
+    check(expected, &["--attach-return-type"], expected);
+}
+
+#[test]
+fn padding_parts_code_from_an_adjacent_block_comment() {
+    let input = "struct M {\n  char *zMalloc;      /* Space */\n  void (*xDel)(void*);/* Destructor */\n};\n";
+    let expected = "struct M {\n    char *zMalloc;      /* Space */\n    void (*xDel)(void *); /* Destructor */\n};\n";
+    check(input, &["--align-pointer=name"], expected);
+    check(expected, &["--align-pointer=name"], expected);
+}
+
+#[test]
+fn unpadding_parens_leaves_one_space_before_a_paren() {
+    let input = "void f(void)\n{\n    d =  (v / x) / 3;\n    h(a,  (b));\n    return  (x);\n}\n";
+    let expected = "void f(void)\n{\n    d = (v / x) / 3;\n    h(a, (b));\n    return (x);\n}\n";
+    check(input, &["--unpad-paren"], expected);
+    check(expected, &["--unpad-paren"], expected);
+}
+
+#[test]
+fn initializer_brace_after_its_assignment_line_stands_at_the_statement() {
+    let input = "void f(void)\n{\n    static int b[] =\n        { 1, 2 };\n    static int c[] =\n        {\n            1, 2\n        };\n}\n";
+    let expected = "void f(void)\n{\n    static int b[] =\n    { 1, 2 };\n    static int c[] =\n    {\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--break-after-logical", "--min-conditional-indent=0"],
+        expected,
+    );
+    check(
+        expected,
+        &["--break-after-logical", "--min-conditional-indent=0"],
+        expected,
+    );
+}

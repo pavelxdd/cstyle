@@ -150,7 +150,7 @@ fn attach_return_type_options_keep_split_struct_pointer_return_type() {
 }
 
 #[test]
-fn attach_return_type_keeps_comments_and_unconfigured_macros_separate() {
+fn attach_return_type_keeps_comments_separate_and_attaches_macro_types() {
     let mut options = FormatOptions::default();
     options.attach_return_type = true;
     let actual = format_with(
@@ -176,8 +176,7 @@ fn attach_return_type_keeps_comments_and_unconfigured_macros_separate() {
             "    return 0;",
             "}",
             "#define API int",
-            "API",
-            "g(void)",
+            "API g(void)",
             "{",
             "    return 1;",
             "}",

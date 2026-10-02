@@ -169,8 +169,11 @@ impl FormatEngine<'_> {
     }
 
     fn source_owned_continuation_line(&self, trimmed: &str) -> bool {
+        // A brace opening an initializer after its `=` stands at the
+        // statement, wherever the source put it.
         if trimmed.starts_with("case ")
             || trimmed.starts_with("default:")
+            || trimmed.starts_with('{')
             || is_attached_user_label(trimmed)
         {
             return false;
