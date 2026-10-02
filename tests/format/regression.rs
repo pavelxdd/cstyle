@@ -3000,3 +3000,9 @@ fn define_initializer_closer_after_a_last_designator_row_keeps_its_level() {
     let input = "#define ATOM_VALUE_INIT { \\\n        .s_size = ATOM_SIZE_UNSPECIFIED \\\n    }\n";
     check(input, &["--indent-preproc-define"], input);
 }
+
+#[test]
+fn else_after_a_braceless_body_ignores_an_earlier_closed_if_block() {
+    let input = "void f(void)\n{\n    for (;;)\n        if (a) {\n            b = 0;\n        }\n    if (added)\n        p(1,\n          2);\n    else {\n        if (deleted)\n            printf(\"%s%sdeleted file \",\n                   line_prefix, c_meta);\n        x();\n    }\n}\n";
+    check(input, &["--max-code-length=109"], input);
+}

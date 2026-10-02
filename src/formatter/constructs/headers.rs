@@ -1205,7 +1205,15 @@ impl FormatEngine<'_> {
                     |frame| frame.sibling_indent_column,
                 )
             });
-        let closed_if_indent = (word == "else")
+        // Only an `else` right after the closing brace pairs with that block.
+        let follows_closing_brace = self.current.trim_start().starts_with('}')
+            || self.current_is_blank()
+                && self.output.last_line_outside_comment().is_some_and(|line| {
+                    line[..trailing_comment_split_limit(line)]
+                        .trim_end()
+                        .ends_with('}')
+                });
+        let closed_if_indent = (word == "else" && follows_closing_brace)
             .then(|| {
                 self.layout
                     .frame_stack
