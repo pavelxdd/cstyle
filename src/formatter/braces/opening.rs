@@ -2151,11 +2151,7 @@ impl FormatEngine<'_> {
         if let Some(comment) = attached_line_comment.or(attached_block_comment)
             && !comment_starts_block
         {
-            self.push_trailing_comment_before_broken_brace(
-                comment,
-                attached_line_comment,
-                brace_type,
-            );
+            self.push_trailing_comment_before_broken_brace(comment, brace_type);
         }
         let objc_method_brace = self.is_objc_method_line()
             || (brace_type == BraceType::Definition && self.output_ends_objc_method_header());
@@ -2446,27 +2442,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn push_trailing_comment_before_broken_brace(
-        &mut self,
-        comment: &str,
-        attached_line_comment: Option<&str>,
-        brace_type: BraceType,
-    ) {
-        let closing_header_comment_needs_min_gap = attached_line_comment.is_some()
-            && brace_type == BraceType::Command
-            && matches!(
-                self.options.brace_style,
-                BraceStyle::Allman
-                    | BraceStyle::Whitesmith
-                    | BraceStyle::Vtk
-                    | BraceStyle::Gnu
-                    | BraceStyle::Horstmann
-            )
-            && is_break_blocks_closing_header(
-                self.current[..self.current_trailing_comment_split_limit()]
-                    .trim_end()
-                    .trim_start(),
-            );
+    fn push_trailing_comment_before_broken_brace(&mut self, comment: &str, brace_type: BraceType) {
         let before_gap = if self.token_input.previous_input_was_adjacent {
             String::new()
         } else {
@@ -2481,17 +2457,7 @@ impl FormatEngine<'_> {
             .clone()
             .unwrap_or_default();
         self.trim_current_end();
-        if closing_header_comment_needs_min_gap {
-            let source_gap_len = before_gap.chars().count() + 1 + after_gap.chars().count();
-            let min_gap = self.options.indent_width.saturating_mul(2) + 1;
-            if source_gap_len >= min_gap {
-                self.current.push_str(&before_gap);
-                self.current.push(' ');
-                self.current.push_str(&after_gap);
-            } else {
-                self.current.push_str(&" ".repeat(min_gap));
-            }
-        } else if brace_type == BraceType::Command
+        if brace_type == BraceType::Command
             && (self.options.pad_parens_inside || self.options.pad_parens_outside)
         {
             self.current.push(' ');

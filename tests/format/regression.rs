@@ -3949,3 +3949,11 @@ fn split_statement_keeps_an_adjacent_line_comment() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn comment_after_a_broken_else_brace_keeps_its_source_gap() {
+    let input = "void f(void)\n{\n  if (a) {\n    x = 1;\n  }\n  else { // is finite\n    y = 2;\n  }\n  if (b) {\n    x = 1;\n  } else {   // c2\n    y = 2;\n  }\n}\n";
+    let expected = "void f(void)\n{\n    if (a)\n        {\n            x = 1;\n        }\n    else   // is finite\n        {\n            y = 2;\n        }\n    if (b)\n        {\n            x = 1;\n        }\n    else       // c2\n        {\n            y = 2;\n        }\n}\n";
+    check(input, &["--style=gnu"], expected);
+    check(expected, &["--style=gnu"], expected);
+}
