@@ -66,6 +66,15 @@ pub(crate) fn function_name_start(before_open_paren: &str) -> Option<usize> {
             start -= 1;
         }
         if start >= 2 && bytes[start - 1] == b':' && bytes[start - 2] == b':' {
+            // `Type<Args>::name`
+            if start >= 3
+                && bytes[start - 3] == b'>'
+                && let Some(open) = template_arguments_open(&bytes[..start - 2])
+                && let Some(index) = identifier_segment_start(open)
+            {
+                start = index;
+                continue;
+            }
             match identifier_segment_start(start - 2) {
                 Some(index) => {
                     start = index;
@@ -77,6 +86,25 @@ pub(crate) fn function_name_start(before_open_paren: &str) -> Option<usize> {
         break;
     }
     (start < end).then_some(start)
+}
+
+/// Index of the `<` matching the `>` that ends `bytes`.
+fn template_arguments_open(bytes: &[u8]) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, &byte) in bytes.iter().enumerate().rev() {
+        match byte {
+            b'>' => depth += 1,
+            b'<' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            b'(' | b')' | b';' | b'{' | b'}' => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 pub(crate) fn function_head_has_assignment(before: &str) -> bool {

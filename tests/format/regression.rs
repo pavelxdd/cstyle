@@ -3826,3 +3826,16 @@ fn column_one_comment_in_a_guarded_struct_takes_the_body_indent() {
     check(input, &["--indent-col1-comments"], expected);
     check(expected, &["--indent-col1-comments"], expected);
 }
+
+#[test]
+fn parameters_follow_a_template_function_name_onto_its_attached_return_type() {
+    let input = "template<typename T>\ninline\nA<T1,T2>::A(int f,\n            int v1)\n{ }\ntemplate<typename T>\nstatic int\nf(int f,\n  int v1)\n{ }\n";
+    let expected = "template<typename T>\ninline A<T1,T2>::A(int f,\n                   int v1)\n{ }\ntemplate<typename T>\nstatic int f(int f,\n             int v1)\n{ }\n";
+    for options in [
+        &["--attach-return-type"][..],
+        &["--attach-return-type", "--min-conditional-indent=0"][..],
+    ] {
+        check(input, options, expected);
+        check(expected, options, expected);
+    }
+}

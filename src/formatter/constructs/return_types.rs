@@ -326,6 +326,18 @@ impl FormatEngine<'_> {
             first: head.start,
             last: span.last,
         }));
+        let previous_indent = leading_visual_width(&previous, self.options.tab_width);
+        let start_column = visual_width_from(
+            &format!("{previous_prefix}{previous_trimmed}{separator}"),
+            0,
+            self.options.tab_width,
+        );
+        self.layout.frame_stack.move_joined_line_frames(
+            self.output.len() + 1,
+            self.output.len(),
+            start_column,
+            previous_indent,
+        );
         self.adjust_and_publish_line(format!(
             "{previous_prefix}{previous_trimmed}{separator}{}",
             line.trim_start()

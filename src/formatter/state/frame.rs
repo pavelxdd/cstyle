@@ -813,6 +813,63 @@ impl FrameStack {
         }
     }
 
+    /// Moves the frames opened on output line `line` to `new_line`, joined
+    /// after text that ends at `start_column` on a line indented
+    /// `new_indent`.
+    pub(crate) fn move_joined_line_frames(
+        &mut self,
+        line: usize,
+        new_line: usize,
+        start_column: usize,
+        new_indent: usize,
+    ) {
+        let mut moved = Vec::new();
+        let mut anchor_shift = None;
+        for entry in &mut self.delimiters {
+            let frame = &mut entry.frame;
+            if frame.opener_output_line != line {
+                continue;
+            }
+            let shift = |column: usize| {
+                shift_column_for_indent(column, frame.line_indent_spaces, start_column)
+            };
+            moved.push(entry.id);
+            anchor_shift.get_or_insert((frame.line_indent_spaces, start_column));
+            frame.opener_output_line = new_line;
+            frame.opener_output_column = shift(frame.opener_output_column);
+            if let Some(column) = frame.continuation_indent_column.as_mut() {
+                *column = shift(*column);
+            }
+            if let Some(call) = frame.call.as_mut() {
+                if let Some(column) = call.first_argument_column.as_mut() {
+                    *column = shift(*column);
+                }
+                if call.logical_operand_indent_tracks_opener {
+                    call.logical_operand_indent_column = shift(call.logical_operand_indent_column);
+                }
+            }
+            frame.line_indent_spaces = new_indent;
+        }
+        for frame in &mut self.brackets {
+            if frame.opener_output_line == line {
+                frame.opener_output_line = new_line;
+                frame.opener_output_column = shift_column_for_indent(
+                    frame.opener_output_column,
+                    frame.line_indent_spaces,
+                    start_column,
+                );
+                frame.line_indent_spaces = new_indent;
+            }
+        }
+        if let Some((old, new)) = anchor_shift
+            && let Some(argument) = self.last_argument.as_mut()
+            && argument.owner.is_some_and(|owner| moved.contains(&owner))
+            && let Some(column) = argument.sibling_anchor_column.as_mut()
+        {
+            *column = shift_column_for_indent(*column, old, new);
+        }
+    }
+
     pub(crate) fn mark_delimiter_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
         for entry in &mut self.delimiters {
             let frame = &mut entry.frame;
