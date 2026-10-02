@@ -684,30 +684,17 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn target_validation_reports_permission_errors() {
-        use std::os::unix::fs::PermissionsExt;
+    fn target_validation_reports_inspection_errors() {
+        let root = temp_path("target-inaccessible");
+        fs::create_dir_all(&root).expect("create target dir");
+        let not_dir = root.join("not-dir");
+        fs::write(&not_dir, "").expect("write file");
 
-        let root = temp_path("target-permission");
-        let locked = root.join("locked");
-        let path = locked.join("input.c");
-        fs::create_dir_all(&locked).expect("create target dir");
-        fs::write(&path, "int value;\n").expect("write target");
-        let mut permissions = fs::metadata(&locked)
-            .expect("target metadata")
-            .permissions();
-        permissions.set_mode(0o000);
-        fs::set_permissions(&locked, permissions).expect("lock target dir");
+        let result = validate_target_path(&not_dir.join("input.c"));
 
-        let result = validate_target_path(&path);
-
-        let mut permissions = fs::metadata(&locked)
-            .expect("target metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&locked, permissions).expect("unlock target dir");
         fs::remove_dir_all(root).expect("remove target dir");
         let error = result.expect_err("inaccessible target must fail");
-        assert!(error.to_string().contains("Permission denied"), "{error}");
+        assert!(error.to_string().contains("failed to inspect"), "{error}");
     }
 
     #[test]

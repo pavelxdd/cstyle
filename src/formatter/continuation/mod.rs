@@ -827,9 +827,7 @@ impl FormatEngine<'_> {
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
-        if !self.options.indent_after_parens
-            && let Some(spaces) = self.declaration_continuation_indent_spaces()
-        {
+        if let Some(spaces) = self.declaration_continuation_indent_spaces() {
             return ContinuationIndent::Spaces(spaces);
         }
         if let Some(spaces) = self.split_aggregate_declaration_name_indent_spaces() {

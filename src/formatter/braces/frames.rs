@@ -15,6 +15,14 @@ use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
+    // Labels that lead the line own what follows them all.
+    let trimmed = code.trim_start();
+    if (trimmed.starts_with("case") || trimmed.starts_with("default"))
+        && code.matches(':').count() > 1
+        && trimmed.starts_with(header)
+    {
+        return Some(code.len() - trimmed.len());
+    }
     code.match_indices(header)
         .filter_map(|(offset, _)| {
             let before = code[..offset].chars().next_back();

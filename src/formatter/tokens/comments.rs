@@ -1904,6 +1904,7 @@ impl FormatEngine<'_> {
             if self.layout.nesting.brace_type_stack.is_empty()
                 && self.layout.nesting.paren_depth == 0
                 && code.ends_with(')')
+                && !trimmed.starts_with('#')
             {
                 let lines = self.output.scoped();
                 let paren_balance = |line: &str| {
@@ -2491,6 +2492,13 @@ impl FormatEngine<'_> {
                     } else {
                         text
                     };
+                    // Rows of `**` and rows without a `*` indented with tabs
+                    // keep their text where it stands.
+                    let keeps_row = if text.starts_with('*') {
+                        body.trim_start().starts_with('*')
+                    } else {
+                        line[..line.len() - text.len()].contains('\t')
+                    };
                     let column = visual_width_from(
                         &line[..line.len() - body.trim_start().len()],
                         0,
@@ -2499,7 +2507,7 @@ impl FormatEngine<'_> {
                     .max(self.current_line_indent_spaces());
                     if body.trim().is_empty() {
                         String::new()
-                    } else if text.starts_with("*/") {
+                    } else if text.starts_with("*/") || keeps_row {
                         line.trim_end().to_string()
                     } else {
                         format!("{}{}", " ".repeat(column), body.trim())
@@ -2507,6 +2515,9 @@ impl FormatEngine<'_> {
                 } else {
                     line.trim_end().to_string()
                 };
+                // astyle writes the rows of a comment opened after code as
+                // they stand.
+                let verbatim = shifted == line.trim_end();
                 let is_last_line = lines.peek().is_none();
                 let last_line_starts_with_star = line.trim_start().starts_with('*');
                 let keep_line_open =
@@ -2514,8 +2525,13 @@ impl FormatEngine<'_> {
                 if keep_line_open {
                     self.current.push_str(&shifted);
                     self.current_is_preindented = true;
+                    self.current_is_verbatim = verbatim;
                 } else {
+                    let published = self.output.len();
                     self.push_raw_comment_output_line(shifted);
+                    if verbatim && self.output.len() > published {
+                        self.output.mark_last_verbatim();
+                    }
                 }
             }
         }

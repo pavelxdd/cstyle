@@ -39,6 +39,9 @@ impl FormatEngine<'_> {
         let published = self.output.len();
         let first = tokens.map(|span| span.first);
         self.publish_finished_line();
+        if std::mem::take(&mut self.current_is_verbatim) && self.output.len() > published {
+            self.output.mark_last_verbatim();
+        }
         if self.output.len() > published
             && first.is_some()
             && self

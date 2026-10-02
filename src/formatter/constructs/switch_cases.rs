@@ -1506,7 +1506,10 @@ impl FormatEngine<'_> {
                 }
             })
         } else {
-            Some(case_indent + case_body_extra + indent_width)
+            // Indented cases indent the block a case opens once more.
+            let block_extra =
+                usize::from(case_layout.opens_block && self.options.indent_cases) * indent_width;
+            Some(case_indent + case_body_extra + indent_width + block_extra)
         };
         if let Some(target) = target
             && (trimmed.starts_with('}') || exact_indent_spaces.unwrap_or(0) < target)
@@ -1548,6 +1551,7 @@ impl FormatEngine<'_> {
         let case_layout = self.active_emitted_case_layout()?;
         let case_indent = case_layout.indent_spaces;
         let tab_width = self.options.tab_width;
+        let indent_width = self.options.indent_width;
         let target = if trimmed.starts_with('}') && !case_layout.opens_block {
             None
         } else if trimmed.starts_with('}') {
@@ -1560,7 +1564,10 @@ impl FormatEngine<'_> {
                 let code = self.output.code(index);
                 if previous_trimmed.starts_with("case ") || previous_trimmed.starts_with("default:")
                 {
-                    return Some(case_indent);
+                    // Indented cases indent the brace closing a case block.
+                    return Some(
+                        case_indent + usize::from(self.options.indent_cases) * indent_width,
+                    );
                 }
                 if previous_trimmed.starts_with('}') {
                     closed += 1;
@@ -1866,11 +1873,14 @@ impl FormatEngine<'_> {
         let target = target
             + self.layout.line_adjuster.case_unindent_depth_for_line(line)
                 * self.options.indent_width;
-        let exact_indent_spaces = if self.preprocessor.split_else.extra_levels > 0 {
-            exact_indent_spaces.map_or(target, |current| current.max(target))
-        } else {
-            target
-        };
+        // Indented cases indent a case block's body past what the frame
+        // recorded.
+        let exact_indent_spaces =
+            if self.preprocessor.split_else.extra_levels > 0 || self.options.indent_cases {
+                exact_indent_spaces.map_or(target, |current| current.max(target))
+            } else {
+                target
+            };
         Some(CaseBlockBodyLayout {
             exact_indent_spaces,
         })
@@ -1910,7 +1920,9 @@ impl FormatEngine<'_> {
             + self.layout.line_adjuster.case_unindent_depth_for_line(line)
                 * self.options.indent_width;
         Some(
-            if frame.case_block && self.preprocessor.split_else.extra_levels > 0 {
+            if frame.case_block
+                && (self.preprocessor.split_else.extra_levels > 0 || self.options.indent_cases)
+            {
                 exact_indent_spaces.map_or(target, |current| current.max(target))
             } else {
                 target

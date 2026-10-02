@@ -6,6 +6,7 @@ use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame}
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_macro_like_word, is_pointer_type_word,
 };
@@ -18,6 +19,24 @@ use crate::formatter::text::line_scan::{
 };
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+
+/// Whether `text` ends with a name alone in parentheses that no call
+/// opens, as a cast to a type name does.
+fn ends_parenthesized_name(text: &str) -> bool {
+    let Some(inner) = text.trim_end().strip_suffix(')') else {
+        return false;
+    };
+    let Some(open) = inner.rfind('(') else {
+        return false;
+    };
+    let name = inner[open + 1..].trim();
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+        && !name.starts_with(|ch: char| ch.is_ascii_digit())
+        && matches!(trailing_word(&inner[..open]), "" | "return")
+}
 
 pub(crate) fn starts_ternary_arm(line: &str) -> bool {
     line.starts_with('?') || (line.starts_with(':') && !line.starts_with("::"))
@@ -792,6 +811,37 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
             }
+            // Between brackets a `*` after a name or value multiplies; after
+            // a `)` it may follow a cast.
+            "*" if matches!(
+                self.layout.previous,
+                PreviousToken::Word | PreviousToken::Literal | PreviousToken::CloseBracket
+            ) && self.active_token_in_brackets() =>
+            {
+                self.push_binary_operator(operator);
+            }
+            // A `*` or `&` run after `return` dereferences or takes an
+            // address.
+            "*" | "&"
+                if trailing_word(self.current.trim_end().trim_end_matches(['*', '&']))
+                    == "return" =>
+            {
+                self.emit_source_space();
+                self.current.push_str(operator);
+                self.emit_trailing_source_space();
+            }
+            // A `*` after `sizeof`, or attached to its operand after a
+            // parenthesized name within parentheses, dereferences.
+            "*" if next_is_adjacent
+                && (trailing_word(&self.current) == "sizeof"
+                    || self.layout.nesting.paren_depth > 0
+                        && ends_parenthesized_name(&self.current))
+                && matches!(next, Some(Token::Word(_) | Token::Symbol('(')))
+                    | matches!(next, Some(Token::Operator(next)) if next == "*") =>
+            {
+                self.emit_source_space();
+                self.current.push_str(operator);
+            }
             "*" if self.should_attach_sizeof_after_standalone_call_argument(next) => {
                 self.emit_source_space();
                 self.current.push_str(operator);
@@ -876,6 +926,15 @@ impl FormatEngine<'_> {
                     self.push_pointer_or_reference(operator, next, next_is_adjacent);
                 }
             }
+            // A reference to a parenthesized declarator keeps its spacing.
+            "&" if operator_role == OperatorRole::PointerDeclarator
+                && matches!(next, Some(Token::Symbol('(')))
+                && self.layout.previous == PreviousToken::Word =>
+            {
+                self.emit_source_space();
+                self.current.push_str(operator);
+                self.emit_trailing_source_space();
+            }
             "&" if operator_role == OperatorRole::PointerDeclarator
                 && self.current.trim_start().starts_with("return ")
                 && self.layout.previous != PreviousToken::OpenParen
@@ -911,6 +970,10 @@ impl FormatEngine<'_> {
             }
             "&" | "*"
                 if operator_role == OperatorRole::Unknown
+                    // An argument of a call in a statement block.
+                    && !(self.layout.previous == PreviousToken::Comma
+                        && self.layout.nesting.brace_type_stack.last()
+                            == Some(&BraceType::Command))
                     && self.current_paren_context_is_declaration()
                     && self.looks_like_pointer_declaration_context()
                     && matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ','))) =>
@@ -1024,15 +1087,19 @@ impl FormatEngine<'_> {
                 self.ensure_space();
                 self.current.push_str(operator);
             }
-            "&&" if split_rvalue_reference
-                || (!self.current_paren_is_expression_context()
-                    || trailing_word(&self.current) == language::AUTO
-                    || self.current.trim_end().ends_with('*')
-                    || self.current_in_cast_type_group()
-                    || self.current_in_parenthesized_type_operand()
-                    || self.current_paren_context_is_declaration()
-                    || self.is_function_declaration_parameter_continuation())
-                    && self.is_rvalue_reference_like(next) =>
+            "&&" if !self
+                .current
+                .active_token()
+                .is_some_and(|index| self.operand_member_is_accessed(index))
+                && (split_rvalue_reference
+                    || (!self.current_paren_is_expression_context()
+                        || trailing_word(&self.current) == language::AUTO
+                        || self.current.trim_end().ends_with('*')
+                        || self.current_in_cast_type_group()
+                        || self.current_in_parenthesized_type_operand()
+                        || self.current_paren_context_is_declaration()
+                        || self.is_function_declaration_parameter_continuation())
+                        && self.is_rvalue_reference_like(next)) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
             }
@@ -1168,6 +1235,32 @@ impl FormatEngine<'_> {
                 | PreviousToken::CloseParen
                 | PreviousToken::CloseBracket
         ) || trailing_word(&self.current) == "return"
+    }
+
+    /// Whether the token being pushed stands between brackets, where only
+    /// expressions go.
+    pub(crate) fn active_token_in_brackets(&self) -> bool {
+        self.current.active_token().is_some_and(|index| {
+            self.tree
+                .groups
+                .enclosing(index)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Bracket)
+        })
+    }
+
+    /// Whether the operand after the operator at `index` is a name whose
+    /// member is accessed, which no declarator is.
+    fn operand_member_is_accessed(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        index < tokens.len()
+            && next_code_token(tokens, index + 1)
+                .filter(|&name| matches!(tokens[name], Token::Word(_)))
+                .and_then(|name| next_code_token(tokens, name + 1))
+                .is_some_and(|after| match &tokens[after] {
+                    Token::Operator(operator) => operator == "->",
+                    Token::Symbol('.') => true,
+                    _ => false,
+                })
     }
 
     fn is_cast_unary_sign(&self, next: Option<&Token>) -> bool {

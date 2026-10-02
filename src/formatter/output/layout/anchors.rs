@@ -1943,6 +1943,8 @@ impl FormatEngine<'_> {
         let column = if groups.enclosing(previous_first) == Some(group) {
             self.output
                 .lead_width(previous_line, self.options.tab_width)
+        } else if self.options.indent_after_parens {
+            return self.stacked_argument_indent(first);
         } else {
             let open = groups.get(group).open;
             let content = self.token_column(next_code_token(tokens, open + 1)?)?;
@@ -3434,15 +3436,26 @@ impl FormatEngine<'_> {
     /// in Ratliff and keeps it at the header in VTK, against how those
     /// styles place the braces of longer blocks.
     fn one_line_control_block_indent(&self, first: usize, line: &str) -> Option<usize> {
-        let extra = match self.options.brace_style {
-            BraceStyle::Ratliff => self.options.indent_width,
-            BraceStyle::Vtk => 0,
-            _ => return None,
-        };
         if !matches!(self.tree.tokens[first], Token::Symbol('{')) {
             return None;
         }
         let group = self.tree.groups.opened_at(first)?;
+        let extra = match self.options.brace_style {
+            BraceStyle::Ratliff => self.options.indent_width,
+            // VTK indents the brace within a block other than a function's.
+            BraceStyle::Vtk
+                if self.tree.groups.ancestors(group).skip(1).any(|id| {
+                    matches!(
+                        self.tree.blocks.kind(id),
+                        Some(BlockKind::Control | BlockKind::Block)
+                    )
+                }) =>
+            {
+                self.options.indent_width
+            }
+            BraceStyle::Vtk => 0,
+            _ => return None,
+        };
         let close = self.tree.groups.get(group).close?;
         let code = line[..trailing_comment_split_limit(line)].trim_end();
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)

@@ -56,7 +56,18 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_block_spacing_comment(&mut self, tokens: &[Token], index: usize) {
-        if !self.options.break_blocks || self.previous_block_spacing_line_is_comment_only() {
+        if !self.options.break_blocks {
+            return;
+        }
+        // Comments before a closing header belong to it.
+        if !self.options.break_closing_header_blocks
+            && self
+                .following_break_blocks_header(tokens, index + 1)
+                .is_some_and(|word| is_break_blocks_closing_header(&word))
+        {
+            self.block_spacing.append_blank = false;
+        }
+        if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
         let Some(previous) = self.layout.previous_pre_adjust_line.as_deref() else {
@@ -202,10 +213,14 @@ impl FormatEngine<'_> {
         if let Some(after) = trimmed.strip_prefix('}') {
             let next = leading_identifier(after.trim_start());
             return self.options.break_closing_header_blocks
-                && is_break_blocks_closing_header(next);
+                && is_break_blocks_closing_header(next)
+                && !self.previous_block_spacing_line_is_comment_only();
         }
         let first = leading_identifier(trimmed);
-        !is_break_blocks_closing_header(first) || self.options.break_closing_header_blocks
+        // A body kept on one line with its header ends no block before its
+        // closing header.
+        !is_break_blocks_closing_header(first)
+            || self.options.break_closing_header_blocks && self.options.break_one_line_statements
     }
 
     pub(crate) fn reset_block_spacing(&mut self) {

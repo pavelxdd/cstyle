@@ -279,9 +279,11 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
     for token in lexer::tokenize(output) {
         let text = lexer::token_text(&token);
         let line_breaks = text.bytes().filter(|byte| *byte == b'\n').count();
+        // Lines inside a raw string or a block comment are no code.
         if matches!(&token, Token::StringLiteral(literal) if ["u8R\"", "LR\"", "uR\"", "UR\"", "R\""]
             .into_iter()
             .any(|prefix| literal.starts_with(prefix)))
+            || matches!(&token, Token::Comment(_, text) if text.starts_with("/*"))
         {
             let end = line_index.saturating_add(line_breaks);
             for raw_line in raw_lines

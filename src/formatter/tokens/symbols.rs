@@ -339,8 +339,9 @@ impl FormatEngine<'_> {
         } else if !outside_pad
             && self.layout.previous == PreviousToken::Operator
             && self.options.pointer_align == PointerAlign::Name
-            && self.current.trim_end().ends_with(['*', '&', '^'])
+            && self.current.trim_end().ends_with(['*', '^'])
             && self.looks_like_pointer_declaration_context()
+            && !self.active_token_in_brackets()
         {
             if !self.function_pointer_parameter_keeps_space_before_name_group() {
                 self.trim_current_end();

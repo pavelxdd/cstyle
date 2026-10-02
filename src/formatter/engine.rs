@@ -117,6 +117,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) source_run_in_brace_lines: Vec<usize>,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
+    /// The current line is a comment row astyle writes as it stands.
+    pub(crate) current_is_verbatim: bool,
     pub(crate) unmatched_closing_brace_recovery: bool,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
@@ -194,6 +196,7 @@ impl<'a> FormatEngine<'a> {
             source_run_in_brace_lines: Vec::new(),
             disabled_formatting: None,
             current_is_preindented: false,
+            current_is_verbatim: false,
             unmatched_closing_brace_recovery: false,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,

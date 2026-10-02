@@ -473,22 +473,28 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn format_path_reports_changed_readonly_write_errors() {
-        use std::os::unix::fs::PermissionsExt;
+    fn format_path_reports_backup_write_errors() {
+        // A backup under the input file, as under a directory, fails to
+        // write for any user and leaves the input as it was.
+        let path = temp_path("unwritable-backup.c");
+        let input = "int main(){return 0;}\n";
+        fs::write(&path, input).expect("write input");
 
-        let path = temp_path("readonly-changed.c");
-        fs::write(&path, "int main(){return 0;}\n").expect("write input");
-        let mut permissions = fs::metadata(&path).expect("metadata").permissions();
-        permissions.set_mode(0o444);
-        fs::set_permissions(&path, permissions).expect("set readonly");
+        let error = format_file_in_place(
+            &path,
+            &FormatOptions::default(),
+            &InPlaceOptions {
+                backup_suffix: Some("/orig".to_string()),
+                dry_run: false,
+                preserve_date: false,
+            },
+        )
+        .expect_err("backup write");
 
-        let error = format_path(&path, &FormatOptions::default()).expect_err("readonly write");
-
-        let mut permissions = fs::metadata(&path).expect("metadata").permissions();
-        permissions.set_mode(0o644);
-        fs::set_permissions(&path, permissions).expect("restore writable");
+        let unchanged = fs::read_to_string(&path).expect("read input");
         fs::remove_file(path).expect("remove temp file");
-        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(unchanged, input);
+        assert_ne!(error.kind(), io::ErrorKind::NotFound);
     }
 
     #[test]

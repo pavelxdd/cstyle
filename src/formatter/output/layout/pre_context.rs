@@ -3,6 +3,7 @@ use crate::formatter::continuation::call_arguments::{
     plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -78,7 +79,10 @@ impl FormatEngine<'_> {
         {
             let split = trailing_comment_split_limit(previous);
             let previous_code = previous[..split].trim_end();
-            if (split < previous.len() || previous_code.contains("/*"))
+            if (split < previous.len()
+                || lexer::tokenize(previous_code)
+                    .iter()
+                    .any(|token| matches!(token, Token::Comment(CommentKind::Block, _))))
                 && previous_code.ends_with(';')
                 && unmatched_open_paren_column(previous_code).is_none()
             {

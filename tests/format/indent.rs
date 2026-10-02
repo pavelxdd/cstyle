@@ -468,7 +468,7 @@ fn macro_call_after_closed_nested_condition_aligns_arguments() {
 }
 
 #[test]
-fn macro_call_bitwise_chain_preserves_source_columns() {
+fn macro_call_bitwise_chain_aligns_after_the_call_paren() {
     let source = fixture!(
         "MAIN(\"tool\", tool_main,",
         "              MAIN_ONE |",
@@ -476,7 +476,15 @@ fn macro_call_bitwise_chain_preserves_source_columns() {
         "              MAIN_THREE)",
     );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    assert_eq!(
+        format_exact(source, &one_true_brace_c_options()),
+        fixture!(
+            "MAIN(\"tool\", tool_main,",
+            "     MAIN_ONE |",
+            "     MAIN_TWO |",
+            "     MAIN_THREE)",
+        )
+    );
 }
 
 #[test]

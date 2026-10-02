@@ -1062,10 +1062,9 @@ fn max_code_length_nested_new_clamps_four_continuation_levels() {
         "void run(){resultValue=new ContainerType(new AlphaType(alphaValue,betaValue),new BetaType(gammaValue,deltaValue),epsilonValue);}",
     );
 
-    // Every nested-new row retains the same clamped continuation owner.
-    assert_stable_max_length_format(
-        source,
-        &options,
+    let actual = format_exact(source, &options);
+    assert_eq!(
+        actual,
         fixture!(
             "void run()",
             "{",
@@ -1073,8 +1072,18 @@ fn max_code_length_nested_new_clamps_four_continuation_levels() {
             "            alphaValue,betaValue),new BetaType(gammaValue,",
             "                    deltaValue),epsilonValue);",
             "}",
-        ),
+        )
     );
+    // Rows already split align after the paren of the second argument.
+    let split = fixture!(
+        "void run()",
+        "{",
+        "    resultValue=new ContainerType(new AlphaType(",
+        "            alphaValue,betaValue),new BetaType(gammaValue,",
+        "                                  deltaValue),epsilonValue);",
+        "}",
+    );
+    assert_eq!(format_exact(split, &options), split);
 }
 
 #[test]

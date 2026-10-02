@@ -3278,3 +3278,153 @@ fn define_rows_after_a_paren_ending_its_row_align_at_the_backslash() {
     let input = "#define I(c) do { \\\n        malloc_printf( \\\n                       \"x\", \\\n                       c); \\\n    } while (0)\n#define J(c) do { \\\n        malloc_printf(a, \\\n                      \"x\", \\\n                      c); \\\n    } while (0)\n";
     check(input, &["--style=kr", "--indent-preproc-define"], input);
 }
+
+#[test]
+fn define_labels_stand_at_the_body_or_a_level_out_with_indented_labels() {
+    let input = "#define R(x) do { \\\n        if (x) { \\\n            f(); \\\n    lbl: \\\n            g(); \\\n        } \\\n    color: \\\n        h(); \\\n    } while (0)\n";
+    check(input, &["--indent-preproc-define"], input);
+    let input = "#define R(x) do { \\\n        if (x) { \\\n            f(); \\\n        lbl: \\\n            g(); \\\n        } \\\n    color: \\\n        h(); \\\n    } while (0)\n";
+    check(
+        input,
+        &["--indent-preproc-define", "--indent-labels"],
+        input,
+    );
+}
+
+#[test]
+fn indent_after_parens_continues_conditions_assignments_and_declarations() {
+    let input = "void f()\n{\nagain:\n    if (line->len >= 2 &&\n        !memcmp(line->buf, \"--\", 2))\n        g();\ndone:\n    if (r->request_body_no_buffering\n        && (rc == NGX_OK || rc == NGX_AGAIN)) {\n        g();\n    }\n    if(data->state.http_host &&\n        /* a Host: header */\n        curlx_str_casecompare(&name, \"Host\"))\n        ;\n    ngx_uint_t               i, default_server, proxy_protocol,\n                             protocols, protocols_prev;\n    int mapped = !filter->ipv6_v6only &&\n        is_ipv4_mapped_ipv6_address(address->family, cinaddr);\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
+
+#[test]
+fn max_code_length_measures_a_run_in_line_from_its_brace() {
+    let input = "void f()\n{   if (x)\n    {   if (y)\n        {   printf(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", argv[1],\n                   sqlite3_errmsg(db));\n            return;\n        }\n    }\n}\nvoid f()\n{   if (x)\n    {   if (y)\n        {   printf(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n                   argv[1], sqlite3_errmsg(db));\n            return;\n        }\n    }\n}\n";
+    check(input, &["--style=horstmann", "--max-code-length=60"], input);
+}
+
+#[test]
+fn pad_operators_keeps_dereferences_after_sizeof_and_parenthesized_names() {
+    let input = "int f(int *np, char ***argv, LONG *expected, const char *zSql)\n{\n    if ((u_long) *np >= x) {\n        return 1;\n    }\n    *argv = xreallocarray(*argv, 1, sizeof **argv);\n    if (old == (LONG) *expected) return 1;\n    if( IdChar((u8)*zSql) ) {\n        return 2;\n    }\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+}
+
+#[test]
+fn break_blocks_add_no_blank_between_a_comment_and_its_closing_header() {
+    let input = "void f()\n{\n    x = 1;\n\n    if (symbol < 16)\n        lengths[index++] = symbol;\n    else {\n        len = 0;\n    }\n\n    y = 2;\n\n    if (a) {\n        /* comment */\n    } else {\n        z();\n    }\n\n    if (b)\n        c();\n    /* else */\n    else if (d)\n        e();\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], input);
+    let input = "void f()\n{\n    x = 1;\n\n    if (symbol < 16)\n        lengths[index++] = symbol;\n\n    else {\n        len = 0;\n    }\n\n    y = 2;\n\n    if (a) {\n        /* comment */\n    } else {\n        z();\n    }\n\n    if (b)\n        c();\n\n    /* else */\n    else if (d)\n        e();\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], input);
+}
+
+#[test]
+fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
+    let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
+    check(input, &["--style=pico", "--break-blocks=all"], input);
+}
+
+#[test]
+fn remove_comment_prefix_keeps_double_star_and_tabbed_rows_of_trailing_comments() {
+    let input = "struct s {\n    int nArg;          /* Number of arguments */\n    int aIdx[7];           /* Constraints on start, stop, step, LIMIT, OFFSET,\n                         ** and value.  aIdx[5] covers value=, value>=, and\n                         ** value>,  aIdx[6] covers value<= and value< */\n    unsigned oid_valid : 1;  /* if true, use oid and trust mode;\n\t\t\t\t   if false, use the name and read from\n\t\t\t\t   the filesystem.\n*/\n};\n";
+    check(input, &["--style=kr", "--remove-comment-prefix"], input);
+}
+
+#[test]
+fn braces_inside_block_comments_stay_on_their_lines() {
+    let input = "/*\n    Example:\n\n       if (eax == [m]) {\n           zf = 1;\n           [m] = r;\n       } else {\n           zf = 0;\n       }\n\n       void foo(void)\n       {\n           warning(\"x\");\n       }\n*/\nint x;\n";
+    for style in ["--style=lisp", "--style=pico", "--style=horstmann"] {
+        check(input, &[style, "--remove-comment-prefix"], input);
+    }
+}
+
+#[test]
+fn define_assignments_register_until_a_comma_in_their_parens() {
+    let input = "#define B(x) \\\n    x = \\\n        foo(a, \\\n            b)\n#define C(x) \\\n    x =   \\\n          foo\n#define S(x) \\\n    (block[n] = \\\n                (uint32_t)data[n * 4] | \\\n                ((uint32_t)data[n * 4 + 1] << 8))\n#define blk0(i) (block->l[i] = (rol(block->l[i],24)&0xFF00FF00) \\\n                               |(rol(block->l[i],8)&0x00FF00FF))\n#define W(p, s) \\\n    ((p)[0] = (u_char) ((s) >> 8), \\\n     (p)[1] = (u_char)  (s), \\\n     (p) + 2)\n";
+    check(input, &["--indent-preproc-define"], input);
+}
+
+#[test]
+fn delete_empty_lines_keeps_the_empty_lines_of_arrays() {
+    let input = "int f(void)\n{\n    static const char *a[] = {\n        \"0.0\", \"0.1\",\n\n        \"1.0\", \"1.1\",\n    };\n    struct s x[] = {\n        { 1, 2 },\n\n        { 3, 4 },\n    };\n    return 0;\n}\nstatic const char *b[] = {\n    \"0.0\",\n\n    \"1.0\",\n};\n";
+    check(input, &["--style=kr", "--delete-empty-lines"], input);
+}
+
+#[test]
+fn rows_of_a_comment_opened_after_code_keep_their_whitespace_with_tabs() {
+    let input = "struct s {\n\tint seekResult;         /* Result of previous\n                          ** if there have been. */\n\tint x; /* a\n              b */\n};\nvoid f()\n{\n\tif (x) {\n\t\tg(); /* so the loop can exit;\n                we *shouldn* get */\n\t}\n}\n";
+    check(input, &["--style=kr", "--indent=force-tab=4"], input);
+    check(input, &["--style=kr", "--indent=tab=4"], input);
+}
+
+#[test]
+fn name_aligned_pointers_leave_logical_and_multiplication_and_returns_alone() {
+    let input = "int f(fd_set *fds_read, int iPhrase)\n{\n    aOut[iPhrase * ((p->nCol+31)/32) + iCol/32] |= 1;\n    return select((int)maxfd + 1,\n                  fds_read && fds_read->fd_count ? fds_read : NULL,\n                  ptimeout);\n}\nstatic inline int weight(struct commit_list *elem)\n{\n    return **commit_weight_at(&commit_weight, elem->item);\n}\nvoid f()\n{\n    x = a * ((b));\n    y[a * ((b))] = 1;\n    y[a * (b)] = 1;\n    z = y[a * b];\n    y[iPhrase * ((p->nCol+31)/32) + iCol/32] |= 1;\n}\n";
+    check(input, &["--style=1tbs", "--align-pointer=name"], input);
+}
+
+#[test]
+fn vtk_indents_a_one_line_block_brace_within_a_block() {
+    let input = "void f()\n{\n    for (;;)\n        {\n        if (x)\n            { a = 1; }\n        else\n            { b = 2; }\n        }\n    if (y)\n    { c = 1; }\n}\n";
+    check(input, &["--style=vtk", "--add-one-line-braces"], input);
+    check(input, &["--style=vtk", "--keep-one-line-blocks"], input);
+}
+
+#[test]
+fn indented_conditionals_in_a_case_block_stand_at_its_body() {
+    let input = "int f(int id)\n{\n    switch (id) {\n    default: {\n        #ifdef SQLITE_ENABLE_API_ARMOR\n        if (id < 0) {\n            return 0;\n        }\n        #endif\n        break;\n    }\n    }\n    return 1;\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], input);
+}
+
+#[test]
+fn two_case_labels_on_a_line_own_the_block_after_them() {
+    let input = "int f(int option)\n{\n    switch (option) {\n    case 1:  case 2: {\n        int status;\n        if (x) return 0;\n        break;\n    }\n    default:\n        break;\n    }\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}
+
+#[test]
+fn case_block_content_takes_another_level_with_indented_cases() {
+    let input = "int f(int q)\n{\n    switch(q) {\n    case 1: {\n            if(x) {\n                return 1;\n            }\n            break;\n        }\n    case 2:\n        break;\n    }\n    return 0;\n}\n";
+    check(input, &["--style=linux", "--indent-cases"], input);
+}
+
+#[test]
+fn reference_arguments_in_one_line_blocks_stay_attached() {
+    let input = "void f()\n{\n    if (x) { g(ac, &cb, NULL); }\n    if (y)\n    { g(ac, &cb, NULL); }\n    { g(ac, &cb, NULL); }\n}\n";
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--keep-one-line-blocks",
+            "--align-pointer=middle",
+        ],
+        input,
+    );
+}
+
+#[test]
+fn define_statement_after_a_trailing_assignment_aligns_as_astyle_registers_it() {
+    let input = "#define SLIST_REMOVE(head, elm, type, field) do {\t\t\t\\\n        if ((head)->slh_first == (elm)) {\t\t\t\t\\\n            SLIST_REMOVE_HEAD((head), field);\t\t\t\\\n        } else {\t\t\t\t\t\t\t\\\n            struct type *curelm = (head)->slh_first;\t\t\\\n            curelm->field.sle_next =\t\t\t\t\\\n                                                    curelm->field.sle_next->field.sle_next;\t\t\\\n            (listelm)->field.le_next->field.le_prev =\t\t\\\n                    &(elm)->field.le_next;\t\t\t\t\\\n        }\t\t\t\t\t\t\t\t\\\n    } while (0)\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn indented_preprocessor_blocks_keep_error_lines_as_written_and_indent_comments() {
+    let input = "int x;\n#if A!=B\n    # error wrong\n#endif\n#ifdef USE_WINSOCK\n#elif defined(__AMIGA__) /* Any AmigaOS flavor */\n    /* long recv(long, char *, long, long); */\n    #define RECV_TYPE_ARG1 long\n#endif\n";
+    check(input, &["--indent-preproc-block"], input);
+}
+
+#[test]
+fn case_blocks_under_a_split_else_keep_indented_case_levels() {
+    let input = "int main(void)\n{\n    if( a ) {\n        x();\n    } else\n\n        /* changeset FILE sql\n        ** Show\n        */\n        if( b ) {\n            switch( op ) {\n            case 1: {\n                    int i;\n                    break;\n                }\n            }\n        }\n    return 0;\n}\n";
+    check(input, &["--style=linux", "--indent-cases"], input);
+    // A comment opener inside a string is no comment.
+    let input = "int main(void)\n{\n    if( a ) {\n        x();\n    } else\n\n        /* c */\n        if( b ) {\n            switch( op ) {\n            case 1: {\n                    int i;\n                    printf(\"/* %d */ x\");\n                    for(i=0; i<n; i++) {\n                        y();\n                    }\n                    break;\n                }\n            }\n        }\n    return 0;\n}\n";
+    check(input, &["--style=linux", "--indent-cases"], input);
+}
+
+#[test]
+fn reference_to_a_parenthesized_declarator_keeps_its_spacing() {
+    let input = "class A\n{\n    gzomanip2(gzofstream& (*f)(gzofstream &, T1, T2),\n              T1 v1);\n    void g(char *(*f)(int));\n    void h(char *(*f)(int));\n};\n";
+    check(input, &["--style=1tbs", "--align-reference=name"], input);
+    check(input, &["--style=1tbs", "--align-pointer=name"], input);
+}

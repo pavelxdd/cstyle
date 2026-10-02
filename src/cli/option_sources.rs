@@ -106,14 +106,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn auto_config_reports_inaccessible_home_options_path() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let root = temp_path("home-options-permission");
+        let root = temp_path("home-options-inaccessible");
+        fs::create_dir_all(&root).expect("create root dir");
         let home = root.join("home");
-        fs::create_dir_all(&home).expect("create home dir");
-        let mut permissions = fs::metadata(&home).expect("home metadata").permissions();
-        permissions.set_mode(0o000);
-        fs::set_permissions(&home, permissions).expect("lock home dir");
+        fs::write(&home, "").expect("write file in place of home");
         let get_env = |name| match name {
             "HOME" => Some(home.clone().into_os_string()),
             _ => None,
@@ -121,10 +117,7 @@ mod tests {
 
         let result = load_auto_config(&get_env);
 
-        let mut permissions = fs::metadata(&home).expect("home metadata").permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&home, permissions).expect("unlock home dir");
-        fs::remove_dir_all(root).expect("remove home dir");
+        fs::remove_dir_all(root).expect("remove root dir");
         assert!(result.is_err(), "inaccessible config lookup must fail");
     }
 

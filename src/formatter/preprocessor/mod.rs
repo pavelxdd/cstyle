@@ -244,18 +244,19 @@ fn is_indentable_preprocessor_block(
     is_first_conditional: bool,
 ) -> bool {
     // astyle reads `#error`, `#warning`, and `#line` as comments; one that
-    // opens the block leaves it unindented.
-    if tokens
-        .iter()
-        .skip(start + 1)
-        .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-        .is_some_and(|token| {
-            matches!(token, Token::Preprocessor(preprocessor)
-            if matches!(
-                preprocessor_directive(&preprocessor.text),
-                Some("error" | "warning" | "line" | "region" | "endregion")
-            ))
-        })
+    // opens a block on the first line of the file leaves it unindented.
+    if start == 0
+        && tokens
+            .iter()
+            .skip(start + 1)
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+            .is_some_and(|token| {
+                matches!(token, Token::Preprocessor(preprocessor)
+                if matches!(
+                    preprocessor_directive(&preprocessor.text),
+                    Some("error" | "warning" | "line" | "region" | "endregion")
+                ))
+            })
     {
         return false;
     }
@@ -694,8 +695,15 @@ impl FormatEngine<'_> {
             Some(indentable) => indentable,
             None => self.preprocessor.indented_block_stack.last() == Some(&true),
         };
-        let collapse =
-            self.options.indent_preproc_block && directive.is_some() && in_indentable_block;
+        // astyle writes the directives it reads as comments as they stand.
+        let collapse = self.options.indent_preproc_block
+            && directive.is_some_and(|directive| {
+                !matches!(
+                    directive,
+                    "error" | "warning" | "line" | "region" | "endregion"
+                )
+            })
+            && in_indentable_block;
         if index == 0 && self.take_block_spacing_blank(part) {
             self.push_empty_line();
         }
@@ -889,6 +897,24 @@ impl FormatEngine<'_> {
     /// code, the others at the directive that opened them.
     fn current_preprocessor_indent(&self, opening: bool) -> PreprocessorLineIndent {
         if let Some(spaces) = self.direct_switch_body_indent_spaces() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
+        // In the block a case label opens, directives stand at its body.
+        if let Some(spaces) = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.case_block)
+            .map(|frame| {
+                // The line adjuster takes the case unindent of the line off.
+                frame.body_indent_column
+                    + self.layout.line_adjuster.case_unindent_depth_for_line("#")
+                        * self.options.indent_width
+            })
+        {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
                 spaces,

@@ -66,6 +66,18 @@ impl FormatEngine<'_> {
     }
 
     fn in_empty_line_protected_context(&self) -> bool {
+        // astyle keeps the empty lines of an array, in functions too.
+        if matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(
+                BraceType::Array
+                    | BraceType::DeferArray
+                    | BraceType::Initializer
+                    | BraceType::CompoundLiteral
+            )
+        ) {
+            return true;
+        }
         !self.layout.nesting.brace_type_stack.is_empty()
             && self
                 .layout

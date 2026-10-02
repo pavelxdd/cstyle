@@ -1571,6 +1571,8 @@ impl FormatEngine<'_> {
                 } else {
                     column
                 }
+            } else if self.options.indent_after_parens {
+                base + self.options.continuation_indent * self.options.indent_width
             } else {
                 paren_indent.max(base + min_conditional_indent_spaces(self.options))
             }

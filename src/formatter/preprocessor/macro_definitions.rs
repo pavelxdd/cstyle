@@ -431,12 +431,6 @@ fn next_define_expression_indent(line: &str, base_spaces: usize, options: &Forma
     base_spaces + levels * options.indent_width
 }
 
-fn define_assignment_continuation_indent(line: &str, tab_width: usize) -> Option<usize> {
-    let line = line.trim_end_matches('\\').trim_end();
-    line.ends_with('=')
-        .then(|| visual_width_from(line, 0, tab_width) + 1)
-}
-
 /// A designator row ends with its comma, or is the last row and ends
 /// with its value.
 fn define_complete_designated_initializer_row(line: &str) -> bool {
@@ -558,11 +552,32 @@ fn capped_define_continuation(
     }
 }
 
-/// Records for each open paren the column a row starting with its `)`
-/// takes and the column its other rows align at, apart from the `extra`
-/// spaces the rows take after a control header. Returns whether `line`
-/// closes a control header with code after it, which indents the rows
-/// after it by a level, the columns the parens align at included.
+/// The `close` of an anchor that an assignment registers rather than a
+/// paren.
+const ASSIGNMENT_ANCHOR: usize = usize::MAX;
+
+/// The column a row continuing at the top of `anchors` takes: a row led
+/// by `)` stands where its paren saved, others at the top anchor.
+fn define_row_anchor(anchors: &[(usize, usize)], row: &str) -> Option<usize> {
+    if row.trim_start().starts_with(')') {
+        anchors
+            .iter()
+            .rev()
+            .find(|&&(close, _)| close != ASSIGNMENT_ANCHOR)
+            .map(|&(close, _)| close)
+    } else {
+        anchors.last().map(|&(_, align)| align)
+    }
+}
+
+/// Replays astyle's continuation stack over a row: each open paren and
+/// each assignment records the column the rows after it align at, and for
+/// a paren the column a row starting with its `)` takes, apart from the
+/// `extra` spaces the rows take after a control header. A `)` drops what
+/// its paren recorded, a `,` the assignments within the paren. Returns
+/// whether `line` closes a control header with code after it, which
+/// indents the rows after it by a level, the columns the parens align at
+/// included.
 fn update_define_expression_paren_anchors(
     line: &str,
     anchors: &mut Vec<(usize, usize)>,
@@ -574,6 +589,12 @@ fn update_define_expression_paren_anchors(
     let row_indent = leading_visual_width(line, tab_width).saturating_sub(extra);
     let mut header_depth = None;
     let mut header_close = None;
+    let paren_count = |anchors: &Vec<(usize, usize)>| {
+        anchors
+            .iter()
+            .filter(|&&(close, _)| close != ASSIGNMENT_ANCHOR)
+            .count()
+    };
     // The maximum counts from the indent level of the rows; past it, rows
     // fall back to two indents past the row with the paren.
     let limit = level_spaces + options.max_continuation_indent;
@@ -581,6 +602,31 @@ fn update_define_expression_paren_anchors(
     let (body, _) = strip_define_backslash(line);
     let chars: Vec<char> = body.chars().collect();
     let full: Vec<char> = line.trim_end().chars().collect();
+    // astyle aligns at the first character after the paren or the
+    // assignment, a continuing backslash included.
+    let register = |anchors: &Vec<(usize, usize)>, index: usize| {
+        let previous = anchors.last().map(|&(_, align)| align);
+        let next = full[index + 1..]
+            .iter()
+            .position(|ch| !ch.is_whitespace())
+            .map(|offset| index + 1 + offset);
+        match next {
+            Some(next) if !options.indent_after_parens => {
+                let align = visual_column_at(&full, next, tab_width).saturating_sub(extra);
+                let align = if align > limit { fallback } else { align };
+                (
+                    visual_column_at(&full, index, tab_width).saturating_sub(extra),
+                    align.max(previous.unwrap_or(0)),
+                )
+            }
+            _ => {
+                let previous = previous.unwrap_or(row_indent);
+                let align = options.continuation_indent * options.indent_width + previous;
+                let align = if align > limit { fallback } else { align };
+                (previous, align)
+            }
+        }
+    };
     let mut index = 0usize;
     let mut quote = None;
     let mut escaped = false;
@@ -614,15 +660,9 @@ fn update_define_expression_paren_anchors(
             index += 1;
             continue;
         }
+        let previous_char = index.checked_sub(1).map(|before| chars[before]);
         match ch {
-            // astyle aligns at the first character after the paren, a
-            // continuing backslash included.
             '(' => {
-                let previous = anchors.last().map(|&(_, align)| align);
-                let next = full[index + 1..]
-                    .iter()
-                    .position(|ch| !ch.is_whitespace())
-                    .map(|offset| index + 1 + offset);
                 let word_end = chars[..index]
                     .iter()
                     .rposition(|ch| !ch.is_whitespace())
@@ -633,32 +673,34 @@ fn update_define_expression_paren_anchors(
                     .map_or(0, |start| start + 1);
                 let word: String = chars[word_start..word_end].iter().collect();
                 if header_depth.is_none() && matches!(word.as_str(), "if" | "while" | "for") {
-                    header_depth = Some(anchors.len());
+                    header_depth = Some(paren_count(anchors));
                 }
-                let anchor = match next {
-                    Some(next) if !options.indent_after_parens => {
-                        let align = visual_column_at(&full, next, tab_width).saturating_sub(extra);
-                        let align = if align > limit { fallback } else { align };
-                        (
-                            visual_column_at(&full, index, tab_width).saturating_sub(extra),
-                            align.max(previous.unwrap_or(0)),
-                        )
-                    }
-                    _ => {
-                        let previous = previous.unwrap_or(row_indent);
-                        let align = options.continuation_indent * options.indent_width + previous;
-                        let align = if align > limit { fallback } else { align };
-                        (previous, align)
-                    }
-                };
+                let anchor = register(anchors, index);
                 anchors.push(anchor);
             }
             ')' => {
-                anchors.pop();
-                if header_depth == Some(anchors.len()) {
+                while anchors
+                    .pop()
+                    .is_some_and(|(close, _)| close == ASSIGNMENT_ANCHOR)
+                {}
+                if header_depth == Some(paren_count(anchors)) {
                     header_depth = None;
                     header_close = Some(index);
                 }
+            }
+            ',' | ';' => {
+                if ch == ';' || paren_count(anchors) > 0 {
+                    while anchors
+                        .last()
+                        .is_some_and(|&(close, _)| close == ASSIGNMENT_ANCHOR)
+                    {
+                        anchors.pop();
+                    }
+                }
+            }
+            '=' if next != Some('=') && !matches!(previous_char, Some('=' | '!' | '<' | '>')) => {
+                let (_, align) = register(anchors, index);
+                anchors.push((ASSIGNMENT_ANCHOR, align));
             }
             _ => {}
         }
@@ -747,13 +789,7 @@ impl FormatEngine<'_> {
                 && let Some(previous) = previous_line.as_deref()
             {
                 let current = strip_define_backslash(part).0.trim_start();
-                line_spaces = if let Some(anchor) = paren_anchors.last().map(|&(paren, align)| {
-                    if current.starts_with(')') {
-                        paren
-                    } else {
-                        align
-                    }
-                }) {
+                line_spaces = if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
                     anchor + extra
                 } else {
                     next_define_expression_indent(previous, spaces, self.options)
@@ -780,9 +816,6 @@ impl FormatEngine<'_> {
     fn push_define_expression_rows(&mut self, body_parts: &[&str], body_level: usize) {
         let base_spaces = body_level * self.options.indent_width;
         let mut paren_anchors = Vec::new();
-        // The column rows after an assignment align at, with the number of
-        // parens open around the assignment.
-        let mut assignment_anchor: Option<(usize, usize)> = None;
         let mut line_spaces = base_spaces;
         for (index, part) in body_parts.iter().enumerate() {
             let current = strip_define_backslash(part).0.trim_start();
@@ -791,26 +824,13 @@ impl FormatEngine<'_> {
             if current_starts_assignment {
                 line_spaces = base_spaces + self.options.indent_width;
             } else if index > 0 {
-                line_spaces = assignment_anchor
-                    .filter(|&(depth, _)| depth == paren_anchors.len())
-                    .map(|(_, column)| column)
-                    .or_else(|| {
-                        paren_anchors.last().map(|&(paren, align)| {
-                            if current.starts_with(')') {
-                                paren
-                            } else {
-                                align
-                            }
-                        })
-                    })
-                    .unwrap_or(base_spaces);
+                line_spaces = define_row_anchor(&paren_anchors, current).unwrap_or(base_spaces);
             }
             let prefix = self
                 .options
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trim_start());
             self.adjust_and_publish_line(line.clone());
-            let depth_before = paren_anchors.len();
             update_define_expression_paren_anchors(
                 &line,
                 &mut paren_anchors,
@@ -818,23 +838,6 @@ impl FormatEngine<'_> {
                 0,
                 self.options,
             );
-            if let Some(anchor) = define_assignment_row_anchor(self.options, &line) {
-                assignment_anchor = Some((paren_anchors.len(), anchor));
-            } else if assignment_anchor.is_none()
-                && depth_before == 0
-                && let Some(column) = define_assignment_align_column(
-                    strip_define_backslash(&line).0,
-                    self.options.tab_width,
-                )
-            {
-                assignment_anchor = Some((
-                    depth_before,
-                    capped_define_continuation(column, line_spaces, base_spaces, self.options),
-                ));
-            }
-            if assignment_anchor.is_some_and(|(depth, _)| depth > paren_anchors.len()) {
-                assignment_anchor = None;
-            }
         }
     }
 
@@ -1152,14 +1155,22 @@ impl FormatEngine<'_> {
             } else if define_complete_designated_initializer_row(content) {
                 None
             } else {
-                define_assignment_align_column(&emitted, self.options.tab_width)
+                // An assignment registers the column after it, a continuing
+                // backslash included.
+                let row = format!("{prefix}{display}");
+                define_assignment_align_column(row.trim_end(), self.options.tab_width).map(
+                    |column| {
+                        capped_define_continuation(
+                            column,
+                            leading_visual_width(&row, self.options.tab_width),
+                            structural_level * self.options.indent_width,
+                            self.options,
+                        )
+                    },
+                )
             };
         }
     }
-}
-
-fn define_assignment_row_anchor(options: &FormatOptions, line: &str) -> Option<usize> {
-    define_assignment_continuation_indent(line, options.tab_width)
 }
 
 /// The parentheses left open after a define body row, starting from

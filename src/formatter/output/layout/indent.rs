@@ -15,6 +15,7 @@ use crate::formatter::continuation::call_arguments::callee_name_start_before_ope
 use crate::formatter::continuation::operator_chains::inline_stream_opener_argument_indent_spaces;
 use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
@@ -748,7 +749,9 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         if previous_full_code.ends_with(';')
-            && previous_full_code.contains("/*")
+            && lexer::tokenize(previous_full_code)
+                .iter()
+                .any(|token| matches!(token, Token::Comment(CommentKind::Block, _)))
             && unmatched_open_paren_column(previous_full_code).is_none()
             && current
                 .chars()

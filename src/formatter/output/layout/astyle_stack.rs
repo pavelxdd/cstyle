@@ -115,11 +115,8 @@ impl FormatEngine<'_> {
     /// `first`, replayed from the start of its statement.
     fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        // Lines that the code length splits are placed by the engine alone;
-        // replaying only the lines of the source would place them apart.
         let closes_stacked_brace = self.closes_stacked_initializer(first);
-        if self.options.max_code_length.is_some()
-            || matches!(tokens[first], Token::Symbol(']' | '{' | ','))
+        if matches!(tokens[first], Token::Symbol(']' | '{' | ','))
             || matches!(tokens[first], Token::Symbol('}')) && !closes_stacked_brace
             || tokens[first..]
                 .iter()
@@ -162,6 +159,16 @@ impl FormatEngine<'_> {
             return None;
         }
         let start_line = self.output.line_with_token(start)?;
+        // Lines that the code length splits are placed by the engine alone;
+        // replaying only the lines of the source would place them apart.
+        if self.options.max_code_length.is_some()
+            && !(start_line..self.output.len())
+                .filter_map(|line| self.output.line_tokens(line).map(|span| span.first))
+                .chain([first])
+                .all(|index| token_begins_source_line(tokens, index))
+        {
+            return None;
+        }
         // The start leads its line, after at most `}` and `else`.
         let mut line_first = next_code_token(tokens, self.output.line_tokens(start_line)?.first)?;
         while line_first < start
@@ -601,12 +608,31 @@ impl FormatEngine<'_> {
                         .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
                 || self.ends_case_label(before)
+                || self.ends_user_label(before)
             {
                 break;
             }
             start = before;
         }
         (start != index).then_some(start)
+    }
+
+    /// Whether the token `colon` is the `:` ending a statement label.
+    fn ends_user_label(&self, colon: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(tokens[colon], Token::Symbol(':'))
+            && self
+                .tree
+                .groups
+                .enclosing(colon)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace)
+            && self.tree.previous_code_token(colon).is_some_and(|label| {
+                matches!(&tokens[label], Token::Word(word)
+                    if !matches!(word.as_str(), "default" | "public" | "private" | "protected"))
+                    && self.tree.previous_code_token(label).is_none_or(|previous| {
+                        matches!(tokens[previous], Token::Symbol(';' | '{' | '}' | ':'))
+                    })
+            })
     }
 
     /// Whether the token `colon` is the `:` ending a `case` or `default`
@@ -667,4 +693,13 @@ pub(super) fn literal_closed(text: &str) -> bool {
 
 fn is_control_keyword(token: &Token) -> bool {
     matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+}
+
+/// Whether the token at `index` starts its line in the source.
+fn token_begins_source_line(tokens: &[Token], index: usize) -> bool {
+    tokens[..index.min(tokens.len())]
+        .iter()
+        .rev()
+        .take_while(|token| !matches!(token, Token::Newline))
+        .all(|token| matches!(token, Token::Whitespace(_)))
 }

@@ -18,8 +18,9 @@ use crate::formatter::preprocessor::{
 };
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::SourceTree;
 use crate::formatter::syntax::language::is_macro_like_word;
-use crate::formatter::syntax::{TemplateAngle, language, template_angle_role};
+use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
@@ -368,6 +369,20 @@ impl FormatEngine<'_> {
         let Some(statement_start) = next_non_whitespace(tokens, start, line_end) else {
             return false;
         };
+        // A header whose condition a macro call gives, as in `if EQ(x) {`,
+        // has no body until that call closes.
+        if self.layout.nesting.paren_depth > 0
+            || tokens[line_start..start]
+                .iter()
+                .rev()
+                .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(_, _)))
+                .find(|token| !matches!(token, Token::Word(word) if !is_header(self.options, word)))
+                .is_some_and(|token| {
+                    matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                })
+        {
+            return false;
+        }
         let header_brace_depth = tokens[line_start..start]
             .iter()
             .fold(0usize, |depth, token| match token {
@@ -2422,6 +2437,9 @@ fn format_one_line_block_tokens(
     let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     let mut formatter = FormatEngine::new(options);
     formatter.one_line_block_mode = true;
+    // The roles of the block's own tokens tell operators apart.
+    formatter.tree = SourceTree::build(tokens);
+    formatter.syntax_roles = classify_syntax(tokens, &formatter.tree);
     if let Some(brace_type) = brace_type {
         formatter.layout.nesting.brace_type_stack.push(brace_type);
     }
