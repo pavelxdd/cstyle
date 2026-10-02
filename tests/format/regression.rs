@@ -3123,3 +3123,9 @@ fn break_blocks_keeps_a_multi_line_comment_on_its_header() {
     let input = "void f(void)\n{\n    z();\n\n    /* two\n       lines */\n    if (b) {\n        y();\n    }\n\n    w();\n\n    /*\n     * three\n     */\n    if (c) {\n        y();\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks"], input);
 }
+
+#[test]
+fn indent_preproc_block_indents_a_body_after_a_comment() {
+    let input = "/* a */\n#ifndef C\n    typedef BOOL _Bool;\n#endif\n";
+    check(input, &["--style=google", "--indent-preproc-block"], input);
+}

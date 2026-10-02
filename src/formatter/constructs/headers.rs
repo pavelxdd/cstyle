@@ -262,10 +262,17 @@ impl FormatEngine<'_> {
             );
         }
         // A code line led by `*` holds tokens; a comment line holds none.
+        // An indented preprocessor block indents its body past the comment.
+        let block_indent = if self.preprocessor.indented_block_stack.last() == Some(&true) {
+            self.options.indent_width
+        } else {
+            0
+        };
         (is_comment_line(before.trim_start()) && self.output.line_tokens(before_index).is_none())
             .then(|| {
                 self.output
                     .comment_indent_width(before_index, self.options.tab_width)
+                    + block_indent
             })
     }
 
