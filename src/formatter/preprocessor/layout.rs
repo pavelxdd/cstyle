@@ -720,6 +720,14 @@ impl FormatEngine<'_> {
         {
             self.clear_preprocessor_split_else_indent();
         }
+        // The block holding the split chain has closed.
+        if self.preprocessor.split_else.extra_indent
+            && self.layout.indentation.indent() < self.preprocessor.split_else.brace_indent
+            && !trimmed.is_empty()
+            && !trimmed.starts_with(['#', '}'])
+        {
+            self.clear_preprocessor_split_else_indent();
+        }
         if self.preprocessor.split_else.clear_pending_after_brace && !trimmed.is_empty() {
             self.preprocessor.split_else.clear_pending_after_brace = false;
             let closing_brace_has_else = self.preprocessor.split_else.closing_brace_has_else;

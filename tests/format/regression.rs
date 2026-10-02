@@ -3846,3 +3846,11 @@ fn attached_closing_brace_drops_trailing_source_space() {
     check(input, &["--style=pico"], "void f(void)\n{   g(); }\n");
     check(input, &["--style=lisp"], "void f(void) {\n    g(); }\n");
 }
+
+#[test]
+fn split_else_chain_indent_ends_with_its_block() {
+    let input = "void f(void)\n{\n  if( z ){\n    if( a ){\n      x = 1;\n    }else\n#ifdef X\n    if( b ){\n      x = 2;\n    }else\n#endif\n    if( c ){\n      x = 3;\n    }\n  }else if( d ){\n    y = 1;\n  }\n}\n";
+    let expected = "void f(void)\n{\n    if( z )\n    {\n        if( a )\n        {\n            x = 1;\n        }\n        else\n#ifdef X\n            if( b )\n            {\n                x = 2;\n            }\n            else\n#endif\n                if( c )\n                {\n                    x = 3;\n                }\n    }\n    else if( d )\n    {\n        y = 1;\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
