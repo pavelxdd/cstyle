@@ -2368,8 +2368,7 @@ impl FormatEngine<'_> {
                     * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
             } else {
                 1 + usize::from(
-                    self.options.indent_switches
-                        || self.options.brace_style == BraceStyle::Ratliff,
+                    self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
                 )
             };
             " ".repeat(

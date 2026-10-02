@@ -3916,3 +3916,11 @@ fn comment_trailing_a_switch_brace_stands_in_the_case_bodies() {
     let expected = "int f(int c)\n{\n    switch( c ) {\n        /* a\n                ** b */\n    case 1:\n        return 1;\n    }\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn vtk_initializer_brace_after_a_local_struct_stands_at_its_close() {
+    let input = "static int f(void){\n  static const T aMult[] = {\n    { \"KiB\", 1024 },\n  };\n  struct { int a; } b = {\n    1\n  };\n  return 0;\n}\nstruct { int a; } b[] = {\n    {1},\n};\n";
+    let expected = "static int f(void)\n{\n    static const T aMult[] =\n        {\n            { \"KiB\", 1024 },\n        };\n    struct\n        {\n        int a;\n        } b =\n        {\n        1\n        };\n    return 0;\n}\nstruct\n{\n    int a;\n} b[] =\n{\n    {1},\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

@@ -288,11 +288,17 @@ impl FormatEngine<'_> {
         {
             return Some(delimiter.opener_output_column);
         }
-        self.layout
-            .frame_stack
-            .active_delimiter()
-            .is_none()
-            .then_some(brace.body_indent_column)
+        if self.layout.frame_stack.active_delimiter().is_some() {
+            return None;
+        }
+        // VTK already indented the `}` of a struct the declarator follows.
+        if self.options.brace_style == BraceStyle::Vtk
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && previous.trim_start().starts_with('}')
+        {
+            return Some(leading_visual_width(previous, self.options.tab_width));
+        }
+        Some(brace.body_indent_column)
     }
 
     pub(crate) fn initializer_or_array_closing_brace_indent_spaces(
