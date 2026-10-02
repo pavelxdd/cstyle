@@ -3179,3 +3179,15 @@ fn unary_star_after_a_comma_or_spaced_operator_stays_attached() {
     let input = "void f(void)\n{\n    if (type & *want_type && x)\n        puts(x);\n}\n";
     check(input, &["--style=kr", "--align-pointer=type"], input);
 }
+
+#[test]
+fn max_code_length_takes_no_split_point_within_ten_columns_of_the_code() {
+    let input = "void f(void)\n{\n    x = g(a, b);                    /* Next chunk in the journal */\n    xx = gg(aaa, bbbb,\n            cc);            // Next chunk in the journal\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], input);
+}
+
+#[test]
+fn max_code_length_keeps_a_string_literal_after_its_call_paren() {
+    let input = "void f(void)\n{\n    if (x) {\n        curl_mprintf(\"CURLUPART_SCHEME %d bytes scheme == %d (%s)\\n\",\n                     EXCESSIVE, (int)uc, curl_url_strerror(uc));\n    }\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], input);
+}

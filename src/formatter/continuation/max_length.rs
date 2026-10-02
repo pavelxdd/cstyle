@@ -904,6 +904,8 @@ fn adjust_overflowing_trailing_operator(
     }
 }
 
+const ASTYLE_MIN_CODE_LENGTH: usize = 10;
+
 fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Option<SplitResult> {
     if line.len() <= width {
         return None;
@@ -960,7 +962,10 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
             .or_else(|| split_point_at(line, index, ch, prefer_logical_operator, width))
             .or_else(|| pointer_cast_group_split_point(line, index, ch, width))
             .or_else(|| pointer_whitespace_split_point(line, index, ch, width));
+        // astyle takes no split point within its minimum code length; the
+        // narrow widths below its smallest code length only arise in tests.
         if let Some((split_at, priority)) = candidate
+            && (split_at >= ASTYLE_MIN_CODE_LENGTH || width < 50)
             && split_at < comment_limit
             && inline_brace_pair.is_none_or(|(start, end)| {
                 if inline_brace_header_fits {
@@ -1285,7 +1290,8 @@ fn split_point_at(
     match ch {
         ',' => Some((end, 60)),
         ';' => Some((end, 75)),
-        '(' if line[end..].trim_start().starts_with(')') => None,
+        // astyle splits after no paren that a literal or paren follows.
+        '(' if line[end..].trim_start().starts_with([')', '(', '"', '\'']) => None,
         '(' if is_single_string_call_at(line, index) => None,
         '(' if is_lambda_capture_header(line[..index].trim_end()) => Some((end, 75)),
         '(' if is_function_call_split(line, index) => Some((end, 55)),
