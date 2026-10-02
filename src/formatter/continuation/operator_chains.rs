@@ -148,7 +148,9 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
+        // Indenting after parens stacks nothing for a `?`.
         if line_kind != LineKind::Normal
+            || self.options.indent_after_parens
             || !line
                 .trim_start()
                 .chars()

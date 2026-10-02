@@ -37,9 +37,6 @@ impl FormatEngine<'_> {
     pub(super) fn stacked_argument_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
-        if self.options.indent_after_parens {
-            return None;
-        }
         let group = groups.enclosing(first)?;
         if groups.get(group).delimiter != Delimiter::Paren
             || matches!(tokens[first], Token::Symbol('['))
@@ -61,8 +58,7 @@ impl FormatEngine<'_> {
     pub(super) fn stacked_closing_paren_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let group = self.tree.groups.closed_at(first)?;
-        if self.options.indent_after_parens
-            || !matches!(tokens[first], Token::Symbol(')'))
+        if !matches!(tokens[first], Token::Symbol(')'))
             || self
                 .tree
                 .previous_code_token(self.tree.groups.get(group).open)
@@ -121,8 +117,10 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         // Lines that the code length splits are placed by the engine alone;
         // replaying only the lines of the source would place them apart.
+        let closes_stacked_brace = self.closes_stacked_initializer(first);
         if self.options.max_code_length.is_some()
-            || matches!(tokens[first], Token::Symbol(']' | '{' | '}' | ','))
+            || matches!(tokens[first], Token::Symbol(']' | '{' | ','))
+            || matches!(tokens[first], Token::Symbol('}')) && !closes_stacked_brace
             || tokens[first..]
                 .iter()
                 .enumerate()
@@ -140,8 +138,11 @@ impl FormatEngine<'_> {
                 // the line.
                 .any(|(offset, token)| {
                     matches!(token, Token::Symbol('{' | '}'))
+                        && !(offset == 0 && closes_stacked_brace)
                         && !(next_code_token(tokens, first + 1) == Some(first + offset)
-                            && self.paren_ends_its_line(first))
+                            && (self.paren_ends_its_line(first)
+                                || self.options.indent_after_parens
+                                    && matches!(tokens[first], Token::Symbol(')'))))
                 })
         {
             return None;
@@ -285,6 +286,28 @@ impl FormatEngine<'_> {
                     let size = *replay.sizes.last()?;
                     replay.stack.truncate(size + 1);
                 }
+                // Indenting after parens stacks an initializer brace as a
+                // paren.
+                Token::Symbol('{') if self.indents_initializer_brace(index) => {
+                    replay.depth += 1;
+                    replay.sizes.push(replay.stack.len());
+                    self.register(&mut replay, index, next_on_line, true, &relative)?;
+                }
+                Token::Symbol('}')
+                    if self
+                        .tree
+                        .groups
+                        .closed_at(index)
+                        .is_some_and(|group| self.indents_initializer_brace(self.tree.groups.get(group).open)) =>
+                {
+                    replay.depth = replay.depth.checked_sub(1)?;
+                    let size = replay.sizes.pop()?;
+                    replay.stack.truncate(size);
+                    let popped = replay.parens.pop()?;
+                    if starts_line {
+                        replay.line_space = popped;
+                    }
+                }
                 Token::Symbol('{' | '}' | ';' | ':') => return None,
                 _ if index == start && is_control_keyword(token) => {
                     replay.header_paren = next_code_token(tokens, index + 1);
@@ -358,7 +381,7 @@ impl FormatEngine<'_> {
             index += 1;
         }
         // A `)` starting its line takes the indent its paren saved.
-        let top = if matches!(tokens[first], Token::Symbol(')')) {
+        let top = if matches!(tokens[first], Token::Symbol(')')) || closes_stacked_brace {
             replay.parens.last().copied()?
         } else {
             replay.stack.last().copied()?
@@ -369,6 +392,45 @@ impl FormatEngine<'_> {
                 + header_levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// Whether the `{` at `open` opens an initializer that indenting after
+    /// parens stacks like a paren: one with code after it on its line.
+    fn indents_initializer_brace(&self, open: usize) -> bool {
+        self.options.indent_after_parens
+            && self.tree.groups.opened_at(open).is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+            && self
+                .output
+                .line_with_token(open)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| span.last != open)
+    }
+
+    /// The row of an initializer that indenting after parens stacks.
+    pub(super) fn stacked_initializer_row_indent(&self, first: usize) -> Option<usize> {
+        if self.closes_stacked_initializer(first) {
+            return self.astyle_stack_indent(first);
+        }
+        let group = self.tree.groups.enclosing(first)?;
+        if !self.indents_initializer_brace(self.tree.groups.get(group).open)
+            || matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
+    /// Whether `close` is the `}` of an initializer stacked like a paren.
+    fn closes_stacked_initializer(&self, close: usize) -> bool {
+        matches!(self.tree.tokens[close], Token::Symbol('}'))
+            && self.tree.groups.closed_at(close).is_some_and(|group| {
+                self.indents_initializer_brace(self.tree.groups.get(group).open)
+            })
     }
 
     /// Whether `close` is a `)` whose `(` ends its line.

@@ -3055,3 +3055,21 @@ fn remove_braces_keeps_the_braces_of_a_statement_spanning_lines() {
     let input = "void f(void)\n{\n    if (b) {\n        rc = g(interp,\n               objv[1]);\n    }\n}\n";
     check(input, &["--style=kr", "--remove-braces"], input);
 }
+
+#[test]
+fn indent_after_parens_stacks_a_level_per_open_paren_and_assignment() {
+    let input = "int f(void)\n{\n    return test(\n            a,\n            b);\n    test(\n        a,\n        b);\n    if (a && b &&\n        c)\n        y();\n    if (a && ((b && (c)) ||\n            d))\n        y();\n    if (log) g(f, 0,\n            h(i));\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
+
+#[test]
+fn indent_after_parens_indents_rows_of_a_run_in_initializer() {
+    let input = "void f(void)\n{\n    static const int cat[] = {LC_ALL, LC_COLLATE, LC_CTYPE,\n            LC_NUMERIC, LC_TIME\n        };\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
+
+#[test]
+fn indent_after_parens_leaves_ternary_arms_and_operator_rows_at_the_value_level() {
+    let input = "void f(void)\n{\n    struct Curl_cfilter *cf =\n        (data->conn && V(sockindex)) ?\n        data->conn->cfilter[sockindex] : NULL;\n    lu_mem sz = cast(lu_mem, sizeof(Proto))\n        + cast_uint(p->sizep) * sizeof(Proto*)\n        + cast_uint(p->sizek);\n    if( a\n        || b\n    ) {\n        x();\n    }\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}

@@ -3546,14 +3546,15 @@ fn indent_after_parens_clamps_nested_level_at_maximum() {
         "}",
     );
 
-    // The configured continuation maximum is independent of opener position.
+    // A level past the configured maximum restarts at two indents, as
+    // astyle does.
     assert_eq!(
         format_exact(source, &options),
         fixture!(
             "void run()",
             "{",
             "    result=outer(alpha,inner(beta,",
-            "                                            gamma),",
+            "            gamma),",
             "                                    delta);",
             "}",
         )

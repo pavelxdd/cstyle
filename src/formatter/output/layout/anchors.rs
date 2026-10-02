@@ -62,6 +62,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.argument_after_interruption_indent(first))
             .or_else(|| self.string_concatenation_indent(first))
             .or_else(|| self.stacked_argument_indent(first))
+            .or_else(|| self.stacked_initializer_row_indent(first))
             .or_else(|| self.stacked_return_indent(first))
             .or_else(|| self.stacked_closing_paren_indent(first))
             .or_else(|| self.logical_operand_in_parens_indent(first))
@@ -2118,7 +2119,9 @@ impl FormatEngine<'_> {
     fn leading_operator_assigned_value_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
-        if !matches!(&tokens[first], Token::Operator(operator)
+        // Indenting after parens indents the value, not aligns with it.
+        if self.options.indent_after_parens
+            || !matches!(&tokens[first], Token::Operator(operator)
                 if matches!(operator.as_str(), "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "||" | "&&"))
         {
             return None;
