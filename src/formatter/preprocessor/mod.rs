@@ -687,7 +687,7 @@ impl FormatEngine<'_> {
         let indent = if force_unindented_branch_separator {
             None
         } else if index > 0 && indent_continued_conditional {
-            Some(self.current_preprocessor_indent())
+            Some(self.current_preprocessor_indent(false))
         } else if directive == Some("endif")
             && self.preprocessor.branch_stack.is_empty()
             && self.token_input.token_source_line_indent > 0
@@ -831,7 +831,12 @@ impl FormatEngine<'_> {
                     .current_preprocessor_indent()
                     .is_some()
             {
-                return Some(self.current_preprocessor_indent());
+                return Some(
+                    self.current_preprocessor_indent(matches!(
+                        directive,
+                        "if" | "ifdef" | "ifndef"
+                    )),
+                );
             }
             return None;
         }
@@ -864,7 +869,9 @@ impl FormatEngine<'_> {
         None
     }
 
-    fn current_preprocessor_indent(&self) -> PreprocessorLineIndent {
+    /// The indent of a conditional directive: an opening one stands at the
+    /// code, the others at the directive that opened them.
+    fn current_preprocessor_indent(&self, opening: bool) -> PreprocessorLineIndent {
         if let Some(spaces) = self.direct_switch_body_indent_spaces() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -877,7 +884,12 @@ impl FormatEngine<'_> {
                 spaces: case_label_column + self.options.indent_width,
             };
         }
-        if let Some(indent) = self.layout.indentation.current_preprocessor_indent() {
+        if let Some(indent) = self
+            .layout
+            .indentation
+            .current_preprocessor_indent()
+            .filter(|_| !opening)
+        {
             if let Some(spaces) = indent.spaces {
                 return PreprocessorLineIndent::Exact {
                     structural_level: indent.level,

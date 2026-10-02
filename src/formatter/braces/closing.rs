@@ -600,10 +600,14 @@ impl FormatEngine<'_> {
         } else if move_one_line_block_comment {
             self.finish_line();
             self.unwind_else_if_break_depths();
+        } else if matches!(next, Some(Token::Comment(_, _))) {
+            self.ensure_space();
+            // A comment after the brace ends the line; the code after it
+            // decides whether the else-if chain goes on.
+            self.layout.unwind_else_if_after_line = !self.closing_brace_precedes_else();
         } else if self.should_attach_closing_header(next)
             || self.should_attach_post_closing_declaration(next)
             || source_attached_word_after_closing
-            || matches!(next, Some(Token::Comment(_, _)))
             || (!self.options.break_one_line_statements
                 && matches!(next, Some(Token::Word(word))
                     if !(is_attachable_closing_header(word)
@@ -672,7 +676,25 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn unwind_else_if_break_depths(&mut self) {
+    /// Whether the code after the `}` being closed, past comments, is an
+    /// `else`.
+    fn closing_brace_precedes_else(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .filter(|&brace| brace < tokens.len())
+            .and_then(|brace| {
+                (brace + 1..tokens.len()).find(|&index| {
+                    !matches!(
+                        tokens[index],
+                        Token::Newline | Token::Whitespace(_) | Token::Comment(_, _)
+                    )
+                })
+            })
+            .is_some_and(|index| matches!(&tokens[index], Token::Word(word) if word == "else"))
+    }
+
+    pub(crate) fn unwind_else_if_break_depths(&mut self) {
         let depth = self.layout.indentation.indent();
         while self
             .layout

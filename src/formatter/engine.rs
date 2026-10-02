@@ -89,6 +89,8 @@ pub(crate) struct LayoutState {
     pub(crate) split_class_export_pending_base: bool,
     pub(crate) template_declaration: TemplateDeclarationState,
     pub(crate) else_if_break_depths: Vec<usize>,
+    /// The else-if chain ends once the line that closed its block ends.
+    pub(crate) unwind_else_if_after_line: bool,
     pub(crate) compound_literal: compound_literals::CompoundLiteralState,
     pub(crate) pending_braceless_block_bias: Option<usize>,
     pub(crate) inline_nested_header_braceless_bias: Option<usize>,
@@ -173,6 +175,7 @@ impl<'a> FormatEngine<'a> {
                 split_class_export_pending_base: false,
                 template_declaration: TemplateDeclarationState::default(),
                 else_if_break_depths: Vec::new(),
+                unwind_else_if_after_line: false,
                 compound_literal: compound_literals::CompoundLiteralState::default(),
                 pending_braceless_block_bias: None,
                 inline_nested_header_braceless_bias: None,

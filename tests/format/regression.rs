@@ -3073,3 +3073,15 @@ fn indent_after_parens_leaves_ternary_arms_and_operator_rows_at_the_value_level(
     let input = "void f(void)\n{\n    struct Curl_cfilter *cf =\n        (data->conn && V(sockindex)) ?\n        data->conn->cfilter[sockindex] : NULL;\n    lu_mem sz = cast(lu_mem, sizeof(Proto))\n        + cast_uint(p->sizep) * sizeof(Proto*)\n        + cast_uint(p->sizek);\n    if( a\n        || b\n    ) {\n        x();\n    }\n}\n";
     check(input, &["--style=kr", "--indent-after-parens"], input);
 }
+
+#[test]
+fn indent_preproc_cond_opens_a_nested_conditional_at_the_code_level() {
+    let input = "#ifndef G\n#define G\n\nstruct s {\n    int a;\n\n    #if (X)\n    int b;\n    #endif\n};\n\n#endif\n";
+    check(input, &["--style=linux", "--indent-preproc-cond"], input);
+}
+
+#[test]
+fn commented_brace_ending_a_broken_else_if_ends_the_chain() {
+    let input = "void f(void)\n{\n    if (a)\n        st.st_mode = 0;\n    else\n        if (lstat(path, &st) < 0)\n        {\n            st.st_mode = 0;\n        } /* else stat is valid */\n\n    if (!verify_path(path))\n    {\n        return;\n    }\n}\n";
+    check(input, &["--style=allman", "--break-elseifs"], input);
+}

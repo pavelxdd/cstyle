@@ -52,6 +52,9 @@ impl FormatEngine<'_> {
         // A finished blank line publishes nothing; its sources must not
         // reach the next line.
         self.output.clear_pending_sources();
+        if std::mem::take(&mut self.layout.unwind_else_if_after_line) {
+            self.unwind_else_if_break_depths();
+        }
     }
 
     fn publish_finished_line(&mut self) {

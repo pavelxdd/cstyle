@@ -1165,7 +1165,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .find(|line| !line.trim().is_empty())
             .is_some_and(|previous| previous.trim() == "else");
-        let closes_by_brace = line.trim() == "}"
+        let closes_by_brace = line[..trailing_comment_split_limit(line)].trim() == "}"
             && self.layout.indentation.indent() <= self.preprocessor.split_else.brace_indent;
         let closes_by_statement = line.ends_with(';')
             && !starts_string_literal_token(line.trim_start())
