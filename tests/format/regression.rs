@@ -3932,3 +3932,12 @@ fn vtk_breaks_multiline_rows_of_file_scope_arrays_a_level_in() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn whitesmith_splits_every_label_of_the_first_case_line() {
+    let input =
+        "void f(int c)\n{\n    switch (c) {\n    case 1: case 2: case 3:\n        g();\n    }\n}\n";
+    let expected = "void f(int c)\n    {\n    switch (c)\n        {\n        case 1:\n        case 2:\n        case 3:\n            g();\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}

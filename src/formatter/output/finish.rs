@@ -165,9 +165,16 @@ impl FormatEngine<'_> {
 
             let case_label_with_comment = case_label_with_trailing_comment(line);
             if self.options.break_one_line_statements
-                && let Some((label, statement)) = split_switch_label_statement(line)
+                && let Some((label, mut statement)) = split_switch_label_statement(line)
             {
                 self.finish_line_text(&label);
+                // Each of several labels on a line takes a line of its own.
+                while (statement.starts_with("case ") || statement.starts_with("default"))
+                    && let Some((label, rest)) = split_switch_label_statement(&statement)
+                {
+                    self.finish_line_text(&label);
+                    statement = rest;
+                }
                 if statement.trim_start().starts_with('#') {
                     self.adjust_and_publish_line(statement.trim_start().to_string());
                     self.preprocessor.last_output_was_preprocessor = true;
