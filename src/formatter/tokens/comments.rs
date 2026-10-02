@@ -1973,7 +1973,8 @@ impl FormatEngine<'_> {
                     .layout
                     .indentation
                     .line_indent(LineKind::Normal, self.options)
-                    + self.case_body_indent_extra(LineKind::Normal))
+                    + self.case_body_indent_extra(LineKind::Normal)
+                    + self.else_if_break_extra())
                     * self.options.indent_width;
                 let trimmed = code.trim_start();
                 if comment_starts_header_word(trimmed, "if")
@@ -2036,6 +2037,15 @@ impl FormatEngine<'_> {
                     && self.layout.indentation.indent() > 0)
                     .then(|| self.layout.indentation.indent() * self.options.indent_width)
             })
+    }
+
+    /// The levels that else-if chains broken before their `if` add.
+    fn else_if_break_extra(&self) -> usize {
+        if self.options.no_indent_if_after_else {
+            0
+        } else {
+            self.layout.else_if_break_depths.len()
+        }
     }
 
     fn lambda_parameter_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {

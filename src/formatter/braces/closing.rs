@@ -620,7 +620,9 @@ impl FormatEngine<'_> {
             Some(Token::Symbol(';') | Token::Symbol(',') | Token::Symbol(')'))
         ) {
             self.finish_line();
-            self.unwind_else_if_break_depths_unless_else(next);
+            if !self.closing_brace_precedes_else() {
+                self.unwind_else_if_break_depths();
+            }
         }
         if unmatched_closing_brace {
             self.layout.continuation_indent.set_next_line_spaces(0);

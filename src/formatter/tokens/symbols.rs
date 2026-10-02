@@ -933,6 +933,8 @@ impl FormatEngine<'_> {
             {
                 self.layout.indentation.exit_braceless_block();
             }
+            // Leaving braceless bodies can end an else-if chain too.
+            self.unwind_else_if_break_depths_unless_else(next);
         } else {
             if self.current.trim_start().starts_with(':')
                 && self.layout.nesting.paren_depth == 0

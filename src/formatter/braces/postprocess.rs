@@ -105,7 +105,8 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| is_namespace_or_module_block_header(line))
         {
-            // astyle measures the written line, whose indent may be tabs.
+            // astyle measures the run-in line from its brace, with the fill
+            // as written, which may be a tab.
             let output_options = self.output_options();
             let prefix =
                 output_options.continuation_indent_prefix(structural_level, base_indent_width);
@@ -117,7 +118,7 @@ impl FormatEngine<'_> {
             );
             let brace = format!("{brace_prefix}{{");
             let fill = horstmann_run_in_fill(&brace, &next, &output_options);
-            let run_in_width = format!("{brace}{fill}").len();
+            let run_in_width = 1 + fill.len();
             let mut has_word_logical = false;
             let mut has_symbol_logical = false;
             for token in lexer::tokenize(line) {

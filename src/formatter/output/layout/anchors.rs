@@ -57,6 +57,14 @@ impl FormatEngine<'_> {
             .or_else(|| self.statement_expression_indent(first))
             .or_else(|| self.return_value_indent(first))
             .or_else(|| self.ternary_arm_in_parens_indent(first))
+            // An assignment registers a continuation level past its line
+            // when parens indent after them.
+            .or_else(|| {
+                self.options
+                    .indent_after_parens
+                    .then(|| self.stacked_assignment_indent(first))
+                    .flatten()
+            })
             .or_else(|| self.assigned_string_continuation_indent(first))
             .or_else(|| self.comment_interrupted_continuation_indent(first))
             .or_else(|| self.argument_after_interruption_indent(first))
@@ -133,6 +141,24 @@ impl FormatEngine<'_> {
         // braceless header once the chain opens a braced block.
         if self.inside_braced_chain_of_braceless_body(first)
             && let Some(spaces) = self.closing_brace_indent(first)
+        {
+            layout.exact_indent_spaces = Some(spaces);
+            return layout;
+        }
+        // The statements of such a block, and of blocks within an `else`
+        // when else-if chains break, keep the column of the first one.
+        if layout.exact_indent_spaces.is_none()
+            && self.tree.statements.starts_block_statement(first)
+            && self.tree.groups.enclosing(first).is_some_and(|group| {
+                self.group_in_braced_chain_of_braceless_body(group)
+                    || self.options.break_else_ifs
+                        && self
+                            .tree
+                            .groups
+                            .ancestors(group)
+                            .any(|id| self.block_of_else(id))
+            })
+            && let Some(spaces) = self.sibling_statement_column(first)
         {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -3358,6 +3384,15 @@ impl FormatEngine<'_> {
             .groups
             .closed_at(first)
             .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+    }
+
+    /// Whether `group` is the block of an `else`, or of the `if` of an
+    /// `else if`, which the block belongs to.
+    fn block_of_else(&self, group: GroupId) -> bool {
+        self.tree.blocks.kind(group) == Some(BlockKind::Control)
+            && self.tree.blocks.owner(group).is_some_and(
+                |head| matches!(&self.tree.tokens[head], Token::Word(word) if word == "else"),
+            )
     }
 
     fn group_in_braced_chain_of_braceless_body(&self, group: GroupId) -> bool {

@@ -2890,7 +2890,12 @@ fn indented_define_bodies_keep_braceless_bodies_and_header_parens() {
     let input = "#define for_each(it, queue) \\\n    for (size_t pq_ix_ = (queue)->get_pending; \\\n         pq_ix_ < (queue)->nr_; \\\n         pq_ix_++)\n\n#define C()  \\\n    if(s < 0) \\\n        s = in\n\nint x;\n";
     check(
         input,
-        &["--style=1tbs", "--indent-preproc-define", "--pad-header"],
+        &[
+            "--style=1tbs",
+            "--indent-preproc-define",
+            "--pad-header",
+            "--min-conditional-indent=0",
+        ],
         input,
     );
 }
@@ -3010,7 +3015,11 @@ fn else_after_a_braceless_body_ignores_an_earlier_closed_if_block() {
 #[test]
 fn define_header_body_after_a_split_condition_takes_the_body_level() {
     let input = "#define CHECK(x, y)                \\\n    do {                           \\\n        if(result &&               \\\n           result != OTHER)        \\\n            goto error;            \\\n    } while(0)\n";
-    check(input, &["--indent-preproc-define"], input);
+    check(
+        input,
+        &["--indent-preproc-define", "--min-conditional-indent=0"],
+        input,
+    );
 }
 
 #[test]
@@ -3208,4 +3217,64 @@ fn parameters_after_an_indented_preprocessor_block_start_from_the_function_line(
 fn preprocessor_block_opened_by_an_error_directive_stays_unindented() {
     let input = "#ifdef X\n#error This file.\n#endif\n";
     check(input, &["--style=allman", "--indent-preproc-block"], input);
+}
+
+#[test]
+fn statements_of_blocks_in_a_broken_else_if_chain_keep_the_first_column() {
+    let input = "void f() {\n    if (a) {\n        x = 1;\n        }\n    else\n        if (b) {\n            y = 1;\n            }\n        else\n            if (c) {\n                int i;\n                i = g(p);\n                p->n++;\n                }\n            else {\n                p->a = y;\n                p->b = 0;\n                }\n    }\n";
+    check(input, &["--style=ratliff", "--break-elseifs"], input);
+}
+
+#[test]
+fn braceless_else_ending_a_broken_else_if_chain_returns_to_the_chain_head() {
+    let input = "void f()\n{\n    if (a)\n        return 1;\n    else\n        if (b)\n            return 2;\n        else\n            if (c)\n                {\n                x = 1;\n                }\n            else\n                name = m;\n\n    for (;;)\n        return fn;\n}\n";
+    check(input, &["--style=vtk", "--break-elseifs"], input);
+}
+
+#[test]
+fn comment_in_a_block_under_a_broken_else_if_chain_keeps_every_chain_level() {
+    let input = "void f()\n{\n    if (!argv[0])\n        {\n        }\n    else\n        if (!strcmp(argv[0], \"main\"))\n            {\n            }\n        else\n            if (skip_prefix(argv[0], \"submodule:\", &gitdir))\n                {\n                    for (p = worktrees; *p; p++)\n                        {\n                            if (!wt->id)\n                                {\n                                    /* special case for main worktree */\n                                    if (!strcmp(gitdir, \"main\"))\n                                        break;\n                                }\n                            else\n                                if (!strcmp(gitdir, wt->id))\n                                    break;\n                        }\n                }\n}\n";
+    check(input, &["--style=gnu", "--break-elseifs"], input);
+}
+
+#[test]
+fn define_continuations_past_the_maximum_take_two_indents_from_their_row() {
+    let input = "#define xcalloc(nmemb, size) xcalloc_impl(nmemb, size, __FILE__, __LINE__, \\\n        __XMALLOC_FUNCTION)\n#define luaS_newliteral(L, s)\t(luaS_newlstr(L, \"\" s, \\\n                                 (sizeof(s)/sizeof(char))-1))\n#define ISCOEFFZERO(u) (                                      \\\n        UBTOUI((u)+DECPMAX-4)==0                                 \\\n        && UBTOUS((u)+DECPMAX-6)==0                                 \\\n        && *(u)==0)\n#define LONGNAME_FOR_TESTING_PURPOSES(a, b) (fooooo(a, \\\n        b) + barrrrrr(a, \\\n                      b))\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+    let input = "#define X(a) \\\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(a, \\\n            b) + cccccccc(dddddddddddddddddddddddddddddddddddddddddddddd(a, \\\n                          b, \\\n                          c))\n#define Y(a) \\\n    aaaaaaaaaaaaaaaaaaaaaaaaaaaa(a, \\\n                                 b) + cccccccc(ddddddd(a, \\\n                                         b, \\\n                                         c))\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn define_rows_after_an_assignment_align_at_its_value_outside_parens() {
+    let input = "#define A(x) \\\n    x = foo(a, \\\n            b) + \\\n        c\n#define B(x) \\\n    x = \\\n        foo(a, \\\n            b)\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn define_headers_after_braces_indent_their_bodies() {
+    let input = "#define RB_ROTATE_LEFT(head, elm, tmp, field) do {\t\t\t\\\n        (tmp) = RB_RIGHT(elm, field);\t\t\t\t\t\\\n        if (RB_PARENT(elm, field)) {\t\t\t\t\t\\\n            RB_LEFT(RB_PARENT(elm, field), field) = (tmp);\t\t\\\n        } else\t\t\t\t\t\t\t\t\\\n            (head)->rbh_root = (tmp);\t\t\t\t\\\n        RB_LEFT(tmp, field) = (elm);\t\t\t\t\t\\\n    } while (0)\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+    let input = "#define markobject(g,t) { if (iswhite(obj2gco(t))) \\\n            reallymarkobject(g, obj2gco(t)); }\n#define M2(g,t) if (iswhite(obj2gco(t))) \\\n        reallymarkobject(g, obj2gco(t));\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+    let input = "#define POST_COMPLETION_FOR_REQ(loop, req)                              \\\n    if (!PostQueuedCompletionStatus((loop)->iocp,                         \\\n                                    0,                                    \\\n                                    0,                                    \\\n                                    &((req)->u.io.overlapped))) {         \\\n        uv_fatal_error(GetLastError(), \"PostQueuedCompletionStatus\");       \\\n    }\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn vtk_define_closing_brace_is_indented_while_a_block_stays_open() {
+    let input = "#define C(x) \\\n    if (x) {\\\n        f(x);\\\n        } else {\\\n        g(x);\\\n    }\n#define D(x) \\\n    if (x) {\\\n        f(x);\\\n    } else\\\n        g(x);\n";
+    check(input, &["--style=vtk", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn define_header_conditions_continue_at_the_minimum_conditional_indent() {
+    let input = "#define F(k) \\\n    for (k = 0; k < ARRAY_SIZE(ut_table); \\\n            k++)\n#define G(k) \\\n    for (k = 0, \\\n            j = 1; k < 3; \\\n            k++)\n#define H(c) { \\\n        if( c<0x80 \\\n                || (c&0xFFFFF800)==0xD800 \\\n                || (c&0xFFFFFFFE)==0xFFFE ){  c = 0xFFFD; } \\\n    }\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn define_rows_after_a_paren_ending_its_row_align_at_the_backslash() {
+    let input = "#define I(c) do { \\\n        malloc_printf( \\\n                       \"x\", \\\n                       c); \\\n    } while (0)\n#define J(c) do { \\\n        malloc_printf(a, \\\n                      \"x\", \\\n                      c); \\\n    } while (0)\n";
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
 }

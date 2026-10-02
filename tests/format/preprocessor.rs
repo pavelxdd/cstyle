@@ -1975,13 +1975,13 @@ fn indent_preproc_define_with_vtk_indents_command_closing_brace() {
         &options,
     );
 
-    // VTK command closers use the command-body column at every scope depth.
+    // A VTK closing brace is indented only while another block stays open.
     assert_eq!(
         actual,
         fixture!(
             concat!("#define APPLY(value) do { ", r"\"),
             concat!("        call(value); ", r"\"),
-            "        } while (0)",
+            "    } while (0)",
         )
     );
 }
@@ -2337,7 +2337,7 @@ fn indent_preproc_define_with_vtk_uses_body_column_for_case_block_closer() {
             concat!("        call(); ", r"\"),
             concat!("        break; ", r"\"),
             concat!("        } ", r"\"),
-            "        }",
+            "    }",
         )
     );
 }
@@ -3264,6 +3264,7 @@ fn indent_preprocessor_keeps_for_update_continuation_in_define() {
         "--pad-comma",
         "--align-pointer=name",
         "--unpad-paren",
+        "--min-conditional-indent=0",
     ]
     .map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");

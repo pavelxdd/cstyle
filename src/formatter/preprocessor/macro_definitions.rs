@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
-use crate::formatter::continuation::operator_chains;
+use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_paren_column,
+    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::source::lex::{
     is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
@@ -21,6 +21,7 @@ enum DefineFrame {
 }
 
 struct DefineBodyLineInfo {
+    trailing_header: bool,
     opens: usize,
     closes: usize,
     leading_close: bool,
@@ -48,6 +49,19 @@ fn is_define_case_label(line: &str) -> bool {
         .split(';')
         .next()
         .is_some_and(|head| head.contains(':'))
+}
+
+fn is_define_user_label(line: &str) -> bool {
+    let word = leading_identifier(line);
+    !word.is_empty()
+        && !matches!(
+            word,
+            "case" | "default" | "public" | "private" | "protected"
+        )
+        && line.trim_start()[word.len()..]
+            .trim_start()
+            .strip_prefix(':')
+            .is_some_and(|rest| !rest.starts_with(':'))
 }
 
 fn has_embedded_default_label(line: &str) -> bool {
@@ -169,7 +183,14 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
     let ends_semicolon = last_code == Some(';');
     let is_command_header = is_define_header_keyword(content);
     let is_header = is_command_header && opens == 0 && !ends_semicolon;
+    // A header after a brace, as in `} else` or `{ if (x)`, with its body on
+    // the next row.
+    let trailing_header = !ends_semicolon
+        && content
+            .rfind(['{', '}'])
+            .is_some_and(|brace| is_define_header_keyword(&content[brace + 1..]));
     DefineBodyLineInfo {
+        trailing_header,
         opens,
         closes,
         leading_close: content.trim_start().starts_with('}'),
@@ -285,7 +306,7 @@ fn is_define_command_frame(frame: DefineFrame) -> bool {
 fn apply_define_frame_transition(
     frames: &mut Vec<DefineFrame>,
     info: &DefineBodyLineInfo,
-    starts_with_open: bool,
+    opens_header_block: bool,
     starts_with_assignment: bool,
 ) {
     if info.closes > info.opens {
@@ -295,10 +316,13 @@ fn apply_define_frame_transition(
         while frames.last().copied().is_some_and(is_define_header_frame) {
             frames.pop();
         }
+        if info.trailing_header {
+            frames.push(DefineFrame::Header);
+        }
     } else if info.opens > info.closes {
         for slot in 0..(info.opens - info.closes) {
             let pending_header = if slot == 0
-                && starts_with_open
+                && opens_header_block
                 && frames.last().copied().is_some_and(is_define_header_frame)
             {
                 frames.pop()
@@ -321,6 +345,15 @@ fn apply_define_frame_transition(
                 frames.push(DefineFrame::Brace);
             }
         }
+        if info.trailing_header {
+            frames.push(DefineFrame::Header);
+        }
+    } else if opens_header_block
+        && info.opens > 0
+        && frames.last().copied().is_some_and(is_define_header_frame)
+    {
+        // A one-line block is the whole body of the header.
+        frames.pop();
     } else if info.is_header {
         frames.push(if info.is_switch_header {
             DefineFrame::SwitchHeader
@@ -480,13 +513,71 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
     None
 }
 
-/// Records for each open paren its column and the column its rows align
-/// at.
+/// The column the rows after a statement row with an open paren align at:
+/// the first character after the last open paren, a continuing backslash
+/// included, but at least the minimum conditional indent within a header.
+fn define_row_paren_continuation(
+    line: &str,
+    level_spaces: usize,
+    options: &FormatOptions,
+) -> Option<usize> {
+    let (body, _) = strip_define_backslash(line);
+    let open = *unmatched_open_paren_columns(body).last()?;
+    let full: Vec<char> = line.trim_end().chars().collect();
+    let open = body[..open].chars().count();
+    let next = full[open + 1..]
+        .iter()
+        .position(|ch| !ch.is_whitespace())
+        .map_or(open + 1, |offset| open + 1 + offset);
+    let row_indent = leading_visual_width(line, options.tab_width);
+    let mut column = visual_column_at(&full, next, options.tab_width);
+    let min = min_conditional_indent_spaces(options);
+    if is_define_header_keyword(line) && column < level_spaces + min {
+        column = row_indent + min;
+    }
+    Some(capped_define_continuation(
+        column,
+        row_indent,
+        level_spaces,
+        options,
+    ))
+}
+
+/// The column rows continuing at `column` take: past the maximum from the
+/// indent level of the rows, two indents past the row with the paren.
+fn capped_define_continuation(
+    column: usize,
+    row_indent: usize,
+    level_spaces: usize,
+    options: &FormatOptions,
+) -> usize {
+    if column > level_spaces + options.max_continuation_indent {
+        2 * options.indent_width + row_indent
+    } else {
+        column
+    }
+}
+
+/// Records for each open paren the column a row starting with its `)`
+/// takes and the column its other rows align at, apart from the `extra`
+/// spaces the rows take after a control header. Returns whether `line`
+/// closes a control header with code after it, which indents the rows
+/// after it by a level, the columns the parens align at included.
 fn update_define_expression_paren_anchors(
     line: &str,
     anchors: &mut Vec<(usize, usize)>,
-    tab_width: usize,
-) {
+    level_spaces: usize,
+    extra: usize,
+    options: &FormatOptions,
+) -> bool {
+    let tab_width = options.tab_width;
+    let row_indent = leading_visual_width(line, tab_width).saturating_sub(extra);
+    let mut header_depth = None;
+    let mut header_close = None;
+    // The maximum counts from the indent level of the rows; past it, rows
+    // fall back to two indents past the row with the paren.
+    let limit = level_spaces + options.max_continuation_indent;
+    let fallback = 2 * options.indent_width + row_indent;
     let (body, _) = strip_define_backslash(line);
     let chars: Vec<char> = body.chars().collect();
     let full: Vec<char> = line.trim_end().chars().collect();
@@ -527,22 +618,53 @@ fn update_define_expression_paren_anchors(
             // astyle aligns at the first character after the paren, a
             // continuing backslash included.
             '(' => {
+                let previous = anchors.last().map(|&(_, align)| align);
                 let next = full[index + 1..]
                     .iter()
                     .position(|ch| !ch.is_whitespace())
-                    .map_or(index + 1, |offset| index + 1 + offset);
-                anchors.push((
-                    visual_column_at(&full, index, tab_width),
-                    visual_column_at(&full, next, tab_width),
-                ));
+                    .map(|offset| index + 1 + offset);
+                let word_end = chars[..index]
+                    .iter()
+                    .rposition(|ch| !ch.is_whitespace())
+                    .map_or(0, |end| end + 1);
+                let word_start = chars[..word_end]
+                    .iter()
+                    .rposition(|ch| !ch.is_alphanumeric() && *ch != '_')
+                    .map_or(0, |start| start + 1);
+                let word: String = chars[word_start..word_end].iter().collect();
+                if header_depth.is_none() && matches!(word.as_str(), "if" | "while" | "for") {
+                    header_depth = Some(anchors.len());
+                }
+                let anchor = match next {
+                    Some(next) if !options.indent_after_parens => {
+                        let align = visual_column_at(&full, next, tab_width).saturating_sub(extra);
+                        let align = if align > limit { fallback } else { align };
+                        (
+                            visual_column_at(&full, index, tab_width).saturating_sub(extra),
+                            align.max(previous.unwrap_or(0)),
+                        )
+                    }
+                    _ => {
+                        let previous = previous.unwrap_or(row_indent);
+                        let align = options.continuation_indent * options.indent_width + previous;
+                        let align = if align > limit { fallback } else { align };
+                        (previous, align)
+                    }
+                };
+                anchors.push(anchor);
             }
             ')' => {
                 anchors.pop();
+                if header_depth == Some(anchors.len()) {
+                    header_depth = None;
+                    header_close = Some(index);
+                }
             }
             _ => {}
         }
         index += 1;
     }
+    header_close.is_some_and(|close| chars[close + 1..].iter().any(|ch| !ch.is_whitespace()))
 }
 
 impl FormatEngine<'_> {
@@ -605,30 +727,34 @@ impl FormatEngine<'_> {
         spaces: usize,
     ) {
         let mut paren_anchors = Vec::new();
-        update_define_expression_paren_anchors(
+        let level_spaces = leading_visual_width(first_line, self.options.tab_width);
+        let mut extra = 0;
+        if update_define_expression_paren_anchors(
             first_line,
             &mut paren_anchors,
-            self.options.tab_width,
-        );
-        let mut line_spaces = spaces;
+            level_spaces,
+            extra,
+            self.options,
+        ) {
+            extra = self.options.indent_width;
+        }
+        let mut line_spaces = paren_anchors
+            .last()
+            .map_or(spaces, |&(_, align)| align + extra);
         let mut previous_line = None;
         for (index, part) in body_parts.iter().enumerate() {
             if index > 0
                 && let Some(previous) = previous_line.as_deref()
             {
                 let current = strip_define_backslash(part).0.trim_start();
-                line_spaces = if let Some(anchor) = paren_anchors
-                    .last()
-                    .map(|&(paren, align)| {
-                        if current.starts_with(')') {
-                            paren
-                        } else {
-                            align
-                        }
-                    })
-                    .filter(|column| *column <= self.options.max_continuation_indent)
-                {
-                    anchor
+                line_spaces = if let Some(anchor) = paren_anchors.last().map(|&(paren, align)| {
+                    if current.starts_with(')') {
+                        paren
+                    } else {
+                        align
+                    }
+                }) {
+                    anchor + extra
                 } else {
                     next_define_expression_indent(previous, spaces, self.options)
                 };
@@ -638,11 +764,15 @@ impl FormatEngine<'_> {
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trim_start());
             self.adjust_and_publish_line(line.clone());
-            update_define_expression_paren_anchors(
+            if update_define_expression_paren_anchors(
                 &line,
                 &mut paren_anchors,
-                self.options.tab_width,
-            );
+                level_spaces,
+                extra,
+                self.options,
+            ) {
+                extra = self.options.indent_width;
+            }
             previous_line = Some(line.trim_end_matches('\\').trim_end().to_string());
         }
     }
@@ -650,7 +780,9 @@ impl FormatEngine<'_> {
     fn push_define_expression_rows(&mut self, body_parts: &[&str], body_level: usize) {
         let base_spaces = body_level * self.options.indent_width;
         let mut paren_anchors = Vec::new();
-        let mut assignment_anchor = None;
+        // The column rows after an assignment align at, with the number of
+        // parens open around the assignment.
+        let mut assignment_anchor: Option<(usize, usize)> = None;
         let mut line_spaces = base_spaces;
         for (index, part) in body_parts.iter().enumerate() {
             let current = strip_define_backslash(part).0.trim_start();
@@ -660,17 +792,16 @@ impl FormatEngine<'_> {
                 line_spaces = base_spaces + self.options.indent_width;
             } else if index > 0 {
                 line_spaces = assignment_anchor
+                    .filter(|&(depth, _)| depth == paren_anchors.len())
+                    .map(|(_, column)| column)
                     .or_else(|| {
-                        paren_anchors
-                            .last()
-                            .map(|&(paren, align)| {
-                                if current.starts_with(')') {
-                                    paren
-                                } else {
-                                    align
-                                }
-                            })
-                            .filter(|column| *column <= self.options.max_continuation_indent)
+                        paren_anchors.last().map(|&(paren, align)| {
+                            if current.starts_with(')') {
+                                paren
+                            } else {
+                                align
+                            }
+                        })
                     })
                     .unwrap_or(base_spaces);
             }
@@ -679,15 +810,48 @@ impl FormatEngine<'_> {
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trim_start());
             self.adjust_and_publish_line(line.clone());
-            if let Some(anchor) = define_assignment_row_anchor(self.options, &line) {
-                assignment_anchor = Some(anchor);
-            }
+            let depth_before = paren_anchors.len();
             update_define_expression_paren_anchors(
                 &line,
                 &mut paren_anchors,
-                self.options.tab_width,
+                base_spaces,
+                0,
+                self.options,
             );
+            if let Some(anchor) = define_assignment_row_anchor(self.options, &line) {
+                assignment_anchor = Some((paren_anchors.len(), anchor));
+            } else if assignment_anchor.is_none()
+                && depth_before == 0
+                && let Some(column) = define_assignment_align_column(
+                    strip_define_backslash(&line).0,
+                    self.options.tab_width,
+                )
+            {
+                assignment_anchor = Some((
+                    depth_before,
+                    capped_define_continuation(column, line_spaces, base_spaces, self.options),
+                ));
+            }
+            if assignment_anchor.is_some_and(|(depth, _)| depth > paren_anchors.len()) {
+                assignment_anchor = None;
+            }
         }
+    }
+
+    /// Whether a block stays open past the row, which indents a VTK
+    /// closing brace.
+    fn vtk_closing_row_leaves_block_open(
+        &self,
+        frames: &[DefineFrame],
+        info: &DefineBodyLineInfo,
+        opens_header_block: bool,
+        starts_with_assignment: bool,
+    ) -> bool {
+        let mut after = frames.to_vec();
+        apply_define_frame_transition(&mut after, info, opens_header_block, starts_with_assignment);
+        after
+            .iter()
+            .any(|frame| !is_define_header_frame(*frame) && *frame != DefineFrame::InitializerBrace)
     }
 
     fn push_define_statement_rows(
@@ -711,9 +875,15 @@ impl FormatEngine<'_> {
                 starts_with_assignment,
             );
         }
-        let mut continuation_column =
-            define_expression_continuation_spaces(first_line, self.options.tab_width);
+        let first_indent = leading_visual_width(first_line, self.options.tab_width);
+        let mut continuation_column = define_expression_continuation_spaces(
+            first_line,
+            self.options.tab_width,
+        )
+        .map(|column| capped_define_continuation(column, first_indent, first_indent, self.options));
         let mut open_parens = 0isize;
+        // The parens open across the rows, for rows that close inner ones.
+        let mut paren_anchors = Vec::new();
         let mut in_comment = false;
         let mut comment_source_open_column = 0usize;
         let mut comment_output_open_column = 0usize;
@@ -755,6 +925,9 @@ impl FormatEngine<'_> {
 
             let info = scan_define_body_line(content);
             let starts_with_open = content.starts_with('{');
+            // A `{` ending the condition of a header opens the header's block.
+            let opens_header_block = starts_with_open
+                || open_parens > 0 && frames.last().copied().is_some_and(is_define_header_frame);
             let starts_with_assignment =
                 content.starts_with('=') && content.as_bytes().get(1) != Some(&b'=');
             let assignment_extra = usize::from(starts_with_assignment);
@@ -799,6 +972,12 @@ impl FormatEngine<'_> {
                 && (starts_with_open || info.leading_close))
                 || (self.options.brace_style == BraceStyle::Vtk
                     && ((info.leading_close
+                        && self.vtk_closing_row_leaves_block_open(
+                            &frames,
+                            &info,
+                            opens_header_block,
+                            starts_with_assignment,
+                        )
                         && frames.last().is_some_and(|frame| {
                             is_define_command_frame(*frame) || *frame == DefineFrame::CaseBrace
                         }))
@@ -816,6 +995,17 @@ impl FormatEngine<'_> {
                 + command_block_extra
                 + usize::from(indented_physical_brace))
             .saturating_sub(case_block_unindent);
+            // Labels stand at the body of the define, or a level out with
+            // indented labels.
+            let structural_level = if is_define_user_label(content) {
+                if self.options.indent_labels {
+                    structural_level.saturating_sub(1).max(base_level)
+                } else {
+                    base_level
+                }
+            } else {
+                structural_level
+            };
 
             let is_structural = info.opens > 0 || info.closes > 0 || info.leading_close;
             let continued_parameter_opens_body = continuation_column.is_some()
@@ -870,7 +1060,8 @@ impl FormatEngine<'_> {
                 !content.is_empty()
                     && (!is_structural
                         || continued_parameter_opens_body
-                        || continued_designated_initializer_row)
+                        || continued_designated_initializer_row
+                        || open_parens > 0 && !info.leading_close && !starts_with_open)
             }) {
                 self.options
                     .continuation_indent_prefix(prefix_structural_level, column)
@@ -895,13 +1086,35 @@ impl FormatEngine<'_> {
             apply_define_frame_transition(
                 &mut frames,
                 &info,
-                starts_with_open,
+                opens_header_block,
                 starts_with_assignment,
             );
             open_parens = open_parens_after(open_parens, content);
+            if open_parens > 0 {
+                let row = format!("{prefix}{display}");
+                let level_spaces = structural_level * self.options.indent_width;
+                let depth = paren_anchors.len();
+                update_define_expression_paren_anchors(
+                    &row,
+                    &mut paren_anchors,
+                    level_spaces,
+                    0,
+                    self.options,
+                );
+                // A header's condition continues at least at the minimum
+                // conditional indent.
+                let min = min_conditional_indent_spaces(self.options);
+                if is_define_header_keyword(content)
+                    && let Some((_, align)) = paren_anchors.get_mut(depth)
+                    && *align < level_spaces + min
+                {
+                    *align = leading_visual_width(&row, self.options.tab_width) + min;
+                }
+            } else {
+                paren_anchors.clear();
+            }
 
-            let line_open_paren = unmatched_open_paren_column(&emitted)
-                .map(|column| visual_width_from(&emitted[..column], 0, self.options.tab_width));
+            let line_open_paren = !unmatched_open_paren_columns(&emitted).is_empty();
             continuation_column = if starts_with_assignment && info.opens > info.closes {
                 emitted.find('{').map(|column| {
                     visual_width_from(&emitted[..column + 1], 0, self.options.tab_width) + 1
@@ -912,22 +1125,28 @@ impl FormatEngine<'_> {
                 Some(column)
             } else if is_structural {
                 None
-            } else if info.ends_semicolon && line_open_paren.is_none() {
+            } else if info.ends_semicolon && !line_open_paren {
                 // Inside the parentheses of a `for` header the next row keeps
                 // their column.
-                if continuation_column.is_some() && (content.starts_with('(') || open_parens > 0) {
+                if continuation_column.is_some() && open_parens > 0 {
                     continuation_column
                 } else {
                     None
                 }
-            } else if let Some(column) = line_open_paren {
-                Some(column + 1)
+            } else if line_open_paren {
+                define_row_paren_continuation(
+                    &format!("{prefix}{display}"),
+                    structural_level * self.options.indent_width,
+                    self.options,
+                )
             } else if open_parens <= 0
                 && content.ends_with(')')
                 && frames.last().copied().is_some_and(is_define_header_frame)
             {
                 // The header's condition closed: its body follows.
                 None
+            } else if let Some(&(_, align)) = paren_anchors.last() {
+                Some(align)
             } else if continuation_column.is_some() {
                 continuation_column
             } else if define_complete_designated_initializer_row(content) {
