@@ -3129,3 +3129,15 @@ fn indent_preproc_block_indents_a_body_after_a_comment() {
     let input = "/* a */\n#ifndef C\n    typedef BOOL _Bool;\n#endif\n";
     check(input, &["--style=google", "--indent-preproc-block"], input);
 }
+
+#[test]
+fn break_return_type_leaves_heads_led_by_struct_or_union() {
+    let input = "struct notes_tree **load(struct string_list *refs, int flags)\n{\n    x();\n}\nunion u f(void)\n{\n    x();\n}\nconst struct a *\ng(void)\n{\n    x();\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], input);
+}
+
+#[test]
+fn attach_return_type_aligns_parameters_of_a_struct_head_left_split() {
+    let input = "struct style *\nstyle_add(struct grid_cell *gc, struct options *oo, const char *name,\n          struct format_tree *ft)\n{\n    x();\n}\n";
+    check(input, &["--style=gnu", "--attach-return-type"], input);
+}

@@ -344,6 +344,10 @@ impl FormatEngine<'_> {
         ) || !self.has_movable_return_type(&head)
             || !span.contains(head.name_start)
             || !self.head_starts_statement(&head)
+            // astyle reads a head led by `struct` or `union` as a type
+            // definition and leaves it whole.
+            || matches!(&self.tree.tokens[head.start], Token::Word(word)
+                if matches!(word.as_str(), "struct" | "union"))
         {
             return false;
         }
