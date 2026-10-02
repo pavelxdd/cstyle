@@ -1855,6 +1855,7 @@ impl FormatEngine<'_> {
             || follows_ternary_arm
             || line.trim_start().starts_with([')', ']', '}'])
             || self.pending_line_continues_statement()
+            || self.continues_aligned_brace_elements()
         {
             return None;
         }

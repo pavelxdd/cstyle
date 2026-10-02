@@ -3794,3 +3794,17 @@ fn initializer_rows_align_to_the_first_element_past_comments() {
         check(expected, options, expected);
     }
 }
+
+#[test]
+fn case_block_initializer_rows_align_to_the_first_element() {
+    let input = "int f(int op)\n{\n  switch( op ){\n    case 1: {\n      int *p = (int*)a;\n      static const char *az[] = { \"S\", \"R\",\n                                  \"P\", \"E\" };\n      g(x);\n    }\n  }\n}\n";
+    let expected = "int f(int op)\n{\n    switch ( op ) {\n        case 1: {\n            int *p = (int *)a;\n            static const char *az[] = { \"S\", \"R\",\n                                        \"P\", \"E\"\n                                      };\n            g(x);\n        }\n    }\n}\n";
+    let options = [
+        "--indent-switches",
+        "--pad-header",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

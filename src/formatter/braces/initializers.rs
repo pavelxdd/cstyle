@@ -15,7 +15,7 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit,
+    trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::tokens::operators::{starts_ternary_arm, starts_with_chain_operator};
 use crate::source::lex::is_identifier_continue;
@@ -858,6 +858,19 @@ impl FormatEngine<'_> {
             .last()
             .filter(|frame| frame.depth == self.layout.nesting.brace_header_stack.len())
             .map(|frame| frame.body_column)
+    }
+
+    /// Whether the line continues a brace whose first element shares its
+    /// line, so it aligns to that element.
+    pub(crate) fn continues_aligned_brace_elements(&self) -> bool {
+        self.current_inline_array_column().is_some()
+            || self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    code.ends_with(',') && unmatched_open_brace_content_offset(code).is_some()
+                })
     }
 
     pub(crate) fn active_initializer_brace_indent_spaces(
