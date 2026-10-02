@@ -3165,3 +3165,9 @@ fn parameters_after_an_unattached_return_type_align_with_their_paren() {
     let input = "JEMALLOC_FORMAT_PRINTF(3, 4)\nstatic void\nprof_dump_printf(write_cb_t *prof_dump_write, void *cbopaque,\n                 const char *format, ...)\n{\n    va_list ap;\n}\n";
     check(input, &["--style=kr", "--attach-return-type"], input);
 }
+
+#[test]
+fn pad_oper_keeps_dereference_after_a_control_header_and_cast_stars() {
+    let input = "void f(void)\n{\n    if (c == 1)\n        *out++ = 1;\n    pU8 = (u8*)pAllocation;\n    *(char**)pArg = 0;\n    v = luaM_reallocvector(L, tb->hash, osize, nsize, TString*);\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+}

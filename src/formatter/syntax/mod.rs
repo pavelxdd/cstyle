@@ -721,6 +721,40 @@ fn preceding_statement_has_trailing_return_arrow(tokens: &[Token], before: Optio
     false
 }
 
+/// Whether the token at `close` is the `)` ending the condition of an
+/// `if`, `while`, `for`, or `switch`.
+fn closes_control_header(tokens: &[Token], close: usize) -> bool {
+    if !matches!(tokens.get(close), Some(Token::Symbol(')'))) {
+        return false;
+    }
+    let mut depth = 0usize;
+    let mut index = close;
+    loop {
+        match tokens[index] {
+            Token::Symbol(')') => depth += 1,
+            Token::Symbol('(') => {
+                depth -= 1;
+                if depth == 0 {
+                    return previous_non_layout_token_index(tokens, index).is_some_and(|keyword| {
+                        matches!(&tokens[keyword], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                    });
+                }
+            }
+            Token::Symbol(';' | '{' | '}')
+                if depth <= 1 && !matches!(tokens[index], Token::Symbol(';')) =>
+            {
+                return false;
+            }
+            _ => {}
+        }
+        if index == 0 {
+            return false;
+        }
+        index -= 1;
+    }
+}
+
 fn star_is_binary_operator(
     tokens: &[Token],
     previous: Option<usize>,
@@ -745,6 +779,10 @@ fn star_is_binary_operator(
         && matches!(tokens.get(next), Some(Token::Word(word)) if is_macro_like_word(word))
     {
         return true;
+    }
+    // After the condition of a control header a statement starts.
+    if closes_control_header(tokens, previous) {
+        return false;
     }
     let suffix_type_word_in_expression =
         suffix_type_word_in_expression(tokens, Some(previous), Some(next), index);

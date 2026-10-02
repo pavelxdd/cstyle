@@ -162,6 +162,26 @@ impl FormatEngine<'_> {
         if self.layout.previous == PreviousToken::OpenBracket && matches!(operator, "*" | "&") {
             return false;
         }
+        // A run of stars right before `)` ends a type, as in `(u8**)`.
+        if operator == "*"
+            && matches!(self.layout.previous, PreviousToken::Word)
+            && (matches!(next, Some(Token::Symbol(')')))
+                || matches!(next, Some(Token::Operator(next)) if next == "*")
+                    && self.current.active_token().is_some_and(|index| {
+                        let tokens = &self.tree.tokens;
+                        tokens
+                            .get(index + 1..)
+                            .and_then(|rest| {
+                                rest.iter().find(|token| {
+                                    !matches!(token, Token::Whitespace(_))
+                                        && !matches!(token, Token::Operator(star) if star == "*")
+                                })
+                            })
+                            .is_some_and(|token| matches!(token, Token::Symbol(')')))
+                    }))
+        {
+            return true;
+        }
         if self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
