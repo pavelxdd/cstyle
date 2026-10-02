@@ -96,6 +96,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let statement_start = next_non_whitespace(tokens, start, line_end)?;
+        if !self.follows_header_end(tokens, statement_start, header) {
+            return None;
+        }
         match tokens.get(statement_start)? {
             Token::Symbol('(')
             | Token::Symbol('{')
@@ -616,8 +619,10 @@ impl FormatEngine<'_> {
         // Added braces skip a body that is itself a header, as `switch`.
         let body_is_nested_header = matches!(&tokens[body_index], Token::Word(word)
             if is_standard_add_braces_header(word) || language::is_header(word));
-        // An empty statement gets no braces and keeps its own line.
-        let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'));
+        // An empty statement gets no braces and keeps its own line; so does
+        // a line after a macro call that ends the header line.
+        let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'))
+            || !self.follows_header_end(tokens, body_index, header);
         if adding_braces && !body_is_nested_header && !body_is_empty {
             // A body with no `;` of its own, as a macro loop over a block,
             // gets no braces either.
@@ -689,6 +694,34 @@ impl FormatEngine<'_> {
         self.layout.command_state.current_header = None;
         self.previous_was_newline = true;
         true
+    }
+
+    /// Whether the code token before `body` ends the header `header`: its
+    /// keyword, or the `)` of its condition. A macro call after the header,
+    /// as `if (x) SWAP(a, b)`, is the body itself.
+    fn follows_header_end(&self, tokens: &[Token], body: usize, header: &str) -> bool {
+        // Rewritten token streams carry no tree to check against.
+        if tokens.len() != self.tree.tokens.len() || body >= tokens.len() {
+            return true;
+        }
+        let Some(previous) = self.tree.previous_code_token(body) else {
+            return true;
+        };
+        match &tokens[previous] {
+            Token::Symbol(')') => self
+                .tree
+                .groups
+                .closed_at(previous)
+                .and_then(|group| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(group).open)
+                })
+                .is_none_or(|keyword| {
+                    matches!(&tokens[keyword], Token::Word(word)
+                        if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                }),
+            _ => true,
+        }
     }
 
     pub(crate) fn try_break_else_if(&mut self, tokens: &[Token], start: usize) -> bool {

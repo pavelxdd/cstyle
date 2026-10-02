@@ -2918,3 +2918,10 @@ fn added_braces_keep_a_multi_line_body_after_else_if_at_its_level() {
     let input = "void f(void)\n{\n    if (a) {\n        if (r)\n            die_errno(_(\"renaming\"),\n                      fname);\n    } else if (b)\n        die(_(\"pack-objects\"),\n            name);\n    else if (c) {\n        y();\n    }\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn added_braces_leave_a_statement_after_a_macro_body_alone() {
+    let input =
+        "void f(void)\n{\n    if( i>iLt ) SWAP_DOUBLE(a[i],a[iLt])\n        iLt++;\n    i++;\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
