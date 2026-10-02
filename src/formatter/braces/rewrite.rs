@@ -916,6 +916,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let brace_type = initializer_brace_type(tokens, start, line_start)
+            .or_else(|| enum_head_ends_previous_line(tokens, start, line_start))
             .or_else(|| {
                 let previous = previous_non_whitespace(tokens, start, line_start);
                 (previous.is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
@@ -1074,6 +1075,19 @@ impl FormatEngine<'_> {
             self.layout
                 .continuation_indent
                 .set_next_line_level(self.layout.indentation.indent());
+        }
+        // A one-line enum body on its own line stays there.
+        if brace_type == BraceType::Enum
+            && token_begins_line(tokens, start)
+            && !self.current_is_blank()
+        {
+            let indent = self.layout.indentation.indent()
+                + usize::from(matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Ratliff
+                ));
+            self.finish_line();
+            self.layout.continuation_indent.set_next_line_level(indent);
         }
         // Only a style attaching other braces breaks a one-line enum.
         if brace_type == BraceType::Enum
@@ -2308,6 +2322,44 @@ fn next_statement_token(
         }
     }
     None
+}
+
+/// `Enum` when the `{` at `open_index` starts its line right after a line
+/// holding only an enum head, as `enum name`.
+fn enum_head_ends_previous_line(
+    tokens: &[Token],
+    open_index: usize,
+    line_start: usize,
+) -> Option<BraceType> {
+    if previous_non_whitespace(tokens, open_index, line_start).is_some() {
+        return None;
+    }
+    let mut index = line_start;
+    let previous = loop {
+        index = index.checked_sub(1)?;
+        match &tokens[index] {
+            Token::Whitespace(_) | Token::Newline => {}
+            _ => break index,
+        }
+    };
+    let head_start = (0..=previous)
+        .rev()
+        .find(|&index| {
+            matches!(
+                tokens[index],
+                Token::Symbol('{' | '}' | ';') | Token::Preprocessor(_)
+            )
+        })
+        .map_or(0, |index| index + 1);
+    let head = &tokens[head_start..=previous];
+    (head
+        .iter()
+        .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+        && !head.iter().any(|token| {
+            matches!(token, Token::Symbol('(' | '=') | Token::Comment(_, _))
+                || matches!(token, Token::Operator(operator) if operator == "=")
+        }))
+    .then_some(BraceType::Enum)
 }
 
 fn initializer_brace_type(

@@ -466,7 +466,7 @@ impl FormatEngine<'_> {
                 let previous = &self.output[index];
                 let previous_code = self.output.code(index);
                 let previous_trimmed = self.output.code_trimmed(index);
-                if previous_code.contains("#define") {
+                if previous_code.contains("#define") || previous_trimmed.ends_with(';') {
                     break;
                 }
                 if previous_trimmed == "enum" {

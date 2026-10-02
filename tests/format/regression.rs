@@ -3957,3 +3957,18 @@ fn comment_after_a_broken_else_brace_keeps_its_source_gap() {
     check(input, &["--style=gnu"], expected);
     check(expected, &["--style=gnu"], expected);
 }
+
+#[test]
+fn one_line_enum_body_on_its_own_line_stays_there() {
+    let input = "enum\n{ OPT_A, OPT_B };\nenum e\n{ A, B };\nint f(void)\n{\n    enum\n    { C, D };\n    int i;\n}\n";
+    for (style, expected) in [
+        ("--style=kr", input),
+        (
+            "--style=whitesmith",
+            "enum\n    { OPT_A, OPT_B };\nenum e\n    { A, B };\nint f(void)\n    {\n    enum\n        { C, D };\n    int i;\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
