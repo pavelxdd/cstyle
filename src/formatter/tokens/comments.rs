@@ -477,14 +477,9 @@ impl FormatEngine<'_> {
             return false;
         }
         let last = self.output[end - 1].trim_start();
-        // Code after a leading comment, as `/* note */ MACRO`, makes the
-        // line a statement of the code before it.
-        if last.starts_with("/*")
-            && last.rsplit_once("*/").is_some_and(|(_, after)| {
-                let after = after.trim();
-                !after.is_empty() && !after.starts_with("/*") && !after.starts_with("//")
-            })
-        {
+        // Code or a second block comment after a comment, as
+        // `/* note */ MACRO`, makes the line a statement of the code before it.
+        if text_follows_comment_close(last) {
             return false;
         }
         let mut indent = (self.layout.indentation.line_indent(line_kind, self.options)
@@ -3031,4 +3026,13 @@ fn strip_block_comment_line(
         .max(indent_len);
     let content: String = chars[first..].iter().collect();
     format!("{prefix}{}{}", " ".repeat(rel), content.trim_end())
+}
+
+/// Whether a line holds code or another block comment after its first
+/// `*/`.
+pub(crate) fn text_follows_comment_close(line: &str) -> bool {
+    line.split_once("*/").is_some_and(|(_, after)| {
+        let after = after.trim();
+        !after.is_empty() && !after.starts_with("//")
+    })
 }

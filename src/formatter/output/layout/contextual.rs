@@ -3184,7 +3184,11 @@ impl FormatEngine<'_> {
                 && previous_code[open + 1..].starts_with(char::is_whitespace)
             {
                 layout.exact_indent_spaces = Some(
-                    visual_width_from(&previous_code[..open + 1], 0, self.options.tab_width) + 1,
+                    visual_width_from(
+                        &previous_code[..first_element_index(previous_code, open)],
+                        0,
+                        self.options.tab_width,
+                    ) + self.case_unindent_spaces(),
                 );
             }
         }
@@ -3208,7 +3212,11 @@ impl FormatEngine<'_> {
                 && previous_code[open + 1..].starts_with(char::is_whitespace)
             {
                 layout.exact_indent_spaces = Some(
-                    visual_width_from(&previous_code[..open + 1], 0, self.options.tab_width) + 1,
+                    visual_width_from(
+                        &previous_code[..first_element_index(previous_code, open)],
+                        0,
+                        self.options.tab_width,
+                    ) + self.case_unindent_spaces(),
                 );
             }
             if let Some(spaces) = self.braceless_ternary_comma_sibling_indent_spaces(
@@ -3236,7 +3244,11 @@ impl FormatEngine<'_> {
                 && let Some(open) = previous_code.rfind('{')
             {
                 layout.exact_indent_spaces = Some(
-                    visual_width_from(&previous_code[..open + 1], 0, self.options.tab_width) + 1,
+                    visual_width_from(
+                        &previous_code[..first_element_index(previous_code, open)],
+                        0,
+                        self.options.tab_width,
+                    ) + self.case_unindent_spaces(),
                 );
             }
             if let Some(spaces) = nested_ternary_colon_sibling_indent_spaces(
@@ -3433,4 +3445,10 @@ impl FormatEngine<'_> {
         }
         contextual
     }
+}
+
+/// The byte index of the first element after the brace at `open`.
+fn first_element_index(code: &str, open: usize) -> usize {
+    let rest = &code[open + 1..];
+    open + 1 + rest.len() - rest.trim_start().len()
 }

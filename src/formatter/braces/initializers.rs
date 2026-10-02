@@ -927,7 +927,10 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_code_line_in_scope()
             && previous.trim_start().starts_with("},")
         {
-            return Some(leading_visual_width(previous, self.options.tab_width));
+            return Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
         }
         if !closing
             && let Some(previous) = self.output.last()
@@ -950,7 +953,10 @@ impl FormatEngine<'_> {
                     .active_brace()
                     .is_some_and(|frame| self.should_indent_brace_line(frame.brace_type))
             {
-                return Some(leading_visual_width(previous, self.options.tab_width));
+                return Some(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + self.case_unindent_spaces(),
+                );
             }
             // Ratliff closes the aggregate a declaration defines at its
             // body; the rows stand a level past the declaration.
@@ -962,7 +968,7 @@ impl FormatEngine<'_> {
             } else {
                 lead
             };
-            return Some(lead + self.options.indent_width);
+            return Some(lead + self.options.indent_width + self.case_unindent_spaces());
         }
         if closing
             && let Some(previous) = self.output.last()
@@ -970,7 +976,8 @@ impl FormatEngine<'_> {
         {
             return Some(
                 leading_visual_width(previous, self.options.tab_width)
-                    .saturating_sub(self.options.indent_width),
+                    .saturating_sub(self.options.indent_width)
+                    + self.case_unindent_spaces(),
             );
         }
         if !closing
@@ -998,7 +1005,8 @@ impl FormatEngine<'_> {
                     {
                         spaces = spaces.max(
                             leading_visual_width(previous, self.options.tab_width)
-                                + self.options.indent_width,
+                                + self.options.indent_width
+                                + self.case_unindent_spaces(),
                         );
                         break;
                     }

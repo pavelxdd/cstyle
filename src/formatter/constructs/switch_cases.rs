@@ -1476,6 +1476,9 @@ impl FormatEngine<'_> {
             return exact_indent_spaces;
         }
 
+        if self.closes_run_in_brace(trimmed) {
+            return exact_indent_spaces;
+        }
         let indent_width = self.options.indent_width;
         let tab_width = self.options.tab_width;
         let Some(case_layout) = self.active_emitted_case_layout() else {
@@ -1513,6 +1516,16 @@ impl FormatEngine<'_> {
         exact_indent_spaces
     }
 
+    /// A closer whose brace opened inside a line (`x = { a,`) lines up
+    /// with that brace, not with the case body.
+    fn closes_run_in_brace(&self, trimmed: &str) -> bool {
+        trimmed.starts_with('}')
+            && self
+                .output
+                .current_closing_brace_open(self.options.tab_width)
+                .is_some_and(|(_, _, opener)| !opener.ends_with('{'))
+    }
+
     pub(crate) fn emitted_case_body_indent_spaces(
         &self,
         line: &str,
@@ -1528,6 +1541,7 @@ impl FormatEngine<'_> {
             || trimmed.starts_with("case ")
             || trimmed.starts_with("default")
             || trimmed.starts_with("} while")
+            || self.closes_run_in_brace(trimmed)
         {
             return None;
         }

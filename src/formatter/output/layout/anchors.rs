@@ -2641,6 +2641,10 @@ impl FormatEngine<'_> {
                             && groups.enclosing(previous) == Some(group)
                     })
         });
+        let compound_literal_first_element = groups.enclosing(first).is_some_and(|group| {
+            self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+                && self.tree.previous_code_token(first) == Some(groups.get(group).open)
+        });
         let is_else = matches!(&tokens[first], Token::Word(word) if word == "else");
         // An arm after a ternary `?` or `:` ending the line before.
         let ternary_arm = self
@@ -2722,6 +2726,7 @@ impl FormatEngine<'_> {
             && !in_parens
             && !member_continuation
             && !initializer_element
+            && !compound_literal_first_element
             && !is_else
             && !ternary_arm
             && !value_after_line_end
@@ -2788,10 +2793,7 @@ impl FormatEngine<'_> {
             }
             // Code after a comment on its line holds it there.
             if self.output.line_tokens(index).is_some()
-                || text.rsplit_once("*/").is_some_and(|(_, after)| {
-                    let after = after.trim();
-                    !after.is_empty() && !after.starts_with("/*") && !after.starts_with("//")
-                })
+                || crate::formatter::tokens::comments::text_follows_comment_close(text)
             {
                 break;
             }

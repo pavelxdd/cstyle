@@ -2937,3 +2937,33 @@ fn comment_led_fallthrough_macro_before_a_case_label_keeps_the_body() {
     let input = "void f(int a)\n{\n    switch (a) {\n    case 1:\n        op = 2;\n        /* no break */ deliberate_fall_through\n    case 2:\n        break;\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn run_in_initializer_in_a_case_block_keeps_its_brace_column() {
+    let input = "void f(int op)\n{\n    switch (op) {\n    case 1: {\n        static const char *az[] = { \"SHARED\", \"RESERVED\",\n                                    \"PENDING\", \"EXCLUSIVE\"\n                                  };\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn two_comments_on_a_line_before_a_case_label_keep_the_body_indent() {
+    let input = "void f(int a)\n{\n    switch (a) {\n    case 1:\n        x();\n        /* else */ /* FALLTHROUGH */\n    case 2:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn initializer_rows_align_with_the_first_element_past_extra_spaces() {
+    let input = "void f(void)\n{\n    static const char *ones[] = {  \"zero\", \"one\",\n                                   \"six\", \"seven\"\n                                };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn designator_rows_in_a_case_block_indent_past_the_declaration() {
+    let input = "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        const struct options opts = {\n            .prefix = \"\",\n            .suffix = \"\",\n        };\n        g(&opts);\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comment_before_the_first_compound_literal_element_takes_its_indent() {
+    let input = "void f(void)\n{\n    *p = (T) {\n        /* c */\n        .a = 2,\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
