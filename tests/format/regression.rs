@@ -3879,3 +3879,9 @@ fn declaration_after_an_attribute_macro_line_takes_the_statement_indent() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn return_type_stays_split_when_a_directive_splits_the_parameters() {
+    let source = "static int\nf(int a,\n#if X\n  int b,\n#endif\n  int c);\n";
+    check(source, &["--attach-return-type-decl"], source);
+}

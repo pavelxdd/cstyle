@@ -265,6 +265,17 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether a preprocessor directive splits the parameter list, which
+    /// keeps astyle from moving the return type.
+    fn parameters_hold_directive(&self, head: &FunctionHead) -> bool {
+        let params = self.tree.groups.get(head.params);
+        params.close.is_some_and(|close| {
+            self.tree.tokens[params.open..close]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+        })
+    }
+
     /// Whether the function name line starting at token `first` joins the
     /// return type on the last output line.
     pub(crate) fn attaches_return_type(&self, first: usize) -> bool {
@@ -277,6 +288,7 @@ impl FormatEngine<'_> {
             self.options.attach_return_type_decl,
         ) || !self.has_movable_return_type(head)
             || !self.head_starts_statement(head)
+            || self.parameters_hold_directive(head)
         {
             return false;
         }
