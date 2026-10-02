@@ -3767,3 +3767,17 @@ fn unpadding_parens_keeps_a_space_only_after_astyle_numeric_types() {
     check(input, &["--unpad-paren"], expected);
     check(expected, &["--unpad-paren"], expected);
 }
+
+#[test]
+fn argument_after_a_broken_one_line_header_aligns_to_the_call_paren() {
+    let input = "void f(void)\n{\n    if( rc ) fatal_error(\"Could not\",\n                         sqlite3_errmsg(db));\n}\n";
+    let expected = "void f(void)\n{\n    if( rc )\n        fatal_error(\"Could not\",\n                    sqlite3_errmsg(db));\n}\n";
+    let options = [
+        "--break-one-line-headers",
+        "--break-after-logical",
+        "--min-conditional-indent=0",
+        "--max-code-length=109",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

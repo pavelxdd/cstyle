@@ -1081,10 +1081,7 @@ impl FormatEngine<'_> {
         }
         let source_is_close_to_current =
             output_source < current_spaces && current_spaces.saturating_sub(output_source) <= 1;
-        if source_is_close_to_current || line_starts_call_expression(trimmed) {
-            return Some(output_source);
-        }
-        None
+        source_is_close_to_current.then_some(output_source)
     }
 
     pub(crate) fn call_shaped_brace_body_indent_floor(

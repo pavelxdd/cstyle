@@ -632,12 +632,12 @@ fn split_assignment_call_preserves_source_indent() {
 }
 
 #[test]
-fn call_argument_rows_preserve_explicit_source_indent() {
+fn call_argument_rows_align_to_the_call_paren() {
     let source = fixture!(
         "void helper(void)",
         "{",
         "    assert_string_equal(\"message\",",
-        "    describe_error(code, (char[64]) {}, 64));",
+        "                        describe_error(code, (char[64]) {}, 64));",
         "",
         "    size_t len = build_header(",
         "                     buf, sizeof(buf), client, server, proto,",
