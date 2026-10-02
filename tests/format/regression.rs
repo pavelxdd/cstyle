@@ -3203,3 +3203,9 @@ fn parameters_after_an_indented_preprocessor_block_start_from_the_function_line(
     let input = "#ifdef _WIN32\n    __declspec(dllexport)\n#endif\nint sqlite3_randomjson_init(\n    sqlite3 *db,\n    char **pzErrMsg\n)\n{\n    return 0;\n}\n";
     check(input, &["--style=allman", "--indent-preproc-block"], input);
 }
+
+#[test]
+fn preprocessor_block_opened_by_an_error_directive_stays_unindented() {
+    let input = "#ifdef X\n#error This file.\n#endif\n";
+    check(input, &["--style=allman", "--indent-preproc-block"], input);
+}

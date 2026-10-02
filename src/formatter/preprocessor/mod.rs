@@ -243,6 +243,22 @@ fn is_indentable_preprocessor_block(
     start: usize,
     is_first_conditional: bool,
 ) -> bool {
+    // astyle reads `#error`, `#warning`, and `#line` as comments; one that
+    // opens the block leaves it unindented.
+    if tokens
+        .iter()
+        .skip(start + 1)
+        .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+        .is_some_and(|token| {
+            matches!(token, Token::Preprocessor(preprocessor)
+            if matches!(
+                preprocessor_directive(&preprocessor.text),
+                Some("error" | "warning" | "line" | "region" | "endregion")
+            ))
+        })
+    {
+        return false;
+    }
     let mut depth = 0usize;
     let mut paren_depth = 0isize;
     let mut saw_conditional = false;
