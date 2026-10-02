@@ -3885,3 +3885,11 @@ fn return_type_stays_split_when_a_directive_splits_the_parameters() {
     let source = "static int\nf(int a,\n#if X\n  int b,\n#endif\n  int c);\n";
     check(source, &["--attach-return-type-decl"], source);
 }
+
+#[test]
+fn max_code_length_splits_at_the_last_bitwise_operator_not_after_a_unary_one() {
+    let input = "void f(void)\n{\n    mask = (a - 1) | ~(DV_I_48_0_bit | DV_I_51_0_bit | DV_I_52_0_bit | DV_II_45_0_bit | DV_II_46_0_bit);\n    ok = (a - 1) && !(DV_I_48_0_bit || DV_I_51_0_bit || DV_I_52_0_bit || DV_II_45_0_bit || DV);\n}\n";
+    let expected = "void f(void)\n{\n    mask = (a - 1) | ~(DV_I_48_0_bit | DV_I_51_0_bit | DV_I_52_0_bit |\n                       DV_II_45_0_bit | DV_II_46_0_bit);\n    ok = (a - 1) && !(DV_I_48_0_bit || DV_I_51_0_bit || DV_I_52_0_bit\n                      || DV_II_45_0_bit || DV);\n}\n";
+    check(input, &["--max-code-length=80"], expected);
+    check(expected, &["--max-code-length=80"], expected);
+}

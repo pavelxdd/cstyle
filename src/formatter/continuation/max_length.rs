@@ -1046,7 +1046,15 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         b.1.cmp(&a.1).then_with(|| {
             let a_delimiter = line[..a.0].trim_end().ends_with(['(', '[']);
             let b_delimiter = line[..b.0].trim_end().ends_with(['(', '[']);
-            if a.1 == 55 && !(a_delimiter && b_delimiter) {
+            // astyle takes the last padded bitwise operator that fits.
+            let bitwise = |split_at: usize| {
+                let head = line[..split_at].trim_end();
+                line[split_at..].starts_with(char::is_whitespace)
+                    && head.ends_with(['|', '&', '^'])
+                    && !head.ends_with("||")
+                    && !head.ends_with("&&")
+            };
+            if a.1 == 55 && !(a_delimiter && b_delimiter) && !(bitwise(a.0) && bitwise(b.0)) {
                 a.2.cmp(&b.2).then(b.0.cmp(&a.0))
             } else {
                 b.0.cmp(&a.0)
@@ -1266,7 +1274,7 @@ fn split_point_at(
             return (line[..argument_start + argument_len].trim_end().len() > width)
                 .then_some((end, 55));
         }
-        if matches!(operator, "::" | "->" | "<<" | ">>") {
+        if matches!(operator, "::" | "->" | "<<" | ">>" | "~" | "!") {
             return None;
         }
         if is_pointer_split_operator(line, start, end, operator)
