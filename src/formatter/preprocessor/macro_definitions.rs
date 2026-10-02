@@ -894,6 +894,12 @@ impl FormatEngine<'_> {
                 }
             } else if let Some(column) = line_open_paren {
                 Some(column + 1)
+            } else if open_parens <= 0
+                && content.ends_with(')')
+                && frames.last().copied().is_some_and(is_define_header_frame)
+            {
+                // The header's condition closed: its body follows.
+                None
             } else if continuation_column.is_some() {
                 continuation_column
             } else if define_complete_designated_initializer_row(content) {

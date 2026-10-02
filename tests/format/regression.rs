@@ -3006,3 +3006,9 @@ fn else_after_a_braceless_body_ignores_an_earlier_closed_if_block() {
     let input = "void f(void)\n{\n    for (;;)\n        if (a) {\n            b = 0;\n        }\n    if (added)\n        p(1,\n          2);\n    else {\n        if (deleted)\n            printf(\"%s%sdeleted file \",\n                   line_prefix, c_meta);\n        x();\n    }\n}\n";
     check(input, &["--max-code-length=109"], input);
 }
+
+#[test]
+fn define_header_body_after_a_split_condition_takes_the_body_level() {
+    let input = "#define CHECK(x, y)                \\\n    do {                           \\\n        if(result &&               \\\n           result != OTHER)        \\\n            goto error;            \\\n    } while(0)\n";
+    check(input, &["--indent-preproc-define"], input);
+}
