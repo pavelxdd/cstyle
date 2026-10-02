@@ -3191,3 +3191,9 @@ fn max_code_length_keeps_a_string_literal_after_its_call_paren() {
     let input = "void f(void)\n{\n    if (x) {\n        curl_mprintf(\"CURLUPART_SCHEME %d bytes scheme == %d (%s)\\n\",\n                     EXCESSIVE, (int)uc, curl_url_strerror(uc));\n    }\n}\n";
     check(input, &["--style=kr", "--max-code-length=60"], input);
 }
+
+#[test]
+fn returned_value_operand_row_under_a_code_length_limit_stands_at_the_value() {
+    let input = "void f(void)\n{\n    if (x) {\n        return ngx_snprintf(text, len, \"%ud.%ud.%ud.%ud\",\n                            p[0], p[1], p[2], p[3])\n               - text;\n    }\n}\n";
+    check(input, &["--style=1tbs", "--max-code-length=109"], input);
+}

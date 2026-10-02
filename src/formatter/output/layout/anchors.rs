@@ -64,6 +64,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.stacked_argument_indent(first))
             .or_else(|| self.stacked_initializer_row_indent(first))
             .or_else(|| self.stacked_return_indent(first))
+            .or_else(|| self.returned_operand_row_indent(first))
             .or_else(|| self.stacked_closing_paren_indent(first))
             .or_else(|| self.logical_operand_in_parens_indent(first))
             .or_else(|| self.logical_chain_operand_indent(first))
@@ -2575,6 +2576,49 @@ impl FormatEngine<'_> {
 
     /// A `return` value starting a line after the keyword takes one level
     /// past the keyword's line, past comments and directives between.
+    /// Under a code length limit, where the stack replay stays off, a row
+    /// led by a binary operator continuing a returned value stands at the
+    /// value.
+    fn returned_operand_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.options.max_code_length?;
+        if !matches!(&tokens[first], Token::Operator(operator)
+                if matches!(operator.as_str(), "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "||" | "&&" | "<<" | ">>"))
+        {
+            return None;
+        }
+        let group = groups.enclosing(first);
+        let mut index = first;
+        while let Some(before) = self.tree.previous_code_token(index) {
+            if let Some(closed) = groups.closed_at(before) {
+                index = groups.get(closed).open;
+                continue;
+            }
+            if groups.enclosing(before) != group {
+                return None;
+            }
+            match &tokens[before] {
+                Token::Word(word) if word == "return" => {
+                    let value = next_code_token(tokens, before + 1)?;
+                    if self.output.line_with_token(value)? != self.output.line_with_token(before)? {
+                        return None;
+                    }
+                    return Some(self.token_column(value)? + self.case_unindent_spaces());
+                }
+                Token::Symbol(';' | '{' | '}' | ',' | '?' | ':') => return None,
+                Token::Operator(operator)
+                    if operator.ends_with('=')
+                        && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
+                {
+                    return None;
+                }
+                _ => index = before,
+            }
+        }
+        None
+    }
+
     fn return_value_indent(&self, first: usize) -> Option<usize> {
         let keyword = self.tree.previous_code_token(first)?;
         if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return") {
