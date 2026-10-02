@@ -22,7 +22,8 @@ use crate::formatter::text::columns::{
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_brace_imbalance, line_ends_with_comment,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_brace_content_offset,
+    unmatched_open_paren_column,
 };
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -139,7 +140,11 @@ impl FormatEngine<'_> {
 
     pub(crate) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {
         let trimmed = line.trim_start();
-        if !trimmed.starts_with("/*") || trimmed.match_indices("/*").nth(1).is_none() {
+        let adjacent = trimmed
+            .strip_prefix("/*")
+            .and_then(|rest| rest.split_once("*/"))
+            .is_some_and(|(_, after)| after.trim_start().starts_with("/*"));
+        if !adjacent {
             return line;
         }
         let target = self
@@ -1141,6 +1146,7 @@ impl FormatEngine<'_> {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
+        let mut brace_element_comment_indent = None;
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
             && !comment.contains('\n')
@@ -1158,7 +1164,12 @@ impl FormatEngine<'_> {
                 .last_non_empty_index()
                 .is_some_and(|index| self.output.is_directive_line(index));
             if previous_code.ends_with(',') && !after_directive {
-                let spaces = leading_visual_width(previous, self.options.tab_width);
+                brace_element_comment_indent = unmatched_open_brace_content_offset(previous_code)
+                    .map(|offset| {
+                        visual_width_from(&previous[..offset], 0, self.options.tab_width)
+                    });
+                let spaces = brace_element_comment_indent
+                    .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width));
                 let structural_level = self
                     .layout
                     .indentation
@@ -1235,7 +1246,8 @@ impl FormatEngine<'_> {
             && self.current.trim().is_empty()
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
-            && let Some(spaces) = case_label_comment_indent
+            && let Some(spaces) = brace_element_comment_indent
+                .or(case_label_comment_indent)
                 .or(control_header_comment_indent)
                 .or(user_label_comment_indent)
                 .or(lambda_parameter_comment_indent)

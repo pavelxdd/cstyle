@@ -1341,8 +1341,15 @@ impl FormatEngine<'_> {
     }
 
     fn is_unary_sign(&self) -> bool {
+        let previous = match self.layout.previous {
+            PreviousToken::Other => self
+                .layout
+                .previous_before_comment
+                .unwrap_or(PreviousToken::Other),
+            previous => previous,
+        };
         matches!(
-            self.layout.previous,
+            previous,
             PreviousToken::None
                 | PreviousToken::Operator
                 | PreviousToken::OpenParen

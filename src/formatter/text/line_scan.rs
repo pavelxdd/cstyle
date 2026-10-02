@@ -433,6 +433,52 @@ pub(crate) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)>
     stack.pop()
 }
 
+/// Byte offset of the first element after the last unmatched `{` when the
+/// line continues past it.
+pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
+    let mut stack: Vec<usize> = Vec::new();
+    let mut chars = line.char_indices().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut in_block_comment = false;
+    while let Some((offset, ch)) = chars.next() {
+        let next = chars.peek().map(|&(_, next)| next);
+        if in_block_comment {
+            if ch == '*' && next == Some('/') {
+                in_block_comment = false;
+                chars.next();
+            }
+            continue;
+        }
+        if quote.is_some() {
+            advance_quoted_literal(ch, &mut quote, &mut escaped);
+            continue;
+        }
+        match ch {
+            '/' if next == Some('/') => break,
+            '/' if next == Some('*') => {
+                in_block_comment = true;
+                chars.next();
+            }
+            '"' | '\'' => quote = Some(ch),
+            '{' => stack.push(offset + 1),
+            '}' => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    let mut after = stack.pop()?;
+    loop {
+        after += line[after..].len() - line[after..].trim_start().len();
+        let Some(comment) = line[after..].strip_prefix("/*") else {
+            break;
+        };
+        after += 2 + comment.find("*/")? + 2;
+    }
+    (after < line.trim_end().len()).then_some(after)
+}
+
 pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
     let chars = line.chars().collect::<Vec<_>>();
     let mut depth = 0usize;

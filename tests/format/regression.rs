@@ -3781,3 +3781,16 @@ fn argument_after_a_broken_one_line_header_aligns_to_the_call_paren() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn initializer_rows_align_to_the_first_element_past_comments() {
+    let input = "void f(void)\n{\n    T arg = {/* h */ !p,\n        /* e */ false, /* fd */ -1};\n    int b[] = {a,\n        /* e */ false, -1};\n    int c[] = {a,\n        false, /* e */ -1};\n}\n";
+    let expected = "void f(void)\n{\n    T arg = {/* h */ !p,\n                     /* e */ false, /* fd */ -1\n            };\n    int b[] = {a,\n               /* e */ false, -1\n              };\n    int c[] = {a,\n               false, /* e */ -1\n              };\n}\n";
+    for options in [
+        &["--pad-oper"][..],
+        &["--pad-oper", "--min-conditional-indent=0"][..],
+    ] {
+        check(input, options, expected);
+        check(expected, options, expected);
+    }
+}

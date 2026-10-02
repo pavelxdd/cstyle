@@ -81,6 +81,8 @@ pub(crate) struct LayoutState {
     pub(crate) previous_pre_adjust_line: Option<String>,
     pub(crate) pending_member_spacing: Option<MemberSpacingBoundary>,
     pub(crate) previous: PreviousToken,
+    /// The code token a run of trailing comments followed.
+    pub(crate) previous_before_comment: Option<PreviousToken>,
     pub(crate) literal_line: literals::LiteralLineState,
     pub(crate) continuation_indent: continuation::ContinuationIndentState,
     pub(crate) objc: objc::ObjCLineState,
@@ -172,6 +174,7 @@ impl<'a> FormatEngine<'a> {
                 previous_pre_adjust_line: None,
                 pending_member_spacing: None,
                 previous: PreviousToken::None,
+                previous_before_comment: None,
                 literal_line: literals::LiteralLineState::default(),
                 continuation_indent: continuation::ContinuationIndentState::default(),
                 objc: objc::ObjCLineState::default(),
@@ -940,7 +943,17 @@ impl<'a> FormatEngine<'a> {
             Token::Number(number) => self.push_literal(number, None),
             Token::StringLiteral(literal) => self.push_literal(literal, Some('"')),
             Token::CharLiteral(literal) => self.push_literal(literal, Some('\'')),
-            Token::Comment(kind, comment) => self.push_comment(*kind, comment),
+            Token::Comment(kind, comment) => {
+                let before = self
+                    .layout
+                    .previous_before_comment
+                    .unwrap_or(self.layout.previous);
+                self.push_comment(*kind, comment);
+                if self.layout.previous == PreviousToken::Other {
+                    self.layout.previous_before_comment = Some(before);
+                }
+                return;
+            }
             Token::Preprocessor(line) => {
                 self.push_preprocessor(&line.text, &line.opaque_literal_line_ranges)
             }
@@ -949,6 +962,9 @@ impl<'a> FormatEngine<'a> {
             Token::Symbol(symbol) => self.push_symbol(*symbol, context),
             Token::Whitespace(whitespace) => self.push_whitespace(whitespace),
             Token::Newline => self.push_newline(),
+        }
+        if !matches!(token, Token::Whitespace(_) | Token::Newline) {
+            self.layout.previous_before_comment = None;
         }
     }
 

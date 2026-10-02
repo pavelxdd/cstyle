@@ -5,7 +5,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::line_scan::{
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    trailing_comment_split_limit, unmatched_open_brace_content_offset, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::{
@@ -136,7 +136,17 @@ impl FormatEngine<'_> {
             {
                 return None;
             }
-            if self.initializer_line_keeps_source_indent(trimmed) {
+            // Rows of a brace whose first element shares its line align to it.
+            let aligned_element_row = (self.current_inline_array_column().is_some()
+                || self
+                    .output
+                    .last_line_outside_comment()
+                    .is_some_and(|previous| {
+                        let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                        code.ends_with(',') && unmatched_open_brace_content_offset(code).is_some()
+                    }))
+                && !trimmed.starts_with(['.', '[', '{', '}']);
+            if !aligned_element_row && self.initializer_line_keeps_source_indent(trimmed) {
                 return Some(output_source);
             }
         }
