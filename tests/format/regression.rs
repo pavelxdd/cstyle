@@ -3818,3 +3818,11 @@ fn every_style_runs_a_brace_into_a_nested_brace() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn column_one_comment_in_a_guarded_struct_takes_the_body_indent() {
+    let input = "#ifndef Z\nstruct A {\n  int s;\n// Some\n  int x;\n};\n#endif\n";
+    let expected = "#ifndef Z\nstruct A {\n    int s;\n    // Some\n    int x;\n};\n#endif\n";
+    check(input, &["--indent-col1-comments"], expected);
+    check(expected, &["--indent-col1-comments"], expected);
+}
