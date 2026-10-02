@@ -2967,3 +2967,30 @@ fn comment_before_the_first_compound_literal_element_takes_its_indent() {
     let input = "void f(void)\n{\n    *p = (T) {\n        /* c */\n        .a = 2,\n    };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn star_after_a_cast_inside_parens_keeps_its_source_spacing() {
+    let input =
+        "void f(void)\n{\n    g((int) * cp);\n    g((int)*cp);\n    g(((double)b) * c);\n}\n";
+    check(input, &["--pad-oper"], input);
+}
+
+#[test]
+fn function_pointer_parameter_after_a_builtin_type_keeps_the_star_attached() {
+    let input = "int a(char *(*func)(char *input), int x);\nint c(struct x * (*h)(int), int x);\n";
+    check(input, &["--pad-oper", "--align-pointer=name"], input);
+    let input = "int a(char* (*func)(char* input), int x);\nint c(struct x * (*h)(int), int x);\n";
+    check(input, &["--pad-oper", "--align-pointer=type"], input);
+}
+
+#[test]
+fn triple_pointer_cast_stays_one_run() {
+    let input = "void f(void)\n{\n    n = g(e, (const char ***)&argv);\n}\n";
+    check(input, &["--pad-oper", "--align-pointer=name"], input);
+}
+
+#[test]
+fn multiplication_on_a_continued_argument_line_stays_padded() {
+    let input = "int f(void)\n{\n    return m->num + get(m->chunk +\n                        (off_t)pos * WIDTH);\n}\n";
+    check(input, &["--align-pointer=name"], input);
+}

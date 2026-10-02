@@ -600,6 +600,41 @@ impl FormatEngine<'_> {
         at_declaration_scope.then_some(false)
     }
 
+    /// A line continuing parentheses opened on an earlier line inside a
+    /// function body holds an expression.
+    pub(super) fn continues_expression_parens(&self) -> bool {
+        if crate::formatter::text::line_scan::unmatched_open_paren_column(self.current.as_str())
+            .is_some()
+        {
+            return false;
+        }
+        let tree = &self.tree;
+        let Some(token) = self
+            .current
+            .active_token()
+            .filter(|&token| token < tree.tokens.len())
+        else {
+            return false;
+        };
+        let Some(group) = tree.groups.enclosing(token) else {
+            return false;
+        };
+        if tree.groups.get(group).delimiter != Delimiter::Paren
+            || tree.functions.is_parameter_list(group)
+            || tree.functions.is_declarator(group)
+        {
+            return false;
+        }
+        let mut parent = tree.groups.get(group).parent;
+        while let Some(index) = parent {
+            if tree.groups.get(index).delimiter == Delimiter::Brace {
+                return !BlockKind::is_declaration_scope(tree.blocks.kind(index));
+            }
+            parent = tree.groups.get(index).parent;
+        }
+        false
+    }
+
     pub(super) fn current_paren_context_is_declaration(&self) -> bool {
         if self.current_paren_is_lambda_parameter_list() {
             return true;
@@ -783,6 +818,17 @@ impl FormatEngine<'_> {
             }
             self.current.push_str(operator);
             self.emit_trailing_source_space();
+            return;
+        }
+        // The rest of a run whose first star went out alone joins it.
+        if continues_sequence
+            && self.pointer_run.star_count > 1
+            && self.current.trim_end().ends_with(operator)
+        {
+            self.pointer_run.skip_adjacent_pointer_operators = self.pointer_run.star_count - 1;
+            self.trim_current_end_horizontal_space();
+            self.current
+                .push_str(&operator.repeat(self.pointer_run.star_count));
             return;
         }
         if continues_sequence && self.pointer_run.star_count > 1 {
@@ -996,6 +1042,24 @@ impl FormatEngine<'_> {
                 self.ensure_space();
             }
         } else {
+            if matches!(next, Some(Token::Symbol('('))) && {
+                self.current.push_str(operator);
+                let multiply = self.function_pointer_parameter_keeps_space_before_name_group()
+                    && self.function_pointer_star_follows_no_pointer_type();
+                self.current.truncate(self.current.len() - operator.len());
+                multiply
+            } {
+                if self.options.pad_operators {
+                    self.ensure_space();
+                    self.current.push_str(operator);
+                    self.ensure_space();
+                } else {
+                    self.emit_source_space();
+                    self.current.push_str(operator);
+                    self.emit_trailing_source_space();
+                }
+                return;
+            }
             self.trim_current_end();
             self.current.push_str(operator);
             if self.pointer_run.next_is_name_like
@@ -1194,11 +1258,21 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Padded operators space a `*` before `(` unless the word before it
+    /// names a pointer type the way astyle knows them: `char`, `int`,
+    /// `void`, or a `name_t`.
     fn function_pointer_parameter_name_group_uses_space(&self) -> bool {
-        self.options.pad_operators
-            && self
-                .function_pointer_parameter_type_words()
-                .is_some_and(|words| !(words.len() == 1 && words[0] == "void"))
+        self.options.pad_operators && self.function_pointer_star_follows_no_pointer_type()
+    }
+
+    fn function_pointer_star_follows_no_pointer_type(&self) -> bool {
+        self.function_pointer_parameter_type_words()
+            .is_some_and(|words| {
+                words.last().is_some_and(|word| {
+                    !(matches!(*word, "char" | "int" | "void" | "INT" | "VOID")
+                        || word.len() >= 6 && word.ends_with("_t"))
+                })
+            })
     }
 
     fn function_pointer_parameter_type_words(&self) -> Option<Vec<&str>> {

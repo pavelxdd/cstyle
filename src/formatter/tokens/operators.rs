@@ -808,8 +808,10 @@ impl FormatEngine<'_> {
             "*" if operator_role != OperatorRole::PointerDeclarator
                 && self.layout.nesting.paren_depth > 0
                 && matches!(next, Some(Token::Word(_)))
-                && self.current_paren_is_expression_context()
-                && !self.current_paren_context_is_declaration()
+                && (self.current_paren_is_expression_context()
+                    && !self.current_paren_context_is_declaration()
+                    || self.layout.previous == PreviousToken::Word
+                        && self.continues_expression_parens())
                 && !self.current_ends_cast()
                 && !self.is_unary_pointer_operator()
                 && !matches!(following_operator, Some("=" | ":")) =>
@@ -982,7 +984,7 @@ impl FormatEngine<'_> {
                     && self.current.chars().filter(|&ch| ch == '(').count()
                         > self.current.chars().filter(|&ch| ch == ')').count() =>
             {
-                self.trim_current_end();
+                self.emit_source_space();
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
             }
