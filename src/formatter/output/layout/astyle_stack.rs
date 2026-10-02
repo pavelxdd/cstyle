@@ -552,6 +552,21 @@ impl FormatEngine<'_> {
         };
         let mut start = index;
         while let Some(before) = self.tree.previous_code_token(start) {
+            // A directive outside parentheses ends what astyle stacks when
+            // the lines before it carry the indent of their block.
+            if self.options.indent_preproc_block
+                && tokens[before + 1..start]
+                    .iter()
+                    .enumerate()
+                    .any(|(offset, token)| {
+                        matches!(token, Token::Preprocessor(_))
+                            && groups
+                                .enclosing(before + 1 + offset)
+                                .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+                    })
+            {
+                break;
+            }
             if let Some(closed) = groups.closed_at(before) {
                 let header = self
                     .tree
