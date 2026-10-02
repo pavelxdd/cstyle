@@ -1183,7 +1183,7 @@ fn unpad_parens_removes_space_after_open_paren_before_semicolon() {
     );
 }
 #[test]
-fn unpad_parens_does_not_add_space_before_core_type_word_paren() {
+fn unpad_parens_keeps_but_does_not_add_space_before_core_type_word_paren() {
     let mut options = FormatOptions::default();
     options.pad_operators = true;
     options.unpad_parens = true;
@@ -1200,7 +1200,7 @@ fn unpad_parens_does_not_add_space_before_core_type_word_paren() {
         fixture!(
             "typedef bool handler_t(int v);",
             "int g() {",
-            "    x = foo_t(3);",
+            "    x = foo_t (3);",
             "    y = foo_t(3);",
             "    z = int (a);",
             "    w = bool(b);",

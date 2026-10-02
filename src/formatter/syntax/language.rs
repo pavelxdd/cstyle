@@ -171,6 +171,29 @@ pub fn is_numeric_variable_word(word: &str) -> bool {
     ) || is_core_typedef_word(word)
 }
 
+/// Words astyle's unpadding keeps a space after, as its `isNumericVariable`.
+pub fn is_unpad_kept_type_word(word: &str) -> bool {
+    matches!(
+        word,
+        "bool"
+            | "char"
+            | "double"
+            | "float"
+            | "int"
+            | "long"
+            | "short"
+            | "void"
+            | "BOOL"
+            | "DWORD"
+            | "HWND"
+            | "INT"
+            | "LPSTR"
+            | "LPVOID"
+            | "VOID"
+            | "wxFontEncoding"
+    ) || (word.len() >= 4 && word.ends_with("_t"))
+}
+
 pub fn is_leading_continuation_operator(operator: &str) -> bool {
     matches!(
         operator,

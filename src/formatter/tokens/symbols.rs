@@ -13,8 +13,8 @@ use crate::formatter::state::frame::{
     DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
 };
 use crate::formatter::syntax::language::{
-    self, is_leading_continuation_operator, is_numeric_variable_word, is_pointer_type_word,
-    is_type_like_pointer_word,
+    self, is_leading_continuation_operator, is_pointer_type_word, is_type_like_pointer_word,
+    is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
     assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
@@ -33,7 +33,7 @@ fn should_keep_unpad_space_before_paren(word: &str, options: &FormatOptions) -> 
         && (matches!(word, language::RETURN | "and" | "or" | "in")
             || (options.pad_header
                 && matches!(word, language::NEW | language::DELETE | language::THROW))
-            || is_numeric_variable_word(word))
+            || is_unpad_kept_type_word(word))
 }
 
 pub(crate) fn close_paren_out_suppressed(token: &Token) -> bool {
@@ -314,6 +314,7 @@ impl FormatEngine<'_> {
                 .and_then(|index| self.tree.groups.opened_at(index))
                 .is_some_and(|group| self.tree.functions.is_declarator(group));
             let keep_source_space = !next_is_close
+                && !self.options.unpad_parens
                 && (opens_declarator
                     || (is_pointer_type_word(word) || is_type_like_pointer_word(word))
                         && matches!(next, Some(Token::Operator(op)) if matches!(op.as_str(), "*" | "&" | "^")));

@@ -3759,3 +3759,11 @@ fn unpadding_parens_drops_the_space_after_a_negation() {
     check(input, &["--unpad-paren"], expected);
     check(expected, &["--unpad-paren"], expected);
 }
+
+#[test]
+fn unpadding_parens_keeps_a_space_only_after_astyle_numeric_types() {
+    let input = "struct z {\n    unsigned (*m)(int);\n    void (*f)(int);\n    uint8_t (*g)(int);\n};\nLUA_API lua_CFunction (lua_atpanic)(lua_State *L);\nLUA_API int (lua_gettop)(lua_State *L);\n";
+    let expected = "struct z {\n    unsigned(*m)(int);\n    void (*f)(int);\n    uint8_t (*g)(int);\n};\nLUA_API lua_CFunction(lua_atpanic)(lua_State *L);\nLUA_API int (lua_gettop)(lua_State *L);\n";
+    check(input, &["--unpad-paren"], expected);
+    check(expected, &["--unpad-paren"], expected);
+}
