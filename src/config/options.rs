@@ -364,7 +364,10 @@ impl FormatOptions {
         let base = StyleFields::capture(self);
         match style {
             StylePreset::None => self.brace_style = BraceStyle::None,
-            StylePreset::Allman => self.brace_style = BraceStyle::Allman,
+            StylePreset::Allman => {
+                self.brace_style = BraceStyle::Allman;
+                self.attach_enum = false;
+            }
             StylePreset::Java => self.brace_style = BraceStyle::Attach,
             StylePreset::Kr => {
                 self.brace_style = BraceStyle::OneTrueBrace;
@@ -394,11 +397,15 @@ impl FormatOptions {
             }
             StylePreset::Whitesmith => {
                 self.brace_style = BraceStyle::Whitesmith;
+                self.attach_enum = false;
                 self.indent_braces = true;
                 self.indent_classes = true;
                 self.indent_switches = true;
             }
-            StylePreset::Vtk => self.brace_style = BraceStyle::Vtk,
+            StylePreset::Vtk => {
+                self.brace_style = BraceStyle::Vtk;
+                self.attach_enum = false;
+            }
             StylePreset::Ratliff => {
                 self.brace_style = BraceStyle::Ratliff;
                 self.indent_braces = true;
@@ -406,10 +413,12 @@ impl FormatOptions {
             }
             StylePreset::Gnu => {
                 self.brace_style = BraceStyle::Gnu;
+                self.attach_enum = false;
                 self.indent_blocks = true;
             }
             StylePreset::Horstmann => {
                 self.brace_style = BraceStyle::Horstmann;
+                self.attach_enum = false;
                 self.indent_switches = true;
             }
             StylePreset::OneTrueBrace => {
@@ -425,6 +434,7 @@ impl FormatOptions {
             }
             StylePreset::Pico => {
                 self.brace_style = BraceStyle::Pico;
+                self.attach_enum = false;
                 self.break_one_line_blocks = false;
                 self.break_one_line_statements = false;
                 self.indent_switches = true;

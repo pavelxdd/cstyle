@@ -53,6 +53,30 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// A line inside brackets whose `[` ends its line stands at the top of
+    /// astyle's continuation stack: a continuation level past the indent
+    /// before.
+    pub(super) fn stacked_bracket_row_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(first)?;
+        let open = groups.get(group).open;
+        if groups.get(group).delimiter != Delimiter::Bracket
+            || matches!(self.tree.tokens[first], Token::Symbol(']'))
+            || self
+                .output
+                .line_with_token(open)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_none_or(|span| span.last != open)
+            || self
+                .tree
+                .previous_code_token(open)
+                .is_none_or(|before| !matches!(self.tree.tokens[before], Token::Word(_)))
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
+    }
+
     /// A `)` starting its line stands where astyle saved its paren: the
     /// paren's column when code follows it, else the indent before.
     pub(super) fn stacked_closing_paren_indent(&self, first: usize) -> Option<usize> {

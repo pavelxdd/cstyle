@@ -1063,7 +1063,12 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_level(self.layout.indentation.indent());
         }
-        if brace_type == BraceType::Enum && !self.options.attach_enum && !self.current_is_blank() {
+        // Only a style attaching other braces breaks a one-line enum.
+        if brace_type == BraceType::Enum
+            && !self.options.attach_enum
+            && self.options.brace_style == BraceStyle::OneTrueBrace
+            && !self.current_is_blank()
+        {
             let indent = self.layout.indentation.indent();
             self.finish_line();
             self.layout.continuation_indent.set_next_line_level(indent);
@@ -1182,9 +1187,27 @@ impl FormatEngine<'_> {
                     let line = line.trim_end();
                     is_lambda_body_header(line) && line.contains("->")
                 });
+        // A control header's condition indexing an array opens no lambda.
+        let control_header_line = self
+            .layout
+            .command_state
+            .current_header
+            .as_deref()
+            .is_some_and(|header| {
+                matches!(header, "if" | "while" | "for" | "switch")
+                    && self
+                        .current
+                        .trim_start()
+                        .trim_start_matches('}')
+                        .trim_start()
+                        .trim_start_matches("else")
+                        .trim_start()
+                        .starts_with(header)
+            });
         let lambda_header = self.current_is_lambda_body_header()
             || previous_line_lambda_header
-            || (self.current.trim_end().ends_with(')')
+            || (!control_header_line
+                && self.current.trim_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
         let parameterized_lambda_header = self.current_is_lambda_body_header()

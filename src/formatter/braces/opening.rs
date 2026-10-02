@@ -831,6 +831,17 @@ impl FormatEngine<'_> {
                 {
                     let keep = ws.len().saturating_sub(1).max(1);
                     self.current.push_str(&ws[..keep]);
+                } else if let Some(&target) =
+                    self.layout.line_state.trailing_comment_columns.first()
+                    && ws.chars().all(|ch| ch == ' ')
+                {
+                    // Code joined before the brace moves the comment no
+                    // further right than its source column, as astyle keeps
+                    // its column.
+                    let code_len = self.current.trim().chars().count();
+                    let shift = (code_len + ws.len()).saturating_sub(target);
+                    self.current
+                        .push_str(&" ".repeat(ws.len().saturating_sub(shift).max(1)));
                 } else {
                     self.current.push_str(&ws);
                 }
@@ -2100,6 +2111,38 @@ impl FormatEngine<'_> {
         } = *placement;
         let previous_line_opens_lambda_body = lambda.previous_line_opens_body;
         let brace_type = brace.brace_type;
+        // A comment after the brace of a case label split off before it
+        // stays on the label's line.
+        if self.current_is_blank()
+            && !self.token_input.token_begins_source_line
+            && let Some(Token::Comment(kind, comment)) = next
+            && (*kind == CommentKind::Line || !comment.contains('\n'))
+            && let Some(index) = self.output.len().checked_sub(1)
+            && self.output_line_is_case_label(index)
+        {
+            let before = self
+                .token_input
+                .previous_input_whitespace
+                .clone()
+                .unwrap_or_default();
+            let after = self
+                .token_input
+                .next_input_whitespace
+                .clone()
+                .unwrap_or_default();
+            let gap = if before.contains('\t') || after.contains('\t') {
+                " ".to_owned()
+            } else {
+                format!("{before} {after}")
+            };
+            let line = format!(
+                "{}{gap}{}",
+                self.output[index].trim_end(),
+                comment.trim_end()
+            );
+            self.output.set(index, line);
+            self.comments.skip_next_attached_comment = true;
+        }
         let block_indent_extra = brace.block_indent_extra;
         let comment_starts_block = (self.token_input.token_begins_source_line
             || self.options.remove_braces
@@ -2444,6 +2487,15 @@ impl FormatEngine<'_> {
             && (self.options.pad_parens_inside || self.options.pad_parens_outside)
         {
             self.current.push(' ');
+        } else if let Some(&target) = self.layout.line_state.trailing_comment_columns.first()
+            && !before_gap.contains('\t')
+            && !after_gap.contains('\t')
+        {
+            // The comment keeps its source column past code that a moved
+            // closing brace and the broken brace left.
+            let code_len = self.current.trim().chars().count();
+            self.current
+                .push_str(&" ".repeat(target.saturating_sub(code_len).max(1)));
         } else {
             self.current.push_str(&before_gap);
             self.current.push(' ');
@@ -2718,6 +2770,14 @@ impl FormatEngine<'_> {
             }
             _ => self.options.indent_braces,
         }
+    }
+
+    fn output_line_is_case_label(&self, index: usize) -> bool {
+        let line = &self.output[index];
+        let trimmed = line[..trailing_comment_split_limit(line)].trim();
+        trimmed.ends_with(':')
+            && trimmed.len() == line.trim().len()
+            && labels::is_label_start(trimmed.trim_end_matches(':'), &self.options.access_labels)
     }
 
     fn should_attach_output_case_label_brace(&self, brace_type: BraceType) -> bool {

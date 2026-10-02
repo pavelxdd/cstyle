@@ -1152,7 +1152,12 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim().is_empty())
         {
             let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-            if previous_code.ends_with(',') {
+            // A directive continues no statement into the comment.
+            let after_directive = self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| self.output.is_directive_line(index));
+            if previous_code.ends_with(',') && !after_directive {
                 let spaces = leading_visual_width(previous, self.options.tab_width);
                 let structural_level = self
                     .layout
@@ -1180,8 +1185,13 @@ impl FormatEngine<'_> {
         {
             let code = previous[..trailing_comment_split_limit(previous)].trim_end();
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            if let Some(spaces) =
-                self.block_comment_call_opener_indent_spaces(code, previous_indent)
+            let after_directive = self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| self.output.is_directive_line(index));
+            if !after_directive
+                && let Some(spaces) =
+                    self.block_comment_call_opener_indent_spaces(code, previous_indent)
             {
                 self.clear_current();
                 let prefix = self
@@ -2948,7 +2958,8 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
                 seen_token = true;
             }
             Token::Word(word) => {
-                if saw_closing_brace && is_break_blocks_closing_header(word) {
+                // A closing header leading its line joins the brace before.
+                if (saw_closing_brace || !seen_code) && is_break_blocks_closing_header(word) {
                     saw_closing_header = true;
                 }
                 seen_code = true;

@@ -1993,7 +1993,7 @@ fn bracket_continuation_aligns_to_opening_bracket_context() {
             "--indent=spaces=4",
             "--pad-oper",
         ],
-        "void f(void)\n{\n    uint8_t value = table[\n                            index + 1u\n                         ];\n    use(value);\n}\n",
+        "void f(void)\n{\n    uint8_t value = table[\n                        index + 1u\n                         ];\n    use(value);\n}\n",
     );
 }
 
@@ -3594,4 +3594,58 @@ fn type_with_a_star_before_a_comma_aligns_as_a_pointer() {
     let expected = "void f(void)\n{\n    x = GLOBAL(BtShared *, y);\n}\n";
     check(input, &["--pad-oper", "--align-pointer=name"], expected);
     check(expected, &["--pad-oper", "--align-pointer=name"], expected);
+}
+
+#[test]
+fn row_after_a_bracket_ending_its_line_continues_a_level_past_the_indent() {
+    let input = "void f(void)\n{\n    char x[\n  A + 2];\n    y = a[\n  A + 2];\n    g(a[\n  A + 2]);\n}\nint y = a[\n  A + 2];\n";
+    let expected = "void f(void)\n{\n    char x[\n        A + 2];\n    y = a[\n            A + 2];\n    g(a[\n          A + 2]);\n}\nint y = a[\n            A + 2];\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn fill_empty_lines_keeps_form_feeds_and_skips_continued_directive_braces() {
+    let input = "#define R { \\\n\t.e = S, \\\n}\n\nint f(void)\n{\n    x();\n\n    y();\n\x0c\n    z();\n}\n";
+    let expected = "#define R { \\\n\t.e = S, \\\n}\n\nint f(void)\n{\n    x();\n    \n    y();\n\x0c\n    z();\n}\n";
+    check(input, &["--fill-empty-lines"], expected);
+    let input = "int f(void)\n{\n    int x;\n    /* Test that scheme is properly initialized.\n     */\n\n    result = g();\n}\n";
+    let expected = "int f(void) {\n    int x;\n    /* Test that scheme is properly initialized.\n     */\n    \n    result = g(); }\n";
+    check(input, &["--style=lisp", "--fill-empty-lines"], expected);
+}
+
+#[test]
+fn spaces_before_a_comma_after_code_are_dropped() {
+    let input = "int f(int , int *);\nvoid g(void)\n{\n    h( , b);\n    h(a /* c */ , b);\n    x = a , b;\n    h(a\n      , b);\n    h(a\t, b);\n}\nenum e { A , B };\n";
+    let expected = "int f(int, int *);\nvoid g(void)\n{\n    h(, b);\n    h(a /* c */, b);\n    x = a, b;\n    h(a\n      , b);\n    h(a\t, b);\n}\nenum e { A, B };\n";
+    check(input, &[], expected);
+}
+
+#[test]
+fn joined_closing_header_shrinks_the_gap_before_its_trailing_comment() {
+    let input = "void f(void)\n{\n  if (a) {\n    x();\n  }\n  else {  /* out = \"source\" */\n    y();\n  }\n  if (a) {\n    x();\n  }\n  else if (b) {      /* Check */\n    y();\n  }\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        x();\n    } else { /* out = \"source\" */\n        y();\n    }\n    if (a) {\n        x();\n    } else if (b) {    /* Check */\n        y();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn comment_after_a_broken_brace_keeps_its_source_column() {
+    let input = "void f(void)\n{\n    if (a) {\n        x();\n    } else {     /* c */\n        y();\n    }\n    if (a) {\n        x();\n    } else if (b) {      /* d */\n        y();\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if (a)\n    {\n        x();\n    }\n    else         /* c */\n    {\n        y();\n    }\n    if (a)\n    {\n        x();\n    }\n    else if (b)          /* d */\n    {\n        y();\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn comment_after_a_case_label_brace_stays_on_the_label_line() {
+    let input = "void f(int c)\n{\n  switch (c) {\n    case 1: {  /* start capture */\n      x();\n      break;\n    }\n    case 2: { // line c\n      y();\n    }\n  }\n}\n";
+    let expected = "void f(int c)\n{\n    switch (c)\n    {\n    case 1:    /* start capture */\n    {\n        x();\n        break;\n    }\n    case 2:   // line c\n    {\n        y();\n    }\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn control_header_indexing_an_array_breaks_its_one_line_block() {
+    let input =
+        "int f(void)\n{\n  while( n>0 && p->aAction[n-1].lookahead<0 ){ n--; }\n  return n;\n}\n";
+    let expected = "int f(void)\n{\n    while( n>0 && p->aAction[n-1].lookahead<0 ) {\n        n--;\n    }\n    return n;\n}\n";
+    check(input, &["--style=kr"], expected);
 }

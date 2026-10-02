@@ -1170,7 +1170,8 @@ fn gnu_enum_brace_layout_does_not_depend_on_prior_type_definition() {
             "{",
             "    int value;",
             "};",
-            "enum Kind {",
+            "enum Kind",
+            "{",
             "    Alpha,",
             "    Beta",
             "};",
@@ -2458,13 +2459,13 @@ fn allman_keeps_one_line_enum_inline() {
 
 // Break-base styles keep the source position of multi-line enum opening braces.
 #[test]
-fn allman_keeps_source_attached_enum_opening_brace() {
+fn allman_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN\n};\n",
+        "enum Color\n{\n    RED,\n    GREEN\n};\n",
     );
 }
 
@@ -2480,59 +2481,59 @@ fn allman_keeps_source_broken_enum_opening_brace() {
 }
 
 #[test]
-fn gnu_keeps_source_attached_enum_opening_brace() {
+fn gnu_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN\n};\n",
+        "enum Color\n{\n    RED,\n    GREEN\n};\n",
     );
 }
 
 #[test]
-fn whitesmith_keeps_source_attached_enum_opening_brace() {
+fn whitesmith_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN\n    };\n",
+        "enum Color\n    {\n    RED,\n    GREEN\n    };\n",
     );
 }
 
 #[test]
-fn vtk_keeps_source_attached_enum_opening_brace() {
+fn vtk_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN\n};\n",
+        "enum Color\n{\n    RED,\n    GREEN\n};\n",
     );
 }
 
 #[test]
-fn horstmann_keeps_source_attached_enum_opening_brace() {
+fn horstmann_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
         .expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN\n};\n",
+        "enum Color\n{   RED,\n    GREEN\n};\n",
     );
 }
 
 #[test]
-fn pico_keeps_source_attached_enum_opening_brace() {
+fn pico_breaks_attached_enum_opening_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
 
     assert_eq!(
         format_exact("enum Color {\nRED,\nGREEN\n};\n", &options),
-        "enum Color {\n    RED,\n    GREEN };\n",
+        "enum Color\n{   RED,\n    GREEN };\n",
     );
 }
 

@@ -3010,7 +3010,7 @@ fn linux_top_level_banner_comment_closer_stays_at_column_zero() {
 }
 
 #[test]
-fn linux_relocated_else_brace_preserves_trailing_comment_gap() {
+fn linux_relocated_else_brace_shrinks_trailing_comment_gap_by_the_joined_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -3038,7 +3038,7 @@ fn linux_relocated_else_brace_preserves_trailing_comment_gap() {
             "{",
             "    if (a) {",
             "        x;",
-            "    } else  {   /* note */",
+            "    } else  { /* note */",
             "        y;",
             "    }",
             "}",

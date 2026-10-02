@@ -3746,7 +3746,7 @@ fn semicolon_terminated_macro_statement_formats_like_normal_statement() {
             "int f(void)\n{\n\tDO_CHECK( inner(value) , \"\");\n}\n",
             &options,
         ),
-        "int f(void)\n{\n    DO_CHECK( inner(value) , \"\");\n}\n",
+        "int f(void)\n{\n    DO_CHECK( inner(value), \"\");\n}\n",
     );
     assert_eq!(
         format_exact("int f(void)\n{\n\t\t\tDO_CHECK(value);\n}\n", &options),

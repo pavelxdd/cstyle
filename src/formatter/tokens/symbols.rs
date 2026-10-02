@@ -986,6 +986,11 @@ impl FormatEngine<'_> {
         let after_compound_literal = std::mem::take(&mut self.layout.compound_literal.just_closed)
             && self.current.trim_end().ends_with('}');
         self.emit_source_space();
+        // astyle drops the spaces before a comma that follows code.
+        if !self.current_is_blank() {
+            let kept = self.current.trim_end_matches(' ').len();
+            self.current.truncate(kept);
+        }
         self.current.push(',');
         self.layout.command_state.observe_char(',');
         if after_compound_literal {
