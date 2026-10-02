@@ -5,7 +5,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::line_scan::{
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::{
@@ -198,9 +198,13 @@ impl FormatEngine<'_> {
         if previous_trimmed.starts_with('#') || previous_code.ends_with(';') {
             return false;
         }
+        // The line starts and ends inside parens.
+        let (closes, opens) = line_paren_imbalance(trimmed);
+        let paren_depth = self.layout.nesting.paren_depth;
+        let paren_depth_at_start = (paren_depth + closes).saturating_sub(opens.len());
         previous_code.ends_with(['(', '[', '=', '?', '\\'])
             || head_ends_binary_operator(previous_code)
             || self.line_follows_logical_operator()
-            || self.layout.nesting.paren_depth > 0
+            || paren_depth > 0 && paren_depth_at_start > 0
     }
 }

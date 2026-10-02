@@ -3870,3 +3870,12 @@ fn split_else_body_with_a_multiline_condition_closes_at_its_header() {
     check(input, &["--style=1tbs"], expected);
     check(expected, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn declaration_after_an_attribute_macro_line_takes_the_statement_indent() {
+    let input = "CURL_EXTERN ALLOC_FUNC ALLOC_SIZE2(1, 2)\n  void *curl_dbg_calloc(size_t wanted_elements, size_t wanted_size,\n                        int line, const char *source);\n";
+    let expected = "CURL_EXTERN ALLOC_FUNC ALLOC_SIZE2(1, 2)\nvoid *curl_dbg_calloc(size_t wanted_elements, size_t wanted_size,\n                      int line, const char *source);\n";
+    let options = ["--break-after-logical", "--min-conditional-indent=0"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
