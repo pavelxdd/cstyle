@@ -238,7 +238,14 @@ impl FormatEngine<'_> {
             .as_deref()
             .is_some_and(|line| {
                 let trimmed = line.trim_start();
-                trimmed.starts_with("//") || trimmed.starts_with("/*")
+                trimmed.starts_with("//")
+                    || trimmed.starts_with("/*")
+                    // The last row of a block comment that opened a line.
+                    || !trimmed.is_empty()
+                        && self.output.last_non_empty_index().is_some_and(|index| {
+                            let start = self.output.comment_start_index(index);
+                            start != index && self.output.trimmed(start).starts_with("/*")
+                        })
             })
     }
 

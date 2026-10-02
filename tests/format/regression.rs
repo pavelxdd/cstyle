@@ -3117,3 +3117,9 @@ fn remove_comment_prefix_leaves_rows_of_a_trailing_comment_in_place() {
     let input = "struct s {\n    unsigned int action;  /* CURL_POLL_IN we last told the\n                             libcurl application */\n    int x;      /* first\n                   second */\n};\n";
     check(input, &["--style=kr", "--remove-comment-prefix"], input);
 }
+
+#[test]
+fn break_blocks_keeps_a_multi_line_comment_on_its_header() {
+    let input = "void f(void)\n{\n    z();\n\n    /* two\n       lines */\n    if (b) {\n        y();\n    }\n\n    w();\n\n    /*\n     * three\n     */\n    if (c) {\n        y();\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], input);
+}
