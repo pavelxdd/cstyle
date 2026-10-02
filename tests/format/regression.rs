@@ -2925,3 +2925,9 @@ fn added_braces_leave_a_statement_after_a_macro_body_alone() {
         "void f(void)\n{\n    if( i>iLt ) SWAP_DOUBLE(a[i],a[iLt])\n        iLt++;\n    i++;\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn continuation_of_a_body_run_in_after_its_header_goes_a_level_in() {
+    let input = "int f(void)\n{\n    if (arg_len % 4) {\n        if (err) *err = \"Wrong number of arguments in \"\n                            \"buffer limit configuration.\";\n        return 0;\n    }\n    if (c) addReplyError(c,\"Invalid stream ID specified as stream \"\n                             \"command argument\");\n    if (vecSize(vdeleted)) notify(NOTIFY_HASH, \"hdel\",\n                                      keyArg, c->db->id);\n    return 1;\n}\n";
+    check(input, &["--style=kr"], input);
+}

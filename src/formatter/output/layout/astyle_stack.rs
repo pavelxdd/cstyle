@@ -169,6 +169,24 @@ impl FormatEngine<'_> {
         {
             line_first = next_code_token(tokens, line_first + 1)?;
         }
+        // A body run in after its header on the line continues a level in,
+        // as astyle indents that body.
+        let mut header_levels = 0;
+        while line_first < start
+            && matches!(&tokens[line_first], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
+            && let Some(open) = next_code_token(tokens, line_first + 1)
+            && matches!(tokens[open], Token::Symbol('('))
+            && let Some(close) = self
+                .tree
+                .groups
+                .opened_at(open)
+                .and_then(|group| self.tree.groups.get(group).close)
+            && close < start
+            && self.output.line_with_token(close) == Some(start_line)
+        {
+            header_levels += 1;
+            line_first = next_code_token(tokens, close + 1)?;
+        }
         if line_first != start {
             return None;
         }
@@ -345,7 +363,12 @@ impl FormatEngine<'_> {
         } else {
             replay.stack.last().copied()?
         };
-        Some(block_lead + top + self.case_unindent_spaces())
+        Some(
+            block_lead
+                + top
+                + header_levels * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Whether `close` is a `)` whose `(` ends its line.

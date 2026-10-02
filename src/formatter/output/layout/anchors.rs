@@ -2240,9 +2240,48 @@ impl FormatEngine<'_> {
                 _ => return None,
             }
         };
-        // The value's line is published: the literal continues it.
+        // The value's line is published: the literal continues it, a level
+        // in when the statement runs in after a header.
         let value = next_code_token(tokens, assign + 1)?;
-        Some(self.token_column(value)? + self.case_unindent_spaces())
+        Some(
+            self.token_column(value)?
+                + self.run_in_header_levels(assign) * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
+    /// How many control headers, as `if (x)`, precede on its line the
+    /// statement holding the token `index`.
+    pub(super) fn run_in_header_levels(&self, index: usize) -> usize {
+        let tokens = &self.tree.tokens;
+        let Some(line) = self.output.line_with_token(index) else {
+            return 0;
+        };
+        let Some(mut cursor) = self
+            .output
+            .line_tokens(line)
+            .and_then(|span| next_code_token(tokens, span.first))
+        else {
+            return 0;
+        };
+        let mut levels = 0;
+        while cursor < index
+            && matches!(&tokens[cursor], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
+            && let Some(open) = next_code_token(tokens, cursor + 1)
+            && matches!(tokens[open], Token::Symbol('('))
+            && let Some(close) = self
+                .tree
+                .groups
+                .opened_at(open)
+                .and_then(|group| self.tree.groups.get(group).close)
+            && close < index
+            && self.output.line_with_token(close) == Some(line)
+            && let Some(next) = next_code_token(tokens, close + 1)
+        {
+            levels += 1;
+            cursor = next;
+        }
+        levels
     }
 
     /// Whether the code token `first` continues a control condition or a
