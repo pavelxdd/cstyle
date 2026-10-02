@@ -473,10 +473,14 @@ impl<'a> FormatEngine<'a> {
         let after_following = following_index
             .and_then(|i| next_non_layout_token_index(tokens, i + 1))
             .map(|i| &tokens[i]);
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Pico | BraceStyle::Lisp
-        ) && matches!(following, Some(Token::Symbol('}')))
+        // Only a removed brace leaves a gap at a line end; astyle drops the
+        // source's own trailing whitespace.
+        if self.options.remove_braces
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            )
+            && matches!(following, Some(Token::Symbol('}')))
             && previous_non_whitespace(tokens, index, line_start).is_some()
             && let Some(Token::Whitespace(whitespace)) = tokens.get(index.wrapping_sub(1))
         {

@@ -3839,3 +3839,10 @@ fn parameters_follow_a_template_function_name_onto_its_attached_return_type() {
         check(expected, options, expected);
     }
 }
+
+#[test]
+fn attached_closing_brace_drops_trailing_source_space() {
+    let input = "void f(void)\n{\n  g(); \n}\n";
+    check(input, &["--style=pico"], "void f(void)\n{   g(); }\n");
+    check(input, &["--style=lisp"], "void f(void) {\n    g(); }\n");
+}
