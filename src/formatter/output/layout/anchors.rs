@@ -2786,7 +2786,13 @@ impl FormatEngine<'_> {
                 end = index;
                 continue;
             }
-            if self.output.line_tokens(index).is_some() {
+            // Code after a comment on its line holds it there.
+            if self.output.line_tokens(index).is_some()
+                || text.rsplit_once("*/").is_some_and(|(_, after)| {
+                    let after = after.trim();
+                    !after.is_empty() && !after.starts_with("/*") && !after.starts_with("//")
+                })
+            {
                 break;
             }
             let start = self.output.comment_start_index(index);

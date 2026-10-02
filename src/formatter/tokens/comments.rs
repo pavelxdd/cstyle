@@ -477,6 +477,16 @@ impl FormatEngine<'_> {
             return false;
         }
         let last = self.output[end - 1].trim_start();
+        // Code after a leading comment, as `/* note */ MACRO`, makes the
+        // line a statement of the code before it.
+        if last.starts_with("/*")
+            && last.rsplit_once("*/").is_some_and(|(_, after)| {
+                let after = after.trim();
+                !after.is_empty() && !after.starts_with("/*") && !after.starts_with("//")
+            })
+        {
+            return false;
+        }
         let mut indent = (self.layout.indentation.line_indent(line_kind, self.options)
             + self.case_body_indent_extra(line_kind))
         .saturating_sub(self.layout.line_adjuster.pending_case_unindent());

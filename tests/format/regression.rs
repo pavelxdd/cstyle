@@ -2931,3 +2931,9 @@ fn continuation_of_a_body_run_in_after_its_header_goes_a_level_in() {
     let input = "int f(void)\n{\n    if (arg_len % 4) {\n        if (err) *err = \"Wrong number of arguments in \"\n                            \"buffer limit configuration.\";\n        return 0;\n    }\n    if (c) addReplyError(c,\"Invalid stream ID specified as stream \"\n                             \"command argument\");\n    if (vecSize(vdeleted)) notify(NOTIFY_HASH, \"hdel\",\n                                      keyArg, c->db->id);\n    return 1;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn comment_led_fallthrough_macro_before_a_case_label_keeps_the_body() {
+    let input = "void f(int a)\n{\n    switch (a) {\n    case 1:\n        op = 2;\n        /* no break */ deliberate_fall_through\n    case 2:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
