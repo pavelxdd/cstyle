@@ -8,7 +8,7 @@
 //! [`output`]. Brace styles that reshape whole lines are applied last by
 //! [`braces::postprocess`].
 
-use crate::config::{FormatOptions, IndentStyle};
+use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
@@ -68,7 +68,36 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
         || tokens
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)));
-    postprocess_brace_style(engine.format_into(&tokens).finish(), options)
+    let output = postprocess_brace_style(engine.format_into(&tokens).finish(), options);
+    if options.empty_line_fill
+        && matches!(
+            options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp | BraceStyle::Horstmann
+        )
+    {
+        refill_empty_lines(&output, options.line_break())
+    } else {
+        output
+    }
+}
+
+/// Brace styles that move lines after the output is finished leave filled
+/// empty lines with the indent of a line that moved: they take the indent of
+/// the line now before them.
+fn refill_empty_lines(output: &str, line_break: &str) -> String {
+    let mut lead = "";
+    let mut lines = Vec::new();
+    for line in output.split(line_break) {
+        if line.trim().is_empty() {
+            lines.push(if line.is_empty() { "" } else { lead });
+        } else {
+            if !line.trim_start().starts_with('#') {
+                lead = &line[..line.len() - line.trim_start().len()];
+            }
+            lines.push(line);
+        }
+    }
+    lines.join(line_break)
 }
 
 fn case_adjustments_needed_for_tokens(tokens: &[Token], options: &FormatOptions) -> bool {

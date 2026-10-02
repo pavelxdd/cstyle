@@ -3024,3 +3024,34 @@ fn chained_assignment_rows_align_with_the_last_assigned_value() {
     let input = "void f(void)\n{\n    *l1 = *l2 = (v) |\n                (v << 16) |\n                (v << 32);\n}\n";
     check(input, &["--style=linux"], input);
 }
+
+#[test]
+fn star_after_a_numeric_cast_on_a_continued_argument_line_keeps_its_spacing() {
+    let input = "void f(void)\n{\n    logmsg(\"%lu > %lu\",\n           (unsigned long)*qlen, (unsigned long)qbuflen);\n}\n";
+    check(input, &["--pad-oper"], input);
+}
+
+#[test]
+fn fill_empty_lines_leaves_file_scope_lines_empty() {
+    let input = "/*\n * x\n */\n\n#include <a.h>\n\nvoid f(void)\n{\n    g(cf, 0,\n      name);\n      \n    /*\n     * c\n     */\n    \n    x();\n}\n";
+    check(input, &["--style=kr", "--fill-empty-lines"], input);
+}
+
+#[test]
+fn fill_empty_lines_restarts_each_conditional_branch() {
+    let input = "void f(void)\n{\n#if A\n    if (a) {\n#else\n    if (b) {\n#endif\n        x();\n    }\n#if B\n    y();\n#endif\n    \n    z();\n}\n";
+    check(input, &["--style=kr", "--fill-empty-lines"], input);
+}
+
+#[test]
+fn star_after_a_comma_in_a_condition_call_stays_unary() {
+    let input =
+        "int f(void)\n{\n    if (icase && a(wc, *c))\n        return 1;\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--align-pointer=middle"], input);
+}
+
+#[test]
+fn remove_braces_keeps_the_braces_of_a_statement_spanning_lines() {
+    let input = "void f(void)\n{\n    if (b) {\n        rc = g(interp,\n               objv[1]);\n    }\n}\n";
+    check(input, &["--style=kr", "--remove-braces"], input);
+}

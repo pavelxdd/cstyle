@@ -1957,11 +1957,18 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
         if !is_remove_braces_opening(tokens, open_index) {
             continue;
         }
-        let Some((_, _, close_index)) =
+        let Some((statement_start, semicolon, close_index)) =
             removable_statement_brace_range(tokens, open_index, tokens.len(), true)
         else {
             continue;
         };
+        // astyle keeps the braces of a statement that spans lines.
+        if tokens[statement_start..semicolon]
+            .iter()
+            .any(|token| matches!(token, Token::Newline))
+        {
+            continue;
+        }
         if !tokens[open_index..=close_index]
             .iter()
             .any(|token| matches!(token, Token::Newline))

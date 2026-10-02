@@ -803,7 +803,14 @@ impl FormatEngine<'_> {
                     <= self.current.chars().filter(|&ch| ch == ')').count()
                 && matches!(next, Some(Token::Word(_))) =>
             {
-                self.push_binary_operator(operator);
+                // Inside parentheses astyle keeps the spacing of the source.
+                if self.layout.nesting.paren_depth > 0 {
+                    self.emit_source_space();
+                    self.current.push_str(operator);
+                    self.emit_trailing_source_space();
+                } else {
+                    self.push_binary_operator(operator);
+                }
             }
             "*" if operator_role != OperatorRole::PointerDeclarator
                 && self.layout.nesting.paren_depth > 0
@@ -833,13 +840,16 @@ impl FormatEngine<'_> {
                 self.push_pointer_run(operator, next, next_is_adjacent);
             }
             "*" if operator_role == OperatorRole::UnaryOperator
-                && (!self.is_pointer_like(
-                    operator,
-                    next,
-                    next_is_adjacent,
-                    following_operator,
-                ) || (self.current.trim_end().ends_with('*')
-                    && !self.looks_like_pointer_declaration_context())) =>
+                && (self.layout.previous == PreviousToken::Comma
+                    && self.current_paren_is_expression_context()
+                    || !self.is_pointer_like(
+                        operator,
+                        next,
+                        next_is_adjacent,
+                        following_operator,
+                    )
+                    || (self.current.trim_end().ends_with('*')
+                        && !self.looks_like_pointer_declaration_context())) =>
             {
                 self.push_unary_prefix(operator);
             }

@@ -383,6 +383,81 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// astyle fills an empty line inside braces with the indent of the line
+    /// before it, and leaves one at file scope empty.
+    fn fill_empty_lines(&mut self) {
+        if !self.options.empty_line_fill {
+            return;
+        }
+        let mut depth = 0isize;
+        let mut branch_depths = Vec::new();
+        let mut previous_lead = String::new();
+        for index in 0..self.output.len() {
+            let line = &self.output[index];
+            if line.trim().is_empty() {
+                if !self.output.is_verbatim(index) {
+                    let fill = if depth > 0 {
+                        previous_lead.clone()
+                    } else {
+                        String::new()
+                    };
+                    self.output.set(index, fill);
+                }
+                continue;
+            }
+            let meta = self.output.brace_meta(index);
+            // The rest of a block comment keeps the indent of its first line.
+            if self.output.comment_start_index(index) != index {
+                continue;
+            }
+            if !meta.code_starts_with_hash {
+                previous_lead = line[..line.len() - line.trim_start().len()].to_string();
+            }
+            let code = line.trim_start();
+            let starts_word = |name: &str| {
+                code.strip_prefix(name).is_some_and(|rest| {
+                    !rest.starts_with(|ch: char| ch == '_' || ch.is_alphanumeric())
+                })
+            };
+            if self
+                .options
+                .macro_blocks
+                .iter()
+                .any(|(begin, _)| starts_word(begin))
+            {
+                depth += 1;
+            } else if self
+                .options
+                .macro_blocks
+                .iter()
+                .any(|(_, end)| starts_word(end))
+            {
+                depth -= 1;
+            }
+            if meta.code_starts_with_hash {
+                // Each branch of a conditional starts at the depth before it,
+                // and the first branch's depth carries on past the conditional.
+                match preprocessor_directive(line.trim_start()) {
+                    Some("if" | "ifdef" | "ifndef") => branch_depths.push((depth, None)),
+                    Some("else" | "elif") => {
+                        if let Some((start, first_end)) = branch_depths.last_mut() {
+                            first_end.get_or_insert(depth);
+                            depth = *start;
+                        }
+                    }
+                    Some("endif") => {
+                        if let Some((_, Some(first_end))) = branch_depths.pop() {
+                            depth = first_end;
+                        }
+                    }
+                    _ => {}
+                }
+                continue;
+            }
+            depth += meta.opens as isize - meta.closes as isize;
+        }
+    }
+
     pub(crate) fn finish(mut self) -> String {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
@@ -393,6 +468,7 @@ impl FormatEngine<'_> {
         self.attach_statement_expression_braces();
         self.align_comments_before_case_labels();
         self.retab_output();
+        self.fill_empty_lines();
         if self.output.is_empty() {
             String::new()
         } else {
