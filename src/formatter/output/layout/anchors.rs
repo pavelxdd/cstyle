@@ -1625,10 +1625,14 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         // Case bodies move their lines after publishing.
-        if self.options.brace_style != BraceStyle::Allman
-            || self.options.indent_blocks
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Allman | BraceStyle::Pico | BraceStyle::Horstmann
+        ) || self.options.indent_blocks
             || self.options.indent_braces
-            || line.trim() != "{"
+            || !(line.trim() == "{"
+                || self.options.brace_style != BraceStyle::Allman
+                    && line.trim_start().starts_with('{'))
             || self.layout.line_adjuster.total_case_unindent_depth() > 0
             || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
         {
@@ -1667,10 +1671,12 @@ impl FormatEngine<'_> {
             return line;
         }
         let spaces = self.output.lead_width(header_line, self.options.tab_width);
-        if leading_visual_width(&line, self.options.tab_width) == spaces {
+        let current = leading_visual_width(&line, self.options.tab_width);
+        // Run-in styles only lift a brace left behind its header.
+        if current == spaces || self.options.brace_style != BraceStyle::Allman && current > spaces {
             return line;
         }
-        format!("{}{{", " ".repeat(spaces))
+        format!("{}{}", " ".repeat(spaces), line.trim_start())
     }
 
     /// Whether the innermost group around `index` is a `switch` body.

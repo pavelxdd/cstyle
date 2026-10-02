@@ -3854,3 +3854,11 @@ fn split_else_chain_indent_ends_with_its_block() {
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn run_in_brace_of_a_split_else_body_aligns_to_its_header() {
+    let input = "void f(void)\n{\n  if(a) {\n    x = 1;\n  }\n  else\n\n  if(c) {\n    y = 1;\n  }\n  z = 2;\n}\n";
+    let expected = "void f(void)\n{   if(a)\n    {   x = 1; }\n    else\n\n        if(c)\n        {   y = 1; }\n    z = 2; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
