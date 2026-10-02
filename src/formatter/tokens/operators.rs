@@ -841,7 +841,12 @@ impl FormatEngine<'_> {
             }
             "*" if operator_role == OperatorRole::UnaryOperator
                 && (self.layout.previous == PreviousToken::Comma
-                    && self.current_paren_is_expression_context()
+                    && (self.current_paren_is_expression_context()
+                        || self.tree_declaration_context().is_none())
+                    // After a binary operator spaced off its left operand.
+                    || self.layout.previous == PreviousToken::Operator
+                        && self.current.ends_with(' ')
+                        && self.current.trim_end().ends_with(['&', '*'])
                     || !self.is_pointer_like(
                         operator,
                         next,

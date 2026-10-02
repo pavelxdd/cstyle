@@ -3171,3 +3171,11 @@ fn pad_oper_keeps_dereference_after_a_control_header_and_cast_stars() {
     let input = "void f(void)\n{\n    if (c == 1)\n        *out++ = 1;\n    pU8 = (u8*)pAllocation;\n    *(char**)pArg = 0;\n    v = luaM_reallocvector(L, tb->hash, osize, nsize, TString*);\n}\n";
     check(input, &["--style=kr", "--pad-oper"], input);
 }
+
+#[test]
+fn unary_star_after_a_comma_or_spaced_operator_stays_attached() {
+    let input = "void f(void)\n{\n    while (isspace(cast(unsigned char, *endptr))) endptr++;\n}\n";
+    check(input, &["--style=kr", "--align-pointer=middle"], input);
+    let input = "void f(void)\n{\n    if (type & *want_type && x)\n        puts(x);\n}\n";
+    check(input, &["--style=kr", "--align-pointer=type"], input);
+}
