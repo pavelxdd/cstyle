@@ -2797,7 +2797,7 @@ impl FormatEngine<'_> {
             .unwrap_or_default();
         if self.layout.line_state.is_multi_statement_line {
             if gap.is_empty() {
-                if kind != CommentKind::Block || comment.contains("NOPAD") {
+                if kind == CommentKind::Block && comment.contains("NOPAD") {
                     self.ensure_space();
                 }
             } else {

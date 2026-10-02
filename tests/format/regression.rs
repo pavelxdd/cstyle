@@ -3941,3 +3941,11 @@ fn whitesmith_splits_every_label_of_the_first_case_line() {
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn split_statement_keeps_an_adjacent_line_comment() {
+    let input = "void f(void)\n{\n    a=0; b=1;// c\n    a=0; if (x) b=1;// e\n}\n";
+    let expected = "void f(void)\n{\n    a=0;\n    b=1;// c\n    a=0;\n    if (x) b=1;// e\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
