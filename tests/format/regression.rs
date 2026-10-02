@@ -3428,3 +3428,74 @@ fn reference_to_a_parenthesized_declarator_keeps_its_spacing() {
     check(input, &["--style=1tbs", "--align-reference=name"], input);
     check(input, &["--style=1tbs", "--align-pointer=name"], input);
 }
+
+#[test]
+fn initializer_member_after_a_directive_stands_at_the_previous_member_start() {
+    let input =
+        "static T a[] = {\n    W(s, 2,\n      g),\n#ifdef X\n    W(m, 1,\n      p),\n#endif\n};\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn enum_run_in_after_its_brace_indents_a_block_level_after_parens() {
+    let input = "struct s {\n    enum e { A,\n        B, C,\n        D\n    };\n    int x;\n};\ntypedef enum { A,\n    B\n} t;\nenum { A = 1,\n    B = (2 +\n            3),\n    C = f(2,\n            3)\n} y;\n";
+    check(input, &["--indent-after-parens"], input);
+    let input =
+        "enum {\n    A = 1,\n    B = (2 +\n         3),\n    C = f(2,\n          3)\n} x;\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn statement_led_by_a_call_or_cast_continues_nothing_past_its_comma() {
+    let input = "int f(int a)\n{\n    (void)file, (void)a,\n    (void)b;\n    g(a),\n    c;\n    int d(1),\n        e;\n    return 0;\n}\n";
+    check(input, &[], input);
+    check(input, &["--indent-after-parens"], input);
+}
+
+#[test]
+fn ternary_arm_in_parens_stacks_after_parens() {
+    let input = "void f(void)\n{\n    show_ce(repo, dir,\n        ce_stage(ce) ? tag_unmerged :\n        (ce_skip_worktree(ce) ? tag_skip_worktree :\n            tag_cached));\n}\n";
+    check(input, &["--indent-after-parens"], input);
+}
+
+#[test]
+fn assignment_split_by_a_directive_stacks_after_parens() {
+    let input = "void f(void)\n{\n    while (len--) {\n        s->out[s->outcnt] =\n#ifdef A\n            dist > s->outcnt ?\n            0 :\n#endif\n            s->out[s->outcnt - dist];\n        s->outcnt++;\n    }\n}\n";
+    check(input, &["--indent-after-parens"], input);
+}
+
+#[test]
+fn conditional_directive_in_a_header_stands_at_its_level_after_parens() {
+    let input = "void f(void)\n{\n    if(a ||\n    #ifdef K\n        b ||\n    #endif\n        c)\n        g();\n    if(x) {\n        h(a,\n            #ifdef K\n            b,\n            #endif\n            c);\n    }\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond", "--indent-after-parens"],
+        input,
+    );
+}
+
+#[test]
+fn first_shift_stacks_like_a_paren_after_parens() {
+    let input = "void f(void)\n{\n  cout << a <<\n    b;\n  cout << a\n    << b;\n  t = a << 16 |\n    b;\n  x = cout << a <<\n    b;\n}\n";
+    check(
+        input,
+        &["--indent=spaces=2", "--indent-after-parens"],
+        input,
+    );
+}
+
+#[test]
+fn define_rows_stack_parens_and_return_after_parens() {
+    let input = "#define X(a_prefix) \\\n    a_type *\\\n    a_prefix##_first(a_prefix##_t *ph) {\\\n        return ph_first(&ph->ph, offsetof(a_type, a_field),\\\n                &a_prefix##_ph_cmp);\\\n    }\\\n    void g(void) {\\\n        ph_insert(&ph->ph, phn,\\\n            a_prefix##_ph_cmp);\\\n    }\n#define Y(a) \\\n    return a +\\\n        b;\n";
+    check(
+        input,
+        &["--indent-preproc-define", "--indent-after-parens"],
+        input,
+    );
+}
+
+#[test]
+fn define_return_continues_at_its_value() {
+    let input = "#define X(a) \\\n    return a +\\\n           b;\n";
+    check(input, &["--indent-preproc-define"], input);
+}

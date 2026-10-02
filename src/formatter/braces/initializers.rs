@@ -620,7 +620,15 @@ impl FormatEngine<'_> {
         }
         self.current.push('{');
         self.layout.command_state.observe_char('{');
-        let brace_column = if nested {
+        // Parens that indent after them make an enum body run in after its
+        // brace a block level past its line.
+        let enum_block_level = self.options.indent_after_parens
+            && brace_type == BraceType::Enum
+            && !nested
+            && !break_first;
+        let brace_column = if enum_block_level {
+            base_indent
+        } else if nested {
             if run_in_after_comma && !first_is_brace {
                 base_indent + self.options.indent_width
             } else {
@@ -632,7 +640,9 @@ impl FormatEngine<'_> {
         if !break_first {
             self.emit_trailing_source_space();
         }
-        let mut column = if nested {
+        let mut column = if enum_block_level {
+            base_indent + self.options.indent_width
+        } else if nested {
             if double_brace_initializer {
                 base_indent + self.options.indent_width * 2
             } else {
@@ -1250,21 +1260,35 @@ impl FormatEngine<'_> {
         if !preprocessor_directive(previous.trim_start()).is_some_and(is_conditional_preprocessor) {
             return None;
         }
-        let row = self
+        let mut rows = self
             .output
             .scoped()
             .iter()
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
             .skip(1)
-            .find(|line| {
+            .filter(|line| {
                 let trimmed = line.trim_start();
                 !trimmed.is_empty() && !trimmed.starts_with('#')
-            })?;
-        let row_code = row[..trailing_comment_split_limit(row)].trim_end();
-        row_code
+            });
+        let mut row = rows.next()?;
+        if !row[..trailing_comment_split_limit(row)]
+            .trim_end()
             .ends_with(',')
-            .then(|| leading_visual_width(row, self.options.tab_width))
+        {
+            return None;
+        }
+        // A member split over rows stands at the row that opens it.
+        let mut pending_closes = 0usize;
+        loop {
+            let (closes, opens) = line_paren_imbalance(&row[..trailing_comment_split_limit(row)]);
+            pending_closes = (pending_closes + closes).saturating_sub(opens.len());
+            if pending_closes == 0 {
+                break;
+            }
+            row = rows.next()?;
+        }
+        Some(leading_visual_width(row, self.options.tab_width))
     }
 
     pub(crate) fn split_else_initializer_closing_indent_spaces(

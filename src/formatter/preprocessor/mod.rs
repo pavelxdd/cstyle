@@ -824,9 +824,18 @@ impl FormatEngine<'_> {
                 .is_some_and(|frame| frame.role == ParenRole::Header)
             && let Some(header) = self.layout.frame_stack.active_header()
         {
+            // Parens indenting after them leave the directive at the
+            // header's own level.
+            let spaces = if self.options.indent_after_parens {
+                header
+                    .body_indent_spaces
+                    .saturating_sub(self.options.indent_width)
+            } else {
+                header.body_indent_spaces
+            };
             return Some(PreprocessorLineIndent::Exact {
-                structural_level: header.body_indent_spaces / self.options.indent_width.max(1),
-                spaces: header.body_indent_spaces,
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
             });
         }
         if self.options.indent_preproc_block && is_conditional_preprocessor(directive) {

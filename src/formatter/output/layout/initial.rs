@@ -1427,7 +1427,11 @@ impl FormatEngine<'_> {
                         text.strip_prefix("new")
                             .is_some_and(|rest| rest.starts_with(char::is_whitespace))
                     };
-                    let spaces = if starts_new(previous_body) && starts_new(current_body) {
+                    let enum_block_level = self.options.indent_after_parens
+                        && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Enum);
+                    let spaces = if enum_block_level {
+                        column
+                    } else if starts_new(previous_body) && starts_new(current_body) {
                         brace_column + self.options.indent_width
                     } else {
                         column.max(brace_column + 1)

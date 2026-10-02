@@ -537,6 +537,19 @@ fn define_row_paren_continuation(
     ))
 }
 
+/// The column of the value a `return` leading a row continues past its
+/// line.
+fn define_return_value_column(row: &str, tab_width: usize) -> Option<usize> {
+    let (body, _) = strip_define_backslash(row);
+    let trimmed = body.trim_start();
+    let rest = trimmed.strip_prefix("return")?;
+    if !rest.starts_with(char::is_whitespace) || body.trim_end().ends_with(';') {
+        return None;
+    }
+    let value = body.len() - rest.trim_start().len();
+    (value < body.trim_end().len()).then(|| visual_width_from(&body[..value], 0, tab_width))
+}
+
 /// The column rows continuing at `column` take: past the maximum from the
 /// indent level of the rows, two indents past the row with the paren.
 fn capped_define_continuation(
@@ -701,6 +714,19 @@ fn update_define_expression_paren_anchors(
             '=' if next != Some('=') && !matches!(previous_char, Some('=' | '!' | '<' | '>')) => {
                 let (_, align) = register(anchors, index);
                 anchors.push((ASSIGNMENT_ANCHOR, align));
+            }
+            // Indenting after parens stacks `return` like an assignment.
+            'r' if options.indent_after_parens
+                && !previous_char.is_some_and(|ch| ch.is_alphanumeric() || ch == '_')
+                && chars[index..].starts_with(&['r', 'e', 't', 'u', 'r', 'n'])
+                && !chars
+                    .get(index + 6)
+                    .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_') =>
+            {
+                let (_, align) = register(anchors, index + 5);
+                anchors.push((ASSIGNMENT_ANCHOR, align));
+                index += 6;
+                continue;
             }
             _ => {}
         }
@@ -1136,6 +1162,8 @@ impl FormatEngine<'_> {
                 } else {
                     None
                 }
+            } else if line_open_paren && self.options.indent_after_parens {
+                paren_anchors.last().map(|&(_, align)| align)
             } else if line_open_paren {
                 define_row_paren_continuation(
                     &format!("{prefix}{display}"),
@@ -1158,16 +1186,22 @@ impl FormatEngine<'_> {
                 // An assignment registers the column after it, a continuing
                 // backslash included.
                 let row = format!("{prefix}{display}");
-                define_assignment_align_column(row.trim_end(), self.options.tab_width).map(
-                    |column| {
-                        capped_define_continuation(
-                            column,
-                            leading_visual_width(&row, self.options.tab_width),
-                            structural_level * self.options.indent_width,
-                            self.options,
-                        )
-                    },
-                )
+                let row_indent = leading_visual_width(&row, self.options.tab_width);
+                define_assignment_align_column(row.trim_end(), self.options.tab_width)
+                    .or_else(|| define_return_value_column(row.trim_end(), self.options.tab_width))
+                    .map(|column| {
+                        if self.options.indent_after_parens {
+                            row_indent
+                                + self.options.continuation_indent * self.options.indent_width
+                        } else {
+                            capped_define_continuation(
+                                column,
+                                row_indent,
+                                structural_level * self.options.indent_width,
+                                self.options,
+                            )
+                        }
+                    })
             };
         }
     }

@@ -98,12 +98,16 @@ impl FormatEngine<'_> {
                     Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
                 )
             })
-            || tokens[start..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || !self.options.indent_after_parens
+                && tokens[start..first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Preprocessor(_)))
             || !(start..first).any(|index| {
                 groups.enclosing(index) == group
-                    && matches!(&tokens[index], Token::Operator(operator) if operator == "=")
+                    && matches!(&tokens[index], Token::Operator(operator)
+                        if operator == "="
+                            || self.options.indent_after_parens
+                                && matches!(operator.as_str(), "<<" | ">>"))
             })
         {
             return None;
@@ -320,10 +324,18 @@ impl FormatEngine<'_> {
                     replay.header_paren = next_code_token(tokens, index + 1);
                 }
                 // Stream chains align their own way; shifts in parens do not.
+                // Indenting after parens stacks the first shift like a
+                // paren at a line end.
                 Token::Operator(operator)
                     if matches!(operator.as_str(), "<<" | ">>") && replay.depth == 0 =>
                 {
-                    return None;
+                    if !self.options.indent_after_parens {
+                        return None;
+                    }
+                    if replay.stack.is_empty() {
+                        self.register(&mut replay, index, next_on_line, false, &relative)?;
+                        replay.continuation = true;
+                    }
                 }
                 Token::Operator(operator)
                     if operator == "=" && in_initializer && replay.depth == 0 => {}
@@ -598,9 +610,20 @@ impl FormatEngine<'_> {
                                 .is_some_and(|span| span.last == groups.get(group).open)
                         })
             };
+            // Each enumerator starts its own statement.
+            let enum_body = |group: GroupId| {
+                self.tree.blocks.kind(group) == Some(BlockKind::Aggregate)
+                    && self.tree.blocks.owner(group).is_some_and(|owner| {
+                        tokens[owner..groups.get(group).open]
+                            .iter()
+                            .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+                    })
+            };
             if groups.opened_at(before).is_some_and(|group| is_block(group) || row_array(group))
                 || matches!(tokens[before], Token::Symbol(','))
-                    && groups.enclosing(before).is_some_and(row_array)
+                    && groups
+                        .enclosing(before)
+                        .is_some_and(|group| row_array(group) || enum_body(group))
                 // The `;` of a `for` header stays inside its statement.
                 || matches!(tokens[before], Token::Symbol(';'))
                     && groups

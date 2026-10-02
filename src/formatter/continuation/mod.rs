@@ -10,9 +10,9 @@ use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
@@ -1366,7 +1366,19 @@ impl FormatEngine<'_> {
         if let Some(paren) = line.find('(') {
             let before_paren = line[..paren].trim_end();
             if !before_paren.contains(char::is_whitespace) {
-                return None;
+                // A call or a cast leading a statement declares nothing:
+                // astyle continues nothing past its comma.
+                let leads_statement = before_paren
+                    .trim_start()
+                    .chars()
+                    .all(is_identifier_continue)
+                    && !is_header(self.options, before_paren.trim_start())
+                    && unmatched_open_paren_column(line).is_none()
+                    && matches!(
+                        self.layout.nesting.brace_type_stack.last(),
+                        Some(BraceType::Command | BraceType::Definition)
+                    );
+                return leads_statement.then(|| self.current_line_indent_spaces());
             }
         }
         let current_prefix_len = line.len() - line.trim_start().len();

@@ -1987,6 +1987,8 @@ impl FormatEngine<'_> {
         let column = if groups.enclosing(previous_first) == Some(group) {
             self.output
                 .lead_width(previous_line, self.options.tab_width)
+        } else if self.options.indent_after_parens {
+            return self.stacked_argument_indent(first);
         } else {
             // Past the maximum continuation indent astyle falls back to
             // the engine's indent.
@@ -2433,6 +2435,10 @@ impl FormatEngine<'_> {
                     .lead_width(previous_line, self.options.tab_width)
                     + self.case_unindent_spaces(),
             );
+        }
+        // Parens indenting after them stack their own indent instead.
+        if self.options.indent_after_parens {
+            return self.stacked_argument_indent(first);
         }
         let content = next_code_token(tokens, open + 1)?;
         Some(self.token_column(content)? + self.case_unindent_spaces())
