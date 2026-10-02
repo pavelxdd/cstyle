@@ -3909,3 +3909,10 @@ fn comment_after_a_case_block_takes_the_label_level_only_before_a_label() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn comment_trailing_a_switch_brace_stands_in_the_case_bodies() {
+    let input = "int f(int c)\n{\n  switch( c ){  /* a\n          ** b */\n    case 1:\n      return 1;\n  }\n}\n";
+    let expected = "int f(int c)\n{\n    switch( c ) {\n        /* a\n                ** b */\n    case 1:\n        return 1;\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+}

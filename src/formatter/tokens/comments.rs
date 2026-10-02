@@ -524,7 +524,9 @@ impl FormatEngine<'_> {
                 }
                 start -= 1;
             }
-            if !self.output[start].trim_start().starts_with("/*") {
+            if !self.output[start].trim_start().starts_with("/*")
+                || line_kind == LineKind::SwitchLabel && self.output_comment_trailed_code(start)
+            {
                 return false;
             }
             let preserve_relative = if line_kind == LineKind::SwitchLabel && last.starts_with('}') {
@@ -553,7 +555,9 @@ impl FormatEngine<'_> {
             }
             start -= 1;
         }
-        if !self.output[start].trim_start().starts_with("/*") {
+        if !self.output[start].trim_start().starts_with("/*")
+            || line_kind == LineKind::SwitchLabel && self.output_comment_trailed_code(start)
+        {
             return false;
         }
         if line_kind == LineKind::SwitchLabel
@@ -571,6 +575,18 @@ impl FormatEngine<'_> {
         }
         self.reindent_output_range(start, end, indent, true);
         true
+    }
+
+    /// Whether the comment opening on output line `line` followed code on
+    /// its source line.
+    pub(crate) fn output_comment_trailed_code(&self, line: usize) -> bool {
+        self.output.comment_token(line).is_some_and(|comment| {
+            self.tree.tokens[..comment]
+                .iter()
+                .rev()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| !matches!(token, Token::Newline))
+        })
     }
 
     fn reindent_output_range(
@@ -2346,11 +2362,19 @@ impl FormatEngine<'_> {
                 code.trim_start().starts_with("switch") && code.ends_with('{')
             }
         {
+            // A comment that trailed the brace stands in the case bodies.
+            let levels = if self.token_input.token_begins_source_line {
+                usize::from(self.comment_precedes_switch_statement())
+                    * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
+            } else {
+                1 + usize::from(
+                    self.options.indent_switches
+                        || self.options.brace_style == BraceStyle::Ratliff,
+                )
+            };
             " ".repeat(
                 leading_visual_width(previous, self.options.tab_width)
-                    + usize::from(self.comment_precedes_switch_statement())
-                        * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
-                        * self.options.indent_width,
+                    + levels * self.options.indent_width,
             )
         } else if let Some(previous) = self
             .output

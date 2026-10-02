@@ -3017,6 +3017,11 @@ impl FormatEngine<'_> {
             {
                 break;
             }
+            // A comment that trailed code in the source keeps its place
+            // before a label.
+            if is_case_label && self.output_comment_trailed_code(start) {
+                break;
+            }
             let lead = self.output.lead_width(start, tab_width);
             let opener_line = &self.output.as_slice()[start];
             let opener_prefix = &opener_line[..opener_line.len() - opener_line.trim_start().len()];
