@@ -3671,3 +3671,41 @@ fn else_joined_from_its_own_line_keeps_the_case_block_closing_brace() {
     let expected = "void f(void)\n{\n    switch (t) {\n    case 1: {\n        if (a) {\n            x();\n        } else {\n            y();\n        }\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn comment_led_argument_row_leaves_no_column_past_its_statement() {
+    let input = "TEST_BEGIN(t)\n{\n    expect_simple(&tree, /* specialness */ 4, /* empty */ true,\n                  /* first */ NULL, /* last */ NULL);\n}\nTEST_END\n\nint x;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn added_braces_leave_a_comment_after_a_blank_line_below_the_block() {
+    let input = "int f(void)\n{\n    if (malloc_failed) *malloc_failed = 0;\n\n    /* We cannot rehash twice. */\n    assert(x);\n}\n";
+    let expected = "int f(void)\n{\n    if (malloc_failed) {\n        *malloc_failed = 0;\n    }\n\n    /* We cannot rehash twice. */\n    assert(x);\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn added_brace_takes_its_place_out_of_the_gap_before_a_header_comment() {
+    let input = "void f(void)\n{\n  if (path == NULL)  /* no versioned? */\n    path = getenv(envname);  /* try */\n  if (rupper >= rlower)\t/* cannot be */\n    return;\n  if (b) /* c */\n    return 0;\n}\n";
+    let expected = "void f(void)\n{\n    if (path == NULL) { /* no versioned? */\n        path = getenv(envname);    /* try */\n    }\n    if (rupper >= rlower) {\t/* cannot be */\n        return;\n    }\n    if (b) { /* c */\n        return 0;\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn added_braces_set_the_statement_comment_an_indent_past_it() {
+    let input = "void f(void)\n{\n  if (a) return; /* c */\n  if (b)\n    return;      /* d */\n  if (c) { return; } /* e */\n}\n";
+    let expected = "void f(void)\n{\n  if (a) {\n    return;  /* c */\n  }\n  if (b) {\n    return;  /* d */\n  }\n  if (c) {\n    return;  /* e */\n  }\n}\n";
+    check(input, &["--style=1tbs", "--indent=spaces=2"], expected);
+    check(expected, &["--style=1tbs", "--indent=spaces=2"], expected);
+}
+
+#[test]
+fn broken_one_line_function_body_comment_keeps_the_gap_before_its_brace() {
+    let input = "int f(){return 0;}// tail\nint g(){return 0;} // tail\n";
+    let expected = "int f() {\n    return 0;   // tail\n}\nint g() {\n    return 0;   // tail\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}

@@ -217,8 +217,20 @@ impl FormatEngine<'_> {
                 statement_start,
                 None,
             );
-            let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true)
-                .and_then(|next_index| tokens.get(next_index));
+            // A comment on a later line follows the block, not the brace.
+            let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true).and_then(
+                |next_index| {
+                    let later_comment = matches!(tokens[next_index], Token::Comment(..))
+                        && tokens[semicolon + 1..next_index]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline));
+                    if later_comment {
+                        Some(&Token::Newline)
+                    } else {
+                        tokens.get(next_index)
+                    }
+                },
+            );
             self.token_input.previous_input_whitespace = Some(" ".to_string());
             self.push_close_brace(next, false);
             self.layout.command_state.current_header = None;
@@ -1836,8 +1848,26 @@ fn is_remove_braces_header(word: &str) -> bool {
 pub(crate) fn add_cross_line_statement_braces(
     tokens: &[Token],
     attach_added_braces: bool,
+    comment_gap: usize,
 ) -> Vec<Token> {
     let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
+    let mut replace: Vec<Option<Token>> = vec![None; tokens.len()];
+    // astyle sets the comment after a braced statement an indent past it,
+    // and takes the brace it attaches out of the gap before a comment.
+    let set_statement_comment_gap = |replace: &mut Vec<Option<Token>>, close_insert: usize| {
+        let mut index = close_insert;
+        while index > 0 && matches!(tokens[index - 1], Token::Newline | Token::Whitespace(_)) {
+            index -= 1;
+        }
+        if index >= 2
+            && matches!(&tokens[index - 1], Token::Comment(_, text) if !text.contains('\n'))
+            && matches!(tokens[index - 2], Token::Whitespace(_))
+            && index >= 3
+            && matches!(tokens[index - 3], Token::Symbol(';'))
+        {
+            replace[index - 2] = Some(Token::Whitespace(" ".repeat(comment_gap)));
+        }
+    };
     let mut covered_until = 0usize;
     for header_index in 0..tokens.len() {
         if header_index < covered_until {
@@ -1854,16 +1884,31 @@ pub(crate) fn add_cross_line_statement_braces(
         if attach_added_braces
             && open_brace_attaches_to_header_line(tokens, header_end, open_insert)
         {
-            let brace_insert = (header_end + 1..open_insert - 1)
-                .find(|&index| matches!(tokens[index], Token::Comment(_, _)))
-                .unwrap_or(open_insert - 1);
-            insert_before[brace_insert].push(Token::Symbol('{'));
+            let comment = (header_end + 1..open_insert - 1)
+                .find(|&index| matches!(tokens[index], Token::Comment(_, _)));
+            match comment {
+                Some(comment) => {
+                    insert_before[header_end + 1].push(Token::Whitespace(" ".to_owned()));
+                    insert_before[header_end + 1].push(Token::Symbol('{'));
+                    if comment == header_end + 2
+                        && let Token::Whitespace(gap) = &tokens[header_end + 1]
+                        && !gap.contains('\t')
+                    {
+                        let kept = gap.len().saturating_sub(2).max(1);
+                        replace[header_end + 1] = Some(Token::Whitespace(" ".repeat(kept)));
+                    } else if comment == header_end + 1 {
+                        insert_before[comment].push(Token::Whitespace(" ".to_owned()));
+                    }
+                }
+                None => insert_before[open_insert - 1].push(Token::Symbol('{')),
+            }
         } else {
             insert_before[open_insert].push(Token::Symbol('{'));
             insert_before[open_insert].push(Token::Newline);
         }
         insert_before[close_insert].push(Token::Newline);
         insert_before[close_insert].push(Token::Symbol('}'));
+        set_statement_comment_gap(&mut replace, close_insert);
         covered_until = close_insert;
     }
 
@@ -1871,7 +1916,7 @@ pub(crate) fn add_cross_line_statement_braces(
         Vec::with_capacity(tokens.len() + insert_before.iter().map(Vec::len).sum::<usize>());
     for (index, token) in tokens.iter().cloned().enumerate() {
         output.append(&mut insert_before[index]);
-        output.push(token);
+        output.push(replace[index].take().unwrap_or(token));
     }
     output.append(&mut insert_before[tokens.len()]);
     output
@@ -2630,6 +2675,6 @@ mod tests {
             "void run(){if(alphaCondition&&\n#if ENABLED\nbetaCondition\n#endif\nzetaCondition){call();}}\n",
         );
 
-        assert_eq!(add_cross_line_statement_braces(&tokens, true), tokens);
+        assert_eq!(add_cross_line_statement_braces(&tokens, true, 4), tokens);
     }
 }

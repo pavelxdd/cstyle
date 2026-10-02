@@ -510,9 +510,14 @@ impl FormatEngine<'_> {
                         .find(|index| !self.output[*index].trim().is_empty())
                 })
                 .or_else(|| self.output.len().checked_sub(1));
+            // astyle puts the brace's indent less one after the space
+            // before the brace.
+            let gap = format!(
+                "{whitespace_before_brace}{}",
+                " ".repeat(self.options.indent_width.saturating_sub(1))
+            );
             if let Some(line) = target_index.and_then(|index| self.output.get_mut(index)) {
-                line.push_str(whitespace_before_brace);
-                line.push_str("   ");
+                line.push_str(&gap);
                 line.push_str(comment.trim_end());
                 if self
                     .options

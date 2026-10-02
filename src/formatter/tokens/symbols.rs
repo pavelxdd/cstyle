@@ -859,6 +859,10 @@ impl FormatEngine<'_> {
         if self.layout.indentation.statement_depth() == 0 {
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
+            // A finished statement leaves no column for the line after it.
+            self.layout
+                .continuation_indent
+                .clear_continuation_after_line = None;
             let closed_questions = self.layout.nesting.truncate_questions_to_brace_scope();
             for _ in 0..closed_questions {
                 self.layout.frame_stack.pop_active_ternary();

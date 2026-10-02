@@ -322,7 +322,11 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Ratliff
                     | BraceStyle::Lisp
             );
-            added_brace_tokens = add_cross_line_statement_braces(tokens, attach_added_braces);
+            added_brace_tokens = add_cross_line_statement_braces(
+                tokens,
+                attach_added_braces,
+                self.options.indent_width,
+            );
             added_brace_tokens.as_slice()
         } else {
             tokens
