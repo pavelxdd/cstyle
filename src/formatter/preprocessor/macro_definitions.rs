@@ -404,9 +404,14 @@ fn define_assignment_continuation_indent(line: &str, tab_width: usize) -> Option
         .then(|| visual_width_from(line, 0, tab_width) + 1)
 }
 
+/// A designator row ends with its comma, or is the last row and ends
+/// with its value.
 fn define_complete_designated_initializer_row(line: &str) -> bool {
     let trimmed = line.trim();
-    trimmed.ends_with(',') && (trimmed.starts_with('.') || trimmed.starts_with('['))
+    (trimmed.starts_with('.') || trimmed.starts_with('['))
+        && (trimmed.ends_with(',')
+            || !(trimmed.ends_with(['=', '(', '[', '{'])
+                || crate::formatter::tokens::operators::head_ends_binary_operator(trimmed)))
 }
 
 fn define_run_in_designated_initializer_column(line: &str, tab_width: usize) -> Option<usize> {

@@ -2994,3 +2994,9 @@ fn multiplication_on_a_continued_argument_line_stays_padded() {
     let input = "int f(void)\n{\n    return m->num + get(m->chunk +\n                        (off_t)pos * WIDTH);\n}\n";
     check(input, &["--align-pointer=name"], input);
 }
+
+#[test]
+fn define_initializer_closer_after_a_last_designator_row_keeps_its_level() {
+    let input = "#define ATOM_VALUE_INIT { \\\n        .s_size = ATOM_SIZE_UNSPECIFIED \\\n    }\n";
+    check(input, &["--indent-preproc-define"], input);
+}
