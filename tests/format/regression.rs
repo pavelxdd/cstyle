@@ -3085,3 +3085,29 @@ fn commented_brace_ending_a_broken_else_if_ends_the_chain() {
     let input = "void f(void)\n{\n    if (a)\n        st.st_mode = 0;\n    else\n        if (lstat(path, &st) < 0)\n        {\n            st.st_mode = 0;\n        } /* else stat is valid */\n\n    if (!verify_path(path))\n    {\n        return;\n    }\n}\n";
     check(input, &["--style=allman", "--break-elseifs"], input);
 }
+
+#[test]
+fn one_line_control_block_on_its_own_line_follows_astyle_per_style() {
+    let ratliff = "void f(void) {\n    if (s == NULL)\n        { return path; }\n    x();\n    }\n";
+    check(
+        ratliff,
+        &["--style=ratliff", "--keep-one-line-blocks"],
+        ratliff,
+    );
+    let vtk = "void f(void)\n{\n    if (s == NULL)\n    { return path; }\n    x();\n}\n";
+    check(vtk, &["--style=vtk", "--keep-one-line-blocks"], vtk);
+}
+
+#[test]
+fn break_one_line_headers_keeps_a_one_line_block_on_its_own_line() {
+    let input = "void f(void) {\n    if (x)\n    { return 1; }\n    if (y) {\n        return 2;\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=java",
+            "--keep-one-line-blocks",
+            "--break-one-line-headers",
+        ],
+        input,
+    );
+}

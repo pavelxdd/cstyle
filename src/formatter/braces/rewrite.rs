@@ -1102,7 +1102,9 @@ impl FormatEngine<'_> {
             || (self.options.break_one_line_headers
                 && !(self.options.brace_style == BraceStyle::Pico
                     && self.layout.command_state.current_header.as_deref() == Some("switch"))
-                && self.layout.command_state.current_header.is_some());
+                && self.layout.command_state.current_header.is_some()
+                // A block on a line of its own already leaves its header.
+                && !token_begins_line(tokens, start));
         if self.options.break_one_line_headers
             && self.layout.command_state.current_header.is_some()
             && tokens[start + 1..close_index]

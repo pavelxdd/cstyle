@@ -18,7 +18,7 @@ use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_to
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::preprocessor_directive;
+use crate::formatter::text::line_scan::{preprocessor_directive, trailing_comment_split_limit};
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_tree_anchor_layout(
@@ -101,6 +101,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.initializer_leading_comma_indent(first))
             .or_else(|| self.initializer_closing_brace_indent(first))
             .or_else(|| self.nested_initializer_closing_brace_indent(first))
+            .or_else(|| self.one_line_control_block_indent(first, line))
             .or_else(|| self.indented_block_brace_indent(first))
             .or_else(|| self.broken_control_brace_indent(first))
             .or_else(|| self.gnu_else_brace_indent(first))
@@ -3325,6 +3326,38 @@ impl FormatEngine<'_> {
 
     /// A `{` on its own line after a control header stands at the header's
     /// line, one level in where the style indents blocks.
+    /// A one-line control block on its own line: astyle indents it a level
+    /// in Ratliff and keeps it at the header in VTK, against how those
+    /// styles place the braces of longer blocks.
+    fn one_line_control_block_indent(&self, first: usize, line: &str) -> Option<usize> {
+        let extra = match self.options.brace_style {
+            BraceStyle::Ratliff => self.options.indent_width,
+            BraceStyle::Vtk => 0,
+            _ => return None,
+        };
+        if !matches!(self.tree.tokens[first], Token::Symbol('{')) {
+            return None;
+        }
+        let group = self.tree.groups.opened_at(first)?;
+        let close = self.tree.groups.get(group).close?;
+        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        if self.tree.blocks.kind(group) != Some(BlockKind::Control)
+            || !code.ends_with('}')
+            || self.tree.tokens[first..close]
+                .iter()
+                .any(|token| matches!(token, Token::Newline))
+        {
+            return None;
+        }
+        let (line, levels) = self.header_chain_before(first)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (levels - 1) * self.options.indent_width
+                + extra
+                + self.case_unindent_spaces(),
+        )
+    }
+
     fn opening_brace_indent(&self, first: usize) -> Option<usize> {
         if !matches!(self.tree.tokens[first], Token::Symbol('{')) {
             return None;
