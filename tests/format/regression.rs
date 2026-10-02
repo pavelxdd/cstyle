@@ -3901,3 +3901,11 @@ fn array_bound_row_after_a_closed_bracket_aligns_past_the_open_bracket() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn comment_after_a_case_block_takes_the_label_level_only_before_a_label() {
+    let input = "int f(int op)\n{\n  switch( op ){\n    case 1: {\n      x = 1;\n      break;\n    }\n\n/* c1\n** c2 */\n#if A\n    case 2:\n      break;\n#endif\n    }\n    switch( op ){\n    case 1: {\n      break;\n    }\n/* c3 */\n/* c4 */\n    case 2:\n      break;\n  }\n}\n";
+    let expected = "int f(int op)\n{\n    switch( op ) {\n    case 1: {\n        x = 1;\n        break;\n    }\n\n        /* c1\n        ** c2 */\n#if A\n    case 2:\n        break;\n#endif\n    }\n    switch( op ) {\n    case 1: {\n        break;\n    }\n    /* c3 */\n    /* c4 */\n    case 2:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

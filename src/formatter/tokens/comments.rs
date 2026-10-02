@@ -1674,15 +1674,7 @@ impl FormatEngine<'_> {
                 {
                     return spaces + self.case_unindent_spaces();
                 }
-                let after_blank = self
-                    .output
-                    .last()
-                    .is_some_and(|line| line.trim().is_empty())
-                    || self
-                        .token_input
-                        .previous_input_whitespace
-                        .as_deref()
-                        .is_some_and(|whitespace| whitespace.matches('\n').count() > 1);
+                let introduces_label = self.comment_precedes_switch_label();
                 let previous_indent = self
                     .output
                     .scoped()
@@ -1691,7 +1683,7 @@ impl FormatEngine<'_> {
                     .find(|line| !line.trim().is_empty())
                     .map(|line| leading_visual_width(line, self.options.tab_width))
                     .unwrap_or(0);
-                if after_blank {
+                if introduces_label {
                     let base = self.layout.indentation.indent().saturating_sub(1)
                         * self.options.indent_width;
                     base.max(previous_indent)
@@ -1700,6 +1692,25 @@ impl FormatEngine<'_> {
                         .max(previous_indent)
                 }
             })
+        })
+    }
+
+    /// Whether the code after the comment being placed, past other
+    /// comments, is a `case` or `default` label.
+    fn comment_precedes_switch_label(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current.active_comment().is_some_and(|comment| {
+            tokens[comment + 1..]
+                .iter()
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
+                    )
+                })
+                .is_some_and(
+                    |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
+                )
         })
     }
 
