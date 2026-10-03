@@ -5699,3 +5699,33 @@ fn a_case_block_after_an_empty_else_block_keeps_its_indented_body() {
         "void f()\n{\n    switch (w) {\n    case 1: {\n            if (a) {\n            } else {\n            }\n        }\n    case 2: {\n            if (c) {\n                d();\n            }\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_case_block_closer_with_a_semicolon_stands_at_the_indented_case_body() {
+    let input = "void f()\n{\n    switch (w) {\n    case 1: {\n        x();\n        break;\n    };\n    case 2:\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent-cases"],
+        "void f() {\n    switch (w) {\n        case 1: {\n                x();\n                break;\n                };\n        case 2:\n            y();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_before_a_commented_case_block_closer_keeps_its_column() {
+    let input = "void f()\n{\n    switch (w) {\n    case 1: {\n        if (u) {\n            set();\n            break;\n        }\n        /* else... */\n    }  /* FALLTHROUGH */\n    case 2:\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-cases"],
+        "void f()\n{\n    switch (w) {\n    case 1: {\n            if (u) {\n                set();\n                break;\n            }\n            /* else... */\n        }  /* FALLTHROUGH */\n    case 2:\n        y();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_commented_case_block_closer_keeps_its_column_before_a_label() {
+    let input = "void f()\n{\n    switch (w) {\n    case 1: {\n        if (u) {\n            set();\n            break;\n        }\n        /* else... */\n    }  /* FALLTHROUGH */\n    case 2:\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n            }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
+    );
+}

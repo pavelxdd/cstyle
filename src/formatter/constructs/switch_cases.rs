@@ -1687,8 +1687,9 @@ impl FormatEngine<'_> {
 
         let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
         if matches!(trimmed, "};" | "},") {
-            // Ratliff closes a block at its body.
-            let body = usize::from(self.options.brace_style == BraceStyle::Ratliff)
+            // Ratliff closes a block at its body, as indented cases do.
+            let body = (usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                + usize::from(self.options.indent_cases))
                 * self.options.indent_width;
             return Some(open_spaces + body + case_unindent_depth * self.options.indent_width);
         }

@@ -526,8 +526,9 @@ impl FormatEngine<'_> {
                 return false;
             }
             let mut start = end - 1;
-            // A statement whose trailing comment ends the output stays put.
-            if last.contains("/*") && !last.starts_with('}') {
+            // A statement or a closing brace whose trailing comment ends the
+            // output stays put.
+            if last.contains("/*") {
                 return false;
             }
             while start > 0 && !self.output[start].trim_start().starts_with("/*") {
