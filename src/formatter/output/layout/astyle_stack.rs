@@ -97,6 +97,19 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// Whether `block` is a bare block opened right after a directive, which
+    /// astyle takes for an array brace.
+    pub(crate) fn is_directive_block(&self, block: GroupId) -> bool {
+        let open = self.tree.groups.get(block).open;
+        self.tree.blocks.kind(block) == Some(BlockKind::Block)
+            && self.tree.tokens[self
+                .tree
+                .previous_code_token(open)
+                .map_or(0, |before| before + 1)..open]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
+    }
+
     /// A line inside brackets whose `[` ends its line stands at the top of
     /// astyle's continuation stack: a continuation level past the indent
     /// before.
@@ -263,16 +276,11 @@ impl FormatEngine<'_> {
         }
         // astyle takes a bare block brace after a directive for an array
         // brace and registers no assignment in it.
-        let directive_block = self.tree.groups.enclosing(start).is_some_and(|block| {
-            let open = self.tree.groups.get(block).open;
-            self.tree.blocks.kind(block) == Some(BlockKind::Block)
-                && tokens[self
-                    .tree
-                    .previous_code_token(open)
-                    .map_or(0, |before| before + 1)..open]
-                    .iter()
-                    .any(|token| matches!(token, Token::Preprocessor(_)))
-        });
+        let directive_block = self
+            .tree
+            .groups
+            .enclosing(start)
+            .is_some_and(|block| self.is_directive_block(block));
         // Only ternary arms are known to follow its parentheses there.
         let ternary_arm = matches!(tokens[first], Token::Symbol('?' | ':'))
             || matches!(&tokens[first], Token::Operator(operator) if matches!(operator.as_str(), "?" | ":"));

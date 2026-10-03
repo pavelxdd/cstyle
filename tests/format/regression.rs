@@ -4778,3 +4778,15 @@ fn max_code_length_continues_declarators_at_the_second_word() {
     check(input, &["--style=gnu", "--max-code-length=70"], expected);
     check(expected, &["--style=gnu", "--max-code-length=70"], expected);
 }
+
+#[test]
+fn max_code_length_keeps_a_directive_block_after_a_brace_whole() {
+    let input = "void f(void)\n{\n    for ( ;; ) {\n        if (rc == NGX_OK) {\n\n#if (NGX_DEBUG)\n            {\n            ngx_str_t  key, value;\n\n            key.len = ctx->header_name_end - ctx->header_name_start;\n            }\n#endif\n        }\n    }\n}\nvoid g(void)\n{\n    x = 1;\n    {\n        key.len = ctx->header_name_end - ctx->header_name_start;\n    }\n}\n";
+    let expected = "void f(void)\n{\n    for ( ;; ) {\n        if (rc == NGX_OK) {\n\n#if (NGX_DEBUG)\n            {\n                ngx_str_t  key, value;\n\n                key.len = ctx->header_name_end - ctx->header_name_start;\n            }\n#endif\n        }\n    }\n}\nvoid g(void)\n{\n    x = 1;\n    {\n        key.len = ctx->header_name_end -\n                  ctx->header_name_start;\n    }\n}\n";
+    check(input, &["--style=linux", "--max-code-length=50"], expected);
+    check(
+        expected,
+        &["--style=linux", "--max-code-length=50"],
+        expected,
+    );
+}

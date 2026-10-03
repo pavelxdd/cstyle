@@ -1,4 +1,4 @@
-use crate::config::BraceStyle;
+use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::constructs::constructor_initializers::{
     advance_max_length_constructor_replay, start_max_length_constructor_replay,
@@ -66,7 +66,8 @@ impl FormatEngine<'_> {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
-        // Rows of an initializer stay whole, as astyle keeps them.
+        // Rows of an initializer, and of the braces astyle takes for one,
+        // stay whole.
         let initializer_row = self
             .output
             .pending_tokens()
@@ -83,6 +84,13 @@ impl FormatEngine<'_> {
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 ) || self.is_enum_body(group)
+                    || self.is_directive_block(group)
+                        && self
+                            .tree
+                            .previous_code_token(self.tree.groups.get(group).open)
+                            .is_some_and(|before| {
+                                matches!(self.tree.tokens[before], Token::Symbol('{'))
+                            })
             });
         if should_skip_split(line) || initializer_row {
             self.push_output_line_with_indent(line, structural_level, indent);
@@ -109,11 +117,10 @@ impl FormatEngine<'_> {
             0
         };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
-        let Some(split) = split_result(line, first_width, self.options.break_after_logical)
-            .or_else(|| {
-                (suffix_width > 0).then(|| {
-                    split_result(line, final_first_width, self.options.break_after_logical)
-                })?
+        let Some(split) =
+            split_result(line, first_width, SplitRules::new(self.options)).or_else(|| {
+                (suffix_width > 0)
+                    .then(|| split_result(line, final_first_width, SplitRules::new(self.options)))?
             })
         else {
             self.push_output_line_with_indent(line, structural_level, indent);
@@ -203,13 +210,13 @@ impl FormatEngine<'_> {
             } else {
                 width
             };
-            let Some(split) = split_result(&tail, tail_width, self.options.break_after_logical)
+            let Some(split) = split_result(&tail, tail_width, SplitRules::new(self.options))
                 .or_else(|| {
                     (suffix_width > 0).then(|| {
                         split_result(
                             &tail,
                             tail_width.saturating_sub(suffix_width).max(1),
-                            self.options.break_after_logical,
+                            SplitRules::new(self.options),
                         )
                     })?
                 })
@@ -893,11 +900,11 @@ fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
 
 const ASTYLE_MIN_CODE_LENGTH: usize = 10;
 
-fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Option<SplitResult> {
+fn split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult> {
     if line.len() <= width {
         return None;
     }
-    astyle_split_result(line, width, prefer_logical_operator)
+    astyle_split_result(line, width, rules)
 }
 
 fn split_result_kind(line: &str, split_at: usize, priority: usize) -> SplitKind {
@@ -1302,6 +1309,26 @@ fn operator_bounds_containing(line: &str, index: usize) -> Option<(usize, usize,
         .max_by_key(|(_, _, operator)| operator.len())
 }
 
+/// The options that shape where astyle splits a line.
+#[derive(Clone, Copy, Default)]
+struct SplitRules {
+    break_after_logical: bool,
+    pointer_to_type: bool,
+    reference_to_type: bool,
+}
+
+impl SplitRules {
+    fn new(options: &FormatOptions) -> Self {
+        let pointer_to_type = options.pointer_align == PointerAlign::Type;
+        Self {
+            break_after_logical: options.break_after_logical,
+            pointer_to_type,
+            reference_to_type: options.reference_align == ReferenceAlign::Type
+                || options.reference_align == ReferenceAlign::SameAsPointer && pointer_to_type,
+        }
+    }
+}
+
 const SEMI: usize = 0;
 const AND_OR: usize = 1;
 const COMMA: usize = 2;
@@ -1318,7 +1345,8 @@ const ASTYLE_OPERATORS: [&str; 46] = [
 /// The point where astyle splits `line`, replayed as astyle appends it:
 /// each appended piece registers its split points, and the first time the
 /// line runs past `width` astyle splits at the best one.
-fn astyle_split_point(line: &str, width: usize, break_after_logical: bool) -> Option<usize> {
+fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usize> {
+    let break_after_logical = rules.break_after_logical;
     let bytes = line.as_bytes();
     let templates = template_argument_ranges(line);
     let mut fit = [0usize; 5];
@@ -1468,7 +1496,16 @@ fn astyle_split_point(line: &str, width: usize, break_after_logical: bool) -> Op
             if !blocked {
                 match byte {
                     b' ' | b'\t' => {
-                        if !matches!(next, b')' | b'(' | b':') && previous_non_space != b'(' {
+                        // Nor before a pointer or reference aligned to its type.
+                        let to_type = match next {
+                            b'*' => rules.pointer_to_type,
+                            b'&' => rules.reference_to_type,
+                            _ => false,
+                        };
+                        if !matches!(next, b')' | b'(' | b':')
+                            && previous_non_space != b'('
+                            && (!to_type || potential_operator(previous_non_space))
+                        {
                             register((&mut fit, &mut pending), WHITESPACE, index, index <= width);
                         }
                     }
@@ -1588,8 +1625,9 @@ fn in_exponent(line: &str, index: usize) -> bool {
             .is_some_and(|word| word.starts_with(|ch: char| ch.is_ascii_digit()))
 }
 
-fn astyle_split_result(line: &str, width: usize, break_after_logical: bool) -> Option<SplitResult> {
-    let split_at = astyle_split_point(line, width, break_after_logical)?;
+fn astyle_split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult> {
+    let break_after_logical = rules.break_after_logical;
+    let split_at = astyle_split_point(line, width, rules)?;
     let head = line[..split_at].trim_end().to_string();
     let tail = line[split_at..].trim_start().to_string();
     if head.is_empty() || tail.is_empty() {
@@ -1641,7 +1679,8 @@ mod tests {
 
     #[test]
     fn split_result_records_comma_metadata() {
-        let result = split_result("call(alpha, beta, gamma, delta)", 20, false).expect("split");
+        let result = split_result("call(alpha, beta, gamma, delta)", 20, SplitRules::default())
+            .expect("split");
 
         assert_eq!(result.kind, SplitKind::Comma);
         assert_eq!(result.priority, 60);
@@ -1651,7 +1690,8 @@ mod tests {
 
     #[test]
     fn split_result_records_logical_operator_metadata() {
-        let result = split_result("alpha && beta && gamma", 14, false).expect("split");
+        let result =
+            split_result("alpha && beta && gamma", 14, SplitRules::default()).expect("split");
 
         assert_eq!(result.kind, SplitKind::LogicalOperator);
         assert_eq!(result.priority, 80);
