@@ -2244,10 +2244,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        for line in self.output.scoped().iter().rev().skip(1) {
+        let scope_start = self.output.len() - self.output.scoped().len();
+        for (offset, line) in self.output.scoped().iter().enumerate().rev().skip(1) {
             let trimmed = line.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
+            }
+            // A macro's body takes no part in the code around it.
+            if self
+                .output
+                .directive_of_continuation(scope_start + offset)
+                .is_some()
+            {
+                return None;
             }
             if trimmed.starts_with("if")
                 && trimmed["if".len()..]

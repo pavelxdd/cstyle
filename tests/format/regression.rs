@@ -4566,3 +4566,19 @@ fn padded_header_moves_a_brace_comment_back_to_its_column() {
         expected,
     );
 }
+
+#[test]
+fn comment_after_a_guarded_macro_with_an_if_stays_at_column_one() {
+    let input = "#if !defined(luai_nummod)\n#define luai_nummod(L,a,b,m)  \\\n  { (void)L; (m) = l_mathop(fmod)(a,b); \\\n    if (((m) > 0) ? (b) < 0 : ((m) < 0 && (b) > 0)) (m) += (b); }\n#endif\n\n/* exponentiation */\n#if !defined(luai_numpow)\n#define X 1\n#endif\n";
+    let expected = "#if !defined(luai_nummod)\n#define luai_nummod(L,a,b,m)  \\\n    { (void)L; (m) = l_mathop(fmod)(a,b); \\\n        if (((m) > 0) ? (b) < 0 : ((m) < 0 && (b) > 0)) (m) += (b); }\n#endif\n\n/* exponentiation */\n#if !defined(luai_numpow)\n#define X 1\n#endif\n";
+    check(
+        input,
+        &["--indent-col1-comments", "--indent-preproc-define"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent-col1-comments", "--indent-preproc-define"],
+        expected,
+    );
+}
