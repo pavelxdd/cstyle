@@ -4284,3 +4284,35 @@ fn force_tab_comment_rows_keep_source_tabs() {
     let expected = "struct s {\n\t/*\n\t * Next\n\t *     more\n\t */\n\tint x;\n};\nvoid f()\n{\n\t/* a\n\t       b */\n\tif (a) {\n\t\t/* a comes\n\t\tif (b)\n\t\t\treturn 1;\n\t\t*/\n\t}\n}\n";
     check(input, &["--indent=force-tab=8"], expected);
 }
+
+#[test]
+fn gnu_conditional_directive_in_broken_else_if_block_follows_the_code() {
+    let input = "void f()\n{\n  if( a ){\n    x();\n  }else if( v==0 ){\n    y();\n  }else{\n    z();\n#ifdef H\n    w();\n#endif\n  }\n}\n";
+    let expected = "void f()\n{\n    if( a )\n        {\n            x();\n        }\n    else\n        if( v==0 )\n            {\n                y();\n            }\n        else\n            {\n                z();\n                #ifdef H\n                w();\n                #endif\n            }\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--indent-preproc-cond", "--break-elseifs"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=gnu", "--indent-preproc-cond", "--break-elseifs"],
+        expected,
+    );
+}
+
+#[test]
+fn attached_conditional_directive_in_broken_else_if_block_follows_the_code() {
+    let input = "void f()\n{\n  if( a ){\n    x();\n  }else if( v==0 ){\n    y();\n  }else{\n    z();\n#ifdef H\n    w();\n#endif\n  }\n}\n";
+    let expected = "void f()\n{\n    if( a ) {\n        x();\n    } else\n        if( v==0 ) {\n            y();\n        } else {\n            z();\n            #ifdef H\n            w();\n            #endif\n        }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond", "--break-elseifs"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=kr", "--indent-preproc-cond", "--break-elseifs"],
+        expected,
+    );
+}

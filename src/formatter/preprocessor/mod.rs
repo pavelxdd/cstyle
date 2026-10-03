@@ -16,6 +16,8 @@ use std::collections::VecDeque;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct PreprocessorState {
+    /// Token of the directive being pushed.
+    pub(crate) active_directive: Option<usize>,
     pub(crate) branch_stack: Vec<PreprocessorBranchState>,
     pub(crate) indented_block_stack: Vec<bool>,
     pub(crate) indentable_blocks: VecDeque<bool>,
@@ -939,6 +941,12 @@ impl FormatEngine<'_> {
     /// The indent of a conditional directive: an opening one stands at the
     /// code, the others at the directive that opened them.
     fn current_preprocessor_indent(&self, opening: bool) -> PreprocessorLineIndent {
+        if opening && let Some(spaces) = self.break_else_if_directive_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         if let Some(spaces) = self.direct_switch_body_indent_spaces() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -1014,10 +1022,15 @@ impl FormatEngine<'_> {
                         *spaces += self.options.indent_width;
                     }
                 }
-                self.layout.indentation.push_preprocessor_indent(
-                    self.layout.indentation.indent(),
-                    self.layout.continuation_indent.next_line_indent_spaces,
-                );
+                let spaces = self
+                    .options
+                    .indent_preproc_conditional
+                    .then(|| self.break_else_if_directive_column())
+                    .flatten()
+                    .or(self.layout.continuation_indent.next_line_indent_spaces);
+                self.layout
+                    .indentation
+                    .push_preprocessor_indent(self.layout.indentation.indent(), spaces);
                 self.preprocessor
                     .indented_block_stack
                     .push(should_indent_block);

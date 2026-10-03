@@ -2238,6 +2238,35 @@ impl FormatEngine<'_> {
                 })
     }
 
+    /// Column of a directive opening a conditional within a block of an
+    /// `else` when else-if chains break: that of the statement after it.
+    pub(crate) fn break_else_if_directive_column(&self) -> Option<usize> {
+        if !self.options.break_else_ifs {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        let mut next = self.preprocessor.active_directive? + 1;
+        let next = loop {
+            let index = next_code_token(tokens, next)?;
+            if !matches!(tokens[index], Token::Preprocessor(_)) {
+                break index;
+            }
+            next = index + 1;
+        };
+        let group = self.tree.groups.enclosing(next)?;
+        if !self.tree.statements.starts_block_statement(next)
+            || !self
+                .tree
+                .groups
+                .ancestors(group)
+                .any(|id| self.block_of_else(id))
+        {
+            return None;
+        }
+        self.sibling_statement_column(next)
+            .or_else(|| self.block_body_column(next))
+    }
+
     fn leading_assignment_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;

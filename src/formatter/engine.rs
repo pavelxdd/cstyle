@@ -453,6 +453,8 @@ impl<'a> FormatEngine<'a> {
                 matches!(tokens[index], Token::Comment(CommentKind::Block, _)).then_some(index);
             self.current.set_active_comment(block_comment);
             self.output.set_active_comment(block_comment);
+            self.preprocessor.active_directive =
+                matches!(tokens[index], Token::Preprocessor(_)).then_some(index);
             self.push_token(&tokens[index], context);
             self.current.set_active_token(None);
             self.current.set_active_comment(None);
