@@ -5758,3 +5758,23 @@ fn a_sign_leading_an_initializer_row_after_its_brace_stays_unary() {
         "int a[] = {\n    -1, 2\n};\nvoid f()\n{\n    int c[] = {\n        -x, 2\n    };\n}\n";
     check(input, &["--pad-oper"], expected);
 }
+
+#[test]
+fn a_const_pointer_cast_in_a_braced_body_aligns_to_the_name() {
+    let input = "void f()\n{\n    if (n) a = (const char * const *)b;\n    if (n) a = (char * const *)b;\n    if (n) a = (char *)b;\n    if (n) a = (char **)b;\n}\n";
+    check(
+        input,
+        &["--add-braces", "--align-pointer=name"],
+        "void f()\n{\n    if (n) {\n        a = (const char *const *)b;\n    }\n    if (n) {\n        a = (char *const *)b;\n    }\n    if (n) {\n        a = (char *)b;\n    }\n    if (n) {\n        a = (char **)b;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_const_pointer_cast_in_a_braced_body_aligns_to_the_type() {
+    let input = "void f()\n{\n    if (n) a = (const char * const *)b;\n    if (n) a = (char * const *)b;\n    if (n) a = (char *)b;\n    if (n) a = (char **)b;\n}\n";
+    check(
+        input,
+        &["--add-braces", "--align-pointer=type"],
+        "void f()\n{\n    if (n) {\n        a = (const char* const*)b;\n    }\n    if (n) {\n        a = (char* const*)b;\n    }\n    if (n) {\n        a = (char*)b;\n    }\n    if (n) {\n        a = (char**)b;\n    }\n}\n",
+    );
+}

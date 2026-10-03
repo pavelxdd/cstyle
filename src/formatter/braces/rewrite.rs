@@ -1886,7 +1886,7 @@ impl FormatEngine<'_> {
                     next_is_adjacent: next_index == Some(index + 1),
                     following_operator: None,
                     template_angle: TemplateAngle::None,
-                    token_index: usize::MAX,
+                    token_index: index,
                     starts_initializer_designator: false,
                     inferred_definition_brace: false,
                     following_closing_braces: 0,
