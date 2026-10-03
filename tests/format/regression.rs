@@ -5669,3 +5669,13 @@ fn a_type_header_ended_by_a_comment_takes_its_attached_brace_mozilla() {
         "struct a\n{\n    int x;\n};\nstruct d /* c */\n{\n    int x;\n} v;\nunion u { // c\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n",
     );
 }
+
+#[test]
+fn a_comment_led_row_closing_a_macro_call_ends_its_statement() {
+    let input = "void f()\n{\n    if (a) {\n        M(x,\n          /* clip */ true)\n        M(y,\n          /* clip */ false)\n        M(z,\n          b, true)\n        M(w,\n          c)\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (a) {\n        M(x,\n          /* clip */ true)\n        M(y,\n          /* clip */ false)\n        M(z,\n          b, true)\n        M(w,\n          c)\n    }\n}\n",
+    );
+}

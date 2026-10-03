@@ -402,6 +402,9 @@ impl FormatEngine<'_> {
                 .active_comment()
                 .filter(|frame| frame.kind == CommentFrameKind::Block && frame.multiline)
                 .map(|frame| frame.output_column);
+            let code_follows_comment = trimmed
+                .split_once("*/")
+                .is_some_and(|(_, after)| !after.trim().is_empty());
             self.push_raw_comment_output_line(trimmed);
             // The line after a comment closes at the column the comment opened.
             let next_indent = closes_standalone_block_comment.then(|| {
@@ -417,6 +420,19 @@ impl FormatEngine<'_> {
             }
             if let Some(spaces) = next_indent {
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            }
+            // A call the code after the comment closes ends the statement
+            // as on any line.
+            if code_follows_comment
+                && let Some(spaces) = self
+                    .layout
+                    .continuation_indent
+                    .clear_continuation_after_line
+                    .take()
+            {
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+                self.layout.nesting.clear_continuation_indents();
             }
         }
         self.reset_after_finished_line();
