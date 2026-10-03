@@ -13,6 +13,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::text::line_scan::preprocessor_directive;
 
 impl FormatEngine<'_> {
     pub(crate) fn retab_output(&mut self) {
@@ -29,10 +30,19 @@ impl FormatEngine<'_> {
             .map(|index| {
                 let line = &self.output[index];
                 let text = line.trim_start_matches([' ', '\t']);
+                let directive = self.output.directive_of_continuation(index);
+                // Indenting conditional directives indents their continued
+                // lines too.
+                let indented_conditional = directive.is_some_and(|directive| {
+                    (self.options.indent_preproc_block || self.options.indent_preproc_conditional)
+                        && preprocessor_directive(self.output.trimmed(directive))
+                            .is_some_and(|name| matches!(name, "if" | "ifdef" | "ifndef" | "elif"))
+                });
                 if self.output.is_verbatim(index)
                     || line.is_empty()
                     || !self.options.indent_preproc_define
-                        && self.output.directive_of_continuation(index).is_some()
+                        && directive.is_some()
+                        && !indented_conditional
                     || self.continues_column_one_comment(index)
                 {
                     return None;
@@ -40,6 +50,7 @@ impl FormatEngine<'_> {
                 let width = self.output.lead_width(index, tab_width);
                 let tab_columns = match self.output_indent_style {
                     IndentStyle::ForceTabs => width / tab_width * tab_width,
+                    _ if indented_conditional => width / indent_width * indent_width,
                     // A filled empty line holds its level's indent.
                     _ if text.is_empty() => width / indent_width * indent_width,
                     _ => self.tab_columns(index, width),

@@ -4234,3 +4234,35 @@ fn lisp_keeps_switch_labels_on_one_line_with_their_block() {
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
+
+#[test]
+fn indented_conditional_continuation_takes_tabs_in_a_block() {
+    let input = "#include \"a.h\"\n\n#if !defined(A) || \\\n  !defined(B)\n#define X\n#endif\nint x;\nvoid f()\n{\n#if !defined(A) || \\\n  !defined(B)\n    x();\n#endif\n}\n";
+    let expected = "#include \"a.h\"\n\n#if !defined(A) || \\\n\t!defined(B)\n\t#define X\n#endif\nint x;\nvoid f()\n{\n#if !defined(A) || \\\n  !defined(B)\n\tx();\n#endif\n}\n";
+    check(
+        input,
+        &["--indent=tab=4", "--indent-preproc-block"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent=tab=4", "--indent-preproc-block"],
+        expected,
+    );
+}
+
+#[test]
+fn indented_conditional_continuation_takes_tabs_in_code() {
+    let input = "#include \"a.h\"\n\n#if !defined(A) || \\\n  !defined(B)\n#define X\n#endif\nint x;\nvoid f()\n{\n#if !defined(A) || \\\n  !defined(B)\n    x();\n#endif\n}\n";
+    let expected = "#include \"a.h\"\n\n#if !defined(A) || \\\n!defined(B)\n#define X\n#endif\nint x;\nvoid f()\n{\n\t#if !defined(A) || \\\n\t!defined(B)\n\tx();\n\t#endif\n}\n";
+    check(
+        input,
+        &["--indent=tab=4", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent=tab=4", "--indent-preproc-cond"],
+        expected,
+    );
+}
