@@ -4814,3 +4814,11 @@ fn max_code_length_aligns_a_comment_before_a_split_statement_in_a_case_block() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_aligns_inside_parens_after_a_shift() {
+    let input = "static int64_t value_from_index(int32_t bucket_index, int32_t sub_bucket_index, int32_t unit_magnitude)\n{\n    return ((int64_t) sub_bucket_index) << (bucket_index + unit_magnitude);\n}\n";
+    let expected = "static int64_t value_from_index(int32_t bucket_index,\n                                int32_t sub_bucket_index, int32_t unit_magnitude)\n{\n    return ((int64_t) sub_bucket_index) << (bucket_index +\n                                            unit_magnitude);\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}

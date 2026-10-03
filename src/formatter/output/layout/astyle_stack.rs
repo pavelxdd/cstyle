@@ -397,16 +397,27 @@ impl FormatEngine<'_> {
                 _ if index == start && is_control_keyword(token) => {
                     replay.header_paren = next_code_token(tokens, index + 1);
                 }
-                // Stream chains align their own way; shifts in parens do not.
-                // Indenting after parens stacks the first shift like a
-                // paren at a line end.
+                // The first shift outside parens registers its column, or,
+                // when indenting after parens, a continuation level.
                 Token::Operator(operator)
                     if matches!(operator.as_str(), "<<" | ">>") && replay.depth == 0 =>
                 {
                     if !self.options.indent_after_parens {
-                        return None;
-                    }
-                    if replay.stack.is_empty() {
+                        // A line leading with a shift continues the chain its
+                        // own way; others stack at the first shift.
+                        if matches!(&tokens[first], Token::Operator(shift) if matches!(shift.as_str(), "<<" | ">>"))
+                        {
+                            return None;
+                        }
+                        if replay.stack.is_empty() {
+                            let mut column = relative(index)?;
+                            if column > self.options.max_continuation_indent {
+                                column = 2 * self.options.indent_width + replay.line_space;
+                            }
+                            replay.stack.push(column);
+                            replay.continuation = true;
+                        }
+                    } else if replay.stack.is_empty() {
                         self.register(&mut replay, index, next_on_line, false, &relative)?;
                         replay.continuation = true;
                     }

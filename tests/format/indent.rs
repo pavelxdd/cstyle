@@ -4998,7 +4998,7 @@ fn adjacent_string_after_over_max_stream_head_uses_two_level_fallback() {
 }
 
 #[test]
-fn adjacent_string_after_multiple_streams_aligns_to_first_stream_operator() {
+fn adjacent_string_after_multiple_streams_aligns_to_its_call_paren() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -5014,7 +5014,7 @@ fn adjacent_string_after_multiple_streams_aligns_to_first_stream_operator() {
             "void f()",
             "{",
             "    Table::addRow(\"row\") << true << Bytes(\"base \"",
-            "                         \"tail\");",
+            "                                          \"tail\");",
             "}",
         )
     );
