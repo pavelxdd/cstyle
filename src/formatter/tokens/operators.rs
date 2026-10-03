@@ -1401,7 +1401,7 @@ impl FormatEngine<'_> {
             .find(|line| !line.trim().is_empty())
             .is_some_and(|previous| {
                 let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                code.ends_with(['(', ',', '=', '?', ':'])
+                code.ends_with(['(', '[', '{', ',', '=', '?', ':'])
                     || head_ends_binary_operator(code)
                     || code.trim_start().starts_with("return ")
             })
@@ -1424,6 +1424,20 @@ impl FormatEngine<'_> {
                 | PreviousToken::Comma
         ) || self.current.trim_end().ends_with([':', '{'])
             || matches!(trailing_word(&self.current), "return" | "case")
+            // A sign leading the line after an opening brace starts an
+            // element or a statement.
+            || self.current.trim().is_empty()
+                && self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .find(|line| !line.trim().is_empty())
+                    .is_some_and(|line| {
+                        line[..trailing_comment_split_limit(line)]
+                            .trim_end()
+                            .ends_with('{')
+                    })
     }
 
     fn current_ends_prefix_increment_or_decrement(&self) -> bool {

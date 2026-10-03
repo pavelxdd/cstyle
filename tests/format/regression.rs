@@ -5749,3 +5749,12 @@ fn a_block_after_a_split_condition_in_a_nested_broken_else_if_keeps_one_level() 
         "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else\n        if (b)\n        {\n            if (c)\n                y();\n            else\n                if (d &&\n                        e)\n                {\n                    z();\n                }\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_sign_leading_an_initializer_row_after_its_brace_stays_unary() {
+    let input =
+        "int a[] = {\n  -1, 2\n};\nvoid f()\n{\n    int c[] = {\n        -x, 2\n    };\n}\n";
+    let expected =
+        "int a[] = {\n    -1, 2\n};\nvoid f()\n{\n    int c[] = {\n        -x, 2\n    };\n}\n";
+    check(input, &["--pad-oper"], expected);
+}
