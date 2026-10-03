@@ -2830,6 +2830,16 @@ impl FormatEngine<'_> {
             .previous_input_whitespace
             .clone()
             .unwrap_or_default();
+        // Braces added around the statement before move its comment no
+        // further.
+        if std::mem::take(&mut self.comments.follows_added_one_line_block) {
+            if gap.is_empty() {
+                self.ensure_space();
+            } else {
+                self.current.push_str(&gap);
+            }
+            return;
+        }
         if self.layout.line_state.is_multi_statement_line {
             if gap.is_empty() {
                 if kind == CommentKind::Block && comment.contains("NOPAD") {
@@ -3116,6 +3126,7 @@ pub(crate) struct CommentState {
     pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
+    pub(crate) follows_added_one_line_block: bool,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
 }

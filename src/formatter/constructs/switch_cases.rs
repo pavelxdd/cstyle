@@ -1864,7 +1864,12 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_brace()
             .filter(|frame| frame.case_block)?;
-        let target = if line.trim_start().starts_with('{') {
+        // A block given to a braceless header is its body, not a sibling.
+        let header_body_block = self
+            .output
+            .last_line_outside_comment()
+            .is_some_and(|previous| line_is_control_body_header(previous.trim_start()));
+        let target = if line.trim_start().starts_with('{') && !header_body_block {
             frame.sibling_indent_column
         } else if frame.nested_case_label {
             frame.header_indent_column + 2 * self.options.indent_width

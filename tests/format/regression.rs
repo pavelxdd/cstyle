@@ -5201,3 +5201,23 @@ fn a_comment_after_a_statement_given_one_line_braces_stays_after_the_block() {
         "void f(void)\n{\n    if (a) { b(); } /* c1 */\n    if (a)\n    { b(); } /* c2 */\n    if (a)\n    { b(); } // c3\n    x();\n}\n",
     );
 }
+
+#[test]
+fn an_added_one_line_block_in_a_braced_case_stands_at_its_header() {
+    let input = "void f(int t)\n{\n    switch (t) {\n    case 1: {\n        if (a)\n            b();\n        c();\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(int t)\n{\n    switch (t) {\n    case 1: {\n        if (a)\n        { b(); }\n        c();\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_added_one_line_block_keeps_its_header_level_and_comment_gap() {
+    let input = "int f(int c)\n{\n    if (a)\n        /* if non-blocking input stalled,\n           return */\n        return 0;\n    if (b)\n        return 1;  /* two */\n    return 2;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "int f(int c)\n{\n    if (a)\n        /* if non-blocking input stalled,\n           return */\n    { return 0; }\n    if (b)\n    { return 1; }  /* two */\n    return 2;\n}\n",
+    );
+}
