@@ -1487,9 +1487,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        let lead = self.output.lead_width(line, self.options.tab_width);
+        // astyle registers no second word after a first one under three
+        // characters.
+        if token_text(&tokens[start]).len() < 3 {
+            return Some(lead + self.case_unindent_spaces());
+        }
         // astyle adds the widths its tabs gain before the comma.
         let text = &self.output.as_slice()[line];
-        let lead = self.output.lead_width(line, self.options.tab_width);
         let comma_column = self.token_column(registering)?;
         let mut column = lead;
         let mut chars = 0;

@@ -4834,3 +4834,19 @@ fn max_code_length_continues_a_run_in_body_assignment_past_the_header() {
         expected,
     );
 }
+
+#[test]
+fn max_code_length_continues_a_member_declarator_at_the_second_word() {
+    let input = "struct WhereLevel {\n  u8 iFrom;             /* Which entry in the FROM clause */\n  u8 op, p3, p5;        /* Opcode, P3 & P5 of the opcode that ends the loop */\n};\n";
+    let expected = "struct WhereLevel {\n    u8 iFrom;             /* Which entry in the FROM clause */\n    u8 op, p3,\n    p5;        /* Opcode, P3 & P5 of the opcode that ends the loop */\n};\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
+
+#[test]
+fn member_declarators_after_a_short_type_continue_at_the_member() {
+    let input = "struct A {\n    u8 op, p3,\n       p5;\n    unsigned long x, y,\n    z;\n};\n";
+    let expected =
+        "struct A {\n    u8 op, p3,\n    p5;\n    unsigned long x, y,\n             z;\n};\n";
+    check(input, &["--style=kr"], expected);
+}

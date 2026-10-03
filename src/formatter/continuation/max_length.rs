@@ -358,6 +358,9 @@ fn should_skip_split(line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
+            && trimmed
+                .find("*/")
+                .is_none_or(|close| !holds_code(&trimmed[close + 2..]))
         || trimmed
             .trim_start_matches('*')
             .chars()

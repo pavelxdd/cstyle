@@ -85,11 +85,15 @@ impl FormatEngine<'_> {
         let group = self.tree.groups.enclosing(first);
         if !matches!(self.tree.tokens[comma], Token::Symbol(','))
             || self.tree.groups.enclosing(comma) != group
-            || group.is_some_and(|group| {
-                !matches!(
-                    self.tree.blocks.kind(group),
-                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
-                )
+            || group.is_some_and(|group| match self.tree.blocks.kind(group) {
+                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block) => false,
+                // Enumerators are no declarators.
+                Some(BlockKind::Aggregate) => self.tree.blocks.owner(group).is_none_or(|owner| {
+                    self.tree.tokens[owner..self.tree.groups.get(group).open]
+                        .iter()
+                        .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+                }),
+                _ => true,
             })
         {
             return None;
