@@ -4066,3 +4066,11 @@ fn comment_gap_after_a_brace_follows_the_closing_brace_placement() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn max_code_length_prefers_a_comma_to_a_comparison() {
+    let input = "void f(void)\n{\n    if (RedisModule_CreateCommand(ctx, \"getkeys.command\", getkeys_command, \"getkeys-api\", 0, 0, 0) == REDISMODULE_ERR) {\n        return 1;\n    }\n    x = aaaaaaaaaaaaaaa(bbbbbbbbbbbbb, cccccccccccccc, ddddddddddddddd, eeeeeeeeeeeee, fffff) == ggggggggggggggggggg;\n    y = aaaaaaaaaaaaaaa(bbbbbbbbbbbbb, cccccccccccccc, ddddddddddddddd, eeeeeeeeeeeee, ffffffff) + ggggggggggggggggggg;\n}\n";
+    let expected = "void f(void)\n{\n    if (RedisModule_CreateCommand(ctx, \"getkeys.command\", getkeys_command, \"getkeys-api\", 0, 0,\n                                  0) == REDISMODULE_ERR) {\n        return 1;\n    }\n    x = aaaaaaaaaaaaaaa(bbbbbbbbbbbbb, cccccccccccccc, ddddddddddddddd, eeeeeeeeeeeee,\n                        fffff) == ggggggggggggggggggg;\n    y = aaaaaaaaaaaaaaa(bbbbbbbbbbbbb, cccccccccccccc, ddddddddddddddd, eeeeeeeeeeeee,\n                        ffffffff) + ggggggggggggggggggg;\n}\n";
+    check(input, &["--max-code-length=100"], expected);
+    check(expected, &["--max-code-length=100"], expected);
+}
