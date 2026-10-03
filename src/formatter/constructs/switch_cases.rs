@@ -830,6 +830,8 @@ pub(crate) struct CaseBlockBodyLayout {
 struct ActiveCaseLayout {
     indent_spaces: usize,
     opens_block: bool,
+    /// The label line ends in the open block of a statement kept on it.
+    statement_block_open: bool,
 }
 
 impl FormatEngine<'_> {
@@ -1420,9 +1422,15 @@ impl FormatEngine<'_> {
                     .iter()
                     .any(|closing| *closing <= indent_spaces)
                 {
+                    // A block after a statement kept on the label line
+                    // is the statement's, not the label's.
+                    let statement_block = code
+                        .strip_suffix('{')
+                        .is_some_and(|head| head.trim_end().ends_with(';'));
                     return Some(ActiveCaseLayout {
                         indent_spaces,
-                        opens_block: code.ends_with('{'),
+                        opens_block: code.ends_with('{') && !statement_block,
+                        statement_block_open: statement_block && closing_indents.is_empty(),
                     });
                 }
                 return None;
@@ -1486,7 +1494,9 @@ impl FormatEngine<'_> {
         };
         let case_indent = case_layout.indent_spaces;
         let case_body_extra = usize::from(self.preprocessor.split_else.extra_indent) * indent_width;
-        let target = if trimmed.starts_with('}') && !case_layout.opens_block {
+        let target = if trimmed.starts_with('}') && case_layout.statement_block_open {
+            Some(case_indent + case_body_extra + indent_width)
+        } else if trimmed.starts_with('}') && !case_layout.opens_block {
             None
         } else if trimmed.starts_with('}') {
             self.output.last_non_empty_index().and_then(|index| {
@@ -1507,8 +1517,10 @@ impl FormatEngine<'_> {
             })
         } else {
             // Indented cases indent the block a case opens once more.
-            let block_extra =
-                usize::from(case_layout.opens_block && self.options.indent_cases) * indent_width;
+            let block_extra = usize::from(
+                case_layout.opens_block && self.options.indent_cases
+                    || case_layout.statement_block_open,
+            ) * indent_width;
             Some(case_indent + case_body_extra + indent_width + block_extra)
         };
         if let Some(target) = target
@@ -1552,7 +1564,9 @@ impl FormatEngine<'_> {
         let case_indent = case_layout.indent_spaces;
         let tab_width = self.options.tab_width;
         let indent_width = self.options.indent_width;
-        let target = if trimmed.starts_with('}') && !case_layout.opens_block {
+        let target = if trimmed.starts_with('}') && case_layout.statement_block_open {
+            Some(case_indent + indent_width)
+        } else if trimmed.starts_with('}') && !case_layout.opens_block {
             None
         } else if trimmed.starts_with('}') {
             let mut closed = 0usize;
@@ -1601,7 +1615,11 @@ impl FormatEngine<'_> {
                 None
             })
         } else {
-            Some(case_indent + self.options.indent_width)
+            Some(
+                case_indent
+                    + (1 + usize::from(case_layout.statement_block_open))
+                        * self.options.indent_width,
+            )
         }?;
         let target = target
             + self.layout.line_adjuster.next_line_case_unindent_depth() * self.options.indent_width;

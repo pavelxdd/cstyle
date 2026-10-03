@@ -5513,3 +5513,38 @@ fn a_kept_statement_after_a_case_block_brace_stays_at_the_brace() {
         "void f()\n{\n    switch (a) {\n    case 1: {\n        x();\n    } break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_block_after_a_kept_statement_on_a_case_label_belongs_to_the_statement_kr() {
+    let input = "void f()\n{\n    switch (a) {\n    default: assert(x); {\n        int y;\n        g(y);\n    }\n    h();\n    break;\n    case 2: q(); {\n        if (a) {\n            b();\n        }\n        c();\n    }\n    d();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (a) {\n    default: assert(x); {\n            int y;\n            g(y);\n        }\n        h();\n        break;\n    case 2: q(); {\n            if (a) {\n                b();\n            }\n            c();\n        }\n        d();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_block_after_a_kept_statement_on_a_case_label_belongs_to_the_statement_java_indented_cases() {
+    let input = "void f()\n{\n    switch (a) {\n    default: assert(x); {\n        int y;\n        g(y);\n    }\n    h();\n    break;\n    case 2: q(); {\n        if (a) {\n            b();\n        }\n        c();\n    }\n    d();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=java",
+            "--keep-one-line-statements",
+            "--indent-cases",
+            "--indent-switches",
+        ],
+        "void f() {\n    switch (a) {\n        default: assert(x); {\n                int y;\n                g(y);\n            }\n            h();\n            break;\n        case 2: q(); {\n                if (a) {\n                    b();\n                }\n                c();\n            }\n            d();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_block_after_a_kept_statement_on_a_case_label_belongs_to_the_statement_allman() {
+    let input = "void f()\n{\n    switch (a) {\n    default: assert(x); {\n        int y;\n        g(y);\n    }\n    h();\n    break;\n    case 2: q(); {\n        if (a) {\n            b();\n        }\n        c();\n    }\n    d();\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (a)\n    {\n    default: assert(x);\n        {\n            int y;\n            g(y);\n        }\n        h();\n        break;\n    case 2: q();\n        {\n            if (a)\n            {\n                b();\n            }\n            c();\n        }\n        d();\n    }\n}\n",
+    );
+}

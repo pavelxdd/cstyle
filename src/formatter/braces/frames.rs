@@ -220,7 +220,11 @@ impl FormatEngine<'_> {
                 }
                 let current = self.current.trim_start();
                 if !current.is_empty() && !is_comment_only_line(current) {
-                    return case_label_token_offset(current, header).is_some();
+                    // A statement kept after the label owns no brace.
+                    return case_label_token_offset(current, header).is_some()
+                        && !current[..trailing_comment_split_limit(current)]
+                            .trim_end()
+                            .ends_with(';');
                 }
                 self.has_pending_case_label_brace()
                     || self

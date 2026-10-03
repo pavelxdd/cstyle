@@ -931,6 +931,19 @@ impl FormatEngine<'_> {
                 && !self.options.break_one_line_headers
                 && self.options.keeps_multi_statement_line()
                 && following_header;
+            // Styles that break blocks from their statements still break
+            // this one.
+            let keep_following_block = self.options.keeps_multi_statement_line()
+                && matches!(next, Some(Token::Symbol('{')))
+                && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Allman
+                        | BraceStyle::Gnu
+                        | BraceStyle::Whitesmith
+                        | BraceStyle::Vtk
+                        | BraceStyle::Horstmann
+                        | BraceStyle::Pico
+                );
             if matches!(next, Some(Token::Comment(_, _))) {
                 self.emit_trailing_source_space();
                 self.schedule_block_spacing_semicolon();
@@ -949,6 +962,7 @@ impl FormatEngine<'_> {
                 self.schedule_block_spacing_semicolon();
             } else if break_expanded_lisp_header
                 || (!keep_following_header
+                    && !keep_following_block
                     && (self.options.break_one_line_statements
                         || !self.layout.line_state.is_multi_statement_line
                         || (self.layout.line_state.is_one_line_block
