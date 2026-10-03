@@ -911,13 +911,13 @@ fn comma_first_function_arguments_keep_source_alignment() {
 }
 
 #[test]
-fn split_union_return_function_parameters_get_extra_continuation_indent() {
+fn split_union_return_function_parameters_continue_like_struct_returns() {
     assert_eq!(
         format_exact(
             "\nstatic inline union Value check_value(\n    int first,\n    int second)\n{\n    return get_value();\n}\n",
             &FormatOptions::default(),
         ),
-        "\nstatic inline union Value check_value(\n        int first,\n        int second)\n{\n    return get_value();\n}\n",
+        "\nstatic inline union Value check_value(\n    int first,\n    int second)\n{\n    return get_value();\n}\n",
     );
 }
 

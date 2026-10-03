@@ -153,7 +153,8 @@ impl FormatEngine<'_> {
             || !(start..first).any(|index| {
                 groups.enclosing(index) == group
                     && matches!(&tokens[index], Token::Operator(operator)
-                        if operator == "="
+                        if operator.ends_with('=')
+                                && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=")
                             || self.options.indent_after_parens
                                 && matches!(operator.as_str(), "<<" | ">>"))
             })
@@ -417,16 +418,12 @@ impl FormatEngine<'_> {
                         *top = 0;
                     }
                 }
-                // A type keyword inside parentheses, as in `sizeof(struct
-                // x)`, opens nothing.
                 Token::Word(word)
                     if is_header(word)
                         || matches!(
                             word.as_str(),
                             "operator" | "template" | "case" | "default" | "else" | "do"
-                        )
-                        || replay.depth == 0
-                            && matches!(word.as_str(), "struct" | "union" | "class" | "enum") =>
+                        ) =>
                 {
                     return None;
                 }

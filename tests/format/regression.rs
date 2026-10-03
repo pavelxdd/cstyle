@@ -4762,3 +4762,11 @@ fn max_code_length_replays_astyle_split_points() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_continues_struct_returning_heads_and_compound_assignments() {
+    let input = "static struct commit *deref_without_lazy_fetch(const struct object_id *oid,\n\t\t\t\t\t       int mark_tags_complete_and_check_obj_db)\n{\n    nack->delivery_count += nack->delivery_count == LLONG_MAX ? 0 : 1;\n}\n";
+    let expected = "static struct commit *deref_without_lazy_fetch(\n    const struct object_id *oid,\n    int mark_tags_complete_and_check_obj_db)\n{\n    nack->delivery_count += nack->delivery_count == LLONG_MAX ?\n                            0 : 1;\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
