@@ -5502,3 +5502,14 @@ fn a_semicolon_inside_a_define_for_header_keeps_the_header_open() {
         "void f() {\n    for (int i = 0;\n            j; j = 0)\n        x(a,\n          b);\n}\n#define G(a) \\\n    for (int i = 0; j;     \\\n            j = 0)          \\\n        x(a, \\\n          b);\n#define jv_array_foreach(a, i, x) \\\n    for (int jv_len__ = jv_array_length(jv_copy(a)), i=0, jv_j__ = 1;     \\\n            jv_j__; jv_j__ = 0)                                              \\\n        for (jv x;                                                          \\\n                i < jv_len__ ?                                                 \\\n                (x = jv_array_get(jv_copy(a), i), 1) : 0;                    \\\n                i++)\n",
     );
 }
+
+#[test]
+fn a_kept_statement_after_a_case_block_brace_stays_at_the_brace() {
+    let input =
+        "void f()\n{\n    switch (a) {\n    case 1: {\n        x();\n    } break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (a) {\n    case 1: {\n        x();\n    } break;\n    }\n}\n",
+    );
+}

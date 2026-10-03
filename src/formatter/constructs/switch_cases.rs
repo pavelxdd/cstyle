@@ -1678,7 +1678,7 @@ impl FormatEngine<'_> {
             return None;
         }
 
-        let target = if line.trim() == "}" {
+        let target = if trimmed.starts_with('}') {
             open_spaces
         } else {
             open_spaces + self.options.indent_width
