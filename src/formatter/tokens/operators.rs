@@ -1158,8 +1158,15 @@ impl FormatEngine<'_> {
             {
                 self.push_unary_prefix(operator);
             }
+            // No pointer precedes a number.
             "&" | "*" | "^"
-                if self.is_pointer_like(operator, next, next_is_adjacent, following_operator) =>
+                if !matches!(next, Some(Token::Number(_)))
+                    && self.is_pointer_like(
+                        operator,
+                        next,
+                        next_is_adjacent,
+                        following_operator,
+                    ) =>
             {
                 self.push_pointer_run(operator, next, next_is_adjacent);
             }
@@ -1294,7 +1301,7 @@ impl FormatEngine<'_> {
     fn current_ends_builtin_pointer_cast(&self) -> bool {
         let current = self.current.trim_end();
         self.current_ends_pointer_cast()
-            && current.rfind('(').is_some_and(|open| {
+            && crate::formatter::engine::matching_open_paren_offset(current).is_some_and(|open| {
                 current[open + 1..]
                     .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
                     .find(|word| !word.is_empty() && *word != "const")

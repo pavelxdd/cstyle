@@ -1097,7 +1097,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = matching_open_paren_offset(current) else {
             return false;
         };
         current[open + 1..current.len() - 1]
@@ -1110,7 +1110,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = matching_open_paren_offset(current) else {
             return false;
         };
         trailing_word(current[..open].trim_end()) == "sizeof"
@@ -1180,7 +1180,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return None;
         }
-        let open = current.rfind('(')?;
+        let open = matching_open_paren_offset(current)?;
         if current[..open]
             .chars()
             .next_back()
@@ -1195,6 +1195,10 @@ impl<'a> FormatEngine<'a> {
             return None;
         }
         let inner = &current[open + 1..current.len() - 1];
+        // `((int)x)` holds a cast and its operand, no type.
+        if inner.contains(')') && !inner.trim_end().ends_with(')') {
+            return None;
+        }
         if inner.chars().any(|ch| {
             matches!(
                 ch,
@@ -1763,4 +1767,22 @@ fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSo
         first_non_ws_is_brace,
         leading_indent,
     }
+}
+
+/// Byte offset of the `(` matching the `)` that ends `text`.
+pub(crate) fn matching_open_paren_offset(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, ch) in text.char_indices().rev() {
+        match ch {
+            ')' => depth += 1,
+            '(' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }

@@ -4074,3 +4074,24 @@ fn max_code_length_prefers_a_comma_to_a_comparison() {
     check(input, &["--max-code-length=100"], expected);
     check(expected, &["--max-code-length=100"], expected);
 }
+
+#[test]
+fn added_brace_ignores_trailing_source_whitespace() {
+    let input = "void f(void)\n{\n    while (*link != NULL) {\n            if (key == visitedKey || cmpFunc( &cmpCache, key, visitedKey))                \n                return link;\n    }\n}\n";
+    let expected = "void f(void)\n{\n    while (*link != NULL) {\n        if (key == visitedKey || cmpFunc( &cmpCache, key, visitedKey)) {\n            return link;\n        }\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn parenthesized_cast_operand_is_no_cast_type() {
+    let input = "long f(void)\n{\n    return (((long long)tv.tv_sec)*1000) + (tv.tv_usec/1000);\n    x = (((int)tv)*1000);\n}\n";
+    let expected = "long f(void)\n{\n    return (((long long)tv.tv_sec) * 1000) + (tv.tv_usec / 1000);\n    x = (((int)tv) * 1000);\n}\n";
+    check(input, &["--pad-oper"], expected);
+    check(expected, &["--pad-oper"], expected);
+}
+
+#[test]
+fn star_before_a_number_after_a_macro_call_multiplies() {
+    let source = "int f(void)\n{\n    return loose_count > (DIV_ROUND_UP(((unsigned long) limit), 256) * 256);\n}\n";
+    check(source, &["--pad-oper"], source);
+}

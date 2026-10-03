@@ -1919,7 +1919,16 @@ pub(crate) fn add_cross_line_statement_braces(
                         insert_before[comment].push(Token::Whitespace(" ".to_owned()));
                     }
                 }
-                None => insert_before[open_insert - 1].push(Token::Symbol('{')),
+                None => {
+                    // Trailing source whitespace makes no gap before the brace.
+                    if open_insert >= 2
+                        && matches!(tokens[open_insert - 2], Token::Whitespace(_))
+                        && matches!(tokens[open_insert - 1], Token::Newline)
+                    {
+                        replace[open_insert - 2] = Some(Token::Whitespace(" ".to_owned()));
+                    }
+                    insert_before[open_insert - 1].push(Token::Symbol('{'));
+                }
             }
         } else {
             insert_before[open_insert].push(Token::Symbol('{'));
