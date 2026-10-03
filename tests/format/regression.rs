@@ -4883,3 +4883,9 @@ fn a_dereferenced_increment_after_a_logical_operator_keeps_its_star() {
         expected,
     );
 }
+
+#[test]
+fn a_paren_and_apostrophe_in_a_comment_row_continue_nothing() {
+    let input = "#endif\n/* since \"static\" is used, we\n   define it (compile with -Dlocal if your debugger can't find it) */\n\n/* gz* functions */\nextern voidp  malloc(uInt size);\n";
+    check(input, &["--style=stroustrup"], input);
+}

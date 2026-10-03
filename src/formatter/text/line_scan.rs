@@ -166,6 +166,15 @@ pub(crate) fn unmatched_open_bracket_column(line: &str) -> Option<usize> {
         .find(|&column| line[column..].starts_with('['))
 }
 
+/// Whether `line` starts inside a block comment it closes: a row that a
+/// comment opened on an earlier line.
+fn continues_block_comment(line: &str) -> bool {
+    line.find("*/").is_some_and(|close| {
+        let before = &line[..close];
+        !before.contains("/*") && !before.contains('"')
+    })
+}
+
 pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack: Vec<usize> = Vec::new();
@@ -174,7 +183,7 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     let mut column = 0;
     let mut quote = None;
     let mut escaped = false;
-    let mut in_block_comment = false;
+    let mut in_block_comment = continues_block_comment(line);
 
     while let Some(&ch) = chars.get(index) {
         let next = chars.get(index + 1).copied();
@@ -326,7 +335,7 @@ pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     let mut column = 0;
     let mut quote = None;
     let mut escaped = false;
-    let mut in_block_comment = false;
+    let mut in_block_comment = continues_block_comment(line);
 
     while let Some(&ch) = chars.get(index) {
         let next = chars.get(index + 1).copied();
