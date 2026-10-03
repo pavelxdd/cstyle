@@ -5265,11 +5265,29 @@ fn an_added_one_line_block_of_a_nested_else_stands_at_the_else() {
 #[test]
 fn header_words_in_a_string_nest_no_header_on_the_line() {
     let input = "int T(void) {\n    if (!X(ctx,\"a do b\",62)) goto fail;\n    for (;;) if (a) {\n        b();\n    }\n}\n";
-    check(input, &["--style=kr", "--add-braces"], "int T(void)\n{\n    if (!X(ctx,\"a do b\",62)) {\n        goto fail;\n    }\n    for (;;) if (a) {\n            b();\n        }\n}\n");
+    check(
+        input,
+        &["--style=kr", "--add-braces"],
+        "int T(void)\n{\n    if (!X(ctx,\"a do b\",62)) {\n        goto fail;\n    }\n    for (;;) if (a) {\n            b();\n        }\n}\n",
+    );
 }
 
 #[test]
 fn an_added_closing_brace_in_a_case_block_ignores_an_earlier_else_line() {
     let input = "int f(void){\n  switch( c ){\n    case 1: {\n      while( c ){\n        if( a ){\n        }else{\n        }\n      }\n      if( c==0 ) return 1;\n    }\n  }\n}\n";
-    check(input, &["--style=kr", "--add-braces"], "int f(void)\n{\n    switch( c ) {\n    case 1: {\n        while( c ) {\n            if( a ) {\n            } else {\n            }\n        }\n        if( c==0 ) {\n            return 1;\n        }\n    }\n    }\n}\n");
+    check(
+        input,
+        &["--style=kr", "--add-braces"],
+        "int f(void)\n{\n    switch( c ) {\n    case 1: {\n        while( c ) {\n            if( a ) {\n            } else {\n            }\n        }\n        if( c==0 ) {\n            return 1;\n        }\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_looks_past_empty_lines_for_a_header_after_a_comment_in_a_switch() {
+    let input = "void f(void)\n{\n    switch (s) {\n    case 1:\n        if (x) {\n            const char *tr = g();\n            /* c1\n               c1b */\n\n            if (tr) {\n                b();\n            }\n        }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f(void)\n{\n    switch (s) {\n    case 1:\n        if (x) {\n            const char *tr = g();\n\n            /* c1\n               c1b */\n\n            if (tr) {\n                b();\n            }\n        }\n\n        break;\n    }\n}\n",
+    );
 }

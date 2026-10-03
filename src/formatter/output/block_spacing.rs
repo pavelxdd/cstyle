@@ -401,7 +401,9 @@ impl FormatEngine<'_> {
     }
 
     fn following_break_blocks_header(&self, tokens: &[Token], start: usize) -> Option<String> {
-        let stop_on_blank = self.block_spacing.active_header.is_none();
+        // Within a switch the lookahead runs past empty lines.
+        let stop_on_blank = self.block_spacing.active_header.is_none()
+            && self.layout.line_adjuster.switch_depth() == 0;
         let mut newline_run = 0usize;
         for token in &tokens[start.min(tokens.len())..] {
             match token {
