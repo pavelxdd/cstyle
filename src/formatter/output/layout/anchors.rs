@@ -171,6 +171,19 @@ impl FormatEngine<'_> {
         let structural = layout.indent * self.options.indent_width;
         let sibling = self.sibling_statement_column(first);
         let block = self.block_body_column(first);
+        // Past a directive the engine keeps none of the levels it lost in
+        // an `else` body split off by an empty line; the tree places them.
+        if layout.exact_indent_spaces.is_none()
+            && sibling.is_none()
+            && block.is_none()
+            && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
+            && self.tree.statements.in_else_body_after_blank_line(first)
+            && self.tree.statements.starts_block_statement(first)
+            && let Some(column) = self.enclosing_block_body_column(first)
+        {
+            layout.exact_indent_spaces = Some(column);
+            return layout;
+        }
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
@@ -2283,17 +2296,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let group = groups.enclosing(first)?;
-        if !matches!(
-            self.tree.blocks.kind(group),
-            Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
-        ) {
+        // A declaration at file scope stands like a statement.
+        if let Some(group) = groups.enclosing(first)
+            && !matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+            )
+        {
             return None;
         }
         let target = self.tree.previous_code_token(first)?;
         let line = self.output.line_with_token(target)?;
         let start = self.output.line_tokens(line)?.first;
-        if !self.tree.statements.starts_block_statement(start)
+        if groups.enclosing(first).is_some() && !self.tree.statements.starts_block_statement(start)
             || tokens[start..first]
                 .iter()
                 .any(|token| matches!(token, Token::Preprocessor(_) | Token::Symbol(';')))

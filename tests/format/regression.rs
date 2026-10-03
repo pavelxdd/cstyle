@@ -5608,3 +5608,23 @@ fn a_continued_indented_case_label_goes_one_level_past_its_body() {
         "int f()\n{\n    switch (mask) {\n        case A|B|\n                C|D:\n            return 1;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_leading_assignment_at_file_scope_goes_one_level_in() {
+    let input = "static const char b[64+1]\n= \"ABC\";\nstatic int x\n    = 5;\nvoid f()\n{\n    int y\n        = 3;\n}\n";
+    check(
+        input,
+        &["--indent-continuation=3"],
+        "static const char b[64+1]\n    = \"ABC\";\nstatic int x\n    = 5;\nvoid f()\n{\n    int y\n        = 3;\n}\n",
+    );
+}
+
+#[test]
+fn an_else_body_split_by_an_empty_line_keeps_its_level_past_a_directive() {
+    let input = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n    if (b) {\n#ifdef X\n        if (c) {\n            y();\n        }\n#else\n        z();\n#endif\n        w();\n    }\n    v();\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        if (b) {\n#ifdef X\n            if (c) {\n                y();\n            }\n#else\n            z();\n#endif\n            w();\n        }\n    v();\n}\n",
+    );
+}
