@@ -5151,3 +5151,13 @@ fn an_empty_one_line_block_adds_no_empty_line_before_its_closing_header() {
         "void f(void)\n{\n    for (;;) {\n        if (a) b();\n\n        else if (c) { }\n        else break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn pico_breaks_the_block_after_a_one_line_header_run_into_the_brace() {
+    let input = "void f(client *c)\n{\n    if (c->x == 0) return;\n    uint64_t timeout = c->y;\n    unsigned char buf[4];\n    g(buf);\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-blocks"],
+        "void f(client *c)\n{   if (c->x == 0) return;\n\n    uint64_t timeout = c->y;\n    unsigned char buf[4];\n    g(buf); }\n",
+    );
+}

@@ -941,6 +941,7 @@ impl FormatEngine<'_> {
                 || self.attached_statement_expression_closer_follows()
             {
                 self.emit_trailing_source_space_or_ensure();
+                self.schedule_block_spacing_semicolon();
             } else if break_expanded_lisp_header
                 || (!keep_following_header
                     && (self.options.break_one_line_statements
