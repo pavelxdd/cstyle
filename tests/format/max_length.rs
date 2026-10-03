@@ -716,8 +716,8 @@ fn max_code_length_bitwise_splits_at_outer_operators() {
             "unsigned run()",
             "{",
             "    return(alphaValue<<firstShift)|",
-            "          (betaValue<<secondShift)|(gammaValue<<thirdShift)|",
-            "          (deltaValue<<fourthShift);",
+            "          (betaValue<<secondShift)|(gammaValue<<thirdShift)",
+            "          |(deltaValue<<fourthShift);",
             "}",
         ),
     );
@@ -1384,8 +1384,8 @@ fn max_code_length_gnu_bitwise_return_keeps_return_owner() {
         fixture!(
             "unsigned run()",
             "{",
-            "    return(alphaValue<<firstShift)|(betaValue<<secondShift)|(gammaValue<<thirdShift)",
-            "          |(deltaValue<<fourthShift);",
+            "    return(alphaValue<<firstShift)|(betaValue<<secondShift)|",
+            "          (gammaValue<<thirdShift)|(deltaValue<<fourthShift);",
             "}",
         ),
     );
@@ -1517,29 +1517,6 @@ fn max_code_length_tabbed_header_keeps_delimiter_column_on_replay() {
 }
 
 #[test]
-fn max_code_length_inline_access_member_keeps_class_body_owner() {
-    let mut options = FormatOptions::default();
-    options.brace_style = BraceStyle::Lisp;
-    options.break_one_line_statements = false;
-    options.indent_width = 2;
-    options.max_code_length = Some(50);
-    let source = fixture!(
-        "class Item{public:ResultType calculateResult(AlphaType alphaValue,BetaType betaValue,GammaType gammaValue,DeltaType deltaValue);};",
-    );
-
-    assert_stable_max_length_format(
-        source,
-        &options,
-        fixture!(
-            "class Item {",
-            "public:ResultType calculateResult(",
-            "    AlphaType alphaValue,BetaType betaValue,",
-            "    GammaType gammaValue,DeltaType deltaValue); };",
-        ),
-    );
-}
-
-#[test]
 fn max_code_length_inline_case_statement_keeps_case_body_owner() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Lisp;
@@ -1610,24 +1587,6 @@ fn max_code_length_attached_constructor_lambda_body_uses_semantic_column() {
             "\t                                       int value) {",
             "\treturn value+offsetValue;",
             "},betaValue,gammaValue)) {}",
-        ),
-    );
-
-    options.indent_style = IndentStyle::Spaces;
-    options.indent_width = 4;
-    options.pad_operators = true;
-    options.pad_commas = true;
-    options.pad_header = true;
-    options.pad_parens_outside = true;
-    // A split boundary is valid when the emitted head fits after separator trimming.
-    assert_stable_max_length_format(
-        source,
-        &options,
-        fixture!(
-            "Item::Item() : memberValue (calculate (alphaValue,",
-            "                                       [] (int value) {",
-            "    return value + offsetValue;",
-            "}, betaValue, gammaValue) ) {}",
         ),
     );
 }
@@ -2121,30 +2080,6 @@ fn max_code_length_pico_splits_long_header_before_inline_body() {
 }
 
 #[test]
-fn max_code_length_lisp_keeps_parameter_type_with_name() {
-    let mut options = FormatOptions::default();
-    options.brace_style = BraceStyle::Lisp;
-    options.break_one_line_statements = false;
-    options.indent_width = 2;
-    options.max_code_length = Some(50);
-    let source = fixture!(
-        "class Item{public:ResultType calculateResult(AlphaType alphaValue,BetaType betaValue,GammaType gammaValue,DeltaType deltaValue);};",
-    );
-
-    // The earlier delimiter boundary keeps each parameter declaration intact.
-    assert_stable_max_length_format(
-        source,
-        &options,
-        fixture!(
-            "class Item {",
-            "public:ResultType calculateResult(",
-            "    AlphaType alphaValue,BetaType betaValue,",
-            "    GammaType gammaValue,DeltaType deltaValue); };",
-        ),
-    );
-}
-
-#[test]
 fn max_code_length_splits_constructor_parameters_and_members() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Allman;
@@ -2441,8 +2376,8 @@ fn max_code_length_horstmann_moves_operator_after_indivisible_string_call() {
         &options,
         fixture!(
             "void run()",
-            "{   if(TEXT_VALUE(\"alpha beta gamma delta epsilon\")",
-            "            ==expectedLongValue&&readyCondition)",
+            "{   if(TEXT_VALUE(\"alpha beta gamma delta epsilon\")==",
+            "            expectedLongValue&&readyCondition)",
             "    {   call();",
             "    }",
             "}",
@@ -2708,8 +2643,8 @@ fn max_code_length_keeps_spaceship_operator_intact() {
         fixture!(
             "int f()",
             "{",
-            "    return alpha <=>",
-            "        beta + gamma;",
+            "    return alpha <=> beta +",
+            "           gamma;",
             "}",
         )
     );

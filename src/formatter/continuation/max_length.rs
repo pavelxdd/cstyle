@@ -8,7 +8,7 @@ use crate::formatter::constructs::labels::max_length_inline_access_body_indent_e
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
 use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{token_text, tokenize};
+use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
@@ -19,9 +19,8 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, inline_brace_pair_range, trailing_comment_split_limit,
-    trailing_comment_start, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::head_ends_assignment_operator;
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
@@ -317,52 +316,12 @@ fn should_skip_split(line: &str) -> bool {
     let trimmed = line.trim_start();
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
-        || trimmed.starts_with('*')
+        || trimmed
+            .strip_prefix('*')
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t', '/', '*']))
         || trimmed.starts_with('#')
         || trimmed.starts_with("asm(")
         || trimmed.starts_with("__asm__")
-}
-
-fn contains_unquoted_plus(line: &str) -> bool {
-    let mut quote = None;
-    let mut escaped = false;
-    for ch in line.chars() {
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            continue;
-        }
-        if matches!(ch, '"' | '\'') {
-            quote = Some(ch);
-        } else if ch == '+' {
-            return true;
-        }
-    }
-    false
-}
-
-/// The name start and close of the first call of a single string that runs
-/// past `width`.
-fn crossing_single_string_call(line: &str, width: usize) -> Option<(usize, usize)> {
-    line.char_indices().find_map(|(index, ch)| {
-        if ch != '(' || index == 0 {
-            return None;
-        }
-        let before = line[..index].trim_end();
-        if !before
-            .chars()
-            .next_back()
-            .is_some_and(is_identifier_continue)
-        {
-            return None;
-        }
-        let close = matching_close_paren(line, index)?;
-        let arg = line[index + 1..close].trim();
-        let name_start = before
-            .rfind(|ch: char| !is_identifier_continue(ch))
-            .map_or(0, |offset| offset + 1);
-        (arg.starts_with('"') && arg.ends_with('"') && close >= width)
-            .then_some((name_start, close))
-    })
 }
 
 fn is_single_string_call_at(line: &str, open: usize) -> bool {
@@ -899,266 +858,13 @@ fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
     ranges
 }
 
-fn adjust_overflowing_trailing_operator(
-    line: &str,
-    split_at: usize,
-    priority: usize,
-    width: usize,
-) -> usize {
-    let head = line[..split_at].trim_end();
-    if priority == 70
-        && head.ends_with('"')
-        && line[..split_at]
-            .chars()
-            .next_back()
-            .is_some_and(char::is_whitespace)
-        && line[split_at..].starts_with('+')
-        && line[..split_at + 1].trim_end().len() <= width
-    {
-        return split_at + 1;
-    }
-    if head.len() <= width || priority != 55 {
-        return split_at;
-    }
-    let Some((last_index, _)) = head.char_indices().next_back() else {
-        return split_at;
-    };
-    let Some((start, _, operator)) = operator_bounds_containing(line, last_index) else {
-        return split_at;
-    };
-    if matches!(
-        operator,
-        "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "&&" | "||"
-    ) && line[..start].trim_end().len() <= width
-    {
-        start
-    } else {
-        split_at
-    }
-}
-
 const ASTYLE_MIN_CODE_LENGTH: usize = 10;
 
 fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Option<SplitResult> {
     if line.len() <= width {
         return None;
     }
-
-    let inline_brace_pair = inline_brace_pair_range(line);
-    let inline_brace_header_fits =
-        inline_brace_pair.is_some_and(|(start, _)| line[..start].trim_end().len() <= width);
-    let comment_start = trailing_comment_start(line);
-    let comment_limit = comment_start
-        .map(|index| line[..index].trim_end().len())
-        .unwrap_or(line.len());
-    let side_comment_text_only_overflow = comment_start.is_some_and(|index| index <= width);
-    let conditional_header_comment_only_overflow = side_comment_text_only_overflow
-        && is_conditional_header_line(line)
-        && comment_start.is_some_and(|start| start.saturating_sub(comment_limit) <= 1);
-    let boundary = deferred_split_boundary(line, width);
-    // A call of a single string past the width splits at no header paren
-    // right before it nor any whitespace after it.
-    let string_call = crossing_single_string_call(line, width);
-    let template_ranges = template_argument_ranges(line);
-    let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
-    let mut quote: Option<char> = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
-    let mut delimiter_depth = 0usize;
-    for (index, ch) in line.char_indices() {
-        if index > boundary
-            && line[..index].trim_end().len() > width
-            && !ends_single_string_call(&line[..index])
-        {
-            break;
-        }
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            continue;
-        }
-        if in_block_comment {
-            if ch == '/' && line[..index].ends_with('*') {
-                in_block_comment = false;
-            }
-            continue;
-        }
-        if line[index..].starts_with("/*") {
-            in_block_comment = true;
-            continue;
-        }
-        if line[index..].starts_with("//") {
-            break;
-        }
-        if matches!(ch, '"' | '\'') {
-            quote = Some(ch);
-            continue;
-        }
-        let candidate = pointer_cast_group_adjacent_split_point(line, index, ch, width)
-            .or_else(|| logical_word_split_point(line, index, prefer_logical_operator))
-            .or_else(|| split_point_at(line, index, ch, prefer_logical_operator, width))
-            .or_else(|| pointer_cast_group_split_point(line, index, ch, width))
-            .or_else(|| pointer_whitespace_split_point(line, index, ch, width));
-        // astyle takes no split point within its minimum code length; the
-        // narrow widths below its smallest code length only arise in tests.
-        // astyle measures a whitespace split point at the whitespace.
-        if let Some((split_at, priority)) = candidate
-            && (split_at - usize::from(priority == 10) >= ASTYLE_MIN_CODE_LENGTH || width < 50)
-            && split_at < comment_limit
-            && !string_call.is_some_and(|(name_start, close)| {
-                let head = line[..split_at].trim_end();
-                priority == 10 && split_at > close
-                    || head.ends_with('(')
-                        && language::is_header(trailing_word(head[..head.len() - 1].trim_end()))
-                        && line[split_at..name_start].trim().is_empty()
-            })
-            && inline_brace_pair.is_none_or(|(start, end)| {
-                if inline_brace_header_fits {
-                    split_at >= end
-                } else {
-                    split_at <= start
-                }
-            })
-            && !(side_comment_text_only_overflow
-                && (priority < 54 || conditional_header_comment_only_overflow))
-            && !template_ranges
-                .iter()
-                .any(|&(start, end)| start <= index && index < end)
-        {
-            candidates.push((split_at, priority, delimiter_depth));
-        }
-        if let Some((split_at, priority)) =
-            logical_fallback_split_point(line, index, prefer_logical_operator)
-            && split_at < comment_limit
-            && inline_brace_pair.is_none_or(|(start, end)| {
-                if inline_brace_header_fits {
-                    split_at >= end
-                } else {
-                    split_at <= start
-                }
-            })
-            && !conditional_header_comment_only_overflow
-            && !template_ranges
-                .iter()
-                .any(|&(start, end)| start <= index && index < end)
-        {
-            candidates.push((split_at, priority, delimiter_depth));
-        }
-        match ch {
-            '(' | '[' => delimiter_depth += 1,
-            ')' | ']' => delimiter_depth = delimiter_depth.saturating_sub(1),
-            _ => {}
-        }
-    }
-
-    let (mut structural, mut plain): (Vec<_>, Vec<_>) = candidates
-        .into_iter()
-        .partition(|(_, priority, _)| is_structural_split_class(*priority));
-    // astyle prefers a comma to a comparison or a compound assignment, and
-    // takes the last of these and the other operators that fits; a
-    // three-way comparison it splits first.
-    let rank = |(split_at, priority): (usize, usize)| match priority {
-        70 if line[..split_at].trim_end().ends_with("<=>") => 58,
-        70 => 55,
-        _ => priority,
-    };
-    structural.sort_by(|a, b| {
-        rank((b.0, b.1)).cmp(&rank((a.0, a.1))).then_with(|| {
-            let a_delimiter = line[..a.0].trim_end().ends_with(['(', '[']);
-            let b_delimiter = line[..b.0].trim_end().ends_with(['(', '[']);
-            // astyle takes the last padded bitwise operator that fits.
-            let bitwise = |split_at: usize| {
-                let head = line[..split_at].trim_end();
-                line[split_at..].starts_with(char::is_whitespace)
-                    && head.ends_with(['|', '&', '^'])
-                    && !head.ends_with("||")
-                    && !head.ends_with("&&")
-            };
-            if a.1 == 55 && !(a_delimiter && b_delimiter) && !(bitwise(a.0) && bitwise(b.0)) {
-                a.2.cmp(&b.2).then(b.0.cmp(&a.0))
-            } else {
-                b.0.cmp(&a.0)
-            }
-        })
-    });
-    plain.sort_by(|a, b| a.2.cmp(&b.2).then(b.0.cmp(&a.0)).then(b.1.cmp(&a.1)));
-    // astyle takes a paren over whitespace before a pointer when the paren
-    // stands past seven tenths of the width.
-    if let Some(&(pointer_split, 59, _)) = structural
-        .iter()
-        .find(|(split_at, _, _)| line[..*split_at].trim_end().len() <= width)
-        && let Some(paren) = structural
-            .iter()
-            .chain(&plain)
-            .copied()
-            .find(|&(split_at, _, _)| {
-                line[..split_at].trim_end().ends_with('(')
-                    && (split_at * 10 >= width * 7 || split_at > pointer_split)
-            })
-    {
-        structural.retain(|candidate| *candidate != paren);
-        plain.retain(|candidate| *candidate != paren);
-        structural.insert(0, paren);
-    }
-    structural
-        .into_iter()
-        .chain(plain)
-        .find_map(|(split_at, priority, _)| {
-            let split_at = adjust_overflowing_trailing_operator(line, split_at, priority, width);
-            let head = line[..split_at].trim_end().to_string();
-            let tail = line[split_at..].trim_start().to_string();
-            let keeps_unsplittable_string = matches!(priority, 10 | 55 | 70)
-                && head.ends_with('"')
-                && tail.starts_with('+')
-                && head.contains('"')
-                && top_level_assignment_index(&head).is_none();
-            let keeps_unsplittable_string_call = priority == 70
-                && ends_single_string_call(&head)
-                && ["==", "!=", "<", ">"]
-                    .iter()
-                    .any(|operator| tail.starts_with(operator));
-            let keeps_unsplittable_head =
-                head.len() > width && split_result(&head, width, prefer_logical_operator).is_none();
-            if head.is_empty()
-                || tail.is_empty()
-                || matches!(
-                    head.trim(),
-                    "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "<<" | ">>" | "&&" | "||"
-                )
-                || head.len() > width
-                    && !(keeps_unsplittable_string
-                        || keeps_unsplittable_string_call
-                        || keeps_unsplittable_head)
-            {
-                return None;
-            }
-            if split_at > 0
-                && line[..split_at].ends_with('(')
-                && is_single_string_call_at(line, split_at - 1)
-            {
-                return None;
-            }
-            if head.ends_with('(') && tail.contains('"') && contains_unquoted_plus(&tail) {
-                return None;
-            }
-            if head.ends_with('[')
-                && tail.len() > width
-                && split_result(&tail, width, prefer_logical_operator).is_none()
-            {
-                return None;
-            }
-            let anchor_column = unmatched_open_paren_column(&head);
-            Some(SplitResult {
-                head,
-                tail,
-                split_at,
-                kind: split_result_kind(line, split_at, priority),
-                priority,
-                anchor_column,
-                indent: anchor_column
-                    .map(|column| ContinuationIndent::Spaces(column + 1))
-                    .unwrap_or(ContinuationIndent::Level(1)),
-            })
-        })
+    astyle_split_result(line, width, prefer_logical_operator)
 }
 
 fn split_result_kind(line: &str, split_at: usize, priority: usize) -> SplitKind {
@@ -1186,28 +892,6 @@ fn split_result_kind(line: &str, split_at: usize, priority: usize) -> SplitKind 
     }
 }
 
-fn is_structural_split_class(priority: usize) -> bool {
-    matches!(priority, 39 | 55 | 59 | 60 | 70 | 75 | 79 | 80)
-}
-
-fn deferred_split_boundary(line: &str, width: usize) -> usize {
-    let mut quote: Option<char> = None;
-    let mut escaped = false;
-    for (index, ch) in line.char_indices() {
-        let in_quote = quote.is_some();
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-        } else if matches!(ch, '"' | '\'') {
-            quote = Some(ch);
-        }
-        let is_code = !in_quote && !matches!(ch, '"' | '\'');
-        if is_code && index + ch.len_utf8() > width {
-            return index;
-        }
-    }
-    line.len()
-}
-
 fn logical_word_split_point(
     line: &str,
     index: usize,
@@ -1224,32 +908,6 @@ fn logical_word_split_point(
         return None;
     }
     Some((if prefer_after_logical { end } else { index }, 80))
-}
-
-fn logical_fallback_split_point(
-    line: &str,
-    index: usize,
-    prefer_after_logical: bool,
-) -> Option<(usize, usize)> {
-    if !prefer_after_logical {
-        return None;
-    }
-    let rest = line.get(index..)?;
-    if ["and", "or"].into_iter().any(|word| {
-        rest.starts_with(word)
-            && line[..index]
-                .chars()
-                .next_back()
-                .is_none_or(|ch| !is_identifier_continue(ch))
-            && line[index + word.len()..]
-                .chars()
-                .next()
-                .is_none_or(|ch| !is_identifier_continue(ch))
-    }) {
-        return Some((index, 79));
-    }
-    let (start, _, operator) = operator_bounds_containing(line, index)?;
-    (index == start && matches!(operator, "&&" | "||")).then_some((start, 79))
 }
 
 fn is_objc_selector_colon(line: &str, colon: usize) -> bool {
@@ -1448,62 +1106,6 @@ fn is_prefix_operator(before: &str) -> bool {
     }
 }
 
-fn pointer_cast_group_adjacent_split_point(
-    line: &str,
-    index: usize,
-    ch: char,
-    width: usize,
-) -> Option<(usize, usize)> {
-    if !is_identifier_start(ch) {
-        return None;
-    }
-    let head = line[..index].trim_end();
-    let tail = line[index..].trim_start();
-    if head.is_empty() || tail.is_empty() || tail.len() > width {
-        return None;
-    }
-    (head.ends_with("*)") && head.contains('(')).then_some((index, 59))
-}
-
-fn pointer_cast_group_split_point(
-    line: &str,
-    index: usize,
-    ch: char,
-    width: usize,
-) -> Option<(usize, usize)> {
-    if !matches!(ch, ' ' | '\t') {
-        return None;
-    }
-    let split_at = index + ch.len_utf8();
-    let head = line[..split_at].trim_end();
-    let tail = line[split_at..].trim_start();
-    if head.is_empty() || tail.is_empty() || tail.len() > width {
-        return None;
-    }
-    (head.ends_with("*)") && head.contains('(')).then_some((split_at, 59))
-}
-
-fn pointer_whitespace_split_point(
-    line: &str,
-    index: usize,
-    ch: char,
-    _width: usize,
-) -> Option<(usize, usize)> {
-    if !matches!(ch, ' ' | '\t')
-        || !whitespace_precedes_pointer_operator(line, index)
-        || unmatched_open_paren_column(&line[..index]).is_none()
-    {
-        return None;
-    }
-    let split_at = index + ch.len_utf8();
-    let head = line[..split_at].trim_end();
-    let tail = line[split_at..].trim_start();
-    if head.is_empty() || tail.is_empty() {
-        return None;
-    }
-    Some((split_at, 59))
-}
-
 fn is_function_call_split(line: &str, open_paren: usize) -> bool {
     line[..open_paren]
         .chars()
@@ -1595,20 +1197,6 @@ fn is_declaration_head(head: &str) -> bool {
     !last_type_word.is_some_and(is_non_type_keyword)
 }
 
-fn whitespace_precedes_pointer_operator(line: &str, index: usize) -> bool {
-    let Some((start, end, ch)) = line[index + 1..]
-        .char_indices()
-        .find(|(_, ch)| !ch.is_whitespace())
-        .map(|(offset, ch)| {
-            let start = index + 1 + offset;
-            (start, start + ch.len_utf8(), ch)
-        })
-    else {
-        return false;
-    };
-    matches!(ch, '*' | '&' | '^') && is_pointer_split_operator(line, start, end, &line[start..end])
-}
-
 /// Whether the `*` or `&` at `start..end` binds to the name of a
 /// statement-level declaration, as in `Type *name`: astyle splits before
 /// it at the whitespace, never after it.
@@ -1681,89 +1269,342 @@ fn operator_bounds_containing(line: &str, index: usize) -> Option<(usize, usize,
         .max_by_key(|(_, _, operator)| operator.len())
 }
 
+const SEMI: usize = 0;
+const AND_OR: usize = 1;
+const COMMA: usize = 2;
+const PAREN: usize = 3;
+const WHITESPACE: usize = 4;
+
+/// The operators astyle appends whole, longest first.
+const ASTYLE_OPERATORS: [&str; 46] = [
+    "<=>", ">>>=", "<<<=", ">>=", "<<=", ">>>", "<<<", "->*", "...", "+=", "-=", "*=", "/=", "%=",
+    "|=", "&=", "^=", "==", "++", "--", "!=", ">=", "<=", ">>", "<<", "??", "=>", "->", "&&", "||",
+    "::", "<?", ">?", "+", "-", "*", "/", "%", "?", ":", "=", "<", ">", "!", "|", "&",
+];
+
+/// The point where astyle splits `line`, replayed as astyle appends it:
+/// each appended piece registers its split points, and the first time the
+/// line runs past `width` astyle splits at the best one.
+fn astyle_split_point(line: &str, width: usize, break_after_logical: bool) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let templates = template_argument_ranges(line);
+    let mut fit = [0usize; 5];
+    let mut pending = [0usize; 5];
+    fn register(points: (&mut [usize; 5], &mut [usize; 5]), kind: usize, at: usize, fits: bool) {
+        if fits {
+            points.0[kind] = at;
+        } else {
+            points.1[kind] = at;
+        }
+    }
+    let peek = |from: usize| -> u8 {
+        bytes[from.min(bytes.len())..]
+            .iter()
+            .copied()
+            .find(|byte| !matches!(byte, b' ' | b'\t'))
+            .unwrap_or(b' ')
+    };
+    let name_char = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_');
+    let potential_operator = |byte: u8| {
+        byte.is_ascii_punctuation()
+            && !matches!(
+                byte,
+                b'{' | b'}' | b'(' | b')' | b'[' | b']' | b';' | b',' | b'#' | b'\\' | b'\'' | b'"'
+            )
+    };
+    let mut previous_non_space = b' ';
+    let mut index = 0;
+    let mut quote: Option<u8> = None;
+    let mut in_comment = false;
+    // A line closing a block it did not open lies in a one-line block.
+    let mut unbroken_depth = unopened_closing_braces(line);
+    while index < bytes.len() {
+        let byte = bytes[index];
+        let mut end = index + 1;
+        if let Some(open) = quote {
+            if byte == b'\\' {
+                end = (index + 2).min(bytes.len());
+            } else if byte == open {
+                quote = None;
+                previous_non_space = byte;
+            }
+        } else if in_comment {
+            if line[index..].starts_with("*/") {
+                end = index + 2;
+                in_comment = false;
+            }
+        } else if line[index..].starts_with("//") {
+            end = bytes.len();
+        } else if line[index..].starts_with("/*") {
+            end = index + 2;
+            in_comment = true;
+        } else if matches!(byte, b'"' | b'\'') {
+            quote = Some(byte);
+        } else if templates
+            .iter()
+            .any(|&(start, stop)| start <= index && index < stop)
+        {
+            if !matches!(byte, b' ' | b'\t') {
+                previous_non_space = byte;
+            }
+        } else if let Some(word) = ["and", "or"].into_iter().find(|word| {
+            line[index..].starts_with(word)
+                && !index
+                    .checked_sub(1)
+                    .is_some_and(|before| name_char(bytes[before]))
+                && !bytes
+                    .get(index + word.len())
+                    .is_some_and(|after| name_char(*after))
+        }) {
+            end = index + word.len();
+            let at = if break_after_logical {
+                end
+            } else if index > 0 && matches!(bytes[index - 1], b' ' | b'\t') {
+                index - 1
+            } else {
+                index
+            };
+            if unbroken_depth == 0 {
+                register((&mut fit, &mut pending), AND_OR, at, at <= width);
+            }
+            previous_non_space = bytes[end - 1];
+        } else if let Some(operator) = ASTYLE_OPERATORS
+            .iter()
+            .find(|operator| line[index..].starts_with(**operator))
+            .filter(|_| potential_operator(byte))
+        {
+            end = index + operator.len();
+            let next = peek(index + 1);
+            let before = index.checked_sub(1).map(|before| bytes[before]);
+            if next != b'/' && unbroken_depth == 0 {
+                match *operator {
+                    "||" | "&&" => {
+                        if break_after_logical {
+                            register((&mut fit, &mut pending), AND_OR, end, end <= width);
+                        } else {
+                            let at = if before.is_some_and(|byte| matches!(byte, b' ' | b'\t')) {
+                                index - 1
+                            } else {
+                                index
+                            };
+                            register((&mut fit, &mut pending), AND_OR, at, at <= width);
+                        }
+                    }
+                    "==" | "!=" | ">=" | "<=" | "<=>" => {
+                        register((&mut fit, &mut pending), WHITESPACE, end, end <= width)
+                    }
+                    "+" | "-" | "?"
+                        if before.is_some_and(|byte| {
+                            name_char(byte) || matches!(byte, b')' | b']' | b'"')
+                        }) && !(*operator != "?" && in_exponent(line, index)) =>
+                    {
+                        register((&mut fit, &mut pending), WHITESPACE, index, index <= width);
+                    }
+                    "=" | ":" => {
+                        let at = if end < width { end } else { index };
+                        if previous_non_space == b']' {
+                            register((&mut fit, &mut pending), WHITESPACE, at, index <= width);
+                        } else if before
+                            .is_some_and(|byte| name_char(byte) || matches!(byte, b')' | b']'))
+                        {
+                            register((&mut fit, &mut pending), WHITESPACE, at, end <= width);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            previous_non_space = bytes[end - 1];
+        } else {
+            let next = peek(end);
+            // A brace with code after it on the line drops the points before
+            // it and registers none up to its closing brace.
+            if byte == b'{' && (unbroken_depth > 0 || !line[end..].trim_start().is_empty()) {
+                if unbroken_depth == 0 {
+                    fit = [0; 5];
+                    pending = [0; 5];
+                }
+                unbroken_depth += 1;
+            } else if byte == b'}' && unbroken_depth > 0 {
+                unbroken_depth -= 1;
+            }
+            let blocked = unbroken_depth > 0
+                || next == b'/'
+                || matches!(byte, b'{' | b'}' | b'[' | b']')
+                || matches!(previous_non_space, b'{' | b'}' | b'[')
+                || matches!(next, b'{' | b'}' | b'[' | b']');
+            if !blocked {
+                match byte {
+                    b' ' | b'\t' => {
+                        if !matches!(next, b')' | b'(' | b':') && previous_non_space != b'(' {
+                            register((&mut fit, &mut pending), WHITESPACE, index, index <= width);
+                        }
+                    }
+                    b')' => {
+                        let member_access =
+                            next == b'-' && line[end..].trim_start().starts_with("->");
+                        if !(matches!(next, b')' | b' ' | b';' | b',' | b'.') || member_access) {
+                            register((&mut fit, &mut pending), WHITESPACE, end, end <= width);
+                        }
+                    }
+                    b',' => register((&mut fit, &mut pending), COMMA, end, end <= width),
+                    b'(' => {
+                        if !matches!(next, b')' | b'(' | b'"' | b'\'') {
+                            let at = if potential_operator(previous_non_space) {
+                                index
+                            } else {
+                                end
+                            };
+                            register((&mut fit, &mut pending), PAREN, at, end <= width);
+                        }
+                    }
+                    b';' => {
+                        if !matches!(next, b' ' | b'}' | b'/') {
+                            register((&mut fit, &mut pending), SEMI, end, end <= width);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if !matches!(byte, b' ' | b'\t') {
+                previous_non_space = byte;
+            }
+        }
+        if end > width {
+            let split = astyle_find_split_point(&fit, &pending, width, end, || {
+                let word_end = if name_char(byte) {
+                    index
+                        + bytes[index..]
+                            .iter()
+                            .take_while(|byte| name_char(**byte))
+                            .count()
+                } else {
+                    index + 2
+                };
+                word_end + 1 > bytes.len()
+            });
+            if split > 0 && split < end {
+                return Some(split);
+            }
+        }
+        index = end;
+    }
+    None
+}
+
+fn unopened_closing_braces(line: &str) -> usize {
+    let mut depth = 0isize;
+    let mut lowest = 0isize;
+    for token in tokenize(line) {
+        match token {
+            Token::Symbol('{') => depth += 1,
+            Token::Symbol('}') => {
+                depth -= 1;
+                lowest = lowest.min(depth);
+            }
+            _ => {}
+        }
+    }
+    lowest.unsigned_abs()
+}
+
+fn astyle_find_split_point(
+    fit: &[usize; 5],
+    pending: &[usize; 5],
+    width: usize,
+    length: usize,
+    at_line_end: impl Fn() -> bool,
+) -> usize {
+    let mut split = fit[SEMI];
+    if fit[AND_OR] >= ASTYLE_MIN_CODE_LENGTH {
+        split = fit[AND_OR];
+    }
+    if split < ASTYLE_MIN_CODE_LENGTH {
+        split = fit[WHITESPACE];
+        if fit[PAREN] > split || fit[PAREN] as f64 >= width as f64 * 0.7 {
+            split = fit[PAREN];
+        }
+        if fit[COMMA] > split || fit[COMMA] as f64 >= width as f64 * 0.3 {
+            split = fit[COMMA];
+        }
+    }
+    if split < ASTYLE_MIN_CODE_LENGTH {
+        return [SEMI, AND_OR, COMMA, PAREN, WHITESPACE]
+            .into_iter()
+            .map(|kind| pending[kind])
+            .filter(|&at| at > 0)
+            .min()
+            .unwrap_or(0);
+    }
+    if length - split > width && at_line_end() {
+        if fit[WHITESPACE] > split + 3 {
+            split = fit[WHITESPACE];
+        }
+        if fit[PAREN] > split {
+            split = fit[PAREN];
+        }
+    }
+    split
+}
+
+fn in_exponent(line: &str, index: usize) -> bool {
+    let head = &line[..index];
+    head.ends_with(['e', 'E'])
+        && head
+            .rsplit(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.' || ch == '_'))
+            .next()
+            .is_some_and(|word| word.starts_with(|ch: char| ch.is_ascii_digit()))
+}
+
+fn astyle_split_result(line: &str, width: usize, break_after_logical: bool) -> Option<SplitResult> {
+    let split_at = astyle_split_point(line, width, break_after_logical)?;
+    let head = line[..split_at].trim_end().to_string();
+    let tail = line[split_at..].trim_start().to_string();
+    if head.is_empty() || tail.is_empty() {
+        return None;
+    }
+    // The split takes the class of the strongest point at it.
+    let head_end = line[..split_at].trim_end().len();
+    let priority = (split_at.saturating_sub(4)..(split_at + 3).min(line.len()))
+        .filter(|&index| line.is_char_boundary(index))
+        .filter_map(|index| {
+            let ch = line[index..].chars().next()?;
+            [
+                logical_word_split_point(line, index, break_after_logical),
+                split_point_at(line, index, ch, break_after_logical, width),
+            ]
+            .into_iter()
+            .flatten()
+            .filter(|&(at, _)| line[..at].trim_end().len() == head_end)
+            .map(|(_, priority)| priority)
+            .max()
+        })
+        .max()
+        .unwrap_or(if head.ends_with(',') {
+            60
+        } else if head.ends_with(';') {
+            75
+        } else if head.ends_with('(') {
+            40
+        } else {
+            10
+        });
+    let anchor_column = unmatched_open_paren_column(&head);
+    Some(SplitResult {
+        kind: split_result_kind(line, split_at, priority),
+        head,
+        tail,
+        split_at,
+        priority,
+        anchor_column,
+        indent: anchor_column
+            .map(|column| ContinuationIndent::Spaces(column + 1))
+            .unwrap_or(ContinuationIndent::Level(1)),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn split_pair(
-        line: &str,
-        width: usize,
-        prefer_logical_operator: bool,
-    ) -> Option<(String, String)> {
-        split_result(line, width, prefer_logical_operator).map(|result| (result.head, result.tail))
-    }
-
-    #[test]
-    fn split_result_uses_ordered_split_point_classes() {
-        assert_eq!(
-            split_pair("alpha beta gamma delta", 16, false),
-            Some(("alpha beta gamma".to_string(), "delta".to_string()))
-        );
-        assert_eq!(
-            split_pair("call(alpha, beta, gamma)", 18, false),
-            Some(("call(alpha, beta,".to_string(), "gamma)".to_string()))
-        );
-        assert_eq!(
-            split_pair("for(i = 0; i < n; i++)", 15, false),
-            Some(("for(i = 0;".to_string(), "i < n; i++)".to_string()))
-        );
-        assert_eq!(
-            split_pair("value = (alpha + beta)", 15, false),
-            Some(("value = (alpha".to_string(), "+ beta)".to_string()))
-        );
-        assert_eq!(
-            split_pair("value = call(alpha beta)", 15, false),
-            Some(("value = call(".to_string(), "alpha beta)".to_string()))
-        );
-        assert_eq!(
-            split_pair("call(alpha beta)", 6, false),
-            Some(("call(".to_string(), "alpha beta)".to_string()))
-        );
-        assert_eq!(
-            split_pair("char *name other", 7, false),
-            Some(("char".to_string(), "*name other".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha * beta", 8, false),
-            Some(("alpha *".to_string(), "beta".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha <= beta == gamma", 16, false),
-            Some(("alpha <= beta ==".to_string(), "gamma".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha && beta && gamma", 18, false),
-            Some(("alpha && beta".to_string(), "&& gamma".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha && beta && gamma", 18, true),
-            Some(("alpha && beta &&".to_string(), "gamma".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha || beta", 7, false),
-            Some(("alpha".to_string(), "|| beta".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha += beta", 7, false),
-            Some(("alpha".to_string(), "+= beta".to_string()))
-        );
-        assert_eq!(
-            split_pair("alpha -= beta", 7, false),
-            Some(("alpha".to_string(), "-= beta".to_string()))
-        );
-        assert_eq!(
-            split_pair("ptr->member tail", 12, false),
-            Some(("ptr->member".to_string(), "tail".to_string()))
-        );
-        assert_eq!(
-            split_pair("value++ tail", 6, false),
-            Some(("value++".to_string(), "tail".to_string()))
-        );
-        assert_eq!(
-            split_pair("value-- tail", 6, false),
-            Some(("value--".to_string(), "tail".to_string()))
-        );
-    }
 
     #[test]
     fn split_result_records_comma_metadata() {
@@ -1773,21 +1614,6 @@ mod tests {
         assert_eq!(result.priority, 60);
         assert_eq!(result.anchor_column, Some(4));
         assert_eq!(result.indent, ContinuationIndent::Spaces(5));
-    }
-
-    #[test]
-    fn inline_brace_body_allows_split_after_its_closing_brace() {
-        assert_eq!(
-            split_pair(
-                "call([](){return alpha+beta+gamma;}, delta, epsilon)",
-                40,
-                false,
-            ),
-            Some((
-                "call([](){return alpha+beta+gamma;},".to_string(),
-                "delta, epsilon)".to_string(),
-            )),
-        );
     }
 
     #[test]

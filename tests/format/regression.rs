@@ -4754,3 +4754,11 @@ fn max_code_length_continues_arguments_after_a_split_open_paren() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_replays_astyle_split_points() {
+    let input = "void f(void)\n{\n    if (x) {\n        *counter = 0; /* clear counter to make the read callback restart */\n        if (nack == cg->pel_nack_tail) new_cg->pel_nack_tail = new_nack;\n        const char *azFmt[] = { \"%s\", \"%s-journal\", \"%s-wal\", \"%s-shm\" };\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if (x) {\n        *counter =\n            0; /* clear counter to make the read callback restart */\n        if (nack == cg->pel_nack_tail) new_cg->pel_nack_tail =\n                new_nack;\n        const char *azFmt[] = { \"%s\", \"%s-journal\", \"%s-wal\", \"%s-shm\" };\n    }\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
