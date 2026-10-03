@@ -4166,3 +4166,43 @@ fn max_code_length_splits_lines_holding_a_string_call() {
     check(input, &["--max-code-length=60"], expected);
     check(expected, &["--max-code-length=60"], expected);
 }
+
+#[test]
+fn vtk_added_one_line_brace_indents_within_a_nested_block() {
+    let input = "void f()\n{\n\tif (m) {\n\t\tclear(repo);\n\t\tif (!w)\n\t\t\tclear2(repo);\n\t}\n\twhile (x) {\n\t\tif (!w)\n\t\t\tcontinue;\n\t}\n}\n";
+    let expected = "void f()\n{\n    if (m)\n        {\n        clear(repo);\n        if (!w)\n            { clear2(repo); }\n        }\n    while (x)\n        {\n        if (!w)\n            { continue; }\n        }\n}\n";
+    check(input, &["--style=vtk", "--add-one-line-braces"], expected);
+    check(
+        expected,
+        &["--style=vtk", "--add-one-line-braces"],
+        expected,
+    );
+}
+
+#[test]
+fn whitesmith_statement_after_nested_added_one_line_block() {
+    let input = "void f()\n{\n\twhile (x) {\n\t\tfor (i = 0; i < n; i++)\n\t\t\tif (!w)\n\t\t\t\tbreak;\n\n\t\ty();\n\t}\n\tfor (i = 0; i < n; i++)\n\t\tif (!w)\n\t\t\tbreak;\n\tz();\n}\n";
+    let expected = "void f()\n    {\n    while (x)\n        {\n        for (i = 0; i < n; i++)\n            if (!w)\n                { break; }\n\n        y();\n        }\n    for (i = 0; i < n; i++)\n        if (!w)\n            { break; }\n    z();\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--add-one-line-braces"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--add-one-line-braces"],
+        expected,
+    );
+}
+
+#[test]
+fn vtk_statement_after_nested_added_one_line_block() {
+    let input = "void f()\n{\n\twhile (x) {\n\t\tfor (i = 0; i < n; i++)\n\t\t\tif (!w)\n\t\t\t\tbreak;\n\n\t\ty();\n\t}\n\tfor (i = 0; i < n; i++)\n\t\tif (!w)\n\t\t\tbreak;\n\tz();\n}\n";
+    let expected = "void f()\n{\n    while (x)\n        {\n        for (i = 0; i < n; i++)\n            if (!w)\n                { break; }\n\n        y();\n        }\n    for (i = 0; i < n; i++)\n        if (!w)\n        { break; }\n    z();\n}\n";
+    check(input, &["--style=vtk", "--add-one-line-braces"], expected);
+    check(
+        expected,
+        &["--style=vtk", "--add-one-line-braces"],
+        expected,
+    );
+}

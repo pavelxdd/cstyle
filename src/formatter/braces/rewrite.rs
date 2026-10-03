@@ -16,6 +16,7 @@ use crate::formatter::lexer::{
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
+use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
@@ -123,8 +124,17 @@ impl FormatEngine<'_> {
         {
             let statement_starts_line = token_begins_line(tokens, statement_start);
             if statement_starts_line && !self.current_is_blank() {
+                // VTK indents the brace within a block other than a function's.
+                let vtk_nested = self.options.brace_style == BraceStyle::Vtk
+                    && self
+                        .layout
+                        .frame_stack
+                        .active_brace()
+                        .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command);
                 let brace_indent_extra = usize::from(
-                    self.options.indent_braces || self.options.brace_style == BraceStyle::Gnu,
+                    self.options.indent_braces
+                        || self.options.brace_style == BraceStyle::Gnu
+                        || vtk_nested,
                 );
                 let block_indent = self
                     .layout

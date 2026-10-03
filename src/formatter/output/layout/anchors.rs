@@ -194,10 +194,11 @@ impl FormatEngine<'_> {
             // A heuristic moved the line off a structural level that the
             // tree confirms; an anchor off that level is itself misplaced.
             layout.exact_indent_spaces = Some(structural);
-        } else if !matches!(
+        } else if (!matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-        ) && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
+        ) || self.follows_added_one_line_block())
+            && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
             && self.tree.statements.braceless_header(first).is_none()
             // Directives opening or closing a group leave the code where
             // they found it; alternative branches do not.
@@ -2221,6 +2222,20 @@ impl FormatEngine<'_> {
                 .lead_width(statement_line, self.options.tab_width)
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// Whether the line before is a one-line block that adding braces made.
+    fn follows_added_one_line_block(&self) -> bool {
+        (self.options.add_braces || self.options.add_one_line_braces)
+            && self
+                .output
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .is_some_and(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trim();
+                    code.starts_with('{') && code.ends_with('}') && code.len() > 2
+                })
     }
 
     fn leading_assignment_indent(&self, first: usize) -> Option<usize> {
