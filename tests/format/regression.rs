@@ -5838,3 +5838,13 @@ fn macro_body_statements_indent_with_tabs_and_their_continuations_align_in_space
         "#define X(a) {   \\\n\t\tif (a) {        \\\n\t\t\tfoo(a,          \\\n\t\t\t    b);         \\\n\t\t}               \\\n\t}\n#define Y(a)     \\\n\tfoo(a,          \\\n\t    b)\n#define Z(a)     \\\n\tdo {            \\\n\t\tx = a +       \\\n\t\t    b;        \\\n\t} while (0)\n#define for_each(j, t)\t\t\\\n\tfor (j = 0, t = b[j];\t\\\n\t        t;\t\t\\\n\t        j++, t = b[j])\n",
     );
 }
+
+#[test]
+fn a_macro_row_closing_its_block_after_code_keeps_the_continuation_column() {
+    let input = "#define G(df, buf) {    \\\n  uInt s=D(df, 0);      \\\n  (buf)[0]=A[s&0x3ff]   \\\n          +B[s&0x3ff]   \\\n          +M[C[s>>26]];}\n";
+    check(
+        input,
+        &["--indent-preproc-define"],
+        "#define G(df, buf) {    \\\n        uInt s=D(df, 0);      \\\n        (buf)[0]=A[s&0x3ff]   \\\n                 +B[s&0x3ff]   \\\n                 +M[C[s>>26]];}\n",
+    );
+}

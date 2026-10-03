@@ -1109,7 +1109,10 @@ impl FormatEngine<'_> {
                     && (!is_structural
                         || continued_parameter_opens_body
                         || continued_designated_initializer_row
-                        || open_parens > 0 && !info.leading_close && !starts_with_open)
+                        || open_parens > 0 && !info.leading_close && !starts_with_open
+                        // A row that only closes a block after its code
+                        // continues the code.
+                        || info.opens == 0 && !info.leading_close)
             }) {
                 self.options
                     .continuation_indent_prefix(prefix_structural_level, column)
