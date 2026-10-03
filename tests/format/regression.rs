@@ -5411,3 +5411,13 @@ fn padding_parens_outside_aligns_initializer_rows_past_the_padded_first_paren() 
         "void f (void)\n{\n    uniform_gen_arg_t arg = { (uint64_t) (uintptr_t)&lg_range_test,\n                              lg_range_test\n                            };\n}\n",
     );
 }
+
+#[test]
+fn a_statement_broken_off_its_header_keeps_the_gap_before_its_comment() {
+    let input = "void f(void)\n{\n    if (a) b();  /* c1 */\n    if (c) return; // c2\n    while (d) e();      /* c3 */\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f(void)\n{\n    if (a)\n        b();  /* c1 */\n    if (c)\n        return; // c2\n    while (d)\n        e();      /* c3 */\n}\n",
+    );
+}

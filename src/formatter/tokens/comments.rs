@@ -3,6 +3,7 @@ use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
+use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::ContinuationIndent;
@@ -2811,6 +2812,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the current line starts with code its source line had a
+    /// control header before, the header now on a line of its own.
+    fn current_line_broke_off_header(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        tokens[line_start..first]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(
+                |token| matches!(token, Token::Word(word) if is_header(self.options, word)),
+            )
+    }
+
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
         let had_formatter_space = (self.current.ends_with(' ') || self.current.ends_with('\t'))
             && matches!(
@@ -2929,6 +2949,16 @@ impl FormatEngine<'_> {
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             && self.current.trim_start().starts_with('{')
             && self.comment_follows_open_source_line_brace()
+        {
+            self.current.push_str(&gap);
+            return;
+        }
+        // A statement broken off its header's line keeps the gap before its
+        // comment.
+        if target_column.is_some()
+            && !gap.is_empty()
+            && !gap.contains('\t')
+            && self.current_line_broke_off_header()
         {
             self.current.push_str(&gap);
             return;
