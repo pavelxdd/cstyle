@@ -2377,7 +2377,21 @@ fn initializer_brace_type(
         .rev()
         .find(|index| matches!(tokens[*index], Token::Symbol('{' | '}' | ';')))
         .map_or(line_start, |index| index + 1);
-    let has_block_word = tokens[segment_start..open_index].iter().any(|token| {
+    // A head split over lines, as `struct` above its name, starts earlier.
+    let head_start = if segment_start == line_start {
+        (0..line_start)
+            .rev()
+            .find(|&index| {
+                matches!(
+                    tokens[index],
+                    Token::Symbol('{' | '}' | ';' | '(' | ')' | '=' | ',') | Token::Preprocessor(_)
+                )
+            })
+            .map_or(0, |index| index + 1)
+    } else {
+        segment_start
+    };
+    let has_block_word = tokens[head_start..open_index].iter().any(|token| {
         matches!(token, Token::Word(word) if language::BLOCK_WORDS.contains(&word.as_str()) || language::PRE_BLOCK_WORDS.contains(&word.as_str()))
     });
     if tokens[segment_start..open_index]

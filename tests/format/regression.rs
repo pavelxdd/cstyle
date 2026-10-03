@@ -4040,3 +4040,11 @@ fn run_in_enum_after_a_typedef_enum_closes_at_its_own_brace() {
         }
     }
 }
+
+#[test]
+fn struct_head_split_over_lines_still_opens_a_struct() {
+    let input = "struct\nBCinfo { int dp0, dp1; };\nstruct BC2 { int a; };\n";
+    let expected = "struct\n    BCinfo {\n    int dp0, dp1;\n};\nstruct BC2 {\n    int a;\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
