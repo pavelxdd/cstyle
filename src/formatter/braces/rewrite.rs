@@ -169,6 +169,7 @@ impl FormatEngine<'_> {
             );
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
+            self.layout.pending_braceless_block_bias = None;
             if header_is_do {
                 self.layout.nesting.last_closed_brace_header = Some("do".to_string());
             }

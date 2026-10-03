@@ -5021,3 +5021,13 @@ fn a_case_label_after_the_closing_brace_of_the_case_before_keeps_its_column() {
         "void f(int i)\n    {\n    switch (i)\n        {\n        case 2:\n            {\n            x = 1;\n            break;\n            } case 3:\n            {\n            y = 2;\n            break;\n            }\n        }\n    z = 3;\n    }\n",
     );
 }
+
+#[test]
+fn an_added_one_line_block_under_a_braceless_header_leaves_the_next_block_level() {
+    let input = "void f(void)\n{\n\tfor (; s2 < x; s2++)\n\t\tif (e() < 0)\n\t\t\treturn -1;\n\n\tfor (;; x = y) {\n\t\ta();\n\t}\n}\n";
+    check(
+        input,
+        &["--style=allman", "--add-one-line-braces"],
+        "void f(void)\n{\n    for (; s2 < x; s2++)\n        if (e() < 0)\n        { return -1; }\n\n    for (;; x = y)\n    {\n        a();\n    }\n}\n",
+    );
+}
