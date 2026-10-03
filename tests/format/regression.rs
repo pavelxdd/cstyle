@@ -5628,3 +5628,14 @@ fn an_else_body_split_by_an_empty_line_keeps_its_level_past_a_directive() {
         "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        if (b) {\n#ifdef X\n            if (c) {\n                y();\n            }\n#else\n            z();\n#endif\n            w();\n        }\n    v();\n}\n",
     );
 }
+
+#[test]
+fn a_line_splice_after_a_closing_brace_stays_on_its_line() {
+    let input =
+        "void f()\n{\n    if (a) {\n        b();\n    } else {\n        c();\n    }      \\\n  }\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (a) {\n        b();\n    } else {\n        c();\n    }      \\\n}\n",
+    );
+}

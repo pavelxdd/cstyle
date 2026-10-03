@@ -602,6 +602,8 @@ impl FormatEngine<'_> {
         {
         } else if source_attached_number_after_closing && !move_one_line_block_comment {
             self.ensure_space();
+        } else if matches!(next, Some(Token::Symbol('\\'))) && !move_one_line_block_comment {
+            // A line splice stays at the end of the line it continues.
         } else if move_one_line_block_comment {
             self.finish_line();
             self.unwind_else_if_break_depths();
