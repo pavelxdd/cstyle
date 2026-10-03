@@ -5421,3 +5421,23 @@ fn a_statement_broken_off_its_header_keeps_the_gap_before_its_comment() {
         "void f(void)\n{\n    if (a)\n        b();  /* c1 */\n    if (c)\n        return; // c2\n    while (d)\n        e();      /* c3 */\n}\n",
     );
 }
+
+#[test]
+fn break_one_line_headers_breaks_a_switch_after_else() {
+    let input = "void f(int i)\n{\n    if (a) {\n        b();\n    } else switch (i) {  /* c */\n        case 1:\n            break;\n    }\n    if (a) {\n        b();\n    } else for (;;) {\n        c();\n    }\n    if (a) b(); else while (x) { y(); }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f(int i)\n{\n    if (a) {\n        b();\n    } else\n        switch (i) {  /* c */\n        case 1:\n            break;\n        }\n    if (a) {\n        b();\n    } else\n        for (;;) {\n            c();\n        }\n    if (a)\n        b();\n    else\n        while (x) {\n            y();\n        }\n}\n",
+    );
+}
+
+#[test]
+fn break_one_line_headers_breaks_a_switch_after_a_header() {
+    let input = "void f(int i)\n{\n    if (a) switch (i) {\n        case 1:\n            break;\n        }\n    for (;;) switch (i) {\n        default:\n            break;\n        }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f(int i)\n{\n    if (a)\n        switch (i) {\n        case 1:\n            break;\n        }\n    for (;;)\n        switch (i) {\n        default:\n            break;\n        }\n}\n",
+    );
+}

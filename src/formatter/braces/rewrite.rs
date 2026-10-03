@@ -554,7 +554,7 @@ impl FormatEngine<'_> {
             Some(Token::Symbol('{') | Token::Symbol(';'))
             | Some(Token::Comment(_, _) | Token::Preprocessor(_) | Token::Newline) => return false,
             Some(Token::Word(word))
-                if is_standard_add_braces_header(word)
+                if (is_standard_add_braces_header(word) || word == "switch")
                     && !is_defer_header(word)
                     && (header != Some("else") || word != "if")
                     && !split_else_after_preprocessor =>

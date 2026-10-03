@@ -871,7 +871,10 @@ impl FormatEngine<'_> {
                 {
                     // A line that lost a `}` broken off before it keeps its
                     // comment at the source column.
-                    let gap = if self.closing_brace_broken_off_source_line() {
+                    let gap = if self.closing_brace_broken_off_source_line()
+                        && is_break_blocks_closing_header(leading_identifier(
+                            self.current.trim_start(),
+                        )) {
                         target
                             .saturating_sub(self.current.trim().chars().count())
                             .max(1)
