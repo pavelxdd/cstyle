@@ -1759,6 +1759,8 @@ impl FormatEngine<'_> {
         } else if matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && !self.token_input.token_followed_by_final_line_comment
+            // A brace leading its line keeps the comment after it.
+            && !self.token_input.token_begins_source_line
             && let Some(comment) = attached_line_comment
         {
             let before_brace = if self.token_input.previous_input_was_adjacent {
@@ -2339,7 +2341,12 @@ impl FormatEngine<'_> {
             };
         let runin_comment = if attach_runin_comment {
             match next {
-                Some(Token::Comment(CommentKind::Line, comment)) => Some(comment.as_str()),
+                // A bare block moves a line comment into its body.
+                Some(Token::Comment(CommentKind::Line, comment))
+                    if brace_type != BraceType::Command =>
+                {
+                    Some(comment.as_str())
+                }
                 // A block comment before the first element stays with it.
                 Some(Token::Comment(CommentKind::Block, comment))
                     if !comment.contains('\n') && self.comments.next_comment_ends_line =>
@@ -2361,6 +2368,8 @@ impl FormatEngine<'_> {
             } else {
                 match self.token_input.next_input_whitespace.as_deref() {
                     Some(ws) if !ws.is_empty() => self.current.push_str(ws),
+                    // A bare block keeps a comment written against its brace.
+                    _ if brace_type == BraceType::Command => {}
                     _ => self.current.push(' '),
                 }
             }

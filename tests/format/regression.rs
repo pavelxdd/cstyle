@@ -4003,3 +4003,20 @@ fn added_brace_takes_two_columns_from_a_tab_gap() {
     let expected = "void f(void)\n{\n    if (a) {\n        x();\n    } else if (!len) {\t/* c */\n        goto out;\n    }\n    if (!len) {\t/* d */\n        goto out;\n    }\n}\n";
     check(input, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn comment_after_a_line_leading_function_brace_stays_below_it() {
+    let input = "void f(void)\n{ // c\n    x();\n}\nvoid g(void)\n{/* d */\n    x();\n}\n";
+    let expected =
+        "void f(void)\n{\n    // c\n    x();\n}\nvoid g(void)\n{\n    /* d */\n    x();\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn bare_block_moves_a_line_comment_into_its_body() {
+    let input = "void f(void)\n{\n    x();\n    {/* emcc */\n        y();\n    }\n    {// c\n        z();\n    }\n}\n";
+    let expected = "void f(void)\n{\n    x();\n    {/* emcc */\n        y();\n    }\n    {\n        // c\n        z();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
