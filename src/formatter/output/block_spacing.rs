@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::source::lex::leading_identifier;
 
 #[derive(Default)]
@@ -98,9 +99,10 @@ impl FormatEngine<'_> {
         tokens: &[Token],
         following_index: Option<usize>,
     ) -> bool {
-        self.options.break_blocks
-            && self.current.trim().is_empty()
-            && self.previous_block_spacing_line_is_comment_only()
+        if !self.options.break_blocks || !self.current.trim().is_empty() {
+            return false;
+        }
+        if self.previous_block_spacing_line_is_comment_only()
             && following_index
                 .filter(|index| matches!(tokens.get(*index), Some(Token::Comment(_, _))))
                 .and_then(|index| self.following_break_blocks_header(tokens, index + 1))
@@ -109,6 +111,48 @@ impl FormatEngine<'_> {
                         || (self.options.break_closing_header_blocks
                             && is_break_blocks_closing_header(&word))
                 })
+        {
+            return true;
+        }
+        // Deleting the empty line after a one-line comment loses the
+        // comment's hold on the header after it, which astyle then breaks
+        // away from it again.
+        self.layout
+            .previous_pre_adjust_line
+            .as_deref()
+            .is_some_and(|line| {
+                let trimmed = line.trim();
+                trimmed.starts_with("//")
+                    || trimmed.starts_with("/*")
+                        && trimmed.ends_with("*/")
+                        && trimmed.find("*/") == Some(trimmed.len() - 2)
+            })
+            && following_index
+                .and_then(|index| match tokens.get(index) {
+                    Some(Token::Word(word)) => Some(word),
+                    _ => None,
+                })
+                .is_some_and(|word| is_break_blocks_opening_header(self.options, word))
+            && self.last_code_line_opens_no_block()
+    }
+
+    /// Whether the last output line holding code ends other than with `{`.
+    fn last_code_line_opens_no_block(&self) -> bool {
+        (0..self.output.len())
+            .rev()
+            .find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && self.output.comment_start_index(index) == index
+                    && !trimmed.starts_with("//")
+                    && !trimmed.starts_with("/*")
+            })
+            .is_some_and(|index| {
+                let line = &self.output[index];
+                !line[..trailing_comment_split_limit(line)]
+                    .trim_end()
+                    .ends_with('{')
+            })
     }
 
     pub(crate) fn schedule_block_spacing_semicolon(&mut self) {

@@ -4889,3 +4889,14 @@ fn a_paren_and_apostrophe_in_a_comment_row_continue_nothing() {
     let input = "#endif\n/* since \"static\" is used, we\n   define it (compile with -Dlocal if your debugger can't find it) */\n\n/* gz* functions */\nextern voidp  malloc(uInt size);\n";
     check(input, &["--style=stroustrup"], input);
 }
+
+#[test]
+fn deleting_empty_lines_keeps_breaking_a_header_off_a_one_line_comment() {
+    let input = "int f(void)\n{\n    char s[81];\n    /* get limits */\n\n    if (a) {\n        x = 1;\n    }\n    y = 2;\n    // c2\n\n    z = 3;\n}\n";
+    let expected = "int f(void)\n{\n    char s[81];\n    /* get limits */\n\n    if (a) {\n        x = 1;\n    }\n\n    y = 2;\n    // c2\n    z = 3;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--delete-empty-lines"],
+        expected,
+    );
+}
