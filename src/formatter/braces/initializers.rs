@@ -652,7 +652,8 @@ impl FormatEngine<'_> {
             }
         } else {
             // Padding parens outside parts a first `(` from the brace.
-            let padded_paren = self.options.pad_parens_outside
+            let padded_paren = (self.options.pad_parens_outside
+                || self.options.pad_first_paren_outside)
                 && !self.current.ends_with([' ', '\t'])
                 && matches!(
                     self.tree.tokens.get(token_index + 1),

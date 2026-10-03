@@ -5451,3 +5451,13 @@ fn break_blocks_parts_a_case_block_brace_from_a_directive_after_it() {
         "void f(void)\n{\n    switch (c) {\n    case 0:\n        break;\n#if X\n\n    case 1: {\n        if (a) {\n            b();\n        }\n\n        break;\n    }\n\n#endif\n\n    case 2:\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn padding_the_first_paren_outside_aligns_initializer_rows_past_it() {
+    let input = "void f(void)\n{\n    int a[] = {(1), 2,\n        3};\n    int b[] = {((1)), 2,\n        3};\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-first-paren-out"],
+        "void f (void)\n{\n    int a[] = { (1), 2,\n                3\n              };\n    int b[] = { ((1)), 2,\n                3\n              };\n}\n",
+    );
+}
