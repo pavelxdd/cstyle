@@ -5191,3 +5191,13 @@ fn an_added_one_line_block_in_a_nested_case_body_takes_the_case_indent() {
         "void f(void)\n{\n    switch (p_ch) {\n        case 1:\n            if (a)\n            { return; }\n            continue;\n        case 2:\n            if (b) {\n                if (c)\n                { x = 1; }\n            }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_statement_given_one_line_braces_stays_after_the_block() {
+    let input = "void f(void)\n{\n    if (a) b(); /* c1 */\n    if (a)\n        b(); /* c2 */\n    if (a)\n        b(); // c3\n    x();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(void)\n{\n    if (a) { b(); } /* c1 */\n    if (a)\n    { b(); } /* c2 */\n    if (a)\n    { b(); } // c3\n    x();\n}\n",
+    );
+}

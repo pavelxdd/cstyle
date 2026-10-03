@@ -196,7 +196,14 @@ impl FormatEngine<'_> {
                 && same_line_next.is_some()
                 && (!next_is_closing_header || attach_closing_header);
             let nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
-            if (next_is_else
+            // A comment after the statement stays after the block.
+            let trailing_comment = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Comment(..)));
+            if trailing_comment {
+                // The line ends after the comment.
+            } else if (next_is_else
                 && attach_closing_header
                 && (nested_header_level.is_none() || !self.options.break_one_line_statements))
                 || keep_following_statement
