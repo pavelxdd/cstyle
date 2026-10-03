@@ -1865,11 +1865,23 @@ impl FormatEngine<'_> {
             .active_brace()
             .filter(|frame| frame.case_block)?;
         // A block given to a braceless header is its body, not a sibling.
-        let header_body_block = self
+        let header_body_column = self
             .output
             .last_line_outside_comment()
-            .is_some_and(|previous| line_is_control_body_header(previous.trim_start()));
-        let target = if line.trim_start().starts_with('{') && !header_body_block {
+            .filter(|previous| {
+                let header = previous.trim_start().trim_start_matches('}').trim_start();
+                line_is_control_body_header(header) || header.trim_end() == "do"
+            })
+            .map(|previous| leading_visual_width(previous, self.options.tab_width));
+        let target = if line.trim_start().starts_with('{')
+            && let Some(header_column) = header_body_column
+        {
+            let brace_extra = usize::from(
+                self.options.indent_braces
+                    || matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk),
+            );
+            header_column + brace_extra * self.options.indent_width
+        } else if line.trim_start().starts_with('{') {
             frame.sibling_indent_column
         } else if frame.nested_case_label {
             frame.header_indent_column + 2 * self.options.indent_width

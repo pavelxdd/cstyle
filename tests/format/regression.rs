@@ -5221,3 +5221,43 @@ fn an_added_one_line_block_keeps_its_header_level_and_comment_gap() {
         "int f(int c)\n{\n    if (a)\n        /* if non-blocking input stalled,\n           return */\n    { return 0; }\n    if (b)\n    { return 1; }  /* two */\n    return 2;\n}\n",
     );
 }
+
+#[test]
+fn an_added_one_line_block_nested_in_a_case_body_stands_at_its_header() {
+    let input = "void f(void)\n{\n\tswitch (state) {\n\tcase 2:\n\t\tfor (; ch; ch++)\n\t\t\tif (!x)\n\t\t\t\tbreak;\n\t\ty();\n\t}\n\tfor (; ch; ch++)\n\t\tif (!x)\n\t\t\tbreak;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(void)\n{\n    switch (state) {\n    case 2:\n        for (; ch; ch++)\n            if (!x)\n            { break; }\n        y();\n    }\n    for (; ch; ch++)\n        if (!x)\n        { break; }\n}\n",
+    );
+}
+
+#[test]
+fn gnu_indents_an_added_one_line_block_of_an_else_in_a_case_block() {
+    let input = "void f(int t)\n{\n\tswitch (t) {\n\tcase 0:\n\t{\n\t\tif (x) {\n\t\t\tif (a) {\n\t\t\t\tb();\n\t\t\t} else\n\t\t\t\tc();\n\t\t}\n\t\tbreak;\n\t}\n\t}\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--add-one-line-braces"],
+        "void f(int t)\n{\n    switch (t)\n        {\n        case 0:\n        {\n            if (x)\n                {\n                    if (a)\n                        {\n                            b();\n                        }\n                    else\n                        { c(); }\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn an_added_one_line_block_after_a_multiline_loop_header_body_stands_at_its_header() {
+    let input = "void f(void) {\n  while (g(a,\n           NULL) != 0) {\n  ASSERT(s(d, \"file1\") == 0 ||\n         s(d, \"sub\") == 0);\n#ifdef X\n    if (!s(d, \"sub\"))\n      E(d, 1);\n    else\n      E(d, 2);\n#endif\n  }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--add-one-line-braces"],
+        "void f(void)\n    {\n    while (g(a,\n             NULL) != 0)\n        {\n        ASSERT(s(d, \"file1\") == 0 ||\n               s(d, \"sub\") == 0);\n#ifdef X\n        if (!s(d, \"sub\"))\n            { E(d, 1); }\n        else\n            { E(d, 2); }\n#endif\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn an_added_one_line_block_of_a_nested_else_stands_at_the_else() {
+    let input = "void f(void)\n{\n\tfor (i = 0; i < n; i++)\n\t\tif (i >= limit)\n\t\t\ta();\n\t\telse\n\t\t\tb();\n\tif (x) {\n\t\ty();\n\t}\n\telse\n\t\tz();\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--add-one-line-braces"],
+        "void f(void)\n{\n    for (i = 0; i < n; i++)\n        if (i >= limit)\n            { a(); }\n        else\n            { b(); }\n    if (x)\n        {\n            y();\n        }\n    else\n        { z(); }\n}\n",
+    );
+}

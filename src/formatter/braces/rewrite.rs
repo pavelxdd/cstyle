@@ -144,19 +144,39 @@ impl FormatEngine<'_> {
                         || self.options.brace_style == BraceStyle::Gnu
                         || vtk_nested,
                 );
-                let block_indent = self
-                    .layout
-                    .indentation
-                    .indent()
-                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
-                    + brace_indent_extra
-                    + self.case_body_indent_extra(LineKind::Normal);
+                // The bias already counts the case body level.
+                let block_indent = (self.layout.indentation.indent()
+                    + self.case_body_indent_extra(LineKind::Normal))
+                .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
+                    + brace_indent_extra;
                 if !follows_comment_line {
                     self.finish_line();
                 }
-                self.layout
-                    .continuation_indent
-                    .set_next_line_level(block_indent);
+                // A case body sets its own floor under a level.
+                if self.layout.line_adjuster.switch_depth() > 0 {
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_spaces(block_indent * self.options.indent_width);
+                } else {
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(block_indent);
+                }
+                // An `else` stands where its `if` put it; the brace joins it.
+                if header_is_else
+                    && !follows_comment_line
+                    && !self.split_else_line_layout_active()
+                    && let Some(else_line) = self.output.last()
+                    && else_line.trim() == "else"
+                {
+                    let spaces = leading_visual_width(else_line, self.options.tab_width)
+                        + self.adjusted_line_indent_delta(else_line)
+                        + usize::from(
+                            brace_indent_extra > 0
+                                || self.options.brace_style == BraceStyle::Whitesmith,
+                        ) * self.options.indent_width;
+                    self.layout.continuation_indent.set_next_line_spaces(spaces);
+                }
             }
             let mut block_tokens = Vec::with_capacity(semicolon - statement_start + 5);
             block_tokens.push(Token::Symbol('{'));

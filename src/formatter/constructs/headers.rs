@@ -1522,7 +1522,14 @@ impl FormatEngine<'_> {
         current_spaces: Option<usize>,
         interrupted_header_context: bool,
     ) -> Option<usize> {
+        // A block given to a braceless header stands at that header.
+        let header_body_block = line.trim_start().starts_with('{')
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| line_is_control_body_header(previous.trim_start()));
         if !interrupted_header_context
+            || header_body_block
             || line_kind != LineKind::Normal
             || line.trim_start().starts_with(['#', '}', ':'])
             || is_header(self.options, leading_identifier(line.trim_start()))
