@@ -543,11 +543,13 @@ impl FormatEngine<'_> {
                     || trimmed.starts_with("default:"))
             {
                 let nested_header_extra = same_line_nested_header_extra(trimmed);
+                let case_label = trimmed.starts_with("case ") || trimmed.starts_with("default:");
+                // Indented cases indent a case block once more.
+                let case_block_extra = usize::from(case_label && self.options.indent_cases);
                 let target = leading_visual_width(previous, self.options.tab_width)
-                    + self.options.indent_width * (1 + nested_header_extra)
-                    + usize::from(
-                        !trimmed.starts_with("case ") && !trimmed.starts_with("default:"),
-                    ) * self.layout.line_adjuster.next_line_case_unindent_depth()
+                    + self.options.indent_width * (1 + nested_header_extra + case_block_extra)
+                    + usize::from(!case_label)
+                        * self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width;
                 if layout.exact_indent_spaces.unwrap_or(0) < target {
                     layout.exact_indent_spaces = Some(target);

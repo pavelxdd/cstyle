@@ -5679,3 +5679,23 @@ fn a_comment_led_row_closing_a_macro_call_ends_its_statement() {
         "void f()\n{\n    if (a) {\n        M(x,\n          /* clip */ true)\n        M(y,\n          /* clip */ false)\n        M(z,\n          b, true)\n        M(w,\n          c)\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_statement_after_a_case_block_stands_at_the_indented_case_body() {
+    let input = "void f()\n{\n    switch(t) {\n    case 1: {\n        int s;\n    }\n    break;\n    case 2:\n        x();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-cases"],
+        "void f()\n{\n    switch(t) {\n    case 1: {\n            int s;\n        }\n        break;\n    case 2:\n        x();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_case_block_after_an_empty_else_block_keeps_its_indented_body() {
+    let input = "void f()\n{\n    switch (w) {\n    case 1: {\n        if (a) {\n        }\n        else {\n        }\n    }\n    case 2: {\n        if (c) {\n            d();\n        }\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-cases"],
+        "void f()\n{\n    switch (w) {\n    case 1: {\n            if (a) {\n            } else {\n            }\n        }\n    case 2: {\n            if (c) {\n                d();\n            }\n        }\n    }\n}\n",
+    );
+}

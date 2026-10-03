@@ -4831,7 +4831,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+        // Indented cases put what follows the block at the case body.
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.case_unindent_spaces()
+                + usize::from(self.options.indent_cases) * self.options.indent_width,
+        )
     }
 
     /// Column of the statement starting at `first` after its previous
