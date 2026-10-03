@@ -12,7 +12,7 @@ use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
-use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
@@ -82,7 +82,7 @@ impl FormatEngine<'_> {
                 matches!(
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                )
+                ) || self.is_enum_body(group)
             });
         if should_skip_split(line) || initializer_row {
             self.push_output_line_with_indent(line, structural_level, indent);
@@ -260,8 +260,20 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// The indent astyle's continuation stack gives the split `part`, once
-    /// its source tokens are pending.
+    /// Whether `group` is the body of an enum, whose rows astyle keeps whole
+    /// like an initializer's.
+    fn is_enum_body(&self, group: GroupId) -> bool {
+        let open = self.tree.groups.get(group).open;
+        self.tree.blocks.kind(group) == Some(BlockKind::Aggregate)
+            && self.tree.blocks.owner(group).is_some_and(|owner| {
+                self.tree.tokens[owner..open]
+                    .iter()
+                    .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+            })
+    }
+
+    /// The indent astyle's continuation stack, or else the syntax tree,
+    /// gives the split `part`, once its source tokens are pending.
     fn split_part_indent(&self, part: &str) -> Option<usize> {
         let first = self.output.pending_tokens()?.first;
         let token = self.tree.tokens.get(first)?;
@@ -269,6 +281,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.split_part_stack_indent(first)
+            .or_else(|| self.tree_anchor_indent(first, part))
     }
 
     /// Gives the part of the split `line` that starts with `part` the source
@@ -334,8 +347,11 @@ fn should_skip_split(line: &str) -> bool {
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
         || trimmed
-            .strip_prefix('*')
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t', '/', '*']))
+            .trim_start_matches('*')
+            .chars()
+            .next()
+            .is_none_or(|ch| matches!(ch, ' ' | '\t' | '/'))
+            && trimmed.starts_with('*')
         || trimmed.starts_with('#')
         || trimmed.starts_with("asm(")
         || trimmed.starts_with("__asm__")
@@ -486,7 +502,7 @@ fn continuation_indent_for_split(
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| {
                 matches!(word, "return" | "case" | "goto")
-                    || matches!(word, "struct" | "union" | "enum" | "class") && !line.contains('(')
+                    || matches!(word, "struct" | "union" | "class") && !line.contains('(')
             })
     {
         return Some(ContinuationIndent::Spaces(base_indent_width));

@@ -21,33 +21,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{preprocessor_directive, trailing_comment_split_limit};
 
 impl FormatEngine<'_> {
-    pub(crate) fn apply_tree_anchor_layout(
-        &self,
-        line: &str,
-        mut layout: LineLayout,
-    ) -> LineLayout {
-        if layout.line_kind == LineKind::SwitchLabel
-            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
-            && let Some(spaces) = self.sibling_case_label_column(first)
-        {
-            layout.exact_indent_spaces = Some(spaces);
-            return layout;
-        }
-        if layout.line_kind != LineKind::Normal || line.trim_start().starts_with('#') {
-            return layout;
-        }
-        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
-            return layout;
-        };
-        // Tokens that the engine moved across lines map to no line of theirs.
-        if !line
-            .trim_start()
-            .starts_with(token_text(&self.tree.tokens[first]).as_str())
-        {
-            return layout;
-        }
-        if let Some(spaces) = self
-            .else_matching_if_indent(first)
+    /// The indent the syntax tree anchors the line starting at `first` to.
+    pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
+        self.else_matching_if_indent(first)
             .or_else(|| self.braceless_body_indent(first))
             .or_else(|| self.do_while_indent(first))
             .or_else(|| self.split_else_block_statement_indent(first))
@@ -135,7 +111,34 @@ impl FormatEngine<'_> {
             .or_else(|| self.condition_after_split_header_paren_indent(first))
             .or_else(|| self.closing_paren_indent(first))
             .or_else(|| self.parameter_line_indent(first))
+    }
+
+    pub(crate) fn apply_tree_anchor_layout(
+        &self,
+        line: &str,
+        mut layout: LineLayout,
+    ) -> LineLayout {
+        if layout.line_kind == LineKind::SwitchLabel
+            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && let Some(spaces) = self.sibling_case_label_column(first)
         {
+            layout.exact_indent_spaces = Some(spaces);
+            return layout;
+        }
+        if layout.line_kind != LineKind::Normal || line.trim_start().starts_with('#') {
+            return layout;
+        }
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return layout;
+        };
+        // Tokens that the engine moved across lines map to no line of theirs.
+        if !line
+            .trim_start()
+            .starts_with(token_text(&self.tree.tokens[first]).as_str())
+        {
+            return layout;
+        }
+        if let Some(spaces) = self.tree_anchor_indent(first, line) {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
         }
