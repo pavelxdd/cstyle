@@ -5898,3 +5898,13 @@ fn a_case_label_after_a_continued_directive_follows_the_label_before_it() {
         "static bool g(int rc)\n{\n    switch(rc) {\n#ifdef A\n\n    case A:\n#endif\n#if defined(B) && \\\n  (!defined(A) || (B != A))\n    case B:\n#endif\n        return TRUE;\n\n    default:\n        return FALSE;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_continued_conditional_takes_the_block_indent() {
+    let input = "#include <signal.h>\n\n#if defined(A) && \\\n    defined(B)\n/* set a tiny limit */\n#define T 50\n#endif\n";
+    check(
+        input,
+        &["--indent-preproc-block"],
+        "#include <signal.h>\n\n#if defined(A) && \\\n    defined(B)\n    /* set a tiny limit */\n    #define T 50\n#endif\n",
+    );
+}

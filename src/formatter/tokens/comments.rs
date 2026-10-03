@@ -1975,6 +1975,10 @@ impl FormatEngine<'_> {
                 && self.layout.nesting.paren_depth == 0
                 && code.ends_with(')')
                 && !trimmed.starts_with('#')
+                && self
+                    .output
+                    .last_non_empty_index()
+                    .is_none_or(|index| self.output.directive_of_continuation(index).is_none())
             {
                 let lines = self.output.scoped();
                 let paren_balance = |line: &str| {
