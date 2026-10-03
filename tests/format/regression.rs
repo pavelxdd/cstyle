@@ -4982,3 +4982,15 @@ fn breaking_blocks_separates_a_statement_macro_block_after_a_braceless_body() {
     let expected = "void f(void)\n{\n    if (s_new == NULL)\n        cs_new = g(s);\n\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\nvoid g(void)\n{\n    if (s_new == NULL &&\n            (d == 1 || d == 2))\n        cs_new = g(s);\n\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\n";
     check(input, &["--style=allman", "--break-blocks"], expected);
 }
+
+#[test]
+fn a_comment_row_starting_with_case_opens_no_case_label() {
+    let input = "#ifndef X\n    /*\n    case iteration has failed, or a value.\n*/\n#endif\n";
+    let expected = "#ifndef X
+/*
+case iteration has failed, or a value.
+*/
+#endif
+";
+    check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+}

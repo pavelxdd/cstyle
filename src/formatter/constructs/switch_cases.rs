@@ -1937,7 +1937,8 @@ impl FormatEngine<'_> {
         for index in (0..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
             depth += meta.closes;
-            if depth == 0 {
+            // A row of a comment holds no label.
+            if depth == 0 && self.output.comment_start_index(index) == index {
                 let code = self.output.code_trimmed(index);
                 if code.starts_with("case ") || code.starts_with("default:") {
                     return Some(self.output.lead_width(index, tab_width));
