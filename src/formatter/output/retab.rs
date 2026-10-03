@@ -7,7 +7,7 @@
 //! continuation line aligns past it with spaces; with `--indent=force-tab`
 //! all of it is tabs.
 
-use crate::config::IndentStyle;
+use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
@@ -247,6 +247,15 @@ impl FormatEngine<'_> {
         if matches!(self.tree.tokens[first], Token::Symbol('{' | '}')) && block_brace {
             return None;
         }
+        // Styles that indent braces indent an initializer's brace opening
+        // its line as a level.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        ) && matches!(self.tree.tokens[first], Token::Symbol('{'))
+        {
+            return None;
+        }
         let start = self.statement_start(first);
         let line = self.output.line_with_token(start)?;
         if line >= index {
@@ -334,6 +343,8 @@ impl FormatEngine<'_> {
                 || matches!(tokens[previous], Token::Symbol('}')) && !closes_expression_brace
                 || initializer_colon(previous)
                 || self.ends_access_label(previous)
+                || self.ends_case_label(previous)
+                || self.ends_user_label(previous)
                 // An Objective-C directive such as `@property` starts anew.
                 || matches!(tokens[start], Token::Symbol('@'))
                 || matches!(&tokens[previous], Token::Word(word) if matches!(word.as_str(), "else" | "do"))

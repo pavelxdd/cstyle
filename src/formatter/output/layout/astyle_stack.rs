@@ -726,7 +726,7 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the token `colon` is the `:` ending a statement label.
-    fn ends_user_label(&self, colon: usize) -> bool {
+    pub(crate) fn ends_user_label(&self, colon: usize) -> bool {
         let tokens = &self.tree.tokens;
         matches!(tokens[colon], Token::Symbol(':'))
             && self
@@ -745,7 +745,7 @@ impl FormatEngine<'_> {
 
     /// Whether the token `colon` is the `:` ending a `case` or `default`
     /// label.
-    fn ends_case_label(&self, colon: usize) -> bool {
+    pub(crate) fn ends_case_label(&self, colon: usize) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         if !matches!(tokens[colon], Token::Symbol(':')) {

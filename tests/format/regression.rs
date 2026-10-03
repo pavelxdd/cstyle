@@ -4858,3 +4858,9 @@ fn padding_parens_outside_keeps_the_spacing_after_an_ampersand_past_a_paren() {
     check(input, &["--pad-paren-out"], expected);
     check(input, &["--pad-oper", "--pad-paren-out"], expected);
 }
+
+#[test]
+fn tab_indent_indents_an_initializer_brace_of_brace_indenting_styles_with_tabs() {
+    let input = "static sqlite3_module templatevtabModule =\n\t{\n\t/* iVersion    */ 0,\n\t0\n\t};\nvoid f(void)\n\t{\n\tstruct part parts[] =\n\t\t{\n\t\t\t{ 1, 2 }\n\t\t};\n\t}\n";
+    check(input, &["--style=whitesmith", "--indent=tab=8"], input);
+}
