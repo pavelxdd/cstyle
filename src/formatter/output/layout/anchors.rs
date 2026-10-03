@@ -163,7 +163,9 @@ impl FormatEngine<'_> {
                             .ancestors(group)
                             .any(|id| self.block_of_else(id))
             })
-            && let Some(spaces) = self.sibling_statement_column(first)
+            && let Some(spaces) = self
+                .sibling_statement_column(first)
+                .or_else(|| self.block_body_column(first))
         {
             layout.exact_indent_spaces = Some(spaces);
             return layout;

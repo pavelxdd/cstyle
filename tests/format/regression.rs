@@ -5739,3 +5739,13 @@ fn empty_lines_in_an_indented_preprocessor_block_take_its_indent() {
         "#ifndef X\n    #define X\n    #ifdef W\n        #include <a.h>\n        \n        int f(int);\n        \n        \n        int g(int);\n    #endif\n    \n    int h;\n#endif\n#if A || \\\n    B\n    \n    int k;\n#endif\n",
     );
 }
+
+#[test]
+fn a_block_after_a_split_condition_in_a_nested_broken_else_if_keeps_one_level() {
+    let input = "void f()\n{\n    if (a) {\n        x();\n    }\n    else if (b) {\n        if (c)\n            y();\n        else if (d &&\n                 e) {\n            z();\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman", "--break-elseifs"],
+        "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else\n        if (b)\n        {\n            if (c)\n                y();\n            else\n                if (d &&\n                        e)\n                {\n                    z();\n                }\n        }\n}\n",
+    );
+}
