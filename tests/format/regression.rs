@@ -5798,3 +5798,13 @@ fn a_function_pointer_after_a_calling_convention_is_a_declarator_with_padded_ope
         "typedef int (WSAAPI* LPFN_WSARECV)\n(int s);\ntypedef int (WSAAPI *LPFN_X)(int s);\ntypedef int (CALLBACK * F)(int);\nstatic int (WSAAPI * G)(int s);\nvoid f()\n{\n    foo(a * b)(c);\n}\n",
     );
 }
+
+#[test]
+fn a_closing_brace_row_in_a_define_takes_its_level_without_conditional_indent() {
+    let input = "#define F \\\n  int a;     \\\n  union {    \\\n    void* r; \\\n    int w;   \\\n  };\n\nint x;\n";
+    check(
+        input,
+        &["--indent-preproc-define", "--min-conditional-indent=0"],
+        "#define F \\\n    int a;     \\\n    union {    \\\n        void* r; \\\n        int w;   \\\n    };\n\nint x;\n",
+    );
+}

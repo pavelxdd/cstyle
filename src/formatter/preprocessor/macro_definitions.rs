@@ -1094,8 +1094,7 @@ impl FormatEngine<'_> {
                 == MinConditionalIndent::Zero
                 && source_indent > 0
                 && (content.starts_with('?')
-                    || (content.starts_with(':') && !content.starts_with("::"))
-                    || content.starts_with("};"))
+                    || (content.starts_with(':') && !content.starts_with("::")))
                 || info.leading_close
                     && content == "}"
                     && source_indent > structural_level * self.options.indent_width;
