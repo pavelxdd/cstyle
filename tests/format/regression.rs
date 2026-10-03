@@ -4822,3 +4822,15 @@ fn max_code_length_aligns_inside_parens_after_a_shift() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_continues_a_run_in_body_assignment_past_the_header() {
+    let input = "void f(void)\n{\n    if (ar && arIsPtr(v)) ar->alloc_size += zmalloc_size(v);\n    if (ar && arIsPtr(v)) ar->alloc_size = zmalloc_size(v);\n}\n";
+    let expected = "void f(void)\n{\n    if (ar && arIsPtr(v)) ar->alloc_size +=\n            zmalloc_size(v);\n    if (ar && arIsPtr(v)) ar->alloc_size =\n            zmalloc_size(v);\n}\n";
+    check(input, &["--style=linux", "--max-code-length=50"], expected);
+    check(
+        expected,
+        &["--style=linux", "--max-code-length=50"],
+        expected,
+    );
+}

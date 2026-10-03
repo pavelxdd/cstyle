@@ -504,7 +504,9 @@ impl FormatEngine<'_> {
             .and_then(|previous| {
                 let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
                 let (operator_start, operator) = find_assignment_operator(previous_code)?;
-                let before = previous_code[..operator_start].trim_end();
+                // A logical `&&` declares no reference.
+                let before = previous_code[..operator_start].trim_end().replace("&&", "");
+                let before = before.as_str();
                 if operator_start + operator.len() == previous_code.len()
                     && (before.contains("* ")
                         || before.contains("& ")

@@ -30,6 +30,9 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_w
 pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
     objc_message_indent_spaces: Option<usize>,
+    /// The part of a split line being published stands where astyle's
+    /// stack or the syntax tree put it.
+    anchored_part: bool,
 }
 
 impl MaxLengthLineState {
@@ -51,6 +54,10 @@ impl MaxLengthLineState {
 
     pub(crate) fn set_objc_message_indent_spaces(&mut self, spaces: Option<usize>) {
         self.objc_message_indent_spaces = spaces;
+    }
+
+    pub(crate) fn take_anchored_part(&mut self) -> bool {
+        std::mem::take(&mut self.anchored_part)
     }
 }
 
@@ -247,8 +254,10 @@ impl FormatEngine<'_> {
             self.set_split_part_tokens(source_tokens, line, &tail);
             if let Some(spaces) = self.split_part_indent(&tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
+                self.max_length_line.anchored_part = true;
             }
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
+            self.max_length_line.anchored_part = false;
             tail = split.tail;
             next_indent = following_indent;
         }
@@ -256,8 +265,10 @@ impl FormatEngine<'_> {
             self.set_split_part_tokens(source_tokens, line, &tail);
             if let Some(spaces) = self.split_part_indent(&tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
+                self.max_length_line.anchored_part = true;
             }
             self.push_output_line_with_indent(&tail, next_structural_level, next_indent);
+            self.max_length_line.anchored_part = false;
         }
     }
 

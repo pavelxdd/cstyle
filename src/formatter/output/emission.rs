@@ -231,7 +231,10 @@ impl FormatEngine<'_> {
         let line_start = line.trim_start();
         let output_line_hints = buffer::output_line_hints(line_start);
         self.finish_define_line(&line);
-        let line = if let Some(spaces) = self
+        let anchored_part = self.max_length_line.take_anchored_part();
+        let line = if anchored_part {
+            line
+        } else if let Some(spaces) = self
             .ternary_operator_tail_indent_spaces(&line)
             .or_else(|| self.maximum_length_using_alias_rhs_indent_spaces(&line))
             .or_else(|| self.using_alias_rhs_indent_spaces(&line))
