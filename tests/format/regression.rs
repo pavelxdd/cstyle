@@ -5401,3 +5401,13 @@ fn padding_parens_outside_spaces_a_close_paren_from_a_binary_operator() {
         "void f (void)\n{\n    x = (v>>7) &0x7f;\n    y = (int) &z;\n    w = (a) *b;\n    q = (a) | (b);\n    p = (char *) *pp;\n    r = (a) <<2;\n}\n",
     );
 }
+
+#[test]
+fn padding_parens_outside_aligns_initializer_rows_past_the_padded_first_paren() {
+    let input = "void f(void)\n{\n\tuniform_gen_arg_t arg = {(uint64_t)(uintptr_t)&lg_range_test,\n\t    lg_range_test};\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-paren-out"],
+        "void f (void)\n{\n    uniform_gen_arg_t arg = { (uint64_t) (uintptr_t)&lg_range_test,\n                              lg_range_test\n                            };\n}\n",
+    );
+}

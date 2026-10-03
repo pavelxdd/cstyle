@@ -651,7 +651,14 @@ impl FormatEngine<'_> {
                 base_indent + self.options.indent_width
             }
         } else {
-            base_indent + self.current_char_len()
+            // Padding parens outside parts a first `(` from the brace.
+            let padded_paren = self.options.pad_parens_outside
+                && !self.current.ends_with([' ', '\t'])
+                && matches!(
+                    self.tree.tokens.get(token_index + 1),
+                    Some(Token::Symbol('('))
+                );
+            base_indent + self.current_char_len() + usize::from(padded_paren)
         };
         let statement_base = ContinuationIndent::Level(
             self.layout
