@@ -5171,3 +5171,23 @@ fn break_blocks_separates_case_labels_kept_on_one_line_with_their_statements() {
         "int f(int c)\n{\n    int ret = 0;\n\n    switch (c) {\n    case 1: ret = 1; break;\n\n    case 2: ret = 2; break;\n\n    case 3: ret = 3; break;\n    }\n\n    return ret;\n}\n",
     );
 }
+
+#[test]
+fn an_added_one_line_block_after_a_comment_stands_at_its_header() {
+    let input = "void f(void)\n{\n\tif (a)\n\t\t/* c1 */\n\t\tx = 1;\n\telse\n\t\t/* c2 */\n\t\tx = 2;\n\tif (b)\n\t\ty();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(void)\n{\n    if (a)\n        /* c1 */\n    { x = 1; }\n    else\n        /* c2 */\n    { x = 2; }\n    if (b)\n    { y(); }\n}\n",
+    );
+}
+
+#[test]
+fn an_added_one_line_block_in_a_nested_case_body_takes_the_case_indent() {
+    let input = "void f(void)\n{\n\tswitch (p_ch) {\n\tcase 1:\n\t\tif (a)\n\t\t\treturn;\n\t\tcontinue;\n\tcase 2:\n\t\tif (b) {\n\t\t\tif (c)\n\t\t\t\tx = 1;\n\t\t}\n\t}\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-switches", "--add-one-line-braces"],
+        "void f(void)\n{\n    switch (p_ch) {\n        case 1:\n            if (a)\n            { return; }\n            continue;\n        case 2:\n            if (b) {\n                if (c)\n                { x = 1; }\n            }\n    }\n}\n",
+    );
+}

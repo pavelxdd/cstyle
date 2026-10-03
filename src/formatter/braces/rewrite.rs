@@ -24,7 +24,7 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
+    has_unmatched_open_brace, is_comment_line, line_ends_with_comment, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -123,7 +123,14 @@ impl FormatEngine<'_> {
             && !self.options.lisp_add_one_line_braces_breaks_blocks()
         {
             let statement_starts_line = token_begins_line(tokens, statement_start);
-            if statement_starts_line && !self.current_is_blank() {
+            // A comment between the header and its statement leaves the
+            // brace at the header's level all the same.
+            let follows_comment_line = self.current_is_blank()
+                && self
+                    .output
+                    .last()
+                    .is_some_and(|line| is_comment_line(line.trim_start()));
+            if statement_starts_line && (!self.current_is_blank() || follows_comment_line) {
                 // VTK indents the brace within a block other than a function's.
                 let vtk_nested = self.options.brace_style == BraceStyle::Vtk
                     && self
@@ -141,8 +148,11 @@ impl FormatEngine<'_> {
                     .indentation
                     .indent()
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
-                    + brace_indent_extra;
-                self.finish_line();
+                    + brace_indent_extra
+                    + self.case_body_indent_extra(LineKind::Normal);
+                if !follows_comment_line {
+                    self.finish_line();
+                }
                 self.layout
                     .continuation_indent
                     .set_next_line_level(block_indent);
