@@ -4358,3 +4358,69 @@ fn max_code_length_keeps_a_block_brace_with_its_head() {
     check(input, &["--max-code-length=60"], expected);
     check(expected, &["--max-code-length=60"], expected);
 }
+
+#[test]
+fn struct_array_rows_in_a_case_block_take_the_row_indent() {
+    let input = "void f()\n{\n  switch (x) {\n    case 11: {    /* object_config */\n      struct ObjConfOpt {\n        const char *zName;\n        int opt;\n      } aOpt[] = {\n        { \"size\", 1 },\n        { 0, 0 }\n      };\n      break;\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n        case 11: {    /* object_config */\n            struct ObjConfOpt {\n                const char *zName;\n                int opt;\n            } aOpt[] = {\n                { \"size\", 1 },\n                { 0, 0 }\n            };\n            break;\n        }\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+}

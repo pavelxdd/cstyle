@@ -404,7 +404,7 @@ fn split_new_call_nested_call_argument_aligns_to_nested_open_paren() {
 }
 
 #[test]
-fn source_indented_macro_call_does_not_shift_following_sibling() {
+fn source_indented_macro_call_row_moves_to_the_rows() {
     let source = fixture!(
         "static const struct Entry entries[] = {",
         "    ITEM_SIZE_KIND(GROUP, \"batch\",",
@@ -419,7 +419,23 @@ fn source_indented_macro_call_does_not_shift_following_sibling() {
         "};",
     );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    // Each element row stands at the rows, wherever the source put it.
+    assert_eq!(
+        format_exact(source, &one_true_brace_c_options()),
+        fixture!(
+            "static const struct Entry entries[] = {",
+            "    ITEM_SIZE_KIND(GROUP, \"batch\",",
+            "                   OPT_BATCH, \"N\",",
+            "                   \"batch size\", opts.batch),",
+            "    ITEM_EXPR(GROUP, \"server\",",
+            "              OPT_SERVER, \"PATH\",",
+            "              \"server socket\"),",
+            "    ITEM_EXPR(GROUP, \"client\",",
+            "              OPT_CLIENT, \"PATH\",",
+            "              \"client socket\"),",
+            "};",
+        )
+    );
 }
 
 #[test]

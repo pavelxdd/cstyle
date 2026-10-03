@@ -2880,8 +2880,11 @@ impl FormatEngine<'_> {
             self.current.push_str(&gap);
             return;
         }
+        // A row a brace runs into keeps its gap; padding a row moves its
+        // comment no further.
         if kind == CommentKind::Block
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
+            && self.current.trim_start().starts_with('{')
         {
             self.current.push_str(&gap);
             return;

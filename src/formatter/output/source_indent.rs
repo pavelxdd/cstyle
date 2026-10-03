@@ -122,26 +122,17 @@ impl FormatEngine<'_> {
         {
             return Some(output_source);
         }
-        if self.in_initializer_brace()
+        if (self.in_initializer_brace()
             || self.innermost_init_block_brace()
             || self.in_aggregate_declaration_brace()
             || self.current_inline_array_column().is_some()
             || self.output_has_open_initializer_brace()
-            || self.previous_comma_inside_open_brace()
+            || self.previous_comma_inside_open_brace())
+            && current_spaces > output_source
+            && trimmed.starts_with('.')
+            && (self.current_initializer_member_before_closing_brace() || source >= current_spaces)
         {
-            if current_spaces > output_source
-                && trimmed.starts_with('.')
-                && (self.current_initializer_member_before_closing_brace()
-                    || source >= current_spaces)
-            {
-                return None;
-            }
-            // Rows of a brace whose first element shares its line align to it.
-            let aligned_element_row = self.continues_aligned_brace_elements()
-                && !trimmed.starts_with(['.', '[', '{', '}']);
-            if !aligned_element_row && self.initializer_line_keeps_source_indent(trimmed) {
-                return Some(output_source);
-            }
+            return None;
         }
         if self.options.break_after_logical
             && starts_ternary_arm(trimmed)
