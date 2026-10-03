@@ -1153,9 +1153,10 @@ impl FormatEngine<'_> {
                     self.options,
                 );
                 // A header's condition continues at least at the minimum
-                // conditional indent.
+                // conditional indent, unless parens indent after them.
                 let min = min_conditional_indent_spaces(self.options);
-                if is_define_header_keyword(content)
+                if !self.options.indent_after_parens
+                    && is_define_header_keyword(content)
                     && let Some((_, align)) = paren_anchors.get_mut(depth)
                     && *align < level_spaces + min
                 {

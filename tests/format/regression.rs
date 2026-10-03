@@ -5908,3 +5908,13 @@ fn a_comment_after_a_continued_conditional_takes_the_block_indent() {
         "#include <signal.h>\n\n#if defined(A) && \\\n    defined(B)\n    /* set a tiny limit */\n    #define T 50\n#endif\n",
     );
 }
+
+#[test]
+fn a_macro_header_condition_indents_after_its_paren_without_conditional_indent() {
+    let input = "#define SLIST_FOREACH(var, head, field)\t\t\t\t\\\n\tfor((var) = SLIST_FIRST(head);\t\t\t\t\\\n\t    (var) != SLIST_END(head);\t\t\t\t\t\\\n\t    (var) = SLIST_NEXT(var, field))\n#define W(a) \\\n    if (a &&  \\\n        b)    \\\n        y()\n";
+    check(
+        input,
+        &["--indent-after-parens", "--indent-preproc-define"],
+        "#define SLIST_FOREACH(var, head, field)\t\t\t\t\\\n    for((var) = SLIST_FIRST(head);\t\t\t\t\\\n        (var) != SLIST_END(head);\t\t\t\t\t\\\n        (var) = SLIST_NEXT(var, field))\n#define W(a) \\\n    if (a &&  \\\n        b)    \\\n        y()\n",
+    );
+}
