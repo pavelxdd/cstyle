@@ -4939,3 +4939,10 @@ fn breaking_blocks_separates_a_block_closed_before_a_trailing_comment() {
     let expected = "int f(void)\n{\n    while (b) {\n        x = 1;\n    } /* c4 */\n\n    y = 4;\n\n    while (b) {\n        x = 1;\n    } // c5\n\n    y = 5;\n}\n";
     check(input, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn breaking_blocks_reads_comment_led_code_and_directives_after_case_labels() {
+    let input = "void f(void)\n{\n    edata_t *edata = extent_recycle(tsdn, pac,\n                                    /* growing_retained */ true, guarded);\n    if (edata != NULL) {\n        x = 1;\n    }\n    switch (ch) {\n    case 1:\n#if (NGX_WIN32)\n        if (a) {\n            b = 1;\n        }\n#endif\n        break;\n    }\n}\n";
+    let expected = "void f(void)\n{\n    edata_t *edata = extent_recycle(tsdn, pac,\n                                    /* growing_retained */ true, guarded);\n\n    if (edata != NULL) {\n        x = 1;\n    }\n\n    switch (ch) {\n    case 1:\n#if (NGX_WIN32)\n        if (a) {\n            b = 1;\n        }\n\n#endif\n        break;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+}

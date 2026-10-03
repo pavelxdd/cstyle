@@ -70,7 +70,9 @@ impl FormatEngine<'_> {
         if is_break_blocks_opening_header(self.options, word)
             && (previous_header.is_none()
                 || self.preprocessor.last_output_was_preprocessor
-                    && previous_header.as_deref() != Some("else"))
+                    && !(previous_header.as_deref() == Some("else")
+                        || matches!(previous_header.as_deref(), Some("case" | "default"))
+                            && !matches!(word, "case" | "default")))
         {
             self.block_spacing.prepend_blank = true;
         }
@@ -364,6 +366,12 @@ impl FormatEngine<'_> {
                 let trimmed = line.trim_start();
                 trimmed.starts_with("//")
                     || trimmed.starts_with("/*")
+                        && trimmed
+                            .find("*/")
+                            .is_none_or(|close| {
+                                let rest = trimmed[close + 2..].trim();
+                                rest.is_empty() || rest.starts_with("//") || rest.starts_with("/*")
+                            })
                     // The last row of a block comment that opened a line.
                     || !trimmed.is_empty()
                         && self.output.last_non_empty_index().is_some_and(|index| {
