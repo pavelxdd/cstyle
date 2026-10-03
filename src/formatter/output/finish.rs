@@ -439,8 +439,14 @@ impl FormatEngine<'_> {
                 continue;
             }
             let meta = self.output.brace_meta(index);
-            // The rest of a block comment keeps the indent of its first line.
-            if self.output.comment_start_index(index) != index {
+            // The rest of a block comment keeps the indent of its first line;
+            // after one that trailed code astyle leaves the next empty line
+            // empty.
+            let comment_start = self.output.comment_start_index(index);
+            if comment_start != index {
+                if !self.output.trimmed(comment_start).starts_with("/*") {
+                    previous_lead.clear();
+                }
                 continue;
             }
             if !meta.code_starts_with_hash {

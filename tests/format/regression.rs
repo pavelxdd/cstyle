@@ -4095,3 +4095,74 @@ fn star_before_a_number_after_a_macro_call_multiplies() {
     let source = "int f(void)\n{\n    return loose_count > (DIV_ROUND_UP(((unsigned long) limit), 256) * 256);\n}\n";
     check(source, &["--pad-oper"], source);
 }
+
+#[test]
+fn reindented_comment_keeps_blank_lines_empty() {
+    let input = "switch(state){\n            /**\n               JS regexes\n\n      case S_C: /* C comment */\n}\n";
+    let expected =
+        "switch(state)\n{\n    /**\n       JS regexes\n\n    case S_C: /* C comment */\n}\n";
+    check(input, &["--style=stroustrup"], expected);
+}
+
+#[test]
+fn empty_line_after_trailing_block_comment_stays_empty() {
+    let input = "void f()\n{\n\t/* assume\n\t * is.\n\t */\n\n\tx();\n\t/* one */\n\n\tw();\n\tx = 1; /* a\n\t */ y = 2;\n\n\tz();\n}\n";
+    let expected = "void f()\n{\n    /* assume\n     * is.\n     */\n    \n    x();\n    /* one */\n    \n    w();\n    x = 1; /* a\n\t */ y = 2;\n\n    z();\n}\n";
+    check(input, &["--style=allman", "--fill-empty-lines"], expected);
+}
+
+#[test]
+fn switch_labels_on_one_line_share_a_whitesmith_case_block() {
+    let input = "void f() {\n    switch (*s) {\n      case 1: case 2: case 3: {\n        x();\n        break;\n      }\n      default: y();\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (*s)\n        {\n        case 1:\n        case 2:\n        case 3:\n            {\n            x();\n            break;\n            }\n        default:\n            y();\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn vtk_nested_switch_case_block_brace_follows_its_label() {
+    let input = "void f() {\n  switch (*p) {\n    case 2: {\n      switch (x) {\n        case 3: {\n          s = 1;\n        }\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (*p)\n        {\n        case 2:\n            {\n            switch (x)\n                {\n                case 3:\n                    {\n                    s = 1;\n                    }\n                }\n            }\n        }\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn statement_label_after_default_owns_whitesmith_block() {
+    let input = "void f() {\n  switch (*p) {\n    default: dflt: {\n      switch (*ep) {\n        case 2: {\n          y();\n        }\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n    {\n    switch (*p)\n        {\n        default:\ndflt:\n                {\n                switch (*ep)\n                    {\n                    case 2:\n                        {\n                        y();\n                        }\n                    }\n                }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn statement_label_after_default_owns_allman_block() {
+    let input = "void f() {\n  switch (*p) {\n    default: dflt: {\n      switch (*ep) {\n        case 2: {\n          y();\n        }\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (*p)\n    {\n    default:\ndflt:\n        {\n            switch (*ep)\n            {\n            case 2:\n            {\n                y();\n            }\n            }\n        }\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn leading_assignment_ignores_continuation_indent() {
+    let input = "void f()\n{\n    int x\n      = 3;\n    int y =\n      3;\n    x = a\n      + b;\n    foo(a,\n        b)\n      + c;\n}\n";
+    let expected = "void f()\n{\n    int x\n        = 3;\n    int y =\n                3;\n    x = a\n        + b;\n    foo(a,\n        b)\n    + c;\n}\n";
+    check(input, &["--indent-continuation=3"], expected);
+    check(expected, &["--indent-continuation=3"], expected);
+}
+
+#[test]
+fn max_code_length_splits_before_a_prefix_operator_not_after_it() {
+    let input = "void f()\n{\n    int *n = &fsync_component_names_and_some_more_text[index];\n    cfg->precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */\n    cfg->precomposed_unicode = 1; // see probe_utf8_pathname_composition()\n}\n";
+    let expected = "void f()\n{\n    int *n = &fsync_component_names_and_some_more_text[index];\n    cfg->precomposed_unicode =\n        -1; /* see probe_utf8_pathname_composition() */\n    cfg->precomposed_unicode =\n        1; // see probe_utf8_pathname_composition()\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn max_code_length_splits_lines_holding_a_string_call() {
+    let input = "void f()\n{\n    warning(_(\"ignoring unknown core.fsync %s\"), component, another_arg);\n    warning(component, another_arg, _(\"ignoring unknown core.fsync %s\"));\n    warning(component, another_arg, other_component, _(\"ignoring %s\"));\n    xxxxxxx = component + another_arg + other_component + _(\"ignoring %s\");\n    warning(_(\"ignoring unknown core.fsync component and more %s\"), c);\n    warning(_(\"ignoring unknown\"), component, another_arg, more_args, x);\n}\n";
+    let expected = "void f()\n{\n    warning(_(\"ignoring unknown core.fsync %s\"), component,\n            another_arg);\n    warning(component, another_arg,\n            _(\"ignoring unknown core.fsync %s\"));\n    warning(component, another_arg, other_component,\n            _(\"ignoring %s\"));\n    xxxxxxx = component + another_arg + other_component +\n              _(\"ignoring %s\");\n    warning(_(\"ignoring unknown core.fsync component and more %s\"),\n            c);\n    warning(_(\"ignoring unknown\"), component, another_arg,\n            more_args, x);\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}

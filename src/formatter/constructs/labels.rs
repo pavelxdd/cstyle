@@ -1,6 +1,6 @@
 use crate::config::FormatOptions;
 use crate::formatter::braces::classification::is_class_like_brace_type;
-use crate::formatter::constructs::headers::starts_header_word;
+use crate::formatter::constructs::headers::{is_header, starts_header_word};
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
@@ -312,11 +312,24 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let frame = self
-            .layout
-            .frame_stack
+        let frame_stack = &self.layout.frame_stack;
+        // A header whose brace the line broke off stands in the block
+        // around that brace.
+        let frame = frame_stack
             .active_brace()
-            .filter(|frame| frame.label_block)?;
+            .filter(|frame| frame.label_block)
+            .or_else(|| {
+                let header = frame_stack.active_header()?;
+                frame_stack
+                    .active_brace()
+                    .filter(|brace| {
+                        is_header(self.options, leading_identifier(line))
+                            && brace.header.as_deref() == Some(header.header.as_str())
+                            && brace.header_indent_column == header.line_indent_spaces
+                    })
+                    .and(frame_stack.enclosing_brace())
+                    .filter(|frame| frame.label_block)
+            })?;
         let target = if line.trim_start().starts_with('{') {
             frame.sibling_indent_column
         } else {

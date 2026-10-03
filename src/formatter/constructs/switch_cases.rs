@@ -1825,8 +1825,8 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_brace_mut()
             .filter(|frame| frame.case_block)?;
-        if frame.case_header_pending {
-            frame.case_header_pending = false;
+        if frame.case_header_pending > 0 {
+            frame.case_header_pending -= 1;
             return None;
         }
         frame.nested_case_label = true;

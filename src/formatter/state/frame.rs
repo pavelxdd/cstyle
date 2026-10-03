@@ -196,7 +196,8 @@ pub(crate) struct BraceFrame {
     pub(crate) header: Option<String>,
     pub(crate) label_block: bool,
     pub(crate) case_block: bool,
-    pub(crate) case_header_pending: bool,
+    /// Labels on the opening line still to be laid out.
+    pub(crate) case_header_pending: usize,
     pub(crate) nested_case_label: bool,
     pub(crate) class_base: bool,
     pub(crate) header_indent_column: usize,
@@ -1248,7 +1249,7 @@ mod tests {
             header: None,
             label_block: false,
             case_block: false,
-            case_header_pending: false,
+            case_header_pending: 0,
             nested_case_label: false,
             class_base: false,
             header_indent_column: 7,

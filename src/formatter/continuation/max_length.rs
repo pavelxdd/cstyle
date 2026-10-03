@@ -320,34 +320,6 @@ fn should_skip_split(line: &str) -> bool {
         || trimmed.starts_with('#')
         || trimmed.starts_with("asm(")
         || trimmed.starts_with("__asm__")
-        || (contains_single_string_call(trimmed)
-            && !contains_unquoted_plus(trimmed)
-            && !contains_unquoted_comparison_operator(trimmed))
-}
-
-fn contains_unquoted_comparison_operator(line: &str) -> bool {
-    let mut quote = None;
-    let mut escaped = false;
-    let bytes = line.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        let ch = bytes[index] as char;
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            index += 1;
-            continue;
-        }
-        if matches!(ch, '"' | '\'') {
-            quote = Some(ch);
-        } else if matches!(
-            bytes.get(index..index + 2),
-            Some(b"==" | b"!=" | b"<=" | b">=")
-        ) {
-            return true;
-        }
-        index += 1;
-    }
-    false
 }
 
 fn contains_unquoted_plus(line: &str) -> bool {
@@ -367,10 +339,12 @@ fn contains_unquoted_plus(line: &str) -> bool {
     false
 }
 
-fn contains_single_string_call(line: &str) -> bool {
-    line.char_indices().any(|(index, ch)| {
+/// The name start and close of the first call of a single string that runs
+/// past `width`.
+fn crossing_single_string_call(line: &str, width: usize) -> Option<(usize, usize)> {
+    line.char_indices().find_map(|(index, ch)| {
         if ch != '(' || index == 0 {
-            return false;
+            return None;
         }
         let before = line[..index].trim_end();
         if !before
@@ -378,13 +352,15 @@ fn contains_single_string_call(line: &str) -> bool {
             .next_back()
             .is_some_and(is_identifier_continue)
         {
-            return false;
+            return None;
         }
-        let Some(close) = matching_close_paren(line, index) else {
-            return false;
-        };
+        let close = matching_close_paren(line, index)?;
         let arg = line[index + 1..close].trim();
-        arg.starts_with('"') && arg.ends_with('"')
+        let name_start = before
+            .rfind(|ch: char| !is_identifier_continue(ch))
+            .map_or(0, |offset| offset + 1);
+        (arg.starts_with('"') && arg.ends_with('"') && close >= width)
+            .then_some((name_start, close))
     })
 }
 
@@ -955,6 +931,9 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         && is_conditional_header_line(line)
         && comment_start.is_some_and(|start| start.saturating_sub(comment_limit) <= 1);
     let boundary = deferred_split_boundary(line, width);
+    // A call of a single string past the width splits at no paren right
+    // before it nor any whitespace after it.
+    let string_call = crossing_single_string_call(line, width);
     let template_ranges = template_argument_ranges(line);
     let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
     let mut quote: Option<char> = None;
@@ -1000,6 +979,11 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         if let Some((split_at, priority)) = candidate
             && (split_at - usize::from(priority == 10) >= ASTYLE_MIN_CODE_LENGTH || width < 50)
             && split_at < comment_limit
+            && !string_call.is_some_and(|(name_start, close)| {
+                priority == 10 && split_at > close
+                    || line[..split_at].trim_end().ends_with('(')
+                        && line[split_at..name_start].trim().is_empty()
+            })
             && inline_brace_pair.is_none_or(|(start, end)| {
                 if inline_brace_header_fits {
                     split_at >= end
@@ -1008,7 +992,7 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
                 }
             })
             && !(side_comment_text_only_overflow
-                && (priority <= 54 || conditional_header_comment_only_overflow))
+                && (priority < 54 || conditional_header_comment_only_overflow))
             && !template_ranges
                 .iter()
                 .any(|&(start, end)| start <= index && index < end)
@@ -1276,7 +1260,9 @@ fn split_point_at(
             return (line[..argument_start + argument_len].trim_end().len() > width)
                 .then_some((end, 55));
         }
-        if matches!(operator, "::" | "->" | "<<" | ">>" | "~" | "!") {
+        if matches!(operator, "::" | "->" | "<<" | ">>" | "~" | "!")
+            || matches!(operator, "&" | "-" | "+" | "*") && is_prefix_operator(&line[..start])
+        {
             return None;
         }
         if is_pointer_split_operator(line, start, end, operator)
@@ -1370,6 +1356,42 @@ fn split_point_at(
             Some((end, 10))
         }
         _ => None,
+    }
+}
+
+/// Whether an operator after `before` applies to the operand after it.
+fn is_prefix_operator(before: &str) -> bool {
+    let before = before.trim_end();
+    match before.chars().next_back() {
+        None => true,
+        Some(ch) if is_identifier_continue(ch) => {
+            let word_start = before
+                .rfind(|ch: char| !is_identifier_continue(ch))
+                .map_or(0, |index| index + 1);
+            matches!(&before[word_start..], "return" | "case")
+        }
+        Some(ch) => matches!(
+            ch,
+            '=' | '('
+                | ','
+                | '['
+                | '{'
+                | '?'
+                | ':'
+                | ';'
+                | '!'
+                | '~'
+                | '<'
+                | '>'
+                | '+'
+                | '-'
+                | '*'
+                | '/'
+                | '%'
+                | '&'
+                | '|'
+                | '^'
+        ),
     }
 }
 

@@ -601,7 +601,9 @@ impl FormatEngine<'_> {
         let opener_leading = leading_visual_width(&self.output[start], tab_width);
         for (offset, line) in self.output.range_mut(start..end).iter_mut().enumerate() {
             let text = line.trim_start();
-            if offset == 0 || !preserve_relative {
+            if text.is_empty() {
+                line.clear();
+            } else if offset == 0 || !preserve_relative {
                 *line = format!("{prefix}{text}");
             } else {
                 let relative = leading_visual_width(line, tab_width).saturating_sub(opener_leading);

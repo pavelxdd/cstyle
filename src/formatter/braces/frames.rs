@@ -1,5 +1,6 @@
 use crate::config::BraceStyle;
 use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::BraceType;
@@ -21,6 +22,14 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
         && code.matches(':').count() > 1
         && trimmed.starts_with(header)
     {
+        // A statement label after them owns the block itself.
+        let mut rest = code;
+        while let Some(colon) = find_case_colon(rest) {
+            rest = &rest[colon + 1..];
+        }
+        if rest.trim_end().ends_with(':') && !rest.contains("::") {
+            return None;
+        }
         return Some(code.len() - trimmed.len());
     }
     code.match_indices(header)
@@ -36,6 +45,16 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
             (boundary && suffix_matches).then_some(offset)
         })
         .last()
+}
+
+fn leading_case_label_count(line: &str) -> usize {
+    let mut rest = line;
+    let mut count = 0;
+    while let Some(colon) = find_case_colon(rest) {
+        count += 1;
+        rest = &rest[colon + 1..];
+    }
+    count
 }
 
 impl FormatEngine<'_> {
@@ -175,7 +194,16 @@ impl FormatEngine<'_> {
             } else {
                 self.current.as_str()
             };
-            labels::line_kind(line.trim_start(), &self.options.access_labels) == LineKind::Label
+            // A statement label after switch labels owns the block.
+            let mut line = line.trim_start();
+            while let Some(colon) = find_case_colon(line) {
+                let rest = line[colon + 1..].trim_start();
+                if rest.is_empty() {
+                    break;
+                }
+                line = rest;
+            }
+            labels::line_kind(line, &self.options.access_labels) == LineKind::Label
         };
         let case_header = brace_header
             .filter(|header| matches!(header.as_str(), "case" | "default"))
@@ -202,8 +230,13 @@ impl FormatEngine<'_> {
                         .is_some_and(|line| case_label_token_offset(line, header).is_some())
             });
         let case_block = semantic_kind == BraceSemanticKind::Command && case_header.is_some();
-        let case_header_pending = case_header
-            .is_some_and(|header| case_label_token_offset(&self.current, header).is_some());
+        let case_header_pending = if case_header
+            .is_some_and(|header| case_label_token_offset(&self.current, header).is_some())
+        {
+            leading_case_label_count(&self.current).max(1)
+        } else {
+            0
+        };
         let case_separated_by_preprocessor = case_block
             && self.current.trim().is_empty()
             && self.output.last_line_outside_comment().is_some_and(|line| {
@@ -218,18 +251,37 @@ impl FormatEngine<'_> {
                 .active_header()
                 .filter(|frame| frame.header == *header)
         });
+        // A switch label still leading the line opens its body first; VTK
+        // counts its switch brace's level in place of it.
+        let pending_case_label = usize::from(
+            self.options.brace_style != BraceStyle::Vtk && find_case_colon(&self.current).is_some(),
+        );
         let label_owner_column = label_block.then(|| {
             (self
                 .layout
                 .indentation
                 .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal))
+                + self.case_body_indent_extra(LineKind::Normal)
+                + pending_case_label)
                 * self.options.indent_width
         });
         let case_owner_column = case_header.and_then(|header| {
             case_label_token_offset(&self.current, header)
                 .map(|offset| {
-                    let base = if self.preprocessor.split_else.extra_levels == 0 {
+                    // VTK's and Whitesmith's labels stand at their switch's brace.
+                    let vtk_switch_brace = matches!(
+                        self.options.brace_style,
+                        BraceStyle::Vtk | BraceStyle::Whitesmith
+                    )
+                    .then(|| self.layout.frame_stack.active_brace())
+                    .flatten()
+                    .filter(|frame| frame.header.as_deref() == Some("switch"))
+                    .map(|frame| frame.sibling_indent_column);
+                    let base = if let Some(column) = vtk_switch_brace
+                        && self.preprocessor.split_else.extra_levels == 0
+                    {
+                        column
+                    } else if self.preprocessor.split_else.extra_levels == 0 {
                         self.layout
                             .indentation
                             .line_indent(LineKind::SwitchLabel, self.options)

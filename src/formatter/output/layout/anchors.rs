@@ -2249,10 +2249,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        Some(
-            self.output.lead_width(line, self.options.tab_width)
-                + self.options.continuation_indent * self.options.indent_width,
-        )
+        // astyle indents it one level whatever the continuation indent.
+        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
     }
 
     /// A line leading with a binary operator in an assignment's value stands
@@ -3050,6 +3048,10 @@ impl FormatEngine<'_> {
                         .saturating_sub(lead);
                     let text = self.output.trimmed(offset).to_string();
                     let line = &mut self.output.range_mut(offset..offset + 1)[0];
+                    if text.is_empty() {
+                        line.clear();
+                        continue;
+                    }
                     *line = format!("{prefix}{}{text}", " ".repeat(relative));
                 }
             }
