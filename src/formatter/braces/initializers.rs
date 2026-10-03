@@ -560,6 +560,17 @@ impl FormatEngine<'_> {
         token_index: usize,
         first_is_brace: bool,
     ) {
+        // An attaching style that breaks enum braces, as Mozilla, breaks
+        // one even when its first value runs in.
+        let broken_enum_brace = brace_type == BraceType::Enum
+            && self.options.brace_style == BraceStyle::OneTrueBrace
+            && !self.options.attach_enum
+            && !self.current_is_blank();
+        if broken_enum_brace {
+            let indent = self.layout.indentation.indent();
+            self.finish_line();
+            self.layout.continuation_indent.set_next_line_level(indent);
+        }
         let enclosed = brace_type == BraceType::Array
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
@@ -672,7 +683,9 @@ impl FormatEngine<'_> {
         }
         let current_trimmed = self.current.trim_start();
         let run_in_nested_brace = current_trimmed.starts_with("{{") || self.current.contains("{ {");
-        let stored_brace_column = if self.current.trim() == "{" {
+        let stored_brace_column = if broken_enum_brace {
+            brace_column
+        } else if self.current.trim() == "{" {
             column
         } else if run_in_nested_brace {
             base_indent + self.options.indent_width

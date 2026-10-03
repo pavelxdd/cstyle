@@ -4020,3 +4020,23 @@ fn bare_block_moves_a_line_comment_into_its_body() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn run_in_enum_after_a_typedef_enum_closes_at_its_own_brace() {
+    let input = "typedef enum { C = 0,\n D = 1 } s;\nenum e { A,\n  B };\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "typedef enum { C = 0,\n               D = 1\n             } s;\nenum e { A,\n         B\n       };\n",
+        ),
+        (
+            "--style=mozilla",
+            "typedef enum\n{ C = 0,\n  D = 1\n} s;\nenum e\n{ A,\n  B\n};\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        if style == "--style=kr" {
+            check(expected, &[style], expected);
+        }
+    }
+}

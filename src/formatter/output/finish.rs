@@ -204,6 +204,15 @@ impl FormatEngine<'_> {
             }
             self.reset_continuation_after_output_line(line, output_line_index);
             self.reset_continuation_after_directive_rows(output_line_index);
+            // A closing brace line that ends its declaration, as `} name;`,
+            // used the column it was given.
+            if code.trim_start().starts_with('}')
+                && code.ends_with(';')
+                && self.layout.indentation.statement_depth() == 0
+                && self.layout.nesting.paren_depth == 0
+            {
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+            }
             if clear_stream_after_line {
                 operator_chains::clear_operator_chain_frames(&mut self.layout.frame_stack);
             }
