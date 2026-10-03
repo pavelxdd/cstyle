@@ -2089,7 +2089,9 @@ fn call_argument_after_switch_keeps_statement_indent() {
 #[test]
 fn compound_literal_call_argument_uses_statement_indent() {
     let input = "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
-    check(input, TEST_SAMPLE_OPTIONS, input);
+    let expected = "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
+    check(input, TEST_SAMPLE_OPTIONS, expected);
+    check(expected, TEST_SAMPLE_OPTIONS, expected);
 }
 
 #[test]
@@ -2106,7 +2108,7 @@ fn compound_literal_call_argument_reindents_from_argument_column() {
     check(
         "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n               (struct call_case) {\n                   .first_active = true,\n                   .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
         TEST_SAMPLE_OPTIONS,
-        "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
+        "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
     );
 }
 

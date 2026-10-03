@@ -44,10 +44,24 @@ impl FormatEngine<'_> {
                 .tree
                 .previous_code_token(groups.get(group).open)
                 .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
-            || tokens[groups.get(group).open..groups.get(group).close.unwrap_or(tokens.len())]
+            || tokens[groups.get(group).open..first]
                 .iter()
                 .any(|token| matches!(token, Token::Symbol('{' | '}')))
         {
+            return None;
+        }
+        // Only a compound literal's braces may follow in the parens.
+        let close = groups.get(group).close.unwrap_or(tokens.len());
+        if (first..close).any(|index| {
+            let brace = match tokens[index] {
+                Token::Symbol('{') => groups.opened_at(index),
+                Token::Symbol('}') => groups.closed_at(index),
+                _ => return false,
+            };
+            brace.is_none_or(|brace| {
+                self.tree.blocks.kind(brace) != Some(BlockKind::CompoundLiteral)
+            })
+        }) {
             return None;
         }
         self.astyle_stack_indent(first)

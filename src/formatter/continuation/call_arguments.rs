@@ -1059,31 +1059,6 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn call_argument_source_indent(
-        &self,
-        trimmed: &str,
-        current_spaces: usize,
-        output_source: usize,
-        source: usize,
-    ) -> Option<usize> {
-        if source == 0 || !self.options.break_after_logical {
-            return None;
-        }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        if !previous_code.ends_with(',') || trimmed.starts_with(['}', ')']) {
-            return None;
-        }
-        let source_is_close_to_current =
-            output_source < current_spaces && current_spaces.saturating_sub(output_source) <= 1;
-        source_is_close_to_current.then_some(output_source)
-    }
-
     pub(crate) fn call_shaped_brace_body_indent_floor(
         &self,
         line: &str,

@@ -1464,24 +1464,6 @@ impl FormatEngine<'_> {
             || starts_with_chain_operator(line.trim_start())
     }
 
-    pub(crate) fn line_follows_preprocessor_guarded_header_body(&self) -> bool {
-        let mut saw_preprocessor = false;
-        for line in self.output.scoped().iter().rev() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if trimmed.starts_with('#') {
-                saw_preprocessor = true;
-                continue;
-            }
-            return saw_preprocessor
-                && is_braceless_header_line(trimmed)
-                && !trimmed.ends_with('{');
-        }
-        false
-    }
-
     pub(crate) fn header_operator_continuation_indent_spaces(&self, line: &str) -> Option<usize> {
         let trimmed = line.trim_start();
         if !(trimmed.starts_with("&&") || trimmed.starts_with("||")) {
@@ -1576,16 +1558,6 @@ impl FormatEngine<'_> {
             } else {
                 paren_indent.max(base + min_conditional_indent_spaces(self.options))
             }
-        })
-    }
-
-    pub(crate) fn recent_output_has_open_ternary(&self) -> bool {
-        (0..self.output.len()).rev().take(12).any(|index| {
-            let code = self.output.code(index);
-            if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
-                return false;
-            }
-            code.contains('?')
         })
     }
 

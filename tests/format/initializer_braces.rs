@@ -2461,7 +2461,7 @@ fn compound_literal_members_preserve_source_indent() {
 }
 
 #[test]
-fn nested_compound_literal_array_rows_preserve_source_indent() {
+fn nested_compound_literal_array_rows_stand_at_their_brace() {
     let source = fixture!(
         "void helper(void)",
         "{",
@@ -2478,7 +2478,26 @@ fn nested_compound_literal_array_rows_preserve_source_indent() {
         "}",
     );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    // astyle stands the rows of a brace nested in a compound literal at the
+    // brace.
+    assert_eq!(
+        format_exact(source, &one_true_brace_c_options()),
+        fixture!(
+            "void helper(void)",
+            "{",
+            "    struct Packet *packet = (struct Packet *)buffer;",
+            "    *packet = (struct Packet) {",
+            "        .source = {",
+            "            .addr = {",
+            "            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,",
+            "            0, 0, 0, 0, 0, 0, 0, 0x0a",
+            "            }",
+            "        },",
+            "        .size = sizeof(buffer),",
+            "    };",
+            "}",
+        )
+    );
 }
 
 #[test]

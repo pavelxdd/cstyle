@@ -1,16 +1,7 @@
 use crate::config::MinConditionalIndent;
-use crate::formatter::braces::initializers::initializer_sibling_uses_previous_indent;
-use crate::formatter::constructs::labels::is_attached_user_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::text::line_scan::{
-    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
-};
-use crate::formatter::tokens::literals::starts_string_literal_token;
-use crate::formatter::tokens::operators::{
-    head_ends_binary_operator, starts_ternary_arm, starts_with_chain_operator,
-};
 
 pub(crate) fn source_indented_macro_row(
     tokens: &[Token],
@@ -47,155 +38,16 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
         line_kind: LineKind,
-        current_spaces: usize,
     ) -> Option<usize> {
         if self.options.min_conditional_indent != MinConditionalIndent::Zero
             || line_kind != LineKind::Normal
         {
             return None;
         }
-        let source = self.token_input.input_source_indent;
-        let output_source = self.source_indent_for_output(source);
         let trimmed = line.trim_start();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             return None;
         }
-        if starts_string_literal_token(trimmed)
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| {
-                    let previous_code =
-                        previous[..trailing_comment_split_limit(previous)].trim_end();
-                    previous_code.ends_with(',')
-                        && unmatched_open_paren_column(previous_code).is_some()
-                })
-        {
-            return None;
-        }
-        if self
-            .constructor_initializer_header_indent_spaces(line)
-            .is_some()
-        {
-            return None;
-        }
-        if let Some(spaces) = self.previous_initializer_comma_indent()
-            && initializer_sibling_uses_previous_indent(trimmed)
-        {
-            if current_spaces < spaces {
-                return Some(spaces);
-            }
-            if current_spaces == spaces {
-                return None;
-            }
-        }
-        if let Some(spaces) = self.compound_initializer_value_indent(trimmed) {
-            if current_spaces < spaces {
-                return Some(spaces);
-            }
-            if current_spaces == spaces {
-                return None;
-            }
-        }
-        if let Some(spaces) = self.previous_call_argument_sibling_indent(line) {
-            return Some(spaces);
-        }
-        if let Some(spaces) =
-            self.call_argument_source_indent(trimmed, current_spaces, output_source, source)
-        {
-            return Some(spaces);
-        }
-        if self.initializer_current_indent_matches_previous_row(trimmed, current_spaces, source) {
-            return None;
-        }
-        if self.options.break_after_logical
-            && source > 0
-            && output_source > current_spaces
-            && self.source_owned_continuation_line(trimmed)
-        {
-            return Some(output_source);
-        }
-        if source == 0 || output_source == current_spaces {
-            return None;
-        }
-        if self.options.break_after_logical && self.line_follows_preprocessor_guarded_header_body()
-        {
-            return Some(output_source);
-        }
-        if (self.in_initializer_brace()
-            || self.innermost_init_block_brace()
-            || self.in_aggregate_declaration_brace()
-            || self.current_inline_array_column().is_some()
-            || self.output_has_open_initializer_brace()
-            || self.previous_comma_inside_open_brace())
-            && current_spaces > output_source
-            && trimmed.starts_with('.')
-            && (self.current_initializer_member_before_closing_brace() || source >= current_spaces)
-        {
-            return None;
-        }
-        if self.options.break_after_logical
-            && starts_ternary_arm(trimmed)
-            && (trimmed.starts_with('?') || self.recent_output_has_open_ternary())
-        {
-            return Some(output_source);
-        }
-        if self.options.break_after_logical
-            && output_source > current_spaces
-            && self.line_follows_logical_operator()
-        {
-            if self
-                .logical_condition_sibling_indent_spaces(line)
-                .is_some_and(|spaces| spaces == current_spaces)
-                || self
-                    .header_operator_continuation_indent_spaces(line)
-                    .is_some_and(|spaces| spaces == current_spaces)
-            {
-                return None;
-            }
-            return Some(output_source);
-        }
-        None
-    }
-
-    fn source_indent_for_output(&self, source: usize) -> usize {
-        source + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
-    }
-
-    fn source_owned_continuation_line(&self, trimmed: &str) -> bool {
-        // A brace opening an initializer after its `=` stands at the
-        // statement, wherever the source put it.
-        if trimmed.starts_with("case ")
-            || trimmed.starts_with("default:")
-            || trimmed.starts_with('{')
-            || is_attached_user_label(trimmed)
-        {
-            return false;
-        }
-        if starts_ternary_arm(trimmed) || starts_with_chain_operator(trimmed) {
-            return true;
-        }
-        let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-        else {
-            return false;
-        };
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let previous_trimmed = previous_code.trim_start();
-        if previous_trimmed.starts_with('#') || previous_code.ends_with(';') {
-            return false;
-        }
-        // The line starts and ends inside parens.
-        let (closes, opens) = line_paren_imbalance(trimmed);
-        let paren_depth = self.layout.nesting.paren_depth;
-        let paren_depth_at_start = (paren_depth + closes).saturating_sub(opens.len());
-        previous_code.ends_with(['(', '[', '=', '?', '\\'])
-            || head_ends_binary_operator(previous_code)
-            || self.line_follows_logical_operator()
-            || paren_depth > 0 && paren_depth_at_start > 0
+        self.previous_call_argument_sibling_indent(line)
     }
 }

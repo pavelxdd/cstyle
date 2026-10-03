@@ -10,15 +10,12 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
-use crate::formatter::tokens::operators::{starts_ternary_arm, starts_with_chain_operator};
-use crate::source::lex::is_identifier_continue;
 
 pub(crate) struct CompoundLiteralOpeningLayout {
     pub(crate) line_indent_spaces: usize,
@@ -32,18 +29,6 @@ fn line_opens_typed_initializer(line: &str) -> bool {
     };
     let before = code[..open].trim_end();
     before.contains('<') && before.ends_with('>')
-}
-
-pub(crate) fn initializer_sibling_uses_previous_indent(line: &str) -> bool {
-    if line.starts_with(['&', '{', '"', '\'']) || line.starts_with(|ch: char| ch.is_ascii_digit()) {
-        return true;
-    }
-    let word_end = line
-        .find(|ch: char| !is_identifier_continue(ch))
-        .unwrap_or(line.len());
-    word_end > 0
-        && is_macro_like_word(&line[..word_end])
-        && !line[word_end..].trim_start().starts_with('(')
 }
 
 pub(crate) fn has_nested_designated_init_brace(tokens: &[Token]) -> bool {
@@ -1136,145 +1121,6 @@ impl FormatEngine<'_> {
             }
         }
         false
-    }
-
-    pub(crate) fn compound_initializer_value_indent(&self, trimmed: &str) -> Option<usize> {
-        if trimmed.starts_with(['}', ')', '.', '[']) || starts_ternary_arm(trimmed) {
-            return None;
-        }
-        let (index, previous) = self
-            .output
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, line)| !line.trim().is_empty())?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        if !previous_code.ends_with('{')
-            || !self.output_line_opens_initializer(index, previous_code)
-        {
-            return None;
-        }
-        let double_brace_extra =
-            usize::from(previous_code.ends_with("{{")) * self.options.indent_width;
-        Some(
-            leading_visual_width(previous, self.options.tab_width)
-                + self.options.indent_width
-                + double_brace_extra,
-        )
-    }
-
-    pub(crate) fn initializer_current_indent_matches_previous_row(
-        &self,
-        trimmed: &str,
-        current_spaces: usize,
-        source: usize,
-    ) -> bool {
-        if source >= current_spaces
-            || trimmed.starts_with('.')
-            || trimmed.starts_with('[')
-            || trimmed[..trailing_comment_split_limit(trimmed)].contains('(')
-            || starts_ternary_arm(trimmed)
-            || starts_with_chain_operator(trimmed)
-            || !self.initializer_line_keeps_source_indent(trimmed)
-            || !(self.in_initializer_brace()
-                || self.innermost_init_block_brace()
-                || self.in_aggregate_declaration_brace()
-                || self.current_inline_array_column().is_some()
-                || self.output_has_open_initializer_brace()
-                || self.previous_comma_inside_open_brace())
-        {
-            return false;
-        }
-        let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-        else {
-            return false;
-        };
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        previous_code.ends_with(',')
-            && leading_visual_width(previous, self.options.tab_width) >= current_spaces
-    }
-
-    pub(crate) fn initializer_line_keeps_source_indent(&self, trimmed: &str) -> bool {
-        if trimmed.starts_with("};") || trimmed.starts_with("];") {
-            return false;
-        }
-        if trimmed.starts_with(['.', '[', '{']) || trimmed.starts_with("},") {
-            return true;
-        }
-        let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-        else {
-            return false;
-        };
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        previous_code.ends_with(',') && !trimmed.starts_with(['}', ')'])
-    }
-
-    pub(crate) fn previous_comma_inside_open_brace(&self) -> bool {
-        self.previous_initializer_comma_indent().is_some()
-    }
-
-    /// The indent of the line where the element ending at `previous`, the
-    /// last output line, starts: a call split over lines starts above.
-    fn element_start_indent(&self, previous: &str) -> usize {
-        let lines = self.output.scoped();
-        let paren_balance = |line: &str| {
-            let (closes, opens) = line_paren_imbalance(&line[..trailing_comment_split_limit(line)]);
-            opens.len() as isize - closes as isize
-        };
-        let mut index = lines.len() - 1;
-        let mut balance = paren_balance(&lines[index]);
-        while balance < 0 && index > 0 {
-            index -= 1;
-            balance += paren_balance(&lines[index]);
-        }
-        if balance == 0 {
-            leading_visual_width(&lines[index], self.options.tab_width)
-        } else {
-            leading_visual_width(previous, self.options.tab_width)
-        }
-    }
-
-    pub(crate) fn previous_initializer_comma_indent(&self) -> Option<usize> {
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trim().is_empty())?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        if !previous_code.ends_with(',') {
-            return None;
-        }
-        let mut closed = 0usize;
-        for index in (0..self.output.len()).rev().take(64) {
-            let line = &self.output[index];
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
-            let trimmed = code.trim();
-            if trimmed.ends_with(';') {
-                return None;
-            }
-            for ch in code.chars().rev() {
-                match ch {
-                    '}' => closed += 1,
-                    '{' if closed > 0 => closed -= 1,
-                    '{' if self.output_line_opens_initializer(index, code) => {
-                        return Some(self.element_start_indent(previous));
-                    }
-                    _ => {}
-                }
-            }
-        }
-        None
     }
 
     pub(crate) fn preprocessor_branch_initializer_member_indent_spaces(

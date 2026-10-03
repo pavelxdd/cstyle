@@ -436,12 +436,7 @@ impl FormatEngine<'_> {
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
-        let current_spaces = layout
-            .exact_indent_spaces
-            .unwrap_or(layout.indent * self.options.indent_width);
-        if let Some(spaces) =
-            self.source_indent_override_spaces(line, layout.line_kind, current_spaces)
-        {
+        if let Some(spaces) = self.source_indent_override_spaces(line, layout.line_kind) {
             layout.exact_indent_spaces = Some(spaces);
         }
         if layout.line_kind == LineKind::Normal
