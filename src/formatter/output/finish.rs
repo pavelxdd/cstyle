@@ -216,7 +216,7 @@ impl FormatEngine<'_> {
             if clear_string_after_line {
                 self.layout.frame_stack.clear_string_continuations();
             }
-            self.observe_finished_block_spacing_line();
+            self.observe_finished_block_spacing_line(code.ends_with(';'));
             if let Some(spaces) = self
                 .layout
                 .continuation_indent

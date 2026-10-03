@@ -262,12 +262,21 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(super) fn observe_finished_block_spacing_line(&mut self) {
+    pub(super) fn observe_finished_block_spacing_line(&mut self, ends_statement: bool) {
         if !self.options.break_blocks {
             return;
         }
         if std::mem::take(&mut self.block_spacing.pending_semicolon) {
             self.observe_block_spacing_semicolon();
+        }
+        // A label kept on one line with its statements ends with them.
+        if ends_statement
+            && matches!(
+                self.block_spacing.active_header.as_deref(),
+                Some("case" | "default")
+            )
+        {
+            self.clear_block_spacing_header();
         }
         if std::mem::take(&mut self.block_spacing.pending_one_line_block) {
             self.block_spacing.append_blank = true;

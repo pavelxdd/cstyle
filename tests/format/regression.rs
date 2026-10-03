@@ -5161,3 +5161,13 @@ fn pico_breaks_the_block_after_a_one_line_header_run_into_the_brace() {
         "void f(client *c)\n{   if (c->x == 0) return;\n\n    uint64_t timeout = c->y;\n    unsigned char buf[4];\n    g(buf); }\n",
     );
 }
+
+#[test]
+fn break_blocks_separates_case_labels_kept_on_one_line_with_their_statements() {
+    let input = "int f(int c)\n{\n    int ret = 0;\n    switch (c) {\n        case 1: ret = 1; break;\n        case 2: ret = 2; break;\n        case 3: ret = 3; break;\n    }\n    return ret;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--keep-one-line-statements"],
+        "int f(int c)\n{\n    int ret = 0;\n\n    switch (c) {\n    case 1: ret = 1; break;\n\n    case 2: ret = 2; break;\n\n    case 3: ret = 3; break;\n    }\n\n    return ret;\n}\n",
+    );
+}
