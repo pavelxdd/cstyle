@@ -5848,3 +5848,13 @@ fn a_macro_row_closing_its_block_after_code_keeps_the_continuation_column() {
         "#define G(df, buf) {    \\\n        uInt s=D(df, 0);      \\\n        (buf)[0]=A[s&0x3ff]   \\\n                 +B[s&0x3ff]   \\\n                 +M[C[s>>26]];}\n",
     );
 }
+
+#[test]
+fn a_compound_literal_keeps_the_gap_before_its_closing_brace_in_pico() {
+    let input = "void f()\n{\n    *out = (T) {0};\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0});\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0 });\n    int a[] = {1, 2};\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   *out = (T) {0};\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0});\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0 });\n    int a[] = {1, 2 }; }\n",
+    );
+}

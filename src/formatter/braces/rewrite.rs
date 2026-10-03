@@ -1816,7 +1816,12 @@ impl FormatEngine<'_> {
                 .current
                 .rsplit_once('{')
                 .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trim_end()));
+        // A compound literal keeps the gap before its `}`.
+        let closes_cast_literal =
+            self.layout.nesting.brace_type_stack.last() == Some(&BraceType::CompoundLiteral);
         if is_aggregate
+            && !closes_compound_literal
+            && !closes_cast_literal
             && attach_closing_brace_mode(self.options)
             && !self.closing_brace_keeps_source_gap()
         {
