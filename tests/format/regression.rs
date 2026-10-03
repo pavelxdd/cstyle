@@ -4953,3 +4953,10 @@ fn breaking_blocks_separates_a_while_loop_after_an_earlier_do_while() {
     let expected = "int f(void)\n{\n    do {\n        x = 1;\n    } while (isdigit(c));\n\n    if (check_next(ls, \"Ee\"))  /* `E'? */\n        check_next(ls, \"+-\");  /* optional exponent sign */\n\n    while (isalnum(c))\n        save(ls);\n}\n";
     check(input, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn breaking_blocks_separates_no_fall_through_labels_across_directives() {
+    let input = "int f(int e)\n{\n    switch (e) {\n    case 1:\n    case 2:\n#ifdef X\n    case 3:\n#endif\n    case 4:\n        return 1;\n    default:\n        return 0;\n    }\n}\n";
+    let expected = "int f(int e)\n{\n    switch (e) {\n    case 1:\n    case 2:\n#ifdef X\n    case 3:\n#endif\n    case 4:\n        return 1;\n\n    default:\n        return 0;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+}

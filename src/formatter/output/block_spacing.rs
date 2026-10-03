@@ -74,7 +74,8 @@ impl FormatEngine<'_> {
                 || self.preprocessor.last_output_was_preprocessor
                     && !(previous_header.as_deref() == Some("else")
                         || matches!(previous_header.as_deref(), Some("case" | "default"))
-                            && !matches!(word, "case" | "default")))
+                            && (!matches!(word, "case" | "default")
+                                || self.last_code_line_ends_label())))
         {
             self.block_spacing.prepend_blank = true;
         }
@@ -172,6 +173,27 @@ impl FormatEngine<'_> {
                 })
                 .is_some_and(|word| is_break_blocks_opening_header(self.options, word))
             && self.last_code_line_opens_no_block()
+    }
+
+    /// Whether the last output line holding code, past directives, is a
+    /// label with no statement after it.
+    fn last_code_line_ends_label(&self) -> bool {
+        (0..self.output.len())
+            .rev()
+            .find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !trimmed.starts_with('#')
+                    && self.output.comment_start_index(index) == index
+                    && !trimmed.starts_with("//")
+                    && !trimmed.starts_with("/*")
+            })
+            .is_some_and(|index| {
+                let line = &self.output[index];
+                line[..trailing_comment_split_limit(line)]
+                    .trim_end()
+                    .ends_with(':')
+            })
     }
 
     /// Whether the last output line holding code ends other than with `{`.
