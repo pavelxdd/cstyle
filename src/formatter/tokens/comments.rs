@@ -2779,6 +2779,29 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Whether the brace starting the source line of the comment being
+    /// pushed is still open at the comment, as a brace run into its row.
+    fn comment_follows_open_source_line_brace(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(comment) = self.current.active_comment() else {
+            return false;
+        };
+        let line_start = tokens[..comment]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        next_code_token(tokens, line_start)
+            .filter(|&first| first < comment && matches!(tokens[first], Token::Symbol('{')))
+            .and_then(|first| self.tree.groups.opened_at(first))
+            .is_some_and(|group| {
+                self.tree
+                    .groups
+                    .get(group)
+                    .close
+                    .is_none_or(|close| close > comment)
+            })
+    }
+
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
         let had_formatter_space = (self.current.ends_with(' ') || self.current.ends_with('\t'))
             && matches!(
@@ -2885,6 +2908,7 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Block
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             && self.current.trim_start().starts_with('{')
+            && self.comment_follows_open_source_line_brace()
         {
             self.current.push_str(&gap);
             return;

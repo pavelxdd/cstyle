@@ -4476,3 +4476,11 @@ fn unpadding_keeps_an_attached_trailing_comment_at_its_column() {
     let expected = "void f()\n{\n    if(a) {\n        assert((pPg->flags & PGHDR_DIRTY) == 0);/* Cannot be both CLEAN and DIRTY */\n        assert(pageNotOnDirtyList(pCache, pPg));  /* CLEAN pages not on dirtylist */\n    }\n}\n";
     check(input, &["--pad-oper", "--unpad-paren"], expected);
 }
+
+#[test]
+fn padded_initializer_row_shrinks_its_comment_gap() {
+    let input = "static const int t[3][3] = {\n    {1024*1024*256, 1024*1024*64, 60}, /* slave */\n    {1024*1024*32, 1024*1024*8, 60} /* pubsub */\n};\n";
+    let expected = "static const int t[3][3] = {\n    {1024 * 1024 * 256, 1024 * 1024 * 64, 60}, /* slave */\n    {1024 * 1024 * 32, 1024 * 1024 * 8, 60} /* pubsub */\n};\n";
+    check(input, &["--pad-oper"], expected);
+    check(expected, &["--pad-oper"], expected);
+}
