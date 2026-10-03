@@ -177,10 +177,9 @@ impl FormatEngine<'_> {
             depth += code.matches('(').count() as isize - code.matches(')').count() as isize;
             // An initializer's brace opens rows that align.
             let opens_block = code.strip_suffix('{').is_some_and(|head| {
-                !head
-                    .trim_end()
+                head.trim_end()
                     .strip_suffix('=')
-                    .is_some_and(|before| !before.ends_with(['=', '!', '<', '>']))
+                    .is_none_or(|before| before.ends_with(['=', '!', '<', '>']))
             });
             if depth <= 0 && (code.is_empty() || code.ends_with([';', '}']) || opens_block) {
                 statement = row + 1;
