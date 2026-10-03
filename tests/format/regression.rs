@@ -4871,3 +4871,15 @@ fn tab_indent_indents_a_statement_broken_off_its_case_label_with_tabs() {
     let expected = "int f(int idx)\n\t{\n\tswitch (idx)\n\t\t{\n\t\tcase LUA_REGISTRYINDEX:\n\t\t\treturn registry(L);\n\t\tdefault:\n\t\t\treturn 4;\n\t\t}\n\t}\n";
     check(input, &["--style=whitesmith", "--indent=tab=4"], expected);
 }
+
+#[test]
+fn a_dereferenced_increment_after_a_logical_operator_keeps_its_star() {
+    let input = "void f(void)\n{\n    if (place[1] != 0 && *++place == 1 && place[1] == 0)\n        x = 1;\n    z = a && *--p;\n}\n";
+    let expected = "void f(void) {\n    if (place[1] != 0 && *++place == 1 && place[1] == 0)\n        x = 1;\n    z = a && *--p;\n}\n";
+    check(input, &["--style=google", "--align-pointer=type"], expected);
+    check(
+        input,
+        &["--style=google", "--align-pointer=middle"],
+        expected,
+    );
+}

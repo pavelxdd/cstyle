@@ -162,6 +162,13 @@ impl FormatEngine<'_> {
         if self.layout.previous == PreviousToken::OpenBracket && matches!(operator, "*" | "&") {
             return false;
         }
+        // An increment or decrement after a logical operator is dereferenced.
+        if self.layout.previous == PreviousToken::Operator
+            && (self.current.trim_end().ends_with("&&") || self.current.trim_end().ends_with("||"))
+            && matches!(next, Some(Token::Operator(step)) if step == "++" || step == "--")
+        {
+            return false;
+        }
         // A run of stars right before `)` ends a type, as in `(u8**)`.
         if operator == "*"
             && matches!(self.layout.previous, PreviousToken::Word)
