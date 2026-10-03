@@ -203,13 +203,7 @@ impl FormatEngine<'_> {
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
-            let tail_width = if trailing_comment_split_limit(&tail) < tail.len() {
-                width
-                    .saturating_sub(next_indent.columns(self.options.indent_width))
-                    .max(1)
-            } else {
-                width
-            };
+            let tail_width = width;
             let Some(split) = split_result(&tail, tail_width, SplitRules::new(self.options))
                 .or_else(|| {
                     (suffix_width > 0).then(|| {
@@ -1379,9 +1373,15 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
     let mut in_comment = false;
     // A line closing a block it did not open lies in a one-line block.
     let mut unbroken_depth = unopened_closing_braces(line);
+    let mut clear_after_brace = false;
     while index < bytes.len() {
         let byte = bytes[index];
         let mut end = index + 1;
+        // The brace itself may still split; what follows it drops the points.
+        if std::mem::take(&mut clear_after_brace) && !(byte == b'}' && unbroken_depth == 1) {
+            fit = [0; 5];
+            pending = [0; 5];
+        }
         if let Some(open) = quote {
             if byte == b'\\' {
                 end = (index + 2).min(bytes.len());
@@ -1480,9 +1480,14 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             // A brace with code after it on the line drops the points before
             // it and registers none up to its closing brace.
             if byte == b'{' && (unbroken_depth > 0 || holds_code(&line[end..])) {
-                if unbroken_depth == 0 {
+                // An initializer's brace drops them already.
+                if unbroken_depth == 0
+                    && matches!(previous_non_space, b'=' | b',' | b'(' | b'{' | b'[')
+                {
                     fit = [0; 5];
                     pending = [0; 5];
+                } else {
+                    clear_after_brace = unbroken_depth == 0;
                 }
                 unbroken_depth += 1;
             } else if byte == b'}' && unbroken_depth > 0 {

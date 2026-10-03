@@ -4798,3 +4798,11 @@ fn max_code_length_splits_a_braced_header_whose_comment_overflows() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_splits_before_an_empty_body_and_measures_tails_unindented() {
+    let input = "static int pushline (lua_State *L, int firstline) {\n  if (firstline && b[0] == '=')  /* first line starts with `=' ? */\n    lua_pushfstring(L, \"return %s\", b+1);\n}\nvoid f(void) {\n      for(i=3, c=z[2]; (c!='*' || z[i]!='/') && (c=z[i])!=0; i++){}\n}\n";
+    let expected = "static int pushline (lua_State *L, int firstline)\n{\n    if (firstline\n            && b[0] == '=')  /* first line starts with `=' ? */\n        lua_pushfstring(L, \"return %s\", b+1);\n}\nvoid f(void)\n{\n    for(i=3, c=z[2]; (c!='*' || z[i]!='/')\n            && (c=z[i])!=0; i++) {}\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
