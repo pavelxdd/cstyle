@@ -3972,3 +3972,11 @@ fn one_line_enum_body_on_its_own_line_stays_there() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn add_braces_wraps_a_body_that_starts_with_a_paren() {
+    let input = "void f(void){\n  if( id ) (void)g(id, op);\n  if( id ) (void)x;\n  if( id ) g(id);\n  if (a) (x)++;\n}\n";
+    let expected = "void f(void) {\n    if( id ) {\n        (void)g(id, op);\n    }\n    if( id ) {\n        (void)x;\n    }\n    if( id ) {\n        g(id);\n    }\n    if (a) {\n        (x)++;\n    }\n}\n";
+    check(input, &["--add-braces"], expected);
+    check(expected, &["--add-braces"], expected);
+}

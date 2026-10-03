@@ -101,8 +101,7 @@ impl FormatEngine<'_> {
             return None;
         }
         match tokens.get(statement_start)? {
-            Token::Symbol('(')
-            | Token::Symbol('{')
+            Token::Symbol('{')
             | Token::Symbol(';')
             | Token::Comment(_, _)
             | Token::Preprocessor(_)
