@@ -1357,7 +1357,9 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.previous_was_newline = true;
         } else if (self.is_objc_method_line() || self.layout.objc.method_continuation)
-            && !self.current.trim_end().ends_with(';')
+            && !self.current[..self.current_trailing_comment_split_limit()]
+                .trim_end()
+                .ends_with(';')
         {
             self.finish_line();
             if self.newline_breaks_statement {

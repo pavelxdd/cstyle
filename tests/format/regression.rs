@@ -5071,3 +5071,13 @@ fn a_comment_after_a_header_that_lost_its_closing_brace_keeps_its_column() {
         "void f(void)\n{\n    if (a) {\n        b();\n    }\n    else {   /* c1 */\n        d();\n    }\n    if (a) {\n        b();\n    }\n    else {     // c2\n        d();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_continuation_row_led_by_plus_and_a_paren_with_a_trailing_comment_ends_its_statement() {
+    let input = "int f(void)\n{\n  nByte = a\n         + (i+1);               /* c3 */\n  p = g(nByte);\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "int f(void) {\n    nByte = a\n            + (i+1);               /* c3 */\n    p = g(nByte);\n    }\n",
+    );
+}
