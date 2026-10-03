@@ -5351,3 +5351,13 @@ fn a_star_right_after_an_ampersand_dereferences() {
         "void f(void)\n{\n    x = (a&*p);\n    x = (a & *p);\n    x = (a+*p);\n    x = (a|*p);\n    x = a** p;\n    x = (a&&*p);\n}\n",
     );
 }
+
+#[test]
+fn breaking_the_return_type_keeps_the_name_gap_and_follows_a_macro_above_an_empty_line() {
+    let input = "static TValue *index2adr (lua_State *L, int idx) {\n  return 0;\n}\nTEST_END\n\nint main(void) {\n  return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-return-type"],
+        "static TValue *\nindex2adr (lua_State *L, int idx)\n{\n    return 0;\n}\nTEST_END\n\nint\nmain(void)\n{\n    return 0;\n}\n",
+    );
+}

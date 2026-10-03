@@ -3,7 +3,9 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
-use crate::formatter::structure::functions::{FunctionHead, template_arguments_start};
+use crate::formatter::structure::functions::{
+    FunctionHead, holds_empty_line, template_arguments_start,
+};
 use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -254,6 +256,15 @@ impl FormatEngine<'_> {
             .previous_code_token(head.start)
             .is_none_or(|previous| match &tokens[previous] {
                 Token::Symbol(';' | '{' | '}' | ':') => true,
+                // A macro left without a semicolon above an empty line, with
+                // no directive between.
+                Token::Word(_) => {
+                    let between = &tokens[previous..head.start];
+                    holds_empty_line(between)
+                        && !between
+                            .iter()
+                            .any(|token| matches!(token, Token::Preprocessor(_)))
+                }
                 // `template<class T>`
                 Token::Operator(operator) if operator == ">" => {
                     template_arguments_start(tokens, previous)
@@ -407,7 +418,7 @@ impl FormatEngine<'_> {
             return false;
         }
         let params_open = self.tree.groups.get(head.params).open;
-        let (Some(name_offset), Some(params_offset)) = (
+        let (Some(name_offset), Some(_)) = (
             self.tree
                 .token_offset_in_line(line, span.first, head.name_start),
             self.tree
@@ -416,11 +427,7 @@ impl FormatEngine<'_> {
             return false;
         };
         let return_type = line[..name_offset].trim_end().to_string();
-        let function_part = format!(
-            "{}{}",
-            line[name_offset..params_offset].trim_end(),
-            &line[params_offset..]
-        );
+        let function_part = line[name_offset..].to_string();
         let return_type_last = self
             .tree
             .previous_code_token(head.name_start)

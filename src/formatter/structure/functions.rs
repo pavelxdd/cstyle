@@ -337,6 +337,21 @@ fn qualified_name_start(tokens: &[Token], name: usize) -> usize {
     start
 }
 
+/// Whether `tokens` hold an empty line: two line breaks with only
+/// whitespace between them.
+pub(crate) fn holds_empty_line(tokens: &[Token]) -> bool {
+    let mut after_break = false;
+    for token in tokens {
+        match token {
+            Token::Newline if after_break => return true,
+            Token::Newline => after_break = true,
+            Token::Whitespace(_) => {}
+            _ => after_break = false,
+        }
+    }
+    false
+}
+
 /// First token of the specifiers and return type before `name_start`, or
 /// `None` when the tokens before the name cannot be a return type (`x = f(`,
 /// `return f(`, `a, f(`).
@@ -356,6 +371,9 @@ fn return_type_start(
         match &tokens[previous] {
             Token::Symbol(';' | '{' | '}' | ':') => break,
             Token::Word(word) if is_non_type_keyword(word) || is_header(word) => return None,
+            // A word above an empty line, such as a macro left without a
+            // semicolon, ends what came before.
+            Token::Word(_) if holds_empty_line(&tokens[previous..start]) => break,
             Token::Word(_) => start = previous,
             Token::Operator(operator)
                 if matches!(operator.as_str(), "*" | "&" | "&&" | "::" | "^") =>
