@@ -5291,3 +5291,13 @@ fn break_blocks_looks_past_empty_lines_for_a_header_after_a_comment_in_a_switch(
         "void f(void)\n{\n    switch (s) {\n    case 1:\n        if (x) {\n            const char *tr = g();\n\n            /* c1\n               c1b */\n\n            if (tr) {\n                b();\n            }\n        }\n\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_directive_in_the_body_of_an_else_split_across_directives_takes_its_level() {
+    let input = "void f(void)\n{\n#ifdef A\n    if (a) {\n        b();\n    } else\n#endif\n    if (c) {\n#ifndef X\n        if (d) {\n            e();\n        } else\n#endif\n        {\n            g();\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond"],
+        "void f(void)\n{\n    #ifdef A\n    if (a) {\n        b();\n    } else\n    #endif\n        if (c) {\n            #ifndef X\n            if (d) {\n                e();\n            } else\n            #endif\n            {\n                g();\n            }\n        }\n}\n",
+    );
+}

@@ -997,7 +997,18 @@ impl FormatEngine<'_> {
                 spaces,
             }
         } else {
-            PreprocessorLineIndent::Level(self.layout.indentation.indent())
+            PreprocessorLineIndent::Level(
+                self.layout.indentation.indent() + self.split_else_directive_extra(),
+            )
+        }
+    }
+
+    /// A body an `else` split across directives opens stands a level deeper.
+    fn split_else_directive_extra(&self) -> usize {
+        if self.preprocessor.split_else.extra_indent {
+            self.preprocessor.split_else.extra_levels
+        } else {
+            0
         }
     }
 
@@ -1028,9 +1039,10 @@ impl FormatEngine<'_> {
                     .then(|| self.break_else_if_directive_column())
                     .flatten()
                     .or(self.layout.continuation_indent.next_line_indent_spaces);
-                self.layout
-                    .indentation
-                    .push_preprocessor_indent(self.layout.indentation.indent(), spaces);
+                self.layout.indentation.push_preprocessor_indent(
+                    self.layout.indentation.indent() + self.split_else_directive_extra(),
+                    spaces,
+                );
                 self.preprocessor
                     .indented_block_stack
                     .push(should_indent_block);
