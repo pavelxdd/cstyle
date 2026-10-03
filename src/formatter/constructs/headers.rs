@@ -13,6 +13,7 @@ use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, line_brace_imbalance, line_paren_imbalance,
     preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
@@ -177,9 +178,6 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let mut result = previous_code.ends_with(") {").then(|| {
-            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width / 2
-        });
         if previous_code.trim_start().starts_with(')')
             && let Some(header_indent) = self.current_closing_multiline_header_indent()
         {
@@ -221,13 +219,13 @@ impl FormatEngine<'_> {
                             && !guarded_header
                             && line_paren_imbalance(code).1.len() > 1
                     });
-            result = Some(if nested_header_group {
+            return Some(if nested_header_group {
                 header_indent
             } else {
                 header_indent + self.options.indent_width
             });
         }
-        result
+        None
     }
 
     pub(crate) fn opening_conditional_directive_body_indent_spaces(
@@ -487,7 +485,7 @@ impl FormatEngine<'_> {
                     return self.output[..index].iter().rev().take(16).find_map(|line| {
                         let code = line[..trailing_comment_split_limit(line)].trim_end();
                         let trimmed = code.trim_start();
-                        (unmatched_open_paren_column(code).is_some()
+                        (!unmatched_open_paren_columns(code).is_empty()
                             && (starts_header_word(trimmed, "if")
                                 || starts_header_word(trimmed, "for")
                                 || starts_header_word(trimmed, "while")

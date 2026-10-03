@@ -436,12 +436,6 @@ impl FormatEngine<'_> {
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = context.body_indent_spaces;
         if context.recent_preprocessor
-            && previous_code.ends_with(") {")
-            && current_spaces < previous_spaces + self.options.indent_width / 2
-        {
-            return Some(previous_spaces + self.options.indent_width / 2);
-        }
-        if context.recent_preprocessor
             && previous_code.ends_with('{')
             && current_spaces < body_spaces
         {

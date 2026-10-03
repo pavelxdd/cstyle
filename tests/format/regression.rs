@@ -5031,3 +5031,13 @@ fn an_added_one_line_block_under_a_braceless_header_leaves_the_next_block_level(
         "void f(void)\n{\n    for (; s2 < x; s2++)\n        if (e() < 0)\n        { return -1; }\n\n    for (;; x = y)\n    {\n        a();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_header_split_after_its_paren_in_an_else_chain_across_directives_indents_its_body_one_level() {
+    let input = "void f(void)\n{\n  if(a) {\n  }\n  else\n#ifdef B\n  if(b) {\n  }\n  else\n#endif\n#ifdef C\n  if(c) {\n    if(\n      d ||\n      e) {\n      auth = 1;\n    }\n  }\n#endif\n  g();\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f(void)\n{\n    if(a) {\n    } else\n#ifdef B\n        if(b) {\n        } else\n#endif\n#ifdef C\n            if(c) {\n                if(\n                    d ||\n                    e) {\n                    auth = 1;\n                }\n            }\n#endif\n    g();\n}\n",
+    );
+}
