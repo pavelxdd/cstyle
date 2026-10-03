@@ -4226,16 +4226,20 @@ impl FormatEngine<'_> {
 
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
+        let header = self.tree.statements.braceless_header(first)?;
         // Added braces make the body a block; an empty statement, a
-        // nested header or a statement over several lines gets none.
+        // nested header, a statement over several lines or one after a
+        // directive gets none.
         if (self.options.add_braces || self.options.add_one_line_braces)
             && !matches!(tokens[first], Token::Symbol(';'))
             && !matches!(&tokens[first], Token::Word(word) if is_header(word))
             && !self.statement_spans_lines(first)
+            && !tokens[header..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
         {
             return None;
         }
-        let header = self.tree.statements.braceless_header(first)?;
         // astyle loses track of a body after a block in its header, such as
         // a lambda in the condition.
         if tokens[header..first]

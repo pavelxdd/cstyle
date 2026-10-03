@@ -5041,3 +5041,13 @@ fn a_header_split_after_its_paren_in_an_else_chain_across_directives_indents_its
         "void f(void)\n{\n    if(a) {\n    } else\n#ifdef B\n        if(b) {\n        } else\n#endif\n#ifdef C\n            if(c) {\n                if(\n                    d ||\n                    e) {\n                    auth = 1;\n                }\n            }\n#endif\n    g();\n}\n",
     );
 }
+
+#[test]
+fn adding_braces_leaves_a_body_after_a_directive_braceless_and_indented() {
+    let input = "void f(void)\n{\n#ifndef X\n  if(a) {\n    b();\n  }\n  else\n#else\n  (void)c;\n#endif\n\n  d = 1;\n\n  e();\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f(void)\n{\n#ifndef X\n    if(a) {\n        b();\n    } else\n#else\n    (void)c;\n#endif\n\n        d = 1;\n\n    e();\n}\n",
+    );
+}
