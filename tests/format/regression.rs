@@ -4266,3 +4266,21 @@ fn indented_conditional_continuation_takes_tabs_in_code() {
         expected,
     );
 }
+
+#[test]
+fn force_tab_comment_rows_keep_their_opener_tabs() {
+    let input = "struct s {\n\t/*\n\t * Next\n\t *     more\n\t */\n\tint x;\n};\nvoid f()\n{\n        /* a\n               b */\n\tif (a) {\n\t\t/* a comes\n\t\tif (b)\n\t\t\treturn 1;\n\t\t*/\n\t}\n}\n";
+    let expected = "struct s {\n\t/*\n\t    Next\n\t       more\n\t*/\n\tint x;\n};\nvoid f()\n{\n\t/*  a\n\t       b */\n\tif (a) {\n\t\t/*  a comes\n\t\t    if (b)\n\t\t\treturn 1;\n\t\t*/\n\t}\n}\n";
+    check(
+        input,
+        &["--indent=force-tab=4", "--remove-comment-prefix"],
+        expected,
+    );
+}
+
+#[test]
+fn force_tab_comment_rows_keep_source_tabs() {
+    let input = "struct s {\n\t/*\n\t * Next\n\t *     more\n\t */\n\tint x;\n};\nvoid f()\n{\n        /* a\n               b */\n\tif (a) {\n\t\t/* a comes\n\t\tif (b)\n\t\t\treturn 1;\n\t\t*/\n\t}\n}\n";
+    let expected = "struct s {\n\t/*\n\t * Next\n\t *     more\n\t */\n\tint x;\n};\nvoid f()\n{\n\t/* a\n\t       b */\n\tif (a) {\n\t\t/* a comes\n\t\tif (b)\n\t\t\treturn 1;\n\t\t*/\n\t}\n}\n";
+    check(input, &["--indent=force-tab=8"], expected);
+}

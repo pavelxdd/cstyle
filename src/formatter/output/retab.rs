@@ -45,7 +45,21 @@ impl FormatEngine<'_> {
                 }
                 let width = self.output.lead_width(index, tab_width);
                 let tab_columns = match self.output_indent_style {
-                    IndentStyle::ForceTabs => width / tab_width * tab_width,
+                    // A standalone comment's rows keep the tabs of its first
+                    // line and align past them in spaces.
+                    IndentStyle::ForceTabs => {
+                        self.comment_opener(index)
+                            .filter(|&opener| {
+                                self.output.line_tokens(opener).is_none()
+                                    && self.output.trimmed(opener).starts_with("/*")
+                                    && !self.comment_row_indents_with_tab(opener, index)
+                            })
+                            .map_or(width, |opener| {
+                                self.output.lead_width(opener, tab_width).min(width)
+                            })
+                            / tab_width
+                            * tab_width
+                    }
                     _ if indented_conditional => width / indent_width * indent_width,
                     // A filled empty line holds its level's indent.
                     _ if text.is_empty() => width / indent_width * indent_width,
@@ -159,6 +173,28 @@ impl FormatEngine<'_> {
     fn continues_column_one_comment(&self, index: usize) -> bool {
         self.comment_opener(index).is_some_and(|opener| {
             self.output.line_tokens(opener).is_none() && self.output[opener].starts_with("/*")
+        })
+    }
+
+    /// Whether the source row of the block comment opened on line `opener`
+    /// that output line `index` holds indents past the comment with a tab.
+    fn comment_row_indents_with_tab(&self, opener: usize, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(comment) = self.output.comment_token(opener) else {
+            return false;
+        };
+        let Token::Comment(_, text) = &tokens[comment] else {
+            return false;
+        };
+        let opener_whitespace = match comment.checked_sub(1).map(|before| &tokens[before]) {
+            Some(Token::Whitespace(whitespace)) => whitespace.as_str(),
+            _ => "",
+        };
+        text.split('\n').nth(index - opener).is_some_and(|row| {
+            let whitespace = &row[..row.len() - row.trim_start_matches([' ', '\t']).len()];
+            whitespace
+                .strip_prefix(opener_whitespace)
+                .is_some_and(|relative| relative.contains('\t'))
         })
     }
 
