@@ -860,7 +860,15 @@ impl FormatEngine<'_> {
                 if let Some(target) = target
                     && !self.current.trim_start().starts_with('}')
                 {
-                    let gap = column_gap(&self.current, target);
+                    // A line that lost a `}` broken off before it keeps its
+                    // comment at the source column.
+                    let gap = if self.closing_brace_broken_off_source_line() {
+                        target
+                            .saturating_sub(self.current.trim().chars().count())
+                            .max(1)
+                    } else {
+                        column_gap(&self.current, target)
+                    };
                     self.current.push_str(&" ".repeat(gap));
                 } else if self
                     .token_input

@@ -5061,3 +5061,13 @@ fn a_logical_and_before_a_trailing_comment_gives_the_padding_back_under_pointer_
         "void f(void)\n{\n    while (!a &&     /* c1 */\n            d) {\n        g();\n    }\n    while (a &&     /* c1 */\n            d) {\n        g();\n    }\n    while (a ||     /* c1 */\n            d) {\n        g();\n    }\n    while (a)     /* c1 */\n        g();\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_header_that_lost_its_closing_brace_keeps_its_column() {
+    let input = "void f(void)\n{\n    if (a) {\n        b();\n    } else { /* c1 */\n        d();\n    }\n    if (a) {\n        b();\n    } else {   // c2\n        d();\n    }\n}\n";
+    check(
+        input,
+        &["--style=stroustrup"],
+        "void f(void)\n{\n    if (a) {\n        b();\n    }\n    else {   /* c1 */\n        d();\n    }\n    if (a) {\n        b();\n    }\n    else {     // c2\n        d();\n    }\n}\n",
+    );
+}
