@@ -5878,3 +5878,13 @@ fn a_comment_after_a_closing_brace_moved_up_follows_it_by_one_column_less_in_lis
         "void f() {\n    if (b) {\n        x();\n        return 1; } /* else not */\n    if (a) {\n        i++;    /* skip */\n        j++; }\n    y(); }\nstruct s {\n    int x; }; /* c */\n",
     );
 }
+
+#[test]
+fn unpadding_keeps_the_last_whitespace_character_before_a_declarator_paren() {
+    let input = "struct s {\n    void\t(*cb)(int);\n    void  (*db)(int);\n    int\t*arg;\n};\nvoid f()\n{\n    x = g\t(a);\n    if\t(a) b();\n}\nstruct t {\n    void \t(*cb)(int);\n    void\t (*db)(int);\n};\n";
+    check(
+        input,
+        &["--unpad-paren"],
+        "struct s {\n    void\t(*cb)(int);\n    void (*db)(int);\n    int\t*arg;\n};\nvoid f()\n{\n    x = g(a);\n    if(a) b();\n}\nstruct t {\n    void\t(*cb)(int);\n    void (*db)(int);\n};\n",
+    );
+}

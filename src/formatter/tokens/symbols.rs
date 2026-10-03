@@ -335,15 +335,16 @@ impl FormatEngine<'_> {
             if force_space {
                 self.pad_before_open_paren_space();
             } else if keep_unpad_space && self.options.unpad_parens {
-                // Unpadding leaves at most one space before the paren.
-                if self
+                // Unpadding leaves the last whitespace character before the
+                // paren.
+                if let Some(last) = self
                     .token_input
                     .previous_input_whitespace
                     .as_deref()
-                    .is_some_and(|whitespace| !whitespace.is_empty())
+                    .and_then(|whitespace| whitespace.chars().next_back())
                 {
                     self.trim_current_end();
-                    self.current.push(' ');
+                    self.current.push(last);
                 }
             } else if keep_unpad_space {
                 self.emit_source_space();
