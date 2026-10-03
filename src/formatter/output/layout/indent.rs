@@ -516,7 +516,7 @@ impl FormatEngine<'_> {
                 {
                     Some(
                         leading_visual_width(previous, self.options.tab_width)
-                            + self.options.indent_width,
+                            + self.options.continuation_indent * self.options.indent_width,
                     )
                 } else {
                     None

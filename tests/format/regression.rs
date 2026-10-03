@@ -5472,3 +5472,23 @@ fn a_macro_body_row_after_a_return_with_token_pasting_stays_as_written() {
         "#define M(t)\t\\\nint\t\\\nf(int a) {\t\\\n\treturn g_##t(a,\t\\\n\t    b);\t\\\n}\n",
     );
 }
+
+#[test]
+fn a_pointer_declaration_assignment_continuation_follows_indent_continuation_zero() {
+    let input = "void f(void)\n{\n    struct w* w =\n        c(r);\n    struct w *w =\n        c(r);\n    struct w w =\n        c(r);\n    st w* w =\n        c(r);\n}\n";
+    check(
+        input,
+        &["--indent-continuation=0"],
+        "void f(void)\n{\n    struct w* w =\n    c(r);\n    struct w *w =\n    c(r);\n    struct w w =\n    c(r);\n    st w* w =\n    c(r);\n}\n",
+    );
+}
+
+#[test]
+fn a_pointer_declaration_assignment_continuation_follows_indent_continuation_three() {
+    let input = "void f(void)\n{\n    struct w* w =\n        c(r);\n    struct w *w =\n        c(r);\n    struct w w =\n        c(r);\n    st w* w =\n        c(r);\n}\n";
+    check(
+        input,
+        &["--indent-continuation=3"],
+        "void f(void)\n{\n    struct w* w =\n                c(r);\n    struct w *w =\n                c(r);\n    struct w w =\n                c(r);\n    st w* w =\n                c(r);\n}\n",
+    );
+}
