@@ -4918,3 +4918,10 @@ fn deleting_empty_lines_keeps_those_of_a_directive_block_after_a_brace() {
     let expected = "void f(void)\n{\n    for ( ;; ) {\n        if (rc == NGX_OK) {\n#if (NGX_DEBUG)\n            {\n                ngx_str_t  key, value;\n\n                key.len = 1;\n            }\n#endif\n        }\n    }\n}\n";
     check(input, &["--style=kr", "--delete-empty-lines"], expected);
 }
+
+#[test]
+fn breaking_closing_header_blocks_skips_comment_only_blocks_and_else_chains_over_directives() {
+    let input = "void f(void)\n{\n    if (a) {\n        /* nothing */\n    } else if (b) {\n        x = 1;\n    } else\n#ifdef T\n        if (c) {\n            y = 1;\n        }\n#endif\n    z = 2;\n}\n";
+    let expected = "void f(void)\n{\n    if (a)\n    {\n        /* nothing */\n    }\n    else if (b)\n    {\n        x = 1;\n    }\n\n    else\n#ifdef T\n        if (c)\n        {\n            y = 1;\n        }\n\n#endif\n    z = 2;\n}\n";
+    check(input, &["--style=allman", "--break-blocks=all"], expected);
+}

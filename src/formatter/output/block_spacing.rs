@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::source::lex::leading_identifier;
 
@@ -51,8 +52,11 @@ impl FormatEngine<'_> {
         {
             return;
         }
+        // An `if` that a directive splits from its `else` continues the chain.
         if is_break_blocks_opening_header(self.options, word)
-            && (previous_header.is_none() || self.preprocessor.last_output_was_preprocessor)
+            && (previous_header.is_none()
+                || self.preprocessor.last_output_was_preprocessor
+                    && previous_header.as_deref() != Some("else"))
         {
             self.block_spacing.prepend_blank = true;
         }
@@ -265,7 +269,17 @@ impl FormatEngine<'_> {
             .as_deref()
             .is_some_and(|previous| previous.trim_end().ends_with('{'));
         if line.trim_start().starts_with('}') {
-            self.block_spacing.closed_empty_block = previous_opens;
+            // A block of comments alone is as empty.
+            let holds_no_code = self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.groups.closed_at(span.first))
+                .is_some_and(|group| {
+                    let open = self.tree.groups.get(group).open;
+                    let close = self.tree.groups.get(group).close.unwrap_or(open);
+                    !self.tree.tokens[open + 1..close].iter().any(is_code_token)
+                });
+            self.block_spacing.closed_empty_block = previous_opens || holds_no_code;
         }
         let prepend = std::mem::take(&mut self.block_spacing.prepend_blank);
         let append = std::mem::take(&mut self.block_spacing.append_blank);
