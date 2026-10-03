@@ -4746,3 +4746,11 @@ fn max_code_length_aligns_a_member_call_argument_to_its_paren() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_continues_arguments_after_a_split_open_paren() {
+    let input = "void f(void)\n{\n\tusage_msg_optf(_(\"options %s and %s cannot be used together\"),\n\t\t       bbb);\n\tx = usage_msg_optf(_(\"options %s and %s cannot be used together\"),\n\t\t       bbb);\n}\n";
+    let expected = "void f(void)\n{\n    usage_msg_optf(\n        _(\"options %s and %s cannot be used together\"),\n        bbb);\n    x = usage_msg_optf(\n            _(\"options %s and %s cannot be used together\"),\n            bbb);\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
