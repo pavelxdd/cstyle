@@ -4730,3 +4730,11 @@ fn max_code_length_takes_the_last_comparison_or_ternary_split_that_fits() {
     check(input, &["--max-code-length=100"], expected);
     check(expected, &["--max-code-length=100"], expected);
 }
+
+#[test]
+fn max_code_length_takes_a_late_paren_over_a_pointer_declarator() {
+    let input = "static enum help_format parse_help_format(const char *format)\n{\n    return 0;\n}\nstatic ngx_uint_t ngx_stream_geo_delete_range(ngx_conf_t *cf, int start);\n";
+    let expected = "static enum help_format parse_help_format(\n    const char *format)\n{\n    return 0;\n}\nstatic ngx_uint_t ngx_stream_geo_delete_range(\n    ngx_conf_t *cf, int start);\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}

@@ -1090,6 +1090,24 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         })
     });
     plain.sort_by(|a, b| a.2.cmp(&b.2).then(b.0.cmp(&a.0)).then(b.1.cmp(&a.1)));
+    // astyle takes a paren over whitespace before a pointer when the paren
+    // stands past seven tenths of the width.
+    if let Some(&(pointer_split, 59, _)) = structural
+        .iter()
+        .find(|(split_at, _, _)| line[..*split_at].trim_end().len() <= width)
+        && let Some(paren) = structural
+            .iter()
+            .chain(&plain)
+            .copied()
+            .find(|&(split_at, _, _)| {
+                line[..split_at].trim_end().ends_with('(')
+                    && (split_at * 10 >= width * 7 || split_at > pointer_split)
+            })
+    {
+        structural.retain(|candidate| *candidate != paren);
+        plain.retain(|candidate| *candidate != paren);
+        structural.insert(0, paren);
+    }
     structural
         .into_iter()
         .chain(plain)
