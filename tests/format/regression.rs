@@ -5778,3 +5778,23 @@ fn a_const_pointer_cast_in_a_braced_body_aligns_to_the_type() {
         "void f()\n{\n    if (n) {\n        a = (const char* const*)b;\n    }\n    if (n) {\n        a = (char* const*)b;\n    }\n    if (n) {\n        a = (char*)b;\n    }\n    if (n) {\n        a = (char**)b;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_function_pointer_after_a_calling_convention_is_a_declarator_with_name() {
+    let input = "typedef int (WSAAPI* LPFN_WSARECV)\n    (int s);\ntypedef int (WSAAPI *LPFN_X)(int s);\ntypedef int (CALLBACK * F)(int);\nstatic int (WSAAPI * G)(int s);\nvoid f()\n{\n    foo(a * b)(c);\n}\n";
+    check(
+        input,
+        &["--align-pointer=name"],
+        "typedef int (WSAAPI *LPFN_WSARECV)\n(int s);\ntypedef int (WSAAPI *LPFN_X)(int s);\ntypedef int (CALLBACK *F)(int);\nstatic int (WSAAPI *G)(int s);\nvoid f()\n{\n    foo(a * b)(c);\n}\n",
+    );
+}
+
+#[test]
+fn a_function_pointer_after_a_calling_convention_is_a_declarator_with_padded_operators() {
+    let input = "typedef int (WSAAPI* LPFN_WSARECV)\n    (int s);\ntypedef int (WSAAPI *LPFN_X)(int s);\ntypedef int (CALLBACK * F)(int);\nstatic int (WSAAPI * G)(int s);\nvoid f()\n{\n    foo(a * b)(c);\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "typedef int (WSAAPI* LPFN_WSARECV)\n(int s);\ntypedef int (WSAAPI *LPFN_X)(int s);\ntypedef int (CALLBACK * F)(int);\nstatic int (WSAAPI * G)(int s);\nvoid f()\n{\n    foo(a * b)(c);\n}\n",
+    );
+}
