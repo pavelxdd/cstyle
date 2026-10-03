@@ -12,6 +12,7 @@ pub(crate) struct BlockSpacingState {
     header_expects_body: bool,
     pending_semicolon: bool,
     pending_one_line_block: bool,
+    closed_empty_block: bool,
 }
 
 impl FormatEngine<'_> {
@@ -35,6 +36,7 @@ impl FormatEngine<'_> {
             if self.options.break_closing_header_blocks
                 && self.current_is_blank()
                 && self.layout.command_state.previous_command_char == Some('}')
+                && !self.block_spacing.closed_empty_block
             {
                 self.block_spacing.prepend_blank = true;
             }
@@ -116,6 +118,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_block_spacing_semicolon(&mut self) {
+        self.block_spacing.closed_empty_block = false;
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
             || self.layout.nesting.paren_depth > 0
@@ -196,6 +199,14 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return false;
         }
+        let previous_opens = self
+            .layout
+            .previous_pre_adjust_line
+            .as_deref()
+            .is_some_and(|previous| previous.trim_end().ends_with('{'));
+        if line.trim_start().starts_with('}') {
+            self.block_spacing.closed_empty_block = previous_opens;
+        }
         let prepend = std::mem::take(&mut self.block_spacing.prepend_blank);
         let append = std::mem::take(&mut self.block_spacing.append_blank);
         if !prepend && !append {
@@ -210,9 +221,12 @@ impl FormatEngine<'_> {
             return true;
         }
         let trimmed = line.trim_start();
+        // An empty block stays closed up to its closing header.
+        let closed_empty_block = self.block_spacing.closed_empty_block;
         if let Some(after) = trimmed.strip_prefix('}') {
             let next = leading_identifier(after.trim_start());
             return self.options.break_closing_header_blocks
+                && !previous_opens
                 && is_break_blocks_closing_header(next)
                 && !self.previous_block_spacing_line_is_comment_only();
         }
@@ -220,7 +234,9 @@ impl FormatEngine<'_> {
         // A body kept on one line with its header ends no block before its
         // closing header.
         !is_break_blocks_closing_header(first)
-            || self.options.break_closing_header_blocks && self.options.break_one_line_statements
+            || self.options.break_closing_header_blocks
+                && self.options.break_one_line_statements
+                && !closed_empty_block
     }
 
     pub(crate) fn reset_block_spacing(&mut self) {

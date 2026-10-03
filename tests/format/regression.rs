@@ -4206,3 +4206,31 @@ fn vtk_statement_after_nested_added_one_line_block() {
         expected,
     );
 }
+
+#[test]
+fn break_blocks_keeps_an_empty_block_closed_up_to_its_closing_header() {
+    let input = "void f()\n{\n\tif (a) {\n\t\tb();\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t\t;\n\t} else {\n\t\ty();\n\t}\n}\n";
+    let expected = "void f()\n{\n    if (a)\n    {\n        b();\n    }\n\n    else if (x)\n    {\n        y();\n    }\n\n    if (a)\n    {\n    }\n    else if (x)\n    {\n        y();\n    }\n\n    if (a)\n    {\n        ;\n    }\n\n    else\n    {\n        y();\n    }\n}\n";
+    check(input, &["--style=allman", "--break-blocks=all"], expected);
+    check(
+        expected,
+        &["--style=allman", "--break-blocks=all"],
+        expected,
+    );
+}
+
+#[test]
+fn attached_break_blocks_keeps_an_empty_block_closed_up() {
+    let input = "void f()\n{\n\tif (a) {\n\t\tb();\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t\t;\n\t} else {\n\t\ty();\n\t}\n}\n";
+    let expected = "void f()\n{\n    if (a) {\n        b();\n\n    } else if (x) {\n        y();\n    }\n\n    if (a) {\n    } else if (x) {\n        y();\n    }\n\n    if (a) {\n        ;\n\n    } else {\n        y();\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+    check(expected, &["--style=kr", "--break-blocks=all"], expected);
+}
+
+#[test]
+fn lisp_keeps_switch_labels_on_one_line_with_their_block() {
+    let input = "void f() {\n    switch (*s) {\n      case 1: case 2: case 3: {\n        x();\n        break;\n      }\n      default: y();\n    }\n}\n";
+    let expected = "void f() {\n    switch (*s) {\n    case 1: case 2: case 3: {\n        x();\n        break; }\n    default: y(); } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}

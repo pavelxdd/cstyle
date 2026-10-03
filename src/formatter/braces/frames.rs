@@ -233,7 +233,12 @@ impl FormatEngine<'_> {
         let case_header_pending = if case_header
             .is_some_and(|header| case_label_token_offset(&self.current, header).is_some())
         {
-            leading_case_label_count(&self.current).max(1)
+            // Labels kept on one line take one line.
+            if self.options.break_one_line_statements {
+                leading_case_label_count(&self.current).max(1)
+            } else {
+                1
+            }
         } else {
             0
         };
