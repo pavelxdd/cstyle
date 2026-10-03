@@ -346,6 +346,29 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
                         && !run_in_next_line_is_access_label(brace, next, options)
                 })
         };
+        // A brace leading a row runs into the block comment after it.
+        if let Some(comment) = line
+            .trim_start()
+            .strip_prefix('{')
+            .filter(|rest| rest.starts_with([' ', '\t']))
+            .map(str::trim_start)
+            .filter(|rest| {
+                rest.starts_with("/*")
+                    && (rest.ends_with("*/") && rest.matches("*/").count() == 1
+                        || !rest.contains("*/"))
+            })
+            && !raw_lines[index]
+        {
+            let brace = &line[..line.len() - line.trim_start().len() + 1];
+            let body = format!(
+                "{}{comment}",
+                " ".repeat(leading_visual_width(brace, options.tab_width) + options.indent_width)
+            );
+            let fill = horstmann_run_in_fill(brace, &body, options);
+            lines.push(format!("{brace}{fill}{comment}"));
+            index += 1;
+            continue;
+        }
         if runs_in(line, index + 1) && !previous_line_is_namespace_header(&input, index) {
             // A `{` that runs in may carry a nested `{` whose own first line
             // runs in after it.

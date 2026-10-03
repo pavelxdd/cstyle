@@ -5111,3 +5111,23 @@ fn lisp_pads_no_closing_brace_right_after_a_comment() {
         "int uv__random_sysctl(void* buf, size_t buflen) {\n    static int name[] = {1 /*CTL_KERN*/, 40 /*KERN_RANDOM*/, 6 /*RANDOM_UUID*/};\n    static const char *azSub[] = {\"count\", \"depth\", 0 };\n    int a[] = {1, 2 };\n    return 0; }\n",
     );
 }
+
+#[test]
+fn pico_runs_an_initializer_row_brace_into_its_block_comment() {
+    let input = "static const struct t tests[] = {\n  { \"a\", 1 },\n  { /* query */\n    \"b\", 2 },\n  {\n    /* other */\n    \"c\", 3 },\n  { NULL, 0 }\n};\n";
+    check(
+        input,
+        &["--style=pico"],
+        "static const struct t tests[] = {\n    { \"a\", 1 },\n    {   /* query */\n        \"b\", 2 },\n    {   /* other */\n        \"c\", 3 },\n    { NULL, 0 } };\n",
+    );
+}
+
+#[test]
+fn horstmann_runs_an_initializer_row_brace_into_its_block_comment() {
+    let input = "static const struct t tests[] = {\n  { \"a\", 1 },\n  { /* query */\n    \"b\", 2 },\n  {\n    /* other */\n    \"c\", 3 },\n  { NULL, 0 }\n};\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "static const struct t tests[] = {\n    { \"a\", 1 },\n    {   /* query */\n        \"b\", 2\n    },\n    {   /* other */\n        \"c\", 3\n    },\n    { NULL, 0 }\n};\n",
+    );
+}
