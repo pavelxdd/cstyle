@@ -205,6 +205,7 @@ impl FormatEngine<'_> {
                 let trimmed = self.output.trimmed(index);
                 !trimmed.is_empty()
                     && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
                     && self.output.comment_start_index(index) == index
                     && !trimmed.starts_with("//")
                     && !trimmed.starts_with("/*")

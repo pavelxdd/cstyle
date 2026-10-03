@@ -5888,3 +5888,13 @@ fn unpadding_keeps_the_last_whitespace_character_before_a_declarator_paren() {
         "struct s {\n    void\t(*cb)(int);\n    void (*db)(int);\n    int\t*arg;\n};\nvoid f()\n{\n    x = g(a);\n    if(a) b();\n}\nstruct t {\n    void\t(*cb)(int);\n    void (*db)(int);\n};\n",
     );
 }
+
+#[test]
+fn a_case_label_after_a_continued_directive_follows_the_label_before_it() {
+    let input = "static bool g(int rc)\n{\n  switch(rc) {\n#ifdef A\n  case A:\n#endif\n#if defined(B) && \\\n  (!defined(A) || (B != A))\n  case B:\n#endif\n    return TRUE;\n  default:\n    return FALSE;\n  }\n}\n";
+    check(
+        input,
+        &["--break-blocks=all"],
+        "static bool g(int rc)\n{\n    switch(rc) {\n#ifdef A\n\n    case A:\n#endif\n#if defined(B) && \\\n  (!defined(A) || (B != A))\n    case B:\n#endif\n        return TRUE;\n\n    default:\n        return FALSE;\n    }\n}\n",
+    );
+}
