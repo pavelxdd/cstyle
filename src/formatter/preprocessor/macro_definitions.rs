@@ -27,6 +27,10 @@ struct DefineBodyLineInfo {
     leading_close: bool,
     is_case_label: bool,
     ends_semicolon: bool,
+    /// The closing `;` ends the statement rather than a clause of a
+    /// `for` header whose parens stay open.
+    semicolon_ends_statement: bool,
+    paren_balance: isize,
     is_header: bool,
     is_command_header: bool,
     is_switch_header: bool,
@@ -138,6 +142,7 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
     let mut opens = 0usize;
     let mut closes = 0usize;
     let mut last_code = None;
+    let mut paren_balance = 0isize;
 
     while let Some(&ch) = chars.get(index) {
         let next = chars.get(index + 1).copied();
@@ -172,6 +177,8 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         match ch {
             '{' => opens += 1,
             '}' => closes += 1,
+            '(' => paren_balance += 1,
+            ')' => paren_balance -= 1,
             _ => {}
         }
         if !ch.is_whitespace() {
@@ -181,8 +188,9 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
     }
 
     let ends_semicolon = last_code == Some(';');
+    let semicolon_ends_statement = ends_semicolon && paren_balance <= 0;
     let is_command_header = is_define_header_keyword(content);
-    let is_header = is_command_header && opens == 0 && !ends_semicolon;
+    let is_header = is_command_header && opens == 0 && !semicolon_ends_statement;
     // A header after a brace, as in `} else` or `{ if (x)`, with its body on
     // the next row.
     let trailing_header = !ends_semicolon
@@ -196,6 +204,8 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         leading_close: content.trim_start().starts_with('}'),
         is_case_label: is_define_case_label(content),
         ends_semicolon,
+        semicolon_ends_statement,
+        paren_balance,
         is_header,
         is_command_header,
         is_switch_header: leading_identifier(content) == "switch",
@@ -360,7 +370,7 @@ fn apply_define_frame_transition(
         } else {
             DefineFrame::Header
         });
-    } else if info.ends_semicolon {
+    } else if info.semicolon_ends_statement {
         while frames.last().copied().is_some_and(is_define_header_frame) {
             frames.pop();
         }
@@ -961,7 +971,8 @@ impl FormatEngine<'_> {
                 continue;
             }
 
-            let info = scan_define_body_line(content);
+            let mut info = scan_define_body_line(content);
+            info.semicolon_ends_statement &= open_parens + info.paren_balance <= 0;
             let starts_with_open = content.starts_with('{');
             // A `{` ending the condition of a header opens the header's block.
             let opens_header_block = starts_with_open

@@ -5492,3 +5492,13 @@ fn a_pointer_declaration_assignment_continuation_follows_indent_continuation_thr
         "void f(void)\n{\n    struct w* w =\n                c(r);\n    struct w *w =\n                c(r);\n    struct w w =\n                c(r);\n    st w* w =\n                c(r);\n}\n",
     );
 }
+
+#[test]
+fn a_semicolon_inside_a_define_for_header_keeps_the_header_open() {
+    let input = "void f() {\n  for (int i = 0;\n       j; j = 0)\n    x(a,\n      b);\n}\n#define G(a) \\\n  for (int i = 0; j;     \\\n       j = 0)          \\\n    x(a, \\\n      b);\n#define jv_array_foreach(a, i, x) \\\n  for (int jv_len__ = jv_array_length(jv_copy(a)), i=0, jv_j__ = 1;     \\\n       jv_j__; jv_j__ = 0)                                              \\\n    for (jv x;                                                          \\\n         i < jv_len__ ?                                                 \\\n           (x = jv_array_get(jv_copy(a), i), 1) : 0;                    \\\n         i++)\n";
+    check(
+        input,
+        &["--indent-preproc-define"],
+        "void f() {\n    for (int i = 0;\n            j; j = 0)\n        x(a,\n          b);\n}\n#define G(a) \\\n    for (int i = 0; j;     \\\n            j = 0)          \\\n        x(a, \\\n          b);\n#define jv_array_foreach(a, i, x) \\\n    for (int jv_len__ = jv_array_length(jv_copy(a)), i=0, jv_j__ = 1;     \\\n            jv_j__; jv_j__ = 0)                                              \\\n        for (jv x;                                                          \\\n                i < jv_len__ ?                                                 \\\n                (x = jv_array_get(jv_copy(a), i), 1) : 0;                    \\\n                i++)\n",
+    );
+}
