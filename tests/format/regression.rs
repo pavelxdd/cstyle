@@ -4316,3 +4316,45 @@ fn attached_conditional_directive_in_broken_else_if_block_follows_the_code() {
         expected,
     );
 }
+
+#[test]
+fn enum_member_with_parenthesized_comment_takes_the_member_indent() {
+    let input =
+        "typedef enum {\n  A, /* First (state) */\n  B, /* (Possibly) First */\n  C,\n} x;\n";
+    let expected =
+        "typedef enum {\n    A, /* First (state) */\n    B, /* (Possibly) First */\n    C,\n} x;\n";
+    check(input, &["--min-conditional-indent=0"], expected);
+    check(expected, &["--min-conditional-indent=0"], expected);
+}
+
+#[test]
+fn max_code_length_paren_at_line_end_stacks_one_continuation() {
+    let input = "void f()\n{\n    foo(aaaaaaa, bar(cccccccccccccccccccccccccc, ddddddddddddddddddddddd));\n    x = foo(aaaaaaa, bar(cccccccccccccccccccccccccc, ddddddddddddddddddddddd));\n    xxxxxxxxxxxxxxxxxxxxxxxxx(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx(bbbbbbbbbbbbbbbbbbbbbbbbbb);\n    yy = xxxxxxxxxxxxxxxxxxxxxxxxx(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    return xxxxxxxxxxxxxxxxxxxxxxxxx(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    if (xxxxxxxxxxxxxxxxxxxxxxxxx(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb))\n        x();\n}\n";
+    let expected = "void f()\n{\n    foo(aaaaaaa, bar(cccccccccccccccccccccccccc,\n                     ddddddddddddddddddddddd));\n    x = foo(aaaaaaa, bar(cccccccccccccccccccccccccc,\n                         ddddddddddddddddddddddd));\n    xxxxxxxxxxxxxxxxxxxxxxxxx(\n        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx(\n        bbbbbbbbbbbbbbbbbbbbbbbbbb);\n    yy = xxxxxxxxxxxxxxxxxxxxxxxxx(\n             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    return xxxxxxxxxxxxxxxxxxxxxxxxx(\n               bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n    if (xxxxxxxxxxxxxxxxxxxxxxxxx(\n                bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb))\n        x();\n}\n";
+    check(input, &["--max-code-length=50"], expected);
+    check(expected, &["--max-code-length=50"], expected);
+}
+
+#[test]
+fn max_code_length_moves_a_string_call_after_a_call_paren() {
+    let input = "void f()\n{\n    return jv_invalid_with_msg(jv_string(\"jq was compiled without ONIGURUMA regex library.\"));\n    if (jv_invalid_with_msg(jv_string(\"jq was compiled without ONIGURUMA regex library.\")))\n        x();\n    while(jv_invalid_with_msg(jv_string(\"jq was compiled without ONIGURUMA regex library.\")))\n        x();\n    xxxxxxxxxxxxx(jv_string(\"jq was compiled without ONIGURUMA regex library. and more\"));\n}\n";
+    let expected = "void f()\n{\n    return jv_invalid_with_msg(\n               jv_string(\"jq was compiled without ONIGURUMA regex library.\"));\n    if (jv_invalid_with_msg(\n                jv_string(\"jq was compiled without ONIGURUMA regex library.\")))\n        x();\n    while(jv_invalid_with_msg(\n                jv_string(\"jq was compiled without ONIGURUMA regex library.\")))\n        x();\n    xxxxxxxxxxxxx(\n        jv_string(\"jq was compiled without ONIGURUMA regex library. and more\"));\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}
+
+#[test]
+fn cast_dereference_in_brackets_before_assignment_keeps_its_spacing() {
+    let input = "void f()\n{\n    while (*p) {\n        lookup[(int)*p] = p + 1;\n        x = (int)*p;\n        y = a[(int)*p];\n    }\n}\n";
+    let expected = "void f()\n{\n    while (*p) {\n        lookup[(int)*p] = p + 1;\n        x = (int) * p;\n        y = a[(int) * p];\n    }\n}\n";
+    check(input, &["--pad-oper"], expected);
+    check(expected, &["--pad-oper"], expected);
+}
+
+#[test]
+fn max_code_length_keeps_a_block_brace_with_its_head() {
+    let input = "void f()\n{\n    TEST(\"Verify that a rehashing dict node in the list is ok\") {\n        x();\n    }\n    TESTX(abcdefghijklmnopqrstuvwxyz, abcdefghijklmnopqrstuvwxyz) {\n        x();\n    }\n}\n";
+    let expected = "void f()\n{\n    TEST(\"Verify that a rehashing dict node in the list is ok\") {\n        x();\n    }\n    TESTX(abcdefghijklmnopqrstuvwxyz,\n          abcdefghijklmnopqrstuvwxyz) {\n        x();\n    }\n}\n";
+    check(input, &["--max-code-length=60"], expected);
+    check(expected, &["--max-code-length=60"], expected);
+}

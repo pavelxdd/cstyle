@@ -874,8 +874,12 @@ impl FormatEngine<'_> {
                     <= self.current.chars().filter(|&ch| ch == ')').count()
                 && matches!(next, Some(Token::Word(_))) =>
             {
-                // Inside parentheses astyle keeps the spacing of the source.
-                if self.layout.nesting.paren_depth > 0 {
+                // Inside parentheses astyle keeps the spacing of the source,
+                // as in brackets before any assignment.
+                if self.layout.nesting.paren_depth > 0
+                    || self.active_token_in_brackets()
+                        && find_assignment_operator(&self.current).is_none()
+                {
                     self.emit_source_space();
                     self.current.push_str(operator);
                     self.emit_trailing_source_space();
@@ -1094,6 +1098,7 @@ impl FormatEngine<'_> {
             {
                 self.push_unary_prefix(operator);
             }
+
             "&" | "*"
                 if self.current_ends_cast()
                     && self.options.pad_operators

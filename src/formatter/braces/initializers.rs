@@ -1172,7 +1172,7 @@ impl FormatEngine<'_> {
         if source >= current_spaces
             || trimmed.starts_with('.')
             || trimmed.starts_with('[')
-            || trimmed.contains('(')
+            || trimmed[..trailing_comment_split_limit(trimmed)].contains('(')
             || starts_ternary_arm(trimmed)
             || starts_with_chain_operator(trimmed)
             || !self.initializer_line_keeps_source_indent(trimmed)

@@ -6,7 +6,7 @@ use crate::formatter::constructs::constructor_initializers::{
 use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
-use crate::formatter::continuation::ContinuationIndent;
+use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{token_text, tokenize};
 use crate::formatter::structure::TokenSpan;
@@ -149,6 +149,7 @@ impl FormatEngine<'_> {
             max_continuation_indent: self.options.max_continuation_indent,
             configured_continuation_spaces: self.options.continuation_indent
                 * self.options.indent_width,
+            min_conditional_spaces: min_conditional_indent_spaces(self.options),
             configured_indent: current_line_owner,
             indent_after_parens: self.options.indent_after_parens,
             following_split: false,
@@ -471,6 +472,7 @@ struct SplitIndentInputs {
     indent_width: usize,
     max_continuation_indent: usize,
     configured_continuation_spaces: usize,
+    min_conditional_spaces: usize,
     configured_indent: ContinuationIndent,
     indent_after_parens: bool,
     following_split: bool,
@@ -628,6 +630,36 @@ fn continuation_indent_for_split(
         ));
     }
 
+    // A paren ending the line stacks one continuation past the indent
+    // before it.
+    if !following_split && head.trim_end().ends_with('(') {
+        let columns = unmatched_open_paren_columns(head);
+        let previous = match columns.len().checked_sub(2).map(|outer| columns[outer]) {
+            Some(outer) => {
+                let registered = if outer + 1 < max_continuation_indent {
+                    base_indent_width + outer + 1
+                } else {
+                    base_indent_width + indent_width * 2
+                };
+                if language::is_header(trailing_word(head[..outer].trim_end())) {
+                    registered.max(base_indent_width + inputs.min_conditional_spaces)
+                } else {
+                    registered
+                }
+            }
+            None => return_value_indent(head, base_indent_width)
+                .or_else(|| assignment_value_indent(head, base_indent_width))
+                .unwrap_or(base_indent_width),
+        };
+        let target = previous + configured_continuation_spaces;
+        return Some(ContinuationIndent::Spaces(
+            if target - base_indent_width > max_continuation_indent {
+                base_indent_width + indent_width * 2
+            } else {
+                target
+            },
+        ));
+    }
     paren_continuation_indent(
         head,
         base_indent_width,
@@ -644,6 +676,7 @@ fn split_function_declaration_head(head: &str) -> bool {
     if top_level_assignment_index(before).is_some()
         || before.starts_with("return ")
         || before.starts_with("new ")
+        || before.contains('(')
     {
         return false;
     }
@@ -931,8 +964,8 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
         && is_conditional_header_line(line)
         && comment_start.is_some_and(|start| start.saturating_sub(comment_limit) <= 1);
     let boundary = deferred_split_boundary(line, width);
-    // A call of a single string past the width splits at no paren right
-    // before it nor any whitespace after it.
+    // A call of a single string past the width splits at no header paren
+    // right before it nor any whitespace after it.
     let string_call = crossing_single_string_call(line, width);
     let template_ranges = template_argument_ranges(line);
     let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
@@ -980,8 +1013,10 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
             && (split_at - usize::from(priority == 10) >= ASTYLE_MIN_CODE_LENGTH || width < 50)
             && split_at < comment_limit
             && !string_call.is_some_and(|(name_start, close)| {
+                let head = line[..split_at].trim_end();
                 priority == 10 && split_at > close
-                    || line[..split_at].trim_end().ends_with('(')
+                    || head.ends_with('(')
+                        && language::is_header(trailing_word(head[..head.len() - 1].trim_end()))
                         && line[split_at..name_start].trim().is_empty()
             })
             && inline_brace_pair.is_none_or(|(start, end)| {
@@ -1089,7 +1124,7 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
             if head.ends_with('(') && tail.contains('"') && contains_unquoted_plus(&tail) {
                 return None;
             }
-            if (head.ends_with('(') || head.ends_with('['))
+            if head.ends_with('[')
                 && tail.len() > width
                 && split_result(&tail, width, prefer_logical_operator).is_none()
             {
@@ -1349,6 +1384,8 @@ fn split_point_at(
         {
             Some((end, 39))
         }
+        // A block's opening brace stays with its head.
+        ' ' | '\t' if line[end..].trim_start().starts_with('{') => None,
         ' ' | '\t'
             if !whitespace_touches_pointer_operator(line, index)
                 || declarator_pointer_follows(line, index) =>
