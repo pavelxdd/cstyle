@@ -4434,3 +4434,11 @@ fn padding_before_an_ending_brace_shrinks_its_comment_gap() {
     check(input, &["--pad-oper", "--pad-header"], expected);
     check(expected, &["--pad-oper", "--pad-header"], expected);
 }
+
+#[test]
+fn define_assignment_on_the_directive_line_aligns_its_continuation() {
+    let input = "#define SWAPINIT(a, es) swaptype = (uintptr_t)a % sizeof(long) || \\\n\tes % sizeof(long) ? 2 : es == sizeof(long)? 0 : 1;\n#define X(a) y = a + \\\n\tb;\n#define Z(a) foo(a, \\\n\tb);\n";
+    let expected = "#define SWAPINIT(a, es) swaptype = (uintptr_t)a % sizeof(long) || \\\n                                   es % sizeof(long) ? 2 : es == sizeof(long)? 0 : 1;\n#define X(a) y = a + \\\n                 b;\n#define Z(a) foo(a, \\\n                 b);\n";
+    check(input, &["--indent-preproc-define"], expected);
+    check(expected, &["--indent-preproc-define"], expected);
+}

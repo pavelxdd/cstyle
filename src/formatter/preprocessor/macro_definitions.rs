@@ -905,11 +905,20 @@ impl FormatEngine<'_> {
             );
         }
         let first_indent = leading_visual_width(first_line, self.options.tab_width);
-        let mut continuation_column = define_expression_continuation_spaces(
-            first_line,
-            self.options.tab_width,
-        )
-        .map(|column| capped_define_continuation(column, first_indent, first_indent, self.options));
+        let mut continuation_column =
+            define_expression_continuation_spaces(first_line, self.options.tab_width)
+                .or_else(|| {
+                    // An assignment the replacement starts registers its value.
+                    (!first_replacement.contains(['{', ';']))
+                        .then(|| {
+                            let (body, _) = strip_define_backslash(first_line);
+                            define_assignment_align_column(body.trim_end(), self.options.tab_width)
+                        })
+                        .flatten()
+                })
+                .map(|column| {
+                    capped_define_continuation(column, first_indent, first_indent, self.options)
+                });
         let mut open_parens = 0isize;
         // The parens open across the rows, for rows that close inner ones.
         let mut paren_anchors = Vec::new();
