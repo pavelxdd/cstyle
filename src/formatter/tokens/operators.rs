@@ -1433,8 +1433,7 @@ impl FormatEngine<'_> {
             } else {
                 self.emit_source_space();
             }
-        } else if self.options.pad_parens_outside
-            && self.layout.previous == PreviousToken::CloseParen
+        } else if self.pads_after_close_paren(operator)
             && self.current_ends_cast()
             && self.layout.nesting.paren_depth > 0
         {
@@ -1592,11 +1591,23 @@ impl FormatEngine<'_> {
             self.current.push_str(operator);
             self.emit_trailing_source_space_or_ensure();
         } else {
-            self.emit_source_space();
+            if self.pads_after_close_paren(operator) {
+                self.emit_source_space_or_ensure();
+            } else {
+                self.emit_source_space();
+            }
             self.record_stream_operator_frame(operator);
             self.current.push_str(operator);
             self.emit_trailing_source_space();
         }
+    }
+
+    /// Padding parens outside spaces a `)` from any operator but those
+    /// starting with `+`, `-` or `.`.
+    fn pads_after_close_paren(&self, operator: &str) -> bool {
+        self.options.pad_parens_outside
+            && self.layout.previous == PreviousToken::CloseParen
+            && !operator.starts_with(['+', '-', '.'])
     }
 }
 

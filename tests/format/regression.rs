@@ -5391,3 +5391,13 @@ fn unpadding_parens_keeps_a_trailing_comment_column_and_leaves_inner_comments() 
         "void f(void)\n{\n    if(!g(L, o)) {   /* c1 */\n        h();\n    }\n    for(i = 0; i < n; /* void */) {\n        h();\n    }\n    while(1 /* exit */) {\n        h();\n    }\n    if(a) b();   /* c2 */\n    x = (a + b);    /* c3 */\n}\n",
     );
 }
+
+#[test]
+fn padding_parens_outside_spaces_a_close_paren_from_a_binary_operator() {
+    let input = "void f(void)\n{\n    x = (v>>7)&0x7f;\n    y = (int)&z;\n    w = (a)*b;\n    q = (a)|(b);\n    p = (char *)*pp;\n    r = (a)<<2;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-paren-out"],
+        "void f (void)\n{\n    x = (v>>7) &0x7f;\n    y = (int) &z;\n    w = (a) *b;\n    q = (a) | (b);\n    p = (char *) *pp;\n    r = (a) <<2;\n}\n",
+    );
+}
