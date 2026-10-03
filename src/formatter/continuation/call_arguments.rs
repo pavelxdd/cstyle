@@ -14,7 +14,7 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
+    code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
     line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
@@ -1643,9 +1643,7 @@ impl FormatEngine<'_> {
         if !previous[..trailing_comment_split_limit(previous)]
             .trim_end()
             .ends_with(',')
-            || !previous
-                .split(|ch: char| !is_identifier_continue(ch))
-                .any(|word| word == "new")
+            || !code_holds_word(previous, "new")
         {
             return None;
         }

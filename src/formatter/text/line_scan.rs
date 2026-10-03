@@ -749,3 +749,11 @@ mod tests {
         );
     }
 }
+
+/// Whether `line` holds the word `word` as code, outside literals and
+/// comments.
+pub(crate) fn code_holds_word(line: &str, word: &str) -> bool {
+    tokenize(line)
+        .iter()
+        .any(|token| matches!(token, Token::Word(text) if text == word))
+}

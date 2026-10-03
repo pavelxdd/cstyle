@@ -9,9 +9,9 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    line_paren_imbalance, preprocessor_directive, trailing_comment_split_limit,
+    code_holds_word, line_paren_imbalance, preprocessor_directive, trailing_comment_split_limit,
 };
-use crate::source::lex::{is_identifier_continue, leading_identifier};
+use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_brace_header_case_and_initializer_correction_layout(
@@ -331,9 +331,7 @@ impl FormatEngine<'_> {
                     previous_code.ends_with(',')
                         && line_paren_imbalance(previous_code).0 > 0
                         && !(self.options.indent_after_parens
-                            && previous_code
-                                .split(|ch: char| !is_identifier_continue(ch))
-                                .any(|word| word == "new"))
+                            && code_holds_word(previous_code, "new"))
                 })
         {
             exact_indent_spaces = Some(
@@ -350,9 +348,7 @@ impl FormatEngine<'_> {
             && previous[..trailing_comment_split_limit(previous)]
                 .trim_end()
                 .ends_with(',')
-            && previous
-                .split(|ch: char| !is_identifier_continue(ch))
-                .any(|word| word == "new")
+            && code_holds_word(previous, "new")
         {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }

@@ -4994,3 +4994,10 @@ case iteration has failed, or a value.
 ";
     check(input, &["--style=kr", "--indent-preproc-cond"], expected);
 }
+
+#[test]
+fn the_word_new_in_a_string_continues_no_new_expression() {
+    let input = "static struct option opts[] = {\n        OPT_BOOL(0, \"a\", &b,\n            N_(\"don't checkout new files\")),\n        OPT_BOOL(0, \"c\", &d,\n            N_(\"update stat\")),\n};\nvoid f(void)\n{\n        g(a,\n            N_(\"don't checkout\")),\n        h(b,\n            c);\n}\n";
+    let expected = "static struct option opts[] = {\n    OPT_BOOL(0, \"a\", &b,\n        N_(\"don't checkout new files\")),\n    OPT_BOOL(0, \"c\", &d,\n        N_(\"update stat\")),\n};\nvoid f(void)\n{\n    g(a,\n        N_(\"don't checkout\")),\n        h(b,\n            c);\n}\n";
+    check(input, &["--style=linux", "--indent-after-parens"], expected);
+}
