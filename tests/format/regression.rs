@@ -4770,3 +4770,11 @@ fn max_code_length_continues_struct_returning_heads_and_compound_assignments() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_continues_declarators_at_the_second_word() {
+    let input = "void f(void)\n{\n    ngx_uint_t             width, sign, hex, max_width, frac_width, scale, n;\n}\n";
+    let expected = "void f(void)\n{\n    ngx_uint_t             width, sign, hex, max_width, frac_width, scale,\n                           n;\n}\n";
+    check(input, &["--style=gnu", "--max-code-length=70"], expected);
+    check(expected, &["--style=gnu", "--max-code-length=70"], expected);
+}

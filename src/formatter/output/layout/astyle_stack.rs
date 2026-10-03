@@ -75,6 +75,26 @@ impl FormatEngine<'_> {
             .or_else(|| self.stacked_return_indent(first))
             .or_else(|| self.stacked_closing_paren_indent(first))
             .or_else(|| self.stacked_assignment_indent(first))
+            .or_else(|| self.stacked_declarator_indent(first))
+    }
+
+    /// A declarator after a `,` ending its statement's first line stands at
+    /// the top of astyle's continuation stack.
+    fn stacked_declarator_indent(&self, first: usize) -> Option<usize> {
+        let comma = self.tree.previous_code_token(first)?;
+        let group = self.tree.groups.enclosing(first);
+        if !matches!(self.tree.tokens[comma], Token::Symbol(','))
+            || self.tree.groups.enclosing(comma) != group
+            || group.is_some_and(|group| {
+                !matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                )
+            })
+        {
+            return None;
+        }
+        self.astyle_stack_indent(first)
     }
 
     /// A line inside brackets whose `[` ends its line stands at the top of
@@ -326,7 +346,14 @@ impl FormatEngine<'_> {
                         let size = *replay.sizes.last()?;
                         replay.stack.truncate(size + 1);
                     } else if next_on_line.is_none() && !replay.continuation {
-                        return None;
+                        // A `,` ending the statement's first line registers
+                        // the line's second word.
+                        if token_line != start_line {
+                            return None;
+                        }
+                        let text = self.output.as_slice()[token_line].trim_start();
+                        replay.stack.push(second_word_column(text, relative(index)?));
+                        replay.continuation = true;
                     }
                 }
                 Token::Symbol('?') => saw_question = true,
@@ -751,4 +778,22 @@ pub(super) fn literal_closed(text: &str) -> bool {
 
 fn is_control_keyword(token: &Token) -> bool {
     matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+}
+
+/// The column astyle registers for a `,` at `comma` ending `line`: its second
+/// word, past a first word of at least three characters.
+fn second_word_column(line: &str, comma: usize) -> usize {
+    let name_char = |ch: char| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.');
+    if !line.starts_with(name_char) {
+        return 0;
+    }
+    let first_end = line.find(|ch: char| !name_char(ch)).unwrap_or(line.len());
+    let after = first_end + 1;
+    if after >= comma || after < 4 {
+        return 0;
+    }
+    match line[after..].find(|ch: char| !matches!(ch, ' ' | '\t')) {
+        Some(offset) if after + offset < comma => after + offset,
+        _ => 0,
+    }
 }
