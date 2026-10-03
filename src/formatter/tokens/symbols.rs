@@ -273,7 +273,11 @@ impl FormatEngine<'_> {
         let current_word = trailing_word(&self.current).to_string();
         let opens_header_paren = self.layout.previous == PreviousToken::Word
             && current_word != "case"
-            && is_header(self.options, &current_word);
+            && is_header(self.options, &current_word)
+            // A `foreach` taken for no header names a function.
+            && !(matches!(current_word.as_str(), "foreach" | "Q_FOREACH")
+                && self.layout.command_state.current_header.as_deref()
+                    != Some(current_word.as_str()));
         if opens_header_paren
             && self.token_input.token_begins_source_line
             && !self.current.trim().is_empty()

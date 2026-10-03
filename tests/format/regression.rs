@@ -4590,3 +4590,69 @@ fn unpad_paren_removes_the_space_after_a_bracket() {
     check(input, &["--unpad-paren"], expected);
     check(expected, &["--unpad-paren"], expected);
 }
+
+#[test]
+fn function_named_foreach_is_no_header() {
+    let input = "static int foreach (lua_State *L) {\n  x();\n  return 0;\n}\n";
+    let expected = "static int foreach (lua_State *L)\n{\n    x();\n    return 0;\n}\n";
+    check(
+        input,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+}

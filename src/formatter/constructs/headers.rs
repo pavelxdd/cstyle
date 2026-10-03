@@ -17,7 +17,7 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{
-    is_identifier_continue, is_identifier_start, is_word_char, leading_identifier,
+    is_identifier_continue, is_identifier_start, is_word_char, leading_identifier, trailing_word,
 };
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -1397,6 +1397,17 @@ impl FormatEngine<'_> {
             ) || matches!(next, Some(Token::Word(word)) if word == "constexpr");
         }
         if word == "else" && matches!(next, Some(Token::Symbol(','))) {
+            return false;
+        }
+        // After the type of a declaration a `foreach` names a function.
+        if matches!(word, "foreach" | "Q_FOREACH")
+            && current
+                .trim_start()
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch == '_' || ch == '*' || ch.is_alphanumeric())
+            && !matches!(trailing_word(current), "else" | "do")
+        {
             return false;
         }
         if matches!(word, "for" | "while" | "switch") {

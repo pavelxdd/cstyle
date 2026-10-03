@@ -245,10 +245,11 @@ fn function_head(
     let Token::Word(name_word) = &tokens[name] else {
         return None;
     };
+    // C knows no `foreach`, so a function may take the name.
     if name_word != "operator"
         && (is_non_type_keyword(name_word)
             || is_builtin_type_word(name_word)
-            || is_header(name_word)
+            || is_header(name_word) && !matches!(name_word.as_str(), "foreach" | "Q_FOREACH")
             || is_attribute_word(name_word))
     {
         return None;
