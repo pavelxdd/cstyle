@@ -840,7 +840,29 @@ impl FormatEngine<'_> {
         match self.token_input.next_input_whitespace.clone() {
             Some(ws) if !ws.is_empty() => {
                 self.trim_current_end();
-                if self
+                let target = self
+                    .layout
+                    .line_state
+                    .trailing_comment_columns
+                    .first()
+                    .copied()
+                    .filter(|_| ws.chars().all(|ch| ch == ' '));
+                // Code joined or padded before the brace moves the comment no
+                // further right than its source column, as astyle keeps its
+                // column.
+                let column_gap = |current: &str, target: usize| {
+                    let code_len = current.trim().chars().count();
+                    let shift = (code_len + ws.len()).saturating_sub(target);
+                    ws.len().saturating_sub(shift).max(1)
+                };
+                // The space joining a closing brace to its header counts as no
+                // padding.
+                if let Some(target) = target
+                    && !self.current.trim_start().starts_with('}')
+                {
+                    let gap = column_gap(&self.current, target);
+                    self.current.push_str(&" ".repeat(gap));
+                } else if self
                     .token_input
                     .previous_input_whitespace
                     .as_deref()
@@ -852,17 +874,9 @@ impl FormatEngine<'_> {
                     let absorbed = usize::from(!self.closing_brace_broken_off_source_line());
                     let keep = ws.len().saturating_sub(absorbed).max(1);
                     self.current.push_str(&ws[..keep]);
-                } else if let Some(&target) =
-                    self.layout.line_state.trailing_comment_columns.first()
-                    && ws.chars().all(|ch| ch == ' ')
-                {
-                    // Code joined before the brace moves the comment no
-                    // further right than its source column, as astyle keeps
-                    // its column.
-                    let code_len = self.current.trim().chars().count();
-                    let shift = (code_len + ws.len()).saturating_sub(target);
-                    self.current
-                        .push_str(&" ".repeat(ws.len().saturating_sub(shift).max(1)));
+                } else if let Some(target) = target {
+                    let gap = column_gap(&self.current, target);
+                    self.current.push_str(&" ".repeat(gap));
                 } else {
                     self.current.push_str(&ws);
                 }

@@ -4484,3 +4484,85 @@ fn padded_initializer_row_shrinks_its_comment_gap() {
     check(input, &["--pad-oper"], expected);
     check(expected, &["--pad-oper"], expected);
 }
+
+#[test]
+fn added_brace_after_unpadded_header_takes_one_space() {
+    let input = "void f()\n{\n    if( a & B  ) z = 1;\n    if( a  ) z = 1;\n    if( a) z = 1;\n}\n";
+    let expected = "void f()\n{\n    if (a & B) {\n        z = 1;\n    }\n    if (a) {\n        z = 1;\n    }\n    if (a) {\n        z = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--add-braces", "--unpad-paren", "--pad-header"],
+        expected,
+    );
+    check(
+        expected,
+        &["--add-braces", "--unpad-paren", "--pad-header"],
+        expected,
+    );
+}
+
+#[test]
+fn padded_header_moves_a_brace_comment_back_to_its_column() {
+    let input = "void f()\n{\n    if( pTerm->eOperator & WO_EQUIV  ) zType[1] = 1;\n  if( iDepth>1 ){   /*OPTIMIZATION-IF-TRUE*/\n    x();\n  }\n  if( p==0 ){     /*OPTIMIZATION-IF-FALSE*/\n    x();\n  }\n}\n";
+    let expected = "void f()\n{\n    if (pTerm->eOperator & WO_EQUIV) {\n        zType[1] = 1;\n    }\n    if (iDepth > 1) { /*OPTIMIZATION-IF-TRUE*/\n        x();\n    }\n    if (p == 0) {   /*OPTIMIZATION-IF-FALSE*/\n        x();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+}

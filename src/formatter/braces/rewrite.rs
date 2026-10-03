@@ -217,6 +217,9 @@ impl FormatEngine<'_> {
         } else {
             self.token_input.token_begins_source_line = false;
             self.layout.line_state.is_one_line_block = true;
+            // The added brace follows its header by one space, whatever the
+            // source held before the header's `)`.
+            self.token_input.previous_input_whitespace = Some(" ".to_string());
             self.push_open_brace(None, usize::MAX, false);
             self.push_replayed_statement(
                 tokens,
