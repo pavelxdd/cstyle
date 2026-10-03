@@ -4469,3 +4469,10 @@ fn comment_led_statement_in_a_default_block_takes_the_block_column() {
     check(input, &["--indent-switches"], expected);
     check(expected, &["--indent-switches"], expected);
 }
+
+#[test]
+fn unpadding_keeps_an_attached_trailing_comment_at_its_column() {
+    let input = "void f()\n{\n    if (a) {\n        assert( (pPg->flags & PGHDR_DIRTY)==0 );/* Cannot be both CLEAN and DIRTY */\n        assert( pageNotOnDirtyList(pCache, pPg) );/* CLEAN pages not on dirtylist */\n    }\n}\n";
+    let expected = "void f()\n{\n    if(a) {\n        assert((pPg->flags & PGHDR_DIRTY) == 0);/* Cannot be both CLEAN and DIRTY */\n        assert(pageNotOnDirtyList(pCache, pPg));  /* CLEAN pages not on dirtylist */\n    }\n}\n";
+    check(input, &["--pad-oper", "--unpad-paren"], expected);
+}

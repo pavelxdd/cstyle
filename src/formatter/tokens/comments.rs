@@ -2926,8 +2926,18 @@ impl FormatEngine<'_> {
         // A block comment set against the code stays there unless padding
         // moved the code into its column, when astyle parts them.
         if kind == CommentKind::Block && gap.is_empty() {
+            let ends_line = !self.token_input.has_next_meaningful_token
+                || self
+                    .token_input
+                    .next_input_whitespace
+                    .as_deref()
+                    .is_some_and(|whitespace| whitespace.contains('\n'));
             if code_len > target_column {
                 self.ensure_space();
+            } else if ends_line {
+                // Code unpadding shortened keeps a trailing comment at its
+                // column.
+                self.current.push_str(&" ".repeat(target_column - code_len));
             }
             return;
         }
