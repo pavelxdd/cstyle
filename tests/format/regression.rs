@@ -4656,3 +4656,69 @@ fn function_named_foreach_is_no_header() {
         expected,
     );
 }
+
+#[test]
+fn attached_return_types_join_pointer_runs_and_split_past_the_width() {
+    let input = "const jim_subcmd_type *\nJim_ParseSubCmd(Jim_Interp *interp, const jim_subcmd_type *command_table, int argc, Jim_Obj *const *argv);\nint\nshort_one(int a);\nchar **\nngx_set_environment(ngx_cycle_t *cycle, ngx_uint_t *last)\n{\n    return 0;\n}\n";
+    let expected = "const jim_subcmd_type *Jim_ParseSubCmd(Jim_Interp *interp, const jim_subcmd_type *command_table, int argc,\n                                       Jim_Obj *const *argv);\nint short_one(int a);\nchar **ngx_set_environment(ngx_cycle_t *cycle, ngx_uint_t *last)\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=1tbs",
+            "--mode=c",
+            "--lineend=linux",
+            "--convert-tabs",
+            "--indent=spaces=4",
+            "--indent-switches",
+            "--indent-preprocessor",
+            "--indent-preproc-define",
+            "--indent-col1-comments",
+            "--add-braces",
+            "--pad-oper",
+            "--pad-comma",
+            "--pad-header",
+            "--unpad-paren",
+            "--break-one-line-headers",
+            "--break-after-logical",
+            "--align-pointer=name",
+            "--align-reference=name",
+            "--attach-closing-while",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+            "--min-conditional-indent=0",
+            "--max-continuation-indent=80",
+            "--max-code-length=109",
+        ],
+        expected,
+    );
+}

@@ -1,4 +1,5 @@
 use crate::formatter::constructs::headers::is_header;
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
@@ -301,8 +302,17 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| {
                     // astyle sees only the line before the name, wherever
                     // the head starts.
+                    // A pointer run such as `**` may record only its first
+                    // star as the line's last token.
                     previous.first >= head.start
-                        && self.tree.previous_code_token(head.name_start) == Some(previous.last)
+                        && self.tree.previous_code_token(head.name_start).is_some_and(
+                            |before_name| {
+                                before_name >= previous.last
+                                    && !self.tree.tokens[previous.last..=before_name]
+                                        .iter()
+                                        .any(|token| matches!(token, Token::Newline))
+                            },
+                        )
                 });
         let previous = &self.output[previous_index];
         // AStyle attaches only return types it recognizes as types, and never
@@ -350,10 +360,21 @@ impl FormatEngine<'_> {
             start_column,
             previous_indent,
         );
-        self.adjust_and_publish_line(format!(
-            "{previous_prefix}{previous_trimmed}{separator}{}",
-            line.trim_start()
-        ));
+        // The joined head may outgrow the maximum code length.
+        let joined = format!("{previous_trimmed}{separator}{}", line.trim_start());
+        if self.options.max_code_length.is_some() && previous_prefix.chars().all(|ch| ch == ' ') {
+            let level = previous_indent / self.options.indent_width.max(1);
+            self.push_formatted_line_with_indent(
+                &joined,
+                level,
+                ContinuationIndent::Spaces(previous_indent),
+                ContinuationIndent::Spaces(
+                    previous_indent + self.options.continuation_indent * self.options.indent_width,
+                ),
+            );
+        } else {
+            self.adjust_and_publish_line(format!("{previous_prefix}{joined}"));
+        }
         true
     }
 

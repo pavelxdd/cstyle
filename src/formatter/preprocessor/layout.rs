@@ -930,9 +930,9 @@ impl FormatEngine<'_> {
         for (checked, index) in (0..self.output.len()).rev().enumerate() {
             let code = self.output.code(index);
             let trimmed = self.output.code_trimmed(index);
-            if self.output.lead_width(index, self.options.tab_width) == 0
-                && code.ends_with('{')
+            if code.ends_with('{')
                 && !trimmed.starts_with('#')
+                && !self.output[index].starts_with([' ', '\t'])
             {
                 break;
             }
