@@ -361,6 +361,12 @@ impl FormatEngine<'_> {
         } else if outside_pad {
             self.pad_before_open_paren_space();
         } else if self.options.unpad_parens
+            && self.current.ends_with([' ', '\t'])
+            && self.current.trim_end().ends_with('[')
+        {
+            // Unpadding takes the space out from after a bracket.
+            self.trim_current_end();
+        } else if self.options.unpad_parens
             && matches!(
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma

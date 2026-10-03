@@ -4582,3 +4582,11 @@ fn comment_after_a_guarded_macro_with_an_if_stays_at_column_one() {
         expected,
     );
 }
+
+#[test]
+fn unpad_paren_removes_the_space_after_a_bracket() {
+    let input = "void f()\n{\n    x = a[ (b) ];\n    x = a[ b ];\n    x = f( (b) );\n    x = - (b);\n    x = ! (b);\n    x = a , (b);\n    x = a [ (b) ];\n}\n";
+    let expected = "void f()\n{\n    x = a[(b) ];\n    x = a[ b ];\n    x = f((b));\n    x = - (b);\n    x = !(b);\n    x = a, (b);\n    x = a [(b) ];\n}\n";
+    check(input, &["--unpad-paren"], expected);
+    check(expected, &["--unpad-paren"], expected);
+}
