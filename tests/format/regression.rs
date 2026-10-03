@@ -3988,3 +3988,18 @@ fn deref_statement_is_no_comment_row_before_an_else() {
     check(input, &["--style=1tbs"], expected);
     check(expected, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn comment_against_an_opening_brace_stays_against_it() {
+    let input = "void f(void)\n{\n    if (a) {/* c1 */\n        x();\n    } else {/* c2 */\n        y();\n    }\n    if (b) {// c3\n        x();\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {/* c1 */\n        x();\n    } else {/* c2 */\n        y();\n    }\n    if (b) {// c3\n        x();\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn added_brace_takes_two_columns_from_a_tab_gap() {
+    let input = "void f(void)\n{\n\tif (a)\n\t\tx();\n\telse if (!len)\t\t/* c */\n\t\tgoto out;\n\tif (!len) \t/* d */\n\t\tgoto out;\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        x();\n    } else if (!len) {\t/* c */\n        goto out;\n    }\n    if (!len) {\t/* d */\n        goto out;\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+}

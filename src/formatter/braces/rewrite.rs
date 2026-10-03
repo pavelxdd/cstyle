@@ -1903,12 +1903,18 @@ pub(crate) fn add_cross_line_statement_braces(
                 Some(comment) => {
                     insert_before[header_end + 1].push(Token::Whitespace(" ".to_owned()));
                     insert_before[header_end + 1].push(Token::Symbol('{'));
+                    // The brace takes its two columns out of the start of the
+                    // gap, a tab freeing both.
                     if comment == header_end + 2
                         && let Token::Whitespace(gap) = &tokens[header_end + 1]
-                        && !gap.contains('\t')
                     {
-                        let kept = gap.len().saturating_sub(2).max(1);
-                        replace[header_end + 1] = Some(Token::Whitespace(" ".repeat(kept)));
+                        let mut kept = gap.as_str();
+                        let mut freed = 0;
+                        while freed < 2 && kept.len() > 1 {
+                            freed += if kept.starts_with('\t') { 2 } else { 1 };
+                            kept = &kept[1..];
+                        }
+                        replace[header_end + 1] = Some(Token::Whitespace(kept.to_owned()));
                     } else if comment == header_end + 1 {
                         insert_before[comment].push(Token::Whitespace(" ".to_owned()));
                     }

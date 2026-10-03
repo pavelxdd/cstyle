@@ -846,7 +846,8 @@ impl FormatEngine<'_> {
                     self.current.push_str(&ws);
                 }
             }
-            _ => self.ensure_space(),
+            // A comment written against its brace stays there.
+            _ => {}
         }
         self.current.push_str(comment.trim_end());
         self.comments.skip_next_attached_comment = true;
