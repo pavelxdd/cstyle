@@ -5639,3 +5639,33 @@ fn a_line_splice_after_a_closing_brace_stays_on_its_line() {
         "void f()\n{\n    if (a) {\n        b();\n    } else {\n        c();\n    }      \\\n}\n",
     );
 }
+
+#[test]
+fn a_type_header_ended_by_a_comment_takes_its_attached_brace_kr() {
+    let input = "struct a\n{\n    int x;\n};\nstruct d /* c */\n{\n    int x;\n} v;\nunion u // c\n{\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "struct a {\n    int x;\n};\nstruct d { /* c */\n    int x;\n} v;\nunion u { // c\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n",
+    );
+}
+
+#[test]
+fn a_type_header_ended_by_a_comment_takes_its_attached_brace_java() {
+    let input = "struct a\n{\n    int x;\n};\nstruct d /* c */\n{\n    int x;\n} v;\nunion u // c\n{\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n";
+    check(
+        input,
+        &["--style=java"],
+        "struct a {\n    int x;\n};\nstruct d { /* c */\n    int x;\n} v;\nunion u { // c\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C { /* c */\n    int x;\n};\n",
+    );
+}
+
+#[test]
+fn a_type_header_ended_by_a_comment_takes_its_attached_brace_mozilla() {
+    let input = "struct a\n{\n    int x;\n};\nstruct d /* c */\n{\n    int x;\n} v;\nunion u // c\n{\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n";
+    check(
+        input,
+        &["--style=mozilla"],
+        "struct a\n{\n    int x;\n};\nstruct d /* c */\n{\n    int x;\n} v;\nunion u { // c\n    int x;\n};\nenum e /* c */\n{\n    A\n};\nclass C /* c */\n{\n    int x;\n};\n",
+    );
+}

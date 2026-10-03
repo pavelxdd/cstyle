@@ -2886,6 +2886,25 @@ impl FormatEngine<'_> {
     }
 
     fn should_attach_output_header_brace(&self, brace_type: BraceType) -> bool {
+        // A type header that a comment ends takes the brace its style
+        // attaches before the comment.
+        if matches!(
+            brace_type,
+            BraceType::Struct | BraceType::Union | BraceType::Class | BraceType::Interface
+        ) && !self.preprocessor.last_output_was_preprocessor
+            && self.current_is_blank()
+            && self.output.last().is_some_and(|last| {
+                let comment_start =
+                    line_comment_split_limit(last).min(trailing_comment_split_limit(last));
+                let code = last[..comment_start].trim();
+                comment_start < last.len()
+                    && !code.is_empty()
+                    && !code.starts_with('#')
+                    && !code.ends_with([';', '{', '}', ','])
+            })
+        {
+            return self.style_attaches_opening_brace(brace_type, None);
+        }
         if !matches!(
             brace_type,
             BraceType::Command | BraceType::Definition | BraceType::NonStatement
@@ -2965,9 +2984,10 @@ impl FormatEngine<'_> {
     }
 
     fn should_attach_opening_brace(&self, brace_type: BraceType, next: Option<&Token>) -> bool {
-        if self.current_is_blank() {
-            return false;
-        }
+        !self.current_is_blank() && self.style_attaches_opening_brace(brace_type, next)
+    }
+
+    fn style_attaches_opening_brace(&self, brace_type: BraceType, next: Option<&Token>) -> bool {
         if self.options.break_one_line_blocks
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && brace_type != BraceType::Command
