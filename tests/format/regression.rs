@@ -5051,3 +5051,13 @@ fn adding_braces_leaves_a_body_after_a_directive_braceless_and_indented() {
         "void f(void)\n{\n#ifndef X\n    if(a) {\n        b();\n    } else\n#else\n    (void)c;\n#endif\n\n        d = 1;\n\n    e();\n}\n",
     );
 }
+
+#[test]
+fn a_logical_and_before_a_trailing_comment_gives_the_padding_back_under_pointer_alignment() {
+    let input = "void f(void)\n{\n    while(!a &&      /* c1 */\n          d) {\n        g();\n    }\n    while(a &&      /* c1 */\n          d) {\n        g();\n    }\n    while(a ||      /* c1 */\n          d) {\n        g();\n    }\n    while(a)      /* c1 */\n        g();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-header", "--align-pointer=name"],
+        "void f(void)\n{\n    while (!a &&     /* c1 */\n            d) {\n        g();\n    }\n    while (a &&     /* c1 */\n            d) {\n        g();\n    }\n    while (a ||     /* c1 */\n            d) {\n        g();\n    }\n    while (a)     /* c1 */\n        g();\n}\n",
+    );
+}

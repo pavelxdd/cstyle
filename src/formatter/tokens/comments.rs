@@ -2816,7 +2816,8 @@ impl FormatEngine<'_> {
             && matches!(
                 self.current.trim_end().chars().next_back(),
                 Some('*' | '&' | '^')
-            );
+            )
+            && !self.current.trim_end().ends_with("&&");
         let formatter_gap = had_formatter_space.then(|| {
             let start = self.current.trim_end_matches([' ', '\t']).len();
             self.current[start..].to_string()
