@@ -243,6 +243,25 @@ impl FormatEngine<'_> {
     fn has_movable_return_type(&self, head: &FunctionHead) -> bool {
         head.has_return_type()
             && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
+            && !self.inside_extern_block(head.start)
+    }
+
+    /// Whether `index` is in the block of an `extern "C"`, where astyle
+    /// leaves return types alone.
+    fn inside_extern_block(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree.groups.enclosing(index).is_some_and(|group| {
+            let open = self.tree.groups.get(group).open;
+            matches!(tokens[open], Token::Symbol('{'))
+                && self
+                    .tree
+                    .previous_code_token(open)
+                    .filter(|&literal| matches!(tokens[literal], Token::StringLiteral(_)))
+                    .and_then(|literal| self.tree.previous_code_token(literal))
+                    .is_some_and(
+                        |keyword| matches!(&tokens[keyword], Token::Word(word) if word == "extern"),
+                    )
+        })
     }
 
     /// Whether `head` starts a statement the way AStyle sees it: after `;`,

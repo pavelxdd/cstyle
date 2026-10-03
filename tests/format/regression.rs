@@ -5808,3 +5808,23 @@ fn a_closing_brace_row_in_a_define_takes_its_level_without_conditional_indent() 
         "#define F \\\n    int a;     \\\n    union {    \\\n        void* r; \\\n        int w;   \\\n    };\n\nint x;\n",
     );
 }
+
+#[test]
+fn a_declaration_in_a_conditional_extern_c_block_keeps_its_return_type() {
+    let input = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\nint f(int a);\nvoid g(void);\n\n#ifdef __cplusplus\n}\n#endif\n";
+    check(
+        input,
+        &["--break-return-type-decl"],
+        "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\nint f(int a);\nvoid g(void);\n\n#ifdef __cplusplus\n}\n#endif\n",
+    );
+}
+
+#[test]
+fn functions_in_an_extern_c_block_keep_their_return_types() {
+    let input = "extern \"C\" {\nint f(int a)\n{\n    return 0;\n}\nint\ng(void);\n}\nnamespace n {\nint h(int a);\n}\n";
+    check(
+        input,
+        &["--break-return-type", "--attach-return-type-decl"],
+        "extern \"C\" {\n    int f(int a)\n    {\n        return 0;\n    }\n    int\n    g(void);\n}\nnamespace n {\nint h(int a);\n}\n",
+    );
+}
