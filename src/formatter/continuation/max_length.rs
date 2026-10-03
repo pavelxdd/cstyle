@@ -600,17 +600,8 @@ fn continuation_indent_for_split(
     let all_openers_over_max = !open_columns.is_empty()
         && open_columns
             .iter()
-            .all(|column| *column + 1 >= max_continuation_indent);
-    let assignment_member_call = top_level_assignment_index(line).is_some_and(|assignment| {
-        open_columns.last().is_some_and(|open| {
-            // A paren before the assignment, as of a declarator, opens no call.
-            line.get(assignment + 1..*open)
-                .is_some_and(|call_head| call_head.contains('.') || call_head.contains("->"))
-        })
-    });
-    if (all_openers_over_max || assignment_member_call)
-        && let Some(spaces) = assignment_value_indent(line, base_indent_width)
-    {
+            .all(|column| *column >= max_continuation_indent);
+    if all_openers_over_max && let Some(spaces) = assignment_value_indent(line, base_indent_width) {
         let call_body_extra =
             usize::from(head.trim_end().ends_with('(')) * configured_continuation_spaces;
         let target = spaces + call_body_extra;
@@ -637,7 +628,7 @@ fn continuation_indent_for_split(
         let columns = unmatched_open_paren_columns(head);
         let previous = match columns.len().checked_sub(2).map(|outer| columns[outer]) {
             Some(outer) => {
-                let registered = if outer + 1 < max_continuation_indent {
+                let registered = if outer < max_continuation_indent {
                     base_indent_width + outer + 1
                 } else {
                     base_indent_width + indent_width * 2
@@ -788,7 +779,7 @@ fn paren_continuation_indent(
     columns
         .into_iter()
         .rev()
-        .find(|column| *column + 1 < max_continuation_indent)
+        .find(|column| *column < max_continuation_indent)
         .map(|column| ContinuationIndent::Spaces(base_indent_width + column + 1))
         .or(Some(ContinuationIndent::Spaces(
             base_indent_width + indent_width * 2,

@@ -4738,3 +4738,11 @@ fn max_code_length_takes_a_late_paren_over_a_pointer_declarator() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_aligns_a_member_call_argument_to_its_paren() {
+    let input = "void f()\n{\n    if (a) {\n        n = c->recv(c, s->buffer->last, s->buffer->end - s->buffer->last);\n    }\n}\nstatic size_t reqresAppendEncodedBuffer(client *c, char *buf, size_t len)\n{\n}\n";
+    let expected = "void f()\n{\n    if (a) {\n        n = c->recv(c, s->buffer->last,\n                    s->buffer->end - s->buffer->last);\n    }\n}\nstatic size_t reqresAppendEncodedBuffer(client *c,\n                                        char *buf, size_t len)\n{\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
