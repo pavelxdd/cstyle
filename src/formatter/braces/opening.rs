@@ -807,6 +807,24 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// Whether a `}` earlier on the source line of the brace being placed
+    /// was broken onto a line of its own.
+    fn closing_brace_broken_off_source_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(open) = self.current.active_token() else {
+            return false;
+        };
+        let line_start = tokens[..open]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        tokens[line_start..open]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            && !self.current.trim_start().starts_with('}')
+    }
+
     fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
         if comment.trim_start().starts_with("//")
             && self.current.trim() == "{"
@@ -829,7 +847,10 @@ impl FormatEngine<'_> {
                     .is_none_or(str::is_empty)
                     && ws.chars().all(|ch| ch == ' ')
                 {
-                    let keep = ws.len().saturating_sub(1).max(1);
+                    // The space before the brace comes out of the gap, unless
+                    // the line lost a `}` broken off before it.
+                    let absorbed = usize::from(!self.closing_brace_broken_off_source_line());
+                    let keep = ws.len().saturating_sub(absorbed).max(1);
                     self.current.push_str(&ws[..keep]);
                 } else if let Some(&target) =
                     self.layout.line_state.trailing_comment_columns.first()

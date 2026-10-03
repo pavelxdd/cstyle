@@ -4048,3 +4048,21 @@ fn struct_head_split_over_lines_still_opens_a_struct() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn comment_gap_after_a_brace_follows_the_closing_brace_placement() {
+    let input = "void f(void)\n{\n  if( a ){       /* c */\n    y();\n  }\n  if( a )   {       /* d */\n    y();\n  }\n  if(a){   /* e */\n    y();\n  }else{     /* f */\n    z();\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=stroustrup",
+            "void f(void)\n{\n    if( a ) {      /* c */\n        y();\n    }\n    if( a )   {       /* d */\n        y();\n    }\n    if(a) {  /* e */\n        y();\n    }\n    else {     /* f */\n        z();\n    }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f(void)\n{\n    if( a ) {      /* c */\n        y();\n    }\n    if( a )   {       /* d */\n        y();\n    }\n    if(a) {  /* e */\n        y();\n    } else {    /* f */\n        z();\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
