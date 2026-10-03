@@ -4900,3 +4900,14 @@ fn deleting_empty_lines_keeps_breaking_a_header_off_a_one_line_comment() {
         expected,
     );
 }
+
+#[test]
+fn deleting_empty_lines_keeps_those_around_comments_before_a_broken_block() {
+    let input = "int f(void)\n{\n    int i;\n\n    /*\n     * long\n     */\n\n    if (n < 3)\n        return 0;\n    acceptfail = 0;\n\n    /* if a command\n       starts */\n\n    if (cmd[0] == 1) {\n        x = 1;\n    }\n}\n";
+    let expected = "int f(void)\n{\n    int i;\n\n    /*\n     * long\n     */\n\n    if (n < 3)\n        return 0;\n\n    acceptfail = 0;\n\n    /* if a command\n       starts */\n\n    if (cmd[0] == 1) {\n        x = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--delete-empty-lines"],
+        expected,
+    );
+}

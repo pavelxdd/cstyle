@@ -102,6 +102,11 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks || !self.current.trim().is_empty() {
             return false;
         }
+        // Only the last of a run of empty lines stays.
+        let follows_empty_line = self
+            .output
+            .last()
+            .is_some_and(|line| line.trim().is_empty());
         if self.previous_block_spacing_line_is_comment_only()
             && following_index
                 .filter(|index| matches!(tokens.get(*index), Some(Token::Comment(_, _))))
@@ -114,19 +119,30 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        // Deleting the empty line after a one-line comment loses the
-        // comment's hold on the header after it, which astyle then breaks
-        // away from it again.
-        self.layout
-            .previous_pre_adjust_line
-            .as_deref()
-            .is_some_and(|line| {
-                let trimmed = line.trim();
-                trimmed.starts_with("//")
-                    || trimmed.starts_with("/*")
-                        && trimmed.ends_with("*/")
-                        && trimmed.find("*/") == Some(trimmed.len() - 2)
-            })
+        // astyle keeps an empty line before comments that lead to a header,
+        // unless a block opens right before.
+        if !follows_empty_line
+            && self.options.delete_empty_lines
+            && self.last_code_line_opens_no_block()
+            && following_index
+                .filter(|index| matches!(tokens.get(*index), Some(Token::Comment(_, _))))
+                .and_then(|index| {
+                    tokens[index..].iter().find_map(|token| match token {
+                        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => None,
+                        Token::Word(word) => Some(Some(word)),
+                        _ => Some(None),
+                    })
+                })
+                .flatten()
+                .is_some_and(|word| is_break_blocks_opening_header(self.options, word))
+        {
+            return true;
+        }
+        // Deleting the empty line after a comment loses the comment's hold
+        // on the header after it, which astyle then breaks away from it
+        // again.
+        !follows_empty_line
+            && self.previous_block_spacing_line_is_comment_only()
             && following_index
                 .and_then(|index| match tokens.get(index) {
                     Some(Token::Word(word)) => Some(word),
