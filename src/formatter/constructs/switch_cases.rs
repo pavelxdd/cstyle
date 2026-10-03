@@ -1702,13 +1702,21 @@ impl FormatEngine<'_> {
         }
 
         let mut target = None;
-        if !self
+        // Only the brace of a `} else {` line closes to that line.
+        let closes_else_block = self
             .output
-            .last_line_outside_comment()
-            .is_some_and(|previous| {
-                let trimmed = previous.trim();
-                trimmed.starts_with('#') || matches!(trimmed, "}" | "};" | "break;")
-            })
+            .current_closing_brace_open(self.options.tab_width)
+            .is_some_and(|(_, _, open_trimmed)| {
+                open_trimmed.starts_with("} else") || open_trimmed.starts_with("}else")
+            });
+        if closes_else_block
+            && !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let trimmed = previous.trim();
+                    trimmed.starts_with('#') || matches!(trimmed, "}" | "};" | "break;")
+                })
             && let Some(open_spaces) = self.recent_same_line_else_open_indent_spaces()
         {
             target = Some(open_spaces + case_unindent_depth * self.options.indent_width);

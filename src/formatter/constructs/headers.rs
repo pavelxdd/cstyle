@@ -4,7 +4,7 @@ use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, tokenize};
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, HeaderFrame};
 use crate::formatter::state::indentation::LineKind;
@@ -75,23 +75,14 @@ pub(crate) fn line_is_control_body_header(line: &str) -> bool {
 
 pub(crate) fn same_line_nested_header_extra(line: &str) -> usize {
     let code = line.trim_end().trim_end_matches('{').trim_end();
-    let mut count = 0usize;
-    let mut index = 0;
-    while index < code.len() {
-        let rest = &code[index..];
-        let Some(offset) = rest.find(is_identifier_start) else {
-            break;
-        };
-        index += offset;
-        let word_end = code[index..]
-            .find(|ch: char| !is_identifier_continue(ch))
-            .unwrap_or(code.len() - index);
-        let word = &code[index..index + word_end];
-        if matches!(word, "if" | "for" | "while" | "switch" | "do") {
-            count += 1;
-        }
-        index += word.len();
-    }
+    // Words in literals and comments are no headers.
+    let mut count = tokenize(code)
+        .iter()
+        .filter(|token| {
+            matches!(token, Token::Word(word)
+                if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "do"))
+        })
+        .count();
     if code.starts_with("else while")
         || code.starts_with("else for")
         || code.starts_with("else do")
