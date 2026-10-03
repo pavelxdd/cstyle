@@ -97,6 +97,9 @@ impl FormatEngine<'_> {
                     .set_pending_tokens(Some(TokenSpan { first, last }));
             }
         }
+        if self.take_block_spacing_blank(trimmed) {
+            self.push_empty_line();
+        }
         if let Some(spaces) = exact_indent_spaces {
             self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), spaces);
         } else {

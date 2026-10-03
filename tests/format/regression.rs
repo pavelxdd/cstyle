@@ -4975,3 +4975,10 @@ fn deleting_empty_lines_keeps_one_before_an_attached_closing_header_after_a_comm
         expected,
     );
 }
+
+#[test]
+fn breaking_blocks_separates_a_statement_macro_block_after_a_braceless_body() {
+    let input = "void f(void)\n{\n    if (s_new == NULL)\n        cs_new = g(s);\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\nvoid g(void)\n{\n    if (s_new == NULL &&\n            (d == 1 || d == 2))\n        cs_new = g(s);\n\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if (s_new == NULL)\n        cs_new = g(s);\n\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\nvoid g(void)\n{\n    if (s_new == NULL &&\n            (d == 1 || d == 2))\n        cs_new = g(s);\n\n    TAILQ_FOREACH(c, &clients, entry)\n    {\n        x = 1;\n    }\n}\n";
+    check(input, &["--style=allman", "--break-blocks"], expected);
+}
