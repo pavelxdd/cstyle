@@ -5001,3 +5001,23 @@ fn the_word_new_in_a_string_continues_no_new_expression() {
     let expected = "static struct option opts[] = {\n    OPT_BOOL(0, \"a\", &b,\n        N_(\"don't checkout new files\")),\n    OPT_BOOL(0, \"c\", &d,\n        N_(\"update stat\")),\n};\nvoid f(void)\n{\n    g(a,\n        N_(\"don't checkout\")),\n        h(b,\n            c);\n}\n";
     check(input, &["--style=linux", "--indent-after-parens"], expected);
 }
+
+#[test]
+fn a_case_label_after_the_closing_brace_of_the_case_before_keeps_its_column() {
+    let input = "void f(int i)\n{\n  switch (i)\n    {\n    case 2:\n      {\n        x = 1;\n        break;\n      } case 3:\n      {\n        y = 2;\n        break;\n      }\n    }\n  z = 3;\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--keep-one-line-statements"],
+        "void f(int i)\n{\n    switch (i)\n        {\n        case 2:\n        {\n            x = 1;\n            break;\n        } case 3:\n        {\n            y = 2;\n            break;\n        }\n        }\n    z = 3;\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f(int i)\n{\n    switch (i) {\n    case 2: {\n        x = 1;\n        break;\n    } case 3: {\n        y = 2;\n        break;\n    }\n    }\n    z = 3;\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        "void f(int i)\n    {\n    switch (i)\n        {\n        case 2:\n            {\n            x = 1;\n            break;\n            } case 3:\n            {\n            y = 2;\n            break;\n            }\n        }\n    z = 3;\n    }\n",
+    );
+}

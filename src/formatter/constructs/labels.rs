@@ -553,8 +553,7 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
     let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trim_end();
     trimmed.ends_with(':')
         && !is_scope_resolution_prefix(trimmed)
-        && !trimmed.starts_with(':')
-        && !trimmed.starts_with("::")
+        && !trimmed.starts_with([':', '}'])
         && !trimmed.contains('?')
         && !is_operator_expression(before_colon)
         && unmatched_open_paren_column(before_colon).is_none()

@@ -47,6 +47,13 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
         .last()
 }
 
+/// Whether `prefix`, the text before a label, is the brace closing the case
+/// before.
+fn brace_led(prefix: &str) -> bool {
+    let prefix = prefix.trim();
+    !prefix.is_empty() && prefix.chars().all(|ch| ch == '}')
+}
+
 fn leading_case_label_count(line: &str) -> usize {
     let mut rest = line;
     let mut count = 0;
@@ -299,12 +306,34 @@ impl FormatEngine<'_> {
                         self.current_line_indent_spaces()
                             .saturating_sub(owner_depth * self.options.indent_width)
                     };
-                    base + visual_width_from(&self.current[..offset], base, self.options.tab_width)
+                    // A label after the brace closing the case before stands
+                    // at the line's own column.
+                    if brace_led(&self.current[..offset]) {
+                        base
+                    } else {
+                        base + visual_width_from(
+                            &self.current[..offset],
+                            base,
+                            self.options.tab_width,
+                        )
+                    }
                 })
                 .or_else(|| {
                     self.output.scoped().iter().rev().find_map(|line| {
                         case_label_token_offset(line, header).map(|offset| {
-                            visual_width_from(&line[..offset], 0, self.options.tab_width)
+                            if brace_led(&line[..offset]) {
+                                // Styles that indent braces put the closing one
+                                // a level past its label.
+                                let indented_braces = matches!(
+                                    self.options.brace_style,
+                                    BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+                                );
+                                leading_visual_width(line, self.options.tab_width).saturating_sub(
+                                    usize::from(indented_braces) * self.options.indent_width,
+                                )
+                            } else {
+                                visual_width_from(&line[..offset], 0, self.options.tab_width)
+                            }
                         })
                     })
                 })
