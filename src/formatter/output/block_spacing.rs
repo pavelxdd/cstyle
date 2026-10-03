@@ -15,6 +15,7 @@ pub(crate) struct BlockSpacingState {
     pending_semicolon: bool,
     pending_one_line_block: bool,
     closed_empty_block: bool,
+    pending_closed_empty_block: Option<bool>,
 }
 
 impl FormatEngine<'_> {
@@ -271,12 +272,21 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.block_spacing.pending_one_line_block) {
             self.block_spacing.append_blank = true;
         }
+        if let Some(empty) = self.block_spacing.pending_closed_empty_block.take() {
+            self.block_spacing.closed_empty_block = empty;
+        }
     }
 
-    pub(crate) fn observe_block_spacing_one_line_block(&mut self, brace_type: BraceType) {
+    pub(crate) fn observe_block_spacing_one_line_block(
+        &mut self,
+        brace_type: BraceType,
+        holds_no_code: bool,
+    ) {
         if !self.options.break_blocks {
             return;
         }
+        // A block of comments alone is as empty once its line ends.
+        self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
         self.block_spacing.pending_one_line_block = brace_type == BraceType::Command;
         self.clear_block_spacing_header();
     }

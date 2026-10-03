@@ -5131,3 +5131,23 @@ fn horstmann_runs_an_initializer_row_brace_into_its_block_comment() {
         "static const struct t tests[] = {\n    { \"a\", 1 },\n    {   /* query */\n        \"b\", 2\n    },\n    {   /* other */\n        \"c\", 3\n    },\n    { NULL, 0 }\n};\n",
     );
 }
+
+#[test]
+fn a_comment_only_one_line_block_adds_no_empty_line_before_its_closing_header() {
+    let input = "void f(void)\n{\n    for (;;) {\n        if (a) b();\n        else if (c) { /* x */ }\n        else break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks=all"],
+        "void f(void)\n{\n    for (;;) {\n        if (a) b();\n\n        else if (c) { /* x */ }\n        else break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_empty_one_line_block_adds_no_empty_line_before_its_closing_header() {
+    let input = "void f(void)\n{\n    for (;;) {\n        if (a) b();\n        else if (c) { }\n        else break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks=all"],
+        "void f(void)\n{\n    for (;;) {\n        if (a) b();\n\n        else if (c) { }\n        else break;\n    }\n}\n",
+    );
+}

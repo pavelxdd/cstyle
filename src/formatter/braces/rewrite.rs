@@ -1643,7 +1643,11 @@ impl FormatEngine<'_> {
         self.layout.nesting.last_closed_brace_type = Some(brace_type);
         self.layout.command_state.previous_command_char = Some('}');
         self.layout.command_state.previous_non_ws_char = Some('}');
-        self.observe_block_spacing_one_line_block(brace_type);
+        let holds_no_code = tokens.len() >= 2
+            && !tokens[1..tokens.len() - 1]
+                .iter()
+                .any(crate::formatter::structure::blocks::is_code_token);
+        self.observe_block_spacing_one_line_block(brace_type, holds_no_code);
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }
