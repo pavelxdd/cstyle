@@ -4722,3 +4722,11 @@ fn attached_return_types_join_pointer_runs_and_split_past_the_width() {
         expected,
     );
 }
+
+#[test]
+fn max_code_length_takes_the_last_comparison_or_ternary_split_that_fits() {
+    let input = "void f()\n{\n    hdr_record_value(config.latency_histogram, (long)c->latency <= CONFIG_LATENCY_HISTOGRAM_MAX_VALUE ? (long)c->latency : CONFIG_LATENCY_HISTOGRAM_MAX_VALUE);\n    x = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa <= bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ? cccccccccccccccccccccc : dddddddddddddddddddddd;\n}\n";
+    let expected = "void f()\n{\n    hdr_record_value(config.latency_histogram,\n                     (long)c->latency <= CONFIG_LATENCY_HISTOGRAM_MAX_VALUE ? (long)c->latency :\n                     CONFIG_LATENCY_HISTOGRAM_MAX_VALUE);\n    x = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa <= bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ? cccccccccccccccccccccc :\n        dddddddddddddddddddddd;\n}\n";
+    check(input, &["--max-code-length=100"], expected);
+    check(expected, &["--max-code-length=100"], expected);
+}

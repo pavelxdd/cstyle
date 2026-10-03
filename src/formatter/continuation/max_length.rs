@@ -1062,10 +1062,16 @@ fn split_result(line: &str, width: usize, prefer_logical_operator: bool) -> Opti
     let (mut structural, mut plain): (Vec<_>, Vec<_>) = candidates
         .into_iter()
         .partition(|(_, priority, _)| is_structural_split_class(*priority));
-    // astyle prefers a comma to a comparison or a compound assignment.
-    let rank = |priority: usize| if priority == 70 { 58 } else { priority };
+    // astyle prefers a comma to a comparison or a compound assignment, and
+    // takes the last of these and the other operators that fits; a
+    // three-way comparison it splits first.
+    let rank = |(split_at, priority): (usize, usize)| match priority {
+        70 if line[..split_at].trim_end().ends_with("<=>") => 58,
+        70 => 55,
+        _ => priority,
+    };
     structural.sort_by(|a, b| {
-        rank(b.1).cmp(&rank(a.1)).then_with(|| {
+        rank((b.0, b.1)).cmp(&rank((a.0, a.1))).then_with(|| {
             let a_delimiter = line[..a.0].trim_end().ends_with(['(', '[']);
             let b_delimiter = line[..b.0].trim_end().ends_with(['(', '[']);
             // astyle takes the last padded bitwise operator that fits.
