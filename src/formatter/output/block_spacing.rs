@@ -166,13 +166,32 @@ impl FormatEngine<'_> {
         // again.
         !follows_empty_line
             && self.previous_block_spacing_line_is_comment_only()
-            && following_index
-                .and_then(|index| match tokens.get(index) {
-                    Some(Token::Word(word)) => Some(word),
-                    _ => None,
-                })
-                .is_some_and(|word| is_break_blocks_opening_header(self.options, word))
-            && self.last_code_line_opens_no_block()
+            && following_index.is_some_and(|index| match tokens.get(index) {
+                Some(Token::Word(word)) => {
+                    is_break_blocks_opening_header(self.options, word)
+                        && self.last_code_line_opens_no_block()
+                }
+                // So does a closing header attached to the block's brace.
+                Some(Token::Symbol('}')) => {
+                    self.options.break_closing_header_blocks
+                        && !self.options.break_closing_braces
+                        && matches!(
+                            self.options.brace_style,
+                            BraceStyle::Attach
+                                | BraceStyle::OneTrueBrace
+                                | BraceStyle::WebKit
+                                | BraceStyle::Pico
+                                | BraceStyle::Lisp
+                        )
+                        && matches!(
+                            tokens[index + 1..]
+                                .iter()
+                                .find(|token| !matches!(token, Token::Whitespace(_))),
+                            Some(Token::Word(word)) if is_break_blocks_closing_header(word)
+                        )
+                }
+                _ => false,
+            })
     }
 
     /// Whether the last output line holding code, past directives, is a

@@ -4960,3 +4960,18 @@ fn breaking_blocks_separates_no_fall_through_labels_across_directives() {
     let expected = "int f(int e)\n{\n    switch (e) {\n    case 1:\n    case 2:\n#ifdef X\n    case 3:\n#endif\n    case 4:\n        return 1;\n\n    default:\n        return 0;\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn deleting_empty_lines_keeps_one_before_an_attached_closing_header_after_a_comment() {
+    let input = "int f(void)\n{\n    if (a) {\n        x = 1;\n        /* Note: the key is also present */\n\n    } else {\n        y = 2;\n    }\n}\n";
+    let expected = "int f(void) {\n    if (a) {\n        x = 1;\n        /* Note: the key is also present */\n\n    } else {\n        y = 2;\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=google",
+            "--delete-empty-lines",
+            "--break-blocks=all",
+        ],
+        expected,
+    );
+}
