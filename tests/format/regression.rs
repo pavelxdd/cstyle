@@ -5828,3 +5828,13 @@ fn functions_in_an_extern_c_block_keep_their_return_types() {
         "extern \"C\" {\n    int f(int a)\n    {\n        return 0;\n    }\n    int\n    g(void);\n}\nnamespace n {\nint h(int a);\n}\n",
     );
 }
+
+#[test]
+fn macro_body_statements_indent_with_tabs_and_their_continuations_align_in_spaces() {
+    let input = "#define X(a) {   \\\n  if (a) {        \\\n    foo(a,          \\\n        b);         \\\n  }               \\\n}\n#define Y(a)     \\\n  foo(a,          \\\n      b)\n#define Z(a)     \\\n  do {            \\\n    x = a +       \\\n        b;        \\\n  } while (0)\n#define for_each(j, t)\t\t\\\n\tfor (j = 0, t = b[j];\t\\\n\t     t;\t\t\\\n\t     j++, t = b[j])\n";
+    check(
+        input,
+        &["--indent=tab=4", "--indent-preproc-define"],
+        "#define X(a) {   \\\n\t\tif (a) {        \\\n\t\t\tfoo(a,          \\\n\t\t\t    b);         \\\n\t\t}               \\\n\t}\n#define Y(a)     \\\n\tfoo(a,          \\\n\t    b)\n#define Z(a)     \\\n\tdo {            \\\n\t\tx = a +       \\\n\t\t    b;        \\\n\t} while (0)\n#define for_each(j, t)\t\t\\\n\tfor (j = 0, t = b[j];\t\\\n\t        t;\t\t\\\n\t        j++, t = b[j])\n",
+    );
+}

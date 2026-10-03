@@ -13,6 +13,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
 impl FormatEngine<'_> {
     pub(crate) fn retab_output(&mut self) {
@@ -158,14 +159,49 @@ impl FormatEngine<'_> {
             return None;
         }
         if let Some(directive) = self.output.directive_of_continuation(index) {
-            // An indented macro body stands one level past its directive and
-            // keeps its alignment in spaces.
-            return Some(
-                self.output.lead_width(directive, self.options.tab_width)
-                    + self.options.indent_width,
-            );
+            return Some(self.macro_row_statement_width(directive, index));
         }
         self.untracked_statement_indent_width(index)
+    }
+
+    /// Indent width of the statement that row `index` of the macro body
+    /// opened on line `directive` belongs to: a statement row indents in
+    /// tabs, and the rows continuing it align past those in spaces.
+    fn macro_row_statement_width(&self, directive: usize, index: usize) -> usize {
+        let mut statement = directive + 1;
+        let mut depth = 0isize;
+        for row in directive + 1..index {
+            let line = &self.output[row];
+            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
+            depth += code.matches('(').count() as isize - code.matches(')').count() as isize;
+            // An initializer's brace opens rows that align.
+            let opens_block = code.strip_suffix('{').is_some_and(|head| {
+                !head
+                    .trim_end()
+                    .strip_suffix('=')
+                    .is_some_and(|before| !before.ends_with(['=', '!', '<', '>']))
+            });
+            if depth <= 0 && (code.is_empty() || code.ends_with([';', '}']) || opens_block) {
+                statement = row + 1;
+            }
+        }
+        let width = self.output.lead_width(statement, self.options.tab_width);
+        let directive_code = self.output.code(directive);
+        let directive_opens_block = directive_code
+            .strip_suffix('\\')
+            .unwrap_or(directive_code)
+            .trim_end()
+            .ends_with('{');
+        if statement == directive + 1 && !directive_opens_block {
+            // The body starts a level past its directive.
+            width.min(
+                self.output.lead_width(directive, self.options.tab_width)
+                    + self.options.indent_width,
+            )
+        } else {
+            width
+        }
     }
 
     /// Whether output line `index` continues a standalone comment that
