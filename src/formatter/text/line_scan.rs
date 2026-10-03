@@ -3,10 +3,12 @@ use crate::source::lex::is_digit_separator;
 
 pub(crate) fn is_comment_line(line: &str) -> bool {
     let trimmed = line.trim_start();
+    // A block comment row leads with a bare `*`; code may lead with `*p`.
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
-        || trimmed.starts_with('*')
-        || trimmed.starts_with("*/")
+        || trimmed
+            .strip_prefix('*')
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t', '*', '/']))
 }
 
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
@@ -696,7 +698,7 @@ mod tests {
         for line in ["// line", " /* block", "* body", "*/"] {
             assert!(is_comment_line(line), "{line}");
         }
-        for line in ["call(); // trailing", "value * other", ""] {
+        for line in ["call(); // trailing", "value * other", "*p = x;", ""] {
             assert!(!is_comment_line(line), "{line}");
         }
     }

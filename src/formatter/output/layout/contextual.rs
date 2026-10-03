@@ -1042,6 +1042,11 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|line| is_comment_line(line.trim_start()))
+            // A line of code such as `*p = x;` holds tokens.
+            && self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| self.output.line_tokens(index).is_none())
         {
             let anchor = self
                 .output

@@ -3980,3 +3980,11 @@ fn add_braces_wraps_a_body_that_starts_with_a_paren() {
     check(input, &["--add-braces"], expected);
     check(expected, &["--add-braces"], expected);
 }
+
+#[test]
+fn deref_statement_is_no_comment_row_before_an_else() {
+    let input = "void g(void) {\n  if (a) return;\n  else if (b)  /* c */\n    *l1 = l2;\n  else {\n    y = 2;\n  }\n}\n";
+    let expected = "void g(void)\n{\n    if (a) {\n        return;\n    } else if (b) { /* c */\n        *l1 = l2;\n    } else {\n        y = 2;\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
