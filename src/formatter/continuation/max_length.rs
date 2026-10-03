@@ -1479,7 +1479,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             let next = peek(end);
             // A brace with code after it on the line drops the points before
             // it and registers none up to its closing brace.
-            if byte == b'{' && (unbroken_depth > 0 || !line[end..].trim_start().is_empty()) {
+            if byte == b'{' && (unbroken_depth > 0 || holds_code(&line[end..])) {
                 if unbroken_depth == 0 {
                     fit = [0; 5];
                     pending = [0; 5];
@@ -1559,6 +1559,10 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
         index = end;
     }
     None
+}
+
+fn holds_code(text: &str) -> bool {
+    tokenize(text).iter().any(is_code_token)
 }
 
 fn unopened_closing_braces(line: &str) -> usize {

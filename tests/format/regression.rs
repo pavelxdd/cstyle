@@ -4790,3 +4790,11 @@ fn max_code_length_keeps_a_directive_block_after_a_brace_whole() {
         expected,
     );
 }
+
+#[test]
+fn max_code_length_splits_a_braced_header_whose_comment_overflows() {
+    let input = "void f(void)\n{\n    if (ls->lookahead.token != TK_EOS) {  /* is there a look-ahead token? */\n        x = 1;\n    } else if (opts->force_detach || !new_branch_info->path) {\t/* No longer on any branch. */\n        y = 2;\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if (ls->lookahead.token !=\n            TK_EOS) {  /* is there a look-ahead token? */\n        x = 1;\n    } else if (opts->force_detach\n               || !new_branch_info->path) {\t/* No longer on any branch. */\n        y = 2;\n    }\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
