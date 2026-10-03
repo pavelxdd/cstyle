@@ -4442,3 +4442,11 @@ fn define_assignment_on_the_directive_line_aligns_its_continuation() {
     check(input, &["--indent-preproc-define"], expected);
     check(expected, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn added_braces_around_a_dereferenced_cast_do_not_panic() {
+    let input = "void f()\n{\n    if( n!=P4_VTAB ) freeP4(db, n, (void*)*(char**)&zP4);\n}\n";
+    let expected = "void f()\n{\n    if( n != P4_VTAB ) {\n        freeP4(db, n, (void*) * (char**)&zP4);\n    }\n}\n";
+    check(input, &["--add-braces", "--pad-oper"], expected);
+    check(expected, &["--add-braces", "--pad-oper"], expected);
+}

@@ -132,6 +132,10 @@ pub(crate) fn is_code_token(token: &Token) -> bool {
 }
 
 pub(crate) fn previous_code_token(tokens: &[Token], before: usize) -> Option<usize> {
+    // Tokens a rewrite made have no index in the source.
+    if before > tokens.len() {
+        return None;
+    }
     (0..before)
         .rev()
         .find(|&index| is_code_token(&tokens[index]))
