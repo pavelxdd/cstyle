@@ -412,6 +412,8 @@ impl FormatEngine<'_> {
         }
         let mut depth = 0isize;
         let mut branch_depths = Vec::new();
+        // The fill of each open conditional that indents its block.
+        let mut preprocessor_block_fills: Vec<Option<String>> = Vec::new();
         let mut previous_lead = String::new();
         // The braces of a directive's continued lines open no block.
         let mut continues_directive = false;
@@ -428,6 +430,8 @@ impl FormatEngine<'_> {
                 if !self.output.is_verbatim(index) && !line.contains('\u{c}') {
                     let fill = if depth > 0 {
                         previous_lead.clone()
+                    } else if let Some(Some(fill)) = preprocessor_block_fills.last() {
+                        fill.clone()
                     } else {
                         String::new()
                     };
@@ -474,7 +478,10 @@ impl FormatEngine<'_> {
                 // Each branch of a conditional starts at the depth before it,
                 // and the first branch's depth carries on past the conditional.
                 match preprocessor_directive(line.trim_start()) {
-                    Some("if" | "ifdef" | "ifndef") => branch_depths.push((depth, None)),
+                    Some("if" | "ifdef" | "ifndef") => {
+                        branch_depths.push((depth, None));
+                        preprocessor_block_fills.push(self.preprocessor_block_fill(index, depth));
+                    }
                     Some("else" | "elif") => {
                         if let Some((start, first_end)) = branch_depths.last_mut() {
                             first_end.get_or_insert(depth);
@@ -485,6 +492,7 @@ impl FormatEngine<'_> {
                         if let Some((_, Some(first_end))) = branch_depths.pop() {
                             depth = first_end;
                         }
+                        preprocessor_block_fills.pop();
                     }
                     _ => {}
                 }
@@ -492,6 +500,31 @@ impl FormatEngine<'_> {
             }
             depth += meta.opens as isize - meta.closes as isize;
         }
+    }
+
+    /// The fill of empty lines in the block the conditional on output
+    /// line `index` opens at file scope: astyle fills them with the indent of
+    /// a block it indents.
+    fn preprocessor_block_fill(&self, index: usize, depth: isize) -> Option<String> {
+        if !self.options.indent_preproc_block || depth > 0 {
+            return None;
+        }
+        let tab_width = self.options.tab_width;
+        let lead = self.output.lead_width(index, tab_width);
+        let mut end = index;
+        while self.output[end].trim_end().ends_with('\\') && end + 1 < self.output.len() {
+            end += 1;
+        }
+        let next =
+            (end + 1..self.output.len()).find(|&next| !self.output[next].trim().is_empty())?;
+        (self.output.lead_width(next, tab_width) > lead).then(|| {
+            let line = &self.output[index];
+            format!(
+                "{}{}",
+                &line[..line.len() - line.trim_start().len()],
+                self.options.indent_prefix(1)
+            )
+        })
     }
 
     pub(crate) fn finish(mut self) -> String {

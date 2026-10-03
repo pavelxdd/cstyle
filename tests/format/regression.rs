@@ -5729,3 +5729,13 @@ fn a_commented_case_block_closer_keeps_its_column_before_a_label() {
         "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n            }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
     );
 }
+
+#[test]
+fn empty_lines_in_an_indented_preprocessor_block_take_its_indent() {
+    let input = "#ifndef X\n#define X\n#ifdef W\n#include <a.h>\n\nint f(int);\n\n\nint g(int);\n#endif\n\nint h;\n#endif\n#if A || \\\n  B\n\nint k;\n#endif\n";
+    check(
+        input,
+        &["--fill-empty-lines", "--indent-preproc-block"],
+        "#ifndef X\n    #define X\n    #ifdef W\n        #include <a.h>\n        \n        int f(int);\n        \n        \n        int g(int);\n    #endif\n    \n    int h;\n#endif\n#if A || \\\n    B\n    \n    int k;\n#endif\n",
+    );
+}
