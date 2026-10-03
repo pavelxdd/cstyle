@@ -929,6 +929,10 @@ impl FormatEngine<'_> {
                     || self.layout.previous == PreviousToken::Operator
                         && self.current.ends_with(' ')
                         && self.current.trim_end().ends_with(['&', '*'])
+                    // No declarator puts a `*` right after a `&`.
+                    || self.layout.previous == PreviousToken::Operator
+                        && self.current.ends_with('&')
+                        && !self.current.ends_with("&&")
                     || !self.is_pointer_like(
                         operator,
                         next,

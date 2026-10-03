@@ -455,6 +455,11 @@ impl FormatEngine<'_> {
         );
         let opener_line_indent = self.open_paren_line_indent_spaces(&current_word);
         let opener_output_column = opener_line_indent + self.current_char_len();
+        if std::mem::take(&mut self.pointer_run.spaces_declarator_group)
+            && !self.current.ends_with([' ', '\t'])
+        {
+            self.current.push(' ');
+        }
         let opener_byte = self.current.len();
         self.current.push('(');
         if !matches!(next, Some(Token::Symbol(')'))) {

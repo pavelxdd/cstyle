@@ -35,6 +35,9 @@ pub(crate) struct PointerRunState {
     pub(crate) gap_before_column: Option<usize>,
     pub(super) skip_adjacent_pointer_operators: usize,
     pub(crate) template_close_before_current: bool,
+    /// A `*` aligned off its name before a parenthesized declarator, as in
+    /// `char* (*get)(void)`, keeps a space before the paren.
+    pub(crate) spaces_declarator_group: bool,
 }
 
 pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {
@@ -1008,6 +1011,8 @@ impl FormatEngine<'_> {
         match align {
             PointerAlign::Type => {
                 self.push_type_aligned_pointer(operator, next);
+                self.pointer_run.spaces_declarator_group =
+                    self.pointer_spaces_declarator_group(operator, next);
             }
             PointerAlign::Middle => {
                 self.push_middle_aligned_pointer(
@@ -1016,6 +1021,8 @@ impl FormatEngine<'_> {
                     followed_by_reference,
                     is_after_scope_resolution,
                 );
+                self.pointer_run.spaces_declarator_group =
+                    self.pointer_spaces_declarator_group(operator, next);
             }
             PointerAlign::Name => {
                 if self.push_name_aligned_pointer(
@@ -1046,6 +1053,26 @@ impl FormatEngine<'_> {
         if is_after_scope_resolution && !next_is_adjacent {
             self.ensure_space();
         }
+    }
+
+    /// Whether the `*` just pushed starts a parenthesized declarator a space
+    /// parts from it. astyle leaves the star of a `struct` type and of a
+    /// conversion operator where it was.
+    fn pointer_spaces_declarator_group(&self, operator: &str, next: Option<&Token>) -> bool {
+        let current = self.current.trim_end();
+        let Some(before) = current.strip_suffix(operator) else {
+            return false;
+        };
+        let words = before
+            .split(|ch: char| !is_identifier_continue(ch))
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>();
+        matches!(next, Some(Token::Symbol('(')))
+            && !words
+                .iter()
+                .rev()
+                .take(2)
+                .any(|word| matches!(*word, "struct" | "union" | "enum" | "class" | "operator"))
     }
 
     fn push_type_aligned_pointer(&mut self, operator: &str, next: Option<&Token>) {

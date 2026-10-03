@@ -5321,3 +5321,33 @@ fn padding_operators_pads_the_commas_of_a_standalone_macro_invocation() {
         "void f(void)\n{\n    g(a, b);\n}\nOP(JUMP_F, BRANCH,   1, 0)\nOP(APPEND, VARIABLE, 1, 0)\nint x = h(a, b);\n",
     );
 }
+
+#[test]
+fn a_type_aligned_star_parts_from_a_parenthesized_declarator() {
+    let input = "struct s {\n    char *(*get)(void);\n    void *(*create)(const char *, size_t);\n};\nvoid *(*g)(void *);\nstatic const char *(matchbuf[1]);\nvoid f(void *(*fn)(void *));\nint x = (0xFE&*p->q);\n";
+    check(
+        input,
+        &["--style=kr", "--align-pointer=type"],
+        "struct s {\n    char* (*get)(void);\n    void* (*create)(const char*, size_t);\n};\nvoid* (*g)(void*);\nstatic const char* (matchbuf[1]);\nvoid f(void* (*fn)(void*));\nint x = (0xFE&*p->q);\n",
+    );
+}
+
+#[test]
+fn a_middle_aligned_star_parts_from_a_parenthesized_declarator() {
+    let input = "struct s {\n    char *(*get)(void);\n    void *(*create)(const char *, size_t);\n};\nvoid *(*g)(void *);\nstatic const char *(matchbuf[1]);\nvoid f(void *(*fn)(void *));\nint x = (0xFE&*p->q);\n";
+    check(
+        input,
+        &["--style=kr", "--align-pointer=middle"],
+        "struct s {\n    char * (*get)(void);\n    void * (*create)(const char *, size_t);\n};\nvoid * (*g)(void *);\nstatic const char * (matchbuf[1]);\nvoid f(void * (*fn)(void *));\nint x = (0xFE&*p->q);\n",
+    );
+}
+
+#[test]
+fn a_star_right_after_an_ampersand_dereferences() {
+    let input = "void f(void)\n{\n    x = (a&*p);\n    x = (a & *p);\n    x = (a+*p);\n    x = (a|*p);\n    x = a**p;\n    x = (a&&*p);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--align-pointer=type"],
+        "void f(void)\n{\n    x = (a&*p);\n    x = (a & *p);\n    x = (a+*p);\n    x = (a|*p);\n    x = a** p;\n    x = (a&&*p);\n}\n",
+    );
+}
