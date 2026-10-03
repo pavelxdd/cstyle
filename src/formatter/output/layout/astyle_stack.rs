@@ -67,6 +67,16 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// The indent astyle's continuation stack gives a part of a line that
+    /// the code length split, starting at `first`.
+    pub(crate) fn split_part_stack_indent(&self, first: usize) -> Option<usize> {
+        self.stacked_argument_indent(first)
+            .or_else(|| self.stacked_bracket_row_indent(first))
+            .or_else(|| self.stacked_return_indent(first))
+            .or_else(|| self.stacked_closing_paren_indent(first))
+            .or_else(|| self.stacked_assignment_indent(first))
+    }
+
     /// A line inside brackets whose `[` ends its line stands at the top of
     /// astyle's continuation stack: a continuation level past the indent
     /// before.

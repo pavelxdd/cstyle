@@ -244,14 +244,31 @@ impl FormatEngine<'_> {
                 following_indent = ContinuationIndent::Spaces(floor);
             }
             self.set_split_part_tokens(source_tokens, line, &tail);
+            if let Some(spaces) = self.split_part_indent(&tail) {
+                next_indent = ContinuationIndent::Spaces(spaces);
+            }
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
             tail = split.tail;
             next_indent = following_indent;
         }
         if !tail.trim().is_empty() {
             self.set_split_part_tokens(source_tokens, line, &tail);
+            if let Some(spaces) = self.split_part_indent(&tail) {
+                next_indent = ContinuationIndent::Spaces(spaces);
+            }
             self.push_output_line_with_indent(&tail, next_structural_level, next_indent);
         }
+    }
+
+    /// The indent astyle's continuation stack gives the split `part`, once
+    /// its source tokens are pending.
+    fn split_part_indent(&self, part: &str) -> Option<usize> {
+        let first = self.output.pending_tokens()?.first;
+        let token = self.tree.tokens.get(first)?;
+        if !part.trim_start().starts_with(token_text(token).as_str()) {
+            return None;
+        }
+        self.split_part_stack_indent(first)
     }
 
     /// Gives the part of the split `line` that starts with `part` the source

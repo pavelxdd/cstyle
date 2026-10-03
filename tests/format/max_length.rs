@@ -1070,7 +1070,7 @@ fn max_code_length_nested_new_clamps_four_continuation_levels() {
             "{",
             "    resultValue=new ContainerType(new AlphaType(",
             "            alphaValue,betaValue),new BetaType(gammaValue,",
-            "                    deltaValue),epsilonValue);",
+            "                                  deltaValue),epsilonValue);",
             "}",
         )
     );
