@@ -2971,6 +2971,7 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
     let mut segment_start_column = 0usize;
     let mut pending_segment_start = false;
     let mut first_code_is_open_brace = false;
+    let mut last_code_is_open_brace = false;
     for token in tokens {
         if !seen_code
             && !matches!(
@@ -2993,6 +2994,12 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
                 pending_segment_start = false;
             }
         }
+        if !matches!(
+            token,
+            Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+        ) {
+            last_code_is_open_brace = matches!(token, Token::Symbol('{'));
+        }
         match token {
             Token::Whitespace(text) => {
                 let width = text.chars().count();
@@ -3004,7 +3011,14 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
             Token::Newline => break,
             Token::Comment(_, comment) => {
                 if seen_code && !comment.contains('\n') {
-                    if open_brace_depth == 0 || (open_brace_depth == 1 && saw_closing_header) {
+                    // A brace ending the code of a line leads to its body.
+                    let after_ending_brace = open_brace_depth == 1
+                        && last_code_is_open_brace
+                        && !first_code_is_open_brace;
+                    if open_brace_depth == 0
+                        || (open_brace_depth == 1 && saw_closing_header)
+                        || after_ending_brace
+                    {
                         columns.push(column.saturating_sub(leading_indent));
                     } else if code_after_open_brace {
                         columns.push(column.saturating_sub(segment_start_column));

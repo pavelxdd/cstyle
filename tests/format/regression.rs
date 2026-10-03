@@ -4426,3 +4426,11 @@ fn struct_array_rows_in_a_case_block_take_the_row_indent() {
         expected,
     );
 }
+
+#[test]
+fn padding_before_an_ending_brace_shrinks_its_comment_gap() {
+    let input = "void f()\n{\n    if(a<b) {  /* c */\n        x();\n    }\n    if(a<b)   /* c */\n        x();\n    x=a<b;  /* c */\n    if(carry) {         /* first */\n        x();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (a < b) { /* c */\n        x();\n    }\n    if (a < b) /* c */\n        x();\n    x = a < b; /* c */\n    if (carry) {        /* first */\n        x();\n    }\n}\n";
+    check(input, &["--pad-oper", "--pad-header"], expected);
+    check(expected, &["--pad-oper", "--pad-header"], expected);
+}
