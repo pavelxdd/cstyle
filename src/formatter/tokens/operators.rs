@@ -1433,10 +1433,7 @@ impl FormatEngine<'_> {
             } else {
                 self.emit_source_space();
             }
-        } else if self.pads_after_close_paren(operator)
-            && self.current_ends_cast()
-            && self.layout.nesting.paren_depth > 0
-        {
+        } else if self.pads_after_close_paren(operator) {
             self.emit_source_space_or_ensure();
         } else if self.layout.previous == PreviousToken::Comma {
             if self.options.pad_commas || self.options.pad_operators {
@@ -1603,9 +1600,13 @@ impl FormatEngine<'_> {
     }
 
     /// Padding parens outside spaces a `)` from any operator but those
-    /// starting with `+`, `-` or `.`.
+    /// starting with `+`, `-` or `.`, within a block.
     fn pads_after_close_paren(&self, operator: &str) -> bool {
+        // At file scope astyle pads no paren before an operator outside
+        // parens.
         self.options.pad_parens_outside
+            && (!self.layout.nesting.brace_type_stack.is_empty()
+                || self.layout.nesting.paren_depth > 0)
             && self.layout.previous == PreviousToken::CloseParen
             && !operator.starts_with(['+', '-', '.'])
     }
