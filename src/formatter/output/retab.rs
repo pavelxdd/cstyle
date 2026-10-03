@@ -282,7 +282,10 @@ impl FormatEngine<'_> {
         let ends_statement = |line: usize| {
             let code = self.output.code_trimmed(line);
             let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
-            code.is_empty() || code.starts_with('#') || code.ends_with([';', '{', '}'])
+            code.is_empty()
+                || code.starts_with('#')
+                || code.ends_with([';', '{', '}'])
+                || ends_label(code)
         };
         let mut start = index;
         while start > 0 && !ends_statement(start - 1) {
@@ -381,4 +384,15 @@ impl FormatEngine<'_> {
                             || self.options.access_labels.iter().any(|access| access == word))
             })
     }
+}
+
+/// Whether `code` is a `case`, `default`, or plain label ending its line.
+fn ends_label(code: &str) -> bool {
+    let Some(label) = code.strip_suffix(':') else {
+        return false;
+    };
+    let label = label.trim();
+    label.starts_with("case ")
+        || label == "default"
+        || !label.is_empty() && label.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
 }

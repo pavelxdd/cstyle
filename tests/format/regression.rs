@@ -4864,3 +4864,10 @@ fn tab_indent_indents_an_initializer_brace_of_brace_indenting_styles_with_tabs()
     let input = "static sqlite3_module templatevtabModule =\n\t{\n\t/* iVersion    */ 0,\n\t0\n\t};\nvoid f(void)\n\t{\n\tstruct part parts[] =\n\t\t{\n\t\t\t{ 1, 2 }\n\t\t};\n\t}\n";
     check(input, &["--style=whitesmith", "--indent=tab=8"], input);
 }
+
+#[test]
+fn tab_indent_indents_a_statement_broken_off_its_case_label_with_tabs() {
+    let input = "int f(int idx)\n{\n  switch (idx) {\n    case LUA_REGISTRYINDEX: return registry(L);\n    default: return 4;\n  }\n}\n";
+    let expected = "int f(int idx)\n\t{\n\tswitch (idx)\n\t\t{\n\t\tcase LUA_REGISTRYINDEX:\n\t\t\treturn registry(L);\n\t\tdefault:\n\t\t\treturn 4;\n\t\t}\n\t}\n";
+    check(input, &["--style=whitesmith", "--indent=tab=4"], expected);
+}
