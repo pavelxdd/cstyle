@@ -11,8 +11,21 @@ impl FormatEngine<'_> {
         tokens: &[Token],
         following_index: Option<usize>,
     ) {
-        self.preserve_block_spacing_comment_blank =
-            self.should_preserve_block_spacing_comment_blank(tokens, following_index);
+        // astyle takes a bare block after a directive and a brace for an
+        // array, whose empty lines it keeps.
+        let in_directive_array = following_index
+            .and_then(|index| self.tree.groups.enclosing(index))
+            .is_some_and(|group| {
+                self.is_directive_block(group)
+                    && self
+                        .tree
+                        .previous_code_token(self.tree.groups.get(group).open)
+                        .is_some_and(|before| {
+                            matches!(self.tree.tokens[before], Token::Symbol('{'))
+                        })
+            });
+        self.preserve_block_spacing_comment_blank = in_directive_array
+            || self.should_preserve_block_spacing_comment_blank(tokens, following_index);
     }
 
     pub(crate) fn should_preserve_input_empty_line(&self) -> bool {

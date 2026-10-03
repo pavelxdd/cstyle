@@ -4911,3 +4911,10 @@ fn deleting_empty_lines_keeps_those_around_comments_before_a_broken_block() {
         expected,
     );
 }
+
+#[test]
+fn deleting_empty_lines_keeps_those_of_a_directive_block_after_a_brace() {
+    let input = "void f(void)\n{\n    for ( ;; ) {\n        if (rc == NGX_OK) {\n\n#if (NGX_DEBUG)\n            {\n                ngx_str_t  key, value;\n\n                key.len = 1;\n            }\n#endif\n        }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    for ( ;; ) {\n        if (rc == NGX_OK) {\n#if (NGX_DEBUG)\n            {\n                ngx_str_t  key, value;\n\n                key.len = 1;\n            }\n#endif\n        }\n    }\n}\n";
+    check(input, &["--style=kr", "--delete-empty-lines"], expected);
+}
