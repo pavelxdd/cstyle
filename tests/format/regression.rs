@@ -4932,3 +4932,10 @@ fn breaking_closing_header_blocks_keeps_else_after_a_trailing_block_comment() {
     let expected = "int f(void)\n{\n    if (a)  /* c1 */\n        return 1;  /* c2 */\n    else\n    {\n        x = 1;\n    }\n\n    if (a)\n        return 1;\n\n    else\n    {\n        x = 1;\n    }\n\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\nint g(void)\n{\n    if (a)\n        return 1;  // c2\n\n    else\n        x = 2;\n\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\n";
     check(input, &["--style=allman", "--break-blocks=all"], expected);
 }
+
+#[test]
+fn breaking_blocks_separates_a_block_closed_before_a_trailing_comment() {
+    let input = "int f(void)\n{\n    while (b) {\n        x = 1;\n    } /* c4 */\n    y = 4;\n    while (b) {\n        x = 1;\n    } // c5\n    y = 5;\n}\n";
+    let expected = "int f(void)\n{\n    while (b) {\n        x = 1;\n    } /* c4 */\n\n    y = 4;\n\n    while (b) {\n        x = 1;\n    } // c5\n\n    y = 5;\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+}

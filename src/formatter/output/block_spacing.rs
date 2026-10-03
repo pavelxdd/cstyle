@@ -248,7 +248,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn observe_block_spacing_close_brace(&mut self) {
+    pub(crate) fn observe_block_spacing_close_brace(&mut self, comment_follows: bool) {
         if !self.options.break_blocks {
             return;
         }
@@ -262,7 +262,12 @@ impl FormatEngine<'_> {
         if closed_command_header
             && closed_header.is_some_and(|header| !matches!(header, "case" | "default"))
         {
-            self.block_spacing.append_blank = true;
+            // A comment after the brace still ends its line.
+            if comment_follows && !self.current_is_blank() {
+                self.block_spacing.pending_one_line_block = true;
+            } else {
+                self.block_spacing.append_blank = true;
+            }
         }
         self.clear_block_spacing_header();
     }

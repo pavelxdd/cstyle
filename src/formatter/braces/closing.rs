@@ -637,7 +637,7 @@ impl FormatEngine<'_> {
             self.layout.frame_stack.clear_logical_frames();
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
-        self.observe_block_spacing_close_brace();
+        self.observe_block_spacing_close_brace(matches!(next, Some(Token::Comment(_, _))));
         if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
             && self.layout.indentation.indent() == base + delta
             && !self.braceless_body_continues(next)
