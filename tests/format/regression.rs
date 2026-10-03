@@ -4925,3 +4925,10 @@ fn breaking_closing_header_blocks_skips_comment_only_blocks_and_else_chains_over
     let expected = "void f(void)\n{\n    if (a)\n    {\n        /* nothing */\n    }\n    else if (b)\n    {\n        x = 1;\n    }\n\n    else\n#ifdef T\n        if (c)\n        {\n            y = 1;\n        }\n\n#endif\n    z = 2;\n}\n";
     check(input, &["--style=allman", "--break-blocks=all"], expected);
 }
+
+#[test]
+fn breaking_closing_header_blocks_keeps_else_after_a_trailing_block_comment() {
+    let input = "int f(void)\n{\n    if (a)  /* c1 */\n        return 1;  /* c2 */\n    else\n    {\n        x = 1;\n    }\n    if (a)\n        return 1;\n    else\n    {\n        x = 1;\n    }\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\nint g(void)\n{\n    if (a)\n        return 1;  // c2\n    else\n        x = 2;\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\n";
+    let expected = "int f(void)\n{\n    if (a)  /* c1 */\n        return 1;  /* c2 */\n    else\n    {\n        x = 1;\n    }\n\n    if (a)\n        return 1;\n\n    else\n    {\n        x = 1;\n    }\n\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\nint g(void)\n{\n    if (a)\n        return 1;  // c2\n\n    else\n        x = 2;\n\n    if (a)\n        return 1;  /* c2 */\n    else\n        x = 2;\n}\n";
+    check(input, &["--style=allman", "--break-blocks=all"], expected);
+}

@@ -35,6 +35,20 @@ impl FormatEngine<'_> {
             return;
         }
         if is_break_blocks_closing_header(word) {
+            // A body ending in a trailing block comment keeps its closing
+            // header.
+            if self.current_is_blank()
+                && self
+                    .layout
+                    .previous_pre_adjust_line
+                    .as_deref()
+                    .is_some_and(|line| {
+                        let code = &line[..trailing_comment_split_limit(line)];
+                        !code.trim().is_empty() && line[code.len()..].trim_start().starts_with("/*")
+                    })
+            {
+                self.block_spacing.append_blank = false;
+            }
             if self.options.break_closing_header_blocks
                 && self.current_is_blank()
                 && self.layout.command_state.previous_command_char == Some('}')
