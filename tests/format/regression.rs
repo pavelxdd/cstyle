@@ -5858,3 +5858,23 @@ fn a_compound_literal_keeps_the_gap_before_its_closing_brace_in_pico() {
         "void f()\n{   *out = (T) {0};\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0});\n    g(c, (struct timeval) { .tv_sec = 1, .tv_usec = 0 });\n    int a[] = {1, 2 }; }\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_closing_brace_moved_up_follows_it_by_one_column_less_in_pico() {
+    let input = "void f()\n{\n    if (b) {\n        x();\n        return 1;\n    }  /* else not */\n    if (a) { i++; j++; }  /* skip */\n    y();\n}\nstruct s {\n    int x;\n};  /* c */\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   if (b)\n    {   x();\n        return 1; } /* else not */\n    if (a) { i++; j++; }  /* skip */\n    y(); }\nstruct s\n{   int x; }; /* c */\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_closing_brace_moved_up_follows_it_by_one_column_less_in_lisp() {
+    let input = "void f()\n{\n    if (b) {\n        x();\n        return 1;\n    }  /* else not */\n    if (a) { i++; j++; }  /* skip */\n    y();\n}\nstruct s {\n    int x;\n};  /* c */\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    if (b) {\n        x();\n        return 1; } /* else not */\n    if (a) {\n        i++;    /* skip */\n        j++; }\n    y(); }\nstruct s {\n    int x; }; /* c */\n",
+    );
+}

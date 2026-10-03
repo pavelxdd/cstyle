@@ -318,7 +318,23 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
             if !previous.trim_end().ends_with('{') {
                 previous.push(' ');
             }
-            previous.push_str(trimmed);
+            // The brace moves up a column and its comment follows it.
+            let code = trimmed[..trailing_comment_split_limit(trimmed)].trim_end();
+            let comment = trimmed.len() - trimmed[code.len()..].trim_start().len();
+            let gap = &trimmed[code.len()..comment];
+            // Only a bare closer moves; an element's comment keeps its
+            // column after the `},`.
+            if comment < trimmed.len()
+                && code.chars().all(|ch| matches!(ch, '}' | ';' | ' '))
+                && gap.len() > 1
+                && gap.bytes().all(|byte| byte == b' ')
+            {
+                previous.push_str(code);
+                previous.push_str(&gap[1..]);
+                previous.push_str(&trimmed[comment..]);
+            } else {
+                previous.push_str(trimmed);
+            }
         } else {
             lines.push(line.to_string());
         }
