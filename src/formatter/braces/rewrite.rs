@@ -24,8 +24,8 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_ends_with_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
@@ -807,6 +807,7 @@ impl FormatEngine<'_> {
             self.options,
             Some(BraceType::DeferArray),
             None,
+            false,
         );
         self.push_output_line(&line, self.layout.indentation.indent());
         self.layout.command_state.current_header = None;
@@ -1517,6 +1518,9 @@ impl FormatEngine<'_> {
                 self.options,
                 Some(brace_type),
                 opening_body_gap.as_deref(),
+                self.output
+                    .last()
+                    .is_some_and(|line| preprocessor_directive(line.trim_start()).is_some()),
             )
         };
         let braced_init = (brace_type == BraceType::Initializer
@@ -1751,6 +1755,18 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// astyle pads no brace that follows a comment directly or sits on the
+    /// line after a directive.
+    fn closing_brace_keeps_source_gap(&self) -> bool {
+        let follows_comment = self.current.trim_end().ends_with("*/")
+            && self
+                .token_input
+                .previous_input_whitespace
+                .as_deref()
+                .is_none_or(str::is_empty);
+        follows_comment || self.one_line_block_after_directive
+    }
+
     pub(super) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
         let is_aggregate = self.inline_array.aggregate_braces.pop().unwrap_or(false);
         let closes_compound_literal = is_aggregate
@@ -1758,7 +1774,10 @@ impl FormatEngine<'_> {
                 .current
                 .rsplit_once('{')
                 .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trim_end()));
-        if is_aggregate && attach_closing_brace_mode(self.options) {
+        if is_aggregate
+            && attach_closing_brace_mode(self.options)
+            && !self.closing_brace_keeps_source_gap()
+        {
             self.emit_source_space_or_ensure();
         } else {
             self.emit_source_space();
@@ -2578,6 +2597,7 @@ fn format_one_line_block_tokens(
     options: &FormatOptions,
     brace_type: Option<BraceType>,
     opening_body_gap: Option<&str>,
+    after_directive: bool,
 ) -> String {
     if is_semicolon_only_one_line_block_tokens(tokens) {
         return tokens
@@ -2599,6 +2619,7 @@ fn format_one_line_block_tokens(
     let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     let mut formatter = FormatEngine::new(options);
     formatter.one_line_block_mode = true;
+    formatter.one_line_block_after_directive = after_directive;
     // The roles of the block's own tokens tell operators apart.
     formatter.tree = SourceTree::build(tokens);
     formatter.syntax_roles = classify_syntax(tokens, &formatter.tree);

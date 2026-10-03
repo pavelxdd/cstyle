@@ -127,6 +127,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) unmatched_closing_brace_recovery: bool,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
+    /// A one-line block being formatted on the line after a directive.
+    pub(crate) one_line_block_after_directive: bool,
     pub(crate) inline_array: InlineArrayState,
     pub(crate) max_length_line: MaxLengthLineState,
     pub(crate) backslash_body: BackslashBodyState,
@@ -207,6 +209,7 @@ impl<'a> FormatEngine<'a> {
             unmatched_closing_brace_recovery: false,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,
+            one_line_block_after_directive: false,
             inline_array: InlineArrayState::default(),
             max_length_line: MaxLengthLineState::default(),
             backslash_body: BackslashBodyState::default(),

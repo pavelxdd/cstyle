@@ -5081,3 +5081,33 @@ fn a_continuation_row_led_by_plus_and_a_paren_with_a_trailing_comment_ends_its_s
         "int f(void) {\n    nByte = a\n            + (i+1);               /* c3 */\n    p = g(nByte);\n    }\n",
     );
 }
+
+#[test]
+fn pico_breaks_the_brace_of_an_extern_c_block() {
+    let input = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n\nint f(void);\n\n#ifdef __cplusplus\n}\n#endif\n";
+    check(
+        input,
+        &["--style=pico"],
+        "#ifdef __cplusplus\nextern \"C\"\n{\n#endif\n\nint f(void);\n\n#ifdef __cplusplus\n}\n#endif\n",
+    );
+}
+
+#[test]
+fn pico_pads_no_closing_brace_after_a_comment_or_on_the_line_after_a_directive() {
+    let input = "int f(void)\n{\n  int b;\n#if X\n  int c;\n#else\n  static int a[] = {1, 2};\n#endif\n  return 0;\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "int f(void)\n{   int b;\n#if X\n    int c;\n#else\n    static int a[] = {1, 2};\n#endif\n    return 0; }\n",
+    );
+}
+
+#[test]
+fn lisp_pads_no_closing_brace_right_after_a_comment() {
+    let input = "int uv__random_sysctl(void* buf, size_t buflen)\n{\n  static int name[] = {1 /*CTL_KERN*/, 40 /*KERN_RANDOM*/, 6 /*RANDOM_UUID*/};\n  static const char *azSub[] = {\"count\", \"depth\", 0};\n  int a[] = {1, 2};\n  return 0;\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "int uv__random_sysctl(void* buf, size_t buflen) {\n    static int name[] = {1 /*CTL_KERN*/, 40 /*KERN_RANDOM*/, 6 /*RANDOM_UUID*/};\n    static const char *azSub[] = {\"count\", \"depth\", 0 };\n    int a[] = {1, 2 };\n    return 0; }\n",
+    );
+}

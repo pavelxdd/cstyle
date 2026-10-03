@@ -2978,7 +2978,10 @@ impl FormatEngine<'_> {
             if self.options.attach_extern_c {
                 return true;
             }
-            if self.options.brace_style != BraceStyle::Horstmann {
+            if !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            ) {
                 return !self.token_input.token_begins_source_line;
             }
         }
