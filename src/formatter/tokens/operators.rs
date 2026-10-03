@@ -384,6 +384,11 @@ impl FormatEngine<'_> {
             return;
         }
 
+        if operator == "*" && self.star_run_closes_type_argument(token_index) {
+            self.push_pointer_run(operator, next, next_is_adjacent);
+            return;
+        }
+
         self.push_operator_by_kind(
             operator,
             next,
@@ -392,6 +397,33 @@ impl FormatEngine<'_> {
             operator_role,
             split_rvalue_reference,
         );
+    }
+
+    /// Whether the `*` at `token_index` is in a run of stars closing a type
+    /// name before a `,` in parentheses, as in a macro's type argument.
+    fn star_run_closes_type_argument(&self, token_index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let is_star = |index: usize| matches!(&tokens[index], Token::Operator(op) if op == "*");
+        if self.layout.nesting.paren_depth == 0
+            || self.active_token_in_brackets()
+            || token_index >= tokens.len()
+        {
+            return false;
+        }
+        let mut stars = 1;
+        let mut after = next_code_token(tokens, token_index + 1);
+        while let Some(index) = after.filter(|&index| is_star(index)) {
+            stars += 1;
+            after = next_code_token(tokens, index + 1);
+        }
+        let mut before = self.tree.previous_code_token(token_index);
+        while let Some(index) = before.filter(|&index| is_star(index)) {
+            stars += 1;
+            before = self.tree.previous_code_token(index);
+        }
+        stars > 1
+            && after.is_some_and(|index| matches!(tokens[index], Token::Symbol(',')))
+            && before.is_some_and(|index| matches!(tokens[index], Token::Word(_)))
     }
 
     /// Whether the `**` at `token_index` follows a comma in a function body:

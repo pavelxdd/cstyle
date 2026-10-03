@@ -5548,3 +5548,33 @@ fn a_block_after_a_kept_statement_on_a_case_label_belongs_to_the_statement_allma
         "void f()\n{\n    switch (a)\n    {\n    default: assert(x);\n        {\n            int y;\n            g(y);\n        }\n        h();\n        break;\n    case 2: q();\n        {\n            if (a)\n            {\n                b();\n            }\n            c();\n        }\n        d();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_star_run_closing_a_type_argument_is_a_pointer_with_pad_oper() {
+    let input = "void f()\n{\n    g(char **, a);\n    g(char ** , a);\n    x = g(a**, b);\n}\nvoid g()\n{\n    const char **name = cast(const char**, dlsym(lib, \"x\"));\n    g(const char**, a);\n    g(char**, a);\n    g(a**, b);\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "void f()\n{\n    g(char **, a);\n    g(char **, a);\n    x = g(a**, b);\n}\nvoid g()\n{\n    const char **name = cast(const char**, dlsym(lib, \"x\"));\n    g(const char**, a);\n    g(char**, a);\n    g(a**, b);\n}\n",
+    );
+}
+
+#[test]
+fn a_star_run_closing_a_type_argument_is_a_pointer_with_type_alignment() {
+    let input = "void f()\n{\n    g(char **, a);\n    g(char ** , a);\n    x = g(a**, b);\n}\nvoid g()\n{\n    const char **name = cast(const char**, dlsym(lib, \"x\"));\n    g(const char**, a);\n    g(char**, a);\n    g(a**, b);\n}\n";
+    check(
+        input,
+        &["--align-pointer=type"],
+        "void f()\n{\n    g(char**, a);\n    g(char**, a);\n    x = g(a**, b);\n}\nvoid g()\n{\n    const char** name = cast(const char**, dlsym(lib, \"x\"));\n    g(const char**, a);\n    g(char**, a);\n    g(a**, b);\n}\n",
+    );
+}
+
+#[test]
+fn a_star_run_closing_a_type_argument_is_a_pointer_with_name_alignment() {
+    let input = "void f()\n{\n    g(char **, a);\n    g(char ** , a);\n    x = g(a**, b);\n}\nvoid g()\n{\n    const char **name = cast(const char**, dlsym(lib, \"x\"));\n    g(const char**, a);\n    g(char**, a);\n    g(a**, b);\n}\n";
+    check(
+        input,
+        &["--pad-oper", "--align-pointer=name"],
+        "void f()\n{\n    g(char **, a);\n    g(char **, a);\n    x = g(a **, b);\n}\nvoid g()\n{\n    const char **name = cast(const char **, dlsym(lib, \"x\"));\n    g(const char **, a);\n    g(char **, a);\n    g(a **, b);\n}\n",
+    );
+}
