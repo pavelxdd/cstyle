@@ -28,7 +28,8 @@ impl FormatEngine<'_> {
         if is_header(self.options, leading_identifier(trimmed)) {
             return false;
         }
-        if self.options.pad_commas {
+        // Padding operators pads commas too.
+        if self.options.pad_commas || self.options.pad_operators {
             return false;
         }
         let has_role = line_tokens.iter().enumerate().any(|(offset, token)| {

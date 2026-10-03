@@ -5311,3 +5311,13 @@ fn removing_comment_prefixes_keeps_lines_a_tab_indents_past_the_opener() {
         "void f(void)\n{\n    /*  first line\n    \tsecond line\n     \tstar tab\n        star sp\n        third */\n    int x;\n    /*  a\n        b\n    */\n}\n",
     );
 }
+
+#[test]
+fn padding_operators_pads_the_commas_of_a_standalone_macro_invocation() {
+    let input = "void f(void)\n{\n    g(a,b);\n}\nOP(JUMP_F,BRANCH,   1, 0)\nOP(APPEND, VARIABLE,1, 0)\nint x = h(a,b);\n";
+    check(
+        input,
+        &["--style=kr", "--pad-oper"],
+        "void f(void)\n{\n    g(a, b);\n}\nOP(JUMP_F, BRANCH,   1, 0)\nOP(APPEND, VARIABLE, 1, 0)\nint x = h(a, b);\n",
+    );
+}
