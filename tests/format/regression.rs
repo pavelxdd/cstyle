@@ -4946,3 +4946,10 @@ fn breaking_blocks_reads_comment_led_code_and_directives_after_case_labels() {
     let expected = "void f(void)\n{\n    edata_t *edata = extent_recycle(tsdn, pac,\n                                    /* growing_retained */ true, guarded);\n\n    if (edata != NULL) {\n        x = 1;\n    }\n\n    switch (ch) {\n    case 1:\n#if (NGX_WIN32)\n        if (a) {\n            b = 1;\n        }\n\n#endif\n        break;\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn breaking_blocks_separates_a_while_loop_after_an_earlier_do_while() {
+    let input = "int f(void)\n{\n    do {\n        x = 1;\n    } while (isdigit(c));\n    if (check_next(ls, \"Ee\"))  /* `E'? */\n        check_next(ls, \"+-\");  /* optional exponent sign */\n    while (isalnum(c))\n        save(ls);\n}\n";
+    let expected = "int f(void)\n{\n    do {\n        x = 1;\n    } while (isdigit(c));\n\n    if (check_next(ls, \"Ee\"))  /* `E'? */\n        check_next(ls, \"+-\");  /* optional exponent sign */\n\n    while (isalnum(c))\n        save(ls);\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+}

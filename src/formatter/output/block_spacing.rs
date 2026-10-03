@@ -29,7 +29,9 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        if word == "while" && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+        if word == "while"
+            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+            && self.layout.command_state.previous_command_char == Some('}')
         {
             self.clear_block_spacing_blanks();
             return;
