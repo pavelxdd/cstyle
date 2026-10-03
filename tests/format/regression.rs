@@ -4806,3 +4806,11 @@ fn max_code_length_splits_before_an_empty_body_and_measures_tails_unindented() {
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn max_code_length_aligns_a_comment_before_a_split_statement_in_a_case_block() {
+    let input = "void g(void)\n{\n  switch(x) {\n  case RTP_PARSE_CHANNEL: {\n      DEBUGASSERT(skip_len == 0);\n      /* we do not consume this byte, it is BODY data */\n      DEBUGF(infof(data, \"RTSP: invalid RTP channel %d, skipping\", idx));\n    break;\n  }\n  }\n}\n";
+    let expected = "void g(void)\n{\n    switch(x) {\n    case RTP_PARSE_CHANNEL: {\n        DEBUGASSERT(skip_len == 0);\n        /* we do not consume this byte, it is BODY data */\n        DEBUGF(infof(data, \"RTSP: invalid RTP channel %d, skipping\",\n                     idx));\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}

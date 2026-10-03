@@ -42,15 +42,12 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.current_is_verbatim) && self.output.len() > published {
             self.output.mark_last_verbatim();
         }
-        if self.output.len() > published
-            && first.is_some()
-            && self
-                .output
-                .line_tokens(self.output.len() - 1)
-                .map(|span| span.first)
-                == first
+        // The code length may have split the line over several.
+        if first.is_some()
+            && let Some(line) = (published..self.output.len())
+                .find(|&line| self.output.line_tokens(line).map(|span| span.first) == first)
         {
-            self.align_comments_before_statement(self.output.len() - 1);
+            self.align_comments_before_statement(line);
         }
         // A finished blank line publishes nothing; its sources must not
         // reach the next line.
