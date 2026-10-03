@@ -13,7 +13,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::groups::Delimiter;
-use crate::formatter::text::line_scan::preprocessor_directive;
 
 impl FormatEngine<'_> {
     pub(crate) fn retab_output(&mut self) {
@@ -33,11 +32,8 @@ impl FormatEngine<'_> {
                 let directive = self.output.directive_of_continuation(index);
                 // Indenting conditional directives indents their continued
                 // lines too.
-                let indented_conditional = directive.is_some_and(|directive| {
-                    (self.options.indent_preproc_block || self.options.indent_preproc_conditional)
-                        && preprocessor_directive(self.output.trimmed(directive))
-                            .is_some_and(|name| matches!(name, "if" | "ifdef" | "ifndef" | "elif"))
-                });
+                let indented_conditional =
+                    directive.is_some() && self.output.is_indented_directive_continuation(index);
                 if self.output.is_verbatim(index)
                     || line.is_empty()
                     || !self.options.indent_preproc_define

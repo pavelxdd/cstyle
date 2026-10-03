@@ -157,6 +157,8 @@ pub(crate) struct OutputBuffer {
     /// Lines kept as the source wrote them: disabled regions, raw lines,
     /// and multi-line literal rows. Their whitespace is content.
     verbatim: Vec<bool>,
+    /// Continued lines of a directive that the formatter indented itself.
+    indented_directive_continuation: Vec<bool>,
     /// Comments of the current line just taken, for the next pushed line.
     pending_comments: Option<LineComments>,
     /// Block comment token being pushed; lines pushed without a current line
@@ -234,6 +236,19 @@ impl OutputBuffer {
         self.verbatim.get(index).copied().unwrap_or(false)
     }
 
+    pub(crate) fn mark_last_indented_directive_continuation(&mut self) {
+        if let Some(last) = self.indented_directive_continuation.last_mut() {
+            *last = true;
+        }
+    }
+
+    pub(crate) fn is_indented_directive_continuation(&self, index: usize) -> bool {
+        self.indented_directive_continuation
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+    }
+
     /// Gives the pending sources to the line just pushed; a blank line, such
     /// as one inserted before the line they belong to, holds none.
     fn push_pending_sources(&mut self, blank: bool) {
@@ -244,6 +259,7 @@ impl OutputBuffer {
             self.pending_scope_start = None;
         }
         self.verbatim.push(false);
+        self.indented_directive_continuation.push(false);
         if blank {
             self.tokens.push(None);
             self.comments.push(LineComments::default());
@@ -268,6 +284,7 @@ impl OutputBuffer {
         self.tokens.pop();
         self.comments.pop();
         self.verbatim.pop();
+        self.indented_directive_continuation.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -306,6 +323,7 @@ impl OutputBuffer {
         self.tokens.remove(index);
         self.comments.remove(index);
         self.verbatim.remove(index);
+        self.indented_directive_continuation.remove(index);
         self.last_non_empty_dirty.set(true);
         self.lines.remove(index)
     }

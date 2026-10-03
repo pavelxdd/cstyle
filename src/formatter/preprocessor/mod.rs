@@ -753,6 +753,7 @@ impl FormatEngine<'_> {
         } else {
             self.preprocessor_line_indent(part, part_is_define, index)
         };
+        let indented_continuation = index > 0 && indent.is_some();
         let output_line = if let Some(indent) = indent {
             let prefix = match indent {
                 PreprocessorLineIndent::Level(level) => self.options.indent_prefix(level),
@@ -792,6 +793,9 @@ impl FormatEngine<'_> {
             self.adjust_and_publish_raw_literal_line(output_line, structural_start);
         } else {
             self.adjust_and_publish_line(output_line);
+            if indented_continuation {
+                self.output.mark_last_indented_directive_continuation();
+            }
         }
         if !line_is_continued_comment && !is_opaque_literal_continuation {
             self.update_preprocessor_state(
