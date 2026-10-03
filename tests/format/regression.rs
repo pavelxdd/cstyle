@@ -4450,3 +4450,22 @@ fn added_braces_around_a_dereferenced_cast_do_not_panic() {
     check(input, &["--add-braces", "--pad-oper"], expected);
     check(expected, &["--add-braces", "--pad-oper"], expected);
 }
+
+#[test]
+fn max_code_length_splits_a_function_pointer_declarator_without_panicking() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--max-code-length=60".to_owned()])
+        .expect("valid options");
+    let input = "ZLIB_INTERNAL unsigned long (*crc32_z_hook)(unsigned long crc, const unsigned char FAR *buf, z_size_t len) = crc32_z;\n";
+    let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+    let output = String::from_utf8(output).expect("utf8");
+    assert_eq!(non_whitespace(&output), non_whitespace(input));
+}
+
+#[test]
+fn comment_led_statement_in_a_default_block_takes_the_block_column() {
+    let input = "void f()\n{\n  switch( e ){\n    default: {\n      e = 1;\n      /* no break */ deliberate_fall_through\n    }\n    case 2:\n      x();\n  }\n}\n";
+    let expected = "void f()\n{\n    switch( e ) {\n        default: {\n            e = 1;\n            /* no break */ deliberate_fall_through\n        }\n        case 2:\n            x();\n    }\n}\n";
+    check(input, &["--indent-switches"], expected);
+    check(expected, &["--indent-switches"], expected);
+}

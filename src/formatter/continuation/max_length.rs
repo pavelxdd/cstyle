@@ -603,8 +603,9 @@ fn continuation_indent_for_split(
             .all(|column| *column + 1 >= max_continuation_indent);
     let assignment_member_call = top_level_assignment_index(line).is_some_and(|assignment| {
         open_columns.last().is_some_and(|open| {
-            let call_head = &line[assignment + 1..*open];
-            call_head.contains('.') || call_head.contains("->")
+            // A paren before the assignment, as of a declarator, opens no call.
+            line.get(assignment + 1..*open)
+                .is_some_and(|call_head| call_head.contains('.') || call_head.contains("->"))
         })
     });
     if (all_openers_over_max || assignment_member_call)

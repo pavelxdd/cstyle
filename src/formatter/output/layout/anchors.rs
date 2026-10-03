@@ -1264,7 +1264,6 @@ impl FormatEngine<'_> {
                 .trim_start()
                 .starts_with(token_text(&tokens[code]).as_str())
             || matches!(&tokens[code], Token::Word(word) if word == "case" || word == "default")
-            || self.layout.line_adjuster.total_case_unindent_depth() > 0
         {
             return None;
         }
