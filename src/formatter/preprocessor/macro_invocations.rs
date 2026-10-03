@@ -29,7 +29,13 @@ impl FormatEngine<'_> {
             return false;
         }
         // Padding operators pads commas too.
-        if self.options.pad_commas || self.options.pad_operators {
+        if self.options.pad_commas
+            || self.options.pad_operators
+            || self.options.unpad_parens
+            || self.options.pad_parens_inside
+            || self.options.pad_parens_outside
+            || self.options.pad_first_paren_outside
+        {
             return false;
         }
         let has_role = line_tokens.iter().enumerate().any(|(offset, token)| {

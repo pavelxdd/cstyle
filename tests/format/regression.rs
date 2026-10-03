@@ -5361,3 +5361,23 @@ fn breaking_the_return_type_keeps_the_name_gap_and_follows_a_macro_above_an_empt
         "static TValue *\nindex2adr (lua_State *L, int idx)\n{\n    return 0;\n}\nTEST_END\n\nint\nmain(void)\n{\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn standalone_macro_invocations_take_unpad_paren() {
+    let input = "BENCHMARK_DECLARE (loop_count)\nBENCHMARK_DECLARE( loop_alive )\n";
+    check(
+        input,
+        &["--style=kr", "--unpad-paren"],
+        "BENCHMARK_DECLARE(loop_count)\nBENCHMARK_DECLARE(loop_alive)\n",
+    );
+}
+
+#[test]
+fn standalone_macro_invocations_take_pad_paren() {
+    let input = "BENCHMARK_DECLARE (loop_count)\nBENCHMARK_DECLARE( loop_alive )\n";
+    check(
+        input,
+        &["--style=kr", "--pad-paren"],
+        "BENCHMARK_DECLARE ( loop_count )\nBENCHMARK_DECLARE ( loop_alive )\n",
+    );
+}
