@@ -3187,6 +3187,17 @@ fn strip_block_comment_line(
             let content: String = chars[first..].iter().collect();
             return format!("{prefix}{}{}", " ".repeat(rel), content.trim_end());
         }
+        // A tab before the text leaves the line as it was, less its `*`.
+        let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
+        if own_lead.contains(&'\t') || chars[first + 1..second].contains(&'\t') {
+            let mut kept: String = own_lead.iter().chain(&chars[first + 1..]).collect();
+            kept = kept.trim_end().to_string();
+            if kept.ends_with('*') {
+                kept.pop();
+                kept = kept.trim_end().to_string();
+            }
+            return format!("{prefix}{kept}");
+        }
         let rel = visual_column_at(&chars, second, tab_width)
             .saturating_sub(opener_source_column)
             .max(indent_len);
@@ -3201,11 +3212,33 @@ fn strip_block_comment_line(
         }
         return format!("{prefix}{}{content}", " ".repeat(rel));
     }
+    let content: String = chars[first..].iter().collect();
+    // A line indented with a tab past the opener's column keeps its indent.
+    let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
+    if own_lead.contains(&'\t') {
+        let lead: String = own_lead.iter().collect();
+        return format!("{prefix}{lead}{}", content.trim_end());
+    }
     let rel = visual_column_at(&chars, first, tab_width)
         .saturating_sub(opener_source_column)
         .max(indent_len);
-    let content: String = chars[first..].iter().collect();
     format!("{prefix}{}{}", " ".repeat(rel), content.trim_end())
+}
+
+/// The part of the leading whitespace `lead` past visual column `column`.
+fn lead_past_column(lead: &[char], column: usize, tab_width: usize) -> &[char] {
+    let mut width = 0;
+    for (index, &ch) in lead.iter().enumerate() {
+        if width >= column {
+            return &lead[index..];
+        }
+        width += if ch == '\t' {
+            tab_width - width % tab_width
+        } else {
+            1
+        };
+    }
+    &lead[lead.len()..]
 }
 
 /// Whether a line holds code or another block comment after its first

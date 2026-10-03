@@ -5301,3 +5301,13 @@ fn a_directive_in_the_body_of_an_else_split_across_directives_takes_its_level() 
         "void f(void)\n{\n    #ifdef A\n    if (a) {\n        b();\n    } else\n    #endif\n        if (c) {\n            #ifndef X\n            if (d) {\n                e();\n            } else\n            #endif\n            {\n                g();\n            }\n        }\n}\n",
     );
 }
+
+#[test]
+fn removing_comment_prefixes_keeps_lines_a_tab_indents_past_the_opener() {
+    let input = "void f(void)\n{\n/* first line\n\tsecond line\n *\tstar tab\n *  star sp\n   third */\n    int x;\n    /* a\n\tb\n     */\n}\n";
+    check(
+        input,
+        &["--style=kr", "--remove-comment-prefix"],
+        "void f(void)\n{\n    /*  first line\n    \tsecond line\n     \tstar tab\n        star sp\n        third */\n    int x;\n    /*  a\n        b\n    */\n}\n",
+    );
+}
