@@ -340,7 +340,9 @@ impl FormatEngine<'_> {
         if operator == "&"
             && self.layout.previous == PreviousToken::CloseParen
             && token_index < self.tree.tokens.len()
-            && !self.options.pad_parens_outside
+            // At file scope astyle pads no paren before it.
+            && (!self.options.pad_parens_outside
+                || self.tree.groups.enclosing(token_index).is_some())
             && !self
                 .tree
                 .groups
@@ -359,7 +361,12 @@ impl FormatEngine<'_> {
                 }
             })
         {
-            self.emit_source_space();
+            // Padding parens outside puts a space after the `)` anyway.
+            if self.options.pad_parens_outside {
+                self.emit_source_space_or_ensure();
+            } else {
+                self.emit_source_space();
+            }
             self.current.push_str(operator);
             self.emit_trailing_source_space();
             self.layout.command_state.observe_text(operator);

@@ -4850,3 +4850,11 @@ fn member_declarators_after_a_short_type_continue_at_the_member() {
         "struct A {\n    u8 op, p3,\n    p5;\n    unsigned long x, y,\n             z;\n};\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn padding_parens_outside_keeps_the_spacing_after_an_ampersand_past_a_paren() {
+    let input = "void f(void)\n{\n    x = (a)&b;\n    x = (a) &b;\n    x = (a)& b;\n    x = (a) & b;\n    g((voidp)&x, (voidp) &x);\n}\n";
+    let expected = "void f (void)\n{\n    x = (a) &b;\n    x = (a) &b;\n    x = (a) & b;\n    x = (a) & b;\n    g ( (voidp) &x, (voidp) &x);\n}\n";
+    check(input, &["--pad-paren-out"], expected);
+    check(input, &["--pad-oper", "--pad-paren-out"], expected);
+}
