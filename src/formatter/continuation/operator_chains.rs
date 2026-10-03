@@ -80,6 +80,8 @@ impl FormatEngine<'_> {
             .starts_with("return ")
             || !previous_code.contains('#')
             || previous_code.ends_with(';')
+            // A row of a macro body stays as written.
+            || previous_code.trim_end().ends_with('\\')
         {
             return None;
         }

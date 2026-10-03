@@ -5461,3 +5461,14 @@ fn padding_the_first_paren_outside_aligns_initializer_rows_past_it() {
         "void f (void)\n{\n    int a[] = { (1), 2,\n                3\n              };\n    int b[] = { ((1)), 2,\n                3\n              };\n}\n",
     );
 }
+
+#[test]
+fn a_macro_body_row_after_a_return_with_token_pasting_stays_as_written() {
+    let input =
+        "#define M(t)\t\\\nint\t\\\nf(int a) {\t\\\n\treturn g_##t(a,\t\\\n\t    b);\t\\\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "#define M(t)\t\\\nint\t\\\nf(int a) {\t\\\n\treturn g_##t(a,\t\\\n\t    b);\t\\\n}\n",
+    );
+}
