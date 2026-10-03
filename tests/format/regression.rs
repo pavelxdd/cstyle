@@ -5578,3 +5578,33 @@ fn a_star_run_closing_a_type_argument_is_a_pointer_with_name_alignment() {
         "void f()\n{\n    g(char **, a);\n    g(char **, a);\n    x = g(a **, b);\n}\nvoid g()\n{\n    const char **name = cast(const char **, dlsym(lib, \"x\"));\n    g(const char **, a);\n    g(char **, a);\n    g(a **, b);\n}\n",
     );
 }
+
+#[test]
+fn a_bare_return_value_continues_by_indent_continuation() {
+    let input = "int f()\n{\n    return\n        (a & 0xff) >> 56 |\n        b;\n}\nint g()\n{\n    return\n        a ? b : c;\n}\n";
+    check(
+        input,
+        &["--indent-continuation=3"],
+        "int f()\n{\n    return\n                (a & 0xff) >> 56 |\n                b;\n}\nint g()\n{\n    return\n                a ? b : c;\n}\n",
+    );
+}
+
+#[test]
+fn a_continued_case_label_goes_one_level_past_its_body() {
+    let input = "int f()\n{\n    switch (mask) {\n    case A|B|\n        C|D:\n        return 1;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-continuation=3"],
+        "int f()\n{\n    switch (mask) {\n    case A|B|\n            C|D:\n        return 1;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_continued_indented_case_label_goes_one_level_past_its_body() {
+    let input = "int f()\n{\n    switch (mask) {\n    case A|B|\n        C|D:\n        return 1;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-continuation=0", "--indent-switches"],
+        "int f()\n{\n    switch (mask) {\n        case A|B|\n                C|D:\n            return 1;\n    }\n}\n",
+    );
+}

@@ -2794,7 +2794,7 @@ impl FormatEngine<'_> {
         let line = self.line_led_by(keyword)?;
         (self.output.line_tokens(line)?.last == keyword).then(|| {
             self.output.lead_width(line, self.options.tab_width)
-                + self.options.indent_width
+                + self.options.continuation_indent * self.options.indent_width
                 + self.case_unindent_spaces()
         })
     }

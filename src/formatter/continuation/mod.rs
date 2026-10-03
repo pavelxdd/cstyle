@@ -732,6 +732,19 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
+        // A case label continued before its colon goes on at its body
+        // and one level in, whatever the continuation indent.
+        let current = self.current.trim_start();
+        if (current.starts_with("case ") || current.starts_with("case("))
+            && find_case_colon(current).is_none()
+            && self.layout.nesting.paren_depth == 0
+        {
+            // The label itself stands a level out unless switches indent.
+            let label_spaces = self.current_line_indent_spaces().saturating_sub(
+                usize::from(!self.options.indent_switches) * self.options.indent_width,
+            );
+            return ContinuationIndent::Spaces(label_spaces + 2 * self.options.indent_width);
+        }
         if self.options.max_code_length.is_some()
             && let Some(spaces) = lambda_parameter_continuation_indent(
                 self.current.trim_end(),
