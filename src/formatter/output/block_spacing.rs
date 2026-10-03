@@ -16,6 +16,7 @@ pub(crate) struct BlockSpacingState {
     pending_one_line_block: bool,
     closed_empty_block: bool,
     pending_closed_empty_block: Option<bool>,
+    case_block_before_directive: bool,
 }
 
 impl FormatEngine<'_> {
@@ -323,6 +324,9 @@ impl FormatEngine<'_> {
                 is_standard_break_blocks_opening_header(header)
                     || is_break_blocks_closing_header(header)
             });
+        // A case block's brace parts from a directive after it.
+        self.block_spacing.case_block_before_directive =
+            closed_header.is_some_and(|header| matches!(header, "case" | "default"));
         if closed_command_header
             && closed_header.is_some_and(|header| !matches!(header, "case" | "default"))
         {
@@ -363,6 +367,20 @@ impl FormatEngine<'_> {
                     !self.tree.tokens[open + 1..close].iter().any(is_code_token)
                 });
             self.block_spacing.closed_empty_block = previous_opens || holds_no_code;
+        }
+        let case_block_before_directive =
+            std::mem::take(&mut self.block_spacing.case_block_before_directive);
+        if case_block_before_directive
+            && line.trim_start().starts_with('#')
+            && self
+                .layout
+                .previous_pre_adjust_line
+                .as_deref()
+                .is_some_and(|previous| previous.trim() == "}")
+        {
+            self.block_spacing.prepend_blank = false;
+            self.block_spacing.append_blank = false;
+            return true;
         }
         let prepend = std::mem::take(&mut self.block_spacing.prepend_blank);
         let append = std::mem::take(&mut self.block_spacing.append_blank);

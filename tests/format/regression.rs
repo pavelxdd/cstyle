@@ -5441,3 +5441,13 @@ fn break_one_line_headers_breaks_a_switch_after_a_header() {
         "void f(int i)\n{\n    if (a)\n        switch (i) {\n        case 1:\n            break;\n        }\n    for (;;)\n        switch (i) {\n        default:\n            break;\n        }\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_parts_a_case_block_brace_from_a_directive_after_it() {
+    let input = "void f(void)\n{\n    switch (c) {\n    case 0:\n        break;\n#if X\n    case 1: {\n        if (a) {\n            b();\n        }\n        break;\n    }\n#endif\n    case 2:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f(void)\n{\n    switch (c) {\n    case 0:\n        break;\n#if X\n\n    case 1: {\n        if (a) {\n            b();\n        }\n\n        break;\n    }\n\n#endif\n\n    case 2:\n        break;\n    }\n}\n",
+    );
+}
