@@ -5381,3 +5381,13 @@ fn standalone_macro_invocations_take_pad_paren() {
         "BENCHMARK_DECLARE ( loop_count )\nBENCHMARK_DECLARE ( loop_alive )\n",
     );
 }
+
+#[test]
+fn unpadding_parens_keeps_a_trailing_comment_column_and_leaves_inner_comments() {
+    let input = "void f(void)\n{\n    if (!g(L, o)) {  /* c1 */\n        h();\n    }\n    for (i = 0; i < n; /* void */ ) {\n        h();\n    }\n    while (1 /* exit */) {\n        h();\n    }\n    if (a) b();  /* c2 */\n    x = ( a + b );  /* c3 */\n}\n";
+    check(
+        input,
+        &["--style=kr", "--unpad-paren"],
+        "void f(void)\n{\n    if(!g(L, o)) {   /* c1 */\n        h();\n    }\n    for(i = 0; i < n; /* void */) {\n        h();\n    }\n    while(1 /* exit */) {\n        h();\n    }\n    if(a) b();   /* c2 */\n    x = (a + b);    /* c3 */\n}\n",
+    );
+}

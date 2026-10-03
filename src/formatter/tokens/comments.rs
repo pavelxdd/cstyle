@@ -2933,6 +2933,24 @@ impl FormatEngine<'_> {
             self.current.push_str(&gap);
             return;
         }
+        // astyle moves no block comment that code follows on its line.
+        let code_follows = kind == CommentKind::Block
+            && self.token_input.has_next_meaningful_token
+            && !self.token_input.next_token_is_line_comment
+            && !self
+                .token_input
+                .next_input_whitespace
+                .as_deref()
+                .is_some_and(|whitespace| whitespace.contains('\n'));
+        if code_follows
+            && target_column.is_some()
+            && !gap.is_empty()
+            && !gap.contains('\t')
+            && !self.current.trim_end().ends_with(['*', '&', '^'])
+        {
+            self.current.push_str(&gap);
+            return;
+        }
         let Some(target_column) = target_column else {
             if gap.is_empty() {
                 let keeps_adjacent_comment = self.layout.previous == PreviousToken::Comma

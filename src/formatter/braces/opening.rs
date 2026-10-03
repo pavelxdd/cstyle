@@ -850,8 +850,17 @@ impl FormatEngine<'_> {
                 // Code joined or padded before the brace moves the comment no
                 // further right than its source column, as astyle keeps its
                 // column.
+                // Code joined or padded before the brace moves the comment no
+                // further right than its source column; spaces unpadding took
+                // out go into the gap.
+                let unpad_parens = self.options.unpad_parens;
                 let column_gap = |current: &str, target: usize| {
                     let code_len = current.trim().chars().count();
+                    // Unpadding takes at most a space off each side of a paren.
+                    let deficit = target.saturating_sub(code_len + ws.len());
+                    if unpad_parens && deficit <= 2 * current.matches(['(', ')']).count() {
+                        return target.saturating_sub(code_len).max(1);
+                    }
                     let shift = (code_len + ws.len()).saturating_sub(target);
                     ws.len().saturating_sub(shift).max(1)
                 };
