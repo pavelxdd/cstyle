@@ -187,11 +187,8 @@ impl FormatEngine<'_> {
         }
         let width = self.output.lead_width(statement, self.options.tab_width);
         let directive_code = self.output.code(directive);
-        let directive_opens_block = directive_code
-            .strip_suffix('\\')
-            .unwrap_or(directive_code)
-            .trim_end()
-            .ends_with('{');
+        let directive_opens_block =
+            directive_code.matches('{').count() > directive_code.matches('}').count();
         if statement == directive + 1 && !directive_opens_block {
             // The body starts a level past its directive.
             width.min(

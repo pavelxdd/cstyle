@@ -519,10 +519,13 @@ impl FormatEngine<'_> {
             (end + 1..self.output.len()).find(|&next| !self.output[next].trim().is_empty())?;
         (self.output.lead_width(next, tab_width) > lead).then(|| {
             let line = &self.output[index];
+            // The output is retabbed by now: the fill takes the output's tabs.
+            let mut output_options = self.options.clone();
+            output_options.indent_style = self.output_indent_style;
             format!(
                 "{}{}",
                 &line[..line.len() - line.trim_start().len()],
-                self.options.indent_prefix(1)
+                output_options.indent_prefix(1)
             )
         })
     }

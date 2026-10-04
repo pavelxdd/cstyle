@@ -6076,3 +6076,18 @@ fn an_added_closer_goes_before_the_statement_comment_with_its_gap_in_lisp() {
         "int f() {\n    if (a) {\n        return -1; }                      /* incomplete set */\n    return 0; }\n",
     );
 }
+
+#[test]
+fn macro_rows_inside_a_directive_brace_and_filled_block_lines_take_tabs() {
+    let input = "#define RTREE_CTX_INITIALIZER {{A(RTREE_CTX_NCACHE)}, \\\n\t\t{B(RTREE_CTX_NCACHE_L2)}}\n\n#ifdef X\n#include <a.h>\n\nint f(int);\n#endif\n\nint y;\n";
+    check(
+        input,
+        &[
+            "--indent=tab=8",
+            "--indent-preproc-define",
+            "--fill-empty-lines",
+            "--indent-preproc-block",
+        ],
+        "#define RTREE_CTX_INITIALIZER {{A(RTREE_CTX_NCACHE)}, \\\n\t\t{B(RTREE_CTX_NCACHE_L2)}}\n\n#ifdef X\n\t#include <a.h>\n\t\n\tint f(int);\n#endif\n\nint y;\n",
+    );
+}
