@@ -2882,6 +2882,30 @@ impl FormatEngine<'_> {
 
     /// Whether the current line starts with code its source line had a
     /// control header before, the header now on a line of its own.
+    /// How much wider the code on the current line came out than its
+    /// source tokens, whitespace runs counted as written.
+    fn current_segment_growth(&self) -> Option<isize> {
+        let tokens = &self.tree.tokens;
+        let first = self.current.tokens()?.first;
+        let comment = self.current.active_comment()?;
+        if comment <= first || comment > tokens.len() {
+            return None;
+        }
+        let mut end = comment;
+        while end > first && matches!(tokens[end - 1], Token::Whitespace(_)) {
+            end -= 1;
+        }
+        if tokens[first..end]
+            .iter()
+            .any(|token| matches!(token, Token::Newline | Token::Comment(..)))
+        {
+            return None;
+        }
+        let source: usize = tokens[first..end].iter().map(token_char_len).sum();
+        let code = self.current.trim().chars().count();
+        Some(code as isize - source as isize)
+    }
+
     fn current_line_broke_off_header(&self) -> bool {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
@@ -3071,7 +3095,10 @@ impl FormatEngine<'_> {
             && !gap.contains('\t')
             && self.current_line_broke_off_header()
         {
-            self.current.push_str(&gap);
+            // Padding the statement takes from the gap as on any line.
+            let growth = self.current_segment_growth().unwrap_or(0);
+            let width = (gap.chars().count() as isize - growth).max(1) as usize;
+            self.current.push_str(&" ".repeat(width));
             return;
         }
         // astyle moves no block comment that code follows on its line.

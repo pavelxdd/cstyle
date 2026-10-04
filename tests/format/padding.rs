@@ -3135,3 +3135,16 @@ fn comment_after_added_brace_keeps_its_column_through_unpadding() {
         "void f()\n{\n    if(L->ci == L->base_ci) { /* no enclosing function? */\n        x();\n    }\n    if(a) {   /* c */\n        x();\n    }\n    if(a) {  /* c */\n        x();\n    }\n}\n",
     );
 }
+
+#[test]
+fn comment_after_broken_off_statement_takes_its_padding() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--break-one-line-headers", "--pad-paren"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n  if (a) x = 1;\n  else switch (idx) {  /* pseudo-indices */\n    case 1: break;\n  }\n  while (othern) othern = gnext(othern);  /* find previous */\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    if ( a )\n        x = 1;\n    else\n        switch ( idx ) { /* pseudo-indices */\n        case 1:\n            break;\n        }\n    while ( othern )\n        othern = gnext ( othern ); /* find previous */\n}\n",
+    );
+}

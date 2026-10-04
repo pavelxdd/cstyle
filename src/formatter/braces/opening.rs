@@ -848,12 +848,13 @@ impl FormatEngine<'_> {
                     .and_then(|brace| self.added_opener_overruns.get(&brace))
                     .copied()
                     .unwrap_or(0);
+                let prefix = self.broken_off_else_prefix_width();
                 let target = self
                     .layout
                     .line_state
                     .trailing_comment_columns
                     .first()
-                    .map(|target| target.saturating_sub(overrun))
+                    .map(|target| target.saturating_sub(overrun + prefix))
                     .filter(|_| ws.chars().all(|ch| ch == ' '));
                 // Code joined or padded before the brace moves the comment no
                 // further right than its source column, as astyle keeps its
@@ -2553,6 +2554,33 @@ impl FormatEngine<'_> {
 
     /// The source width of what a broken else-if moved off the line its
     /// brace is on, before the `if`.
+    /// Width of the `else` an `else switch`-like line left on the line
+    /// before, which the comment's source column counts.
+    fn broken_off_else_prefix_width(&self) -> usize {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return 0;
+        };
+        if first >= tokens.len() {
+            return 0;
+        }
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let Some(code_start) = (line_start..first).find(|&index| is_code_token(&tokens[index]))
+        else {
+            return 0;
+        };
+        if !tokens[code_start..first].iter().all(|token| {
+            matches!(token, Token::Whitespace(_))
+                || matches!(token, Token::Word(word) if word == "else")
+        }) {
+            return 0;
+        }
+        tokens[code_start..first].iter().map(token_char_len).sum()
+    }
+
     fn broken_else_if_prefix_width(&self) -> usize {
         if !self.current.trim_start().starts_with("if")
             || !self
