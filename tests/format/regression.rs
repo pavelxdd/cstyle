@@ -6026,3 +6026,13 @@ fn a_conditional_in_a_header_condition_stands_a_level_before_its_column() {
         "void f()\n{\n    if (r == 0)\n        x();\n    else if (errno == E\n         #if defined(O)\n             || errno == B\n         #endif\n            )\n        y();\n}\nvoid g()\n{\n    if(\n    #if A\n        x &&\n    #endif\n        y) {\n        z();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_logical_operand_in_a_condition_indents_after_the_paren_in_a_branch_block() {
+    let input = "int f(void)\n{\n#ifdef A\n    x = 1;\n#else\n    {\n        if((h != I) &&\n            G(h, &c)) {\n            x();\n        }\n    }\n#endif\n}\n";
+    check(
+        input,
+        &["--indent-after-parens"],
+        "int f(void)\n{\n#ifdef A\n    x = 1;\n#else\n    {\n        if((h != I) &&\n            G(h, &c)) {\n            x();\n        }\n    }\n#endif\n}\n",
+    );
+}

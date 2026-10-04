@@ -2047,6 +2047,10 @@ impl FormatEngine<'_> {
     /// An operand after a trailing `&&` or `||` inside nested parentheses
     /// aligns with the first operand after their `(`.
     fn logical_operand_in_parens_indent(&self, first: usize) -> Option<usize> {
+        // Parens indenting after them align nothing.
+        if self.options.indent_after_parens {
+            return None;
+        }
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
         let previous = self.tree.previous_code_token(first)?;
