@@ -238,6 +238,9 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
 /// ignoring braces inside strings and comments. A `}` without a matching `{` earlier on the
 /// same line counts as an unmatched close; a `{` left open at the end counts as an open.
 pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
+    if !line.contains(['{', '}']) {
+        return (0, 0);
+    }
     let chars = line.chars().collect::<Vec<_>>();
     let mut open_depth = 0usize;
     let mut unmatched_closes = 0usize;
