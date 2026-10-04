@@ -5928,3 +5928,13 @@ fn conditionals_in_a_header_condition_and_their_continued_lines_follow_astyle() 
         "void f()\n{\n    if ((err == A\n        #if (W)\n            || err == B\n        #endif\n        )) {\n        x();\n    }\n    const char *s[] = {\n        \"a\"\n        #if !defined(X) ||  \\\n        (defined(Y) ||       \\\n         defined(Z))\n        \"b\"\n        #endif\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_header_alternative_after_else_directive_takes_no_blank_line() {
+    let input = "void f()\n{\n  if (a)\n    abort();\n\n#if defined(M)\n  if (b(1))\n#else\n  if (b(2))\n#endif\n    abort();\n\n  x();\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    if (a)\n        abort();\n\n#if defined(M)\n\n    if (b(1))\n#else\n    if (b(2))\n#endif\n        abort();\n\n    x();\n}\n",
+    );
+}

@@ -25,6 +25,7 @@ impl FormatEngine<'_> {
             return;
         }
         let previous_header = self.block_spacing.active_header.take();
+        let previous_header_expects_body = self.block_spacing.header_expects_body;
         self.block_spacing.active_header = Some(word.to_string());
         self.block_spacing.header_expects_body = true;
 
@@ -74,6 +75,9 @@ impl FormatEngine<'_> {
         if is_break_blocks_opening_header(self.options, word)
             && (previous_header.is_none()
                 || self.preprocessor.last_output_was_preprocessor
+                    // A header a directive splits from its alternative.
+                    && !(previous_header_expects_body
+                        && matches!(word, "if" | "while" | "for"))
                     && !(previous_header.as_deref() == Some("else")
                         || matches!(previous_header.as_deref(), Some("case" | "default"))
                             && (!matches!(word, "case" | "default")
