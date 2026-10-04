@@ -6091,3 +6091,13 @@ fn macro_rows_inside_a_directive_brace_and_filled_block_lines_take_tabs() {
         "#define RTREE_CTX_INITIALIZER {{A(RTREE_CTX_NCACHE)}, \\\n\t\t{B(RTREE_CTX_NCACHE_L2)}}\n\n#ifdef X\n\t#include <a.h>\n\t\n\tint f(int);\n#endif\n\nint y;\n",
     );
 }
+
+#[test]
+fn a_block_without_code_stays_on_its_header_line_in_pico() {
+    let input = "void f()\n{\n    if (r->postponed) {\n        for (pr = r->postponed; pr->next; pr = pr->next) { /* void */ }\n        x();\n    }\n    for (;;) { /* void */ }\n}\nvoid g()\n{\n    for (;;) { x(); }\n    for (;;) { }\n    if (a) { /* c */ }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-one-line-headers"],
+        "void f()\n{   if (r->postponed)\n    {   for (pr = r->postponed; pr->next; pr = pr->next) { /* void */ }\n        x(); }\n    for (;;) { /* void */ } }\nvoid g()\n{   for (;;)\n    {   x(); }\n    for (;;) { }\n    if (a) { /* c */ } }\n",
+    );
+}

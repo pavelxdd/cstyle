@@ -541,6 +541,19 @@ impl FormatEngine<'_> {
                 }) {
                     return false;
                 }
+                // A block holding no code stays on its header's line.
+                if tokens[statement_start + 1..line_end]
+                    .iter()
+                    .find(|token| {
+                        !matches!(
+                            token,
+                            Token::Whitespace(_) | Token::Comment(CommentKind::Block, _)
+                        )
+                    })
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+                {
+                    return false;
+                }
                 let header_indent = self
                     .layout
                     .indentation
