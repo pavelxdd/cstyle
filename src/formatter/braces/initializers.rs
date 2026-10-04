@@ -595,7 +595,7 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| self.current_line_indent_spaces())
             }
         } else {
-            self.current_line_indent_spaces()
+            self.statement_line_indent_spaces()
                 .max(constructor_indent.unwrap_or(0))
         };
         let aggregate_assign = self.current.trim_end().ends_with('=');

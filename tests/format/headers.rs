@@ -2635,3 +2635,40 @@ fn split_condition_close_paren_after_a_directive_split_else_aligns_with_its_pare
         ),
     );
 }
+
+#[test]
+fn initializer_brace_in_a_broken_else_if_closes_at_its_brace() {
+    let mut options = FormatOptions::default();
+    options.break_else_ifs = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f() {",
+                "    if (a) {",
+                "        x();",
+                "    } else if (b) {",
+                "        char *s[] = { \"bol\", \"eol\",",
+                "                      \"bow\"",
+                "                    };",
+                "        y();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    if (a) {",
+            "        x();",
+            "    } else",
+            "        if (b) {",
+            "            char *s[] = { \"bol\", \"eol\",",
+            "                          \"bow\"",
+            "                        };",
+            "            y();",
+            "        }",
+            "}",
+        ),
+    );
+}

@@ -417,6 +417,24 @@ impl FormatEngine<'_> {
         self.continuation_base_indent() * self.options.indent_width + split_else_extra
     }
 
+    /// [`Self::current_line_indent_spaces`] for a line that starts a
+    /// statement, which the `if`s an `else` broke from stand deeper.
+    pub(crate) fn statement_line_indent_spaces(&self) -> usize {
+        let else_if_break_extra = if self.options.no_indent_if_after_else
+            || self
+                .layout
+                .continuation_indent
+                .next_line_indent_spaces
+                .is_some()
+            || self.layout.continuation_indent.next_line_indent.is_some()
+        {
+            0
+        } else {
+            self.layout.else_if_break_depths.len() * self.options.indent_width
+        };
+        self.current_line_indent_spaces() + else_if_break_extra
+    }
+
     pub(crate) fn inline_brace_call_indent_spaces(&self, current: &str) -> Option<usize> {
         let is_current_line = std::ptr::eq(current.as_ptr(), self.current.as_ptr());
         let current_line_brace = if is_current_line {
