@@ -5918,3 +5918,13 @@ fn a_macro_header_condition_indents_after_its_paren_without_conditional_indent()
         "#define SLIST_FOREACH(var, head, field)\t\t\t\t\\\n    for((var) = SLIST_FIRST(head);\t\t\t\t\\\n        (var) != SLIST_END(head);\t\t\t\t\t\\\n        (var) = SLIST_NEXT(var, field))\n#define W(a) \\\n    if (a &&  \\\n        b)    \\\n        y()\n",
     );
 }
+
+#[test]
+fn conditionals_in_a_header_condition_and_their_continued_lines_follow_astyle() {
+    let input = "void f()\n{\n    if ((err == A\n#if (W)\n         || err == B\n#endif\n        )) {\n        x();\n    }\n    const char *s[] = {\n        \"a\"\n#if !defined(X) ||  \\\n  (defined(Y) ||       \\\n   defined(Z))\n        \"b\"\n#endif\n    };\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond"],
+        "void f()\n{\n    if ((err == A\n        #if (W)\n            || err == B\n        #endif\n        )) {\n        x();\n    }\n    const char *s[] = {\n        \"a\"\n        #if !defined(X) ||  \\\n        (defined(Y) ||       \\\n         defined(Z))\n        \"b\"\n        #endif\n    };\n}\n",
+    );
+}

@@ -140,6 +140,9 @@ struct PreprocessorLineParts<'a> {
     /// The directive is a conditional that indenting preprocessor blocks
     /// indents: its continued lines stand a level past it.
     indent_continued_block_conditional: bool,
+    /// The source lead of the first continued line, which later ones keep
+    /// their offsets from.
+    first_continuation_lead: Option<usize>,
 }
 
 impl FormatEngine<'_> {
@@ -621,6 +624,9 @@ impl FormatEngine<'_> {
         }
 
         let mut continued_line_comment = false;
+        let first_continuation_lead = parts
+            .get(1)
+            .map(|part| leading_visual_width(part, self.options.tab_width));
         for (index, part) in parts.iter().enumerate() {
             self.push_preprocessor_part(
                 index,
@@ -630,6 +636,7 @@ impl FormatEngine<'_> {
                     branch_separator_after_else,
                     indent_continued_conditional,
                     indent_continued_block_conditional,
+                    first_continuation_lead,
                 },
                 &mut continued_line_comment,
             );
@@ -695,6 +702,7 @@ impl FormatEngine<'_> {
             branch_separator_after_else,
             indent_continued_conditional,
             indent_continued_block_conditional,
+            first_continuation_lead,
         } = *parts;
         let line_is_continued_comment = *continued_line_comment;
         let is_opaque_literal_line = opaque_literal_line_ranges
@@ -771,7 +779,16 @@ impl FormatEngine<'_> {
             } else {
                 part.trim_start().to_string()
             };
-            format!("{prefix}{body}")
+            // A conditional's later continued lines keep their offsets from
+            // its first one.
+            let offset = if index > 1 && indent_continued_conditional {
+                first_continuation_lead.map_or(0, |first| {
+                    leading_visual_width(part, self.options.tab_width).saturating_sub(first)
+                })
+            } else {
+                0
+            };
+            format!("{prefix}{}{body}", " ".repeat(offset))
         } else if collapse {
             let leading = &part[..part.len() - part.trim_start().len()];
             format!("{leading}{}", collapse_pound_whitespace(part.trim_start()))
@@ -991,7 +1008,7 @@ impl FormatEngine<'_> {
             }
             return PreprocessorLineIndent::Level(indent.level);
         }
-        if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
+        if let Some(spaces) = self.preprocessor_continuation_spaces() {
             PreprocessorLineIndent::Exact {
                 structural_level: self.layout.indentation.indent(),
                 spaces,
@@ -1001,6 +1018,22 @@ impl FormatEngine<'_> {
                 self.layout.indentation.indent() + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The column of a directive inside a continued statement: in the
+    /// condition of a control header astyle takes the header's level back off.
+    fn preprocessor_continuation_spaces(&self) -> Option<usize> {
+        let spaces = self.layout.continuation_indent.next_line_indent_spaces?;
+        let in_header_condition = self.header_paren.depth.is_some()
+            && matches!(
+                self.layout.command_state.current_header.as_deref(),
+                Some("if" | "while" | "for")
+            );
+        Some(if in_header_condition {
+            spaces.saturating_sub(self.options.indent_width)
+        } else {
+            spaces
+        })
     }
 
     /// A body an `else` split across directives opens stands a level deeper.
@@ -1038,7 +1071,7 @@ impl FormatEngine<'_> {
                     .indent_preproc_conditional
                     .then(|| self.break_else_if_directive_column())
                     .flatten()
-                    .or(self.layout.continuation_indent.next_line_indent_spaces);
+                    .or_else(|| self.preprocessor_continuation_spaces());
                 self.layout.indentation.push_preprocessor_indent(
                     self.layout.indentation.indent() + self.split_else_directive_extra(),
                     spaces,
