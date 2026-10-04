@@ -9783,3 +9783,37 @@ fn tab_indent_statements_after_a_qt_slots_label_stand_at_their_level() {
         )
     );
 }
+#[test]
+fn tab_indent_closer_of_a_block_running_on_from_its_header_aligns_in_spaces() {
+    let mut options = FormatOptions::default();
+    options.indent_style = IndentStyle::Tabs;
+    let actual = format_with(
+        fixture!(
+            "enum trailer_info_type { TRAILER_KEY, TRAILER_COMMAND,",
+            "TRAILER_WHERE",
+            "};",
+            "void f(void)",
+            "{",
+            "enum e { A,",
+            "B",
+            "} v;",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "enum trailer_info_type { TRAILER_KEY, TRAILER_COMMAND,",
+            "                         TRAILER_WHERE",
+            "                       };",
+            "void f(void)",
+            "{",
+            "\tenum e { A,",
+            "\t         B",
+            "\t       } v;",
+            "}",
+        )
+    );
+}

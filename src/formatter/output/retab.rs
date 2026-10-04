@@ -11,7 +11,7 @@ use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::structure::blocks::{BlockKind, is_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
@@ -336,6 +336,25 @@ impl FormatEngine<'_> {
             )
         });
         if matches!(self.tree.tokens[first], Token::Symbol('{' | '}')) && block_brace {
+            // A block whose body runs on from a brace that ends a header,
+            // as `enum e { A,`, closes aligned past the header's indent.
+            if matches!(self.tree.tokens[first], Token::Symbol('}'))
+                && let Some(group) = groups.closed_at(first)
+            {
+                let open = groups.get(group).open;
+                let line = self.output.line_with_token(open)?;
+                let tokens = &self.tree.tokens;
+                let runs_on = next_code_token(tokens, open + 1).is_some_and(|next| {
+                    next != first && self.output.line_with_token(next) == Some(line)
+                });
+                let leads_line = self
+                    .output
+                    .line_tokens(line)
+                    .is_some_and(|span| next_code_token(tokens, span.first) == Some(open));
+                if runs_on && !leads_line {
+                    return Some(self.output.lead_width(line, self.options.tab_width));
+                }
+            }
             return None;
         }
         // Styles that indent braces indent an initializer's brace opening
