@@ -11,7 +11,9 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::preprocessor::PreprocessorRegion;
-use crate::formatter::state::frame::{BraceSemanticKind, CommentFrame, CommentFrameKind};
+use crate::formatter::state::frame::{
+    BraceSemanticKind, CommentFrame, CommentFrameKind, ParenRole,
+};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::is_code_token;
@@ -377,9 +379,16 @@ impl FormatEngine<'_> {
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);
                     trimmed = format!("{prefix}{}", trimmed.trim_start());
-                } else if let Some(spaces) = line_continuation_indent
-                    .or_else(|| self.recent_paren_continuation_indent_spaces())
-                {
+                } else if let Some(spaces) = line_continuation_indent.or_else(|| {
+                    // A control header's condition placed its comments.
+                    (!self
+                        .layout
+                        .frame_stack
+                        .active_delimiter()
+                        .is_some_and(|frame| frame.role == ParenRole::Header))
+                    .then(|| self.recent_paren_continuation_indent_spaces())
+                    .flatten()
+                }) {
                     let prefix = self
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);
@@ -1278,6 +1287,33 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trim().is_empty())
             .is_some_and(|line| line.trim_start().starts_with("@interface"));
+        // A control header's condition continues where its lines do, past
+        // the minimum conditional indent.
+        let in_header_condition = self
+            .layout
+            .frame_stack
+            .active_delimiter()
+            .is_some_and(|frame| frame.role == ParenRole::Header);
+        let header_condition_row_indent = in_header_condition
+            .then(|| {
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .find(|line| !line.trim().is_empty())
+                    .filter(|line| {
+                        let trimmed = line.trim_start();
+                        !is_comment_only_line(trimmed)
+                            && !["if", "while", "for"]
+                                .iter()
+                                .any(|header| comment_starts_header_word(trimmed, header))
+                            && !trimmed.starts_with("} while")
+                            && !trimmed.starts_with("else if")
+                            && !trimmed.starts_with("} else if")
+                    })
+                    .map(|line| leading_visual_width(line, self.options.tab_width))
+            })
+            .flatten();
         if kind == CommentKind::Block
             && self.current.trim().is_empty()
             && !comment.contains('\n')
@@ -1287,6 +1323,7 @@ impl FormatEngine<'_> {
                 .or(control_header_comment_indent)
                 .or(user_label_comment_indent)
                 .or(lambda_parameter_comment_indent)
+                .or(header_condition_row_indent)
                 .or_else(|| {
                     self.options
                         .indent_after_parens
@@ -1305,6 +1342,9 @@ impl FormatEngine<'_> {
                                 leading_visual_width(line, self.options.tab_width);
                             self.block_comment_call_opener_indent_spaces(code, previous_indent)
                                 .or_else(|| {
+                                    if in_header_condition {
+                                        return None;
+                                    }
                                     unmatched_open_paren_column(code).map(|column| {
                                         let after_open = &code[column + 1..];
                                         let content_offset = after_open

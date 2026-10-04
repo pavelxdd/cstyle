@@ -9424,3 +9424,34 @@ fn leading_assignment_in_a_braceless_body_stands_a_level_in() {
         ),
     );
 }
+
+#[test]
+fn column_one_comments_in_a_header_condition_stand_at_its_rows() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    if ((err==UNZ_OK) && (s!=0) &&",
+                "/* #ifdef HAVE_BZIP2 */",
+                "                         (s!=Z_BZIP2ED) &&",
+                "/* #endif */",
+                "                         (s!=Z_DEFLATED))",
+                "        err=UNZ_BADZIPFILE;",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    if ((err==UNZ_OK) && (s!=0) &&",
+            "            /* #ifdef HAVE_BZIP2 */",
+            "            (s!=Z_BZIP2ED) &&",
+            "            /* #endif */",
+            "            (s!=Z_DEFLATED))",
+            "        err=UNZ_BADZIPFILE;",
+            "}",
+        ),
+    );
+}
