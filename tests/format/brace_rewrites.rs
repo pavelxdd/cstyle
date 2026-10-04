@@ -1688,3 +1688,43 @@ fn added_one_line_block_indents_with_tabs() {
         );
     }
 }
+
+#[test]
+fn lisp_added_block_breaks_from_the_statement_after_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=lisp".to_owned(),
+            "--add-one-line-braces".to_owned(),
+            "--break-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(int x)",
+                "{",
+                "    a();",
+                "    if (x)",
+                "        return 1;",
+                "    b();",
+                "    return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(int x) {",
+            "    a();",
+            "",
+            "    if (x) {",
+            "        return 1; }",
+            "",
+            "    b();",
+            "    return 0; }",
+        ),
+    );
+}

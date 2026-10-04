@@ -289,7 +289,9 @@ impl FormatEngine<'_> {
             }
         } else {
             self.token_input.token_begins_source_line = false;
-            self.layout.line_state.is_one_line_block = true;
+            // A block lisp breaks is no one-line block to its neighbors.
+            self.layout.line_state.is_one_line_block =
+                !(lisp_breaks_added_block || self.options.lisp_add_one_line_braces_breaks_blocks());
             // The added brace follows its header by one space, whatever the
             // source held before the header's `)`.
             self.token_input.previous_input_whitespace = Some(" ".to_string());
@@ -302,14 +304,16 @@ impl FormatEngine<'_> {
                 statement_start,
                 None,
             );
-            // A comment on a later line follows the block, not the brace.
+            // A comment or a statement on a later line follows the block,
+            // not the brace; a closing header still joins it.
             let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true).and_then(
                 |next_index| {
-                    let later_comment = matches!(tokens[next_index], Token::Comment(..))
-                        && tokens[semicolon + 1..next_index]
-                            .iter()
-                            .any(|token| matches!(token, Token::Newline));
-                    if later_comment {
+                    let on_later_line = tokens[semicolon + 1..next_index]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline));
+                    let closing_header = matches!(&tokens[next_index], Token::Word(word)
+                        if matches!(word.as_str(), "else" | "while" | "catch"));
+                    if on_later_line && !closing_header {
                         Some(&Token::Newline)
                     } else {
                         tokens.get(next_index)
