@@ -950,7 +950,14 @@ impl FormatEngine<'_> {
             frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_some()
         });
         if let Some(frame) = semantic_frame {
-            return Some(frame.header_indent_column + self.options.indent_width);
+            // An `else` leading its line stands where a broken else-if chain
+            // put it.
+            let header = if starts_header_word(open, "else") {
+                open_spaces.max(frame.header_indent_column)
+            } else {
+                frame.header_indent_column
+            };
+            return Some(header + self.options.indent_width);
         }
         let case_unindent = if starts_header_word(open, "case") || open.starts_with("default:") {
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width

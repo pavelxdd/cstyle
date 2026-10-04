@@ -829,3 +829,45 @@ fn indented_brace_styles_keep_sibling_indent_after_closing_declaration() {
         assert_eq!(format_exact(source, &options), source, "{style}");
     }
 }
+
+#[test]
+fn ratliff_closes_else_of_broken_braceless_else_if_chain_at_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a)",
+                "        x();",
+                "    else if (b)",
+                "        y();",
+                "    else {",
+                "        z();",
+                "    }",
+                "    w();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    if (a)",
+            "        x();",
+            "    else",
+            "        if (b)",
+            "            y();",
+            "        else {",
+            "            z();",
+            "            }",
+            "    w();",
+            "    }",
+        ),
+    );
+}
