@@ -1398,7 +1398,8 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim().is_empty())
+            // A comment line between leaves the sign to the code before it.
+            .find(|line| !line[..trailing_comment_split_limit(line)].trim().is_empty())
             .is_some_and(|previous| {
                 let code = previous[..trailing_comment_split_limit(previous)].trim_end();
                 code.ends_with(['(', '[', '{', ',', '=', '?', ':'])

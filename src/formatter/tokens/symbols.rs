@@ -405,7 +405,11 @@ impl FormatEngine<'_> {
                 || (self.layout.line_state.ternary_colon
                     && self.options.pad_operators
                     && self.token_input.previous_input_whitespace.is_none()
-                    && self.current.ends_with(' ')))
+                    && self.current.ends_with(' '))
+                // A `for` header's clause starts a space past its `;`.
+                || (self.layout.nesting.paren_depth > 0
+                    && self.current.ends_with(' ')
+                    && self.current.trim_end().ends_with(';')))
         {
             self.emit_source_space();
         }

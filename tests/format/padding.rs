@@ -2992,3 +2992,44 @@ fn pad_oper_keeps_sign_unary_after_astyle_numeric_casts() {
         ),
     );
 }
+
+#[test]
+fn for_clause_paren_starts_a_space_past_its_semicolon() {
+    let options = FormatOptions::default();
+
+    assert_eq!(
+        format_exact(
+            fixture!("void f(void)", "{", "    for (i=0;(i<n);(i++)) {}", "}"),
+            &options,
+        ),
+        fixture!("void f(void)", "{", "    for (i=0; (i<n); (i++)) {}", "}"),
+    );
+}
+
+#[test]
+fn pad_oper_reads_sign_after_comment_line_from_code_before() {
+    let mut options = FormatOptions::default();
+    options.pad_operators = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    err = g(a,",
+                "            /* -X, Y, */",
+                "            -X, Y);",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    err = g(a,",
+            "            /* -X, Y, */",
+            "            -X, Y);",
+            "}",
+        ),
+    );
+}
