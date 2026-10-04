@@ -11,7 +11,7 @@ use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
@@ -382,7 +382,36 @@ impl FormatEngine<'_> {
                 && (self.closes_control_condition(previous)
                     || matches!(&tokens[previous], Token::Word(word) if matches!(word.as_str(), "else" | "do")))
         });
-        Some(lead + usize::from(after_head_colon || after_header) * self.options.indent_width)
+        // A declaration a `struct` or `union` leads, its first line ending
+        // in a name or `*`, continues as the block that keyword would open.
+        let ends_in_name = self.output.line_tokens(line).is_some_and(|span| {
+            (span.first..=span.last)
+                .rev()
+                .find(|&token| is_code_token(&tokens[token]))
+                .is_some_and(|token| match &tokens[token] {
+                    Token::Word(_) | Token::Symbol('*') => true,
+                    Token::Operator(op) => op == "*",
+                    _ => false,
+                })
+        });
+        let record_led = ends_in_name
+            && groups.enclosing(first) == groups.enclosing(start)
+            && tokens[start..]
+            .iter()
+            .filter(|token| {
+                !matches!(token, Token::Whitespace(_) | Token::Newline | Token::Comment(..))
+            })
+            .find(|token| {
+                !matches!(token, Token::Word(word) if matches!(
+                    word.as_str(),
+                    "static" | "extern" | "const" | "volatile" | "typedef" | "register"
+                ))
+            })
+            .is_some_and(|token| matches!(token, Token::Word(word) if matches!(word.as_str(), "struct" | "union")));
+        Some(
+            lead + usize::from(after_head_colon || after_header || record_led)
+                * self.options.indent_width,
+        )
     }
 
     /// For a code line the tree does not cover, such as a row of a macro
@@ -487,11 +516,17 @@ impl FormatEngine<'_> {
 
     /// Whether the token `index` is the `:` of an access label.
     fn ends_access_label(&self, index: usize) -> bool {
+        let access = |label: usize| {
+            matches!(&self.tree.tokens[label], Token::Word(word)
+                    if matches!(word.as_str(), "public" | "protected" | "private")
+                        || self.options.access_labels.iter().any(|access| access == word))
+        };
         matches!(self.tree.tokens[index], Token::Symbol(':'))
             && self.tree.previous_code_token(index).is_some_and(|label| {
-                matches!(&self.tree.tokens[label], Token::Word(word)
-                        if matches!(word.as_str(), "public" | "protected" | "private")
-                            || self.options.access_labels.iter().any(|access| access == word))
+                access(label)
+                    // Qt's `public slots:`
+                    || matches!(&self.tree.tokens[label], Token::Word(word) if word == "slots")
+                        && self.tree.previous_code_token(label).is_some_and(access)
             })
     }
 }

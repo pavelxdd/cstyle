@@ -1193,3 +1193,30 @@ fn ratliff_case_block_after_a_closed_case_block_keeps_its_statements() {
         "void f() {\n    switch (c) {\n        case 1: {\n            x();\n            break;\n            }\n        case 2: {\n            if (a) {\n                y();\n                }\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn ratliff_indents_a_padded_macro_row_before_the_first_case_as_a_case_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--pad-paren-out".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void h(int type) {\nswitch (type) {\nx = 1;\nMAP(XX)\ndefault:\nreturn;\n}\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void h (int type) {",
+            "    switch (type) {",
+            "            x = 1;",
+            "            MAP (XX)",
+            "        default:",
+            "            return;",
+            "        }",
+            "    }",
+        )
+    );
+}

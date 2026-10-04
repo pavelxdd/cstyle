@@ -1285,7 +1285,12 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn direct_switch_body_indent_spaces(&self) -> Option<usize> {
-        if !self.options.indent_switches && self.options.brace_style != BraceStyle::Vtk {
+        if !self.options.indent_switches
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Vtk | BraceStyle::Ratliff
+            )
+        {
             return None;
         }
         let frame = self

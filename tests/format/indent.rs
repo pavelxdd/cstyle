@@ -9715,3 +9715,71 @@ fn tab_indent_continuation_of_a_statement_on_its_header_line_tabs_to_the_body_le
         )
     );
 }
+#[test]
+fn tab_indent_continuation_of_a_struct_led_declaration_tabs_to_the_next_level() {
+    let mut options = FormatOptions::default();
+    options.indent_style = IndentStyle::Tabs;
+    let actual = format_with(
+        fixture!(
+            "static struct foo",
+            "bar[3];",
+            "void f(void){",
+            "static struct foo *",
+            "bar = baz +",
+            "2;",
+            "struct transport *transport =",
+            "get(remote);",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "static struct foo",
+            "\tbar[3];",
+            "void f(void)",
+            "{",
+            "\tstatic struct foo *",
+            "\t\tbar = baz +",
+            "\t\t      2;",
+            "\tstruct transport *transport =",
+            "\t    get(remote);",
+            "}",
+        )
+    );
+}
+#[test]
+fn tab_indent_statements_after_a_qt_slots_label_stand_at_their_level() {
+    let mut options = FormatOptions::default();
+    options.indent_style = IndentStyle::Tabs;
+    let actual = format_with(
+        fixture!(
+            "class W : public QObject {",
+            "public:",
+            "W(QObject *parent = 0)",
+            ": QObject(parent) {}",
+            "",
+            "public slots:",
+            "void run();",
+            "};",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "class W : public QObject",
+            "{",
+            "public:",
+            "\tW(QObject *parent = 0)",
+            "\t\t: QObject(parent) {}",
+            "",
+            "public slots:",
+            "\tvoid run();",
+            "};",
+        )
+    );
+}
