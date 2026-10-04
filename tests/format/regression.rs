@@ -6016,3 +6016,13 @@ fn an_initializer_brace_stays_off_a_line_it_would_take_past_the_maximum_length()
         "static ngx_command_t  ngx_stream_upstream_hash_commands[] =\n{\n    {\n        ngx_string(\"hash\"),\n        0\n    },\n};\n",
     );
 }
+
+#[test]
+fn a_conditional_in_a_header_condition_stands_a_level_before_its_column() {
+    let input = "void f()\n{\n    if (r == 0)\n        x();\n    else if (errno == E\n#if defined(O)\n             || errno == B\n#endif\n            )\n        y();\n}\nvoid g()\n{\n    if(\n#if A\n        x &&\n#endif\n        y) {\n        z();\n    }\n}\n";
+    check(
+        input,
+        &["--style=mozilla", "--indent-preproc-cond"],
+        "void f()\n{\n    if (r == 0)\n        x();\n    else if (errno == E\n         #if defined(O)\n             || errno == B\n         #endif\n            )\n        y();\n}\nvoid g()\n{\n    if(\n    #if A\n        x &&\n    #endif\n        y) {\n        z();\n    }\n}\n",
+    );
+}

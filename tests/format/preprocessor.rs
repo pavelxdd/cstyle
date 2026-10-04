@@ -3852,7 +3852,7 @@ fn linux_condition_preprocessor_directive_uses_structural_owner() {
             "void run(){if(alpha&&\n#if ENABLED\nbeta\n#endif\ngamma){call();}}\n",
             &options,
         ),
-        "void run()\n{\n    if(alpha&&\n        #if ENABLED\n       beta\n        #endif\n       gamma) {\n        call();\n    }\n}\n",
+        "void run()\n{\n    if(alpha&&\n   #if ENABLED\n       beta\n   #endif\n       gamma) {\n        call();\n    }\n}\n",
     );
 }
 

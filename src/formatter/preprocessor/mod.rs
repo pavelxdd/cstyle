@@ -884,7 +884,13 @@ impl FormatEngine<'_> {
                     .body_indent_spaces
                     .saturating_sub(self.options.indent_width)
             } else {
-                header.body_indent_spaces
+                // astyle takes the header's level off the condition's column.
+                self.layout
+                    .continuation_indent
+                    .next_line_indent_spaces
+                    .map_or(header.body_indent_spaces, |spaces| {
+                        spaces.saturating_sub(self.options.indent_width)
+                    })
             };
             return Some(PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
