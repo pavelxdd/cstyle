@@ -1369,7 +1369,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.output.line_with_token(element)?;
-        if self.output.line_tokens(line)?.first != element {
+        let line_first = self.output.line_tokens(line)?.first;
+        // Or at the line of elements holding it.
+        if line_first != element
+            && (line_first <= open || groups.enclosing(line_first) != Some(group))
+        {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())

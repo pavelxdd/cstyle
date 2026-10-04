@@ -1917,3 +1917,16 @@ fn space_before_a_broken_function_brace_counts_in_the_head_length() {
         ),
     );
 }
+
+#[test]
+fn remove_braces_keeps_a_brace_row_led_by_a_comment() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--remove-braces"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "int f()\n{\n    if (x) { /* c */\n        return 0;\n    }\n    if (x)\n    {   /* c */\n        return 0;\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "int f()\n{\n    if (x)   /* c */\n        return 0;\n    if (x) {\n        /* c */\n        return 0;\n    }\n}\n",
+    );
+}

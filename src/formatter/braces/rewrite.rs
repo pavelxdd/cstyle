@@ -2319,6 +2319,13 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
         {
             continue;
         }
+        let brace_leads_line = tokens[line_bounds(tokens, open_index).0..open_index]
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));
+        // A brace leading its line keeps the comment after it in the block.
+        if brace_leads_line && opening_brace_has_line_comment(tokens, open_index) {
+            continue;
+        }
         mark_removed_brace(tokens, open_index, &mut remove);
         // astyle blanks the brace before a comment, unless a tab follows it.
         if opening_brace_has_line_comment(tokens, open_index)

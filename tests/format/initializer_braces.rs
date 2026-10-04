@@ -4261,3 +4261,11 @@ fn ratliff_brace_row_after_a_directive_is_indented_past_plain_rows() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn leading_comma_stands_at_the_row_of_elements_it_follows() {
+    let options = FormatOptions::default();
+    let source = "void f()\n{\n    size_t a[] = {\n        0\n        , 20\n    };\n    size_t b[] = {\n        0, 4\n        , 20\n    };\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}
