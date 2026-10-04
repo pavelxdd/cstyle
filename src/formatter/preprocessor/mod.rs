@@ -20,6 +20,9 @@ pub(crate) struct PreprocessorState {
     pub(crate) active_directive: Option<usize>,
     pub(crate) branch_stack: Vec<PreprocessorBranchState>,
     pub(crate) indented_block_stack: Vec<bool>,
+    /// The statement continuation each open conditional set aside, which
+    /// its `#endif` resumes.
+    pub(crate) suspended_continuations: Vec<Option<usize>>,
     pub(crate) indentable_blocks: VecDeque<bool>,
     pub(crate) split_else: PreprocessorSplitElseState,
     pub(crate) may_have_preprocessor: bool,
@@ -1071,9 +1074,19 @@ impl FormatEngine<'_> {
             Some("if" | "ifdef" | "ifndef") => {
                 let should_indent_block =
                     opening_indentable.unwrap_or_else(|| self.should_indent_preprocessor_block());
+                let mut suspended = None;
                 if should_indent_block {
+                    // At file scope astyle indents a block's lines by the
+                    // block alone, a statement they continue or not.
+                    let file_scope = self.layout.indentation.indent() == 0;
                     self.layout.indentation.enter_block();
-                    if let Some(spaces) = self
+                    if file_scope {
+                        suspended = self
+                            .layout
+                            .continuation_indent
+                            .next_line_indent_spaces
+                            .take();
+                    } else if let Some(spaces) = self
                         .layout
                         .continuation_indent
                         .next_line_indent_spaces
@@ -1095,6 +1108,7 @@ impl FormatEngine<'_> {
                 self.preprocessor
                     .indented_block_stack
                     .push(should_indent_block);
+                self.preprocessor.suspended_continuations.push(suspended);
                 self.preprocessor.branch_stack.push(self.branch_snapshot());
             }
             Some("else" | "elif" | "elifdef" | "elifndef") => {
@@ -1130,9 +1144,12 @@ impl FormatEngine<'_> {
                     self.restore_branch_snapshot(*end);
                 }
                 self.layout.indentation.pop_preprocessor_indent();
+                let suspended = self.preprocessor.suspended_continuations.pop().flatten();
                 if self.preprocessor.indented_block_stack.pop() == Some(true) {
                     self.layout.indentation.exit_block();
-                    if let Some(spaces) = self
+                    if suspended.is_some() {
+                        self.layout.continuation_indent.next_line_indent_spaces = suspended;
+                    } else if let Some(spaces) = self
                         .layout
                         .continuation_indent
                         .next_line_indent_spaces

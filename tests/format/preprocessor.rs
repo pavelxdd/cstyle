@@ -4012,3 +4012,33 @@ fn indented_conditional_in_nested_parens_takes_their_content_column() {
         ),
     );
 }
+
+#[test]
+fn file_scope_indented_block_sets_aside_the_statement_it_continues() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_block = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static bool have_dss =",
+                "#ifdef JEMALLOC_DSS",
+                "    true",
+                "#else",
+                "    false",
+                "#endif",
+                "    ;",
+            ),
+            &options,
+        ),
+        fixture!(
+            "static bool have_dss =",
+            "#ifdef JEMALLOC_DSS",
+            "    true",
+            "#else",
+            "    false",
+            "#endif",
+            "    ;",
+        ),
+    );
+}
