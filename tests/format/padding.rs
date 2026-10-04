@@ -3089,3 +3089,16 @@ fn unpad_paren_keeps_the_column_of_a_comment_ending_the_line() {
         ),
     );
 }
+
+#[test]
+fn comment_after_broken_else_if_takes_the_padding_of_its_line() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--break-elseifs", "--pad-paren"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    if (a)\n        x();\n    else if (sep == 0)  /* missing */\n        y();\n    else if (state->how == COPY)        /* read directly */\n        z();\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    if ( a )\n        x();\n    else\n        if ( sep == 0 ) /* missing */\n            y();\n        else\n            if ( state->how == COPY )      /* read directly */\n                z();\n}\n",
+    );
+}

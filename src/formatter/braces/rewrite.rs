@@ -12,7 +12,7 @@ use crate::formatter::constructs::headers::line_is_control_body_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
-    next_non_whitespace, previous_non_layout_token_index, token_text,
+    next_non_whitespace, previous_non_layout_token_index, token_char_len, token_text,
 };
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
@@ -914,6 +914,28 @@ impl FormatEngine<'_> {
         self.layout
             .else_if_break_depths
             .push(self.layout.indentation.indent());
+        // A comment after a braceless condition keeps its place relative to
+        // the `if`, the `else` gone from its line.
+        let line_start = tokens[..start]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let prefix = &tokens[line_start..start];
+        let leading = prefix
+            .iter()
+            .take_while(|token| matches!(token, Token::Whitespace(_)))
+            .map(token_char_len)
+            .sum::<usize>();
+        let else_width = prefix.iter().map(token_char_len).sum::<usize>() - leading;
+        let brace_leaves_line = tokens[start..]
+            .iter()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .any(|token| matches!(token, Token::Symbol('{')));
+        if !brace_leaves_line {
+            for column in &mut self.layout.line_state.trailing_comment_columns {
+                *column = column.saturating_sub(else_width);
+            }
+        }
         true
     }
 

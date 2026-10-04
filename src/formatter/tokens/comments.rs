@@ -2891,12 +2891,20 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |index| index + 1);
+        // An `if` broken from its `else` pads as on the `else`'s line, unless
+        // a brace leaves it.
+        let breaks_else_if = matches!(&tokens[first], Token::Word(word) if word == "if")
+            && !tokens[first..]
+                .iter()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .any(|token| matches!(token, Token::Symbol('{')));
         tokens[line_start..first]
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
-            .is_some_and(
-                |token| matches!(token, Token::Word(word) if is_header(self.options, word)),
-            )
+            .is_some_and(|token| {
+                matches!(token, Token::Word(word)
+                    if is_header(self.options, word) && !(breaks_else_if && word == "else"))
+            })
     }
 
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
