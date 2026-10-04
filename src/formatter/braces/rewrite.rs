@@ -1556,6 +1556,25 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.clear_next_line();
             }
         }
+        // A kept block ends the braceless bodies it was the statement of,
+        // unless an `else` goes on with them.
+        if brace_type == BraceType::Command && self.current_is_blank() {
+            let else_follows = tokens[close_index + 1..]
+                .iter()
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_)
+                            | Token::Newline
+                            | Token::Comment(..)
+                            | Token::Preprocessor(_)
+                    )
+                })
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
+            if !else_follows {
+                self.layout.pending_braceless_block_bias = None;
+            }
+        }
         Some(close_index + 1)
     }
 

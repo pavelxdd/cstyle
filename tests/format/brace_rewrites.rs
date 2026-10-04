@@ -1778,3 +1778,47 @@ fn added_block_ending_broken_else_if_chain_unwinds_it() {
         ),
     );
 }
+
+#[test]
+fn kept_block_ends_braceless_body_level_after_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--add-one-line-braces".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    for (scan = in; scan < ep; scan++)",
+                "        if (!isspace(*scan))",
+                "        { break; }",
+                "",
+                "    if (x) {",
+                "        y();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    for (scan = in; scan < ep; scan++)",
+            "        if (!isspace(*scan))",
+            "        { break; }",
+            "",
+            "    if (x)",
+            "    {",
+            "        y();",
+            "    }",
+            "}",
+        ),
+    );
+}
