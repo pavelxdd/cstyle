@@ -1731,13 +1731,16 @@ fn closing_braces_after_semicolon(tokens: &[Token], index: usize) -> usize {
     let mut cursor = index + 1;
     let mut count = 0;
     loop {
+        let mut newlines = 0;
         while matches!(
             tokens.get(cursor),
             Some(Token::Whitespace(_) | Token::Newline)
         ) {
+            newlines += usize::from(matches!(tokens[cursor], Token::Newline));
             cursor += 1;
         }
-        if !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
+        // A brace past an empty line stays on a line of its own.
+        if newlines > 1 || !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
             break;
         }
         count += 1;

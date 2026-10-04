@@ -973,3 +973,35 @@ fn horstmann_block_after_braceless_broken_else_if_chain_runs_in_at_its_level() {
         ),
     );
 }
+
+#[test]
+fn pico_counts_no_closer_past_an_empty_line_in_a_statement_length() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.max_code_length = Some(60);
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    if (a)",
+                "    {",
+                "        tutil_rlim2str(strbuff, sizeof(strbuff), rl.rlim_max);",
+                "        curl_mfprintf(stderr, \"current hard limit: %s\\n\", strbuff);",
+                "",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{   if (a)",
+            "    {   tutil_rlim2str(strbuff, sizeof(strbuff), rl.rlim_max);",
+            "        curl_mfprintf(stderr, \"current hard limit: %s\\n\", strbuff);",
+            "",
+            "    } }",
+        ),
+    );
+}
