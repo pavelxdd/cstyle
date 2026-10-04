@@ -430,8 +430,12 @@ impl FormatEngine<'_> {
             continues_directive = (in_directive || line.trim_start().starts_with('#'))
                 && line.trim_end().ends_with('\\');
             if in_directive {
+                // The empty line a directive continues into stays empty.
                 if line.trim().is_empty() {
                     sources.push(EmptyFillSource::Kept);
+                    if !line.is_empty() && !self.output.is_verbatim(index) {
+                        self.output.set(index, String::new());
+                    }
                 }
                 continue;
             }

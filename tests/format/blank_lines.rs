@@ -1652,3 +1652,31 @@ fn pico_empty_line_fill_after_run_in_block_comment_keeps_its_level() {
         fixture!("int h(void)", "{   /* c", "     */", "    ", "    y(); }"),
     );
 }
+
+#[test]
+fn empty_line_fill_leaves_line_a_define_continues_into_empty() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define FIELDS \\",
+                "  int rcount; \\",
+                "  int wcount; \\",
+                "",
+                "#define MORE \\",
+                "  int x;",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define FIELDS \\",
+            "  int rcount; \\",
+            "  int wcount; \\",
+            "",
+            "#define MORE \\",
+            "  int x;",
+        ),
+    );
+}
