@@ -488,7 +488,12 @@ impl FormatEngine<'_> {
                     .and_then(|semicolon| {
                         next_statement_token(tokens, semicolon + 1, line_end, false)
                     })
-                    .is_some_and(|index| !matches!(tokens.get(index), Some(Token::Symbol('}')))));
+                    .is_some_and(|index| {
+                        !matches!(
+                            tokens.get(index),
+                            Some(Token::Symbol('}') | Token::Comment(..))
+                        )
+                    }));
         if keeps_multi_statement_line {
             return false;
         }
@@ -537,11 +542,18 @@ impl FormatEngine<'_> {
         }
         match tokens.get(statement_start) {
             Some(Token::Symbol('{')) if self.options.brace_style == BraceStyle::Pico => {
+                // A comment ending the brace's line stays on the header's.
                 if next_non_whitespace(tokens, statement_start + 1, line_end).is_some_and(|index| {
-                    matches!(
-                        tokens.get(index),
-                        Some(Token::Comment(CommentKind::Line, _))
-                    )
+                    match tokens.get(index) {
+                        Some(Token::Comment(CommentKind::Line, _)) => true,
+                        Some(Token::Comment(CommentKind::Block, comment)) => {
+                            !comment.contains('\n')
+                                && tokens[index + 1..line_end].iter().all(|token| {
+                                    matches!(token, Token::Whitespace(_) | Token::Newline)
+                                })
+                        }
+                        _ => false,
+                    }
                 }) {
                     return false;
                 }

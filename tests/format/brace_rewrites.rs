@@ -1426,3 +1426,44 @@ fn lisp_added_brace_after_else_comment_stands_at_else() {
         ),
     );
 }
+
+#[test]
+fn pico_break_one_line_headers_keeps_comments_beside_their_code() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=pico".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a) { /* c1 */",
+                "        x();",
+                "        y();",
+                "    }",
+                "    if (b) z(); /* c2 */",
+                "    if (b) z(); // c3",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{   if (a)   /* c1 */",
+            "    {   x();",
+            "        y(); }",
+            "    if (b)",
+            "        z(); /* c2 */",
+            "    if (b)",
+            "        z(); // c3",
+            "}",
+        ),
+    );
+}
