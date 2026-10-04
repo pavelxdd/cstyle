@@ -1384,8 +1384,15 @@ impl FormatEngine<'_> {
         if word == "if" {
             let before = current.trim();
             let before = before.strip_prefix('}').map_or(before, str::trim_start);
+            // A statement or a label may precede it on its line.
+            let follows_statement = before.ends_with(';')
+                || before.ends_with(':')
+                    && !before.ends_with("::")
+                    && self.layout.nesting.paren_depth == 0
+                    && !self.layout.nesting.has_question_in_current_brace();
             if !(before.is_empty()
                 || before == "else"
+                || follows_statement
                 || self
                     .layout
                     .command_state

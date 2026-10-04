@@ -89,6 +89,11 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // astyle adds no braces to an `if` after a statement on a line it
+        // keeps, when its body is on that line too.
+        let follows_statement = header == "if"
+            && self.options.keeps_multi_statement_line()
+            && if_follows_statement_on_line(tokens, start);
         let header_is_else = header == "else";
         let header_is_do = header == "do";
         if matches!(header, "if" | "for" | "while")
@@ -98,7 +103,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let statement_start = next_non_whitespace(tokens, start, line_end)?;
-        if !self.follows_header_end(tokens, statement_start, header) {
+        if !self.follows_header_end(tokens, statement_start, header)
+            || follows_statement
+                && !matches!(tokens[statement_start], Token::Newline)
+                && !token_begins_line(tokens, statement_start)
+        {
             return None;
         }
         match tokens.get(statement_start)? {
@@ -2290,6 +2299,27 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
         }
     }
     output
+}
+
+/// Whether the `if` whose condition ends before `start` follows a statement
+/// or a label on its line.
+fn if_follows_statement_on_line(tokens: &[Token], start: usize) -> bool {
+    let Some(close) = previous_non_layout_token_index(tokens, start) else {
+        return false;
+    };
+    if !matches!(tokens[close], Token::Symbol(')')) {
+        return false;
+    }
+    let Some(header) = matching_open_paren_global(tokens, close)
+        .and_then(|open| previous_non_layout_token_index(tokens, open))
+    else {
+        return false;
+    };
+    tokens[..header]
+        .iter()
+        .rev()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+        .is_some_and(|token| matches!(token, Token::Symbol(';' | ':')))
 }
 
 fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {

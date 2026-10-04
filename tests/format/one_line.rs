@@ -1514,3 +1514,72 @@ fn bare_top_level_open_brace_run_keeps_one_line() {
         assert_eq!(format_exact(source, &options), expected);
     }
 }
+
+#[test]
+fn kept_statement_line_ending_in_if_indents_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--keep-one-line-statements".to_owned()])
+        .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(int c)",
+                "{",
+                "    a(); if (x) y();",
+                "    b(); if (x)",
+                "        y();",
+                "    else",
+                "        z();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{",
+            "    a(); if (x) y();",
+            "    b(); if (x)",
+            "        y();",
+            "    else",
+            "        z();",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn kept_statement_line_if_takes_no_added_braces_on_its_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--keep-one-line-statements".to_owned(),
+            "--style=allman".to_owned(),
+            "--add-one-line-braces".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(int c)",
+                "{",
+                "    a(); if (x) y();",
+                "    b(); if (x)",
+                "        y();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{",
+            "    a(); if (x) y();",
+            "    b(); if (x)",
+            "    { y(); }",
+            "}",
+        ),
+    );
+}
