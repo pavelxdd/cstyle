@@ -2878,6 +2878,20 @@ impl FormatEngine<'_> {
                 self.ensure_space();
             } else {
                 self.current.push_str(&gap);
+                // Attaching a bare closer takes a space out of its gap.
+                if matches!(
+                    self.options.brace_style,
+                    BraceStyle::Pico | BraceStyle::Lisp
+                ) && gap.len() > 1
+                    && gap.bytes().all(|byte| byte == b' ')
+                    && self
+                        .current
+                        .trim()
+                        .chars()
+                        .all(|ch| matches!(ch, '}' | ';' | ' '))
+                {
+                    self.current.push(' ');
+                }
             }
             return;
         }

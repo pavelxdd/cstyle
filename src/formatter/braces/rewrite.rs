@@ -285,6 +285,10 @@ impl FormatEngine<'_> {
             );
             self.token_input.previous_input_whitespace = Some(" ".to_string());
             self.push_close_brace(next, false);
+            self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Comment(..)));
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             if header_is_else && !matches!(next, Some(Token::Word(word)) if word == "else") {

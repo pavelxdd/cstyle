@@ -1351,3 +1351,40 @@ fn remove_braces_drops_source_trailing_space_before_pico_closing_brace() {
         fixture!("int f(void)", "{   int a = 1;", "    return a; }"),
     );
 }
+
+#[test]
+fn lisp_added_one_line_braces_keep_comment_gap() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=lisp".to_owned(),
+            "--add-one-line-braces".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(int x)",
+                "{",
+                "    if (x)",
+                "        return 1;  /* one */",
+                "    if (x)",
+                "        res = 0;\t/* two */",
+                "    return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(int x) {",
+            "    if (x) {",
+            "        return 1; }  /* one */",
+            "    if (x) {",
+            "        res = 0; }\t/* two */",
+            "    return 0; }",
+        ),
+    );
+}
