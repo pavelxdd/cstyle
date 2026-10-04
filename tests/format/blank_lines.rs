@@ -805,6 +805,34 @@ fn break_closing_header_blocks_separates_else_after_comment() {
 }
 
 #[test]
+fn break_closing_header_blocks_keeps_else_after_trailing_empty_block() {
+    let mut options = break_blocks_options();
+    options.break_closing_header_blocks = true;
+    let source = fixture!(
+        "void helper(void) {",
+        "    if (alpha) {",
+        "        while (beta) {}",
+        "    } else {",
+        "        second();",
+        "    }",
+        "}",
+    );
+    assert_eq!(
+        format_exact(source, &options),
+        fixture!(
+            "void helper(void)",
+            "{",
+            "    if (alpha) {",
+            "        while (beta) {}",
+            "    } else {",
+            "        second();",
+            "    }",
+            "}",
+        )
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_outer_else_at_outer_header_indent() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Allman;

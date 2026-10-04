@@ -371,7 +371,18 @@ impl FormatEngine<'_> {
                     let close = self.tree.groups.get(group).close.unwrap_or(open);
                     !self.tree.tokens[open + 1..close].iter().any(is_code_token)
                 });
-            self.block_spacing.closed_empty_block = previous_opens || holds_no_code;
+            // So is one ending in an empty block of its own.
+            let ends_empty_block =
+                self.layout
+                    .previous_pre_adjust_line
+                    .as_deref()
+                    .is_some_and(|previous| {
+                        previous[..trailing_comment_split_limit(previous)]
+                            .trim_end()
+                            .ends_with("{}")
+                    });
+            self.block_spacing.closed_empty_block =
+                previous_opens || holds_no_code || ends_empty_block;
         }
         let case_block_before_directive =
             std::mem::take(&mut self.block_spacing.case_block_before_directive);
