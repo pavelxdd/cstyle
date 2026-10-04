@@ -1068,11 +1068,45 @@ impl FormatEngine<'_> {
             .filter(|word| !word.is_empty())
             .collect::<Vec<_>>();
         matches!(next, Some(Token::Symbol('(')))
-            && !words
-                .iter()
-                .rev()
-                .take(2)
-                .any(|word| matches!(*word, "struct" | "union" | "enum" | "class" | "operator"))
+            && !words.iter().rev().take(2).any(|word| {
+                *word == "operator"
+                        // In a statement astyle leaves a tagged type's star
+                        // where it is.
+                        || matches!(*word, "struct" | "union" | "enum" | "class")
+                            && self.in_statement_brace()
+            })
+    }
+
+    /// In a statement astyle leaves a tagged type's star before a declarator
+    /// group as written.
+    fn push_tagged_type_star_before_group(&mut self, operator: &str, next: Option<&Token>) -> bool {
+        let tagged = self
+            .current
+            .trim_end()
+            .split(|ch: char| !is_identifier_continue(ch))
+            .filter(|word| !word.is_empty())
+            .rev()
+            .take(2)
+            .any(|word| matches!(word, "struct" | "union" | "enum" | "class"));
+        if !(tagged && matches!(next, Some(Token::Symbol('('))) && self.in_statement_brace()) {
+            return false;
+        }
+        self.emit_source_space();
+        self.current.push_str(operator);
+        self.emit_trailing_source_space();
+        true
+    }
+
+    /// Whether the code is a statement or a parameter rather than a member
+    /// or a declaration at file scope.
+    fn in_statement_brace(&self) -> bool {
+        self.layout.nesting.paren_depth > 0
+            || !matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                None | Some(
+                    BraceType::Struct | BraceType::Class | BraceType::Union | BraceType::Interface
+                )
+            )
     }
 
     fn push_type_aligned_pointer(&mut self, operator: &str, next: Option<&Token>) {
@@ -1096,21 +1130,7 @@ impl FormatEngine<'_> {
                 self.ensure_space();
             }
         } else {
-            // astyle leaves a tagged type's star before a declarator group
-            // as written.
-            if matches!(next, Some(Token::Symbol('(')))
-                && self
-                    .current
-                    .trim_end()
-                    .split(|ch: char| !is_identifier_continue(ch))
-                    .filter(|word| !word.is_empty())
-                    .rev()
-                    .take(2)
-                    .any(|word| matches!(word, "struct" | "union" | "enum" | "class"))
-            {
-                self.emit_source_space();
-                self.current.push_str(operator);
-                self.emit_trailing_source_space();
+            if self.push_tagged_type_star_before_group(operator, next) {
                 return;
             }
             if matches!(next, Some(Token::Symbol('('))) && {
@@ -1140,6 +1160,8 @@ impl FormatEngine<'_> {
                     Some(Token::Operator(operator)) if operator == "="
                 )
                 || matches!(next, Some(Token::Comment(_, _)))
+                || matches!(next, Some(Token::Symbol('(')))
+                    && self.pointer_spaces_declarator_group(operator, next)
             {
                 let gap = self.consolidated_pointer_gap();
                 self.current.push_str(&gap);
@@ -1163,6 +1185,9 @@ impl FormatEngine<'_> {
             next,
             Some(Token::Operator(next_operator)) if next_operator.starts_with('>')
         );
+        if self.push_tagged_type_star_before_group(operator, next) {
+            return;
+        }
         if closes_unnamed_type {
             self.trim_current_end();
             self.ensure_space();

@@ -5948,3 +5948,23 @@ fn a_tagged_type_star_before_a_declarator_group_stays_as_written() {
         "void f()\n{\n    typedef const struct S *(*letterfunc)(const char* ptr);\n    typedef int* (*g)(int);\n}\ntypedef char* (*h)(int);\nvoid g()\n{\n    struct S* x;\n    const struct S* y = 0;\n    struct S *(*fp)(int);\n}\n",
     );
 }
+
+#[test]
+fn a_star_before_a_declarator_group_moves_its_gap_or_stays_by_context_with_type_alignment() {
+    let input = "struct T {\n    struct S\t*(*fp)(int);\n};\nvoid f()\n{\n    struct S\t*(*gp)(int);\n}\nstruct S\t*(*hp)(int);\nvoid k(struct S\t*(*a)(int));\ntypedef int  *(*g)(int);\ntypedef int\t*(*h)(int);\nvoid f()\n{\n    int  *(*k)(int);\n}\n";
+    check(
+        input,
+        &["--align-pointer=type"],
+        "struct T {\n    struct S*\t(*fp)(int);\n};\nvoid f()\n{\n    struct S\t*(*gp)(int);\n}\nstruct S*\t(*hp)(int);\nvoid k(struct S\t*(*a)(int));\ntypedef int*  (*g)(int);\ntypedef int*\t(*h)(int);\nvoid f()\n{\n    int*  (*k)(int);\n}\n",
+    );
+}
+
+#[test]
+fn a_star_before_a_declarator_group_moves_its_gap_or_stays_by_context_with_middle_alignment() {
+    let input = "struct T {\n    struct S\t*(*fp)(int);\n};\nvoid f()\n{\n    struct S\t*(*gp)(int);\n}\nstruct S\t*(*hp)(int);\nvoid k(struct S\t*(*a)(int));\ntypedef int  *(*g)(int);\ntypedef int\t*(*h)(int);\nvoid f()\n{\n    int  *(*k)(int);\n}\n";
+    check(
+        input,
+        &["--align-pointer=middle"],
+        "struct T {\n    struct S\t* (*fp)(int);\n};\nvoid f()\n{\n    struct S\t*(*gp)(int);\n}\nstruct S\t* (*hp)(int);\nvoid k(struct S\t*(*a)(int));\ntypedef int * (*g)(int);\ntypedef int\t* (*h)(int);\nvoid f()\n{\n    int * (*k)(int);\n}\n",
+    );
+}

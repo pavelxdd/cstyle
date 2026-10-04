@@ -385,6 +385,8 @@ impl FormatEngine<'_> {
             if !self.current.ends_with(['!', '~']) {
                 self.current.push(' ');
             }
+        } else if self.pointer_run.spaces_declarator_group && self.current.ends_with([' ', '\t']) {
+            // The gap moved past a type's star stays before its group.
         } else if !handled_objc_return_paren
             && !handled_objc_param_paren
             && !self.options.unpad_parens
