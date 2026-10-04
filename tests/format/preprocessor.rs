@@ -4288,3 +4288,44 @@ fn define_expression_row_leading_with_assignment_stands_at_its_paren() {
         ),
     );
 }
+
+#[test]
+fn vtk_define_header_brace_at_the_top_of_the_body_stands_at_the_header() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Vtk;
+    options.indent_preproc_define = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define Y(L,n) \\",
+                "\tif (a) \\",
+                "\t  { \\",
+                "\t    x(); \\",
+                "\t  } \\",
+                "\telse { h(L); }",
+                "#define W(L,n) do { \\",
+                "\tif (a) \\",
+                "\t  { \\",
+                "\t    x(); \\",
+                "\t  } \\",
+                "\t} while (0)",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define Y(L,n) \\",
+            "    if (a) \\",
+            "    { \\",
+            "        x(); \\",
+            "    } \\",
+            "    else { h(L); }",
+            "#define W(L,n) do { \\",
+            "        if (a) \\",
+            "            { \\",
+            "            x(); \\",
+            "            } \\",
+            "    } while (0)",
+        ),
+    );
+}

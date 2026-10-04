@@ -1052,8 +1052,11 @@ impl FormatEngine<'_> {
                         && frames.last().is_some_and(|frame| {
                             is_define_command_frame(*frame) || *frame == DefineFrame::CaseBrace
                         }))
+                        // A header's brace at the top of the body stands at
+                        // the header.
                         || (starts_with_open
-                            && frames.last().copied().is_some_and(is_define_header_frame))))
+                            && frames.last().copied().is_some_and(is_define_header_frame)
+                            && frames.iter().any(|frame| !is_define_header_frame(*frame)))))
                 || (self.options.brace_style == BraceStyle::Gnu
                     && starts_with_open
                     && frames.last().copied().is_some_and(is_define_header_frame));
