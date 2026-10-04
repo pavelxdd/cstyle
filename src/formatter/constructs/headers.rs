@@ -1346,7 +1346,7 @@ impl FormatEngine<'_> {
         let header = if let Some(header) = objc_header {
             Some(header)
         } else if ((is_header(self.options, word) && !word_is_macro_argument)
-            || is_asm_block_header(word))
+            || is_asm_block_header(word) && matches!(next, Some(Token::Symbol('{'))))
             && self.word_can_be_header_here(word, next)
         {
             Some(word)

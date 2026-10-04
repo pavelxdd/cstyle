@@ -1722,3 +1722,35 @@ fn lisp_empty_line_after_attached_struct_close_takes_its_lead() {
         ),
     );
 }
+
+#[test]
+fn break_blocks_reads_assembly_lines_and_blocks_as_statements() {
+    let mut options = FormatOptions::default();
+    options.break_blocks = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void) {",
+                "    __asm volatile (\"\" : : : \"memory\");",
+                "    x();",
+                "    __asm {",
+                "        mov eax, 1",
+                "    }",
+                "    y();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    __asm volatile (\"\" : : : \"memory\");",
+            "    x();",
+            "    __asm {",
+            "        mov eax, 1",
+            "    }",
+            "    y();",
+            "}",
+        ),
+    );
+}

@@ -3033,3 +3033,31 @@ fn pad_oper_reads_sign_after_comment_line_from_code_before() {
         ),
     );
 }
+
+#[test]
+fn ms_asm_line_keeps_its_operator_spacing_and_ends_at_its_line() {
+    let mut options = FormatOptions::default();
+    options.pad_operators = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void) {",
+                "    __asm volatile (\"\" ::: \"memory\");",
+                "    __asm mov eax , ebx + 4",
+                "    _asm mov eax, [ebx-4]",
+                "    x=1;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    __asm volatile (\"\" ::: \"memory\");",
+            "    __asm mov eax, ebx + 4",
+            "    _asm mov eax, [ebx-4]",
+            "    x = 1;",
+            "}",
+        ),
+    );
+}

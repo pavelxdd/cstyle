@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
@@ -323,8 +324,10 @@ impl FormatEngine<'_> {
             return;
         }
         let closed_header = self.layout.nesting.last_closed_brace_header.as_deref();
+        // astyle reads an assembly block as no command block.
         let closed_command_header = self.layout.nesting.last_closed_brace_type
             == Some(BraceType::Command)
+            && !closed_header.is_some_and(is_asm_block_header)
             || closed_header.is_some_and(|header| {
                 is_standard_break_blocks_opening_header(header)
                     || is_break_blocks_closing_header(header)

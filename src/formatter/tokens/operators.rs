@@ -680,12 +680,9 @@ impl FormatEngine<'_> {
             return true;
         }
         if self.is_in_asm_operator_context() {
-            if matches!(operator, "*" | "&" | "^") {
-                self.emit_source_space();
-            } else {
-                self.trim_current_end();
-            }
+            self.emit_source_space();
             self.current.push_str(operator);
+            self.emit_trailing_source_space();
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Operator;
             self.previous_was_newline = false;
