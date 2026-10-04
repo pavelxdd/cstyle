@@ -2317,7 +2317,10 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+                    .find(|line| {
+                        !line[..trailing_comment_split_limit(line)].trim().is_empty()
+                            && !line.trim_start().starts_with('#')
+                    })
                     .filter(|line| brace.header.as_deref() == Some("else") || line.trim() == "else")
                     .map(|line| leading_visual_width(line, self.options.tab_width))
             })

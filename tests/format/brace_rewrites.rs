@@ -1388,3 +1388,41 @@ fn lisp_added_one_line_braces_keep_comment_gap() {
         ),
     );
 }
+
+#[test]
+fn lisp_added_brace_after_else_comment_stands_at_else() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=lisp".to_owned(),
+            "--add-one-line-braces".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a)",
+                "        x();",
+                "    else",
+                "        /* c */",
+                "        y();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    if (a) {",
+            "        x(); }",
+            "    else",
+            "        /* c */",
+            "    {",
+            "        y(); } }",
+        ),
+    );
+}
