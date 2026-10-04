@@ -3102,3 +3102,23 @@ fn comment_after_broken_else_if_takes_the_padding_of_its_line() {
         "void f()\n{\n    if ( a )\n        x();\n    else\n        if ( sep == 0 ) /* missing */\n            y();\n        else\n            if ( state->how == COPY )      /* read directly */\n                z();\n}\n",
     );
 }
+
+#[test]
+fn comment_after_added_one_line_block_moves_with_paren_padding() {
+    let source = "void f()\n{\n    if (ar->superdir) return;  /* Superdir */\n    if (ar->superdir) return; /* one */\n    if (ar) return;   /* three */\n}\n";
+    let mut padded = FormatOptions::default();
+    let args = ["--style=kr", "--add-one-line-braces", "--pad-paren"].map(str::to_owned);
+    apply_command_line_args(&mut padded, &args).expect("valid options");
+    let mut unpadded = FormatOptions::default();
+    let args = ["--style=kr", "--add-one-line-braces", "--unpad-paren"].map(str::to_owned);
+    apply_command_line_args(&mut unpadded, &args).expect("valid options");
+
+    assert_eq!(
+        format_exact(source, &padded),
+        "void f()\n{\n    if ( ar->superdir ) { return; } /* Superdir */\n    if ( ar->superdir ) { return; } /* one */\n    if ( ar ) { return; } /* three */\n}\n",
+    );
+    assert_eq!(
+        format_exact(source, &unpadded),
+        "void f()\n{\n    if(ar->superdir) { return; }   /* Superdir */\n    if(ar->superdir) { return; }  /* one */\n    if(ar) { return; }    /* three */\n}\n",
+    );
+}

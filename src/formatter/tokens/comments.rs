@@ -2929,8 +2929,29 @@ impl FormatEngine<'_> {
         // Braces added around the statement before move its comment no
         // further.
         if std::mem::take(&mut self.comments.follows_added_one_line_block) {
+            // Padding moves the comment as on any line; the four columns of
+            // the added braces do not.
+            let padded_gap = (!gap.is_empty()
+                && !gap.contains('\t')
+                && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Pico | BraceStyle::Lisp
+                )
+                && !self.layout.line_state.trailing_comment_columns.is_empty())
+            .then(|| {
+                let target = self.layout.line_state.trailing_comment_columns.remove(0);
+                let out_indent = self
+                    .current
+                    .chars()
+                    .take_while(|ch| ch.is_whitespace())
+                    .count();
+                let code_len = (self.current_char_len() - out_indent).saturating_sub(4);
+                target.saturating_sub(code_len).max(1)
+            });
             if gap.is_empty() {
                 self.ensure_space();
+            } else if let Some(width) = padded_gap {
+                self.current.push_str(&" ".repeat(width));
             } else {
                 self.current.push_str(&gap);
                 // Attaching a bare closer takes a space out of its gap.
