@@ -410,11 +410,16 @@ impl FormatEngine<'_> {
         if !self.options.empty_line_fill {
             return;
         }
-        let mut depth = 0isize;
-        let mut branch_depths = Vec::new();
+        // astyle indents each #else and #elif branch with a copy of the
+        // state at its #if, and fills an empty line from the state outside
+        // every such branch, or from the branch's copy when that is at file
+        // scope. A state is the brace depth and the lead of its last line.
+        let mut root = (0isize, String::new());
+        let mut active: Vec<(isize, String)> = Vec::new();
+        let mut waiting: Vec<(isize, String)> = Vec::new();
+        let mut conditionals: Vec<(usize, usize)> = Vec::new();
         // The fill of each open conditional that indents its block.
         let mut preprocessor_block_fills: Vec<Option<String>> = Vec::new();
-        let mut previous_lead = String::new();
         // The braces of a directive's continued lines open no block.
         let mut continues_directive = false;
         for index in 0..self.output.len() {
@@ -428,8 +433,11 @@ impl FormatEngine<'_> {
             if line.trim().is_empty() {
                 // A form feed stays as the page break it marks.
                 if !self.output.is_verbatim(index) && !line.contains('\u{c}') {
-                    let fill = if depth > 0 {
-                        previous_lead.clone()
+                    let branch = active.last().filter(|state| state.0 > 0);
+                    let fill = if root.0 > 0 {
+                        root.1.clone()
+                    } else if let Some(state) = branch {
+                        state.1.clone()
                     } else if let Some(Some(fill)) = preprocessor_block_fills.last() {
                         fill.clone()
                     } else {
@@ -439,6 +447,7 @@ impl FormatEngine<'_> {
                 }
                 continue;
             }
+            let state = active.last_mut().unwrap_or(&mut root);
             let meta = self.output.brace_meta(index);
             // The rest of a block comment keeps the indent of its first line;
             // after one that trailed code astyle leaves the next empty line
@@ -446,12 +455,12 @@ impl FormatEngine<'_> {
             let comment_start = self.output.comment_start_index(index);
             if comment_start != index {
                 if !self.output.trimmed(comment_start).starts_with("/*") {
-                    previous_lead.clear();
+                    state.1.clear();
                 }
                 continue;
             }
             if !meta.code_starts_with_hash {
-                previous_lead = line[..line.len() - line.trim_start().len()].to_string();
+                state.1 = line[..line.len() - line.trim_start().len()].to_string();
             }
             let code = line.trim_start();
             let starts_word = |name: &str| {
@@ -465,32 +474,37 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(|(begin, _)| starts_word(begin))
             {
-                depth += 1;
+                state.0 += 1;
             } else if self
                 .options
                 .macro_blocks
                 .iter()
                 .any(|(_, end)| starts_word(end))
             {
-                depth -= 1;
+                state.0 -= 1;
             }
             if meta.code_starts_with_hash {
-                // Each branch of a conditional starts at the depth before it,
-                // and the first branch's depth carries on past the conditional.
                 match preprocessor_directive(line.trim_start()) {
                     Some("if" | "ifdef" | "ifndef") => {
-                        branch_depths.push((depth, None));
+                        let depth = state.0;
+                        waiting.push(state.clone());
+                        conditionals.push((waiting.len() - 1, active.len()));
                         preprocessor_block_fills.push(self.preprocessor_block_fill(index, depth));
                     }
-                    Some("else" | "elif") => {
-                        if let Some((start, first_end)) = branch_depths.last_mut() {
-                            first_end.get_or_insert(depth);
-                            depth = *start;
+                    Some("else") => {
+                        if let Some(state) = waiting.pop() {
+                            active.push(state);
+                        }
+                    }
+                    Some("elif") => {
+                        if let Some(state) = waiting.last() {
+                            active.push(state.clone());
                         }
                     }
                     Some("endif") => {
-                        if let Some((_, Some(first_end))) = branch_depths.pop() {
-                            depth = first_end;
+                        if let Some((waiting_len, active_len)) = conditionals.pop() {
+                            waiting.truncate(waiting_len);
+                            active.truncate(active_len);
                         }
                         preprocessor_block_fills.pop();
                     }
@@ -498,7 +512,7 @@ impl FormatEngine<'_> {
                 }
                 continue;
             }
-            depth += meta.opens as isize - meta.closes as isize;
+            state.0 += meta.opens as isize - meta.closes as isize;
         }
     }
 

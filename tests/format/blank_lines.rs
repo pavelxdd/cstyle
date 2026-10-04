@@ -1458,3 +1458,67 @@ fn filled_empty_lines_take_tabs_in_tab_indent_styles() {
         assert_eq!(format_exact(source, &options), source);
     }
 }
+
+#[test]
+fn empty_line_fill_reads_state_outside_else_branches() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "#if A",
+                "    if (a)",
+                "        x();",
+                "#else",
+                "    y();",
+                "",
+                "    z();",
+                "#endif",
+                "",
+                "    w();",
+                "}",
+                "",
+                "#ifdef B",
+                "int b;",
+                "#else",
+                "void g(void)",
+                "{",
+                "    v();",
+                "",
+                "    u();",
+                "}",
+                "#endif",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "#if A",
+            "    if (a)",
+            "        x();",
+            "#else",
+            "    y();",
+            "        ",
+            "    z();",
+            "#endif",
+            "        ",
+            "    w();",
+            "}",
+            "",
+            "#ifdef B",
+            "int b;",
+            "#else",
+            "void g(void)",
+            "{",
+            "    v();",
+            "    ",
+            "    u();",
+            "}",
+            "#endif",
+        ),
+    );
+}
