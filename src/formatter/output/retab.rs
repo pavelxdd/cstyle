@@ -96,8 +96,11 @@ impl FormatEngine<'_> {
                 Some(rest)
                     if rest.starts_with("  ")
                         && !rest.trim().is_empty()
+                        && !rest.trim_start().starts_with("/*")
+                        && !rest.trim_start().starts_with("//")
                         && (self.starts_with_block_brace(index)
-                            || self.output.line_tokens(index).is_none()) =>
+                            || self.output.line_tokens(index).is_none()
+                            || rest.trim_start().starts_with('{')) =>
                 {
                     let body = rest.trim_start();
                     let target = width + 1 + (rest.len() - body.len());

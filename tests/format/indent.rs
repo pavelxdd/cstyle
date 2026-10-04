@@ -9817,3 +9817,45 @@ fn tab_indent_closer_of_a_block_running_on_from_its_header_aligns_in_spaces() {
         )
     );
 }
+#[test]
+fn tab_indent_fills_a_broken_nested_initializer_brace_with_a_tab_but_keeps_a_comment_gap() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent=tab".to_owned()],
+    )
+    .expect("valid style options");
+    let actual = format_with(
+        fixture!(
+            "const char t[2][2] = {",
+            "\t{ { 1, 1 }, /* 0 */",
+            "\t\t{ 1, 0 },",
+            "\t},",
+            "};",
+            "void f(void)",
+            "{",
+            "    {   /* note */",
+            "        g();",
+            "    }",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "const char t[2][2] = {",
+            "\t{\t{ 1, 1 }, /* 0 */",
+            "\t\t{ 1, 0 },",
+            "\t},",
+            "};",
+            "void f(void)",
+            "{",
+            "\t{   /* note */",
+            "\t\tg();",
+            "\t}",
+            "}",
+        )
+    );
+}
