@@ -30,7 +30,7 @@ fn operator_path_can_read_token_indexed_roles_without_output_change() {
         formatter.operator_role_at(star_index),
         OperatorRole::BinaryOperator
     );
-    assert_eq!(formatter.finish(), source);
+    assert_eq!(formatter.finish().0, source);
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn syntax_roles_do_not_change_plain_output() {
     let options = FormatOptions::default();
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
-    assert_eq!(formatter.finish(), source);
+    assert_eq!(formatter.finish().0, source);
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn line_ready_pipeline_preserves_existing_output() {
     let options = FormatOptions::default();
     let formatter = FormatEngine::new(&options).format_into(&tokens);
 
-    assert_eq!(formatter.finish(), source);
+    assert_eq!(formatter.finish().0, source);
 }
 
 #[test]

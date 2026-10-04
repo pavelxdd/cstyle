@@ -405,10 +405,12 @@ impl FormatEngine<'_> {
     }
 
     /// astyle fills an empty line inside braces with the indent of the line
-    /// before it, and leaves one at file scope empty.
-    fn fill_empty_lines(&mut self) {
+    /// before it, and leaves one at file scope empty. Returns where the fill
+    /// of each whitespace-only line came from.
+    fn fill_empty_lines(&mut self) -> Vec<EmptyFillSource> {
+        let mut sources = Vec::new();
         if !self.options.empty_line_fill {
-            return;
+            return sources;
         }
         // astyle indents each #else and #elif branch with a copy of the
         // state at its #if, and fills an empty line from the state outside
@@ -428,23 +430,29 @@ impl FormatEngine<'_> {
             continues_directive = (in_directive || line.trim_start().starts_with('#'))
                 && line.trim_end().ends_with('\\');
             if in_directive {
+                if line.trim().is_empty() {
+                    sources.push(EmptyFillSource::Kept);
+                }
                 continue;
             }
             if line.trim().is_empty() {
                 // A form feed stays as the page break it marks.
-                if !self.output.is_verbatim(index) && !line.contains('\u{c}') {
-                    let branch = active.last().filter(|state| state.0 > 0);
-                    let fill = if root.0 > 0 {
-                        root.1.clone()
-                    } else if let Some(state) = branch {
-                        state.1.clone()
-                    } else if let Some(Some(fill)) = preprocessor_block_fills.last() {
-                        fill.clone()
-                    } else {
-                        String::new()
-                    };
-                    self.output.set(index, fill);
+                if self.output.is_verbatim(index) || line.contains('\u{c}') {
+                    sources.push(EmptyFillSource::Kept);
+                    continue;
                 }
+                let branch = active.last().filter(|state| state.0 > 0);
+                let (fill, source) = if root.0 > 0 {
+                    (root.1.clone(), EmptyFillSource::Root)
+                } else if let Some(state) = branch {
+                    (state.1.clone(), EmptyFillSource::Branch)
+                } else if let Some(Some(fill)) = preprocessor_block_fills.last() {
+                    (fill.clone(), EmptyFillSource::Kept)
+                } else {
+                    (String::new(), EmptyFillSource::Kept)
+                };
+                sources.push(source);
+                self.output.set(index, fill);
                 continue;
             }
             let state = active.last_mut().unwrap_or(&mut root);
@@ -514,6 +522,7 @@ impl FormatEngine<'_> {
             }
             state.0 += meta.opens as isize - meta.closes as isize;
         }
+        sources
     }
 
     /// The fill of empty lines in the block the conditional on output
@@ -544,7 +553,9 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn finish(mut self) -> String {
+    /// The finished text, and where the fill of each of its whitespace-only
+    /// lines came from.
+    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
@@ -554,13 +565,24 @@ impl FormatEngine<'_> {
         self.attach_statement_expression_braces();
         self.align_comments_before_case_labels();
         self.retab_output();
-        self.fill_empty_lines();
+        let fill_sources = self.fill_empty_lines();
         if self.output.is_empty() {
-            String::new()
+            (String::new(), fill_sources)
         } else {
             let mut output = self.output.join(self.options.line_break());
             output.push_str(self.options.line_break());
-            output
+            (output, fill_sources)
         }
     }
+}
+
+/// Which state of astyle's beautifiers an empty line takes its fill from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EmptyFillSource {
+    /// The code outside every #else and #elif branch.
+    Root,
+    /// The innermost #else or #elif branch.
+    Branch,
+    /// A fill that no later move of lines changes.
+    Kept,
 }

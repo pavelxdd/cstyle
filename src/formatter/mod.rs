@@ -13,6 +13,8 @@ use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, tokenize};
+use crate::formatter::output::finish::EmptyFillSource;
+use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::tabs;
 use crate::source::line_endings;
 
@@ -68,14 +70,15 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
         || tokens
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)));
-    let output = postprocess_brace_style(engine.format_into(&tokens).finish(), options);
+    let (output, fill_sources) = engine.format_into(&tokens).finish();
+    let output = postprocess_brace_style(output, options);
     if options.empty_line_fill
         && matches!(
             options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp | BraceStyle::Horstmann
         )
     {
-        refill_empty_lines(&output, options.line_break())
+        refill_empty_lines(&output, options.line_break(), &fill_sources)
     } else {
         output
     }
@@ -83,26 +86,71 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
 
 /// Brace styles that move lines after the output is finished leave filled
 /// empty lines with the indent of a line that moved: they take the indent of
-/// the line now before them.
-fn refill_empty_lines(output: &str, line_break: &str) -> String {
-    let mut lead = "";
-    let mut lines = Vec::new();
+/// the line now before them in the state they were filled from.
+fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource]) -> String {
+    let lines: Vec<&str> = output.split(line_break).collect();
+    let blank_lines = lines.iter().filter(|line| line.trim().is_empty()).count();
+    // The split leaves an empty line after the final line break.
+    let aligned = blank_lines == sources.len() + usize::from(output.ends_with(line_break));
+    let mut sources = sources.iter();
+    let mut root = "";
+    let mut active: Vec<&str> = Vec::new();
+    let mut waiting: Vec<&str> = Vec::new();
+    let mut conditionals: Vec<(usize, usize)> = Vec::new();
+    let mut refilled = Vec::with_capacity(lines.len());
     // The rest of a block comment keeps the indent of its first line.
     let mut in_block_comment = false;
-    for line in output.split(line_break) {
-        if line.contains('\u{c}') {
-            lines.push(line);
-        } else if line.trim().is_empty() {
-            lines.push(if line.is_empty() { "" } else { lead });
-        } else {
-            if !in_block_comment && !line.trim_start().starts_with('#') {
-                lead = &line[..line.len() - line.trim_start().len()];
+    let mut continues_directive = false;
+    for line in lines {
+        let in_directive = continues_directive;
+        continues_directive = !in_block_comment
+            && (in_directive || line.trim_start().starts_with('#'))
+            && line.trim_end().ends_with('\\');
+        if in_directive && aligned {
+            refilled.push(line);
+            if line.trim().is_empty() {
+                sources.next();
             }
-            in_block_comment = ends_inside_block_comment(line, in_block_comment);
-            lines.push(line);
+            continue;
         }
+        if line.trim().is_empty() {
+            let source = sources.next();
+            let lead = match source {
+                _ if !aligned => *active.last().unwrap_or(&root),
+                Some(EmptyFillSource::Root) => root,
+                Some(EmptyFillSource::Branch) => active.last().copied().unwrap_or(root),
+                Some(EmptyFillSource::Kept) | None => line,
+            };
+            let keep = line.is_empty() || line.contains('\u{c}');
+            refilled.push(if keep { line } else { lead });
+            continue;
+        }
+        let state = active.last_mut().unwrap_or(&mut root);
+        let code = line.trim_start();
+        if !in_block_comment && !code.starts_with('#') {
+            *state = &line[..line.len() - code.len()];
+        }
+        if aligned && !in_block_comment {
+            match preprocessor_directive(code) {
+                Some("if" | "ifdef" | "ifndef") => {
+                    waiting.push(*state);
+                    conditionals.push((waiting.len() - 1, active.len()));
+                }
+                Some("else") => active.extend(waiting.pop()),
+                Some("elif") => active.extend(waiting.last().copied()),
+                Some("endif") => {
+                    if let Some((waiting_len, active_len)) = conditionals.pop() {
+                        waiting.truncate(waiting_len);
+                        active.truncate(active_len);
+                    }
+                }
+                _ => {}
+            }
+        }
+        in_block_comment = ends_inside_block_comment(line, in_block_comment);
+        refilled.push(line);
     }
-    lines.join(line_break)
+    refilled.join(line_break)
 }
 
 /// Whether a block comment is open at the end of `line`, given whether one

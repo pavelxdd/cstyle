@@ -1557,3 +1557,47 @@ fn empty_line_fill_reads_state_outside_else_branches() {
         ),
     );
 }
+
+#[test]
+fn lisp_empty_line_fill_reads_state_outside_else_branches() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+    options.brace_style = BraceStyle::Lisp;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void) {",
+                "#if A",
+                "    if (a) {",
+                "        x();",
+                "    }",
+                "    y();",
+                "#else",
+                "    if (b) {",
+                "        z();",
+                "    }",
+                "",
+                "    w();",
+                "#endif",
+                "    return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void) {",
+            "#if A",
+            "    if (a) {",
+            "        x(); }",
+            "    y();",
+            "#else",
+            "    if (b) {",
+            "        z(); }",
+            "    ",
+            "    w();",
+            "#endif",
+            "    return 0; }",
+        ),
+    );
+}
