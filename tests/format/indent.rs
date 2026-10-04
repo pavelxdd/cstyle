@@ -9340,3 +9340,16 @@ fn whitesmith_tab_indent_closes_compound_literal_at_a_level() {
         "void f(void)\n\t{\n\tzp->zds = create((Mem)\n\t\t{\n\t\t.a = 1,\n\t\t.b = NULL\n\t\t});\n\t}\n",
     );
 }
+
+#[test]
+fn force_tab_leaves_rest_of_directive_comment_as_written() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent=force-tab=4".to_owned()])
+        .expect("valid options");
+
+    let source = fixture!(
+        "#define MAX_PROTOSTRING (MAX_PROTOS * 11)  /* Room for MAX_PROTOS number of",
+        "                                              10-chars proto names. */",
+    );
+    assert_eq!(format_exact(source, &options), source);
+}

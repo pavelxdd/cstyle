@@ -35,7 +35,14 @@ impl FormatEngine<'_> {
                 // lines too.
                 let indented_conditional =
                     directive.is_some() && self.output.is_indented_directive_continuation(index);
+                // The rest of a comment a directive line opened stays as
+                // written, as the directive does.
+                let continues_directive_comment =
+                    self.comment_opener(index).is_some_and(|opener| {
+                        opener != index && self.output.trimmed(opener).starts_with('#')
+                    });
                 if self.output.is_verbatim(index)
+                    || continues_directive_comment
                     || line.is_empty()
                     || !self.options.indent_preproc_define
                         && directive.is_some()
