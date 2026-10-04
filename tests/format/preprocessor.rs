@@ -4329,3 +4329,64 @@ fn vtk_define_header_brace_at_the_top_of_the_body_stands_at_the_header() {
         ),
     );
 }
+
+#[test]
+fn directive_after_a_closed_split_else_chain_body_stands_at_its_statements() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::OneTrueBrace;
+    options.attach_struct = true;
+    options.attach_enum = true;
+    options.indent_preproc_conditional = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "#if (A)",
+                "    if (x) {",
+                "        a();",
+                "    } else",
+                "#endif",
+                "#if (T)",
+                "    if (y) {",
+                "        t();",
+                "    } else",
+                "#endif",
+                "    {",
+                "        n = 1;",
+                "    }",
+                "",
+                "#if (B)",
+                "    b();",
+                "#endif",
+                "    c();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    #if (A)",
+            "    if (x) {",
+            "        a();",
+            "    } else",
+            "    #endif",
+            "    #if (T)",
+            "        if (y) {",
+            "            t();",
+            "        } else",
+            "    #endif",
+            "        {",
+            "            n = 1;",
+            "        }",
+            "",
+            "    #if (B)",
+            "    b();",
+            "    #endif",
+            "    c();",
+            "}",
+        ),
+    );
+}

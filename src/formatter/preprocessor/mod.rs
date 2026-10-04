@@ -1101,7 +1101,10 @@ impl FormatEngine<'_> {
 
     /// A body an `else` split across directives opens stands a level deeper.
     fn split_else_directive_extra(&self) -> usize {
-        if self.preprocessor.split_else.extra_indent {
+        // The brace closing the body ended the chain unless an `else` goes on.
+        let body_closed = self.preprocessor.split_else.clear_pending_after_brace
+            && !self.preprocessor.split_else.closing_brace_has_else;
+        if self.preprocessor.split_else.extra_indent && !body_closed {
             self.preprocessor.split_else.extra_levels
         } else {
             0
