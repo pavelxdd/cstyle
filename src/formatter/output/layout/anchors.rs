@@ -4539,7 +4539,7 @@ impl FormatEngine<'_> {
         }
         Some(
             self.output.lead_width(line, self.options.tab_width)
-                + self.options.indent_width
+                + self.options.continuation_indent * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
     }

@@ -4042,3 +4042,47 @@ fn file_scope_indented_block_sets_aside_the_statement_it_continues() {
         ),
     );
 }
+
+#[test]
+fn case_block_value_after_directive_takes_continuation_levels() {
+    let mut options = FormatOptions::default();
+    options.continuation_indent = 2;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    switch (x) {",
+                "    case 1:",
+                "        *p =",
+                "#ifdef A",
+                "            0",
+                "#else",
+                "            u",
+                "#endif",
+                "            ;",
+                "        break;",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    switch (x) {",
+            "    case 1:",
+            "        *p =",
+            "#ifdef A",
+            "                0",
+            "#else",
+            "                u",
+            "#endif",
+            "                ;",
+            "        break;",
+            "    }",
+            "}",
+        ),
+    );
+}
