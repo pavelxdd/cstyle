@@ -1282,3 +1282,35 @@ fn indented_switches_indent_the_cases_of_a_switch_held_by_an_attached_else() {
         )
     );
 }
+
+#[test]
+fn a_braceless_header_kept_on_a_case_label_line_indents_its_body_past_the_case_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int c)\n{\n    switch (c) {\n    case 1: if (x)\n            y();\n        else\n            z();\n        break;\n    }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{",
+            "    switch (c) {",
+            "    case 1: if (x)",
+            "            y();",
+            "        else",
+            "            z();",
+            "        break;",
+            "    }",
+            "}",
+        )
+    );
+}

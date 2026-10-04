@@ -769,6 +769,19 @@ fn char_index_after_byte(chars: &[(usize, char)], byte_index: usize) -> usize {
     chars.partition_point(|(index, _)| *index <= byte_index)
 }
 
+/// Whether `code` is a case label line whose statement is a header
+/// awaiting its braceless body, as `case 1: if (x)`.
+fn label_line_holds_braceless_header(code: &str) -> bool {
+    let Some(colon) = find_case_colon(code) else {
+        return false;
+    };
+    let statement = code[colon + 1..].trim();
+    let header = ["if", "while", "for", "else"]
+        .into_iter()
+        .any(|word| starts_header_word(statement, word));
+    header && (statement.ends_with(')') || statement == "else")
+}
+
 fn starts_inline_case_statement(line: &str) -> bool {
     let line = line.trim_start();
     if !(starts_header_word(line, "case") || starts_header_word(line, "default")) {
@@ -1569,7 +1582,13 @@ impl FormatEngine<'_> {
                 case_layout.opens_block && self.options.indent_cases
                     || case_layout.statement_block_open,
             ) * indent_width;
-            Some(case_indent + case_body_extra + indent_width + block_extra)
+            // The body of a braceless header kept on the label's line
+            // stands a level past the case body.
+            let header_body_extra =
+                usize::from(self.output.last_non_empty_index().is_some_and(|index| {
+                    label_line_holds_braceless_header(self.output.code(index))
+                })) * indent_width;
+            Some(case_indent + case_body_extra + indent_width + block_extra + header_body_extra)
         };
         if let Some(target) = target
             && (trimmed.starts_with('}') || exact_indent_spaces.unwrap_or(0) < target)
