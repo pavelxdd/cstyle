@@ -1942,6 +1942,7 @@ fn is_remove_braces_header(word: &str) -> bool {
 pub(crate) fn add_cross_line_statement_braces(
     tokens: &[Token],
     attach_added_braces: bool,
+    attach_closing_brace: bool,
     comment_gap: usize,
 ) -> Vec<Token> {
     let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
@@ -2015,9 +2016,33 @@ pub(crate) fn add_cross_line_statement_braces(
             insert_before[open_insert].push(Token::Symbol('{'));
             insert_before[open_insert].push(Token::Newline);
         }
-        insert_before[close_insert].push(Token::Newline);
-        insert_before[close_insert].push(Token::Symbol('}'));
-        set_statement_comment_gap(&mut replace, close_insert);
+        // A closer kept on its statement's line goes before the statement's
+        // comment, which keeps its gap.
+        let mut code_end = close_insert;
+        while code_end > 0 && matches!(tokens[code_end - 1], Token::Newline | Token::Whitespace(_))
+        {
+            code_end -= 1;
+        }
+        if attach_closing_brace
+            && code_end >= 3
+            && matches!(&tokens[code_end - 1], Token::Comment(_, text) if !text.contains('\n'))
+            && matches!(tokens[code_end - 2], Token::Whitespace(_))
+            && matches!(tokens[code_end - 3], Token::Symbol(';'))
+        {
+            insert_before[code_end - 2].push(Token::Whitespace(" ".to_owned()));
+            insert_before[code_end - 2].push(Token::Symbol('}'));
+            // Joining the closer back takes a space of the gap; this one
+            // was never moved.
+            if let Token::Whitespace(gap) = &tokens[code_end - 2]
+                && gap.bytes().all(|byte| byte == b' ')
+            {
+                replace[code_end - 2] = Some(Token::Whitespace(format!("{gap} ")));
+            }
+        } else {
+            insert_before[close_insert].push(Token::Newline);
+            insert_before[close_insert].push(Token::Symbol('}'));
+            set_statement_comment_gap(&mut replace, close_insert);
+        }
         covered_until = close_insert;
     }
 
@@ -2838,6 +2863,9 @@ mod tests {
             "void run(){if(alphaCondition&&\n#if ENABLED\nbetaCondition\n#endif\nzetaCondition){call();}}\n",
         );
 
-        assert_eq!(add_cross_line_statement_braces(&tokens, true, 4), tokens);
+        assert_eq!(
+            add_cross_line_statement_braces(&tokens, true, false, 4),
+            tokens
+        );
     }
 }

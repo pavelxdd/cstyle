@@ -6056,3 +6056,23 @@ fn a_comment_after_a_broken_brace_keeps_its_column_with_padded_parens_in_pico() 
         "int f()\n{   if (max == 0)                       /* no symbols */\n    {   x = 1;\n        return 0; }\n    if (left > 0 && (type == C || max != 1) )\n        return -1;                      /* incomplete set */\n    return 0; }\n",
     );
 }
+
+#[test]
+fn an_added_closer_goes_before_the_statement_comment_with_its_gap_in_pico() {
+    let input = "int f()\n{\n    if (a)\n        return -1;                      /* incomplete set */\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=pico", "--add-braces"],
+        "int f()\n{   if (a)\n    {   return -1; }                      /* incomplete set */\n    return 0; }\n",
+    );
+}
+
+#[test]
+fn an_added_closer_goes_before_the_statement_comment_with_its_gap_in_lisp() {
+    let input = "int f()\n{\n    if (a)\n        return -1;                      /* incomplete set */\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--add-braces"],
+        "int f() {\n    if (a) {\n        return -1; }                      /* incomplete set */\n    return 0; }\n",
+    );
+}

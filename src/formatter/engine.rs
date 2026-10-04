@@ -331,6 +331,10 @@ impl<'a> FormatEngine<'a> {
             added_brace_tokens = add_cross_line_statement_braces(
                 tokens,
                 attach_added_braces,
+                matches!(
+                    self.options.brace_style,
+                    BraceStyle::Pico | BraceStyle::Lisp
+                ),
                 self.options.indent_width,
             );
             added_brace_tokens.as_slice()
