@@ -657,8 +657,9 @@ impl<'a> FormatEngine<'a> {
             && matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<")
             && next_index.is_some()
             && !matches!(next, Some(Token::Operator(operator)) if operator == "=")
-            && previous_non_whitespace(tokens, index, line.start)
-                .is_some_and(|previous| matches!(tokens.get(previous), Some(Token::Word(_))))
+            && previous_non_whitespace(tokens, index, line.start).is_some_and(|previous| {
+                matches!(tokens.get(previous), Some(Token::Word(word)) if word != "operator")
+            })
         {
             template_angle = TemplateAngle::Open;
         }

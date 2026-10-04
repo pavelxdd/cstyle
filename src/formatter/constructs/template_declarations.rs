@@ -16,10 +16,53 @@ pub(crate) fn template_declaration_line_complete(line: &str) -> bool {
 }
 
 fn angle_depth_delta(line: &str) -> isize {
-    line.chars().fold(0, |depth, ch| match ch {
+    angle_chars(line).fold(0, |depth, (_, ch)| match ch {
         '<' => depth + 1,
-        '>' => depth - 1,
-        _ => depth,
+        _ => depth - 1,
+    })
+}
+
+/// The angle brackets of `line` by char column, leaving out those naming an
+/// operator, as in `operator<<`.
+fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
+    let chars = line.chars().collect::<Vec<_>>();
+    let mut operator_name_end = 0;
+    let mut column = 0;
+    std::iter::from_fn(move || {
+        while column < chars.len() {
+            let at = column;
+            column += 1;
+            if chars[at..].starts_with(&['o', 'p', 'e', 'r', 'a', 't', 'o', 'r'])
+                && !at
+                    .checked_sub(1)
+                    .is_some_and(|before| chars[before].is_alphanumeric() || chars[before] == '_')
+            {
+                let mut end = at + "operator".len();
+                if chars
+                    .get(end)
+                    .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_')
+                {
+                    continue;
+                }
+                while chars.get(end).is_some_and(|ch| ch.is_whitespace()) {
+                    end += 1;
+                }
+                while chars
+                    .get(end)
+                    .is_some_and(|ch| "<>=!+-*/%^&|~".contains(*ch))
+                {
+                    end += 1;
+                }
+                operator_name_end = end;
+            }
+            if at < operator_name_end {
+                continue;
+            }
+            if matches!(chars[at], '<' | '>') {
+                return Some((at, chars[at]));
+            }
+        }
+        None
     })
 }
 
@@ -35,13 +78,11 @@ pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
         return Some(open + 1);
     }
     let mut stack = Vec::new();
-    for (column, ch) in line.chars().enumerate() {
-        match ch {
-            '<' => stack.push(column),
-            '>' => {
-                stack.pop();
-            }
-            _ => {}
+    for (column, ch) in angle_chars(line) {
+        if ch == '<' {
+            stack.push(column);
+        } else {
+            stack.pop();
         }
     }
     stack
@@ -246,11 +287,11 @@ impl FormatEngine<'_> {
 
 fn angle_depth(line: &str) -> isize {
     let mut depth = 0isize;
-    for ch in line.chars() {
-        match ch {
-            '<' => depth += 1,
-            '>' => depth = depth.saturating_sub(1),
-            _ => {}
+    for (_, ch) in angle_chars(line) {
+        if ch == '<' {
+            depth += 1;
+        } else {
+            depth = depth.saturating_sub(1);
         }
     }
     depth

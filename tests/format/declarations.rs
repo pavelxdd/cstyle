@@ -365,6 +365,23 @@ fn operator_template_declaration_does_not_indent_following_macro() {
 }
 
 #[test]
+fn template_operator_definition_closes_its_template_head() {
+    let source = fixture!(
+        "template<class T> int &operator<<(int &s, int m)",
+        "{",
+        "    return s;",
+        "}",
+        "",
+        "inline int g(int s)",
+        "{",
+        "    return s;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn user_defined_literal_operator_suffix_stays_attached() {
     let source = fixture!(
         "inline Value operator\"\"_value(const char* text, std::size_t size)",
