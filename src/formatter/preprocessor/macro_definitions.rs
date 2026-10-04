@@ -388,6 +388,8 @@ fn define_expression_continuation_spaces(line: &str, tab_width: usize) -> Option
             ')' => {
                 parens.pop();
             }
+            // A brace, as in a statement expression, starts statements.
+            '{' => parens.clear(),
             _ => {}
         }
     }

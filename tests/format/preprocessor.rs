@@ -3943,3 +3943,34 @@ fn define_with_continued_parameters_indents_no_body_level() {
         ),
     );
 }
+
+#[test]
+fn define_statement_expression_body_ignores_its_open_paren() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--indent-preproc-define".to_owned(),
+            "--max-continuation-indent=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define atomicCompareExchange(type,var,expected_var,desired) ({ \\",
+                "    type _old = __sync_val_compare_and_swap(&var,expected_var,desired); \\",
+                "    _old; \\",
+                "})",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define atomicCompareExchange(type,var,expected_var,desired) ({ \\",
+            "        type _old = __sync_val_compare_and_swap(&var,expected_var,desired); \\",
+            "        _old; \\",
+            "    })",
+        ),
+    );
+}
