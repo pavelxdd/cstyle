@@ -3499,3 +3499,13 @@ fn double_pointer_after_comma_in_a_function_body_stays_as_written() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn multiplication_in_nested_call_argument_is_no_pointer() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=allman", "--align-pointer=type"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void g(void)\n{\n    f(L, floor(r*u));\n    f(g(r*u)+1);\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}

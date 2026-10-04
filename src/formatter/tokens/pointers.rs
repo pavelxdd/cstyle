@@ -733,7 +733,10 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|brace_type| is_class_like_brace_type(*brace_type));
         }
-        if return_type.contains(['.', '[', ']']) {
+        // A head inside an open paren is a call's argument.
+        if return_type.contains(['.', '[', ']'])
+            || has_unclosed_balanced_delimiter(return_type, "(", ")")
+        {
             return false;
         }
         let last_type_word = return_type
