@@ -404,6 +404,10 @@ impl<'a> FormatEngine<'a> {
                 index += 1;
                 continue;
             }
+            // Only the comment right after an added block follows it.
+            if is_code_token(&tokens[index]) {
+                self.comments.follows_added_one_line_block = false;
+            }
             // Rewrites below push runs of tokens; their text belongs to the
             // token they start from.
             self.current

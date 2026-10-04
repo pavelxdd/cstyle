@@ -1467,3 +1467,49 @@ fn pico_break_one_line_headers_keeps_comments_beside_their_code() {
         ),
     );
 }
+
+#[test]
+fn added_block_comment_gap_holds_only_for_its_own_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--add-braces".to_owned(),
+            "--pad-oper".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(int pos)",
+                "{",
+                "  while (m[line] <= pos) line++;   // c1",
+                "  return line-1;",
+                "}",
+                "",
+                "int g(int line)",
+                "{",
+                "  return m[line+1] - m[line] -1;   // c2",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(int pos)",
+            "{",
+            "    while (m[line] <= pos) {",
+            "        line++;    // c1",
+            "    }",
+            "    return line - 1;",
+            "}",
+            "",
+            "int g(int line)",
+            "{",
+            "    return m[line + 1] - m[line] - 1; // c2",
+            "}",
+        ),
+    );
+}
