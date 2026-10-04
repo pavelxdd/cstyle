@@ -2962,3 +2962,33 @@ fn spaces_between_a_cast_and_a_number_keep_their_source_width() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn pad_oper_keeps_sign_unary_after_astyle_numeric_casts() {
+    let mut options = FormatOptions::default();
+    options.pad_operators = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    a = (DWORD) -1;",
+                "    h = (HWND)-1;",
+                "    i = (foo_t)-1;",
+                "    g = (x)-1;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    a = (DWORD) -1;",
+            "    h = (HWND) -1;",
+            "    i = (foo_t) -1;",
+            "    g = (x) - 1;",
+            "}",
+        ),
+    );
+}

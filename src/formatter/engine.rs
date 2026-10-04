@@ -32,7 +32,9 @@ use crate::formatter::state::{
 };
 use crate::formatter::structure::SourceTree;
 use crate::formatter::structure::blocks::is_code_token;
-use crate::formatter::syntax::language::{is_numeric_variable_word, is_type_like_pointer_word};
+use crate::formatter::syntax::language::{
+    is_numeric_variable_word, is_type_like_pointer_word, is_unpad_kept_type_word,
+};
 use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
 };
@@ -1102,7 +1104,7 @@ impl<'a> FormatEngine<'a> {
     pub(crate) fn current_ends_numeric_cast(&self) -> bool {
         self.current_cast_words()
             .and_then(|words| words.last().copied())
-            .is_some_and(is_numeric_variable_word)
+            .is_some_and(|word| is_numeric_variable_word(word) || is_unpad_kept_type_word(word))
     }
 
     pub(crate) fn current_ends_pointer_cast(&self) -> bool {
