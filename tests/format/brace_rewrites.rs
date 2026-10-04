@@ -1728,3 +1728,53 @@ fn lisp_added_block_breaks_from_the_statement_after_it() {
         ),
     );
 }
+
+#[test]
+fn added_block_ending_broken_else_if_chain_unwinds_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--add-one-line-braces".to_owned(),
+            "--break-elseifs".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a)",
+                "        x();",
+                "    else if (b)",
+                "        y();",
+                "    else",
+                "        z();",
+                "    for (i = 0; i < n; i++) {",
+                "        w();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)",
+            "    { x(); }",
+            "    else",
+            "        if (b)",
+            "        { y(); }",
+            "        else",
+            "        { z(); }",
+            "    for (i = 0; i < n; i++)",
+            "    {",
+            "        w();",
+            "    }",
+            "}",
+        ),
+    );
+}

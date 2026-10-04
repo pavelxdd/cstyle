@@ -96,6 +96,7 @@ impl FormatEngine<'_> {
             && self.options.keeps_multi_statement_line()
             && if_follows_statement_on_line(tokens, start);
         let header_is_else = header == "else";
+        let header_is_if = header == "if";
         let header_is_do = header == "do";
         if matches!(header, "if" | "for" | "while")
             && (self.layout.command_state.previous_command_char != Some(')')
@@ -286,6 +287,28 @@ impl FormatEngine<'_> {
                         self.layout.frame_stack.pop_braceless_header();
                     }
                 }
+            }
+            // The block of a chain's last `else`, or of its last broken
+            // `else if`, ends the chain.
+            let broken_else_if = header_is_if && {
+                let lines = self.output.scoped();
+                let mut rows = lines.iter().rev().filter(|line| !line.trim().is_empty());
+                rows.nth(2).is_some_and(|line| line.trim() == "else")
+            };
+            let else_follows = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_)
+                            | Token::Newline
+                            | Token::Comment(..)
+                            | Token::Preprocessor(_)
+                    )
+                })
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
+            if (header_is_else || broken_else_if) && !else_follows && self.current_is_blank() {
+                self.unwind_else_if_break_depths();
             }
         } else {
             self.token_input.token_begins_source_line = false;
