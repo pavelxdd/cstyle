@@ -16,13 +16,13 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token};
+use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::TokenSpan;
-use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
@@ -2531,6 +2531,7 @@ impl FormatEngine<'_> {
             // The comment keeps its source column past code that a moved
             // closing brace and the broken brace left.
             let code_len = self.current.trim().chars().count();
+            let target = target.saturating_sub(self.broken_else_if_prefix_width());
             self.current
                 .push_str(&" ".repeat(target.saturating_sub(code_len).max(1)));
         } else {
@@ -2540,6 +2541,39 @@ impl FormatEngine<'_> {
         }
         self.current.push_str(comment.trim_end());
         self.comments.skip_next_attached_comment = true;
+    }
+
+    /// The source width of what a broken else-if moved off the line its
+    /// brace is on, before the `if`.
+    fn broken_else_if_prefix_width(&self) -> usize {
+        if !self.current.trim_start().starts_with("if")
+            || !self
+                .output
+                .last()
+                .is_some_and(|line| line.trim_end().ends_with("else"))
+        {
+            return 0;
+        }
+        let tokens = &self.tree.tokens;
+        let Some(brace) = self
+            .current
+            .active_token()
+            .filter(|&brace| brace < tokens.len())
+        else {
+            return 0;
+        };
+        let line_start = tokens[..brace]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let Some(first) = (line_start..brace).find(|&index| is_code_token(&tokens[index])) else {
+            return 0;
+        };
+        (first..brace)
+            .find(|&index| matches!(&tokens[index], Token::Word(word) if word == "if"))
+            .map_or(0, |header| {
+                tokens[first..header].iter().map(token_char_len).sum()
+            })
     }
 
     fn enter_pushed_brace_scope(

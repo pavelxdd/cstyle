@@ -2543,3 +2543,45 @@ fn braced_body_after_continued_condition_ignores_call_shape_of_its_tail() {
         ),
     );
 }
+
+#[test]
+fn broken_else_if_comment_keeps_its_column_from_the_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=allman".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    for(i = 0; i < n; ++i)",
+                "        if(p[i] == '/')",
+                "            p[i] = 0;",
+                "        else if(!p[i]) { /* zero */",
+                "            g();",
+                "            return 1;",
+                "        }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    for(i = 0; i < n; ++i)",
+            "        if(p[i] == '/')",
+            "            p[i] = 0;",
+            "        else",
+            "            if(!p[i])   /* zero */",
+            "            {",
+            "                g();",
+            "                return 1;",
+            "            }",
+            "}",
+        ),
+    );
+}
