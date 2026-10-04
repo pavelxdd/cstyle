@@ -408,7 +408,26 @@ impl OutputBuffer {
     }
 
     pub(crate) fn brace_meta(&self, index: usize) -> &LineBraceMeta {
-        self.meta[index].get_or_init(|| compute_line_brace_meta(&self.lines[index]))
+        self.meta[index].get_or_init(|| {
+            let line = &self.lines[index];
+            // A row of a block comment holds no code.
+            if self.tokens[index].is_none() && self.comments[index].lead.is_some() {
+                LineBraceMeta {
+                    code_starts_with_hash: false,
+                    closes: 0,
+                    opens: 0,
+                    open_shape: OpenBraceShape::Other,
+                    trim_start_byte: line.len() - line.trim_start().len(),
+                    trim_end_byte: line.trim_end().len(),
+                    code_end_byte: 0,
+                    paren_closes: 0,
+                    paren_open_count: 0,
+                    paren_last_open_column: None,
+                }
+            } else {
+                compute_line_brace_meta(line)
+            }
+        })
     }
 
     pub(crate) fn trimmed(&self, index: usize) -> &str {

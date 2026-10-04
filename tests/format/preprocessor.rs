@@ -4136,3 +4136,58 @@ fn conditional_continued_lines_indent_as_code_in_a_header_condition() {
         ),
     );
 }
+
+#[test]
+fn a_paren_in_a_block_comment_row_leaves_a_split_else_body_alone() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "/*",
+                " * (a",
+                " */",
+                "void f(void)",
+                "{",
+                "#ifdef A",
+                "  if(x) {",
+                "    a();",
+                "  }",
+                "  else",
+                "#endif",
+                "",
+                "  if(",
+                "#if B && \\",
+                "  C",
+                "    y &&",
+                "#endif",
+                "    (z == 0)) {",
+                "    b();",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "/*",
+            " * (a",
+            " */",
+            "void f(void)",
+            "{",
+            "#ifdef A",
+            "    if(x)",
+            "    {   a(); }",
+            "    else",
+            "#endif",
+            "",
+            "        if(",
+            "#if B && \\",
+            "  C",
+            "            y &&",
+            "#endif",
+            "            (z == 0))",
+            "        {   b(); } }",
+        ),
+    );
+}
