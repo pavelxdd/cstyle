@@ -2231,11 +2231,18 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
     }
 
     let mut output = Vec::with_capacity(tokens.len());
+    // Whether the whitespace run ending the output takes a removed brace's
+    // place: only that gap stays at a line end before a closing brace.
+    let mut gap_from_removal = false;
     for (index, token) in tokens.iter().cloned().enumerate() {
         let token = if replace_with_space[index] {
+            gap_from_removal = true;
             Some(Token::Whitespace(" ".to_string()))
+        } else if remove[index] {
+            gap_from_removal |= matches!(output.last(), Some(Token::Whitespace(_)));
+            None
         } else {
-            (!remove[index]).then_some(token)
+            Some(token)
         };
         let Some(token) = token else {
             continue;
@@ -2248,7 +2255,22 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
                     output.push(Token::Whitespace(whitespace));
                 }
             }
-            token => output.push(token),
+            Token::Newline => {
+                if !gap_from_removal
+                    && matches!(output.last(), Some(Token::Whitespace(_)))
+                    && next_non_layout_token_index(tokens, index + 1).is_some_and(|next| {
+                        !remove[next] && matches!(tokens[next], Token::Symbol('}'))
+                    })
+                {
+                    output.pop();
+                }
+                gap_from_removal = false;
+                output.push(Token::Newline);
+            }
+            token => {
+                gap_from_removal = false;
+                output.push(token);
+            }
         }
     }
     output

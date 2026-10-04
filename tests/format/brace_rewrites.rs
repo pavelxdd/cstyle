@@ -1336,3 +1336,18 @@ fn pico_remove_braces_malformed_colon_block_after_embedded_define_is_idempotent(
 
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn remove_braces_drops_source_trailing_space_before_pico_closing_brace() {
+    let mut options = FormatOptions::default();
+    options.remove_braces = true;
+    options.brace_style = BraceStyle::Pico;
+
+    assert_eq!(
+        format_exact(
+            fixture!("int f(void) {", "    int a = 1;", "    return a;   ", "}"),
+            &options,
+        ),
+        fixture!("int f(void)", "{   int a = 1;", "    return a; }"),
+    );
+}
