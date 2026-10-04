@@ -9486,3 +9486,56 @@ fn string_element_after_a_paren_closing_string_row_stands_at_the_brace_content()
         ),
     );
 }
+
+#[test]
+fn block_of_a_split_condition_else_if_in_a_split_else_body_closes_at_its_header() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Attach;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  if( a ){",
+                "    x();",
+                "  }else",
+                "",
+                "  if( iCol==1 ){",
+                "    if( b ){",
+                "      y();",
+                "    }else if(",
+                "        c",
+                "     || d",
+                "    ){",
+                "      z();",
+                "    }",
+                "  }else{",
+                "    w();",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    if( a ) {",
+            "        x();",
+            "    } else",
+            "",
+            "        if( iCol==1 ) {",
+            "            if( b ) {",
+            "                y();",
+            "            } else if(",
+            "                c",
+            "                || d",
+            "            ) {",
+            "                z();",
+            "            }",
+            "        } else {",
+            "            w();",
+            "        }",
+            "}",
+        ),
+    );
+}

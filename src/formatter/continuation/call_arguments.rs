@@ -677,7 +677,10 @@ impl FormatEngine<'_> {
                 clear_continuation_after_line: None,
             });
         }
-        if current.starts_with(',') && starts_string_literal_token(previous_code.trim_start()) {
+        if current.starts_with(',')
+            && starts_string_literal_token(previous_code.trim_start())
+            && line_paren_imbalance(previous_code).0 == 0
+        {
             let clear_continuation_after_line = line.trim_end().ends_with(';').then(|| {
                 self.output
                     .scoped()

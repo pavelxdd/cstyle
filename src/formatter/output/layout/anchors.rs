@@ -4631,13 +4631,19 @@ impl FormatEngine<'_> {
             if let Some(condition) = groups.closed_at(header) {
                 header = self.tree.previous_code_token(groups.get(condition).open)?;
             }
-            // A condition split over lines leaves the `{` on a later line.
+            // A condition split over lines leaves the `{` on a later line;
+            // its header may follow a `}` and an `else` on its own line.
             if let Some(header_line) = self.output.line_with_token(header)
                 && header_line < line
-                && self.output.line_tokens(header_line)?.first == header
+                && let Some(header_line_first) =
+                    self.output.line_tokens(header_line).map(|span| span.first)
+                && tokens[header_line_first..header].iter().all(|token| {
+                    matches!(token, Token::Symbol('}') | Token::Whitespace(_))
+                        || matches!(token, Token::Word(word) if word == "else")
+                })
             {
                 line = header_line;
-                line_first = header;
+                line_first = header_line_first;
             }
             if !matches!(&tokens[header], Token::Word(word)
                 if matches!(word.as_str(), "if" | "else" | "for" | "while" | "switch" | "do"))
