@@ -188,6 +188,15 @@ impl FormatEngine<'_> {
         if ends_statement_before_comment(&split.head) {
             next_indent = indent;
         }
+        // A `goto` split from its label continues one level in.
+        if split
+            .head
+            .trim_end()
+            .strip_suffix("goto")
+            .is_some_and(|before| !before.ends_with(is_identifier_continue))
+        {
+            next_indent = ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
+        }
         if let Some(extra) = inline_body_indent_extra {
             next_indent =
                 ContinuationIndent::Spaces(next_indent.columns(self.options.indent_width) + extra);
@@ -601,11 +610,13 @@ fn continuation_indent_for_split(
                         )
                 })
         });
+    // Member access registers nothing.
+    let unaccessed_head = head.replace("->", ".");
     if !following_split
-        && head.chars().all(|ch| {
+        && unaccessed_head.chars().all(|ch| {
             is_identifier_continue(ch)
                 || ch.is_whitespace()
-                || matches!(ch, '*' | '&' | ':' | '<' | '>')
+                || matches!(ch, '*' | '&' | ':' | '<' | '>' | '.')
                 || macro_groups && matches!(ch, '(' | ')' | ',')
         })
         && head.ends_with(|ch: char| {

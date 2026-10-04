@@ -2906,3 +2906,16 @@ fn max_code_length_splits_standalone_macro_invocation_rows() {
         "void f(void)\n{\n    struct x *hlu;\n\n    RB_FOREACH_SAFE(hlu, hyperlinks_by_inner_tree,\n                    &hl->by_inner, hlu1)\n    hyperlinks_remove(hlu);\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_goto_and_member_heads_register_no_continuation() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=50"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots += total_bytes;\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots\n    += total_bytes;\n}\n",
+    );
+}
