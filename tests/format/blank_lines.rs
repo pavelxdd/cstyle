@@ -1601,3 +1601,26 @@ fn lisp_empty_line_fill_reads_state_outside_else_branches() {
         ),
     );
 }
+
+#[test]
+fn pico_empty_line_fill_after_run_in_block_comment_keeps_its_level() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+    options.brace_style = BraceStyle::Pico;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int h(void)",
+                "{",
+                "    /* c",
+                "     */",
+                "",
+                "    y();",
+                "}"
+            ),
+            &options,
+        ),
+        fixture!("int h(void)", "{   /* c", "     */", "    ", "    y(); }"),
+    );
+}

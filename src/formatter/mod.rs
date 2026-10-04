@@ -93,9 +93,11 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
     // The split leaves an empty line after the final line break.
     let aligned = blank_lines == sources.len() + usize::from(output.ends_with(line_break));
     let mut sources = sources.iter();
-    let mut root = "";
-    let mut active: Vec<&str> = Vec::new();
-    let mut waiting: Vec<&str> = Vec::new();
+    // A state's lead is none after a block comment: the fill the comment
+    // left stands, as the lines it spans move with it.
+    let mut root = Some("");
+    let mut active: Vec<Option<&str>> = Vec::new();
+    let mut waiting: Vec<Option<&str>> = Vec::new();
     let mut conditionals: Vec<(usize, usize)> = Vec::new();
     let mut refilled = Vec::with_capacity(lines.len());
     // The rest of a block comment keeps the indent of its first line.
@@ -119,16 +121,21 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
                 _ if !aligned => *active.last().unwrap_or(&root),
                 Some(EmptyFillSource::Root) => root,
                 Some(EmptyFillSource::Branch) => active.last().copied().unwrap_or(root),
-                Some(EmptyFillSource::Kept) | None => line,
-            };
+                Some(EmptyFillSource::Kept) | None => None,
+            }
+            .unwrap_or(line);
             let keep = line.is_empty() || line.contains('\u{c}');
             refilled.push(if keep { line } else { lead });
             continue;
         }
         let state = active.last_mut().unwrap_or(&mut root);
         let code = line.trim_start();
-        if !in_block_comment && !code.starts_with('#') {
-            *state = &line[..line.len() - code.len()];
+        if in_block_comment {
+            if aligned {
+                *state = None;
+            }
+        } else if !code.starts_with('#') {
+            *state = Some(&line[..line.len() - code.len()]);
         }
         if aligned && !in_block_comment {
             match preprocessor_directive(code) {
