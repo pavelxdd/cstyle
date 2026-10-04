@@ -2209,7 +2209,7 @@ impl FormatEngine<'_> {
         if let Some(comment) = attached_line_comment.or(attached_block_comment)
             && !comment_starts_block
         {
-            self.push_trailing_comment_before_broken_brace(comment, brace_type);
+            self.push_trailing_comment_before_broken_brace(comment);
         }
         let objc_method_brace = self.is_objc_method_line()
             || (brace_type == BraceType::Definition && self.output_ends_objc_method_header());
@@ -2507,7 +2507,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn push_trailing_comment_before_broken_brace(&mut self, comment: &str, brace_type: BraceType) {
+    fn push_trailing_comment_before_broken_brace(&mut self, comment: &str) {
         let before_gap = if self.token_input.previous_input_was_adjacent {
             String::new()
         } else {
@@ -2522,11 +2522,7 @@ impl FormatEngine<'_> {
             .clone()
             .unwrap_or_default();
         self.trim_current_end();
-        if brace_type == BraceType::Command
-            && (self.options.pad_parens_inside || self.options.pad_parens_outside)
-        {
-            self.current.push(' ');
-        } else if let Some(&target) = self.layout.line_state.trailing_comment_columns.first()
+        if let Some(&target) = self.layout.line_state.trailing_comment_columns.first()
             && !before_gap.contains('\t')
             && !after_gap.contains('\t')
         {

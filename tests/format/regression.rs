@@ -6036,3 +6036,23 @@ fn a_logical_operand_in_a_condition_indents_after_the_paren_in_a_branch_block() 
         "int f(void)\n{\n#ifdef A\n    x = 1;\n#else\n    {\n        if((h != I) &&\n            G(h, &c)) {\n            x();\n        }\n    }\n#endif\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_broken_brace_keeps_its_column_with_padded_parens_in_allman() {
+    let input = "int f()\n{\n    if (max == 0) {                     /* no symbols */\n        x = 1;\n        return 0;\n    }\n    if (left > 0 && (type == C || max != 1))\n        return -1;                      /* incomplete set */\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=allman", "--pad-paren-in"],
+        "int f()\n{\n    if ( max == 0 )                     /* no symbols */\n    {\n        x = 1;\n        return 0;\n    }\n    if ( left > 0 && ( type == C || max != 1 ) )\n        return -1;                      /* incomplete set */\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_broken_brace_keeps_its_column_with_padded_parens_in_pico() {
+    let input = "int f()\n{\n    if (max == 0) {                     /* no symbols */\n        x = 1;\n        return 0;\n    }\n    if (left > 0 && (type == C || max != 1))\n        return -1;                      /* incomplete set */\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=pico", "--pad-paren-out"],
+        "int f()\n{   if (max == 0)                       /* no symbols */\n    {   x = 1;\n        return 0; }\n    if (left > 0 && (type == C || max != 1) )\n        return -1;                      /* incomplete set */\n    return 0; }\n",
+    );
+}
