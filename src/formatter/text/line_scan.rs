@@ -605,7 +605,23 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
     if !line.contains("//") && !line.contains("/*") {
         return None;
     }
-    trailing_comment_start_in_tokens(line, true)
+    thread_local! {
+        // Layout reads the same recent lines over and over.
+        static CACHE: std::cell::RefCell<std::collections::HashMap<String, Option<usize>>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+    }
+    if let Some(start) = CACHE.with(|cache| cache.borrow().get(line).copied()) {
+        return start;
+    }
+    let start = trailing_comment_start_in_tokens(line, true);
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 4096 {
+            cache.clear();
+        }
+        cache.insert(line.to_owned(), start);
+    });
+    start
 }
 
 fn trailing_comment_start_in_tokens(line: &str, inspect_preprocessor: bool) -> Option<usize> {
