@@ -2874,3 +2874,25 @@ fn bitfield_declarators_after_a_tab_stand_where_astyle_counts_the_tab() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn breaking_return_types_breaks_a_head_under_a_bare_macro_but_not_under_an_attribute() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--break-return-type".to_owned(),
+            "--break-return-type-decl".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "LAST_ARG_MUST_BE_NULL\nint execl_git_cmd(const char *cmd, ...);\nstatic\nint h(int x);\n__attribute__((format (printf, 1, 2)))\nvoid advise(const char *advice, ...);\n",
+            &options,
+        ),
+        "LAST_ARG_MUST_BE_NULL\nint\nexecl_git_cmd(const char *cmd, ...);\nstatic\nint\nh(int x);\n__attribute__((format (printf, 1, 2)))\nvoid advise(const char *advice, ...);\n",
+    );
+}
