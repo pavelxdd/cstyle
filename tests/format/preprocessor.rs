@@ -4224,3 +4224,33 @@ fn file_scope_block_in_parens_indents_its_lines_by_the_block() {
         ),
     );
 }
+
+#[test]
+fn define_ternary_arm_after_a_split_call_resumes_the_arm_column() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_define = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define X(a) do {\t\\",
+                "        node = init ?\t\\",
+                "               g(t, r,\t\\",
+                "                 s, l) :\t\\",
+                "               h(s,\t\\",
+                "                 d);\t\\",
+                "} while (0)",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define X(a) do {\t\\",
+            "        node = init ?\t\\",
+            "               g(t, r,\t\\",
+            "                 s, l) :\t\\",
+            "               h(s,\t\\",
+            "                 d);\t\\",
+            "    } while (0)",
+        ),
+    );
+}

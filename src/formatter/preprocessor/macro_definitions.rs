@@ -921,6 +921,9 @@ impl FormatEngine<'_> {
             );
         }
         let first_indent = leading_visual_width(first_line, self.options.tab_width);
+        // The column rows continued at before a paren opened, which they
+        // resume once it closes.
+        let mut column_before_parens = None;
         let mut continuation_column =
             define_expression_continuation_spaces(first_line, self.options.tab_width)
                 .or_else(|| {
@@ -1155,6 +1158,7 @@ impl FormatEngine<'_> {
                 opens_header_block,
                 starts_with_assignment,
             );
+            let parens_before = open_parens;
             open_parens = open_parens_after(open_parens, content);
             if open_parens > 0 {
                 let row = format!("{prefix}{display}");
@@ -1182,6 +1186,10 @@ impl FormatEngine<'_> {
             }
 
             let line_open_paren = !unmatched_open_paren_columns(&emitted).is_empty();
+            if parens_before <= 0 && open_parens > 0 {
+                column_before_parens = continuation_column;
+            }
+            let parens_closed = parens_before > 0 && open_parens <= 0;
             continuation_column = if closes_parameters {
                 None
             } else if starts_with_assignment && info.opens > info.closes {
@@ -1216,6 +1224,8 @@ impl FormatEngine<'_> {
             {
                 // The header's condition closed: its body follows.
                 None
+            } else if parens_closed && column_before_parens.is_some() {
+                column_before_parens.take()
             } else if let Some(&(_, align)) = paren_anchors.last() {
                 Some(align)
             } else if continuation_column.is_some() {
