@@ -1061,3 +1061,49 @@ fn ratliff_closer_in_a_split_else_body_stands_past_its_header_line() {
         ),
     );
 }
+
+#[test]
+fn ratliff_closer_of_a_dangling_else_block_stands_past_the_else() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()])
+        .expect("valid Ratliff style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    while(*str) {",
+                "        if(p)",
+                "            switch(action) {",
+                "            case deny:",
+                "                x();",
+                "                break;",
+                "            }",
+                "        else {",
+                "            y();",
+                "            return 1;",
+                "        }",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    while(*str) {",
+            "        if(p)",
+            "            switch(action) {",
+            "                case deny:",
+            "                    x();",
+            "                    break;",
+            "                }",
+            "        else {",
+            "            y();",
+            "            return 1;",
+            "            }",
+            "        }",
+            "    }",
+        ),
+    );
+}

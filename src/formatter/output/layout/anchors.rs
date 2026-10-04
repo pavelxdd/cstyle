@@ -3446,8 +3446,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.line_led_by(self.tree.statements.if_of_else(else_token)?)?;
-        // GNU indents the block's braces a level past the `else`.
-        let braces = if self.options.brace_style == BraceStyle::Gnu {
+        // GNU indents the block's braces a level past the `else`, Ratliff
+        // its closing brace.
+        let braces = if self.options.brace_style == BraceStyle::Gnu
+            || self.options.brace_style == BraceStyle::Ratliff
+                && matches!(tokens[first], Token::Symbol('}'))
+        {
             self.options.indent_width
         } else {
             0
