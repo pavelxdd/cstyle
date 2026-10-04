@@ -871,3 +871,55 @@ fn ratliff_closes_else_of_broken_braceless_else_if_chain_at_its_body() {
         ),
     );
 }
+
+#[test]
+fn ratliff_nests_header_in_else_body_after_broken_braced_else_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void)",
+                "{",
+                "    if (fd < 0)",
+                "        res = 1;",
+                "    else if (w() < 0) {",
+                "        res = 2;",
+                "    } else if (c() < 0)",
+                "        res = 3;",
+                "    else {",
+                "        reset();",
+                "        if (l() < 0)",
+                "            res = 4;",
+                "    }",
+                "    return res;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void) {",
+            "    if (fd < 0)",
+            "        res = 1;",
+            "    else",
+            "        if (w() < 0) {",
+            "            res = 2;",
+            "            }",
+            "        else",
+            "            if (c() < 0)",
+            "                res = 3;",
+            "            else {",
+            "                reset();",
+            "                if (l() < 0)",
+            "                    res = 4;",
+            "                }",
+            "    return res;",
+            "    }",
+        ),
+    );
+}

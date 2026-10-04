@@ -1215,7 +1215,22 @@ impl FormatEngine<'_> {
                     .frame_stack
                     .last_closed_brace()
                     .filter(|frame| frame.header.as_deref() == Some("if"))
-                    .map(|frame| frame.header_indent_column)
+                    .map(|frame| {
+                        // The `if` of a broken else-if stands a level past
+                        // the column its frame recorded; its body holds it.
+                        if matches!(
+                            self.options.brace_style,
+                            BraceStyle::Ratliff | BraceStyle::Whitesmith
+                        ) {
+                            frame.header_indent_column.max(
+                                frame
+                                    .body_indent_column
+                                    .saturating_sub(self.options.indent_width),
+                            )
+                        } else {
+                            frame.header_indent_column
+                        }
+                    })
             })
             .flatten();
         let open_if_indent = (word == "else")
