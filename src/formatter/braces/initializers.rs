@@ -13,7 +13,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+    has_unmatched_open_brace, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 
@@ -1033,7 +1033,6 @@ impl FormatEngine<'_> {
                 let mut depth = 0usize;
                 for (index, previous) in self.output.iter().enumerate().rev() {
                     let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-                    let (closes, opens) = line_brace_imbalance(code);
                     if depth == 0
                         && code.ends_with('{')
                         && self.output_line_opens_initializer(index, code)
@@ -1048,7 +1047,8 @@ impl FormatEngine<'_> {
                     if code.ends_with(';') || code.ends_with('}') {
                         break;
                     }
-                    depth = (depth + closes).saturating_sub(opens);
+                    let meta = self.output.brace_meta(index);
+                    depth = (depth + meta.closes).saturating_sub(meta.opens);
                 }
             }
             return Some(spaces);

@@ -1630,18 +1630,36 @@ impl FormatEngine<'_> {
             && previous_code.ends_with(',')
             && !current.starts_with(['.', '{', '}', ')', '#', '?', ':'])
         {
-            let mut open_info = None;
-            for (line_index, line) in self.output.iter().enumerate().rev() {
+            // Lines pushed since the last look back are read first; the
+            // walk then goes on into lines it already read.
+            let (len, version) = (self.output.len(), self.output.version());
+            let (read_from, mut open_info) = match self.open_paren_scan_cache.get() {
+                Some(((cached_len, cached_version), open_info))
+                    if cached_version == version && cached_len <= len =>
+                {
+                    (cached_len, Some(open_info))
+                }
+                _ => (0, None),
+            };
+            let mut decided = None;
+            for line_index in (read_from..len).rev() {
+                let line = &self.output[line_index];
                 let code = line[..trailing_comment_split_limit(line)].trim_end();
                 if code.ends_with(';') || code.contains('{') || code.contains('}') {
+                    decided = Some(None);
                     break;
                 }
                 if let Some(open) = unmatched_open_paren_column(code) {
-                    open_info =
-                        Some((line_index, column_after(code, open, self.options.tab_width)));
+                    decided = Some(Some((
+                        line_index,
+                        column_after(code, open, self.options.tab_width),
+                    )));
                     break;
                 }
             }
+            let open_info = decided.or(open_info.take()).flatten();
+            self.open_paren_scan_cache
+                .set(Some(((len, version), open_info)));
             if let Some((line_index, target)) = open_info {
                 let before_open = self.output[..line_index].iter().rev();
                 let mut saw_blank = false;

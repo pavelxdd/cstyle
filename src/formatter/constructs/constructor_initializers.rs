@@ -293,6 +293,42 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
+        let key = (self.output.len(), self.output.version());
+        let scan = match self.constructor_scan_cache.get() {
+            Some((cached, scan)) if cached == key => scan,
+            _ => {
+                let scan = self.scan_constructor_initializer();
+                self.constructor_scan_cache.set(Some((key, scan)));
+                scan
+            }
+        };
+        match scan {
+            ConstructorScan::Colon { index, after_colon } => {
+                let leading = leading_visual_width(&self.output[index], self.options.tab_width);
+                match after_colon {
+                    Some(spaces) => Some(leading + 1 + spaces),
+                    None => {
+                        let function_try = self
+                            .layout
+                            .frame_stack
+                            .active_constructor_initializer()
+                            .is_some_and(|frame| frame.function_try);
+                        Some(leading + usize::from(function_try) * self.options.indent_width)
+                    }
+                }
+            }
+            ConstructorScan::Head { index } => Some(
+                leading_visual_width(&self.output[index], self.options.tab_width)
+                    + self.options.indent_width,
+            ),
+            ConstructorScan::Stop => None,
+            ConstructorScan::Exhausted => self.constructor_initializer_frame_base_indent_spaces(),
+        }
+    }
+
+    /// Looks back from the last output line for the line that starts a
+    /// constructor initializer list.
+    fn scan_constructor_initializer(&self) -> ConstructorScan {
         let total = self.output.len();
         for offset in 0..total.min(64) {
             let index = total - 1 - offset;
@@ -305,36 +341,26 @@ impl FormatEngine<'_> {
             let trimmed = code.trim_start();
             if trimmed.starts_with(':') && !trimmed.starts_with("::") {
                 if code.ends_with('{') || code.ends_with('}') {
-                    return None;
+                    return ConstructorScan::Stop;
                 }
                 if self.colon_line_is_ternary_arm(index) {
-                    return None;
+                    return ConstructorScan::Stop;
                 }
-                let leading = leading_visual_width(raw, self.options.tab_width);
-                if trimmed == ":" {
-                    let function_try = self
-                        .layout
-                        .frame_stack
-                        .active_constructor_initializer()
-                        .is_some_and(|frame| frame.function_try);
-                    return Some(leading + usize::from(function_try) * self.options.indent_width);
-                }
-                let spaces_after_colon = trimmed[1..].len() - trimmed[1..].trim_start().len();
-                return Some(leading + 1 + spaces_after_colon);
+                let after_colon =
+                    (trimmed != ":").then(|| trimmed[1..].len() - trimmed[1..].trim_start().len());
+                return ConstructorScan::Colon { index, after_colon };
             }
             if trimmed.ends_with(':') && !trimmed.starts_with(['?', ':']) && trimmed.contains('(') {
                 if trimmed.contains('?') || self.colon_line_is_ternary_arm(index) {
-                    return None;
+                    return ConstructorScan::Stop;
                 }
-                return Some(
-                    leading_visual_width(raw, self.options.tab_width) + self.options.indent_width,
-                );
+                return ConstructorScan::Head { index };
             }
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
-                return None;
+                return ConstructorScan::Stop;
             }
         }
-        self.constructor_initializer_frame_base_indent_spaces()
+        ConstructorScan::Exhausted
     }
 
     fn colon_line_is_ternary_arm(&self, colon_index: usize) -> bool {
@@ -907,4 +933,21 @@ pub(crate) fn constructor_initializer_name_indent_from_line(
     let name_start = trimmed[punctuation.len_utf8()..].find(|ch: char| !ch.is_whitespace())?
         + punctuation.len_utf8();
     Some(leading + name_start)
+}
+
+/// What the look back for a constructor initializer list found.
+#[derive(Clone, Copy)]
+pub(crate) enum ConstructorScan {
+    /// A line the list's `:` leads, with the spaces after a colon that code
+    /// follows.
+    Colon {
+        index: usize,
+        after_colon: Option<usize>,
+    },
+    /// A constructor head ending in the list's `:`.
+    Head { index: usize },
+    /// A line that ends the search empty-handed.
+    Stop,
+    /// No line decided within reach.
+    Exhausted,
 }

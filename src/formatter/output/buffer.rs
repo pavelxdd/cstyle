@@ -177,6 +177,8 @@ pub(crate) struct OutputBuffer {
     may_have_question: bool,
     last_non_empty_index: Cell<Option<usize>>,
     last_non_empty_dirty: Cell<bool>,
+    /// Counts changes to lines already pushed.
+    version: u64,
 }
 
 impl OutputBuffer {
@@ -288,6 +290,7 @@ impl OutputBuffer {
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
+            self.version += 1;
         }
         line
     }
@@ -301,6 +304,7 @@ impl OutputBuffer {
             self.may_have_comment = true;
             self.may_have_question = true;
             self.last_non_empty_dirty.set(true);
+            self.version += 1;
         }
         self.lines.last_mut()
     }
@@ -314,6 +318,7 @@ impl OutputBuffer {
             self.may_have_comment = true;
             self.may_have_question = true;
             self.last_non_empty_dirty.set(true);
+            self.version += 1;
         }
         self.lines.get_mut(index)
     }
@@ -325,6 +330,7 @@ impl OutputBuffer {
         self.verbatim.remove(index);
         self.indented_directive_continuation.remove(index);
         self.last_non_empty_dirty.set(true);
+        self.version += 1;
         self.lines.remove(index)
     }
 
@@ -353,6 +359,7 @@ impl OutputBuffer {
         self.meta[index] = OnceCell::new();
         self.lines[index] = line;
         self.last_non_empty_dirty.set(true);
+        self.version += 1;
     }
 
     /// Makes `tokens` the source tokens of the next pushed line.
@@ -388,6 +395,12 @@ impl OutputBuffer {
         self.tokens.get(index).copied().flatten()
     }
 
+    /// Changes with every edit of a line already pushed; with the line
+    /// count, it identifies the buffer's content.
+    pub(crate) fn version(&self) -> u64 {
+        self.version
+    }
+
     pub(crate) fn as_slice(&self) -> &[String] {
         &self.lines
     }
@@ -403,6 +416,7 @@ impl OutputBuffer {
             self.may_have_comment = true;
             self.may_have_question = true;
             self.last_non_empty_dirty.set(true);
+            self.version += 1;
         }
         &mut self.lines[range]
     }

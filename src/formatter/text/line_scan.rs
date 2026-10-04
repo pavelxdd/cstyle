@@ -260,18 +260,20 @@ pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
     if !line.contains(['{', '}']) {
         return (0, 0);
     }
-    let chars = line.chars().collect::<Vec<_>>();
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
     let mut open_depth = 0usize;
     let mut unmatched_closes = 0usize;
     let mut index = 0;
-    let mut quote = None;
+    let mut quote: Option<u8> = None;
     let mut escaped = false;
     let mut in_block_comment = false;
 
-    while let Some(&ch) = chars.get(index) {
-        let next = chars.get(index + 1).copied();
+    while let Some(&byte) = bytes.get(index) {
+        let next = bytes.get(index + 1).copied();
         if in_block_comment {
-            if ch == '*' && next == Some('/') {
+            if byte == b'*' && next == Some(b'/') {
                 in_block_comment = false;
                 index += 2;
             } else {
@@ -279,28 +281,38 @@ pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
             }
             continue;
         }
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == open {
+                quote = None;
+            }
             index += 1;
             continue;
         }
-        if ch == '/' && next == Some('/') {
+        if byte == b'/' && next == Some(b'/') {
             break;
         }
-        if ch == '/' && next == Some('*') {
+        if byte == b'/' && next == Some(b'*') {
             in_block_comment = true;
             index += 2;
             continue;
         }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
+        let digit_separator = byte == b'\''
+            && index > 0
+            && bytes[index - 1].is_ascii_hexdigit()
+            && next.is_some_and(|next| next.is_ascii_hexdigit());
+        if byte == b'"' || (byte == b'\'' && !digit_separator) {
+            quote = Some(byte);
             index += 1;
             continue;
         }
-        match ch {
-            '{' => open_depth += 1,
-            '}' if open_depth > 0 => open_depth -= 1,
-            '}' => unmatched_closes += 1,
+        match byte {
+            b'{' => open_depth += 1,
+            b'}' if open_depth > 0 => open_depth -= 1,
+            b'}' => unmatched_closes += 1,
             _ => {}
         }
         index += 1;

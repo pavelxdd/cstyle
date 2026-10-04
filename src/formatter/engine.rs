@@ -100,12 +100,29 @@ pub(crate) struct LayoutState {
     pub(crate) inline_nested_header_braceless_bias: Option<usize>,
 }
 
+/// The output's line count and edit version, which identify what a look
+/// back over it read.
+pub(crate) type OutputKey = (usize, u64);
+
+/// An output line leaving a paren open, and the column after that paren.
+pub(crate) type OpenParenLine = (usize, usize);
+
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
     /// Indent style of the finished output; the engine itself may lay out a
     /// tab-indented style in spaces.
     pub(crate) output_indent_style: IndentStyle,
     pub(crate) output: buffer::OutputBuffer,
+    /// The last constructor initializer scan, keyed by the output it read.
+    pub(crate) constructor_scan_cache: std::cell::Cell<
+        Option<(
+            (usize, u64),
+            crate::formatter::constructs::constructor_initializers::ConstructorScan,
+        )>,
+    >,
+    /// The last look back for a line leaving a paren open, keyed by the
+    /// output it read.
+    pub(crate) open_paren_scan_cache: std::cell::Cell<Option<(OutputKey, Option<OpenParenLine>)>>,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
     line_brace_match_start: usize,
@@ -170,6 +187,8 @@ impl<'a> FormatEngine<'a> {
             options,
             output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
+            constructor_scan_cache: std::cell::Cell::new(None),
+            open_paren_scan_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
                 command_state: CommandState::default(),

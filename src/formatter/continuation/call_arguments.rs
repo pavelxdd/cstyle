@@ -1412,6 +1412,10 @@ impl FormatEngine<'_> {
     }
 
     fn new_over_max_call_base_indent_spaces(&self) -> Option<usize> {
+        let window = || self.output.scoped().iter().rev().take(64);
+        if !window().any(|line| line.contains("new ")) {
+            return None;
+        }
         for line in self
             .output
             .scoped()
@@ -1849,6 +1853,16 @@ impl FormatEngine<'_> {
     }
 
     fn split_new_call_paren_indent_spaces(&self) -> Option<usize> {
+        if !self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .take(64)
+            .any(|line| line.contains("new "))
+        {
+            return None;
+        }
         if let Some(previous) = self
             .output
             .scoped()
