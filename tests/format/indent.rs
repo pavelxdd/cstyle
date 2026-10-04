@@ -9897,3 +9897,53 @@ fn tab_indent_elements_of_an_initializer_opening_with_a_nested_brace_stand_at_a_
         )
     );
 }
+#[test]
+fn tab_indent_comment_rows_indented_with_a_tab_past_the_opener_stay_in_tabs() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent=tab".to_owned()],
+    )
+    .expect("valid style options");
+    let actual = format_with(
+        fixture!(
+            "void f(void)",
+            "{",
+            "\tif (a) {",
+            "\t\t/* a comes after b",
+            "\t\tif (b)",
+            "\t\t\treturn 1;",
+            "\t\t*/",
+            "\t\treturn 1;",
+            "\t}",
+            "\tstatic const struct option options[] = {",
+            "\t\t{ .help = \"x\" },",
+            "\t\tOPT_STRING('m', \"message\", &message,",
+            "\t\t           N_(\"use\")),",
+            "\t};",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "void f(void)",
+            "{",
+            "\tif (a) {",
+            "\t\t/* a comes after b",
+            "\t\tif (b)",
+            "\t\t\treturn 1;",
+            "\t\t*/",
+            "\t\treturn 1;",
+            "\t}",
+            "\tstatic const struct option options[] = {",
+            "\t\t{ .help = \"x\" },",
+            "\t\tOPT_STRING('m', \"message\", &message,",
+            "\t\t           N_(\"use\")),",
+            "\t};",
+            "}",
+        )
+    );
+}

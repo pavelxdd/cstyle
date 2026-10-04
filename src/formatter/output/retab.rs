@@ -162,6 +162,9 @@ impl FormatEngine<'_> {
             if trailing {
                 return Some(0);
             }
+            if self.comment_row_indents_with_tab(opener, index) {
+                return None;
+            }
             let opener_width = self.output.lead_width(opener, self.options.tab_width);
             return Some(self.tab_columns(opener, opener_width));
         }
@@ -386,6 +389,7 @@ impl FormatEngine<'_> {
         // An initializer list that opens with a nested brace, as
         // `{ { 1, 2 },`, holds its elements a level in.
         if matches!(self.tree.tokens[start], Token::Symbol('{'))
+            && groups.enclosing(first) == groups.enclosing(start)
             && self.tree.previous_code_token(start).is_some_and(|open| {
                 matches!(self.tree.tokens[open], Token::Symbol('{'))
                     && groups.opened_at(open).is_some_and(|group| {
