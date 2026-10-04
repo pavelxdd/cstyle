@@ -980,6 +980,31 @@ impl FormatEngine<'_> {
             }
         }
 
+        // A subscript left open aligns the next line past its bracket, as
+        // astyle counts brackets as parentheses.
+        if !self.options.indent_after_parens
+            && let line = self.current.trim_end()
+            && let Some(open) = unmatched_open_paren_column(line)
+            && line[open..].starts_with('[')
+            // An Objective-C message aligns its own way.
+            && self.layout.frame_stack.bracket_depth() > 0
+            && !self.layout.objc.message_active
+            && line[..open]
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
+        {
+            let indent = self.current_line_indent_spaces();
+            let lead = self.current.len() - self.current.trim_start().len();
+            return ContinuationIndent::Spaces(
+                indent
+                    + visual_width_from(
+                        &self.current[lead..open + 1],
+                        indent,
+                        self.options.tab_width,
+                    ),
+            );
+        }
         if (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()

@@ -9264,3 +9264,30 @@ fn shifts_inside_parens_keep_the_argument_stack() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn open_subscript_continues_past_its_bracket() {
+    let options = FormatOptions::default();
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    /* c */",
+                "    x = a[MX",
+                "          -1];",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    /* c */",
+            "    x = a[MX",
+            "          -1];",
+            "}",
+        ),
+    );
+}
