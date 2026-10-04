@@ -89,7 +89,8 @@ impl FormatEngine<'_> {
                 Some(rest)
                     if rest.starts_with("  ")
                         && !rest.trim().is_empty()
-                        && self.starts_with_block_brace(index) =>
+                        && (self.starts_with_block_brace(index)
+                            || self.output.line_tokens(index).is_none()) =>
                 {
                     let body = rest.trim_start();
                     let target = width + 1 + (rest.len() - body.len());
@@ -138,6 +139,11 @@ impl FormatEngine<'_> {
             return self.token_statement_indent_width(span.first, index);
         }
         let text = self.output.trimmed(index);
+        // A line the tree does not cover that a brace leads, as one around a
+        // statement braces were added to, opens a block.
+        if text.starts_with('{') {
+            return None;
+        }
         if let Some(opener) = self.comment_opener(index) {
             // A trailing comment's rows align in spaces; a standalone
             // comment's rows keep the tabs of its first line.

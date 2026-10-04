@@ -1654,3 +1654,37 @@ fn added_block_in_else_chain_of_braceless_body_stays_in_the_body() {
         );
     }
 }
+
+#[test]
+fn added_one_line_block_indents_with_tabs() {
+    for (style, block) in [
+        ("--style=gnu", "\t\t{ return 1; }"),
+        ("--style=pico", "\t{\treturn 1; }"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_owned(),
+                "--add-one-line-braces".to_owned(),
+                "--indent=tab".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let actual = format_exact(
+            fixture!(
+                "int f(int x)",
+                "{",
+                "    if (x)",
+                "        return 1;",
+                "    return 0;",
+                "}"
+            ),
+            &options,
+        );
+        assert!(
+            actual.lines().any(|line| line == block),
+            "{style}: {actual:?}"
+        );
+    }
+}
