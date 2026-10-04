@@ -9313,3 +9313,30 @@ fn tab_indent_line_after_header_macro_call_stands_at_a_level() {
         "void f(void)\n{\n\tif (a) FAIL(\"x\")\n\t\t/* c */\n\t\tg(1);\n\th();\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_tab_indent_closes_compound_literal_at_a_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=whitesmith".to_owned(), "--indent=tab".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    zp->zds = create((Mem)",
+                "    {",
+                "        .a = 1,",
+                "        .b = NULL",
+                "    });",
+                "}",
+            ),
+            &options,
+        ),
+        "void f(void)\n\t{\n\tzp->zds = create((Mem)\n\t\t{\n\t\t.a = 1,\n\t\t.b = NULL\n\t\t});\n\t}\n",
+    );
+}

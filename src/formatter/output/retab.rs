@@ -318,11 +318,15 @@ impl FormatEngine<'_> {
             return None;
         }
         // Styles that indent braces indent an initializer's brace opening
-        // its line as a level.
+        // its line, or a compound literal's closing it, as a level.
+        let closes_compound_literal = matches!(self.tree.tokens[first], Token::Symbol('}'))
+            && groups.closed_at(first).is_some_and(|group| {
+                self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+            });
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-        ) && matches!(self.tree.tokens[first], Token::Symbol('{'))
+        ) && (matches!(self.tree.tokens[first], Token::Symbol('{')) || closes_compound_literal)
         {
             return None;
         }
