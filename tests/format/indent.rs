@@ -9398,3 +9398,29 @@ fn a_typedef_block_leaves_no_continuation_rule_on_later_declarations() {
         ),
     );
 }
+
+#[test]
+fn leading_assignment_in_a_braceless_body_stands_a_level_in() {
+    let mut options = FormatOptions::default();
+    options.continuation_indent = 0;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f() {",
+                "    for (i = 0; i < n; i++)",
+                "        ((CU *)ob)[i]",
+                "            = ((CU *)hb)[i];",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    for (i = 0; i < n; i++)",
+            "        ((CU *)ob)[i]",
+            "            = ((CU *)hb)[i];",
+            "}",
+        ),
+    );
+}

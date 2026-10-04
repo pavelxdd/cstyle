@@ -2320,7 +2320,10 @@ impl FormatEngine<'_> {
         let target = self.tree.previous_code_token(first)?;
         let line = self.output.line_with_token(target)?;
         let start = self.output.line_tokens(line)?.first;
-        if groups.enclosing(first).is_some() && !self.tree.statements.starts_block_statement(start)
+        // A braceless body's statement starts its own statement too.
+        if groups.enclosing(first).is_some()
+            && !self.tree.statements.starts_block_statement(start)
+            && self.tree.statements.braceless_header(start).is_none()
             || tokens[start..first]
                 .iter()
                 .any(|token| matches!(token, Token::Preprocessor(_) | Token::Symbol(';')))
