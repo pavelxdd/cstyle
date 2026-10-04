@@ -66,7 +66,8 @@ impl FormatEngine<'_> {
         }
         if !self.current_is_blank()
             || (self.layout.command_state.previous_command_char == Some('{')
-                && !self.preprocessor.last_output_was_preprocessor)
+                && (!self.preprocessor.last_output_was_preprocessor
+                    || self.comment_precedes_directives()))
             || (self.options.brace_style == BraceStyle::Pico
                 && self.output.last().is_some_and(|line| line.trim() == "{"))
         {
@@ -461,6 +462,22 @@ impl FormatEngine<'_> {
             }
         }
         None
+    }
+
+    /// Whether the directive lines just output follow a comment-only
+    /// line, which astyle keeps with the header after them.
+    fn comment_precedes_directives(&self) -> bool {
+        (0..self.output.len())
+            .rev()
+            .find(|&index| {
+                let line = self.output.trimmed(index);
+                !line.is_empty() && !line.starts_with('#')
+            })
+            .is_some_and(|index| {
+                let start = self.output.comment_start_index(index);
+                let line = self.output.trimmed(start);
+                line.starts_with("//") || line.starts_with("/*")
+            })
     }
 
     fn previous_block_spacing_line_is_comment_only(&self) -> bool {

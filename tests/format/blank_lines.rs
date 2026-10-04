@@ -1817,3 +1817,21 @@ fn fill_empty_lines_reads_a_comment_a_define_opens_as_no_code() {
         ),
     );
 }
+
+#[test]
+fn break_blocks_keeps_a_header_after_a_comment_and_directive_opening_its_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-blocks".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    if (a) {\n#ifndef X\n        if (t)\n            g();\n#endif\n    }\n    if (b) {\n        /* c */\n#ifndef X\n        if (t)\n            g();\n#endif\n    }\n}\n",
+            &options,
+        ),
+        "void f(void)\n{\n    if (a) {\n#ifndef X\n\n        if (t)\n            g();\n\n#endif\n    }\n\n    if (b) {\n        /* c */\n#ifndef X\n        if (t)\n            g();\n\n#endif\n    }\n}\n",
+    );
+}
