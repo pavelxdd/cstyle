@@ -406,9 +406,8 @@ impl FormatEngine<'_> {
         if let Some(after) = trimmed.strip_prefix('}') {
             let next = leading_identifier(after.trim_start());
             return self.options.break_closing_header_blocks
-                && !previous_opens
-                && is_break_blocks_closing_header(next)
-                && !self.previous_block_spacing_line_is_comment_only();
+                && !self.block_spacing.closed_empty_block
+                && is_break_blocks_closing_header(next);
         }
         let first = leading_identifier(trimmed);
         // A body kept on one line with its header ends no block before its
