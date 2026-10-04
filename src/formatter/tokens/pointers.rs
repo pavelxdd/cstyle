@@ -1096,6 +1096,23 @@ impl FormatEngine<'_> {
                 self.ensure_space();
             }
         } else {
+            // astyle leaves a tagged type's star before a declarator group
+            // as written.
+            if matches!(next, Some(Token::Symbol('(')))
+                && self
+                    .current
+                    .trim_end()
+                    .split(|ch: char| !is_identifier_continue(ch))
+                    .filter(|word| !word.is_empty())
+                    .rev()
+                    .take(2)
+                    .any(|word| matches!(word, "struct" | "union" | "enum" | "class"))
+            {
+                self.emit_source_space();
+                self.current.push_str(operator);
+                self.emit_trailing_source_space();
+                return;
+            }
             if matches!(next, Some(Token::Symbol('('))) && {
                 self.current.push_str(operator);
                 let multiply = self.function_pointer_parameter_keeps_space_before_name_group()

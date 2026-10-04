@@ -5938,3 +5938,13 @@ fn a_header_alternative_after_else_directive_takes_no_blank_line() {
         "void f()\n{\n    if (a)\n        abort();\n\n#if defined(M)\n\n    if (b(1))\n#else\n    if (b(2))\n#endif\n        abort();\n\n    x();\n}\n",
     );
 }
+
+#[test]
+fn a_tagged_type_star_before_a_declarator_group_stays_as_written() {
+    let input = "void f()\n{\n    typedef const struct S *(*letterfunc)(const char *ptr);\n    typedef int *(*g)(int);\n}\ntypedef char *(*h)(int);\nvoid g()\n{\n    struct S *x;\n    const struct S *y = 0;\n    struct S *(*fp)(int);\n}\n";
+    check(
+        input,
+        &["--align-pointer=type"],
+        "void f()\n{\n    typedef const struct S *(*letterfunc)(const char* ptr);\n    typedef int* (*g)(int);\n}\ntypedef char* (*h)(int);\nvoid g()\n{\n    struct S* x;\n    const struct S* y = 0;\n    struct S *(*fp)(int);\n}\n",
+    );
+}
