@@ -603,8 +603,8 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .take(8)
-            .take_while(|line| !line.trim_end().ends_with(';'))
+            .take(256)
+            .take_while(|line| !line.trim_end().ends_with([';', '{', '}']))
         {
             if colon_spaces.is_none() && previous.trim_start().starts_with(':') {
                 colon_spaces = Some(leading_visual_width(previous, self.options.tab_width));

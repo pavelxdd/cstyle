@@ -1616,13 +1616,15 @@ impl FormatEngine<'_> {
             || current.starts_with("_asm ")
             || current.starts_with("__asm ")
             || current.starts_with("__asm__ ")
+            // The statement's lines back to its start, over any number of
+            // template rows.
             || self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .take(8)
-                .take_while(|line| !line.trim_end().ends_with(';'))
+                .take(256)
+                .take_while(|line| !line.trim_end().ends_with([';', '{', '}']))
                 .any(|line| line.contains("asm"))
     }
 

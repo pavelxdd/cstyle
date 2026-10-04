@@ -9645,3 +9645,44 @@ fn pico_brace_of_an_else_if_in_a_split_else_body_stands_at_its_header() {
         ),
     );
 }
+
+#[test]
+fn asm_operand_rows_far_from_the_asm_keyword_keep_its_column() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Attach;
+    options.continuation_indent = 3;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "{",
+                "    __asm__ volatile (",
+                "",
+                "    \"    bne-    1b          \\n\" /* the reservation was cleared              */",
+                "    \"    isync               \\n\" /* read barrier                             */",
+                "    \"    li      %0, 1       \\n\" /* set \"1\" to \"res\"                         */",
+                "    \"2:                      \\n\"",
+                "",
+                "    : \"=&b\" (res), \"=&b\" (temp)",
+                "    : \"b\" (lock), \"b\" (old), \"b\" (set)",
+                "    : \"cc\", \"memory\");",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "{",
+            "    __asm__ volatile (",
+            "",
+            "                \"    bne-    1b          \\n\" /* the reservation was cleared              */",
+            "                \"    isync               \\n\" /* read barrier                             */",
+            "                \"    li      %0, 1       \\n\" /* set \"1\" to \"res\"                         */",
+            "                \"2:                      \\n\"",
+            "",
+            "                : \"=&b\" (res), \"=&b\" (temp)",
+            "                : \"b\" (lock), \"b\" (old), \"b\" (set)",
+            "                : \"cc\", \"memory\");",
+            "}",
+        ),
+    );
+}
