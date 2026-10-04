@@ -4855,8 +4855,13 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let sibling = self.tree.statements.previous_sibling(first)?;
         let line = self.output.line_with_token(sibling)?;
-        if self.output.line_tokens(line)?.first != sibling {
-            return None;
+        // Statements kept on one line stand where the first of them does.
+        let mut leader = sibling;
+        while self.output.line_tokens(line)?.first != leader {
+            leader = self.tree.statements.previous_sibling(leader)?;
+            if self.output.line_with_token(leader) != Some(line) {
+                return None;
+            }
         }
         let column =
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces();

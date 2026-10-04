@@ -1583,3 +1583,43 @@ fn kept_statement_line_if_takes_no_added_braces_on_its_line() {
         ),
     );
 }
+
+#[test]
+fn statement_after_a_kept_statement_line_in_a_nested_case_block_stands_with_it() {
+    let mut options = FormatOptions::default();
+    options.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f() {",
+                "    switch (p) {",
+                "    case 1: {",
+                "        switch (q) {",
+                "        case 3: {",
+                "            ep; previous;",
+                "            p += 2;",
+                "        }",
+                "        }",
+                "    }",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    switch (p) {",
+            "    case 1: {",
+            "        switch (q) {",
+            "        case 3: {",
+            "            ep; previous;",
+            "            p += 2;",
+            "        }",
+            "        }",
+            "    }",
+            "    }",
+            "}",
+        ),
+    );
+}
