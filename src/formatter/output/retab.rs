@@ -272,6 +272,38 @@ impl FormatEngine<'_> {
         None
     }
 
+    fn follows_header_macro_call(&self, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(close) = self.tree.previous_code_token(first) else {
+            return false;
+        };
+        if !matches!(tokens[close], Token::Symbol(')')) {
+            return false;
+        }
+        let Some(call) = groups.closed_at(close) else {
+            return false;
+        };
+        let Some(name) = self.tree.previous_code_token(groups.get(call).open) else {
+            return false;
+        };
+        if !matches!(tokens[name], Token::Word(_)) {
+            return false;
+        }
+        let Some(condition_close) = self.tree.previous_code_token(name) else {
+            return false;
+        };
+        matches!(tokens[condition_close], Token::Symbol(')'))
+            && groups.closed_at(condition_close).is_some_and(|condition| {
+                self.tree
+                    .previous_code_token(groups.get(condition).open)
+                    .is_some_and(|keyword| {
+                        matches!(&tokens[keyword], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for"))
+                    })
+            })
+    }
+
     fn token_statement_indent_width(&self, first: usize, index: usize) -> Option<usize> {
         // A block's braces stand at a level; an initializer's continue their
         // statement.
@@ -292,6 +324,11 @@ impl FormatEngine<'_> {
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
         ) && matches!(self.tree.tokens[first], Token::Symbol('{'))
         {
+            return None;
+        }
+        // A macro call after a control header, as `if (a) FAIL(x)`, is the
+        // header's body: the line after it stands at a level.
+        if self.follows_header_macro_call(first) {
             return None;
         }
         let start = self.statement_start(first);

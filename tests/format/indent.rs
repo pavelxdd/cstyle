@@ -9291,3 +9291,25 @@ fn open_subscript_continues_past_its_bracket() {
         ),
     );
 }
+
+#[test]
+fn tab_indent_line_after_header_macro_call_stands_at_a_level() {
+    let mut options = FormatOptions::default();
+    options.indent_style = IndentStyle::Tabs;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a) FAIL(\"x\")",
+                "    /* c */",
+                "    g(1);",
+                "    h();",
+                "}",
+            ),
+            &options,
+        ),
+        "void f(void)\n{\n\tif (a) FAIL(\"x\")\n\t\t/* c */\n\t\tg(1);\n\th();\n}\n",
+    );
+}
