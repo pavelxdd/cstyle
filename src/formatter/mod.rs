@@ -169,7 +169,7 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
 
 /// Whether a block comment is open at the end of `line`, given whether one
 /// was open at its start.
-fn ends_inside_block_comment(line: &str, mut in_block_comment: bool) -> bool {
+pub(crate) fn ends_inside_block_comment(line: &str, mut in_block_comment: bool) -> bool {
     let mut quote = None;
     let mut escaped = false;
     let mut chars = line.chars().peekable();

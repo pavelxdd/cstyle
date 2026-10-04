@@ -1787,3 +1787,33 @@ fn break_blocks_parts_a_do_loop_from_the_statement_after_its_while() {
         ),
     );
 }
+
+#[test]
+fn fill_empty_lines_reads_a_comment_a_define_opens_as_no_code() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "extern \"C\" {",
+                "#define A (1 << 14)  /* allow empty",
+                "                        x */",
+                "#define B 1",
+                "",
+                "typedef struct C D;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "extern \"C\" {",
+            "#define A (1 << 14)  /* allow empty",
+            "                        x */",
+            "#define B 1",
+            "",
+            "    typedef struct C D;",
+            "}",
+        ),
+    );
+}

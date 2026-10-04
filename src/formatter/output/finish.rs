@@ -3,6 +3,7 @@ use crate::formatter::constructs::switch_cases::{
     case_label_with_trailing_comment, split_switch_label_statement,
 };
 use crate::formatter::continuation::operator_chains;
+use crate::formatter::ends_inside_block_comment;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
@@ -424,8 +425,15 @@ impl FormatEngine<'_> {
         let mut preprocessor_block_fills: Vec<Option<String>> = Vec::new();
         // The braces of a directive's continued lines open no block.
         let mut continues_directive = false;
+        // A block comment a directive opens holds no code either.
+        let mut in_directive_comment = false;
         for index in 0..self.output.len() {
             let line = &self.output[index];
+            if in_directive_comment && !line.trim().is_empty() {
+                in_directive_comment = ends_inside_block_comment(line, true);
+                active.last_mut().unwrap_or(&mut root).1.clear();
+                continue;
+            }
             let in_directive = continues_directive;
             continues_directive = (in_directive || line.trim_start().starts_with('#'))
                 && line.trim_end().ends_with('\\');
@@ -496,6 +504,8 @@ impl FormatEngine<'_> {
                 state.0 -= 1;
             }
             if meta.code_starts_with_hash {
+                in_directive_comment =
+                    !line.trim_end().ends_with('\\') && ends_inside_block_comment(line, false);
                 match preprocessor_directive(line.trim_start()) {
                     Some("if" | "ifdef" | "ifndef") => {
                         let depth = state.0;
