@@ -178,8 +178,11 @@ impl FormatEngine<'_> {
                             && line_is_control_body_header(code)
                             && self.preprocessor.split_else.extra_levels == 0
                         {
-                            let level = leading_visual_width(line, self.options.tab_width)
-                                / self.options.indent_width;
+                            // The line counts the levels broken else-ifs add,
+                            // which the layout adds again.
+                            let level = (leading_visual_width(line, self.options.tab_width)
+                                / self.options.indent_width)
+                                .saturating_sub(self.else_if_break_extra());
                             block_indent = block_indent.max(level + brace_indent_extra);
                         }
                     }
@@ -308,8 +311,13 @@ impl FormatEngine<'_> {
                     )
                 })
                 .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
-            if (header_is_else || broken_else_if) && !else_follows && self.current_is_blank() {
-                self.unwind_else_if_break_depths();
+            if (header_is_else || broken_else_if) && !else_follows {
+                // A comment the block's line still takes ends it later.
+                if self.current_is_blank() {
+                    self.unwind_else_if_break_depths();
+                } else {
+                    self.layout.unwind_else_if_after_line = true;
+                }
             }
         } else {
             self.token_input.token_begins_source_line = false;

@@ -1676,3 +1676,16 @@ fn nested_case_block_after_several_labels_on_a_line_stands_a_level_in() {
         ),
     );
 }
+
+#[test]
+fn added_one_line_block_after_broken_else_if_stays_at_its_header() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--add-one-line-braces", "--break-elseifs"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    if (a) {\n        x();\n    } else if (b) {\n        y();\n    } else\n        z();\n    if (indent)\n        a();\n    else if (b)\n        c(sb,\n          d);\n    else {\n        if (x)\n            d();\n    }\n    while (x) {\n        if (a)\n            ;\n        else if (b)\n            ;\n        else\n            return 0; /* c */\n\n        if (u)\n            u++;\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    if (a) {\n        x();\n    } else\n        if (b) {\n            y();\n        } else\n        { z(); }\n    if (indent)\n    { a(); }\n    else\n        if (b)\n            c(sb,\n              d);\n        else {\n            if (x)\n            { d(); }\n        }\n    while (x) {\n        if (a)\n            ;\n        else\n            if (b)\n                ;\n            else\n            { return 0; } /* c */\n\n        if (u)\n        { u++; }\n    }\n}\n",
+    );
+}

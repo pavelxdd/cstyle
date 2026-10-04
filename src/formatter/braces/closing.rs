@@ -698,9 +698,38 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn unwind_else_if_break_depths_unless_else(&mut self, next: Option<&Token>) {
-        if !matches!(next, Some(Token::Word(word)) if word == "else") {
+        // A plain `else` on a later line keeps the chain's levels; an
+        // `else if` records its own.
+        let else_follows = matches!(next, Some(Token::Word(word)) if word == "else")
+            || matches!(
+                next,
+                Some(Token::Newline | Token::Whitespace(_) | Token::Comment(..)) | None
+            ) && self.next_code_is_plain_else();
+        if !else_follows {
             self.unwind_else_if_break_depths();
         }
+    }
+
+    fn next_code_is_plain_else(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let code_after = |from: usize| {
+            (from..tokens.len()).find(|&index| {
+                !matches!(
+                    tokens[index],
+                    Token::Newline | Token::Whitespace(_) | Token::Comment(_, _)
+                )
+            })
+        };
+        self.current
+            .active_token()
+            .filter(|&token| token < tokens.len())
+            .and_then(|token| code_after(token + 1))
+            .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "else"))
+            .is_some_and(|index| {
+                code_after(index + 1).is_none_or(
+                    |after| !matches!(&tokens[after], Token::Word(word) if word == "if"),
+                )
+            })
     }
 
     /// Whether the code after the `}` being closed, past comments, is an
