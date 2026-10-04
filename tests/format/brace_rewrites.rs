@@ -1854,3 +1854,41 @@ fn add_braces_counts_the_added_brace_in_the_statement_length() {
         ),
     );
 }
+
+#[test]
+fn space_before_a_broken_control_brace_counts_in_the_header_length() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Allman;
+    options.max_code_length = Some(56);
+    let input = fixture!(
+        "void g()",
+        "{",
+        "    x();",
+        "    if (ngx_http_log_check_length(r, buf, end, 1) != NGX_OK) {",
+        "        return NULL;",
+        "    }",
+        "    if (ngx_http_log_check_length(r, buf, end, 1) != NGX_OK){",
+        "        return NULL;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(
+        format_exact(input, &options),
+        fixture!(
+            "void g()",
+            "{",
+            "    x();",
+            "    if (ngx_http_log_check_length(r, buf, end,",
+            "                                  1) != NGX_OK)",
+            "    {",
+            "        return NULL;",
+            "    }",
+            "    if (ngx_http_log_check_length(r, buf, end, 1) != NGX_OK)",
+            "    {",
+            "        return NULL;",
+            "    }",
+            "}",
+        ),
+    );
+}
