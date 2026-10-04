@@ -2585,3 +2585,53 @@ fn broken_else_if_comment_keeps_its_column_from_the_if() {
         ),
     );
 }
+
+#[test]
+fn split_condition_close_paren_after_a_directive_split_else_aligns_with_its_paren() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Allman;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "#if X",
+                "  if( a ){",
+                "    b();",
+                "  }else",
+                "#endif",
+                "  if( c ){",
+                "    if( d",
+                "     && e",
+                "    ){",
+                "      g();",
+                "    }",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "#if X",
+            "    if( a )",
+            "    {",
+            "        b();",
+            "    }",
+            "    else",
+            "#endif",
+            "        if( c )",
+            "        {",
+            "            if( d",
+            "                    && e",
+            "              )",
+            "            {",
+            "                g();",
+            "            }",
+            "        }",
+            "}",
+        ),
+    );
+}
