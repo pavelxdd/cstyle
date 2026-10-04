@@ -703,6 +703,11 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn paren_head_is_declaration(&self, before: &str) -> bool {
+        // A head continued past an escaped newline still names the function.
+        let before = before
+            .trim_end()
+            .strip_suffix('\\')
+            .map_or(before, str::trim_end);
         if before.is_empty() || before.contains('?') || function_head_has_assignment(before) {
             return false;
         }

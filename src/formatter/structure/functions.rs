@@ -136,6 +136,8 @@ fn previous_head_token(tokens: &[Token], before: usize) -> Option<usize> {
         match tokens[index] {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
             Token::Preprocessor(_) => return None,
+            // An escaped newline continues the head.
+            Token::Symbol('\\') => {}
             _ => return Some(index),
         }
     }
@@ -229,7 +231,11 @@ fn function_head(
     }
     // `int init\n#endif\n(sqlite3 *db)`: a directive may separate the name
     // from its parameter list.
-    let before_params = previous_code_token(tokens, group.open)?;
+    let mut before_params = previous_code_token(tokens, group.open)?;
+    // An escaped newline may part the name from its parameter list.
+    if matches!(tokens[before_params], Token::Symbol('\\')) {
+        before_params = previous_code_token(tokens, before_params)?;
+    }
     // `int (lua_gettop) (lua_State *L)` keeps the name in parentheses.
     let (name, parenthesized_name) =
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {

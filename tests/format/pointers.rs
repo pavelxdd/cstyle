@@ -3509,3 +3509,21 @@ fn multiplication_in_nested_call_argument_is_no_pointer() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn parameters_after_an_escaped_newline_in_a_function_head_align_their_pointers() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--align-pointer=name".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "extern int yylex \\\n(YYSTYPE * yylval_param, YYLTYPE * yylloc_param);\n",
+            &options,
+        ),
+        "extern int yylex \\\n(YYSTYPE *yylval_param, YYLTYPE *yylloc_param);\n",
+    );
+}
