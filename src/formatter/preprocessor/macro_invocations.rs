@@ -108,9 +108,9 @@ impl FormatEngine<'_> {
             self.push_empty_line();
         }
         if let Some(spaces) = exact_indent_spaces {
-            self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), spaces);
+            self.push_formatted_line_exact(trimmed, self.layout.indentation.indent(), spaces);
         } else {
-            self.push_output_line(trimmed, indent);
+            self.push_formatted_line(trimmed, indent);
         }
         self.previous_was_newline = true;
         if trimmed.starts_with("Q_FOREACH(") {

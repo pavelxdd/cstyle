@@ -2893,3 +2893,16 @@ fn max_code_length_continues_array_bound_under_its_operator() {
         "void f()\n{\n    slot = &ngx_cycle->cache[(size + ngx_pagesize - 1) /\n                                                       ngx_pagesize];\n    clvector[(chainlen < DICT_STATS_VECTLEN) ? chainlen :\n                                             (DICT_STATS_VECTLEN-1)]++;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_standalone_macro_invocation_rows() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f(void)\n{\n    struct x *hlu;\n\n    RB_FOREACH_SAFE(hlu, hyperlinks_by_inner_tree, &hl->by_inner, hlu1)\n        hyperlinks_remove(hlu);\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f(void)\n{\n    struct x *hlu;\n\n    RB_FOREACH_SAFE(hlu, hyperlinks_by_inner_tree,\n                    &hl->by_inner, hlu1)\n    hyperlinks_remove(hlu);\n}\n",
+    );
+}
