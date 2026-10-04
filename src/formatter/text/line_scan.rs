@@ -644,7 +644,7 @@ pub(crate) fn line_comment_split_limit(line: &str) -> usize {
 }
 
 pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
-    if !line.contains("//") && !line.contains("/*") {
+    if !has_comment_opener(line) {
         return None;
     }
     thread_local! {
@@ -664,6 +664,20 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
         cache.insert(line.to_owned(), start);
     });
     start
+}
+
+/// Whether `line` holds `//` or `/*`, in one pass.
+fn has_comment_opener(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let mut from = 0;
+    while let Some(offset) = bytes[from..].iter().position(|&byte| byte == b'/') {
+        let slash = from + offset;
+        if matches!(bytes.get(slash + 1), Some(b'/' | b'*')) {
+            return true;
+        }
+        from = slash + 1;
+    }
+    false
 }
 
 fn trailing_comment_start_in_tokens(line: &str, inspect_preprocessor: bool) -> Option<usize> {
