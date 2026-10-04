@@ -2208,7 +2208,10 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
             continue;
         }
         mark_removed_brace(tokens, open_index, &mut remove);
-        if opening_brace_has_line_comment(tokens, open_index) {
+        // astyle blanks the brace before a comment, unless a tab follows it.
+        if opening_brace_has_line_comment(tokens, open_index)
+            && !matches!(&tokens[open_index + 1], Token::Whitespace(gap) if gap.starts_with('\t'))
+        {
             replace_with_space[open_index] = true;
         }
         mark_removed_brace(tokens, close_index, &mut remove);
@@ -2253,10 +2256,14 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
 
 fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
     let (_, line_end) = line_bounds(tokens, open_index);
-    tokens[open_index + 1..line_end]
+    let mut rest = tokens[open_index + 1..line_end]
         .iter()
-        .find(|token| !matches!(token, Token::Whitespace(_)))
-        .is_some_and(|token| matches!(token, Token::Comment(CommentKind::Line, _)))
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    match (rest.next(), rest.next()) {
+        (Some(Token::Comment(CommentKind::Line, _)), None) => true,
+        (Some(Token::Comment(CommentKind::Block, text)), None) => !text.contains('\n'),
+        _ => false,
+    }
 }
 
 fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
@@ -2342,10 +2349,8 @@ fn removable_statement_brace_range(
     let first = next_statement_token(tokens, open_index + 1, line_end, allow_newlines)?;
     let statement_start = if allow_newlines
         && opening_brace_has_line_comment(tokens, open_index)
-        && matches!(
-            tokens.get(first),
-            Some(Token::Comment(CommentKind::Line, _))
-        ) {
+        && matches!(tokens.get(first), Some(Token::Comment(_, _)))
+    {
         next_statement_token(tokens, first + 1, line_end, true)?
     } else {
         first

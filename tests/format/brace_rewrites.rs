@@ -319,6 +319,47 @@ fn remove_braces_unwraps_cross_line_single_statement_blocks() {
 }
 
 #[test]
+fn remove_braces_keeps_header_comment_beside_header() {
+    let mut options = FormatOptions::default();
+    options.remove_braces = true;
+    options.brace_style = BraceStyle::Allman;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a) { /* one */",
+                "        x();",
+                "    }",
+                "    if (b) {\t/* two */",
+                "        y();",
+                "    } else { /* many */",
+                "        z();",
+                "        w();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)   /* one */",
+            "        x();",
+            "    if (b) \t/* two */",
+            "        y();",
+            "    else   /* many */",
+            "    {",
+            "        z();",
+            "        w();",
+            "    }",
+            "}",
+        )
+    );
+}
+
+#[test]
 fn remove_braces_unwraps_if_constexpr_body() {
     let mut options = FormatOptions::default();
     options.remove_braces = true;

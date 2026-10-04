@@ -2203,7 +2203,6 @@ impl FormatEngine<'_> {
         }
         let block_indent_extra = brace.block_indent_extra;
         let comment_starts_block = (self.token_input.token_begins_source_line
-            || self.options.remove_braces
             || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks))
             && next_is_trailing_comment;
         if let Some(comment) = attached_line_comment.or(attached_block_comment)
