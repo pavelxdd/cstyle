@@ -1393,7 +1393,9 @@ impl FormatEngine<'_> {
     fn nearest_open_switch_indent_spaces(&self) -> Option<usize> {
         let tab_width = self.options.tab_width;
         let mut depth = 0usize;
-        for index in (0..self.output.len()).rev() {
+        // A switch lies within the current top-level construct.
+        let scope_start = self.output.len() - self.output.scoped().len();
+        for index in (scope_start..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
             depth += meta.closes;
             if meta.opens > depth {
@@ -1410,7 +1412,8 @@ impl FormatEngine<'_> {
     fn active_emitted_case_layout(&self) -> Option<ActiveCaseLayout> {
         let tab_width = self.options.tab_width;
         let mut closing_indents = Vec::new();
-        for index in (0..self.output.len()).rev() {
+        let scope_start = self.output.len() - self.output.scoped().len();
+        for index in (scope_start..self.output.len()).rev() {
             let trimmed = self.output.code_trimmed(index);
             if trimmed.is_empty() {
                 continue;
