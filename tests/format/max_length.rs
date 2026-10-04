@@ -2826,3 +2826,31 @@ fn max_code_length_declaration_after_macro_group_continues_nothing() {
         "TSD_ATTR(bool) TLS_MODEL\ntsd_initialized_long_name_is_here = false;\nvoid f()\n{\n    foo(aaaaaaaaaaaaaaaaaaaaaaaa)\n    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_weighs_run_in_split_points_from_the_brace() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=pico", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    if (x) {\n        lua_lock(L);  /* `luaV_tostring' may create a new string */\n        y();\n    }\n}\n",
+            &options,
+        ),
+        "void f()\n{   if (x)\n    {   lua_lock(\n            L);  /* `luaV_tostring' may create a new string */\n        y(); } }\n",
+    );
+}
+
+#[test]
+fn max_code_length_measures_case_block_run_in_by_one_indent() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=pico", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    switch (x) {\n    case SASL_GSSAPI: {\n        struct kerberos5data *krb5 = Curl_auth_krb5_get(conn);\n        result = 1;\n        break;\n    }\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{   switch (x)\n    {   case SASL_GSSAPI:\n        {   struct kerberos5data *krb5 = Curl_auth_krb5_get(conn);\n            result = 1;\n            break; } } }\n",
+    );
+}

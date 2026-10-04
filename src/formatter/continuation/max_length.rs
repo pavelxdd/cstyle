@@ -120,12 +120,10 @@ impl FormatEngine<'_> {
             usize::from(broken_attached_brace)
         };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
-        let Some(split) =
-            split_result(line, first_width, SplitRules::new(self.options)).or_else(|| {
-                (suffix_width > 0)
-                    .then(|| split_result(line, final_first_width, SplitRules::new(self.options)))?
-            })
-        else {
+        let first_rules = SplitRules::new(self.options).with_offset(brace_row_layout.prefix_width);
+        let Some(split) = split_result(line, first_width, first_rules).or_else(|| {
+            (suffix_width > 0).then(|| split_result(line, final_first_width, first_rules))?
+        }) else {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
@@ -1410,6 +1408,9 @@ struct SplitRules {
     break_after_logical: bool,
     pointer_to_type: bool,
     reference_to_type: bool,
+    /// Columns ahead of the line on its output row, which count in the
+    /// positions astyle weighs its split points by.
+    offset: usize,
 }
 
 impl SplitRules {
@@ -1420,7 +1421,12 @@ impl SplitRules {
             pointer_to_type,
             reference_to_type: options.reference_align == ReferenceAlign::Type
                 || options.reference_align == ReferenceAlign::SameAsPointer && pointer_to_type,
+            offset: 0,
         }
+    }
+
+    fn with_offset(self, offset: usize) -> Self {
+        Self { offset, ..self }
     }
 }
 
@@ -1646,7 +1652,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             }
         }
         if end > width {
-            let split = astyle_find_split_point(&fit, &pending, width, end, || {
+            let split = astyle_find_split_point(&fit, &pending, width, end, rules.offset, || {
                 let word_end = if name_char(byte) {
                     index
                         + bytes[index..]
@@ -1692,22 +1698,25 @@ fn astyle_find_split_point(
     pending: &[usize; 5],
     width: usize,
     length: usize,
+    offset: usize,
     at_line_end: impl Fn() -> bool,
 ) -> usize {
+    let position = |at: usize| if at == 0 { 0 } else { at + offset };
+    let full_width = width + offset;
     let mut split = fit[SEMI];
-    if fit[AND_OR] >= ASTYLE_MIN_CODE_LENGTH {
+    if position(fit[AND_OR]) >= ASTYLE_MIN_CODE_LENGTH {
         split = fit[AND_OR];
     }
-    if split < ASTYLE_MIN_CODE_LENGTH {
+    if position(split) < ASTYLE_MIN_CODE_LENGTH {
         split = fit[WHITESPACE];
-        if fit[PAREN] > split || fit[PAREN] as f64 >= width as f64 * 0.7 {
+        if fit[PAREN] > split || position(fit[PAREN]) as f64 >= full_width as f64 * 0.7 {
             split = fit[PAREN];
         }
-        if fit[COMMA] > split || fit[COMMA] as f64 >= width as f64 * 0.3 {
+        if fit[COMMA] > split || position(fit[COMMA]) as f64 >= full_width as f64 * 0.3 {
             split = fit[COMMA];
         }
     }
-    if split < ASTYLE_MIN_CODE_LENGTH {
+    if position(split) < ASTYLE_MIN_CODE_LENGTH {
         return [SEMI, AND_OR, COMMA, PAREN, WHITESPACE]
             .into_iter()
             .map(|kind| pending[kind])
@@ -1715,7 +1724,7 @@ fn astyle_find_split_point(
             .min()
             .unwrap_or(0);
     }
-    if length - split > width && at_line_end() {
+    if length - split > full_width && at_line_end() {
         if fit[WHITESPACE] > split + 3 {
             split = fit[WHITESPACE];
         }

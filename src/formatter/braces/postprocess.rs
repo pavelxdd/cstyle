@@ -13,6 +13,8 @@ use crate::formatter::text::line_scan::{
 
 pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) first_width: usize,
+    /// The run-in brace and fill ahead of the row on its line.
+    pub(crate) prefix_width: usize,
     pub(crate) attaches_lisp_closer: bool,
 }
 
@@ -83,6 +85,7 @@ impl FormatEngine<'_> {
                     && preprocessor_directive(previous.trim_start()).is_none()
                     && !line_ends_with_comment(previous)
             });
+        let mut prefix_width = 0;
         let first_width = if attaches_lisp_closer && let Some(previous) = self.output.last() {
             let separator_width = usize::from(!previous.trim_end().ends_with('{'));
             width
@@ -118,7 +121,16 @@ impl FormatEngine<'_> {
             );
             let brace = format!("{brace_prefix}{{");
             let fill = horstmann_run_in_fill(&brace, &next, &output_options);
-            let run_in_width = 1 + fill.len();
+            // A space fill is one indent, wherever the row stood before
+            // postprocessing.
+            let fill_width = if self.options.indent_style == IndentStyle::Spaces {
+                fill.len()
+                    .min(self.options.indent_width.saturating_sub(1).max(1))
+            } else {
+                fill.len()
+            };
+            let run_in_width = 1 + fill_width;
+            prefix_width = run_in_width;
             let mut has_word_logical = false;
             let mut has_symbol_logical = false;
             for token in lexer::tokenize(line) {
@@ -142,6 +154,7 @@ impl FormatEngine<'_> {
         };
         MaxLengthBraceRowLayout {
             first_width,
+            prefix_width,
             attaches_lisp_closer,
         }
     }
