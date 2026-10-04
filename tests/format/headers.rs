@@ -2672,3 +2672,49 @@ fn initializer_brace_in_a_broken_else_if_closes_at_its_brace() {
         ),
     );
 }
+
+#[test]
+fn pico_kept_else_block_ends_a_broken_else_if_chain() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.break_else_ifs = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    if (data == 1)",
+                "    {   ms = 1;",
+                "    }",
+                "    else",
+                "        if (data == 2)",
+                "        {   ms = 2;",
+                "        }",
+                "        else",
+                "        {   ms = 3; }",
+                "",
+                "    if (ms != -1)",
+                "    {   ms = 4;",
+                "        p = 5;",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{   if (data == 1)",
+            "    {   ms = 1; }",
+            "    else",
+            "        if (data == 2)",
+            "        {   ms = 2; }",
+            "        else",
+            "        {   ms = 3; }",
+            "",
+            "    if (ms != -1)",
+            "    {   ms = 4;",
+            "        p = 5; } }",
+        ),
+    );
+}

@@ -1558,7 +1558,9 @@ impl FormatEngine<'_> {
         }
         // A kept block ends the braceless bodies it was the statement of,
         // unless an `else` goes on with them.
-        if brace_type == BraceType::Command && self.current_is_blank() {
+        if matches!(brace_type, BraceType::Command | BraceType::NonStatement)
+            && self.current_is_blank()
+        {
             let else_follows = tokens[close_index + 1..]
                 .iter()
                 .find(|token| {
@@ -1572,7 +1574,10 @@ impl FormatEngine<'_> {
                 })
                 .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
             if !else_follows {
-                self.layout.pending_braceless_block_bias = None;
+                if brace_type == BraceType::Command {
+                    self.layout.pending_braceless_block_bias = None;
+                }
+                self.unwind_else_if_break_depths();
             }
         }
         Some(close_index + 1)
