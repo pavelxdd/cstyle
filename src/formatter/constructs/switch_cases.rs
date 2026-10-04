@@ -1468,9 +1468,13 @@ impl FormatEngine<'_> {
             }
             if code.ends_with('{') {
                 let open_indent = self.output.lead_width(index, tab_width);
+                // The brace closes at the deepest closer not past it.
                 if let Some(index) = closing_indents
                     .iter()
-                    .position(|closing| *closing <= open_indent)
+                    .enumerate()
+                    .filter(|(_, closing)| **closing <= open_indent)
+                    .max_by_key(|(_, closing)| **closing)
+                    .map(|(index, _)| index)
                 {
                     closing_indents.remove(index);
                 } else {

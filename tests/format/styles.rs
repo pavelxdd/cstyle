@@ -1220,3 +1220,35 @@ fn ratliff_indents_a_padded_macro_row_before_the_first_case_as_a_case_body() {
         )
     );
 }
+
+#[test]
+fn horstmann_indented_cases_resume_the_outer_case_body_after_a_nested_switch_and_label() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-cases".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int c)\n{\n  switch (c) {\n    case 1: {\n      switch (c) {\n        case 2: {\n          c = 2;\n        }\n      }\n     read_save:\n       next(ls);\n    }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{   switch (c)",
+            "    {   case 1:",
+            "            {   switch (c)",
+            "                {   case 2:",
+            "                        {   c = 2;",
+            "                        }",
+            "                }",
+            "read_save:",
+            "                next(ls);",
+            "            }",
+            "    }",
+            "}",
+        )
+    );
+}
