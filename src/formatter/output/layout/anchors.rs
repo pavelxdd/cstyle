@@ -3665,6 +3665,14 @@ impl FormatEngine<'_> {
         // move lines after layout.
         if self.should_indent_brace_line(BraceType::Command)
             || self.tree.statements.in_else_body_after_blank_line(first)
+                && !self.header_keyword_before(first).is_some_and(|keyword| {
+                    // A header nested in the body stands where layout put it.
+                    self.tree.statements.in_else_body_after_blank_line(keyword)
+                        && !self
+                            .tree
+                            .statements
+                            .starts_else_body_after_blank_line(keyword)
+                })
         {
             return None;
         }

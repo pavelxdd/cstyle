@@ -473,19 +473,28 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with("} else")
                     && !trimmed.starts_with("}else")
                 {
-                    return self.output[..index].iter().rev().take(16).find_map(|line| {
+                    // The header stands in the lines right before the brace:
+                    // a line ending a statement or block, or a bare `else`,
+                    // owns it instead.
+                    for line in self.output[..index].iter().rev().take(16) {
                         let code = line[..trailing_comment_split_limit(line)].trim_end();
                         let trimmed = code.trim_start();
-                        (!unmatched_open_paren_columns(code).is_empty()
+                        if !unmatched_open_paren_columns(code).is_empty()
                             && (starts_header_word(trimmed, "if")
                                 || starts_header_word(trimmed, "for")
                                 || starts_header_word(trimmed, "while")
                                 || starts_header_word(trimmed, "switch")
                                 || trimmed.starts_with("else if")
                                 || trimmed.starts_with("} else")
-                                || trimmed.starts_with("}else")))
-                        .then_some(leading_visual_width(line, self.options.tab_width))
-                    });
+                                || trimmed.starts_with("}else"))
+                        {
+                            return Some(leading_visual_width(line, self.options.tab_width));
+                        }
+                        if code.ends_with([';', '{', '}']) || trimmed == "else" {
+                            return None;
+                        }
+                    }
+                    return None;
                 }
                 return None;
             }
