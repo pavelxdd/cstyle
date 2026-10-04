@@ -176,6 +176,9 @@ fn continues_block_comment(line: &str) -> bool {
 }
 
 pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
+    if !line.contains(['(', ')', '[', ']']) {
+        return (0, Vec::new());
+    }
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack: Vec<usize> = Vec::new();
     let mut unmatched_closes = 0usize;
@@ -329,6 +332,9 @@ pub(crate) fn line_has_brace(line: &str) -> bool {
 }
 
 pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
+    if !line.contains(['(', '[']) {
+        return Vec::new();
+    }
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack = Vec::new();
     let mut index = 0;

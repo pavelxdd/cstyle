@@ -1421,7 +1421,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
         {
             let code = line[..trailing_comment_split_limit(line)].trim_end();
-            if code.ends_with(',') {
+            if code.ends_with(',') && code.contains("new ") {
                 let base = leading_visual_width(line, self.options.tab_width);
                 let has_over_max_new_call =
                     unmatched_open_paren_columns(code).into_iter().any(|open| {
@@ -1442,7 +1442,7 @@ impl FormatEngine<'_> {
                 }
             }
             let start = code.trim_start();
-            if line_paren_imbalance(code).0 > 0 && !code.ends_with(',')
+            if !code.ends_with(',') && line_paren_imbalance(code).0 > 0
                 || start.starts_with(')')
                 || start.ends_with(';')
                 || start.ends_with('{')
@@ -1881,11 +1881,11 @@ impl FormatEngine<'_> {
                 }
                 return None;
             }
-            if line_paren_imbalance(trimmed).0 > 0
-                || trimmed.starts_with(')')
+            if trimmed.starts_with(')')
                 || trimmed.ends_with(';')
                 || trimmed.ends_with('{')
                 || trimmed.ends_with('}')
+                || line_paren_imbalance(trimmed).0 > 0
             {
                 return None;
             }
