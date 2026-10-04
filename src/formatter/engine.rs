@@ -47,7 +47,7 @@ use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{continuation, preprocessor, syntax};
 use crate::source::lex::{is_identifier_continue, trailing_word};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy)]
 pub(crate) struct TokenPushContext<'a> {
@@ -146,6 +146,7 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) access_modified_braces: HashSet<usize>,
     /// Closing braces add-braces put after statements.
     pub(crate) added_closing_braces: HashSet<usize>,
+    pub(crate) added_opener_overruns: HashMap<usize, usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
@@ -228,6 +229,7 @@ impl<'a> FormatEngine<'a> {
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: HashSet::new(),
             added_closing_braces: HashSet::new(),
+            added_opener_overruns: HashMap::new(),
             syntax_roles: SyntaxRoles::new(0),
             tree: SourceTree::default(),
             pending_extern: false,
@@ -333,8 +335,7 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Ratliff
                     | BraceStyle::Lisp
             );
-            let added_closers;
-            (added_brace_tokens, added_closers) = add_marked_cross_line_statement_braces(
+            let added = add_marked_cross_line_statement_braces(
                 tokens,
                 attach_added_braces,
                 matches!(
@@ -343,7 +344,9 @@ impl<'a> FormatEngine<'a> {
                 ),
                 self.options.indent_width,
             );
-            self.added_closing_braces = added_closers;
+            added_brace_tokens = added.tokens;
+            self.added_closing_braces = added.closers;
+            self.added_opener_overruns = added.opener_overruns;
             added_brace_tokens.as_slice()
         } else {
             tokens

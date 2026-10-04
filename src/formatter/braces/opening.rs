@@ -840,12 +840,20 @@ impl FormatEngine<'_> {
         match self.token_input.next_input_whitespace.clone() {
             Some(ws) if !ws.is_empty() => {
                 self.trim_current_end();
+                // An added brace that took more than the gap leaves the
+                // comment its source column.
+                let overrun = self
+                    .current
+                    .active_token()
+                    .and_then(|brace| self.added_opener_overruns.get(&brace))
+                    .copied()
+                    .unwrap_or(0);
                 let target = self
                     .layout
                     .line_state
                     .trailing_comment_columns
                     .first()
-                    .copied()
+                    .map(|target| target.saturating_sub(overrun))
                     .filter(|_| ws.chars().all(|ch| ch == ' '));
                 // Code joined or padded before the brace moves the comment no
                 // further right than its source column, as astyle keeps its

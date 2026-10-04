@@ -1702,11 +1702,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
-        // Only a case label's block in a switch qualifies; checking that
-        // first spares a walk back through the function.
-        if !matches!(trimmed, "};" | "},")
-            && (case_unindent_depth == 0 || self.layout.line_adjuster.switch_depth() == 0)
-        {
+        // Only a case unindent or a closing row can use the case block;
+        // checking that first spares a walk back through the function.
+        if case_unindent_depth == 0 && !matches!(trimmed, "};" | "},") {
             return None;
         }
         let (open_spaces, _, open_trimmed) = self

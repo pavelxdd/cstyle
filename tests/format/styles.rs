@@ -1181,3 +1181,15 @@ fn ratliff_closes_a_statement_expression_at_its_statements() {
         "void f() {\n    DEBUG_OUT({\n        x();\n        });\n    y();\n    }\n",
     );
 }
+
+#[test]
+fn ratliff_case_block_after_a_closed_case_block_keeps_its_statements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()]).expect("valid options");
+    let source = "void f()\n{\n    switch (c) {\n    case 1: {\n        x();\n        break;\n    }\n    case 2: {\n        if (a) {\n            y();\n        }\n        break;\n    }\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f() {\n    switch (c) {\n        case 1: {\n            x();\n            break;\n            }\n        case 2: {\n            if (a) {\n                y();\n                }\n            break;\n            }\n        }\n    }\n",
+    );
+}

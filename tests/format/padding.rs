@@ -3122,3 +3122,16 @@ fn comment_after_added_one_line_block_moves_with_paren_padding() {
         "void f()\n{\n    if(ar->superdir) { return; }   /* Superdir */\n    if(ar->superdir) { return; }  /* one */\n    if(ar) { return; }    /* three */\n}\n",
     );
 }
+
+#[test]
+fn comment_after_added_brace_keeps_its_column_through_unpadding() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--add-braces", "--unpad-paren"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    if (L->ci == L->base_ci)  /* no enclosing function? */\n        x();\n    if ( a )  /* c */\n        x();\n    if (a)   /* c */\n        x();\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    if(L->ci == L->base_ci) { /* no enclosing function? */\n        x();\n    }\n    if(a) {   /* c */\n        x();\n    }\n    if(a) {  /* c */\n        x();\n    }\n}\n",
+    );
+}

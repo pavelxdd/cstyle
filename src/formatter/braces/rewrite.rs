@@ -29,7 +29,7 @@ use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 impl FormatEngine<'_> {
     pub(crate) fn try_add_braces_to_statement(
@@ -2090,8 +2090,11 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     attach_added_braces: bool,
     attach_closing_brace: bool,
     comment_gap: usize,
-) -> (Vec<Token>, HashSet<usize>) {
+) -> AddedBraces {
     let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
+    // Columns an added `{` takes past the gap before a comment, by input
+    // index of its insertion.
+    let mut opener_overruns = HashMap::new();
     let mut replace: Vec<Option<Token>> = vec![None; tokens.len()];
     // astyle sets the comment after a braced statement an indent past it,
     // and takes the brace it attaches out of the gap before a comment.
@@ -2141,6 +2144,9 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                         while freed < 2 && kept.len() > 1 {
                             freed += if kept.starts_with('\t') { 2 } else { 1 };
                             kept = &kept[1..];
+                        }
+                        if freed < 2 {
+                            opener_overruns.insert(header_end + 1, 2 - freed);
                         }
                         replace[header_end + 1] = Some(Token::Whitespace(kept.to_owned()));
                     } else if comment == header_end + 1 {
@@ -2195,20 +2201,47 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     let mut output =
         Vec::with_capacity(tokens.len() + insert_before.iter().map(Vec::len).sum::<usize>());
     let mut added_closers = HashSet::new();
-    let mut append_inserted = |output: &mut Vec<Token>, inserted: &mut Vec<Token>| {
-        for token in inserted.drain(..) {
-            if matches!(token, Token::Symbol('}')) {
-                added_closers.insert(output.len());
+    let mut overruns = HashMap::new();
+    let mut append_inserted =
+        |output: &mut Vec<Token>, inserted: &mut Vec<Token>, overrun: Option<usize>| {
+            for token in inserted.drain(..) {
+                match token {
+                    Token::Symbol('}') => {
+                        added_closers.insert(output.len());
+                    }
+                    Token::Symbol('{') => {
+                        if let Some(overrun) = overrun {
+                            overruns.insert(output.len(), overrun);
+                        }
+                    }
+                    _ => {}
+                }
+                output.push(token);
             }
-            output.push(token);
-        }
-    };
+        };
     for (index, token) in tokens.iter().cloned().enumerate() {
-        append_inserted(&mut output, &mut insert_before[index]);
+        append_inserted(
+            &mut output,
+            &mut insert_before[index],
+            opener_overruns.get(&index).copied(),
+        );
         output.push(replace[index].take().unwrap_or(token));
     }
-    append_inserted(&mut output, &mut insert_before[tokens.len()]);
-    (output, added_closers)
+    append_inserted(&mut output, &mut insert_before[tokens.len()], None);
+    AddedBraces {
+        tokens: output,
+        closers: added_closers,
+        opener_overruns: overruns,
+    }
+}
+
+/// Tokens with the braces add-braces put in, the indexes of the added
+/// closers, and the columns each added opener takes past the gap before a
+/// comment after it.
+pub(crate) struct AddedBraces {
+    pub(crate) tokens: Vec<Token>,
+    pub(crate) closers: HashSet<usize>,
+    pub(crate) opener_overruns: HashMap<usize, usize>,
 }
 
 fn open_brace_attaches_to_header_line(
@@ -3074,7 +3107,7 @@ mod tests {
         );
 
         assert_eq!(
-            add_marked_cross_line_statement_braces(&tokens, true, false, 4).0,
+            add_marked_cross_line_statement_braces(&tokens, true, false, 4).tokens,
             tokens
         );
     }
