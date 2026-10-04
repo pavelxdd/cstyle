@@ -414,7 +414,13 @@ impl FormatEngine<'_> {
             let code_follows_comment = trimmed
                 .split_once("*/")
                 .is_some_and(|(_, after)| !after.trim().is_empty());
-            self.push_raw_comment_output_line(trimmed);
+            if let Some((head, tail, spaces)) = self.split_comment_led_line(&trimmed) {
+                self.push_raw_comment_output_line(head);
+                let level = self.layout.indentation.indent();
+                self.push_formatted_line_exact(&tail, level, spaces);
+            } else {
+                self.push_raw_comment_output_line(trimmed);
+            }
             // The line after a comment closes at the column the comment opened.
             let next_indent = closes_standalone_block_comment.then(|| {
                 frame_column.unwrap_or_else(|| {

@@ -2781,3 +2781,33 @@ fn max_length_split_before_multibyte_comment_char_does_not_panic() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn max_code_length_splits_after_leading_block_comment() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    /* a comment that is long enough */ /* another comment that is long */ y = 2;\n    /* a comment that is long enough to push things over */ x = alpha + beta + gamma;\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    /* a comment that is long enough */ /* another comment that is long */\n    y = 2;\n    /* a comment that is long enough to push things over */ x =\n        alpha + beta + gamma;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_starts_statement_after_comment_split() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    x = 1; /* a long comment that pushes the line past the limit */ y = 2;\n    foo(alpha, /* a comment that is long enough to push things over */ beta);\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    x = 1; /* a long comment that pushes the line past the limit */\n    y = 2;\n    foo(alpha, /* a comment that is long enough to push things over */\n        beta);\n}\n",
+    );
+}

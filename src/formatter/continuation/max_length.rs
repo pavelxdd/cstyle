@@ -73,32 +73,7 @@ impl FormatEngine<'_> {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
-        // Rows of an initializer, and of the braces astyle takes for one,
-        // stay whole.
-        let initializer_row = self
-            .output
-            .pending_tokens()
-            .filter(|span| span.first < self.tree.tokens.len())
-            .and_then(|span| self.tree.groups.enclosing(span.first))
-            .and_then(|group| {
-                self.tree
-                    .groups
-                    .ancestors(group)
-                    .find(|&id| self.tree.groups.get(id).delimiter == Delimiter::Brace)
-            })
-            .is_some_and(|group| {
-                matches!(
-                    self.tree.blocks.kind(group),
-                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                ) || self.is_enum_body(group)
-                    || self.is_directive_block(group)
-                        && self
-                            .tree
-                            .previous_code_token(self.tree.groups.get(group).open)
-                            .is_some_and(|before| {
-                                matches!(self.tree.tokens[before], Token::Symbol('{'))
-                            })
-            });
+        let initializer_row = self.initializer_row();
         if should_skip_split(line) || initializer_row {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
@@ -206,6 +181,9 @@ impl FormatEngine<'_> {
         }
         let inline_body_indent_extra = max_length_inline_case_body_indent_extra(self.options, line)
             .or_else(|| max_length_inline_access_body_indent_extra(self.options, line));
+        if ends_statement_before_comment(&split.head) {
+            next_indent = indent;
+        }
         if let Some(extra) = inline_body_indent_extra {
             next_indent =
                 ContinuationIndent::Spaces(next_indent.columns(self.options.indent_width) + extra);
@@ -372,6 +350,74 @@ impl FormatEngine<'_> {
             leading_visual_width(previous, self.options.tab_width)
                 + self.options.continuation_indent * self.options.indent_width,
         )
+    }
+}
+
+/// A split right after a block comment that follows a finished statement
+/// starts the next statement.
+fn ends_statement_before_comment(head: &str) -> bool {
+    let mut code = head.trim_end();
+    if !code.ends_with("*/") {
+        return false;
+    }
+    while code.ends_with("*/") {
+        let Some(open) = code.rfind("/*") else {
+            return false;
+        };
+        code = code[..open].trim_end();
+    }
+    code.is_empty() || code.ends_with([';', '{', '}'])
+}
+
+impl FormatEngine<'_> {
+    /// Rows of an initializer, and of the braces astyle takes for one,
+    /// stay whole.
+    fn initializer_row(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .filter(|span| span.first < self.tree.tokens.len())
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .and_then(|group| {
+                self.tree
+                    .groups
+                    .ancestors(group)
+                    .find(|&id| self.tree.groups.get(id).delimiter == Delimiter::Brace)
+            })
+            .is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                ) || self.is_enum_body(group)
+                    || self.is_directive_block(group)
+                        && self
+                            .tree
+                            .previous_code_token(self.tree.groups.get(group).open)
+                            .is_some_and(|before| {
+                                matches!(self.tree.tokens[before], Token::Symbol('{'))
+                            })
+            })
+    }
+
+    /// Splits a row led by a block comment with code after it.
+    pub(crate) fn split_comment_led_line(&self, line: &str) -> Option<(String, String, usize)> {
+        let width = self.options.max_code_length?.max(1);
+        let lead = &line[..line.len() - line.trim_start().len()];
+        let code = line.trim_start();
+        if !code.starts_with("/*") || code.contains('\x0c') || self.initializer_row() {
+            return None;
+        }
+        let close = code.find("*/")?;
+        if !holds_code(&code[close + 2..]) {
+            return None;
+        }
+        let split = split_result(code, width, SplitRules::new(self.options))?;
+        let lead_width = leading_visual_width(line, self.options.tab_width);
+        let tail_spaces = if ends_statement_before_comment(&split.head) {
+            lead_width
+        } else {
+            lead_width + self.options.continuation_indent * self.options.indent_width
+        };
+        Some((format!("{lead}{}", split.head), split.tail, tail_spaces))
     }
 }
 
