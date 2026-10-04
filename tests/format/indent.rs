@@ -9686,3 +9686,32 @@ fn asm_operand_rows_far_from_the_asm_keyword_keep_its_column() {
         ),
     );
 }
+#[test]
+fn tab_indent_continuation_of_a_statement_on_its_header_line_tabs_to_the_body_level() {
+    let mut options = FormatOptions::default();
+    options.indent_style = IndentStyle::Tabs;
+    let actual = format_with(
+        fixture!(
+            "void f(void){",
+            "if (bp) reason = ok ? \"called\" :",
+            "\"break point\";",
+            "if (a) g(1,",
+            "2);",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "void f(void)",
+            "{",
+            "\tif (bp) reason = ok ? \"called\" :",
+            "\t\t                 \"break point\";",
+            "\tif (a) g(1,",
+            "\t\t         2);",
+            "}",
+        )
+    );
+}

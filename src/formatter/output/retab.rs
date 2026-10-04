@@ -372,7 +372,17 @@ impl FormatEngine<'_> {
                         && self.output.line_with_token(close) == Some(line)
                 })
         });
-        Some(lead + usize::from(after_head_colon) * self.options.indent_width)
+        // A statement on its braceless header's line, as `if (a) f(x,`,
+        // stands at the header's body level.
+        let opens_header = matches!(&tokens[start], Token::Word(word)
+            if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "do" | "foreach"));
+        let after_header = !opens_header
+            && self.tree.previous_code_token(start).is_some_and(|previous| {
+            self.output.line_with_token(previous) == Some(line)
+                && (self.closes_control_condition(previous)
+                    || matches!(&tokens[previous], Token::Word(word) if matches!(word.as_str(), "else" | "do")))
+        });
+        Some(lead + usize::from(after_head_colon || after_header) * self.options.indent_width)
     }
 
     /// For a code line the tree does not cover, such as a row of a macro
