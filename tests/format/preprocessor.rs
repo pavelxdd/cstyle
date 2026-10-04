@@ -4086,3 +4086,53 @@ fn case_block_value_after_directive_takes_continuation_levels() {
         ),
     );
 }
+
+#[test]
+fn conditional_continued_lines_indent_as_code_in_a_header_condition() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_conditional = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    if(",
+                "#if A && \\",
+                "  (B || \\",
+                "      C) && \\",
+                "        D",
+                "        y &&",
+                "#endif",
+                "        z)",
+                "        g();",
+                "#if A && \\",
+                "  B && \\",
+                "    C",
+                "    x = 1;",
+                "#endif",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    if(",
+            "    #if A && \\",
+            "        (B || \\",
+            "         C) && \\",
+            "        D",
+            "        y &&",
+            "    #endif",
+            "        z)",
+            "        g();",
+            "    #if A && \\",
+            "    B && \\",
+            "    C",
+            "    x = 1;",
+            "    #endif",
+            "}",
+        ),
+    );
+}

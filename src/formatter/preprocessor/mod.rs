@@ -143,9 +143,6 @@ struct PreprocessorLineParts<'a> {
     /// The directive is a conditional that indenting preprocessor blocks
     /// indents: its continued lines stand a level past it.
     indent_continued_block_conditional: bool,
-    /// The source lead of the first continued line, which later ones keep
-    /// their offsets from.
-    first_continuation_lead: Option<usize>,
 }
 
 impl FormatEngine<'_> {
@@ -627,9 +624,7 @@ impl FormatEngine<'_> {
         }
 
         let mut continued_line_comment = false;
-        let first_continuation_lead = parts
-            .get(1)
-            .map(|part| leading_visual_width(part, self.options.tab_width));
+        let mut open_paren_columns = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             self.push_preprocessor_part(
                 index,
@@ -639,9 +634,9 @@ impl FormatEngine<'_> {
                     branch_separator_after_else,
                     indent_continued_conditional,
                     indent_continued_block_conditional,
-                    first_continuation_lead,
                 },
                 &mut continued_line_comment,
+                &mut open_paren_columns,
             );
         }
         if is_define && !line.trim_end().ends_with('\\') {
@@ -699,13 +694,13 @@ impl FormatEngine<'_> {
         part: &str,
         parts: &PreprocessorLineParts<'_>,
         continued_line_comment: &mut bool,
+        open_paren_columns: &mut Vec<usize>,
     ) {
         let PreprocessorLineParts {
             opaque_literal_line_ranges,
             branch_separator_after_else,
             indent_continued_conditional,
             indent_continued_block_conditional,
-            first_continuation_lead,
         } = *parts;
         let line_is_continued_comment = *continued_line_comment;
         let is_opaque_literal_line = opaque_literal_line_ranges
@@ -747,7 +742,7 @@ impl FormatEngine<'_> {
         let indent = if force_unindented_branch_separator {
             None
         } else if index > 0 && indent_continued_conditional {
-            Some(self.current_preprocessor_indent(false))
+            Some(self.conditional_continuation_indent(open_paren_columns))
         } else if index > 0
             && indent_continued_block_conditional
             && self.preprocessor.indented_block_stack.last() == Some(&true)
@@ -782,16 +777,7 @@ impl FormatEngine<'_> {
             } else {
                 part.trim_start().to_string()
             };
-            // A conditional's later continued lines keep their offsets from
-            // its first one.
-            let offset = if index > 1 && indent_continued_conditional {
-                first_continuation_lead.map_or(0, |first| {
-                    leading_visual_width(part, self.options.tab_width).saturating_sub(first)
-                })
-            } else {
-                0
-            };
-            format!("{prefix}{}{body}", " ".repeat(offset))
+            format!("{prefix}{body}")
         } else if collapse {
             let leading = &part[..part.len() - part.trim_start().len()];
             format!("{leading}{}", collapse_pound_whitespace(part.trim_start()))
@@ -817,6 +803,23 @@ impl FormatEngine<'_> {
             self.adjust_and_publish_line(output_line);
             if indented_continuation {
                 self.output.mark_last_indented_directive_continuation();
+            }
+            // astyle reads the directive's own line apart from the code its
+            // continued lines are indented as.
+            if indent_continued_conditional
+                && index > 0
+                && let Some(published) = self.output.last()
+            {
+                let after_parens = self.options.indent_after_parens.then(|| {
+                    leading_visual_width(published, self.options.tab_width)
+                        + self.options.indent_width
+                });
+                track_open_paren_columns(
+                    published,
+                    self.options.tab_width,
+                    after_parens,
+                    open_paren_columns,
+                );
             }
         }
         if !line_is_continued_comment && !is_opaque_literal_continuation {
@@ -1029,6 +1032,33 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// astyle indents a conditional's continued lines as code: after a paren
+    /// the directive left open, else where a statement line would stand.
+    fn conditional_continuation_indent(
+        &self,
+        open_paren_columns: &[usize],
+    ) -> PreprocessorLineIndent {
+        let structural_level = self.layout.indentation.indent();
+        if let Some(&spaces) = open_paren_columns.last() {
+            return PreprocessorLineIndent::Exact {
+                structural_level,
+                spaces,
+            };
+        }
+        if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
+            return PreprocessorLineIndent::Exact {
+                structural_level,
+                spaces: spaces.max(
+                    self.layout
+                        .nesting
+                        .current_continuation_indent_spaces()
+                        .unwrap_or(0),
+                ),
+            };
+        }
+        self.current_preprocessor_indent(false)
+    }
+
     /// The column of a directive inside a continued statement: in the
     /// condition of a control header astyle takes the header's level back off.
     fn preprocessor_continuation_spaces(&self) -> Option<usize> {
@@ -1226,6 +1256,47 @@ impl FormatEngine<'_> {
         self.inline_array = inline_array;
         self.pending_extern = pending_extern;
         self.extern_c_guard = extern_c_guard;
+    }
+}
+
+/// Pushes the column after each paren `line` opens, or `after_parens` when
+/// lines indent after parens, and pops one per paren it closes, outside
+/// literals and comments.
+fn track_open_paren_columns(
+    line: &str,
+    tab_width: usize,
+    after_parens: Option<usize>,
+    columns: &mut Vec<usize>,
+) {
+    let mut column = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        column = if ch == '\t' {
+            column + tab_width.max(1) - column % tab_width.max(1)
+        } else {
+            column + 1
+        };
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '/' if matches!(chars.peek(), Some('/' | '*')) => break,
+            '(' => columns.push(after_parens.unwrap_or(column)),
+            ')' => {
+                columns.pop();
+            }
+            _ => {}
+        }
     }
 }
 
