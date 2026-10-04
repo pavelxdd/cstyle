@@ -1541,9 +1541,10 @@ impl FormatEngine<'_> {
                     .is_some_and(|whitespace| whitespace.contains('\n'));
             let outside_pad =
                 self.options.pad_parens_outside || self.options.pad_first_paren_outside;
-            if comment_ends_line && outside_pad && self.options.unpad_parens {
-                self.trim_current_end_horizontal_space();
-                self.ensure_space();
+            if comment_ends_line && self.options.unpad_parens {
+                // A comment ending its line keeps its column as a trailing
+                // comment does.
+                self.pad_before_trailing_comment(kind, comment);
             } else if self.options.pad_parens_inside {
                 self.pad_inside_paren_space();
             } else if comment_ends_line && outside_pad {

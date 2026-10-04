@@ -1930,17 +1930,17 @@ fn pad_parens_outside_preserves_source_gap_before_line_ending_comment() {
 }
 
 #[test]
-fn unpad_parens_removes_gap_before_line_ending_comment() {
+fn unpad_parens_keeps_the_gap_before_a_line_ending_comment() {
     let mut options = FormatOptions::default();
     options.unpad_parens = true;
 
     assert_eq!(
         format_exact("call(  // note\n value);\n", &options),
-        "call(// note\n    value);\n"
+        "call(  // note\n    value);\n"
     );
     assert_eq!(
         format_exact("call(  /* note */\n value);\n", &options),
-        "call(/* note */\n    value);\n"
+        "call(  /* note */\n    value);\n"
     );
 
     options.pad_parens_outside = true;
@@ -3057,6 +3057,34 @@ fn ms_asm_line_keeps_its_operator_spacing_and_ends_at_its_line() {
             "    __asm mov eax, ebx + 4",
             "    _asm mov eax, [ebx-4]",
             "    x = 1;",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn unpad_paren_keeps_the_column_of_a_comment_ending_the_line() {
+    let mut options = FormatOptions::default();
+    options.unpad_parens = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void g() {",
+                "    x(              /* c */",
+                "        a);",
+                "    x (/* c */",
+                "        a);",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void g() {",
+            "    x(              /* c */",
+            "        a);",
+            "    x( /* c */",
+            "        a);",
             "}",
         ),
     );
