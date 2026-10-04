@@ -665,10 +665,12 @@ impl FormatEngine<'_> {
         let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_trimmed = previous.trim_start();
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
+        // A string row closing a paren ends the operand it continued.
         if starts_string_literal_token(current)
             && (is_comment_line(previous_trimmed) || is_comment_only_line(previous_trimmed))
             || starts_string_literal_token(current)
                 && starts_string_literal_token(previous_code.trim_start())
+                && line_paren_imbalance(previous_code).0 == 0
         {
             return Some(SplitElseCallLineLayout {
                 indent_spaces: previous_spaces,

@@ -9455,3 +9455,34 @@ fn column_one_comments_in_a_header_condition_stand_at_its_rows() {
         ),
     );
 }
+
+#[test]
+fn string_element_after_a_paren_closing_string_row_stands_at_the_brace_content() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static const struct test_spec test_specs[] = {",
+                "  { OID(\"\\x01\"), \"0.1\", CURLE_OK },",
+                "  {",
+                "    OID(\"\\x2b\\x01\"",
+                "        \"\\x01\\x01\"),",
+                "    \"1.3.1\"",
+                "    \".1.1\", CURLE_OK",
+                "  },",
+                "};",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "static const struct test_spec test_specs[] = {",
+            "    { OID(\"\\x01\"), \"0.1\", CURLE_OK },",
+            "    {",
+            "        OID(\"\\x2b\\x01\"",
+            "            \"\\x01\\x01\"),",
+            "        \"1.3.1\"",
+            "        \".1.1\", CURLE_OK",
+            "    },",
+            "};",
+        ),
+    );
+}

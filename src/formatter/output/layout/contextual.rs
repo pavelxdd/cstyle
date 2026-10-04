@@ -2827,6 +2827,8 @@ impl FormatEngine<'_> {
         if starts_string_literal_token(line.trim_start())
             && let Some(previous) = self.output.last_line_outside_comment()
             && starts_string_literal_token(previous.trim_start())
+            // A string row closing a paren ends the operand it continued.
+            && line_paren_imbalance(&previous[..trailing_comment_split_limit(previous)]).0 == 0
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
