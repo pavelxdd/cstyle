@@ -31,6 +31,8 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_w
 #[derive(Default)]
 pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
+    /// The braces and `while` attached after the statement on its line.
+    while_suffix: Option<String>,
     objc_message_indent_spaces: Option<usize>,
     /// The part of a split line being published stands where astyle's
     /// stack or the syntax tree put it.
@@ -48,6 +50,10 @@ impl MaxLengthLineState {
 
     pub(crate) fn set_suffix_width(&mut self, width: usize) {
         self.suffix_width = width;
+    }
+
+    pub(crate) fn set_while_suffix(&mut self, suffix: Option<String>) {
+        self.while_suffix = suffix;
     }
 
     fn objc_message_indent_spaces(&self) -> Option<usize> {
@@ -123,9 +129,27 @@ impl FormatEngine<'_> {
         };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
         let first_rules = SplitRules::new(self.options).with_offset(brace_row_layout.prefix_width);
-        let Some(split) = split_result(line, first_width, first_rules).or_else(|| {
-            (suffix_width > 0).then(|| split_result(line, final_first_width, first_rules))?
-        }) else {
+        // A `while` attached after the statement's braces shares its line,
+        // so the line splits where the whole of it would, and not before
+        // the `while` when it would split there.
+        let while_suffix = line
+            .trim_end()
+            .ends_with(';')
+            .then(|| self.max_length_line.while_suffix.clone())
+            .flatten();
+        let split = match &while_suffix {
+            Some(suffix) => split_result(
+                &format!("{}{suffix}", line.trim_end()),
+                first_width,
+                first_rules.with_closers_following_statement(),
+            )
+            .filter(|split| split.split_at < line.trim_end().len())
+            .and_then(|split| split_result_at(line, split.split_at, first_width, first_rules)),
+            None => split_result(line, first_width, first_rules).or_else(|| {
+                (suffix_width > 0).then(|| split_result(line, final_first_width, first_rules))?
+            }),
+        };
+        let Some(split) = split else {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
@@ -1212,6 +1236,8 @@ fn split_point_at(
     let end = index + ch.len_utf8();
     match ch {
         ',' => Some((end, 60)),
+        // A line splits before no closing brace.
+        ';' if line[end..].trim_start().starts_with('}') => None,
         ';' => Some((end, 75)),
         // astyle splits after no paren that a literal or paren follows.
         '(' if line[end..].trim_start().starts_with([')', '(', '"', '\'']) => None,
@@ -1447,6 +1473,9 @@ struct SplitRules {
     /// Columns ahead of the line on its output row, which count in the
     /// positions astyle weighs its split points by.
     offset: usize,
+    /// The line's closing braces close blocks the statement before them
+    /// sits in, not one-line blocks.
+    closers_follow_statement: bool,
 }
 
 impl SplitRules {
@@ -1458,11 +1487,19 @@ impl SplitRules {
             reference_to_type: options.reference_align == ReferenceAlign::Type
                 || options.reference_align == ReferenceAlign::SameAsPointer && pointer_to_type,
             offset: 0,
+            closers_follow_statement: false,
         }
     }
 
     fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
+    }
+
+    fn with_closers_following_statement(self) -> Self {
+        Self {
+            closers_follow_statement: true,
+            ..self
+        }
     }
 }
 
@@ -1515,7 +1552,11 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
     let mut quote: Option<u8> = None;
     let mut in_comment = false;
     // A line closing a block it did not open lies in a one-line block.
-    let mut unbroken_depth = unopened_closing_braces(line);
+    let mut unbroken_depth = if rules.closers_follow_statement {
+        0
+    } else {
+        unopened_closing_braces(line)
+    };
     let mut clear_after_brace = false;
     // A case label registers no points up to its colon.
     let mut in_case = false;
@@ -1807,8 +1848,17 @@ fn in_exponent(line: &str, index: usize) -> bool {
 }
 
 fn astyle_split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult> {
-    let break_after_logical = rules.break_after_logical;
     let split_at = astyle_split_point(line, width, rules)?;
+    split_result_at(line, split_at, width, rules)
+}
+
+fn split_result_at(
+    line: &str,
+    split_at: usize,
+    width: usize,
+    rules: SplitRules,
+) -> Option<SplitResult> {
+    let break_after_logical = rules.break_after_logical;
     let head = line[..split_at].trim_end().to_string();
     let tail = line[split_at..].trim_start().to_string();
     if head.is_empty() || tail.is_empty() {

@@ -5,7 +5,7 @@ use crate::formatter::braces::classification::{
 use crate::formatter::constructs::constructor_initializers::constructor_initializer_name_indent_from_line;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
-use crate::formatter::engine::{FormatEngine, TokenPushContext};
+use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{
@@ -132,7 +132,17 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                self.push_semicolon(next, following_closer_width, added_brace_follows);
+                let following_while_suffix = self
+                    .options
+                    .attach_closing_while
+                    .then(|| closer_width_after_semicolon(&self.tree.tokens, token_index, true).1)
+                    .flatten();
+                self.push_semicolon(
+                    next,
+                    following_closer_width,
+                    following_while_suffix,
+                    added_brace_follows,
+                );
             }
             ',' => self.push_comma(next),
             ':' => self.push_colon(next),
@@ -859,17 +869,21 @@ impl FormatEngine<'_> {
         &mut self,
         next: Option<&Token>,
         following_closer_width: usize,
+        following_while_suffix: Option<String>,
         added_brace_follows: bool,
     ) {
-        let suffix_width = if matches!(
+        let run_in_closers = matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
-        ) {
+        );
+        let suffix_width = if run_in_closers {
             following_closer_width
         } else {
             usize::from(added_brace_follows)
         };
         self.max_length_line.set_suffix_width(suffix_width);
+        self.max_length_line
+            .set_while_suffix(following_while_suffix.filter(|_| run_in_closers));
         let closed_lambda_header_indent = self
             .current
             .trim_end()

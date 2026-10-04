@@ -2919,3 +2919,30 @@ fn max_code_length_goto_and_member_heads_register_no_continuation() {
         "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots\n    += total_bytes;\n}\n",
     );
 }
+
+#[test]
+fn attached_closing_while_counts_in_the_line_a_run_in_statement_splits() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=lisp".to_owned(),
+            "--attach-closing-while".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    do {\n        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode, p->iFoldParam);\n    } while( iCode==0 );\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    do {",
+            "        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode,",
+            "                                   p->iFoldParam); } while( iCode==0 ); }",
+        )
+    );
+}

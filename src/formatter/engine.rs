@@ -675,7 +675,8 @@ impl<'a> FormatEngine<'a> {
             initializers::bracket_starts_initializer_designator(tokens, index, line.end);
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
-        let following_closer_width = closer_width_after_semicolon(tokens, index);
+        let following_closer_width =
+            closer_width_after_semicolon(tokens, index, self.options.attach_closing_while).0;
         TokenPushContext {
             next,
             next_is_adjacent,
@@ -1731,9 +1732,13 @@ impl<'a> FormatEngine<'a> {
 /// The width the closing braces after a semicolon bring to its line where
 /// they attach to it: a space and the brace each, then whatever follows the
 /// last one on its line.
-fn closer_width_after_semicolon(tokens: &[Token], index: usize) -> usize {
-    if !matches!(tokens[index], Token::Symbol(';')) {
-        return 0;
+pub(crate) fn closer_width_after_semicolon(
+    tokens: &[Token],
+    index: usize,
+    attach_while: bool,
+) -> (usize, Option<String>) {
+    if !matches!(tokens.get(index), Some(Token::Symbol(';'))) {
+        return (0, None);
     }
     let mut cursor = index + 1;
     let mut width = 0;
@@ -1756,20 +1761,43 @@ fn closer_width_after_semicolon(tokens: &[Token], index: usize) -> usize {
         after_last = cursor;
     }
     if width == 0 {
-        return 0;
+        return (0, None);
     }
     let mut spaced = false;
     let tail = &tokens[after_last.min(tokens.len())..];
-    // A header after the braces breaks from them past the space astyle
-    // pads it with.
-    if tail
+    let header = tail
         .iter()
         .find(|token| !matches!(token, Token::Whitespace(_)))
-        .is_some_and(|token| {
-            matches!(token, Token::Word(word) if matches!(word.as_str(), "else" | "while" | "catch" | "finally"))
-        })
-    {
-        return width + 1;
+        .and_then(|token| match token {
+            Token::Word(word)
+                if matches!(word.as_str(), "else" | "while" | "catch" | "finally") =>
+            {
+                Some(word.as_str())
+            }
+            _ => None,
+        });
+    // An attached `while` stays on the braces' line whole.
+    if header == Some("while") && attach_while {
+        let mut suffix = " }".repeat(width / 2);
+        for token in tail {
+            match token {
+                Token::Whitespace(_) => spaced = true,
+                Token::Newline | Token::Comment(..) => break,
+                token => {
+                    if spaced || suffix.ends_with('}') {
+                        suffix.push(' ');
+                    }
+                    suffix.push_str(&token_text(token));
+                    spaced = false;
+                }
+            }
+        }
+        return (suffix.len(), Some(suffix));
+    }
+    // A header after the braces breaks from them past the space astyle
+    // pads it with.
+    if header.is_some() {
+        return (width + 1, None);
     }
     for token in tail {
         match token {
@@ -1785,7 +1813,7 @@ fn closer_width_after_semicolon(tokens: &[Token], index: usize) -> usize {
             }
         }
     }
-    width
+    (width, None)
 }
 
 fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSourceColumns {
