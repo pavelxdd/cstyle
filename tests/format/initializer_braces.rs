@@ -4269,3 +4269,26 @@ fn leading_comma_stands_at_the_row_of_elements_it_follows() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn elements_after_a_leading_nested_brace_stand_a_level_in() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    int b[] = {{1, 2},\n        3,\n4, {5},\n6\n    };\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    int b[] = {{1, 2},",
+            "        3,",
+            "        4, {5},",
+            "        6",
+            "    };",
+            "}",
+        )
+    );
+}

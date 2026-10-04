@@ -383,6 +383,18 @@ impl FormatEngine<'_> {
         if line >= index {
             return None;
         }
+        // An initializer list that opens with a nested brace, as
+        // `{ { 1, 2 },`, holds its elements a level in.
+        if matches!(self.tree.tokens[start], Token::Symbol('{'))
+            && self.tree.previous_code_token(start).is_some_and(|open| {
+                matches!(self.tree.tokens[open], Token::Symbol('{'))
+                    && groups.opened_at(open).is_some_and(|group| {
+                        self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
+                    })
+            })
+        {
+            return None;
+        }
         let lead = self.output.lead_width(line, self.options.tab_width);
         // An initializer list that starts on its constructor's line still
         // stands one level in.

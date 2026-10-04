@@ -9859,3 +9859,41 @@ fn tab_indent_fills_a_broken_nested_initializer_brace_with_a_tab_but_keeps_a_com
         )
     );
 }
+#[test]
+fn tab_indent_elements_of_an_initializer_opening_with_a_nested_brace_stand_at_a_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent=tab".to_owned()],
+    )
+    .expect("valid style options");
+    let actual = format_with(
+        fixture!(
+            "static const char *const key_val[][2] = { { \"11\", \"one\" },",
+            "    { \"22\", \"two\" }",
+            "};",
+            "void f(void)",
+            "{",
+            "    int b[] = {{1, 2},",
+            "        3",
+            "    };",
+            "}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "static const char *const key_val[][2] = { { \"11\", \"one\" },",
+            "\t{ \"22\", \"two\" }",
+            "};",
+            "void f(void)",
+            "{",
+            "\tint b[] = {{1, 2},",
+            "\t\t3",
+            "\t};",
+            "}",
+        )
+    );
+}

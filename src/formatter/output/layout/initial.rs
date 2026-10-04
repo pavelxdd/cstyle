@@ -1429,7 +1429,9 @@ impl FormatEngine<'_> {
                     };
                     let enum_block_level = self.options.indent_after_parens
                         && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Enum);
-                    let spaces = if enum_block_level {
+                    // A list whose first element is a brace holds its
+                    // elements a level in, not under the first.
+                    let spaces = if enum_block_level || previous_body.starts_with('{') {
                         column
                     } else if starts_new(previous_body) && starts_new(current_body) {
                         brace_column + self.options.indent_width
