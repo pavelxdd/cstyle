@@ -335,7 +335,21 @@ impl FormatEngine<'_> {
                 .current
                 .active_token()
                 .is_some_and(|brace| self.closes_statement_expression(brace));
+        // An initializer row keeps the closer written after its block
+        // comment.
+        let attached_after_comment = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && !self.token_input.token_begins_source_line
+            && self.current.trim_end().ends_with("*/")
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer)
+            );
         if attached_statement_expression {
+            self.ensure_space();
+        } else if attached_after_comment {
+            self.trim_current_end_horizontal_space();
             self.ensure_space();
         } else {
             self.finish_line();

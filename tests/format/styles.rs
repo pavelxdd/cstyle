@@ -1157,3 +1157,15 @@ fn whitesmith_first_statement_of_a_block_in_a_labeled_case_block_stands_at_its_b
         ),
     );
 }
+
+#[test]
+fn pico_initializer_closer_stays_after_its_block_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "static const s t[] = {\n    { 0xC03B, \"TLS\",\n              \"ECDHE\" },\n    { 0xC03C, \"TLS\",\n              \"ARIA128-SHA256\" /* ns */ },\n};\nstatic const s u[] = {\n    { 1,\n      \"A\" /* ns */\n    },\n};\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "static const s t[] = {\n    {   0xC03B, \"TLS\",\n        \"ECDHE\" },\n    {   0xC03C, \"TLS\",\n        \"ARIA128-SHA256\" /* ns */ }, };\nstatic const s u[] =\n{   {   1,\n        \"A\" /* ns */\n    }, };\n",
+    );
+}
