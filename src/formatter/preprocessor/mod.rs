@@ -1029,7 +1029,17 @@ impl FormatEngine<'_> {
     /// The column of a directive inside a continued statement: in the
     /// condition of a control header astyle takes the header's level back off.
     fn preprocessor_continuation_spaces(&self) -> Option<usize> {
-        let spaces = self.layout.continuation_indent.next_line_indent_spaces?;
+        // A paren opened past the pending column holds the next line.
+        let spaces = self
+            .layout
+            .continuation_indent
+            .next_line_indent_spaces?
+            .max(
+                self.layout
+                    .nesting
+                    .current_continuation_indent_spaces()
+                    .unwrap_or(0),
+            );
         let in_header_condition = self.header_paren.depth.is_some()
             && matches!(
                 self.layout.command_state.current_header.as_deref(),

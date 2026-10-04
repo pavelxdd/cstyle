@@ -3974,3 +3974,41 @@ fn define_statement_expression_body_ignores_its_open_paren() {
         ),
     );
 }
+
+#[test]
+fn indented_conditional_in_nested_parens_takes_their_content_column() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_conditional = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    oflag =",
+                "        (m ?",
+                "         R :",
+                "         (W | C |",
+                "#ifdef B",
+                "          (e ? B : 0) |",
+                "#endif",
+                "          P));",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    oflag =",
+            "        (m ?",
+            "         R :",
+            "         (W | C |",
+            "          #ifdef B",
+            "          (e ? B : 0) |",
+            "          #endif",
+            "          P));",
+            "}",
+        ),
+    );
+}
