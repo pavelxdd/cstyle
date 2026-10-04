@@ -127,9 +127,13 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // Lisp breaks the block it adds around a statement on its own line.
+        let lisp_breaks_added_block = self.options.brace_style == BraceStyle::Lisp
+            && token_begins_line(tokens, statement_start);
         if !self.options.break_one_line_headers
             && (self.options.add_one_line_braces || !self.options.break_one_line_blocks)
             && !self.options.lisp_add_one_line_braces_breaks_blocks()
+            && !lisp_breaks_added_block
         {
             let statement_starts_line = token_begins_line(tokens, statement_start);
             // A comment between the header and its statement leaves the

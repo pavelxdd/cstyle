@@ -1513,3 +1513,39 @@ fn added_block_comment_gap_holds_only_for_its_own_comment() {
         ),
     );
 }
+
+#[test]
+fn lisp_breaks_added_block_around_next_line_statement_with_kept_blocks() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=lisp".to_owned(),
+            "--add-one-line-braces".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void)",
+                "{",
+                "    if (a)",
+                "        return 1;",
+                "    if (b) return 2;",
+                "    if (c) { return 3; }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void) {",
+            "    if (a) {",
+            "        return 1; }",
+            "    if (b) { return 2; }",
+            "    if (c) { return 3; } }",
+        ),
+    );
+}
