@@ -9601,3 +9601,47 @@ fn allman_blocks_in_a_split_else_body_stand_at_their_headers() {
         ),
     );
 }
+
+#[test]
+fn pico_brace_of_an_else_if_in_a_split_else_body_stands_at_its_header() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  if( a ){",
+                "    x();",
+                "  }else",
+                "",
+                "  if( iCol==1 ){",
+                "    if( b ){",
+                "      y();",
+                "    }else if( c ){",
+                "      z();",
+                "    }",
+                "  }else{",
+                "    w();",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{   if( a )",
+            "    {   x(); }",
+            "    else",
+            "",
+            "        if( iCol==1 )",
+            "        {   if( b )",
+            "            {   y(); }",
+            "            else if( c )",
+            "            {   z(); } }",
+            "        else",
+            "        {   w(); } }",
+        ),
+    );
+}

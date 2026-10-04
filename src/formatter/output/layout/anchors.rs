@@ -3775,6 +3775,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Attach
                     | BraceStyle::OneTrueBrace
                     | BraceStyle::Horstmann
+                    | BraceStyle::Pico
             )
             || self.options.indent_braces
             || self.options.indent_blocks
