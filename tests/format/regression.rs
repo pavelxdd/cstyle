@@ -6006,3 +6006,13 @@ fn an_added_block_after_a_broken_else_if_in_a_case_takes_its_level() {
         "void f()\n    {\n    switch (s)\n        {\n        case 1:\n            if (t)\n                {\n                if (x)\n                    { y = 1; }\n                else\n                    if (n)\n                        { return (-1); }\n                }\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn an_initializer_brace_stays_off_a_line_it_would_take_past_the_maximum_length() {
+    let input = "static ngx_command_t  ngx_stream_upstream_hash_commands[] =\n{\n    { ngx_string(\"hash\"),\n      0 },\n};\n";
+    check(
+        input,
+        &["--style=google", "--max-code-length=60"],
+        "static ngx_command_t  ngx_stream_upstream_hash_commands[] =\n{\n    {\n        ngx_string(\"hash\"),\n        0\n    },\n};\n",
+    );
+}

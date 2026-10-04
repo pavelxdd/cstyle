@@ -2865,6 +2865,16 @@ impl FormatEngine<'_> {
         if last.trim_start().starts_with('#') {
             return false;
         }
+        // A brace that would take the line past the maximum length stays on
+        // its own.
+        if self.options.max_code_length.is_some_and(|max| {
+            leading_visual_width(last, self.options.tab_width)
+                + last.trim_start().len()
+                + " {".len()
+                > max
+        }) {
+            return false;
+        }
         if matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && last.ends_with('=')
             && matches!(
