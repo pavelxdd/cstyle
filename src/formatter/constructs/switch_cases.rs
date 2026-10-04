@@ -1402,11 +1402,27 @@ impl FormatEngine<'_> {
         let scope_start = self.output.len() - self.output.scoped().len();
         for index in (scope_start..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
+            // A `}` before the line's `{` closes an earlier block.
+            let opens_block = meta.opens > depth;
             depth += meta.closes;
-            if meta.opens > depth {
+            if opens_block {
                 let trimmed = self.output.code_trimmed(index);
                 if trimmed.starts_with("switch ") || trimmed.starts_with("switch(") {
                     return Some(self.output.lead_width(index, tab_width));
+                }
+                // A switch an `else` holds on its line stands at its body.
+                let after_else = trimmed
+                    .strip_prefix('}')
+                    .unwrap_or(trimmed)
+                    .trim_start()
+                    .strip_prefix("else")
+                    .map(str::trim_start);
+                if after_else
+                    .is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
+                {
+                    return Some(
+                        self.output.lead_width(index, tab_width) + self.options.indent_width,
+                    );
                 }
             }
             depth = depth.saturating_sub(meta.opens);

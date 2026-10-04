@@ -1252,3 +1252,33 @@ fn horstmann_indented_cases_resume_the_outer_case_body_after_a_nested_switch_and
         )
     );
 }
+
+#[test]
+fn indented_switches_indent_the_cases_of_a_switch_held_by_an_attached_else() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "int f(int idx)\n{\n  if (idx > 0) {\n    return 1;\n  }\n  else switch (idx) {\n    case 1: return 2;\n    default: return 3;\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "int f(int idx)",
+            "{",
+            "    if (idx > 0) {",
+            "        return 1;",
+            "    } else switch (idx) {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "                return 3;",
+            "        }",
+            "}",
+        )
+    );
+}
