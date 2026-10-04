@@ -2,8 +2,8 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::InlineArrayState;
 use crate::formatter::braces::rewrite::{
-    add_cross_line_statement_braces, following_operator_after_next_word, previous_non_whitespace,
-    remove_cross_line_statement_braces,
+    add_marked_cross_line_statement_braces, following_operator_after_next_word,
+    previous_non_whitespace, remove_cross_line_statement_braces,
 };
 use crate::formatter::braces::{compound_literals, initializers};
 use crate::formatter::constructs::class_declarations::is_split_export_head;
@@ -144,6 +144,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) pointer_run: pointers::PointerRunState,
     pub(crate) preprocessor: preprocessor::PreprocessorState,
     pub(crate) access_modified_braces: HashSet<usize>,
+    /// Closing braces add-braces put after statements.
+    pub(crate) added_closing_braces: HashSet<usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
@@ -225,6 +227,7 @@ impl<'a> FormatEngine<'a> {
             pointer_run: pointers::PointerRunState::default(),
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: HashSet::new(),
+            added_closing_braces: HashSet::new(),
             syntax_roles: SyntaxRoles::new(0),
             tree: SourceTree::default(),
             pending_extern: false,
@@ -330,7 +333,8 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Ratliff
                     | BraceStyle::Lisp
             );
-            added_brace_tokens = add_cross_line_statement_braces(
+            let added_closers;
+            (added_brace_tokens, added_closers) = add_marked_cross_line_statement_braces(
                 tokens,
                 attach_added_braces,
                 matches!(
@@ -339,6 +343,7 @@ impl<'a> FormatEngine<'a> {
                 ),
                 self.options.indent_width,
             );
+            self.added_closing_braces = added_closers;
             added_brace_tokens.as_slice()
         } else {
             tokens

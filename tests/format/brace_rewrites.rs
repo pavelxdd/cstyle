@@ -1822,3 +1822,35 @@ fn kept_block_ends_braceless_body_level_after_it() {
         ),
     );
 }
+
+#[test]
+fn add_braces_counts_the_added_brace_in_the_statement_length() {
+    let mut options = FormatOptions::default();
+    options.add_braces = true;
+    options.max_code_length = Some(109);
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f() {",
+                "    if (x)",
+                "        a();",
+                "    else",
+                "        locfile_locate(curr->locfile, curr->source, \"jq: error: %s/%d is not defined\", curr->symbol, curr->nactuals);",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    if (x) {",
+            "        a();",
+            "    }",
+            "    else {",
+            "        locfile_locate(curr->locfile, curr->source, \"jq: error: %s/%d is not defined\", curr->symbol,",
+            "                       curr->nactuals);",
+            "    }",
+            "}",
+        ),
+    );
+}

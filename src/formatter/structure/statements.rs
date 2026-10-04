@@ -638,31 +638,47 @@ impl Parser<'_> {
     /// Parses statements inside a group of an expression: lambda bodies and
     /// statement expressions.
     fn nested(&mut self, open: usize, close: usize) {
-        if self.is_symbol(open, '{')
-            && !matches!(
-                self.brace_kind(open),
-                Some(BlockKind::Aggregate | BlockKind::Initializer | BlockKind::CompoundLiteral)
-            )
-        {
-            self.items(open + 1, close);
-            return;
-        }
-        let mut position = open + 1;
-        while let Some(index) = self.next(position, close) {
-            position = index + 1;
-            if matches!(self.tokens[index], Token::Symbol('(' | '[' | '{'))
-                && let Some(inner) = self.close_of(index)
-            {
-                // A statement expression: `({ ... })`.
-                if self.is_symbol(open, '(')
-                    && self.is_symbol(index, '{')
-                    && self.next(open + 1, close) == Some(index)
-                {
-                    self.items(index + 1, inner);
-                } else {
-                    self.nested(index, inner);
+        // An explicit stack keeps deeply nested groups off the call stack:
+        // each entry is a group and where its scan resumes.
+        let mut pending = vec![(open, close, None)];
+        'groups: while let Some((open, close, resume)) = pending.pop() {
+            let mut position = match resume {
+                Some(position) => position,
+                None => {
+                    if self.is_symbol(open, '{')
+                        && !matches!(
+                            self.brace_kind(open),
+                            Some(
+                                BlockKind::Aggregate
+                                    | BlockKind::Initializer
+                                    | BlockKind::CompoundLiteral
+                            )
+                        )
+                    {
+                        self.items(open + 1, close);
+                        continue;
+                    }
+                    open + 1
                 }
-                position = inner + 1;
+            };
+            while let Some(index) = self.next(position, close) {
+                position = index + 1;
+                if matches!(self.tokens[index], Token::Symbol('(' | '[' | '{'))
+                    && let Some(inner) = self.close_of(index)
+                {
+                    // A statement expression: `({ ... })`.
+                    if self.is_symbol(open, '(')
+                        && self.is_symbol(index, '{')
+                        && self.next(open + 1, close) == Some(index)
+                    {
+                        self.items(index + 1, inner);
+                    } else {
+                        pending.push((open, close, Some(inner + 1)));
+                        pending.push((index, inner, None));
+                        continue 'groups;
+                    }
+                    position = inner + 1;
+                }
             }
         }
     }

@@ -130,7 +130,10 @@ impl FormatEngine<'_> {
             ')' => self.push_close_paren(next, next_is_adjacent),
             '[' => self.push_open_bracket(next, starts_initializer_designator),
             ']' => self.push_close_bracket(),
-            ';' => self.push_semicolon(next, following_closing_braces),
+            ';' => {
+                let added_brace_follows = self.added_brace_follows(token_index);
+                self.push_semicolon(next, following_closing_braces, added_brace_follows);
+            }
             ',' => self.push_comma(next),
             ':' => self.push_colon(next),
             '?' => self.push_question(next),
@@ -835,14 +838,36 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    fn push_semicolon(&mut self, next: Option<&Token>, following_closing_braces: usize) {
+    /// Whether the token after `index` is a brace add-braces put there,
+    /// which astyle counts in the statement line's length.
+    #[inline(never)]
+    fn added_brace_follows(&self, index: usize) -> bool {
+        if self.added_closing_braces.is_empty() {
+            return false;
+        }
+        (index.saturating_add(1)..self.tree.tokens.len())
+            .find(|&next| {
+                !matches!(
+                    self.tree.tokens[next],
+                    Token::Whitespace(_) | Token::Newline
+                )
+            })
+            .is_some_and(|next| self.added_closing_braces.contains(&next))
+    }
+
+    fn push_semicolon(
+        &mut self,
+        next: Option<&Token>,
+        following_closing_braces: usize,
+        added_brace_follows: bool,
+    ) {
         let suffix_width = if matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
         ) {
             following_closing_braces * 2
         } else {
-            0
+            usize::from(added_brace_follows)
         };
         self.max_length_line.set_suffix_width(suffix_width);
         let closed_lambda_header_indent = self

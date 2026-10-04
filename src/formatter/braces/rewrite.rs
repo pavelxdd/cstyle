@@ -29,6 +29,7 @@ use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+use std::collections::HashSet;
 
 impl FormatEngine<'_> {
     pub(crate) fn try_add_braces_to_statement(
@@ -2052,12 +2053,14 @@ fn is_remove_braces_header(word: &str) -> bool {
     matches!(word, "if" | "else" | "for" | "while")
 }
 
-pub(crate) fn add_cross_line_statement_braces(
+/// Adds braces around braceless statements that span lines, returning the
+/// tokens and the indices of the closing braces it added.
+pub(crate) fn add_marked_cross_line_statement_braces(
     tokens: &[Token],
     attach_added_braces: bool,
     attach_closing_brace: bool,
     comment_gap: usize,
-) -> Vec<Token> {
+) -> (Vec<Token>, HashSet<usize>) {
     let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
     let mut replace: Vec<Option<Token>> = vec![None; tokens.len()];
     // astyle sets the comment after a braced statement an indent past it,
@@ -2161,12 +2164,21 @@ pub(crate) fn add_cross_line_statement_braces(
 
     let mut output =
         Vec::with_capacity(tokens.len() + insert_before.iter().map(Vec::len).sum::<usize>());
+    let mut added_closers = HashSet::new();
+    let mut append_inserted = |output: &mut Vec<Token>, inserted: &mut Vec<Token>| {
+        for token in inserted.drain(..) {
+            if matches!(token, Token::Symbol('}')) {
+                added_closers.insert(output.len());
+            }
+            output.push(token);
+        }
+    };
     for (index, token) in tokens.iter().cloned().enumerate() {
-        output.append(&mut insert_before[index]);
+        append_inserted(&mut output, &mut insert_before[index]);
         output.push(replace[index].take().unwrap_or(token));
     }
-    output.append(&mut insert_before[tokens.len()]);
-    output
+    append_inserted(&mut output, &mut insert_before[tokens.len()]);
+    (output, added_closers)
 }
 
 fn open_brace_attaches_to_header_line(
@@ -3025,7 +3037,7 @@ mod tests {
         );
 
         assert_eq!(
-            add_cross_line_statement_braces(&tokens, true, false, 4),
+            add_marked_cross_line_statement_braces(&tokens, true, false, 4).0,
             tokens
         );
     }
