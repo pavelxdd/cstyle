@@ -200,7 +200,11 @@ impl FormatEngine<'_> {
                 // The engine loses levels in an `else` body split off by an
                 // empty line; the tree places its blocks.
                 || sibling.is_none_or(|sibling| Some(sibling) == block)
-                    && self.tree.statements.in_else_body_after_blank_line(first))
+                    && self.tree.statements.in_else_body_after_blank_line(first)
+                // A block's first statement stands at its brace.
+                || self.options.brace_style != BraceStyle::Ratliff
+                    && sibling.is_none()
+                    && self.tree.statements.block_opening(first).is_some())
         {
             layout.exact_indent_spaces = block;
             return layout;

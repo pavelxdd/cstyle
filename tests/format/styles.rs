@@ -1107,3 +1107,53 @@ fn ratliff_closer_of_a_dangling_else_block_stands_past_the_else() {
         ),
     );
 }
+
+#[test]
+fn whitesmith_first_statement_of_a_block_in_a_labeled_case_block_stands_at_its_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid Whitesmith style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  switch( op ){",
+                "    case A: lab: {",
+                "      int j = 1;",
+                "      for(j=1; j<n; j++){",
+                "        if( a ){",
+                "          x();",
+                "        }",
+                "      }",
+                "      break;",
+                "    }",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "    {",
+            "    switch( op )",
+            "        {",
+            "        case A:",
+            "lab:",
+            "                {",
+            "                int j = 1;",
+            "                for(j=1; j<n; j++)",
+            "                    {",
+            "                    if( a )",
+            "                        {",
+            "                        x();",
+            "                        }",
+            "                    }",
+            "                break;",
+            "                }",
+            "        }",
+            "    }",
+        ),
+    );
+}
