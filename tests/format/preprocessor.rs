@@ -3896,3 +3896,50 @@ fn escaped_line_comment_in_define_continues_at_top_level_column() {
         "#define VALUE alpha + \\\n beta // comment \\\ncontinued\nint value;\n",
     );
 }
+
+#[test]
+fn define_with_continued_parameters_indents_no_body_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=gnu".to_owned(),
+            "--indent-preproc-define".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define X(a, \\",
+                "    b) do { \\",
+                "    if (a) { \\",
+                "        y(); \\",
+                "    } \\",
+                "} while (0)",
+                "",
+                "#define Z(a, \\",
+                "    b) \\",
+                "    if (a) { \\",
+                "        y(); \\",
+                "    }",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define X(a, \\",
+            "          b) do { \\",
+            "        if (a) { \\",
+            "                y(); \\",
+            "            } \\",
+            "    } while (0)",
+            "",
+            "#define Z(a, \\",
+            "          b) \\",
+            "if (a) { \\",
+            "        y(); \\",
+            "    }",
+        ),
+    );
+}

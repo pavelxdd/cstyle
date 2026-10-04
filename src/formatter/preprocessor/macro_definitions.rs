@@ -772,8 +772,12 @@ impl FormatEngine<'_> {
         let first_line = format!("{define_prefix}{}", first.trim_start());
         self.adjust_and_publish_line(first_line.clone());
 
+        // astyle indents no body past a `#define` whose parameter list
+        // continues on the next line.
         let body_level = define_base
-            + if define_base > 0 && self.options.indent_preproc_block {
+            + if define_base > 0 && self.options.indent_preproc_block
+                || open_parens_after(0, first) > 0
+            {
                 0
             } else {
                 1
@@ -930,6 +934,8 @@ impl FormatEngine<'_> {
                     capped_define_continuation(column, first_indent, first_indent, self.options)
                 });
         let mut open_parens = 0isize;
+        // The parameters a `#define` line leaves open, which its body follows.
+        let mut open_parameters = open_parens_after(0, first);
         // The parens open across the rows, for rows that close inner ones.
         let mut paren_anchors = Vec::new();
         let mut in_comment = false;
@@ -971,7 +977,17 @@ impl FormatEngine<'_> {
                 continue;
             }
 
-            let mut info = scan_define_body_line(content);
+            // The replacement starts after the row closing the parameters.
+            let parameters_before = open_parameters;
+            let closes_parameters = open_parameters > 0 && {
+                open_parameters = open_parens_after(open_parameters, content);
+                open_parameters == 0
+            };
+            let mut info = scan_define_body_line(if closes_parameters {
+                parameters_tail(parameters_before, content)
+            } else {
+                content
+            });
             info.semicolon_ends_statement &= open_parens + info.paren_balance <= 0;
             let starts_with_open = content.starts_with('{');
             // A `{` ending the condition of a header opens the header's block.
@@ -1094,10 +1110,7 @@ impl FormatEngine<'_> {
                 == MinConditionalIndent::Zero
                 && source_indent > 0
                 && (content.starts_with('?')
-                    || (content.starts_with(':') && !content.starts_with("::")))
-                || info.leading_close
-                    && content == "}"
-                    && source_indent > structural_level * self.options.indent_width;
+                    || (content.starts_with(':') && !content.starts_with("::")));
             let prefix = if keep_source_indent {
                 self.options
                     .continuation_indent_prefix(prefix_structural_level, source_indent)
@@ -1167,7 +1180,9 @@ impl FormatEngine<'_> {
             }
 
             let line_open_paren = !unmatched_open_paren_columns(&emitted).is_empty();
-            continuation_column = if starts_with_assignment && info.opens > info.closes {
+            continuation_column = if closes_parameters {
+                None
+            } else if starts_with_assignment && info.opens > info.closes {
                 emitted.find('{').map(|column| {
                     visual_width_from(&emitted[..column + 1], 0, self.options.tab_width) + 1
                 })
@@ -1228,6 +1243,25 @@ impl FormatEngine<'_> {
             };
         }
     }
+}
+
+/// The text after the parenthesis that closes `open` continued parameter
+/// parentheses.
+fn parameters_tail(open: isize, text: &str) -> &str {
+    let mut balance = open;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '(' => balance += 1,
+            ')' => {
+                balance -= 1;
+                if balance == 0 {
+                    return text[index + 1..].trim_start();
+                }
+            }
+            _ => {}
+        }
+    }
+    text
 }
 
 /// The parentheses left open after a define body row, starting from
