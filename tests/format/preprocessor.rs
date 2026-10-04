@@ -4191,3 +4191,36 @@ fn a_paren_in_a_block_comment_row_leaves_a_split_else_body_alone() {
         ),
     );
 }
+
+#[test]
+fn file_scope_block_in_parens_indents_its_lines_by_the_block() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_block = true;
+    options.indent_preproc_conditional = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int g(struct a *data,",
+                "#ifdef D",
+                "      bool e,",
+                "#endif",
+                "      unsigned char *rnd)",
+                "{",
+                "    return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int g(struct a *data,",
+            "#ifdef D",
+            "    bool e,",
+            "#endif",
+            "      unsigned char *rnd)",
+            "{",
+            "    return 0;",
+            "}",
+        ),
+    );
+}

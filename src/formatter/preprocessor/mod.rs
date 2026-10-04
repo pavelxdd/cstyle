@@ -23,6 +23,11 @@ pub(crate) struct PreprocessorState {
     /// The statement continuation each open conditional set aside, which
     /// its `#endif` resumes.
     pub(crate) suspended_continuations: Vec<Option<usize>>,
+    /// Whether each open conditional is a file scope block indenting the
+    /// lines of a paren group it opened in.
+    pub(crate) group_blocks: Vec<bool>,
+    /// Output lines such blocks indented.
+    pub(crate) group_block_rows: Vec<usize>,
     pub(crate) indentable_blocks: VecDeque<bool>,
     pub(crate) split_else: PreprocessorSplitElseState,
     pub(crate) may_have_preprocessor: bool,
@@ -759,7 +764,7 @@ impl FormatEngine<'_> {
                 spaces: self.token_input.token_source_line_indent,
             })
         } else {
-            self.preprocessor_line_indent(part, part_is_define, index)
+            self.preprocessor_line_indent(part, part_is_define, index, opening_indentable)
         };
         let indented_continuation = index > 0 && indent.is_some();
         let output_line = if let Some(indent) = indent {
@@ -853,6 +858,7 @@ impl FormatEngine<'_> {
         line: &str,
         is_define: bool,
         define_part_index: usize,
+        opening_indentable: Option<bool>,
     ) -> Option<PreprocessorLineIndent> {
         if self.options.indent_preproc_define && is_define {
             let continuation = if define_part_index == 0 {
@@ -906,6 +912,14 @@ impl FormatEngine<'_> {
         if self.options.indent_preproc_block && is_conditional_preprocessor(directive) {
             match directive {
                 "if" | "ifdef" | "ifndef" => {
+                    // A file scope block opening in parens stands at the
+                    // margin.
+                    if self.layout.indentation.indent() == 0
+                        && self.layout.nesting.paren_depth > 0
+                        && opening_indentable == Some(true)
+                    {
+                        return Some(PreprocessorLineIndent::Level(0));
+                    }
                     if self.preprocessor.indented_block_stack.last() == Some(&true) {
                         return Some(PreprocessorLineIndent::Level(
                             self.layout.indentation.indent(),
@@ -1105,10 +1119,12 @@ impl FormatEngine<'_> {
                 let should_indent_block =
                     opening_indentable.unwrap_or_else(|| self.should_indent_preprocessor_block());
                 let mut suspended = None;
+                let mut group_block = false;
                 if should_indent_block {
                     // At file scope astyle indents a block's lines by the
                     // block alone, a statement they continue or not.
                     let file_scope = self.layout.indentation.indent() == 0;
+                    group_block = file_scope && self.layout.nesting.paren_depth > 0;
                     self.layout.indentation.enter_block();
                     if file_scope {
                         suspended = self
@@ -1139,6 +1155,7 @@ impl FormatEngine<'_> {
                     .indented_block_stack
                     .push(should_indent_block);
                 self.preprocessor.suspended_continuations.push(suspended);
+                self.preprocessor.group_blocks.push(group_block);
                 self.preprocessor.branch_stack.push(self.branch_snapshot());
             }
             Some("else" | "elif" | "elifdef" | "elifndef") => {
@@ -1175,6 +1192,7 @@ impl FormatEngine<'_> {
                 }
                 self.layout.indentation.pop_preprocessor_indent();
                 let suspended = self.preprocessor.suspended_continuations.pop().flatten();
+                self.preprocessor.group_blocks.pop();
                 if self.preprocessor.indented_block_stack.pop() == Some(true) {
                     self.layout.indentation.exit_block();
                     if suspended.is_some() {

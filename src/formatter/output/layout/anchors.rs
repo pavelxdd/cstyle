@@ -1980,7 +1980,10 @@ impl FormatEngine<'_> {
         let group = groups.enclosing(first)?;
         let previous_line = self.output.line_with_token(previous)?;
         let previous_first = self.output.line_tokens(previous_line)?.first;
-        let column = if groups.enclosing(previous_first) == Some(group) {
+        // A row a file scope block indented stands apart from the group.
+        let column = if groups.enclosing(previous_first) == Some(group)
+            && !self.preprocessor.group_block_rows.contains(&previous_line)
+        {
             self.output
                 .lead_width(previous_line, self.options.tab_width)
         } else if self.options.indent_after_parens {
@@ -2024,7 +2027,10 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.line_with_token(previous)?;
         let previous_first = self.output.line_tokens(previous_line)?.first;
-        let column = if groups.enclosing(previous_first) == Some(group) {
+        // A row a file scope block indented stands apart from the group.
+        let column = if groups.enclosing(previous_first) == Some(group)
+            && !self.preprocessor.group_block_rows.contains(&previous_line)
+        {
             self.output
                 .lead_width(previous_line, self.options.tab_width)
         } else if self.options.indent_after_parens {

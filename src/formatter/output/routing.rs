@@ -107,7 +107,15 @@ impl FormatEngine<'_> {
             self.deferred_post_emission_layout(line, &layout, restore_objc_message_align);
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
-        let layout = self.apply_tree_anchor_layout(line, layout);
+        let mut layout = self.apply_tree_anchor_layout(line, layout);
+        if self.preprocessor.group_blocks.contains(&true)
+            && layout.line_kind == LineKind::Normal
+            && !line.trim_start().starts_with('#')
+        {
+            layout.exact_indent_spaces =
+                Some(self.layout.indentation.indent() * self.options.indent_width);
+            self.preprocessor.group_block_rows.push(self.output.len());
+        }
         let emitted_indent_spaces = self.publish_formatted_line_layout(line, &layout);
         self.apply_post_emission_state(
             line,
