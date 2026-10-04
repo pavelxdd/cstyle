@@ -923,3 +923,53 @@ fn ratliff_nests_header_in_else_body_after_broken_braced_else_if() {
         ),
     );
 }
+
+#[test]
+fn horstmann_block_after_braceless_broken_else_if_chain_runs_in_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void)",
+                "{",
+                "    for (;;)",
+                "        if (a)",
+                "            x = 1;",
+                "        else if (b) {",
+                "            y();",
+                "            return 2;",
+                "        }",
+                "",
+                "    if (c) {",
+                "        z();",
+                "        w();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void)",
+            "{   for (;;)",
+            "        if (a)",
+            "            x = 1;",
+            "        else",
+            "            if (b)",
+            "            {   y();",
+            "                return 2;",
+            "            }",
+            "",
+            "    if (c)",
+            "    {   z();",
+            "        w();",
+            "    }",
+            "}",
+        ),
+    );
+}
