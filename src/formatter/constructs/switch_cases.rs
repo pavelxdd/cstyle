@@ -1416,6 +1416,26 @@ impl FormatEngine<'_> {
                 continue;
             }
             let code = self.output.code(index);
+            // A label kept after the `}` closing the case block before it.
+            let label = trimmed.trim_start_matches('}').trim_start();
+            if (trimmed.starts_with('}')
+                && (label.starts_with("case ") || label.starts_with("default:")))
+                && closing_indents.is_empty()
+            {
+                // An indented brace stands a level past its label.
+                let brace_extra = usize::from(
+                    self.options.indent_braces
+                        || self.options.brace_style == BraceStyle::Whitesmith,
+                ) * self.options.indent_width;
+                return Some(ActiveCaseLayout {
+                    indent_spaces: self
+                        .output
+                        .lead_width(index, tab_width)
+                        .saturating_sub(brace_extra),
+                    opens_block: false,
+                    statement_block_open: false,
+                });
+            }
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 let indent_spaces = self.output.lead_width(index, tab_width);
                 if !closing_indents
@@ -1784,6 +1804,16 @@ impl FormatEngine<'_> {
         let after_brace = line.trim_start().strip_prefix("} ")?.trim_start();
         if !(starts_header_word(after_brace, "case") || after_brace.starts_with("default:")) {
             return None;
+        }
+        if self.options.indent_switches {
+            // The line stands at the labels, or at an indented brace past
+            // them.
+            let brace_extra = usize::from(
+                self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
+            ) * self.options.indent_width;
+            return self
+                .nearest_open_switch_indent_spaces()
+                .map(|switch| switch + self.options.indent_width + brace_extra);
         }
         let case_unindent_depth = self.layout.line_adjuster.total_case_unindent_depth();
         (case_unindent_depth > 0).then_some(

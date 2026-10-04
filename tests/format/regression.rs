@@ -5968,3 +5968,27 @@ fn a_star_before_a_declarator_group_moves_its_gap_or_stays_by_context_with_middl
         "struct T {\n    struct S\t* (*fp)(int);\n};\nvoid f()\n{\n    struct S\t*(*gp)(int);\n}\nstruct S\t* (*hp)(int);\nvoid k(struct S\t*(*a)(int));\ntypedef int * (*g)(int);\ntypedef int\t* (*h)(int);\nvoid f()\n{\n    int * (*k)(int);\n}\n",
     );
 }
+
+#[test]
+fn a_label_kept_after_a_case_block_closer_opens_its_body_with_allman() {
+    let input = "void f()\n{\n    switch (a) {\n    case 1: {\n        x();\n    } default:\n        not_reached();\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (a)\n    {\n    case 1:\n    {\n        x();\n    } default:\n        not_reached();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_label_kept_after_a_case_block_closer_opens_its_body_with_indented_switches() {
+    let input = "void f()\n{\n    switch (a) {\n    case 1: {\n        x();\n    } default:\n        not_reached();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--indent-switches",
+        ],
+        "void f()\n{\n    switch (a) {\n        case 1: {\n            x();\n        } default:\n            not_reached();\n    }\n}\n",
+    );
+}
