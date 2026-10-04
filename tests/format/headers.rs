@@ -2493,3 +2493,53 @@ fn lisp_breaks_before_control_header_after_statement() {
         "void run() {\n    call();\n    if(alpha) {\n        first(); } }\n",
     );
 }
+
+#[test]
+fn braced_body_after_continued_condition_ignores_call_shape_of_its_tail() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--pad-header".to_owned(),
+            "--min-conditional-indent=0".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void) {",
+                "    switch(t) {",
+                "    case 1:",
+                "        {",
+                "        while (n) {",
+                "            if (a &&",
+                "                (b(l,-2) != L ||",
+                "                 c(l,-2) != e)) d = 0;",
+                "        }",
+                "        }",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void)",
+            "{",
+            "    switch (t) {",
+            "    case 1: {",
+            "        while (n) {",
+            "            if (a &&",
+            "                (b(l,-2) != L ||",
+            "                 c(l,-2) != e)) {",
+            "                d = 0;",
+            "            }",
+            "        }",
+            "    }",
+            "    }",
+            "}",
+        ),
+    );
+}

@@ -1070,8 +1070,11 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let code = previous[..trailing_comment_split_limit(previous)].trim_end();
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        // The tail of a continued condition closes parens it never opened.
+        let closes_outer_paren = code.matches(')').count() > code.matches('(').count();
         (code.ends_with('{')
             && line_starts_call_expression(code.trim_start())
+            && !closes_outer_paren
             && previous_indent < normal_indent * self.options.indent_width)
             .then_some(previous_indent + self.options.indent_width)
     }
