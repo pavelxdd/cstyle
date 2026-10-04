@@ -58,7 +58,7 @@ pub(crate) struct TokenPushContext<'a> {
     pub(crate) token_index: usize,
     pub(crate) starts_initializer_designator: bool,
     pub(crate) inferred_definition_brace: bool,
-    pub(crate) following_closing_braces: usize,
+    pub(crate) following_closer_width: usize,
 }
 
 struct LineSourceColumns {
@@ -671,7 +671,7 @@ impl<'a> FormatEngine<'a> {
             initializers::bracket_starts_initializer_designator(tokens, index, line.end);
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
-        let following_closing_braces = closing_braces_after_semicolon(tokens, index);
+        let following_closer_width = closer_width_after_semicolon(tokens, index);
         TokenPushContext {
             next,
             next_is_adjacent,
@@ -680,7 +680,7 @@ impl<'a> FormatEngine<'a> {
             token_index: index,
             starts_initializer_designator,
             inferred_definition_brace,
-            following_closing_braces,
+            following_closer_width,
         }
     }
 
@@ -1690,7 +1690,7 @@ impl<'a> FormatEngine<'a> {
                     token_index: usize::MAX,
                     starts_initializer_designator: false,
                     inferred_definition_brace: false,
-                    following_closing_braces: 0,
+                    following_closer_width: 0,
                 },
             );
         }
@@ -1724,12 +1724,16 @@ impl<'a> FormatEngine<'a> {
 }
 
 /// Number of `}` tokens that directly follow the `;` at `index`, skipping layout.
-fn closing_braces_after_semicolon(tokens: &[Token], index: usize) -> usize {
+/// The width the closing braces after a semicolon bring to its line where
+/// they attach to it: a space and the brace each, then whatever follows the
+/// last one on its line.
+fn closer_width_after_semicolon(tokens: &[Token], index: usize) -> usize {
     if !matches!(tokens[index], Token::Symbol(';')) {
         return 0;
     }
     let mut cursor = index + 1;
-    let mut count = 0;
+    let mut width = 0;
+    let mut after_last = cursor;
     loop {
         let mut newlines = 0;
         while matches!(
@@ -1743,10 +1747,41 @@ fn closing_braces_after_semicolon(tokens: &[Token], index: usize) -> usize {
         if newlines > 1 || !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
             break;
         }
-        count += 1;
+        width += 2;
         cursor += 1;
+        after_last = cursor;
     }
-    count
+    if width == 0 {
+        return 0;
+    }
+    let mut spaced = false;
+    let tail = &tokens[after_last.min(tokens.len())..];
+    // A header after the braces breaks from them past the space astyle
+    // pads it with.
+    if tail
+        .iter()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+        .is_some_and(|token| {
+            matches!(token, Token::Word(word) if matches!(word.as_str(), "else" | "while" | "catch" | "finally"))
+        })
+    {
+        return width + 1;
+    }
+    for token in tail {
+        match token {
+            Token::Whitespace(_) => spaced = true,
+            Token::Newline | Token::Comment(..) | Token::Symbol('}' | '{') => break,
+            token => {
+                width += usize::from(spaced) + token_text(token).len();
+                spaced = false;
+                // The line may split after a comma of its own.
+                if matches!(token, Token::Symbol(',')) {
+                    break;
+                }
+            }
+        }
+    }
+    width
 }
 
 fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSourceColumns {

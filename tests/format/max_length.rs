@@ -2854,3 +2854,16 @@ fn max_code_length_measures_case_block_run_in_by_one_indent() {
         "void f()\n{   switch (x)\n    {   case SASL_GSSAPI:\n        {   struct kerberos5data *krb5 = Curl_auth_krb5_get(conn);\n            result = 1;\n            break; } } }\n",
     );
 }
+
+#[test]
+fn max_code_length_counts_what_follows_attached_pico_closers() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=pico", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "typedef struct {\n    ngx_flag_t    uninitialized_variable_warn;\n} ngx_http_rewrite_loc_conf_t;\n\nvoid f()\n{\n    if (a) {\n        slots = RedisModule_GetClusterNodeSlotRanges(ctx, nodeid);\n    } else {\n        b();\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "typedef struct\n{   ngx_flag_t\n    uninitialized_variable_warn; } ngx_http_rewrite_loc_conf_t;\n\nvoid f()\n{   if (a)\n    {   slots = RedisModule_GetClusterNodeSlotRanges(ctx,\n                nodeid); }\n    else\n    {   b(); } }\n",
+    );
+}

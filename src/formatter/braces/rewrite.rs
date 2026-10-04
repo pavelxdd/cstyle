@@ -2009,7 +2009,7 @@ impl FormatEngine<'_> {
                     token_index: index,
                     starts_initializer_designator: false,
                     inferred_definition_brace: false,
-                    following_closing_braces: 0,
+                    following_closer_width: 0,
                 },
             );
         }
@@ -2920,7 +2920,7 @@ fn format_one_line_block_tokens(
                     tokens.len(),
                 ),
                 inferred_definition_brace: false,
-                following_closing_braces: 0,
+                following_closer_width: 0,
             },
         );
     }

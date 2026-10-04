@@ -120,7 +120,7 @@ impl FormatEngine<'_> {
             token_index,
             starts_initializer_designator,
             inferred_definition_brace,
-            following_closing_braces,
+            following_closer_width,
             ..
         } = context;
         match symbol {
@@ -132,7 +132,7 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                self.push_semicolon(next, following_closing_braces, added_brace_follows);
+                self.push_semicolon(next, following_closer_width, added_brace_follows);
             }
             ',' => self.push_comma(next),
             ':' => self.push_colon(next),
@@ -858,14 +858,14 @@ impl FormatEngine<'_> {
     fn push_semicolon(
         &mut self,
         next: Option<&Token>,
-        following_closing_braces: usize,
+        following_closer_width: usize,
         added_brace_follows: bool,
     ) {
         let suffix_width = if matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
         ) {
-            following_closing_braces * 2
+            following_closer_width
         } else {
             usize::from(added_brace_follows)
         };
