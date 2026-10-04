@@ -1005,3 +1005,59 @@ fn pico_counts_no_closer_past_an_empty_line_in_a_statement_length() {
         ),
     );
 }
+
+#[test]
+fn ratliff_closer_in_a_split_else_body_stands_past_its_header_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()])
+        .expect("valid Ratliff style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  if( a ){",
+                "    x();",
+                "  }else",
+                "",
+                "  if( iCol==1 ){",
+                "    y();",
+                "  }else if( iCol==2 ){",
+                "    if( b ){",
+                "      y();",
+                "    }else if( c ){",
+                "      z();",
+                "    }",
+                "  }else{",
+                "    w();",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    if( a ) {",
+            "        x();",
+            "        }",
+            "    else",
+            "",
+            "        if( iCol==1 ) {",
+            "            y();",
+            "            }",
+            "        else if( iCol==2 ) {",
+            "            if( b ) {",
+            "                y();",
+            "                }",
+            "            else if( c ) {",
+            "                z();",
+            "                }",
+            "            }",
+            "        else {",
+            "            w();",
+            "            }",
+            "    }",
+        ),
+    );
+}

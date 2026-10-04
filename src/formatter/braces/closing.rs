@@ -954,10 +954,17 @@ impl FormatEngine<'_> {
             frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_some()
         });
         if let Some(frame) = semantic_frame {
-            // An `else` leading its line stands where a broken else-if chain
-            // put it.
-            let header = if starts_header_word(open, "else") {
+            // An `else` or the header leading its line stands where layout
+            // put it, past levels the engine lost.
+            let header = if starts_header_word(open, "else")
+                || frame
+                    .header
+                    .as_deref()
+                    .is_some_and(|header| starts_header_word(open, header))
+            {
                 open_spaces.max(frame.header_indent_column)
+            } else if let Some(header_spaces) = self.current_closing_multiline_header_indent() {
+                header_spaces.max(frame.header_indent_column)
             } else {
                 frame.header_indent_column
             };
