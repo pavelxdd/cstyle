@@ -124,7 +124,14 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
                 Some(EmptyFillSource::Kept) | None => None,
             }
             .unwrap_or(line);
-            let keep = line.is_empty() || line.contains('\u{c}');
+            // A line filled from a state takes that state's lead even when
+            // the lead was empty before lines moved.
+            let filled_from_state = aligned
+                && matches!(
+                    source,
+                    Some(EmptyFillSource::Root | EmptyFillSource::Branch)
+                );
+            let keep = line.is_empty() && !filled_from_state || line.contains('\u{c}');
             refilled.push(if keep { line } else { lead });
             continue;
         }

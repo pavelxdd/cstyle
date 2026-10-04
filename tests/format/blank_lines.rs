@@ -1680,3 +1680,45 @@ fn empty_line_fill_leaves_line_a_define_continues_into_empty() {
         ),
     );
 }
+
+#[test]
+fn lisp_empty_line_after_attached_struct_close_takes_its_lead() {
+    let mut options = FormatOptions::default();
+    options.empty_line_fill = true;
+    options.brace_style = BraceStyle::Lisp;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#ifdef __cplusplus",
+                "extern \"C\" {",
+                "#endif",
+                "",
+                "typedef struct a {",
+                "    int x;",
+                "} a_t;",
+                "",
+                "int k;",
+                "",
+                "#ifdef __cplusplus",
+                "}",
+                "#endif",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#ifdef __cplusplus",
+            "extern \"C\" {",
+            "#endif",
+            "",
+            "typedef struct a {",
+            "    int x; } a_t;",
+            "    ",
+            "int k;",
+            "",
+            "#ifdef __cplusplus",
+            "}",
+            "#endif",
+        ),
+    );
+}
