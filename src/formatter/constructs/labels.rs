@@ -420,7 +420,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut depth = 0usize;
-        for index in (0..self.output.len()).rev() {
+        // A label's block lies within the current top-level construct.
+        let scope_start = self.output.len() - self.output.scoped().len();
+        for index in (scope_start..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
             depth += meta.closes;
             if meta.opens > depth && meta.open_shape == OpenBraceShape::Label {
