@@ -179,6 +179,25 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     if !line.contains(['(', ')', '[', ']']) {
         return (0, Vec::new());
     }
+    thread_local! {
+        static CACHE: std::cell::RefCell<std::collections::HashMap<String, (usize, Vec<usize>)>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+    }
+    if let Some(imbalance) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
+        return imbalance;
+    }
+    let imbalance = scan_line_paren_imbalance(line);
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 4096 {
+            cache.clear();
+        }
+        cache.insert(line.to_owned(), imbalance.clone());
+    });
+    imbalance
+}
+
+fn scan_line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack: Vec<usize> = Vec::new();
     let mut unmatched_closes = 0usize;
@@ -338,6 +357,26 @@ pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     if !line.contains(['(', '[']) {
         return Vec::new();
     }
+    thread_local! {
+        // Layout reads the same recent lines over and over.
+        static CACHE: std::cell::RefCell<std::collections::HashMap<String, Vec<usize>>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+    }
+    if let Some(columns) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
+        return columns;
+    }
+    let columns = scan_unmatched_open_paren_columns(line);
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 4096 {
+            cache.clear();
+        }
+        cache.insert(line.to_owned(), columns.clone());
+    });
+    columns
+}
+
+fn scan_unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     let chars = line.chars().collect::<Vec<_>>();
     let mut stack = Vec::new();
     let mut index = 0;
