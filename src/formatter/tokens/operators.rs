@@ -180,7 +180,13 @@ pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
         let after = &head[open + 1..];
         return Some(open + 1 + after.len() - after.trim_start().len());
     }
-    trailing_binary_operator_column(head)
+    // A ternary's `:` continues under its `?`.
+    trailing_binary_operator_column(head).or_else(|| {
+        let trimmed = head.trim_end();
+        (trimmed.ends_with(':') && !trimmed.ends_with("::"))
+            .then(|| trimmed[open..].rfind('?').map(|at| open + at))
+            .flatten()
+    })
 }
 
 pub(crate) fn head_ends_binary_operator(head: &str) -> bool {

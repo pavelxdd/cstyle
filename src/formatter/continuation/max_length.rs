@@ -19,10 +19,12 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, last_unmatched_open_delimiter, trailing_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
-use crate::formatter::tokens::operators::head_ends_assignment_operator;
+use crate::formatter::tokens::operators::{
+    array_bound_operator_column, head_ends_assignment_operator,
+};
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
@@ -622,6 +624,13 @@ fn continuation_indent_for_split(
     // A label split from the labels before it lines up with them.
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
+    }
+    // An array bound continues under its trailing operator.
+    if last_unmatched_open_delimiter(head)
+        .is_some_and(|(open, at)| open == '[' && !head[..at].contains(']'))
+        && let Some(column) = array_bound_operator_column(head)
+    {
+        return Some(ContinuationIndent::Spaces(base_indent_width + column));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
     if let Some(spaces) = lambda_parameter_continuation_indent(

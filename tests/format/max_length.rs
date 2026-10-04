@@ -2880,3 +2880,16 @@ fn max_code_length_splits_pico_case_labels_between_labels() {
         "void f()\n{   switch (c)\n    {   case 1: case 2: case 3: case 4: case 5:\n        case 6: case 7: case 8: case 9: case 10: case 11:\n        case 12: case 13:\n            x(); } }\n",
     );
 }
+
+#[test]
+fn max_code_length_continues_array_bound_under_its_operator() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=60"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    slot = &ngx_cycle->cache[(size + ngx_pagesize - 1) / ngx_pagesize];\n    clvector[(chainlen < DICT_STATS_VECTLEN) ? chainlen : (DICT_STATS_VECTLEN-1)]++;\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    slot = &ngx_cycle->cache[(size + ngx_pagesize - 1) /\n                                                       ngx_pagesize];\n    clvector[(chainlen < DICT_STATS_VECTLEN) ? chainlen :\n                                             (DICT_STATS_VECTLEN-1)]++;\n}\n",
+    );
+}
