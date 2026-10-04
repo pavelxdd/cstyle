@@ -573,18 +573,38 @@ fn continuation_indent_for_split(
     let head = split.head.as_str();
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
+    // Macro calls the head closes register nothing either.
+    let macro_groups = head.contains('(')
+        && unmatched_open_paren_columns(head).is_empty()
+        && split.tail.starts_with(is_identifier_continue)
+        && head.match_indices('(').all(|(at, _)| {
+            head[..at]
+                .rsplit(|ch: char| !is_identifier_continue(ch))
+                .next()
+                .is_some_and(|word| {
+                    !word.is_empty()
+                        && !matches!(
+                            word,
+                            "if" | "while" | "for" | "switch" | "return" | "sizeof" | "catch"
+                        )
+                })
+        });
     if !following_split
         && head.chars().all(|ch| {
             is_identifier_continue(ch)
                 || ch.is_whitespace()
                 || matches!(ch, '*' | '&' | ':' | '<' | '>')
+                || macro_groups && matches!(ch, '(' | ')' | ',')
         })
-        && head.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>'))
+        && head.ends_with(|ch: char| {
+            is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>') || macro_groups && ch == ')'
+        })
         && !head
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| {
                 matches!(word, "return" | "case" | "goto")
-                    || matches!(word, "struct" | "union" | "class") && !line.contains('(')
+                    || matches!(word, "struct" | "union" | "class")
+                        && (macro_groups || !line.contains('('))
             })
     {
         return Some(ContinuationIndent::Spaces(base_indent_width));

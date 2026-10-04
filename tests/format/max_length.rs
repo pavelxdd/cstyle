@@ -2811,3 +2811,18 @@ fn max_code_length_starts_statement_after_comment_split() {
         "void f()\n{\n    x = 1; /* a long comment that pushes the line past the limit */\n    y = 2;\n    foo(alpha, /* a comment that is long enough to push things over */\n        beta);\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_declaration_after_macro_group_continues_nothing() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr", "--max-code-length=50"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "TSD_ATTR(bool) TLS_MODEL tsd_initialized_long_name_is_here = false;\nvoid f()\n{\n    foo(aaaaaaaaaaaaaaaaaaaaaaaa) bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;\n}\n",
+            &options,
+        ),
+        "TSD_ATTR(bool) TLS_MODEL\ntsd_initialized_long_name_is_here = false;\nvoid f()\n{\n    foo(aaaaaaaaaaaaaaaaaaaaaaaa)\n    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;\n}\n",
+    );
+}
