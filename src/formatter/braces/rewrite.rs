@@ -154,9 +154,10 @@ impl FormatEngine<'_> {
                 }
                 // A case body sets its own floor under a level.
                 if self.layout.line_adjuster.switch_depth() > 0 {
-                    self.layout
-                        .continuation_indent
-                        .set_next_line_spaces(block_indent * self.options.indent_width);
+                    // Spaces take no level a broken else-if adds; count it.
+                    self.layout.continuation_indent.set_next_line_spaces(
+                        (block_indent + self.else_if_break_extra()) * self.options.indent_width,
+                    );
                 } else {
                     self.layout
                         .continuation_indent

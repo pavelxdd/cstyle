@@ -2115,7 +2115,7 @@ impl FormatEngine<'_> {
     }
 
     /// The levels that else-if chains broken before their `if` add.
-    fn else_if_break_extra(&self) -> usize {
+    pub(crate) fn else_if_break_extra(&self) -> usize {
         if self.options.no_indent_if_after_else {
             0
         } else {

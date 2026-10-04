@@ -5992,3 +5992,17 @@ fn a_label_kept_after_a_case_block_closer_opens_its_body_with_indented_switches(
         "void f()\n{\n    switch (a) {\n        case 1: {\n            x();\n        } default:\n            not_reached();\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_added_block_after_a_broken_else_if_in_a_case_takes_its_level() {
+    let input = "void f()\n{\n    switch (s) {\n    case 1:\n        if (t) {\n            if (x)\n                y = 1;\n            else if (n)\n                return (-1);\n        }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--break-elseifs",
+            "--add-one-line-braces",
+        ],
+        "void f()\n    {\n    switch (s)\n        {\n        case 1:\n            if (t)\n                {\n                if (x)\n                    { y = 1; }\n                else\n                    if (n)\n                        { return (-1); }\n                }\n            break;\n        }\n    }\n",
+    );
+}
