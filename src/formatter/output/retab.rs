@@ -181,8 +181,19 @@ impl FormatEngine<'_> {
     /// opened on line `directive` belongs to: a statement row indents in
     /// tabs, and the rows continuing it align past those in spaces.
     fn macro_row_statement_width(&self, directive: usize, index: usize) -> usize {
-        let mut statement = directive + 1;
-        let mut depth = 0isize;
+        // Parens the replacement on the directive line leaves open make its
+        // rows continue that line's statement.
+        let open_on_directive = define_replacement(self.output.code(directive))
+            .filter(|text| text.matches('{').count() <= text.matches('}').count())
+            .map_or(0, |text| {
+                text.matches('(').count() as isize - text.matches(')').count() as isize
+            });
+        let mut statement = if open_on_directive > 0 {
+            directive
+        } else {
+            directive + 1
+        };
+        let mut depth = open_on_directive.max(0);
         for row in directive + 1..index {
             let line = &self.output[row];
             let code = line[..trailing_comment_split_limit(line)].trim_end();
@@ -197,6 +208,9 @@ impl FormatEngine<'_> {
             if depth <= 0 && (code.is_empty() || code.ends_with([';', '}']) || opens_block) {
                 statement = row + 1;
             }
+        }
+        if statement == directive {
+            return self.output.lead_width(directive, self.options.tab_width);
         }
         let width = self.output.lead_width(statement, self.options.tab_width);
         let directive_code = self.output.code(directive);
@@ -481,4 +495,21 @@ fn ends_label(code: &str) -> bool {
     label.starts_with("case ")
         || label == "default"
         || !label.is_empty() && label.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
+}
+
+/// The replacement text on a `#define` line: what follows the macro's name
+/// and parameters.
+fn define_replacement(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix('#')?.trim_start();
+    let rest = rest.strip_prefix("define")?;
+    let rest = rest.trim_start();
+    let name_end = rest
+        .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .unwrap_or(rest.len());
+    let rest = &rest[name_end..];
+    if let Some(parameters) = rest.strip_prefix('(') {
+        let close = parameters.find(')')?;
+        return Some(&parameters[close + 1..]);
+    }
+    Some(rest)
 }

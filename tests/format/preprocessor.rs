@@ -4390,3 +4390,16 @@ fn directive_after_a_closed_split_else_chain_body_stands_at_its_statements() {
         ),
     );
 }
+
+#[test]
+fn define_rows_continuing_the_directive_line_align_in_spaces_under_tabs() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=java", "--indent=tab=4", "--indent-preproc-define"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "#define nvalue(o)\tcheck_exp(ttisnumber(o), \\\n\t(ttisinteger(o) ? cast_num(ivalue(o)) : fltvalue(o)))\n#define X(o) ({ \\\n\tfoo(a); \\\n\t})\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "#define nvalue(o)\tcheck_exp(ttisnumber(o), \\\n                              (ttisinteger(o) ? cast_num(ivalue(o)) : fltvalue(o)))\n#define X(o) ({ \\\n\t\tfoo(a); \\\n\t})\n",
+    );
+}
