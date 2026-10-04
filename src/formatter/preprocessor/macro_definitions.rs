@@ -863,7 +863,8 @@ impl FormatEngine<'_> {
             let current = strip_define_backslash(part).0.trim_start();
             let current_starts_assignment =
                 current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
-            if current_starts_assignment {
+            // Inside parens a leading `=` stands at them like any row.
+            if current_starts_assignment && paren_anchors.is_empty() {
                 line_spaces = base_spaces + self.options.indent_width;
             } else if index > 0 {
                 line_spaces = define_row_anchor(&paren_anchors, current).unwrap_or(base_spaces);

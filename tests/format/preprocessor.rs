@@ -4254,3 +4254,37 @@ fn define_ternary_arm_after_a_split_call_resumes_the_arm_column() {
         ),
     );
 }
+
+#[test]
+fn define_expression_row_leading_with_assignment_stands_at_its_paren() {
+    let mut options = FormatOptions::default();
+    options.indent_preproc_define = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "#define F(h) \\",
+                "    ( ((a == b \\",
+                "       ? 1 \\",
+                "       : 0), \\",
+                "      h->tempptr = h->base, \\",
+                "      h->next \\",
+                "      = PTR(h->base, h->next, \\",
+                "            h->mask), \\",
+                "      h->t)",
+            ),
+            &options,
+        ),
+        fixture!(
+            "#define F(h) \\",
+            "    ( ((a == b \\",
+            "        ? 1 \\",
+            "        : 0), \\",
+            "       h->tempptr = h->base, \\",
+            "       h->next \\",
+            "       = PTR(h->base, h->next, \\",
+            "             h->mask), \\",
+            "       h->t)",
+        ),
+    );
+}
