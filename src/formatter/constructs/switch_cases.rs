@@ -1698,6 +1698,14 @@ impl FormatEngine<'_> {
         if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
             return None;
         }
+        let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
+        // Only a case label's block in a switch qualifies; checking that
+        // first spares a walk back through the function.
+        if !matches!(trimmed, "};" | "},")
+            && (case_unindent_depth == 0 || self.layout.line_adjuster.switch_depth() == 0)
+        {
+            return None;
+        }
         let (open_spaces, _, open_trimmed) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
@@ -1705,7 +1713,6 @@ impl FormatEngine<'_> {
             return None;
         }
 
-        let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
         if matches!(trimmed, "};" | "},") {
             // Ratliff closes a block at its body, as indented cases do.
             let body = (usize::from(self.options.brace_style == BraceStyle::Ratliff)
