@@ -1623,3 +1623,56 @@ fn statement_after_a_kept_statement_line_in_a_nested_case_block_stands_with_it()
         ),
     );
 }
+
+#[test]
+fn nested_case_block_after_several_labels_on_a_line_stands_a_level_in() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::OneTrueBrace;
+    options.attach_struct = true;
+    options.attach_enum = true;
+    options.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void g()",
+                "{",
+                "    while (true) {",
+                "        switch (*f) {",
+                "        case 1: {",
+                "            switch (*f) {",
+                "            case 5: case 6: {",
+                "                int u;",
+                "                x();",
+                "                break;",
+                "            }",
+                "            }",
+                "            break;",
+                "        }",
+                "        }",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void g()",
+            "{",
+            "    while (true) {",
+            "        switch (*f) {",
+            "        case 1: {",
+            "            switch (*f) {",
+            "            case 5: case 6: {",
+            "                int u;",
+            "                x();",
+            "                break;",
+            "            }",
+            "            }",
+            "            break;",
+            "        }",
+            "        }",
+            "    }",
+            "}",
+        ),
+    );
+}

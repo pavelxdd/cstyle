@@ -4812,7 +4812,13 @@ impl FormatEngine<'_> {
             })
         })?;
         let line = self.output.line_with_token(label)?;
-        if self.output.line_tokens(line)?.first != label
+        // Labels sharing the line all lead to the block.
+        let line_first = self.output.line_tokens(line)?.first;
+        if !(line_first == label
+            || matches!(&tokens[line_first], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+                && !tokens[line_first..label]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol(';' | '{' | '}'))))
             || self.output.line_with_token(open) != Some(line)
         {
             return None;
