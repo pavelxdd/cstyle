@@ -1892,3 +1892,28 @@ fn space_before_a_broken_control_brace_counts_in_the_header_length() {
         ),
     );
 }
+
+#[test]
+fn space_before_a_broken_function_brace_counts_in_the_head_length() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Allman;
+    options.max_code_length = Some(59);
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static int block_bind_subblock_inner(int any, block binder) {",
+                "  return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "static int block_bind_subblock_inner(int any,",
+            "                                     block binder)",
+            "{",
+            "    return 0;",
+            "}",
+        ),
+    );
+}

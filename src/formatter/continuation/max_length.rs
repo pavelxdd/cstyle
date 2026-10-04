@@ -117,9 +117,8 @@ impl FormatEngine<'_> {
             configured_indent_width.max(leading_visual_width(&adjusted, self.options.tab_width));
         let brace_row_layout =
             self.max_length_brace_row_layout(line, structural_level, base_indent_width, width);
-        // The space before a control block's brace the source attached to
-        // the line counts in its length though the brace moves to a line of
-        // its own.
+        // The space before a brace the source attached to the line counts
+        // in its length though the brace moves to a line of its own.
         let broken_attached_brace = !line.trim_end().ends_with('{')
             && self.output.pending_tokens().is_some_and(|span| {
                 matches!(
@@ -132,7 +131,12 @@ impl FormatEngine<'_> {
                     .tree
                     .groups
                     .opened_at(span.last + 2)
-                    .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Control))
+                    .is_some_and(|group| {
+                        matches!(
+                            self.tree.blocks.kind(group),
+                            Some(BlockKind::Control | BlockKind::FunctionBody)
+                        )
+                    })
             });
         let first_width = brace_row_layout.first_width;
         let suffix_width = if line.trim_end().ends_with(';') {
