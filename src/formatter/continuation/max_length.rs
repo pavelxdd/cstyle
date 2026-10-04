@@ -177,8 +177,12 @@ impl FormatEngine<'_> {
         {
             next_indent = ContinuationIndent::Spaces(floor);
         }
-        let inline_body_indent_extra = max_length_inline_case_body_indent_extra(self.options, line)
-            .or_else(|| max_length_inline_access_body_indent_extra(self.options, line));
+        let inline_body_indent_extra = (!splits_before_label(&split))
+            .then(|| {
+                max_length_inline_case_body_indent_extra(self.options, line)
+                    .or_else(|| max_length_inline_access_body_indent_extra(self.options, line))
+            })
+            .flatten();
         if ends_statement_before_comment(&split.head) {
             next_indent = indent;
         }
@@ -551,6 +555,14 @@ struct SplitIndentInputs {
     break_lambda_parameters: bool,
 }
 
+fn splits_before_label(split: &SplitResult) -> bool {
+    split.head.trim_end().ends_with(':')
+        && ["case", "default"].into_iter().any(|word| {
+            split.tail.starts_with(word)
+                && !split.tail[word.len()..].starts_with(is_identifier_continue)
+        })
+}
+
 fn continuation_indent_for_split(
     line: &str,
     split: &SplitResult,
@@ -605,6 +617,10 @@ fn continuation_indent_for_split(
                         && (macro_groups || !line.contains('('))
             })
     {
+        return Some(ContinuationIndent::Spaces(base_indent_width));
+    }
+    // A label split from the labels before it lines up with them.
+    if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
@@ -1481,9 +1497,32 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
     // A line closing a block it did not open lies in a one-line block.
     let mut unbroken_depth = unopened_closing_braces(line);
     let mut clear_after_brace = false;
+    // A case label registers no points up to its colon.
+    let mut in_case = false;
     while index < bytes.len() {
         let byte = bytes[index];
         let mut end = index + 1;
+        let case_points = (fit, pending);
+        let mut in_label = in_case;
+        if quote.is_none() && !in_comment {
+            if in_case && byte == b':' && peek(index + 1) != b':' {
+                in_case = false;
+            } else if !in_case
+                && matches!(previous_non_space, b' ' | b'{' | b':' | b';' | b'}')
+                && ["case", "default"].into_iter().any(|word| {
+                    line[index..].starts_with(word)
+                        && !index
+                            .checked_sub(1)
+                            .is_some_and(|before| name_char(bytes[before]))
+                        && !bytes
+                            .get(index + word.len())
+                            .is_some_and(|after| name_char(*after))
+                })
+            {
+                in_case = true;
+                in_label = true;
+            }
+        }
         // The brace itself may still split; what follows it drops the points.
         if std::mem::take(&mut clear_after_brace) && !(byte == b'}' && unbroken_depth == 1) {
             fit = [0; 5];
@@ -1650,6 +1689,9 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             if !matches!(byte, b' ' | b'\t') {
                 previous_non_space = byte;
             }
+        }
+        if in_label {
+            (fit, pending) = case_points;
         }
         if end > width {
             let split = astyle_find_split_point(&fit, &pending, width, end, rules.offset, || {

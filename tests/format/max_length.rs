@@ -2867,3 +2867,16 @@ fn max_code_length_counts_what_follows_attached_pico_closers() {
         "typedef struct\n{   ngx_flag_t\n    uninitialized_variable_warn; } ngx_http_rewrite_loc_conf_t;\n\nvoid f()\n{   if (a)\n    {   slots = RedisModule_GetClusterNodeSlotRanges(ctx,\n                nodeid); }\n    else\n    {   b(); } }\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_pico_case_labels_between_labels() {
+    let mut options = FormatOptions::default();
+    let args = ["--style=pico", "--max-code-length=50"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "void f()\n{\n    switch (c) {\n    case 1: case 2: case 3: case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12: case 13:\n        x();\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{   switch (c)\n    {   case 1: case 2: case 3: case 4: case 5:\n        case 6: case 7: case 8: case 9: case 10: case 11:\n        case 12: case 13:\n            x(); } }\n",
+    );
+}
