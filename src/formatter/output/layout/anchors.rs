@@ -4176,7 +4176,10 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let (group, extra) = if matches!(tokens[first], Token::Symbol('}')) {
-            (groups.closed_at(first)?, 0)
+            // Ratliff closes at the statements.
+            let extra = usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                * self.options.indent_width;
+            (groups.closed_at(first)?, extra)
         } else {
             if !self.tree.statements.starts_block_statement(first) {
                 return None;
