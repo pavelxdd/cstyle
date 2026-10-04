@@ -9353,3 +9353,48 @@ fn force_tab_leaves_rest_of_directive_comment_as_written() {
     );
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn a_typedef_block_leaves_no_continuation_rule_on_later_declarations() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "typedef enum {",
+                "    A",
+                "} k;",
+                "",
+                "struct tool_mime {",
+                "    int kind;",
+                "    struct tool_mime",
+                "        *prev;",
+                "    int b;",
+                "};",
+                "void f() {",
+                "    struct S {",
+                "        int a;",
+                "    } s",
+                "    = {1};",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "typedef enum {",
+            "    A",
+            "} k;",
+            "",
+            "struct tool_mime {",
+            "    int kind;",
+            "    struct tool_mime",
+            "        *prev;",
+            "    int b;",
+            "};",
+            "void f() {",
+            "    struct S {",
+            "        int a;",
+            "    } s",
+            "        = {1};",
+            "}",
+        ),
+    );
+}

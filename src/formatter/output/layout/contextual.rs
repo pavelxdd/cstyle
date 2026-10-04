@@ -23,7 +23,6 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::is_code_token;
-use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -697,10 +696,20 @@ impl FormatEngine<'_> {
             }
             if starts_post_closing_declaration(previous_code) {
                 let closing_indent = leading_visual_width(previous, self.options.tab_width);
+                // The value of a declarator the closing line leaves open
+                // continues it.
+                let assigned_value = line.trim_start().starts_with('=')
+                    && !line.trim_start().starts_with("==")
+                    && !previous_code.ends_with([';', ',']);
                 layout.exact_indent_spaces = Some(
                     self.closed_block_owner_indent()
                         .map_or(closing_indent, |owner| owner.min(closing_indent))
-                        + self.case_unindent_spaces(),
+                        + self.case_unindent_spaces()
+                        + if assigned_value {
+                            self.options.indent_width
+                        } else {
+                            0
+                        },
                 );
             }
         } else if !line.trim_start().starts_with(['}', '#'])
@@ -774,24 +783,6 @@ impl FormatEngine<'_> {
                         + self.options.indent_width,
                 );
             }
-        }
-        if line.trim_start().starts_with([
-            '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]) && !is_comment_line(line.trim_start())
-            // An operand inside brackets or parentheses continues them.
-            && !self
-                .output
-                .pending_tokens()
-                .and_then(|span| self.tree.groups.enclosing(span.first))
-                .is_some_and(|group| {
-                    self.tree.groups.get(group).delimiter != Delimiter::Brace
-                })
-            && (0..self.output.len()).rev().take(8).any(|index| {
-                let previous_code = self.output.code(index);
-                starts_post_closing_declaration(previous_code)
-            })
-        {
-            layout.exact_indent_spaces = Some(self.options.indent_width);
         }
         if line.trim_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
