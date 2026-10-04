@@ -263,7 +263,12 @@ impl FormatEngine<'_> {
             .is_some_and(|header| !matches!(header, "case" | "default"));
         let line_is_broken = self.options.break_one_line_statements
             || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks);
-        if header_appends && (line_is_broken || !self.layout.line_state.is_multi_statement_line) {
+        // A `do` loop's `while` ends the block its line closes.
+        let closes_do_loop = self.block_spacing.active_header.as_deref() == Some("while")
+            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
+        if header_appends
+            && (line_is_broken || closes_do_loop || !self.layout.line_state.is_multi_statement_line)
+        {
             self.block_spacing.append_blank = true;
         }
         self.clear_block_spacing_header();

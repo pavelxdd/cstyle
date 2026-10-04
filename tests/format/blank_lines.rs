@@ -1754,3 +1754,36 @@ fn break_blocks_reads_assembly_lines_and_blocks_as_statements() {
         ),
     );
 }
+
+#[test]
+fn break_blocks_parts_a_do_loop_from_the_statement_after_its_while() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.break_blocks = true;
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(char *p) {",
+                "    do {",
+                "        x();",
+                "        vu >>= 7; } while( vu!=0 );",
+                "    q = 1;",
+                "    y();",
+                "    return 0; }",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(char *p) {",
+            "    do {",
+            "        x();",
+            "        vu >>= 7; }",
+            "    while( vu!=0 );",
+            "",
+            "    q = 1;",
+            "    y();",
+            "    return 0; }",
+        ),
+    );
+}

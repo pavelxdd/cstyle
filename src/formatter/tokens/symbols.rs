@@ -979,6 +979,9 @@ impl FormatEngine<'_> {
                 self.observe_block_spacing_semicolon();
             } else if !matches!(next, Some(Token::Symbol(';' | ')' | '}'))) {
                 self.emit_trailing_source_space_or_ensure();
+                if matches!(next, Some(Token::Newline) | None) {
+                    self.schedule_block_spacing_semicolon();
+                }
             } else {
                 self.trim_current_end();
             }
