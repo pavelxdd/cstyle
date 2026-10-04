@@ -1549,3 +1549,108 @@ fn lisp_breaks_added_block_around_next_line_statement_with_kept_blocks() {
         ),
     );
 }
+
+#[test]
+fn add_one_line_braces_with_broken_headers_keeps_next_line_statement_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--add-one-line-braces".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(int x)",
+                "{",
+                "    if (x)",
+                "        return 1;",
+                "    if (x) return 2;",
+                "    return 0;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(int x)",
+            "{",
+            "    if (x)",
+            "    { return 1; }",
+            "    if (x) {",
+            "        return 2;",
+            "    }",
+            "    return 0;",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn added_block_in_else_chain_of_braceless_body_stays_in_the_body() {
+    for (style, expected) in [
+        (
+            "--style=kr",
+            fixture!(
+                "int f(void)",
+                "{",
+                "    for (i = 0; i < 8; i++)",
+                "        if (a)",
+                "        { return 0; }",
+                "        else if (b) {",
+                "            c();",
+                "            d();",
+                "        } else if (e)",
+                "        { return 1; }",
+                "    return 2;",
+                "}",
+            ),
+        ),
+        (
+            "--style=pico",
+            fixture!(
+                "int f(void)",
+                "{   for (i = 0; i < 8; i++)",
+                "        if (a)",
+                "        {   return 0; }",
+                "        else if (b)",
+                "        {   c();",
+                "            d(); }",
+                "        else if (e)",
+                "        {   return 1; }",
+                "    return 2; }",
+            ),
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--add-one-line-braces".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(
+            format_exact(
+                fixture!(
+                    "int f(void)",
+                    "{",
+                    "    for (i = 0; i < 8; i++)",
+                    "        if (a)",
+                    "            return 0;",
+                    "        else if (b) {",
+                    "            c();",
+                    "            d();",
+                    "        } else if (e)",
+                    "            return 1;",
+                    "    return 2;",
+                    "}",
+                ),
+                &options,
+            ),
+            expected,
+        );
+    }
+}

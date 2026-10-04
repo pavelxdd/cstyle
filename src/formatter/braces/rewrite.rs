@@ -8,6 +8,7 @@ use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::headers::is_header;
+use crate::formatter::constructs::headers::line_is_control_body_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
@@ -130,7 +131,9 @@ impl FormatEngine<'_> {
         // Lisp breaks the block it adds around a statement on its own line.
         let lisp_breaks_added_block = self.options.brace_style == BraceStyle::Lisp
             && token_begins_line(tokens, statement_start);
-        if !self.options.break_one_line_headers
+        // Breaking one-line headers leaves a statement on a line of its own
+        // to the one-line block around it.
+        if (!self.options.break_one_line_headers || token_begins_line(tokens, statement_start))
             && (self.options.add_one_line_braces || !self.options.break_one_line_blocks)
             && !self.options.lisp_add_one_line_braces_breaks_blocks()
             && !lisp_breaks_added_block
@@ -158,12 +161,26 @@ impl FormatEngine<'_> {
                         || vtk_nested,
                 );
                 // The bias already counts the case body level.
-                let block_indent = (self.layout.indentation.indent()
+                let mut block_indent = (self.layout.indentation.indent()
                     + self.case_body_indent_extra(LineKind::Normal))
                 .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
                     + brace_indent_extra;
                 if !follows_comment_line {
                     self.finish_line();
+                    // The header's line holds the level a braceless body
+                    // around it left no trace of.
+                    if let Some(line) = self.output.last() {
+                        let code = line.trim();
+                        let code = code.strip_prefix('}').map_or(code, str::trim_start);
+                        if code.starts_with("else")
+                            && line_is_control_body_header(code)
+                            && self.preprocessor.split_else.extra_levels == 0
+                        {
+                            let level = leading_visual_width(line, self.options.tab_width)
+                                / self.options.indent_width;
+                            block_indent = block_indent.max(level + brace_indent_extra);
+                        }
+                    }
                 }
                 // A case body sets its own floor under a level.
                 if self.layout.line_adjuster.switch_depth() > 0 {
@@ -214,7 +231,7 @@ impl FormatEngine<'_> {
             );
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.pending_braceless_block_bias = None;
+            let header_body_bias = self.layout.pending_braceless_block_bias.take();
             if header_is_do {
                 self.layout.nesting.last_closed_brace_header = Some("do".to_string());
             }
@@ -248,7 +265,10 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             if self.current_is_blank() {
-                if let Some(level) = nested_header_level {
+                // An else-chain goes on in the braceless body holding it.
+                if let Some(level) = nested_header_level.or(header_body_bias
+                    .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
+                {
                     let delta = level.saturating_sub(self.layout.indentation.indent());
                     if delta > 0 {
                         self.layout.indentation.enter_braceless_block(delta);
