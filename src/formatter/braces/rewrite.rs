@@ -130,9 +130,15 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // Lisp breaks the block it adds around a statement on its own line.
+        // Lisp breaks the block it adds around a statement on its own line,
+        // or one a comment follows.
         let lisp_breaks_added_block = self.options.brace_style == BraceStyle::Lisp
-            && token_begins_line(tokens, statement_start);
+            && (token_begins_line(tokens, statement_start)
+                || self.options.break_one_line_blocks
+                    && tokens[semicolon + 1..]
+                        .iter()
+                        .find(|token| !matches!(token, Token::Whitespace(_)))
+                        .is_some_and(|token| matches!(token, Token::Comment(..))));
         // Breaking one-line headers leaves a statement on a line of its own
         // to the one-line block around it.
         if (!self.options.break_one_line_headers || token_begins_line(tokens, statement_start))

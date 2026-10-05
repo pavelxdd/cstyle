@@ -1930,3 +1930,30 @@ fn remove_braces_keeps_a_brace_row_led_by_a_comment() {
         "int f()\n{\n    if (x)   /* c */\n        return 0;\n    if (x) {\n        /* c */\n        return 0;\n    }\n}\n",
     );
 }
+
+#[test]
+fn lisp_added_braces_close_before_a_trailing_comment_of_a_statement_on_its_header_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--add-braces".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    if (y) return 0;\n    if (y) return 0;  /* put */\n    if (z) return 1; // line\n    g();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    if (y) {",
+            "        return 0; }",
+            "    if (y) {",
+            "        return 0; }  /* put */",
+            "    if (z) {",
+            "        return 1; } // line",
+            "    g(); }",
+        )
+    );
+}
