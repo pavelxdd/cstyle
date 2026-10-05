@@ -232,10 +232,21 @@ impl FormatEngine<'_> {
             block_tokens.extend_from_slice(&tokens[statement_start..=semicolon]);
             block_tokens.push(Token::Whitespace(" ".to_string()));
             block_tokens.push(Token::Symbol('}'));
+            // A block one-line braces add takes the gap the statement had
+            // after its header.
+            let header_gap = statement_start
+                .checked_sub(1)
+                .filter(|_| self.options.add_one_line_braces && !statement_starts_line)
+                .and_then(|before| match &tokens[before] {
+                    Token::Whitespace(gap) if gap.len() > 1 || gap.contains('\t') => {
+                        Some(gap.clone())
+                    }
+                    _ => None,
+                });
             self.push_attached_one_line_block(
                 &block_tokens,
                 BraceType::Command,
-                None::<&str>,
+                header_gap.as_deref(),
                 None::<&str>,
                 false,
                 None,

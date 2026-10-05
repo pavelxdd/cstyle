@@ -1957,3 +1957,29 @@ fn lisp_added_braces_close_before_a_trailing_comment_of_a_statement_on_its_heade
         )
     );
 }
+
+#[test]
+fn one_line_braces_keep_the_gap_a_statement_had_after_its_header() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--add-one-line-braces".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    if (a)  return;\n    if (b)   x = 1;\n    if (c)\treturn;\n    while (d) x();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)  { return; }",
+            "    if (b)   { x = 1; }",
+            "    if (c)\t{ return; }",
+            "    while (d) { x(); }",
+            "}",
+        )
+    );
+}
