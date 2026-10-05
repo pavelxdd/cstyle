@@ -932,8 +932,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut question_indent = None;
-        for raw in self.output.scoped().iter().rev().take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(12) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             if code.contains('?') {
                 question_indent = Some(leading_visual_width(raw, self.options.tab_width));
             }
@@ -967,8 +968,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));
-        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -1006,8 +1008,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));
-        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -1038,8 +1041,8 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with('(') {
             return None;
         }
-        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -1166,8 +1169,9 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let mut candidate_indent = leading_visual_width(previous, tab_width);
         let mut saw_question = previous.contains('?');
-        for line in self.output.scoped().iter().rev().skip(1) {
-            let code = self.output.code_of(line).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1) {
+            let line = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
                 continue;
@@ -1554,8 +1558,8 @@ impl FormatEngine<'_> {
     }
 
     fn previous_statement_is_braceless_ternary(&self) -> bool {
-        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
                 continue;
@@ -1671,8 +1675,9 @@ impl FormatEngine<'_> {
     }
 
     fn parenthesized_logical_operand_indent_after_call_tail(&self) -> Option<usize> {
-        for previous in self.output.scoped().iter().rev().skip(1).take(8) {
-            let code = self.output.code_of(previous).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
+            let previous = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

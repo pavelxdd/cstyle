@@ -5,6 +5,7 @@ use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::constructs::headers::is_braceless_header_line;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::index_hash::IndexSet;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
@@ -1023,7 +1024,7 @@ impl FormatEngine<'_> {
                 // Nested groups closed before the row hold no opener of it.
                 let mut depth = 0usize;
                 for (index, previous) in self.output.iter().enumerate().rev() {
-                    let code = self.output.code_of(previous).trim_end();
+                    let code = self.output.code_before_comment(index).trim_end();
                     if depth == 0
                         && code.ends_with('{')
                         && self.output_line_opens_initializer(index, code)
@@ -1286,7 +1287,7 @@ pub(crate) struct InlineArrayState {
     pub(crate) frames: Vec<InlineArrayFrame>,
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(super) aggregate_braces: Vec<bool>,
-    pub(crate) nested_brace_arrays: std::collections::HashSet<usize>,
+    pub(crate) nested_brace_arrays: IndexSet<usize>,
 }
 
 pub(crate) fn initializer_brace_line_comment_gap(

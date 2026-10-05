@@ -2,30 +2,30 @@
 
 use super::blocks::{BlockKind, Blocks, is_code_token, next_code_token};
 use super::groups::Groups;
+use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::text::line_scan::preprocessor_directive;
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Statements {
     /// `if` token of each `else` token, by token index.
-    else_ifs: HashMap<usize, usize>,
+    else_ifs: IndexMap<usize, usize>,
     /// Keyword of the control statement whose braceless body starts at a
     /// token, by the body's first token.
-    braceless_headers: HashMap<usize, usize>,
+    braceless_headers: IndexMap<usize, usize>,
     /// Control keyword whose header ends the first branch of a conditional
     /// group, by the `{` after the group that astyle reads as its body.
-    branch_header_blocks: HashMap<usize, usize>,
+    branch_header_blocks: IndexMap<usize, usize>,
     /// First token of the previous statement in the same block, by a
     /// statement's first token: labels are skipped, and a statement after
     /// one without its `;` (a macro call) has none.
-    previous_siblings: HashMap<usize, usize>,
+    previous_siblings: IndexMap<usize, usize>,
     /// The `{` of the block that a statement starts, by the statement's
     /// first token.
-    block_openings: HashMap<usize, usize>,
+    block_openings: IndexMap<usize, usize>,
     /// First tokens of the statements and labels in blocks.
-    block_statements: HashSet<usize>,
+    block_statements: IndexSet<usize>,
     /// Bodies of `else` keywords separated from them by a blank line.
     split_else_bodies: Vec<ElseBody>,
 }
@@ -49,12 +49,12 @@ impl Statements {
             tokens,
             groups,
             blocks,
-            else_ifs: HashMap::new(),
-            braceless_headers: HashMap::new(),
-            branch_header_blocks: HashMap::new(),
-            previous_siblings: HashMap::new(),
-            block_openings: HashMap::new(),
-            block_statements: HashSet::new(),
+            else_ifs: IndexMap::default(),
+            braceless_headers: IndexMap::default(),
+            branch_header_blocks: IndexMap::default(),
+            previous_siblings: IndexMap::default(),
+            block_openings: IndexMap::default(),
+            block_statements: IndexSet::default(),
             else_bodies: Vec::new(),
             unterminated: false,
         };
@@ -176,12 +176,12 @@ struct Parser<'a> {
     tokens: &'a [Token],
     groups: &'a Groups,
     blocks: &'a Blocks,
-    else_ifs: HashMap<usize, usize>,
-    braceless_headers: HashMap<usize, usize>,
-    branch_header_blocks: HashMap<usize, usize>,
-    previous_siblings: HashMap<usize, usize>,
-    block_openings: HashMap<usize, usize>,
-    block_statements: HashSet<usize>,
+    else_ifs: IndexMap<usize, usize>,
+    braceless_headers: IndexMap<usize, usize>,
+    branch_header_blocks: IndexMap<usize, usize>,
+    previous_siblings: IndexMap<usize, usize>,
+    block_openings: IndexMap<usize, usize>,
+    block_statements: IndexSet<usize>,
     else_bodies: Vec<ElseBody>,
     /// Whether the last expression statement ended at a keyword, not `;`.
     unterminated: bool,

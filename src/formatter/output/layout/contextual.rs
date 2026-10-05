@@ -306,8 +306,9 @@ impl FormatEngine<'_> {
                 && self.constructor_initializer_base_indent_spaces().is_none()
                 && !current.starts_with(['#', '(', ')', '{', '}'])
             {
-                for raw in self.output.scoped().iter().rev().skip(1).take(16) {
-                    let code = self.output.code_of(raw).trim_end();
+                for scan_index in self.output.scoped_range().rev().skip(1).take(16) {
+                    let raw = &self.output[scan_index];
+                    let code = self.output.code_before_comment(scan_index).trim_end();
                     let trimmed_code = code.trim();
                     if trimmed_code == "(" {
                         layout.exact_indent_spaces = Some(

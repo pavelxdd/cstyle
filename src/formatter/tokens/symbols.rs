@@ -1795,8 +1795,8 @@ impl FormatEngine<'_> {
         if find_assignment_operator(current).is_some() {
             return TernaryOwnerRole::Assignment;
         }
-        for raw in self.output.scoped().iter().rev().take(8) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(8) {
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

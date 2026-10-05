@@ -1,7 +1,7 @@
 //! Function heads at declaration scope: return type, name, parameter list,
 //! and body.
 
-use std::collections::{HashMap, HashSet};
+use crate::formatter::index_hash::{IndexMap, IndexSet};
 
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{
@@ -35,17 +35,17 @@ impl FunctionHead {
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Functions {
     heads: Vec<FunctionHead>,
-    by_params: HashMap<GroupId, usize>,
-    by_start: HashMap<usize, usize>,
-    by_name_start: HashMap<usize, usize>,
+    by_params: IndexMap<GroupId, usize>,
+    by_start: IndexMap<usize, usize>,
+    by_name_start: IndexMap<usize, usize>,
     /// Parameter lists outside `heads`: of function pointer declarators
     /// (`(*name)(...)`) and of functions whose body a macro supplies.
-    other_parameter_lists: HashSet<GroupId>,
+    other_parameter_lists: IndexSet<GroupId>,
     /// Declarator groups such as `(*name)` in `int (*name)(void)` or
     /// `(name)` in `int (name)(void)`.
-    declarators: HashSet<GroupId>,
+    declarators: IndexSet<GroupId>,
     /// `*`, `&`, and `^` tokens in the return types of `heads`.
-    return_type_pointers: HashSet<usize>,
+    return_type_pointers: IndexSet<usize>,
 }
 
 impl Functions {
@@ -207,7 +207,7 @@ fn function_head(
     tokens: &[Token],
     groups: &Groups,
     blocks: &Blocks,
-    head_params: &HashMap<GroupId, usize>,
+    head_params: &IndexMap<GroupId, usize>,
     params: GroupId,
 ) -> Option<HeadMatch> {
     let group = groups.get(params);
@@ -364,7 +364,7 @@ pub(crate) fn holds_empty_line(tokens: &[Token]) -> bool {
 fn return_type_start(
     tokens: &[Token],
     groups: &Groups,
-    head_params: &HashMap<GroupId, usize>,
+    head_params: &IndexMap<GroupId, usize>,
     name_start: usize,
 ) -> Option<usize> {
     let level = groups.enclosing(name_start);

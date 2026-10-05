@@ -263,8 +263,8 @@ impl FormatEngine<'_> {
         {
             let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.trim_start().starts_with("#if") {
-                for (index, candidate) in self.output.iter().enumerate().rev() {
-                    let candidate_code = self.output.code_of(candidate).trim_end();
+                for index in (0..self.output.len()).rev() {
+                    let candidate_code = self.output.code_before_comment(index).trim_end();
                     if !(candidate_code.trim_start().starts_with('#')
                         && candidate_code.ends_with(']'))
                     {

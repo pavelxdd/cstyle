@@ -565,8 +565,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_lambda = false;
-        for raw in self.output.scoped().iter().rev().take(32) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(32) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
                 continue;
@@ -893,8 +894,9 @@ impl FormatEngine<'_> {
             {
                 return Some(spaces);
             }
-            for raw in self.output.scoped().iter().rev().skip(1).take(16) {
-                let code = self.output.code_of(raw).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1).take(16) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     continue;
@@ -974,8 +976,9 @@ impl FormatEngine<'_> {
             }
         }
         if current.starts_with('=') && previous_trimmed.starts_with("#if") {
-            for raw in self.output.scoped().iter().rev().skip(1) {
-                let code = self.output.code_of(raw).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     continue;
@@ -986,8 +989,9 @@ impl FormatEngine<'_> {
         if starts_string_literal_token(current)
             && (previous_trimmed.starts_with("#else") || previous_trimmed.starts_with("#elif"))
         {
-            for raw in self.output.scoped().iter().rev().skip(1) {
-                let code = self.output.code_of(raw).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() {
                     continue;
@@ -1075,8 +1079,9 @@ impl FormatEngine<'_> {
             && !prefix.trim_start().starts_with('{')
             && !prefix.contains_any_byte(b"=(@")
         {
-            for line in self.output.scoped().iter().rev().skip(1).take(64) {
-                let code = self.output.code_of(line).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1).take(64) {
+                let line = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 if let Some(prefix) = code.strip_suffix('{') {
                     let prefix = prefix.trim_start();
                     if !prefix.is_empty()
@@ -1229,8 +1234,9 @@ impl FormatEngine<'_> {
             && self.constructor_initializer_base_indent_spaces().is_none()
             && !current.starts_with(['#', '(', ')', '{', '}'])
         {
-            for raw in self.output.scoped().iter().rev().skip(1).take(16) {
-                let code = self.output.code_of(raw).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1).take(16) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 let trimmed_code = code.trim();
                 if trimmed_code == "(" {
                     return Some(leading_visual_width(raw, tab_width) + width);

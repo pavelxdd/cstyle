@@ -86,8 +86,8 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut closed_blocks = 0usize;
-        for (index, line) in self.output.iter().enumerate().rev().take(24) {
-            let code = self.output.code_of(line).trim_end();
+        for index in (0..self.output.len()).rev().take(24) {
+            let code = self.output.code_before_comment(index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -160,7 +160,7 @@ impl FormatEngine<'_> {
             .filter(|(_, line)| !line.trim().is_empty())
             .take(8)
         {
-            let previous_code = self.output.code_of(previous).trim_end();
+            let previous_code = self.output.code_before_comment(previous_index).trim_end();
             if let Some(open) = unmatched_open_paren_column(previous_code) {
                 let before = previous_code[..open].trim_end();
                 let name_start = function_name_start(before)?;

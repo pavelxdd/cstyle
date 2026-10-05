@@ -1040,7 +1040,7 @@ impl FormatEngine<'_> {
             .skip_while(|(_, line)| line.as_str() != previous.as_str())
             .skip(1)
         {
-            let branch_code = self.output.code_of(branch).trim_end();
+            let branch_code = self.output.code_before_comment(branch_index).trim_end();
             let branch_trimmed = branch_code.trim_start();
             let branch_raw_trimmed = branch.trim_start();
             if branch_trimmed.is_empty()

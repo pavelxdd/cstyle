@@ -734,8 +734,9 @@ impl FormatEngine<'_> {
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
         }
-        for line in self.output.scoped().iter().rev() {
-            let code = &self.output.code_of(line);
+        for scan_index in self.output.scoped_range().rev() {
+            let line = &self.output[scan_index];
+            let code = &self.output.code_before_comment(scan_index);
             let trimmed = code.trim();
             if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
                 continue;

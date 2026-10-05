@@ -599,8 +599,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_string = false;
-        for previous in self.output.scoped().iter().rev().take(16) {
-            let code = self.output.code_of(previous).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(16) {
+            let previous = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() {
                 continue;
@@ -1396,8 +1397,8 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') {
             return None;
         }
-        for line in self.output.scoped().iter().rev().take(16) {
-            let code = self.output.code_of(line).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(16) {
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if code.ends_with(';') || code.ends_with('{') || trimmed == "}" {
                 break;
@@ -1738,8 +1739,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
-        for line in self.output.scoped().iter().rev().skip(1).take(8) {
-            let code = self.output.code_of(line).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
+            let line = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim();
             if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
                 break;
@@ -1779,8 +1781,8 @@ impl FormatEngine<'_> {
             return None;
         }
         if unmatched_open_paren_column(previous_code).is_none() {
-            for line in self.output.scoped().iter().rev().skip(1).take(12) {
-                let code = self.output.code_of(line).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
                     break;
                 }
@@ -1976,8 +1978,9 @@ impl FormatEngine<'_> {
         let previous_code = self.output.code_of(previous).trim_end();
         if previous_code.ends_with("),") {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            for raw in self.output.scoped().iter().rev().skip(1).take(8) {
-                let code = self.output.code_of(raw).trim_end();
+            for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trim_end();
                 let trimmed = code.trim();
                 if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
                     break;
@@ -2327,8 +2330,9 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') || !line_paren_imbalance(previous_code).1.is_empty() {
             return None;
         }
-        for raw in self.output.scoped().iter().rev().skip(1).take(12) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             if !line_paren_imbalance(code).1.is_empty() {
                 return Some(leading_visual_width(raw, self.options.tab_width));
             }

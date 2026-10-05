@@ -10,6 +10,7 @@ use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::headers::line_is_control_body_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
+use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
     next_non_whitespace, previous_non_layout_token_index, token_char_len, token_text,
@@ -29,7 +30,6 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
-use std::collections::{HashMap, HashSet};
 
 impl FormatEngine<'_> {
     pub(crate) fn try_add_braces_to_statement(
@@ -2110,7 +2110,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
     // Columns an added `{` takes past the gap before a comment, by input
     // index of its insertion.
-    let mut opener_overruns = HashMap::new();
+    let mut opener_overruns = IndexMap::default();
     let mut replace: Vec<Option<Token>> = vec![None; tokens.len()];
     // astyle sets the comment after a braced statement an indent past it,
     // and takes the brace it attaches out of the gap before a comment.
@@ -2216,8 +2216,8 @@ pub(crate) fn add_marked_cross_line_statement_braces(
 
     let mut output =
         Vec::with_capacity(tokens.len() + insert_before.iter().map(Vec::len).sum::<usize>());
-    let mut added_closers = HashSet::new();
-    let mut overruns = HashMap::new();
+    let mut added_closers = IndexSet::default();
+    let mut overruns = IndexMap::default();
     let mut append_inserted =
         |output: &mut Vec<Token>, inserted: &mut Vec<Token>, overrun: Option<usize>| {
             for token in inserted.drain(..) {
@@ -2256,8 +2256,8 @@ pub(crate) fn add_marked_cross_line_statement_braces(
 /// comment after it.
 pub(crate) struct AddedBraces {
     pub(crate) tokens: Vec<Token>,
-    pub(crate) closers: HashSet<usize>,
-    pub(crate) opener_overruns: HashMap<usize, usize>,
+    pub(crate) closers: IndexSet<usize>,
+    pub(crate) opener_overruns: IndexMap<usize, usize>,
 }
 
 fn open_brace_attaches_to_header_line(

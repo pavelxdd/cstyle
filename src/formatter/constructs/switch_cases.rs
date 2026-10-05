@@ -1871,8 +1871,9 @@ impl FormatEngine<'_> {
 
     fn recent_same_line_else_open_indent_spaces(&self) -> Option<usize> {
         let tab_width = self.options.tab_width;
-        for line in self.output.scoped().iter().rev().take(32) {
-            let code = self.output.code_of(line).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(32) {
+            let line = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 break;

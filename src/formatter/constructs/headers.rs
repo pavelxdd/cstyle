@@ -1777,8 +1777,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut open_indent: Option<usize> = None;
-        for previous in self.output.scoped().iter().rev().skip(1) {
-            let previous_code = self.output.code_of(previous).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1) {
+            let previous = &self.output[scan_index];
+            let previous_code = self.output.code_before_comment(scan_index).trim_end();
             let previous_trimmed = previous_code.trim_start();
             if previous_trimmed.is_empty() {
                 continue;

@@ -1,5 +1,6 @@
 //! Token roles decided before layout, and the C-family vocabulary they use.
 
+use crate::formatter::index_hash::IndexSet;
 use crate::formatter::lexer::{
     Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
     previous_non_layout_token_index,
@@ -12,7 +13,6 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, trailing_word,
 };
-use std::collections::HashSet;
 
 pub(crate) mod language;
 
@@ -341,8 +341,8 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
     Some(declarator)
 }
 
-pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> HashSet<usize> {
-    let mut indices = HashSet::new();
+pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> IndexSet<usize> {
+    let mut indices = IndexSet::default();
     let mut stack: Vec<(usize, usize)> = Vec::new();
     let mut modifier_count = 0usize;
     for (index, token) in tokens.iter().enumerate() {
@@ -364,8 +364,8 @@ pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> HashSet<usize> 
     indices
 }
 
-pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> HashSet<usize> {
-    let mut indices = HashSet::new();
+pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
+    let mut indices = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
         match token {

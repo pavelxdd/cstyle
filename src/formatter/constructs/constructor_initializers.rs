@@ -285,8 +285,9 @@ impl FormatEngine<'_> {
                 Some(frame.colon_line_indent_spaces + self.options.indent_width)
             }
             ConstructorInitializerLayout::Split => {
-                for raw in self.output.scoped().iter().rev().take(64) {
-                    let code = self.output.code_of(raw).trim_end();
+                for scan_index in self.output.scoped_range().rev().take(64) {
+                    let raw = &self.output[scan_index];
+                    let code = self.output.code_before_comment(scan_index).trim_end();
                     let trimmed = code.trim_start();
                     if trimmed.starts_with(':') && !trimmed.starts_with("::") {
                         if trimmed == ":" {
@@ -514,8 +515,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut saw_member = false;
-        for raw in self.output.scoped().iter().rev().skip(1).take(64) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().skip(1).take(64) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             let previous = code.trim_start();
             if previous.is_empty() || previous.starts_with('#') {
                 continue;
@@ -613,8 +615,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut pending = trimmed.chars().take_while(|ch| *ch == ')').count();
-        for raw in self.output.scoped().iter().rev().take(128) {
-            let code = self.output.code_of(raw).trim_end();
+        for scan_index in self.output.scoped_range().rev().take(128) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trim_end();
             if code.trim().is_empty() {
                 continue;
             }

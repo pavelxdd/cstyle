@@ -22,6 +22,7 @@ mod braces;
 mod constructs;
 mod continuation;
 mod engine;
+mod index_hash;
 mod lexer;
 mod output;
 mod preprocessor;

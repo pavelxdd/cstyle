@@ -14,6 +14,7 @@ use crate::formatter::constructs::template_declarations::TemplateDeclarationStat
 use crate::formatter::constructs::{headers, labels, objc, switch_cases};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::max_length::MaxLengthLineState;
+use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::{
     CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
@@ -46,7 +47,6 @@ use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{continuation, preprocessor, syntax};
 use crate::source::lex::{is_identifier_continue, trailing_word};
-use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy)]
 pub(crate) struct TokenPushContext<'a> {
@@ -163,10 +163,10 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) token_input: TokenInputState,
     pub(crate) pointer_run: pointers::PointerRunState,
     pub(crate) preprocessor: preprocessor::PreprocessorState,
-    pub(crate) access_modified_braces: HashSet<usize>,
+    pub(crate) access_modified_braces: IndexSet<usize>,
     /// Closing braces add-braces put after statements.
-    pub(crate) added_closing_braces: HashSet<usize>,
-    pub(crate) added_opener_overruns: HashMap<usize, usize>,
+    pub(crate) added_closing_braces: IndexSet<usize>,
+    pub(crate) added_opener_overruns: IndexMap<usize, usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
@@ -251,9 +251,9 @@ impl<'a> FormatEngine<'a> {
             token_input: TokenInputState::default(),
             pointer_run: pointers::PointerRunState::default(),
             preprocessor: preprocessor::PreprocessorState::default(),
-            access_modified_braces: HashSet::new(),
-            added_closing_braces: HashSet::new(),
-            added_opener_overruns: HashMap::new(),
+            access_modified_braces: IndexSet::default(),
+            added_closing_braces: IndexSet::default(),
+            added_opener_overruns: IndexMap::default(),
             syntax_roles: SyntaxRoles::new(0),
             tree: SourceTree::default(),
             pending_extern: false,
