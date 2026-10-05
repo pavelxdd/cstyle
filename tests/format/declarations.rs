@@ -2896,3 +2896,24 @@ fn breaking_return_types_breaks_a_head_under_a_bare_macro_but_not_under_an_attri
         "LAST_ARG_MUST_BE_NULL\nint\nexecl_git_cmd(const char *cmd, ...);\nstatic\nint\nh(int x);\n__attribute__((format (printf, 1, 2)))\nvoid advise(const char *advice, ...);\n",
     );
 }
+
+#[test]
+fn breaking_return_types_breaks_an_extern_c_declaration() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--break-return-type-decl".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "extern \"C\" int yywrap ( yyscan_t yyscanner );\n",
+            &options
+        ),
+        "extern \"C\" int\nyywrap ( yyscan_t yyscanner );\n",
+    );
+}

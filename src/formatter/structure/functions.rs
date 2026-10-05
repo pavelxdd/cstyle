@@ -435,6 +435,14 @@ fn return_type_start(
                     }
                 };
             }
+            // `extern "C" int f(void)`
+            Token::StringLiteral(_)
+                if previous_head_token(tokens, previous).is_some_and(
+                    |word| matches!(&tokens[word], Token::Word(word) if word == "extern"),
+                ) =>
+            {
+                start = previous;
+            }
             _ => return None,
         }
     }
