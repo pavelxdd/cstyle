@@ -189,6 +189,12 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::Normal
             && line.trim_start().starts_with(']')
+            && let Some(spaces) = self.bracket_rows_closing_indent_spaces()
+        {
+            exact_indent_spaces = Some(spaces);
+        }
+        if line_kind == LineKind::Normal
+            && line.trim_start().starts_with(']')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_of(previous).trim_end();
@@ -406,5 +412,35 @@ impl FormatEngine<'_> {
         }
         layout.exact_indent_spaces = exact_indent_spaces;
         layout
+    }
+
+    /// The column of a `]` leading its line after rows its `[` opened at
+    /// the end of a line: a level before the rows, never before that line.
+    fn bracket_rows_closing_indent_spaces(&self) -> Option<usize> {
+        let mut depth = 0usize;
+        let mut first_row = None;
+        for index in (0..self.output.len()).rev() {
+            let code = self.output.code_before_comment(index).trim_end();
+            for byte in code.bytes().rev() {
+                match byte {
+                    b']' => depth += 1,
+                    b'[' if depth == 0 => {
+                        if !code.ends_with('[') {
+                            return None;
+                        }
+                        let opener = self.output.lead_width(index, self.options.tab_width);
+                        let row = self.output.lead_width(first_row?, self.options.tab_width);
+                        return Some(row.saturating_sub(self.options.indent_width).max(opener));
+                    }
+                    b'[' => depth -= 1,
+                    b';' | b'{' | b'}' if depth == 0 => return None,
+                    _ => {}
+                }
+            }
+            if !code.trim().is_empty() {
+                first_row = Some(index);
+            }
+        }
+        None
     }
 }

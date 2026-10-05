@@ -1993,7 +1993,7 @@ fn bracket_continuation_aligns_to_opening_bracket_context() {
             "--indent=spaces=4",
             "--pad-oper",
         ],
-        "void f(void)\n{\n    uint8_t value = table[\n                        index + 1u\n                         ];\n    use(value);\n}\n",
+        "void f(void)\n{\n    uint8_t value = table[\n                        index + 1u\n                    ];\n    use(value);\n}\n",
     );
 }
 
@@ -6302,4 +6302,11 @@ fn whitesmith_last_brace_row_of_a_compound_literal_stands_with_the_rows() {
     let expected = "static S s = {\n    .h = (H[]){\n            {1, 2},\n            {0}\n        },\n    };\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
+}
+#[test]
+fn closing_bracket_row_stands_a_level_before_the_rows_its_bracket_opened() {
+    let input = "static unsigned char mem[\n  1024 * 4 /* a\n              b */\n] = {0};\nvoid f(void)\n{\n    x = tab[\n        i +\n        1\n    ];\n}\n";
+    let expected = "static unsigned char mem[\n    1024 * 4 /* a\n              b */\n] = {0};\nvoid f(void)\n{\n    x = tab[\n            i +\n            1\n        ];\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
