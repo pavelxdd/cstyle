@@ -948,7 +948,7 @@ impl FormatEngine<'_> {
         let mut comment_source_open_column = 0usize;
         let mut comment_output_open_column = 0usize;
         let mut comment_structural_level = base_level;
-        for part in body_parts {
+        for (part_index, part) in body_parts.iter().enumerate() {
             let display = part.trim_start();
             let (body, had_backslash) = strip_define_backslash(part);
             let content = body.trim_start();
@@ -1052,6 +1052,20 @@ impl FormatEngine<'_> {
                         && frames.last().is_some_and(|frame| {
                             is_define_command_frame(*frame) || *frame == DefineFrame::CaseBrace
                         }))
+                        // In code, the brace closing the define's block
+                        // stands at its body, unless it ends the define
+                        // alone.
+                        || (info.leading_close
+                            && self.layout.indentation.indent() > 0
+                            && (part_index + 1 < body_parts.len()
+                                || !content
+                                    .trim_end_matches('\\')
+                                    .trim_end()
+                                    .trim_start_matches('}')
+                                    .trim()
+                                    .is_empty())
+                            && frames.len() == 1
+                            && frames.last().copied().is_some_and(is_define_command_frame))
                         // A header's brace at the top of the body stands at
                         // the header.
                         || (starts_with_open

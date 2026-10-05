@@ -4403,3 +4403,24 @@ fn define_rows_continuing_the_directive_line_align_in_spaces_under_tabs() {
         "#define nvalue(o)\tcheck_exp(ttisnumber(o), \\\n                              (ttisinteger(o) ? cast_num(ivalue(o)) : fltvalue(o)))\n#define X(o) ({ \\\n\t\tfoo(a); \\\n\t})\n",
     );
 }
+
+#[test]
+fn vtk_indents_a_define_block_closer_in_code_unless_it_ends_the_define() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=vtk".to_owned(),
+            "--indent-preproc-define".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    x();\n#define OUT(x) do { \\\n\tif (dst == end) \\\n\t\tBUG(\"x\"); \\\n\t*dst++ = (x); \\\n} while(0)\n    y();\n}\n",
+            &options,
+        ),
+        "void f(void)\n{\n    x();\n#define OUT(x) do { \\\n        if (dst == end) \\\n            BUG(\"x\"); \\\n        *dst++ = (x); \\\n        } while(0)\n    y();\n}\n",
+    );
+}
