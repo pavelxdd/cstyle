@@ -447,6 +447,14 @@ fn is_tree_declarator_operator(tokens: &[Token], tree: &SourceTree, index: usize
 fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
     let mut stack = Vec::new();
     let mut depth_changes = vec![0isize; tokens.len()];
+    // Assignments before each token, so a range counts its own at once.
+    let mut assignments_before = Vec::with_capacity(tokens.len() + 1);
+    assignments_before.push(0usize);
+    for token in tokens {
+        let assigns = matches!(token, Token::Operator(operator) if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()));
+        assignments_before
+            .push(assignments_before.last().copied().unwrap_or(0) + usize::from(assigns));
+    }
     for (index, token) in tokens.iter().enumerate() {
         match token {
             Token::Symbol('(') => stack.push(index),
@@ -454,7 +462,8 @@ fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
                 let Some(open) = stack.pop() else {
                     continue;
                 };
-                if paren_range_is_expression(tokens, open, index) && open + 1 < index {
+                let assigns = assignments_before[index] > assignments_before[open + 1];
+                if paren_range_is_expression(tokens, open, index, assigns) && open + 1 < index {
                     depth_changes[open + 1] += 1;
                     depth_changes[index] -= 1;
                 }
@@ -998,7 +1007,7 @@ fn following_token_is_symbol(tokens: &[Token], index: usize, symbol: char) -> bo
         .is_some_and(|token| matches!(token, Token::Symbol(found) if *found == symbol))
 }
 
-fn paren_range_is_expression(tokens: &[Token], open: usize, close: usize) -> bool {
+fn paren_range_is_expression(tokens: &[Token], open: usize, close: usize, assigns: bool) -> bool {
     if previous_non_layout_token_index(tokens, open)
         .and_then(|previous| tokens.get(previous))
         .is_some_and(|token| matches!(token, Token::Word(_)))
@@ -1011,19 +1020,11 @@ fn paren_range_is_expression(tokens: &[Token], open: usize, close: usize) -> boo
     let Some(last) = last_token_in_range(tokens, open + 1, close) else {
         return false;
     };
-    if syntax_token_is_type_word(&tokens[first])
-        || range_contains_assignment(tokens, open + 1, close)
-    {
+    if syntax_token_is_type_word(&tokens[first]) || assigns {
         return false;
     }
     syntax_token_can_start_expression(&tokens[first])
         && syntax_token_can_end_expression(&tokens[last])
-}
-
-fn range_contains_assignment(tokens: &[Token], start: usize, end: usize) -> bool {
-    tokens[start..end].iter().any(|token| {
-        matches!(token, Token::Operator(operator) if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()))
-    })
 }
 
 fn first_token_in_range(tokens: &[Token], start: usize, end: usize) -> Option<usize> {

@@ -2088,7 +2088,7 @@ fn array_brace_attaches_for_attach_family() {
 }
 
 #[test]
-fn compound_literal_brace_attaches_except_one_true_brace() {
+fn compound_literal_brace_attaches_in_attaching_styles() {
     let source = fixture!("Item v = (Item)", "{", "    .x = 1", "};");
 
     let mut attach = FormatOptions::default();
@@ -2117,18 +2117,18 @@ fn compound_literal_brace_attaches_except_one_true_brace() {
     otbs.brace_style = BraceStyle::OneTrueBrace;
     assert_eq!(
         format_exact(source, &otbs),
-        fixture!("Item v = (Item)", "{", "    .x = 1", "};")
+        fixture!("Item v = (Item) {", "    .x = 1", "};")
     );
 }
 
 #[test]
-fn multiline_compound_literal_breaks_run_in_designated_fields() {
+fn multiline_compound_literal_keeps_run_in_designated_fields() {
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  value = (struct Item) { .first = alpha,\n                          .second = beta\n                        };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    value = (struct Item) {\n        .first = alpha,\n        .second = beta\n    };\n}\n",
+        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n                            .second = beta\n                          };\n}\n",
     );
 }
 
@@ -2528,7 +2528,7 @@ fn nested_compound_literal_range_elements_match_source_shape() {
             "        .ranges = (const struct range[]) { { .start = 1, .end = 2 } },",
             "    },",
             "    {",
-            "        .ranges = (const struct range[]) {",
+            "        .ranges = (const struct range[]){",
             "            { .start = 1, .end = 2 },",
             "            { .start = 3, .end = 4 }",
             "        },",

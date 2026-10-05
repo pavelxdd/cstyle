@@ -207,7 +207,14 @@ impl FormatEngine<'_> {
                     let code = &self.output.code_of(line);
                     is_namespace_block_header(code) && !code.trim_end().ends_with('{')
                 });
-        if header.is_some_and(is_defer_header) {
+        // Only a deferred block kept on one line reads as an array; a longer
+        // one is the header's block.
+        if header.is_some_and(is_defer_header)
+            && self
+                .current
+                .active_token()
+                .is_some_and(|brace| self.matching_brace_on_current_line(brace).is_some())
+        {
             BraceType::DeferArray
         } else if self.is_objc_method_line()
             || self.layout.objc.method_continuation
@@ -244,7 +251,9 @@ impl FormatEngine<'_> {
                 .nesting
                 .brace_type_stack
                 .last()
-                .is_some_and(|brace_type| *brace_type == BraceType::Array)
+                .is_some_and(|brace_type| {
+                    matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
+                })
             || (self.layout.command_state.previous_command_char == Some('{')
                 && !self.token_input.token_begins_source_line
                 && matches!(

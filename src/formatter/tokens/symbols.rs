@@ -7,11 +7,11 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
 use crate::formatter::lexer::{CommentKind, Token};
-use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
     DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
 };
+use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_pointer_type_word, is_type_like_pointer_word,
     is_unpad_kept_type_word,
@@ -1681,7 +1681,8 @@ impl FormatEngine<'_> {
     }
 
     fn is_bit_field_segment(&self, next_is_number: bool) -> bool {
-        if !self.in_aggregate_declaration_brace()
+        let in_class = self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Class);
+        if !(self.in_aggregate_declaration_brace() || in_class)
             || self.layout.nesting.has_question_in_current_brace()
         {
             return false;
@@ -1691,7 +1692,10 @@ impl FormatEngine<'_> {
             .rfind([';', '{', '}'])
             .map_or(current, |index| &current[index + 1..])
             .trim();
-        if segment.is_empty() || segment.contains('?') {
+        if segment.is_empty()
+            || segment.contains('?')
+            || in_class && labels::is_access_label_start(segment, &self.options.access_labels)
+        {
             return false;
         }
         let word_count = segment

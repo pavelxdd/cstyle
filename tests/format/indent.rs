@@ -6296,7 +6296,7 @@ fn file_scope_call_continuation_falls_back_when_rhs_also_exceeds_max() {
 
 // A closed inner subscript does not shift its outer operator continuation.
 #[test]
-fn nested_subscript_operator_continuation_aligns_to_operator_column() {
+fn nested_subscript_operator_continuation_aligns_past_its_bracket() {
     let options = options_from_args(&["--style=linux", "--mode=c"]);
 
     assert_eq!(
@@ -6304,7 +6304,7 @@ fn nested_subscript_operator_continuation_aligns_to_operator_column() {
             "void f(void)\n{\n\tqmul = table[inv[exp[faila] ^\n\texp[failb]]];\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    qmul = table[inv[exp[faila] ^\n                                exp[failb]]];\n}\n",
+        "void f(void)\n{\n    qmul = table[inv[exp[faila] ^\n                     exp[failb]]];\n}\n",
     );
 }
 

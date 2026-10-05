@@ -3897,9 +3897,9 @@ fn max_code_length_splits_at_the_last_bitwise_operator_not_after_a_unary_one() {
 }
 
 #[test]
-fn array_bound_row_after_a_closed_bracket_aligns_past_the_open_bracket() {
+fn subscript_row_aligns_past_the_open_bracket() {
     let input = "void f(void)\n{\n    buf[k] = special[my_random() %\n        ARRAY_SIZE(special)];\n    x = a[b() %\n        c];\n}\n";
-    let expected = "void f(void)\n{\n    buf[k] = special[my_random() %\n                     ARRAY_SIZE(special)];\n    x = a[b() %\n              c];\n}\n";
+    let expected = "void f(void)\n{\n    buf[k] = special[my_random() %\n                     ARRAY_SIZE(special)];\n    x = a[b() %\n          c];\n}\n";
     check(input, &[], expected);
     check(expected, &[], expected);
 }
@@ -6100,4 +6100,206 @@ fn a_block_without_code_stays_on_its_header_line_in_pico() {
         &["--style=pico", "--break-one-line-headers"],
         "void f()\n{   if (r->postponed)\n    {   for (pr = r->postponed; pr->next; pr = pr->next) { /* void */ }\n        x(); }\n    for (;;) { /* void */ } }\nvoid g()\n{   for (;;)\n    {   x(); }\n    for (;;) { }\n    if (a) { /* c */ } }\n",
     );
+}
+
+#[test]
+fn named_width_bit_fields_in_a_class_keep_their_colon_spacing() {
+    let input = "class C {\npublic:\n    int x : WIDTH;\n    int z : 3;\n    int w:4;\nprivate:\n    int y;\n};\nstruct E {\npublic:\n    int x : WIDTH;\n};\n";
+    let expected = "class C\n{\npublic:\n    int x : WIDTH;\n    int z : 3;\n    int w:4;\nprivate:\n    int y;\n};\nstruct E {\npublic:\n    int x : WIDTH;\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn named_width_bit_fields_in_a_class_keep_their_colon_spacing_padded() {
+    let input = "class C {\npublic:\n    int x : WIDTH;\n    int z:3;\n};\n";
+    let expected = "class C\n{\npublic:\n    int x : WIDTH;\n    int z: 3;\n};\n";
+    check(input, &["--style=kr", "--pad-oper"], expected);
+    check(expected, &["--style=kr", "--pad-oper"], expected);
+}
+
+#[test]
+fn subscript_rows_continue_past_their_bracket() {
+    let input = "void f(void)\n{\n    here = state->lencode[last.val +\n        (BITS(last.bits + last.op) >> last.bits)];\n    x = s->a[b +\n        c];\n    y = get()[idx +\n        1];\n    g(a[b.c +\n        c]);\n}\n";
+    let expected = "void f(void)\n{\n    here = state->lencode[last.val +\n                          (BITS(last.bits + last.op) >> last.bits)];\n    x = s->a[b +\n             c];\n    y = get()[idx +\n              1];\n    g(a[b.c +\n        c]);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn shift_rows_in_a_subscript_continue_past_its_bracket() {
+    let input = "int f(void)\n{\n    x = tab[size <<\n        MIN];\n    tab[size >>\n        MIN] = 1;\n    return tab[(size + 1)\n        >> MIN];\n}\n";
+    let expected = "int f(void)\n{\n    x = tab[size <<\n            MIN];\n    tab[size >>\n        MIN] = 1;\n    return tab[(size + 1)\n               >> MIN];\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn shift_row_in_a_returned_subscript_continues_past_its_bracket_under_max_code_length() {
+    let input = "int f(size_t size)\n{\n\treturn sz_size2index_tab[(size + (ZU(1) << SC_LG_TINY_MIN) - 1)\n\t    >> SC_LG_TINY_MIN];\n}\n";
+    let expected = "int f(size_t size)\n{\n    return sz_size2index_tab[(size + (ZU(1) << SC_LG_TINY_MIN) - 1)\n                             >> SC_LG_TINY_MIN];\n}\n";
+    check(input, &["--style=kr", "--max-code-length=109"], expected);
+    check(expected, &["--style=kr", "--max-code-length=109"], expected);
+}
+
+#[test]
+fn defer_statements_take_no_added_braces() {
+    let input = "void f(void)\n{\n    void *p = malloc(10);\n    defer free(p);\n    defer { free(p); }\n    defer {\n        free(p);\n        close(fd);\n    }\n}\n";
+    let expected = "void f(void)\n{\n    void *p = malloc(10);\n    defer free(p);\n    defer { free(p); }\n    defer {\n        free(p);\n        close(fd);\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--add-braces",
+            "--break-one-line-headers",
+            "--pad-header",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=kr",
+            "--add-braces",
+            "--break-one-line-headers",
+            "--pad-header",
+        ],
+        expected,
+    );
+}
+
+#[test]
+fn sibling_brace_rows_of_a_compound_literal_stand_with_the_first() {
+    let input = "static S s = {\n    .args = (Arg[]){\n        {\n            .name = \"key\",\n        },\n        {\n            .name = \"x\",\n        },\n        {0}\n    },\n    .b = 1,\n};\nvoid f(void)\n{\n    g((Arg[]){\n        {\n            .name = \"key\",\n        },\n        {\n            .name = \"x\",\n        },\n    });\n}\n";
+    let expected = "static S s = {\n    .args = (Arg[]){\n        {\n            .name = \"key\",\n        },\n        {\n            .name = \"x\",\n        },\n        {0}\n    },\n    .b = 1,\n};\nvoid f(void)\n{\n    g((Arg[]) {\n        {\n            .name = \"key\",\n        },\n        {\n            .name = \"x\",\n        },\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn compound_literal_in_a_run_in_element_indents_from_its_row() {
+    let input = "void f(void)\n{\n    A args[] = {\n        { .name = \"key\", .t = 0 },\n        { .name = \"format\", .subargs = (A[]) {\n                { .name = \"ele\" },\n                { .name = NULL }\n            }\n        },\n        { .name = \"v\" },\n    };\n}\n";
+    let expected = "void f(void)\n{\n    A args[] = {\n        { .name = \"key\", .t = 0 },\n        {\n            .name = \"format\", .subargs = (A[]) {\n                { .name = \"ele\" },\n                { .name = NULL }\n            }\n        },\n        { .name = \"v\" },\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn cast_compound_literals_stay_on_one_line() {
+    let input = "void f(void)\n{\n    p = (int *)(int[]){ 1, 2, 3 };\n    p = (int[]){ 1, 2, 3 };\n    g((int[]){ 1, 2 });\n    h(&(struct timeval){ .tv_sec = 1 });\n}\n";
+    let expected = "void f(void)\n{\n    p = (int *)(int[]) { 1, 2, 3 };\n    p = (int[]) { 1, 2, 3 };\n    g((int[]) { 1, 2 });\n    h(&(struct timeval) { .tv_sec = 1 });\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn compound_literal_closing_brace_leaves_the_last_row() {
+    let input = "void f(void)\n{\n    p = (int[]){\n        1, 2, 3 };\n    g((int[]){\n        1, 2, 3 });\n}\n";
+    let expected = "void f(void)\n{\n    p = (int[]) {\n        1, 2, 3\n    };\n    g((int[]) {\n        1, 2, 3\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn compound_literal_rows_align_under_a_run_in_first_element() {
+    let input = "void f(void)\n{\n    q = (int[]){ 1, 2,\n        3 };\n    return (struct p){ .a = 1,\n        .b = 2 };\n    g((int[]){ 1,\n        2 }, 3);\n}\n";
+    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n                  3\n                };\n    return (struct p) { .a = 1,\n                        .b = 2\n                      };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn broken_compound_literal_brace_attaches_in_attaching_styles() {
+    let input = "void f(void)\n{\n    q = (struct point)\n    {\n        .x = 1,\n    };\n    g((struct point)\n    {\n        .x = 1,\n    });\n}\n";
+    let expected = "void f(void)\n{\n    q = (struct point) {\n        .x = 1,\n    };\n    g((struct point) {\n        .x = 1,\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn compound_literal_nested_in_an_initializer_keeps_its_brace_attached() {
+    let input = "static S s = {\n    .args = (Arg[]) {\n        1,\n        {0},\n        {\n            3\n        },\n    },\n};\n";
+    let expected = "static S s = {\n    .args = (Arg[]) {\n        1,\n        {0},\n        {\n            3\n        },\n    },\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn whitesmith_indents_brace_rows_of_a_compound_literal() {
+    let input = "void f(void)\n{\n    x = g(a, (int[][1]) {\n        1,\n        {0},\n        {\n            3\n        },\n        {\n            3\n        },\n    });\n}\n";
+    let expected = "void f(void)\n    {\n    x = g(a, (int[][1])\n        {\n        1,\n            {0},\n            {\n            3\n            },\n            {\n            3\n            },\n        });\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn vtk_indents_brace_rows_of_a_compound_literal() {
+    let input = "void f(void)\n{\n    x = g(a, (int[][1]) {\n        1,\n        {0},\n        {\n            3\n        },\n        {\n            3\n        },\n    });\n}\n";
+    let expected = "void f(void)\n{\n    x = g(a, (int[][1])\n        {\n        1,\n            {0},\n            {\n            3\n            },\n            {\n            3\n            },\n        });\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn compound_literal_field_takes_no_column_from_an_earlier_initializer() {
+    let input = "static S s = {\n    .h = 1,\n};\nvoid f(void)\n{\n    T info = {\n        .h = (H[]){\n            {0}\n        },\n    };\n}\n";
+    let expected = "static S s = {\n    .h = 1,\n};\nvoid f(void)\n{\n    T info = {\n        .h = (H[]){\n            {0}\n        },\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn block_comment_among_compound_literal_elements_stands_with_them() {
+    let input = "static S s = {\n    .history = (H[]){\n        /* note a\n         * b */\n        {\"5.0\", \"x\"},\n        {0}\n    },\n};\nvoid f(void)\n{\n    g((H[]){\n        /* a\n         * b */\n        {1},\n    });\n}\n";
+    let expected = "static S s = {\n    .history = (H[]){\n        /* note a\n         * b */\n        {\"5.0\", \"x\"},\n        {0}\n    },\n};\nvoid f(void)\n{\n    g((H[]) {\n        /* a\n         * b */\n        {1},\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn element_after_a_trailing_block_comment_stands_with_the_elements() {
+    let input = "void f(void)\n{\n    y = { 1, /* a\n                   b */\n        2 };\n    int z[] = { 1, /* a\n                   b */\n        2 };\n}\n";
+    let expected = "void f(void)\n{\n    y = { 1, /* a\n                   b */\n          2\n        };\n    int z[] = { 1, /* a\n                   b */\n                2\n              };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn nested_compound_literal_fields_stand_a_level_in_whitesmith() {
+    let input = "void f(void)\n{\n    T x = {\n        .a = 1,\n        .t = (struct u) {\n            .user = 1,\n            .nice = 2,\n        },\n    };\n}\nvoid g(void)\n{\n    (*ci)[i++] = (uv_cpu_info_t) {\n      .speed     = c->freq / 1000,\n      .cpu_times = (struct uv_cpu_times_s) {\n        .user = 10 * c->user,\n        .irq  = 10 * c->irq,\n      },\n    };\n}\n";
+    let expected = "void f(void)\n    {\n    T x =\n        {\n        .a = 1,\n        .t = (struct u) {\n            .user = 1,\n            .nice = 2,\n            },\n        };\n    }\nvoid g(void)\n    {\n    (*ci)[i++] = (uv_cpu_info_t)\n        {\n        .speed     = c->freq / 1000,\n        .cpu_times = (struct uv_cpu_times_s) {\n            .user = 10 * c->user,\n            .irq  = 10 * c->irq,\n            },\n        };\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn nested_compound_literal_fields_stand_a_level_in_allman() {
+    let input = "void f(void)\n{\n    T x = {\n        .a = 1,\n        .t = (struct u) {\n            .user = 1,\n            .nice = 2,\n        },\n    };\n}\n";
+    let expected = "void f(void)\n{\n    T x =\n    {\n        .a = 1,\n        .t = (struct u) {\n            .user = 1,\n            .nice = 2,\n        },\n    };\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn nested_compound_literal_fields_stand_a_level_in_vtk() {
+    let input = "void f(void)\n{\n    (*ci)[i++] = (uv_cpu_info_t) {\n      .speed     = c->freq / 1000,\n      .cpu_times = (struct uv_cpu_times_s) {\n        .user = 10 * c->user,\n        .irq  = 10 * c->irq,\n      },\n    };\n}\n";
+    let expected = "void f(void)\n{\n    (*ci)[i++] = (uv_cpu_info_t)\n        {\n        .speed     = c->freq / 1000,\n        .cpu_times = (struct uv_cpu_times_s) {\n            .user = 10 * c->user,\n            .irq  = 10 * c->irq,\n            },\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn compound_literal_nested_in_an_initializer_keeps_its_brace_gap() {
+    let input = "static S s = {\n    .a ={\n        1,\n    },\n    .b = (T){\n        1,\n    },\n    .c = (T)  {\n        1,\n    },\n};\nvoid f(void)\n{\n    x = (T){\n        1,\n    };\n}\n";
+    let expected = "static S s = {\n    .a ={\n        1,\n    },\n    .b = (T){\n        1,\n    },\n    .c = (T)  {\n        1,\n    },\n};\nvoid f(void)\n{\n    x = (T) {\n        1,\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn whitesmith_last_brace_row_of_a_compound_literal_stands_with_the_rows() {
+    let input = "static S s = {\n    .h = (H[]){\n        {1, 2},\n        {0}\n    },\n};\n";
+    let expected = "static S s = {\n    .h = (H[]){\n            {1, 2},\n            {0}\n        },\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
 }

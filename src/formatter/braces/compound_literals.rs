@@ -33,7 +33,26 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
     }
     match before_open.chars().next_back() {
         Some(ch) if is_word_char(ch) => trailing_word(before_open) == language::RETURN,
-        Some(')' | ']') => false,
+        Some(')') => ends_with_value_cast(before_open),
+        Some(']') => false,
+        _ => true,
+    }
+}
+
+/// Whether `text` ends with a cast that starts a value, which the cast of a
+/// compound literal may follow: `(int *)` in `p = (int *)(int[]){ … }`.
+fn ends_with_value_cast(text: &str) -> bool {
+    let Some((open, close)) = trailing_matching_parens(text) else {
+        return false;
+    };
+    if close == open + 1 || has_top_level_comma_in_text(&text[open + 1..close]) {
+        return false;
+    }
+    // After `*`, `&` or `^` the parentheses may be a declarator's.
+    let before = text[..open].trim_end();
+    match before.chars().next_back() {
+        Some(')' | ']' | '*' | '&' | '^') => false,
+        Some(ch) if is_word_char(ch) => trailing_word(before) == language::RETURN,
         _ => true,
     }
 }

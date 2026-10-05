@@ -1250,7 +1250,12 @@ impl<'a> FormatEngine<'a> {
             return None;
         }
         let inner = &current[open + 1..current.len() - 1];
-        // `((int)x)` holds a cast and its operand, no type.
+        // No type starts with a parenthesis: `((int)x)` holds a cast and its
+        // operand, `((x))` a group.
+        if inner.trim_start().starts_with('(') {
+            return None;
+        }
+        // `(f(x) y)` holds a call, no type.
         if inner.contains(')') && !inner.trim_end().ends_with(')') {
             return None;
         }
@@ -1894,10 +1899,10 @@ fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSo
 /// Byte offset of the `(` matching the `)` that ends `text`.
 pub(crate) fn matching_open_paren_offset(text: &str) -> Option<usize> {
     let mut depth = 0usize;
-    for (offset, ch) in text.char_indices().rev() {
-        match ch {
-            ')' => depth += 1,
-            '(' => {
+    for (offset, byte) in text.bytes().enumerate().rev() {
+        match byte {
+            b')' => depth += 1,
+            b'(' => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(offset);

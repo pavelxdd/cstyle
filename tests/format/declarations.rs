@@ -988,13 +988,13 @@ fn nested_aggregate_pointer_declarator_keeps_member_indent() {
 }
 
 #[test]
-fn array_bound_operator_continuation_aligns_under_line_end_operator() {
+fn array_bound_continuation_aligns_past_its_bracket() {
     assert_eq!(
         format_exact(
             "\nstruct Item {\n    int values[PARAM_ALPHA -\n               PARAM_BETA + 1];\n    long values2[PARAM_ALPHA -\n                 PARAM_BETA + 1];\n};\n",
             &FormatOptions::default(),
         ),
-        "\nstruct Item {\n    int values[PARAM_ALPHA -\n                           PARAM_BETA + 1];\n    long values2[PARAM_ALPHA -\n                             PARAM_BETA + 1];\n};\n",
+        "\nstruct Item {\n    int values[PARAM_ALPHA -\n               PARAM_BETA + 1];\n    long values2[PARAM_ALPHA -\n                 PARAM_BETA + 1];\n};\n",
     );
 }
 
@@ -1005,7 +1005,7 @@ fn struct_array_bound_continuation_is_not_overindented() {
             "\nstruct Item {\n    struct Type values[PARAM_ALPHA -\n                       PARAM_BETA + 1];\n};\n",
             &FormatOptions::default(),
         ),
-        "\nstruct Item {\n    struct Type values[PARAM_ALPHA -\n                                   PARAM_BETA + 1];\n};\n",
+        "\nstruct Item {\n    struct Type values[PARAM_ALPHA -\n                       PARAM_BETA + 1];\n};\n",
     );
 }
 

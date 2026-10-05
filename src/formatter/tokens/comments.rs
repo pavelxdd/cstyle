@@ -24,9 +24,9 @@ use crate::formatter::text::columns::{
 };
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_brace_imbalance, line_ends_with_comment,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_brace_content_offset,
-    unmatched_open_paren_column,
+    has_unmatched_open_brace, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_brace_content_offset, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -1343,23 +1343,28 @@ impl FormatEngine<'_> {
                                     if in_header_condition {
                                         return None;
                                     }
-                                    unmatched_open_paren_column(code).map(|column| {
-                                        let after_open = &code[column + 1..];
-                                        let content_offset = after_open
-                                            .char_indices()
-                                            .find(|(_, ch)| !ch.is_whitespace())
-                                            .map_or(0, |(offset, _)| offset);
-                                        visual_width_from(
-                                            &code[..column + 1 + content_offset],
-                                            0,
-                                            self.options.tab_width,
-                                        )
-                                    })
+                                    // A brace opened after the paren holds the comment.
+                                    unmatched_open_paren_column(code)
+                                        .filter(|&column| {
+                                            !has_unmatched_open_brace(&code[column + 1..])
+                                        })
+                                        .map(|column| {
+                                            let after_open = &code[column + 1..];
+                                            let content_offset = after_open
+                                                .char_indices()
+                                                .find(|(_, ch)| !ch.is_whitespace())
+                                                .map_or(0, |(offset, _)| offset);
+                                            visual_width_from(
+                                                &code[..column + 1 + content_offset],
+                                                0,
+                                                self.options.tab_width,
+                                            )
+                                        })
                                 })
                         })
                 })
-                .or(block_comment_continuation_indent)
                 .or_else(|| self.current_inline_array_column())
+                .or(block_comment_continuation_indent)
                 .or_else(|| {
                     self.output
                         .scoped()
@@ -2354,11 +2359,28 @@ impl FormatEngine<'_> {
     }
 
     fn push_multiline_block_comment(&mut self, comment: &str, opener_indent: Option<usize>) {
+        // A comment among a compound literal's elements stands with them.
+        let opener_indent = self
+            .innermost_brace_is_compound_literal()
+            .then(|| self.current_inline_array_column())
+            .flatten()
+            .or(opener_indent);
         let interrupted_header = self.layout.command_state.current_header.clone();
         let open_paren_comment_indent = (self.layout.previous == PreviousToken::OpenParen)
             .then(|| self.comment_after_open_paren_indent_spaces());
         if !self.current.trim().is_empty() {
+            // The element after a comment trailing an element of a brace
+            // stands with the elements.
+            let element_column = self
+                .current
+                .trim_end()
+                .ends_with(',')
+                .then(|| self.current_inline_array_column())
+                .flatten();
             self.push_trailing_block_comment_lines(comment);
+            if let Some(column) = element_column {
+                self.layout.continuation_indent.set_next_line_spaces(column);
+            }
             self.attach_source_space_after_block_comment();
             if self.layout.command_state.current_header.is_none() {
                 self.layout.command_state.current_header = interrupted_header;

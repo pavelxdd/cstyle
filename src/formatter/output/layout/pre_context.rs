@@ -1,6 +1,5 @@
 use crate::formatter::continuation::call_arguments::{
-    closing_braced_call_argument_indent_spaces, line_opens_attachable_lambda_block,
-    plain_call_opener_indent_for_closing_line,
+    line_opens_attachable_lambda_block, plain_call_opener_indent_for_closing_line,
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
@@ -207,13 +206,6 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.embedded_capture_lambda_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
-        }
-        if let Some(spaces) = closing_braced_call_argument_indent_spaces(
-            line,
-            self.output.as_slice(),
-            self.options.tab_width,
-        ) {
             layout.exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.line_start_stream_adjacent_string_indent_spaces(line) {

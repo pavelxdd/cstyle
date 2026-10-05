@@ -15,8 +15,8 @@ use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    is_comment_line, last_unmatched_open_delimiter, line_paren_imbalance,
+    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{starts_string_literal_token, string_literal_token_end};
 use crate::formatter::tokens::operators::{
@@ -128,7 +128,9 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trim_end();
         let previous_trimmed = previous_code.trim_start();
-        if !starts_header_word(previous_trimmed, "return") {
+        if !starts_header_word(previous_trimmed, "return")
+            || last_unmatched_open_delimiter(previous_code).is_some_and(|(open, _)| open == '[')
+        {
             return None;
         }
         let after_return = &previous_trimmed["return".len()..];
@@ -340,6 +342,8 @@ impl FormatEngine<'_> {
             || current.starts_with(['{', '}', '#'])
             || current.starts_with("//")
             || current.starts_with("/*")
+            // A compound literal's field continues no operator.
+            || current.starts_with('.') && self.innermost_brace_is_compound_literal()
         {
             return None;
         }
@@ -688,6 +692,10 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trim_end();
         if !previous_code.ends_with("<<") && !previous_code.ends_with(">>") {
+            return None;
+        }
+        // A shift inside a subscript continues past its bracket.
+        if last_unmatched_open_delimiter(previous_code).is_some_and(|(open, _)| open == '[') {
             return None;
         }
         self.line_after_trailing_stream_operator_indent_spaces()

@@ -114,27 +114,6 @@ pub(crate) fn callee_name_start_before_open(line: &str, open_column: usize) -> O
     (start < end).then_some(start)
 }
 
-pub(crate) fn closing_braced_call_argument_indent_spaces(
-    line: &str,
-    output: &[String],
-    tab_width: usize,
-) -> Option<usize> {
-    if !line.trim_start().starts_with("})") {
-        return None;
-    }
-    for previous in output.iter().rev().take(16) {
-        let code = previous[..trailing_comment_split_limit(previous)].trim_end();
-        let trimmed = code.trim();
-        if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
-            break;
-        }
-        if let Some(comma) = code.rfind(", {") {
-            return Some(visual_width_from(&code[..comma + 2], 0, tab_width));
-        }
-    }
-    None
-}
-
 pub(crate) fn plain_call_opener_indent_for_closing_line(
     output: &[String],
     tab_width: usize,

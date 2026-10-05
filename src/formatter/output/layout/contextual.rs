@@ -2115,7 +2115,9 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
             && previous.trim() == "}"
         {
-            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            // The brace stands where the case unindent left it.
+            let previous_indent = leading_visual_width(previous, self.options.tab_width)
+                + self.case_unindent_spaces();
             if layout
                 .exact_indent_spaces
                 .unwrap_or(layout.indent * self.options.indent_width)
@@ -3262,6 +3264,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && matches!(line.trim_start().chars().next(), Some('.' | '['))
             && self.innermost_brace_is_compound_literal()
+            && self.current_inline_array_column().is_none()
             && let Some(spaces) = self.active_initializer_brace_indent_spaces(line, false)
         {
             layout.exact_indent_spaces =

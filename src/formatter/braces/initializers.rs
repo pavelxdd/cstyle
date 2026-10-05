@@ -246,6 +246,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A compound literal's element brace stands at its elements.
+        if self.innermost_brace_is_compound_literal()
+            && self.current_inline_array_column().is_some()
+        {
+            return None;
+        }
         // VTK indents only initializer braces nested in a block.
         if self.options.brace_style == BraceStyle::Vtk
             && self
@@ -336,16 +342,22 @@ impl FormatEngine<'_> {
             if self.in_initializer_brace() || self.in_aggregate_declaration_brace() {
                 if line.trim_start().starts_with('.') {
                     let limit = self.token_input.input_source_indent.max(normal_spaces);
+                    // Only a field of the same initializer sets the column.
                     self.output
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| {
-                            line.trim_start().starts_with('.')
-                                && leading_visual_width(line, self.options.tab_width) <= limit
+                        .map_while(|line| {
+                            let code = self.output.code_of(line).trim();
+                            let field = code.starts_with('.');
+                            (field || !(code.ends_with(';') || code.ends_with('{')))
+                                .then_some((line, field))
                         })
-                        .map(|previous| leading_visual_width(previous, self.options.tab_width))
-                        .unwrap_or(self.token_input.input_source_indent)
+                        .find(|&(line, field)| {
+                            field && leading_visual_width(line, self.options.tab_width) <= limit
+                        })
+                        .map(|(previous, _)| leading_visual_width(previous, self.options.tab_width))
+                        .unwrap_or_else(|| exact_indent_spaces.unwrap_or(normal_spaces))
                 } else {
                     self.output
                         .scoped()
@@ -457,7 +469,7 @@ impl FormatEngine<'_> {
             depth: self.layout.nesting.brace_header_stack.len(),
             body_column: body_indent,
             brace_column,
-            output_line: self.output.len(),
+            output_line: self.output.len().saturating_sub(1),
             aggregate_assignment: control_paren_indent.is_some(),
         });
         self.layout
@@ -590,7 +602,10 @@ impl FormatEngine<'_> {
             self.statement_line_indent_spaces()
                 .max(constructor_indent.unwrap_or(0))
         };
-        let aggregate_assign = self.current.trim_end().ends_with('=');
+        // A compound literal outside parentheses is a value as an assigned
+        // aggregate is.
+        let aggregate_assign = self.current.trim_end().ends_with('=')
+            || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
         if self.current_is_lambda_body_header() || is_lambda_capture_header(self.current.trim_end())
         {
             self.emit_source_space_or_ensure();
@@ -608,7 +623,9 @@ impl FormatEngine<'_> {
                 {
                     self.emit_source_space_or_ensure();
                 }
-                _ if aggregate_assign => self.emit_source_space_or_ensure(),
+                _ if aggregate_assign || brace_type == BraceType::CompoundLiteral => {
+                    self.emit_source_space_or_ensure();
+                }
                 _ => self.emit_source_space(),
             }
         }
@@ -712,6 +729,12 @@ impl FormatEngine<'_> {
     pub(super) fn close_inline_array_brace(&mut self) {
         if self.current_is_blank() {
             self.layout.frame_stack.clear_closed_braces();
+        } else if self.token_input.token_begins_source_line
+            && self.innermost_brace_is_compound_literal()
+        {
+            // The row before a `}` that leads its line stands among the
+            // elements, so it publishes while the brace is open.
+            self.finish_line();
         }
         let closing_brace_type = self.layout.nesting.brace_type_stack.last().copied();
         let closing_compound_literal =
@@ -747,6 +770,12 @@ impl FormatEngine<'_> {
             let trimmed = line.trim_start();
             trimmed.starts_with("for ") && trimmed.trim_end().ends_with('{')
         });
+        // A compound literal its line opened closes on a line of its own.
+        let closing_line_opened_literal = closing_compound_literal
+            && self
+                .output
+                .get(open_output_len)
+                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with('{'));
         let call_argument_array_column = self.output.get(open_output_len).and_then(|line| {
             line.rfind(", {")
                 .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
@@ -757,7 +786,19 @@ impl FormatEngine<'_> {
                 .output
                 .get(open_output_len)
                 .is_some_and(|line| line_opens_typed_initializer(line));
-        let closing_column = call_argument_array_column.or(brace_column);
+        // A style indenting braces indents the `}` of a compound literal
+        // that its line opened.
+        let closing_brace_indent = if closing_line_opened_literal
+            && self.options.brace_style != BraceStyle::Ratliff
+            && self.should_indent_brace_line(BraceType::Array)
+        {
+            self.options.indent_width
+        } else {
+            0
+        };
+        let closing_column = call_argument_array_column
+            .or(brace_column)
+            .map(|column| column + closing_brace_indent);
         let forced_break = self
             .layout
             .compound_literal
@@ -812,7 +853,7 @@ impl FormatEngine<'_> {
             }
         } else if self.output.len() > open_output_len
             && !self.current_is_blank()
-            && (closing_compound_literal
+            && (closing_line_opened_literal
                 || aggregate_assign
                 || objc_dictionary
                 || closing_enum
@@ -832,7 +873,7 @@ impl FormatEngine<'_> {
                 .clone()
                 .filter(|gap| !gap.is_empty() && gap.chars().all(|ch| ch == ' ' || ch == '\t'))
         });
-        let source_closing_gap = (!closing_compound_literal
+        let source_closing_gap = (!closing_line_opened_literal
             && !aggregate_assign
             && !range_for_initializer
             && !call_argument_array)
@@ -941,6 +982,13 @@ impl FormatEngine<'_> {
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return Some(spaces);
         }
+        // A compound literal's fields stand at its elements.
+        if designator
+            && self.innermost_brace_is_compound_literal()
+            && let Some(column) = self.current_inline_array_column()
+        {
+            return Some(column);
+        }
         if !closing
             && let Some(previous) = self.output.last()
             && previous.trim_end().ends_with("},{")
@@ -997,6 +1045,16 @@ impl FormatEngine<'_> {
             };
             return Some(lead + self.options.indent_width + self.case_unindent_spaces());
         }
+        // A style indenting braces closes a compound literal at its fields.
+        if closing
+            && self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral)
+            && (self.options.brace_style == BraceStyle::Ratliff
+                || self.should_indent_brace_line(BraceType::Array))
+            && let Some(previous) = self.output.last()
+            && previous.trim_start().starts_with('.')
+        {
+            return Some(leading_visual_width(previous, self.options.tab_width));
+        }
         if closing
             && let Some(previous) = self.output.last()
             && previous.trim_start().starts_with('.')
@@ -1029,9 +1087,18 @@ impl FormatEngine<'_> {
                         && code.ends_with('{')
                         && self.output_line_opens_initializer(index, code)
                     {
+                        // An indented brace on its own line stands at its rows.
+                        let brace_indent = if code.trim_start() == "{"
+                            && self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                                self.should_indent_brace_line(frame.brace_type)
+                            }) {
+                            0
+                        } else {
+                            self.options.indent_width
+                        };
                         spaces = spaces.max(
                             leading_visual_width(previous, self.options.tab_width)
-                                + self.options.indent_width
+                                + brace_indent
                                 + self.case_unindent_spaces(),
                         );
                         break;
@@ -1162,6 +1229,16 @@ impl FormatEngine<'_> {
                 break;
             }
             row = rows.next()?;
+        }
+        // Members after a brace that opens mid-row stand where the first one
+        // does.
+        let code = self.output.code_of(row);
+        if let Some(content) = unmatched_open_brace_content_offset(code) {
+            return Some(visual_width_from(
+                &code[..content],
+                0,
+                self.options.tab_width,
+            ));
         }
         Some(leading_visual_width(row, self.options.tab_width))
     }

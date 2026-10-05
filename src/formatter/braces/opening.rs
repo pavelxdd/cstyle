@@ -443,7 +443,10 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trim() != "{" || self.options.brace_style != BraceStyle::Whitesmith {
+        if line.trim() != "{"
+            || self.options.brace_style != BraceStyle::Whitesmith
+            || self.innermost_brace_is_compound_literal()
+        {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -474,7 +477,11 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trim() != "{" || self.options.brace_style != BraceStyle::Whitesmith {
+        if line.trim() != "{"
+            || self.options.brace_style != BraceStyle::Whitesmith
+            // A compound literal's element brace stands at its elements.
+            || self.innermost_brace_is_compound_literal()
+        {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -1595,19 +1602,6 @@ impl FormatEngine<'_> {
             self.open_expanded_init_brace(brace.header.take(), brace_type, block_indent_extra);
             return true;
         }
-        if brace_type == BraceType::CompoundLiteral
-            && !self.current_is_blank()
-            && !matches!(next, None | Some(Token::Newline))
-            && !self.comments.next_comment_ends_line
-        {
-            self.open_multiline_attached_initializer_brace(
-                brace.header.take(),
-                brace_type,
-                block_indent_extra,
-                false,
-            );
-            return true;
-        }
         if brace_type == BraceType::Enum
             && self.token_input.token_begins_source_line
             && !self.current_is_blank()
@@ -2724,7 +2718,14 @@ impl FormatEngine<'_> {
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == ']' || ch == '>')
                 || self.current.trim_end().ends_with('>'));
-        if self.is_nested_designated_init_field() {
+        // A compound literal nested in an aggregate keeps the gap written
+        // before its brace, as any brace there does.
+        let nested_compound_literal = brace_type == BraceType::CompoundLiteral
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            );
+        if self.is_nested_designated_init_field() || nested_compound_literal {
             if self.options.pad_operators && self.current.trim_end().ends_with('=') {
                 self.emit_source_space_or_ensure();
             } else {
@@ -2957,11 +2958,19 @@ impl FormatEngine<'_> {
         {
             return true;
         }
+        // A compound literal nested in an aggregate keeps its place, as any
+        // brace there does.
         line_ends_compound_literal_cast(last)
-            && matches!(
+            && (matches!(
                 self.options.brace_style,
                 BraceStyle::Attach | BraceStyle::Lisp | BraceStyle::Ratliff
-            )
+            ) || matches!(
+                self.options.brace_style,
+                BraceStyle::OneTrueBrace | BraceStyle::WebKit
+            ) && !matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            ))
     }
 
     fn should_attach_output_header_brace(&self, brace_type: BraceType) -> bool {
@@ -3151,6 +3160,13 @@ impl FormatEngine<'_> {
                     && self.token_input.token_begins_source_line))
                 && !self.output.is_empty()
                 && !self.is_nested_designated_init_field()
+                // Like any brace nested in an aggregate, a compound literal's
+                // keeps its place.
+                && !(brace_type == BraceType::CompoundLiteral
+                    && matches!(
+                        self.layout.nesting.brace_type_stack.last(),
+                        Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+                    ))
             {
                 return false;
             }

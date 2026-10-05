@@ -185,7 +185,12 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     match &tokens[previous] {
         Token::Operator(operator) if operator == "=" => return BlockKind::Initializer,
         Token::Word(word) if word == "return" => return BlockKind::Initializer,
-        Token::Word(word) if matches!(word.as_str(), "else" | "do" | "try" | "__try") => {
+        Token::Word(word)
+            if matches!(
+                word.as_str(),
+                "else" | "do" | "try" | "__try" | "defer" | "_Defer"
+            ) =>
+        {
             return BlockKind::Control;
         }
         Token::Symbol(')') => {
@@ -297,8 +302,21 @@ fn classify_after_paren(
         Token::Symbol(']') => BlockKind::Lambda,
         Token::Symbol(')') if groups.closed_at(before).is_some() => {
             // `f(a)(b) {` is a function returning a function pointer, or a
-            // macro-generated head; `(*f)(a) {` the same.
-            if BlockKind::is_declaration_scope(parent_block) {
+            // macro-generated head; `(*f)(a) {` the same. A cast cast again,
+            // `(int *)(int[]) {`, opens a compound literal.
+            let inner = groups.closed_at(before).map(|id| groups.get(id).open);
+            if inner.is_some_and(|open| {
+                previous_code_token(tokens, open).is_none_or(|index| match &tokens[index] {
+                    Token::Word(word) => word == "return",
+                    Token::Symbol(symbol) => !matches!(symbol, ')' | ']'),
+                    // After `*`, `&` or `^` the parentheses may be a
+                    // declarator's.
+                    Token::Operator(operator) => !matches!(operator.as_str(), "*" | "&" | "^"),
+                    _ => false,
+                })
+            }) {
+                BlockKind::CompoundLiteral
+            } else if BlockKind::is_declaration_scope(parent_block) {
                 BlockKind::FunctionBody
             } else {
                 BlockKind::Control

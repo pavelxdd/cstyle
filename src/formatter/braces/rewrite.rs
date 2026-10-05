@@ -1165,7 +1165,8 @@ impl FormatEngine<'_> {
             || previous_line_lambda_header
             || (self.current.trim_end().ends_with(')')
                 && self.current.contains('[')
-                && self.current.contains(']'));
+                && self.current.contains(']')
+                && brace_type != BraceType::CompoundLiteral);
         if lambda_header
             && self.options.break_one_line_blocks
             && matches!(
@@ -2818,6 +2819,18 @@ pub(crate) fn previous_non_whitespace(
         .find(|index| !matches!(tokens[*index], Token::Whitespace(_)))
 }
 
+/// Whether a value may start after `token`, so a parenthesized type after
+/// it is a cast.
+fn starts_value(token: &Token) -> bool {
+    match token {
+        Token::Symbol(symbol) => !matches!(symbol, ')' | ']'),
+        // After `*`, `&` or `^` the parentheses may be a declarator's.
+        Token::Operator(operator) => !matches!(operator.as_str(), "*" | "&" | "^"),
+        Token::Word(word) => word == language::RETURN,
+        _ => false,
+    }
+}
+
 fn is_compound_literal_before_brace(
     tokens: &[Token],
     close_paren: usize,
@@ -2852,10 +2865,22 @@ fn is_compound_literal_before_brace(
     if let Some(Token::Word(word)) = previous {
         return word == language::RETURN;
     }
-    if matches!(previous, Some(Token::Symbol(']')))
-        || (depth == 0 && matches!(previous, Some(Token::Symbol(')'))))
-    {
+    if matches!(previous, Some(Token::Symbol(']'))) {
         return false;
+    }
+    // Only a cast that starts a value may stand before the cast:
+    // `(int *)(int[]){ … }`.
+    if depth == 0
+        && let Some(index) = previous_index
+        && matches!(previous, Some(Token::Symbol(')')))
+    {
+        return matching_open_paren(tokens, index, line_start).is_some_and(|open| {
+            index > open + 1
+                && !has_top_level_comma(tokens, open + 1, index)
+                && previous_non_whitespace(tokens, open, line_start)
+                    .and_then(|before| tokens.get(before))
+                    .is_none_or(starts_value)
+        });
     }
     if let Some(index) = previous_index
         && operator_overload_name_ends_at(tokens, index, line_start)

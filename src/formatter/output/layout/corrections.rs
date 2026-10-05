@@ -65,6 +65,7 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
         ) && line.trim_start().starts_with(['.', '['])
+            && self.current_inline_array_column().is_none()
             && let Some(frame) = self
                 .layout
                 .frame_stack

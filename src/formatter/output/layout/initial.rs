@@ -1392,6 +1392,17 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(previous_indent);
             }
         }
+        // A brace row of a compound literal stands at its elements.
+        if line.trim_start().starts_with('{') && self.innermost_brace_is_compound_literal() {
+            let brace_indent = usize::from(self.should_indent_brace_line(BraceType::Array))
+                * self.options.indent_width;
+            if let Some(column) = self.current_inline_array_column() {
+                layout.exact_indent_spaces = Some(column + brace_indent);
+            } else if brace_indent > 0 && !has_unmatched_open_brace(self.output.code_of(line)) {
+                layout.exact_indent_spaces =
+                    Some(layout.indent * self.options.indent_width + brace_indent);
+            }
+        }
         if self.current_inline_array_column().is_some()
             && !self.innermost_brace_is_compound_literal()
             && !self.enclosed_in_compound_literal()

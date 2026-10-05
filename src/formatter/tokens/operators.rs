@@ -175,7 +175,14 @@ pub(crate) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
 /// once a bracket closed earlier on the line.
 pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
     let open = crate::formatter::text::line_scan::unmatched_open_bracket_column(head)?;
-    if head[..open].contains(']') {
+    // A subscript, after a name or a closed bracket or paren, continues
+    // past its bracket; only a message send aligns under its operator.
+    let subscript = head[..open]
+        .trim_end()
+        .chars()
+        .next_back()
+        .is_some_and(|ch| is_identifier_continue(ch) || matches!(ch, '.' | ']' | ')'));
+    if subscript || head[..open].contains(']') {
         let after = &head[open + 1..];
         return Some(open + 1 + after.len() - after.trim_start().len());
     }

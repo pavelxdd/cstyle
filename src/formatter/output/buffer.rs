@@ -781,7 +781,8 @@ impl OutputBuffer {
     /// backslash-newlines.
     pub(crate) fn directive_of_continuation(&self, index: usize) -> Option<usize> {
         let mut line = index;
-        while line > 0 && self.code_trimmed(line - 1).ends_with('\\') {
+        // A comment row of the body continues the directive too.
+        while line > 0 && self.trimmed(line - 1).ends_with('\\') {
             line -= 1;
             if self.trimmed(line).starts_with('#') {
                 return Some(line);

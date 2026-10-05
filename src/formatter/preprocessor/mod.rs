@@ -607,7 +607,8 @@ impl FormatEngine<'_> {
         let continued_define_contains_directive = is_define
             && parts.iter().skip(1).any(|part| {
                 let part = part.trim_end();
-                preprocessor_directive(part).is_some() && !part.ends_with('\\')
+                preprocessor_directive(part).is_some_and(is_known_preprocessor_directive)
+                    && !part.ends_with('\\')
             });
         // Lines a block comment carries past an unbroken directive continue
         // no define body.
@@ -631,9 +632,11 @@ impl FormatEngine<'_> {
         let mut continued_line_comment = false;
         let mut open_paren_columns = Vec::new();
         for (index, part) in parts.iter().enumerate() {
+            let backslash_continued = index > 0 && parts[index - 1].trim_end().ends_with('\\');
             self.push_preprocessor_part(
                 index,
                 part,
+                backslash_continued,
                 &PreprocessorLineParts {
                     opaque_literal_line_ranges,
                     branch_separator_after_else,
@@ -697,6 +700,7 @@ impl FormatEngine<'_> {
         &mut self,
         index: usize,
         part: &str,
+        backslash_continued: bool,
         parts: &PreprocessorLineParts<'_>,
         continued_line_comment: &mut bool,
         open_paren_columns: &mut Vec<usize>,
@@ -717,9 +721,12 @@ impl FormatEngine<'_> {
         } else {
             part.trim_end()
         };
+        // On a line a backslash continues, a `#` before an unknown name
+        // stringizes a macro parameter.
         let directive = (!line_is_continued_comment && !is_opaque_literal_continuation)
             .then(|| preprocessor_directive(part))
-            .flatten();
+            .flatten()
+            .filter(|&name| !backslash_continued || is_known_preprocessor_directive(name));
         let part_known_directive = directive.is_some_and(is_known_preprocessor_directive);
         let part_is_define = directive == Some("define");
         let opening_indentable = if matches!(directive, Some("if" | "ifdef" | "ifndef")) {
