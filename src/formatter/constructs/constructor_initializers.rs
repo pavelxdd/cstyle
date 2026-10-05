@@ -336,8 +336,7 @@ impl FormatEngine<'_> {
             if self.output.comment_start_index(index) != index {
                 continue;
             }
-            let raw = &self.output[index];
-            let code = raw[..trailing_comment_split_limit(raw)].trim_end();
+            let code = self.output.code_before_comment(index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.starts_with(':') && !trimmed.starts_with("::") {
                 if code.ends_with('{') || code.ends_with('}') {
@@ -379,8 +378,7 @@ impl FormatEngine<'_> {
                 .any(|index| matches!(self.tree.tokens[index], Token::Symbol('?')));
         }
         for index in (0..colon_index).rev() {
-            let code =
-                self.output[index][..trailing_comment_split_limit(&self.output[index])].trim_end();
+            let code = self.output.code_before_comment(index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

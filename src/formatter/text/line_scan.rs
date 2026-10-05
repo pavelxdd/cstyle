@@ -180,8 +180,8 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
         return (0, Vec::new());
     }
     thread_local! {
-        static CACHE: std::cell::RefCell<std::collections::HashMap<String, (usize, Vec<usize>)>> =
-            std::cell::RefCell::new(std::collections::HashMap::new());
+        static CACHE: std::cell::RefCell<LineCache<(usize, Vec<usize>)>> =
+            std::cell::RefCell::new(LineCache::default());
     }
     if let Some(imbalance) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
         return imbalance;
@@ -371,8 +371,8 @@ pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
     }
     thread_local! {
         // Layout reads the same recent lines over and over.
-        static CACHE: std::cell::RefCell<std::collections::HashMap<String, Vec<usize>>> =
-            std::cell::RefCell::new(std::collections::HashMap::new());
+        static CACHE: std::cell::RefCell<LineCache<Vec<usize>>> =
+            std::cell::RefCell::new(LineCache::default());
     }
     if let Some(columns) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
         return columns;
@@ -616,8 +616,8 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
     }
     thread_local! {
         // Layout reads the same recent lines over and over.
-        static CACHE: std::cell::RefCell<std::collections::HashMap<String, Option<usize>>> =
-            std::cell::RefCell::new(std::collections::HashMap::new());
+        static CACHE: std::cell::RefCell<LineCache<Option<usize>>> =
+            std::cell::RefCell::new(LineCache::default());
     }
     if let Some(start) = CACHE.with(|cache| cache.borrow().get(line).copied()) {
         return start;
@@ -800,5 +800,30 @@ mod tests {
             trailing_comment_split_limit(preprocessor),
             "#define VALUE 1'000".len()
         );
+    }
+}
+
+/// A map from line text to what a scan found in it; lines are short and
+/// hashed often, so a multiply-rotate hash serves better than SipHash.
+type LineCache<V> = std::collections::HashMap<String, V, std::hash::BuildHasherDefault<LineHasher>>;
+
+#[derive(Default)]
+struct LineHasher(u64);
+
+impl std::hash::Hasher for LineHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        const SEED: u64 = 0x51_7c_c1_b7_27_22_0a_95;
+        let mut chunks = bytes.chunks_exact(8);
+        for chunk in &mut chunks {
+            let word = u64::from_le_bytes(chunk.try_into().expect("eight bytes"));
+            self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(SEED);
+        }
+        for &byte in chunks.remainder() {
+            self.0 = (self.0.rotate_left(5) ^ u64::from(byte)).wrapping_mul(SEED);
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
     }
 }

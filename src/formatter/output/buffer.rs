@@ -3,6 +3,7 @@ use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
@@ -28,6 +29,9 @@ pub(crate) struct LineBraceMeta {
     pub(crate) paren_closes: usize,
     pub(crate) paren_open_count: usize,
     pub(crate) paren_last_open_column: Option<usize>,
+    /// End of the code before a trailing comment, as
+    /// `trailing_comment_split_limit` finds it.
+    comment_split_limit: usize,
 }
 
 fn is_raw_literal(token: &Token) -> bool {
@@ -89,6 +93,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         paren_closes,
         paren_open_count: paren_opens.len(),
         paren_last_open_column: paren_opens.last().copied(),
+        comment_split_limit: trailing_comment_split_limit(line),
     }
 }
 
@@ -109,6 +114,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         paren_closes,
         paren_open_count: paren_opens.len(),
         paren_last_open_column: None,
+        comment_split_limit: trailing_comment_split_limit(line),
     }
 }
 
@@ -179,6 +185,9 @@ pub(crate) struct OutputBuffer {
     last_non_empty_dirty: Cell<bool>,
     /// Counts changes to lines already pushed.
     version: u64,
+    /// The last look back for the open brace a closing brace would close:
+    /// the line count and version it read, and the line it found.
+    closing_brace_open_cache: Cell<Option<(usize, u64, Option<usize>)>>,
 }
 
 impl OutputBuffer {
@@ -437,6 +446,7 @@ impl OutputBuffer {
                     paren_closes: 0,
                     paren_open_count: 0,
                     paren_last_open_column: None,
+                    comment_split_limit: trailing_comment_split_limit(line),
                 }
             } else {
                 compute_line_brace_meta(line)
@@ -452,6 +462,12 @@ impl OutputBuffer {
     pub(crate) fn code(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
         &self.lines[index][..meta.code_end_byte]
+    }
+
+    /// Line `index` up to its trailing comment, as
+    /// `trailing_comment_split_limit` cuts it.
+    pub(crate) fn code_before_comment(&self, index: usize) -> &str {
+        &self.lines[index][..self.brace_meta(index).comment_split_limit]
     }
 
     pub(crate) fn code_trimmed(&self, index: usize) -> &str {
@@ -476,26 +492,70 @@ impl OutputBuffer {
         &self,
         tab_width: usize,
     ) -> Option<(usize, OpenBraceShape, &str)> {
+        // Lines pushed since the last look back are read first; with no
+        // brace left open among them, the walk ends where it did then.
+        let len = self.lines.len();
+        let cached = self
+            .closing_brace_open_cache
+            .get()
+            .filter(|&(cached_len, version, _)| version == self.version && cached_len <= len);
+        let stop = cached.map_or(0, |(cached_len, _, _)| cached_len);
         let mut depth = 0usize;
-        for index in (0..self.lines.len()).rev() {
-            // The body of a block comment holds no braces.
-            if self.comment_start_index(index) != index {
-                continue;
+        let mut found = None;
+        let mut index = len;
+        while index > stop {
+            index -= 1;
+            if let Some(open) = self.closing_brace_open_step(index, &mut depth) {
+                found = Some(Some(open));
+                break;
             }
-            let meta = self.brace_meta(index);
-            let trimmed = self.code_trimmed(index);
-            if depth == 0
-                && meta.opens > 0
-                && (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
-            {
-                return Some((self.lead_width(index, tab_width), meta.open_shape, trimmed));
-            }
-            depth += meta.closes;
-            if meta.opens > depth {
-                return Some((self.lead_width(index, tab_width), meta.open_shape, trimmed));
-            }
-            depth = depth.saturating_sub(meta.opens);
         }
+        let open = match (found, cached) {
+            (Some(open), _) => open,
+            (None, Some((_, _, open))) if depth == 0 => open,
+            _ => {
+                let mut open = None;
+                while index > 0 {
+                    index -= 1;
+                    if let Some(at) = self.closing_brace_open_step(index, &mut depth) {
+                        open = Some(at);
+                        break;
+                    }
+                }
+                open
+            }
+        };
+        self.closing_brace_open_cache
+            .set(Some((len, self.version, open)));
+        let index = open?;
+        let meta = self.brace_meta(index);
+        Some((
+            self.lead_width(index, tab_width),
+            meta.open_shape,
+            self.code_trimmed(index),
+        ))
+    }
+
+    /// One step of the walk back for the open brace the next closing brace
+    /// closes: line `index`, if it holds that brace.
+    fn closing_brace_open_step(&self, index: usize, depth: &mut usize) -> Option<usize> {
+        // The body of a block comment holds no braces.
+        if self.comment_start_index(index) != index {
+            return None;
+        }
+        let meta = self.brace_meta(index);
+        let trimmed = self.code_trimmed(index);
+        if *depth == 0
+            && meta.opens > 0
+            && (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
+        {
+            return Some(index);
+        }
+        *depth += meta.closes;
+        if meta.opens > *depth {
+            return Some(index);
+        }
+        *depth = depth.saturating_sub(meta.opens);
         None
     }
 
