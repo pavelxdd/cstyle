@@ -12,12 +12,13 @@ use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
     is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
     // Labels that lead the line own what follows them all.
-    let trimmed = code.trim_ascii_start();
+    let trimmed = code.trimmed_start();
     if (trimmed.starts_with("case") || trimmed.starts_with("default"))
         && code.matches(':').count() > 1
         && trimmed.starts_with(header)
@@ -27,7 +28,7 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
         while let Some(colon) = find_case_colon(rest) {
             rest = &rest[colon + 1..];
         }
-        if rest.trim_ascii_end().ends_with(':') && !rest.contains("::") {
+        if rest.trimmed_end().ends_with(':') && !rest.contains("::") {
             return None;
         }
         return Some(code.len() - trimmed.len());
@@ -40,7 +41,7 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
             let suffix_matches = if header == "case" {
                 after.starts_with(char::is_whitespace)
             } else {
-                after.trim_ascii_start().starts_with(':')
+                after.trimmed_start().starts_with(':')
             };
             (boundary && suffix_matches).then_some(offset)
         })
@@ -50,7 +51,7 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
 /// Whether `prefix`, the text before a label, is the brace closing the case
 /// before.
 fn brace_led(prefix: &str) -> bool {
-    let prefix = prefix.trim_ascii();
+    let prefix = prefix.trimmed();
     !prefix.is_empty() && prefix.chars().all(|ch| ch == '}')
 }
 
@@ -107,11 +108,11 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty())
+            .filter(|line| !line.trimmed().is_empty())
             .take(32)
         {
             let code = &self.output.code_of(previous);
-            if code.trim_ascii_end().ends_with([';', '{', '}']) {
+            if code.trimmed_end().ends_with([';', '{', '}']) {
                 return None;
             }
             let (closes, opens) = line_scan::line_paren_imbalance(code);
@@ -138,7 +139,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|line| line.trim_ascii_start().starts_with('#'))
+                .is_some_and(|line| line.trimmed_start().starts_with('#'))
         {
             self.layout
                 .continuation_indent
@@ -177,9 +178,9 @@ impl FormatEngine<'_> {
         };
         let header_candidate = self
             .current
-            .trim_ascii_start()
+            .trimmed_start()
             .strip_prefix('}')
-            .map_or(self.current.trim_ascii_start(), str::trim_start);
+            .map_or(self.current.trimmed_start(), str::trim_start);
         let split_header = !header_candidate.is_empty()
             && brace_header.is_some_and(|header| {
                 leading_identifier(header_candidate) != header
@@ -187,13 +188,13 @@ impl FormatEngine<'_> {
             });
         let semantic_kind = self.brace_semantic_kind(brace_type, opens_lambda_body);
         let current_label = || {
-            let line = if self.current.trim_ascii().is_empty() {
+            let line = if self.current.trimmed().is_empty() {
                 self.output
                     .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
-                        let trimmed = line.trim_ascii_start();
+                        let trimmed = line.trimmed_start();
                         !trimmed.is_empty() && !is_comment_only_line(trimmed)
                     })
                     .map(String::as_str)
@@ -202,9 +203,9 @@ impl FormatEngine<'_> {
                 self.current.as_str()
             };
             // A statement label after switch labels owns the block.
-            let mut line = line.trim_ascii_start();
+            let mut line = line.trimmed_start();
             while let Some(colon) = find_case_colon(line) {
-                let rest = line[colon + 1..].trim_ascii_start();
+                let rest = line[colon + 1..].trimmed_start();
                 if rest.is_empty() {
                     break;
                 }
@@ -218,11 +219,11 @@ impl FormatEngine<'_> {
                 if current_label() {
                     return false;
                 }
-                let current = self.current.trim_ascii_start();
+                let current = self.current.trimmed_start();
                 if !current.is_empty() && !is_comment_only_line(current) {
                     // A statement kept after the label owns no brace.
                     return case_label_token_offset(current, header).is_some()
-                        && !self.output.code_of(current).trim_ascii_end().ends_with(';');
+                        && !self.output.code_of(current).trimmed_end().ends_with(';');
                 }
                 self.has_pending_case_label_brace()
                     || self
@@ -231,7 +232,7 @@ impl FormatEngine<'_> {
                         .iter()
                         .rev()
                         .find(|line| {
-                            let trimmed = line.trim_ascii_start();
+                            let trimmed = line.trimmed_start();
                             !trimmed.is_empty()
                                 && !trimmed.starts_with('#')
                                 && !is_comment_only_line(trimmed)
@@ -252,9 +253,9 @@ impl FormatEngine<'_> {
             0
         };
         let case_separated_by_preprocessor = case_block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                preprocessor_directive(line.trim_ascii_start())
+                preprocessor_directive(line.trimmed_start())
                     .is_some_and(|directive| !is_conditional_preprocessor(directive))
             });
         let label_block =
@@ -420,10 +421,7 @@ impl FormatEngine<'_> {
             .and_then(|frame| frame.header.as_deref())
         {
             let starts_header = |line: &str| {
-                let code = line
-                    .trim_ascii_start()
-                    .trim_start_matches('}')
-                    .trim_ascii_start();
+                let code = line.trimmed_start().trim_start_matches('}').trimmed_start();
                 let code = code
                     .strip_prefix("else")
                     .filter(|_| header != "else")
@@ -432,7 +430,7 @@ impl FormatEngine<'_> {
                     !rest.starts_with(|ch: char| ch.is_alphanumeric() || ch == '_')
                 })
             };
-            let code = self.output.code_of(line).trim_ascii();
+            let code = self.output.code_of(line).trimmed();
             if code != "{"
                 && !starts_header(line)
                 && let Some(header_line) = self
@@ -445,7 +443,7 @@ impl FormatEngine<'_> {
                         !self
                             .output
                             .code_of(line)
-                            .trim_ascii_end()
+                            .trimmed_end()
                             .ends_with([';', '{', '}'])
                     })
                     .find(|line| starts_header(line))
@@ -453,7 +451,7 @@ impl FormatEngine<'_> {
                 line = header_line;
             }
         }
-        let code = self.output.code_of(line).trim_ascii();
+        let code = self.output.code_of(line).trimmed();
         if self
             .layout
             .frame_stack

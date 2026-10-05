@@ -10,6 +10,7 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
 };
+use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) first_width: usize,
@@ -39,7 +40,7 @@ impl FormatEngine<'_> {
             let Some(next_line) = self.output.get(index + 1) else {
                 continue;
             };
-            if next_line.trim_ascii().is_empty() || self.output[index].trim_ascii() != "{" {
+            if next_line.trimmed().is_empty() || self.output[index].trimmed() != "{" {
                 continue;
             }
             let next_line = self.output.remove(index + 1);
@@ -48,7 +49,7 @@ impl FormatEngine<'_> {
                 "{}{}{}",
                 self.output[index],
                 fill,
-                next_line.trim_ascii_start()
+                next_line.trimmed_start()
             );
             self.output.set(index, merged);
         }
@@ -64,8 +65,8 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let code = self.output.code_of(previous).trim_ascii_end();
-                    code.trim_ascii_start().starts_with('}') && code.ends_with(',')
+                    let code = self.output.code_of(previous).trimmed_end();
+                    code.trimmed_start().starts_with('}') && code.ends_with(',')
                 })
         {
             return None;
@@ -78,21 +79,21 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
         structural_level: usize,
-        base_indent_width: usize,
+        base_indent_width: impl FnOnce() -> usize,
         width: usize,
     ) -> MaxLengthBraceRowLayout {
         let attaches_lisp_closer = matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
-        ) && line.trim_ascii_start().starts_with('}')
+        ) && line.trimmed_start().starts_with('}')
             && self.output.last().is_some_and(|previous| {
-                !previous.trim_ascii().is_empty()
-                    && preprocessor_directive(previous.trim_ascii_start()).is_none()
+                !previous.trimmed().is_empty()
+                    && preprocessor_directive(previous.trimmed_start()).is_none()
                     && !line_ends_with_comment(previous)
             });
         let mut prefix_width = 0;
         let first_width = if attaches_lisp_closer && let Some(previous) = self.output.last() {
-            let separator_width = usize::from(!previous.trim_ascii_end().ends_with('{'));
+            let separator_width = usize::from(!previous.trimmed_end().ends_with('{'));
             width
                 .saturating_sub(
                     visual_width_from(previous, 0, self.options.tab_width) + separator_width,
@@ -102,23 +103,23 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         ) && let Some(brace) = self.output.last()
-            && brace.trim_ascii() == "{"
-            && !line.trim_ascii_start().starts_with(['#', '}'])
-            && !line.trim_ascii_start().starts_with("//")
+            && brace.trimmed() == "{"
+            && !line.trimmed_start().starts_with(['#', '}'])
+            && !line.trimmed_start().starts_with("//")
             && !line.contains("*INDENT-OFF*")
             && !labels::is_access_label(line, &self.options.access_labels)
             && !self.output[..self.output.len() - 1]
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .is_some_and(|line| is_namespace_or_module_block_header(line))
         {
             // astyle measures the run-in line from its brace, with the fill
             // as written, which may be a tab.
             let output_options = self.output_options();
             let prefix =
-                output_options.continuation_indent_prefix(structural_level, base_indent_width);
-            let next = format!("{prefix}{}", line.trim_ascii_start());
+                output_options.continuation_indent_prefix(structural_level, base_indent_width());
+            let next = format!("{prefix}{}", line.trimmed_start());
             let brace_width = leading_visual_width(brace, self.options.tab_width);
             let brace_prefix = output_options.continuation_indent_prefix(
                 brace_width / self.options.indent_width.max(1),
@@ -168,14 +169,14 @@ impl FormatEngine<'_> {
         if !(matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line.trim_ascii() == "};"
+        ) && line.trimmed() == "};"
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
                 .take(4)
-                .any(|line| is_lambda_body_header(line.trim_ascii_end())))
+                .any(|line| is_lambda_body_header(line.trimmed_end())))
         {
             return false;
         }
@@ -188,7 +189,7 @@ impl FormatEngine<'_> {
         } else {
             base + 1
         };
-        self.push_output_line(line.trim_ascii(), indent);
+        self.push_output_line(line.trimmed(), indent);
         true
     }
 
@@ -206,14 +207,14 @@ impl FormatEngine<'_> {
         let Some(open) = line.rfind('{') else {
             return false;
         };
-        if !(is_lambda_body_header(line[..open].trim_ascii_end()) && {
-            let head = line[..open].trim_ascii_end();
+        if !(is_lambda_body_header(line[..open].trimmed_end()) && {
+            let head = line[..open].trimmed_end();
             let one_line_body = line[open + 1..].contains('}');
             !(one_line_body && (!self.options.break_one_line_blocks || head.contains("->")))
         }) {
             return false;
         }
-        self.finish_line_text(line[..open].trim_ascii_end());
+        self.finish_line_text(line[..open].trimmed_end());
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
@@ -248,12 +249,12 @@ impl FormatEngine<'_> {
         };
         if !(open < close
             && line[..open].contains("operator")
-            && line[..open].trim_ascii_end().ends_with(')'))
+            && line[..open].trimmed_end().ends_with(')'))
         {
             return false;
         }
-        let head = line[..open].trim_ascii_end();
-        let body = line[open + 1..close].trim_ascii();
+        let head = line[..open].trimmed_end();
+        let body = line[open + 1..close].trimmed();
         let base = self
             .layout
             .indentation
@@ -324,21 +325,21 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
         .into_iter()
         .enumerate()
     {
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         if !raw_lines[index]
             && trimmed.starts_with('}')
             && let Some(previous) = lines.last_mut()
-            && !previous.trim_ascii().is_empty()
-            && preprocessor_directive(previous.trim_ascii_start()).is_none()
-            && !previous.trim_ascii_end().ends_with('\\')
+            && !previous.trimmed().is_empty()
+            && preprocessor_directive(previous.trimmed_start()).is_none()
+            && !previous.trimmed_end().ends_with('\\')
             && !line_ends_with_comment(previous)
         {
-            if !previous.trim_ascii_end().ends_with('{') {
+            if !previous.trimmed_end().ends_with('{') {
                 previous.push(' ');
             }
             // The brace moves up a column and its comment follows it.
-            let code = trimmed[..trailing_comment_split_limit(trimmed)].trim_ascii_end();
-            let comment = trimmed.len() - trimmed[code.len()..].trim_ascii_start().len();
+            let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
+            let comment = trimmed.len() - trimmed[code.len()..].trimmed_start().len();
             let gap = &trimmed[code.len()..comment];
             // Only a bare closer moves; an element's comment keeps its
             // column after the `},`.
@@ -370,11 +371,11 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
         let line = input[index];
         let runs_in = |brace: &str, at: usize| {
             !raw_lines[at - 1]
-                && brace.trim_ascii() == "{"
+                && brace.trimmed() == "{"
                 && input.get(at).is_some_and(|next| {
-                    !next.trim_ascii().is_empty()
-                        && !next.trim_ascii_start().starts_with('#')
-                        && !next.trim_ascii_start().starts_with('}')
+                    !next.trimmed().is_empty()
+                        && !next.trimmed_start().starts_with('#')
+                        && !next.trimmed_start().starts_with('}')
                         && !next.starts_with("//")
                         && !next.contains("*INDENT-OFF*")
                         && !run_in_next_line_is_access_label(brace, next, options)
@@ -382,7 +383,7 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
         };
         // A brace leading a row runs into the block comment after it.
         if let Some(comment) = line
-            .trim_ascii_start()
+            .trimmed_start()
             .strip_prefix('{')
             .filter(|rest| rest.starts_with([' ', '\t']))
             .map(str::trim_start)
@@ -393,7 +394,7 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             })
             && !raw_lines[index]
         {
-            let brace = &line[..line.len() - line.trim_ascii_start().len() + 1];
+            let brace = &line[..line.len() - line.trimmed_start().len() + 1];
             let body = format!(
                 "{}{comment}",
                 " ".repeat(leading_visual_width(brace, options.tab_width) + options.indent_width)
@@ -412,7 +413,7 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             loop {
                 let next = input[at];
                 let fill = horstmann_run_in_fill(&brace, next, options);
-                let next = next.trim_ascii_start();
+                let next = next.trimmed_start();
                 let next = if options.strip_comment_prefix {
                     next.strip_prefix("/*  ")
                         .map_or_else(|| next.to_string(), |rest| format!("/* {rest}"))
@@ -456,7 +457,7 @@ fn previous_line_is_namespace_header(input: &[&str], before: usize) -> bool {
     input[..before]
         .iter()
         .rev()
-        .find(|line| !line.trim_ascii().is_empty())
+        .find(|line| !line.trimmed().is_empty())
         .is_some_and(|line| is_namespace_or_module_block_header(line))
 }
 
@@ -465,7 +466,7 @@ pub(crate) fn horstmann_run_in_fill(
     next_line: &str,
     options: &FormatOptions,
 ) -> String {
-    let switch_label = switch_cases::find_case_colon(next_line.trim_ascii_start()).is_some();
+    let switch_label = switch_cases::find_case_colon(next_line.trimmed_start()).is_some();
     if !matches!(options.indent_style, IndentStyle::ForceTabs)
         && labels::is_access_label(next_line, &options.access_labels)
     {

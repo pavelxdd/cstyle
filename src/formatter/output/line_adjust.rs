@@ -3,6 +3,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::tabs;
+use crate::formatter::text::trim::Trimmed;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LineAdjuster {
@@ -50,7 +51,7 @@ impl LineAdjuster {
 
     pub fn observe_raw_comment_line(&mut self, line: &str) {
         if self.line_observe_enabled {
-            let kind = labels::line_kind(line.trim_ascii_start(), &self.access_labels);
+            let kind = labels::line_kind(line.trimmed_start(), &self.access_labels);
             self.switch_observer.observe_line(line, kind);
         }
     }
@@ -63,7 +64,7 @@ impl LineAdjuster {
         if !self.line_observe_enabled {
             return LineKind::Normal;
         }
-        let kind = labels::line_kind(line.trim_ascii_start(), &self.access_labels);
+        let kind = labels::line_kind(line.trimmed_start(), &self.access_labels);
         self.switch_observer.observe_line(line, kind)
     }
 
@@ -90,7 +91,7 @@ impl LineAdjuster {
         if self.line_observe_enabled
             && let Some(suffix) = observed_suffix
         {
-            let kind = labels::line_kind(suffix.trim_ascii_start(), &self.access_labels);
+            let kind = labels::line_kind(suffix.trimmed_start(), &self.access_labels);
             self.switch_observer.observe_line(suffix, kind);
         }
         self.convert_line_tabs(line)
@@ -104,7 +105,7 @@ impl LineAdjuster {
         if self.macro_blocks.is_empty() {
             return line;
         }
-        let trimmed = line.trim_ascii_start();
+        let trimmed = line.trimmed_start();
         let is_begin = macro_block_end_for(trimmed, &self.macro_blocks).is_some();
         let is_end = macro_block_end_macro(trimmed, &self.macro_blocks);
         let is_preprocessor = trimmed.starts_with('#');
@@ -179,7 +180,7 @@ fn macro_block_line_starts_with(line: &str, name: &str) -> bool {
     macro_call_starts_with(line, name)
         || line
             .strip_prefix("#define")
-            .is_some_and(|rest| macro_call_starts_with(rest.trim_ascii_start(), name))
+            .is_some_and(|rest| macro_call_starts_with(rest.trimmed_start(), name))
 }
 
 pub(crate) fn macro_call_starts_with(line: &str, name: &str) -> bool {

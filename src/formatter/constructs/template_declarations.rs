@@ -4,6 +4,7 @@ use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_litera
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::text::trim::Trimmed;
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct TemplateDeclarationState {
@@ -70,11 +71,11 @@ fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
 }
 
 pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
-    let trimmed = line.trim_ascii_start();
+    let trimmed = line.trimmed_start();
     if !trimmed.starts_with("template") || angle_depth_delta(trimmed) <= 0 {
         return None;
     }
-    let code = line[..trailing_comment_split_limit(line)].trim_ascii_end();
+    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
     if (code.ends_with("||") || code.ends_with("&&"))
         && let Some(open) = unmatched_open_paren_column(code)
     {
@@ -103,11 +104,11 @@ pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
 
 impl FormatEngine<'_> {
     pub(crate) fn is_template_declaration_line(&self) -> bool {
-        self.current.trim_ascii_start().starts_with("template")
+        self.current.trimmed_start().starts_with("template")
     }
 
     pub(crate) fn is_complete_template_declaration_line(&self) -> bool {
-        let current = self.current.trim_ascii();
+        let current = self.current.trimmed();
         current.starts_with("template")
             && current.ends_with('>')
             && template_declaration_line_complete(current)
@@ -118,11 +119,11 @@ impl FormatEngine<'_> {
             return false;
         };
         let line = &self.output[index];
-        if !line.trim_ascii_end().ends_with('>') {
+        if !line.trimmed_end().ends_with('>') {
             return false;
         }
-        let code = self.output.code_before_comment(index).trim_ascii_end();
-        let trimmed = code.trim_ascii_start();
+        let code = self.output.code_before_comment(index).trimmed_end();
+        let trimmed = code.trimmed_start();
         is_template_declaration_head_line(trimmed)
             && template_declaration_line_complete(trimmed)
             && !trimmed.ends_with(';')
@@ -133,25 +134,25 @@ impl FormatEngine<'_> {
             return false;
         };
         let previous = &self.output[index];
-        if !previous.trim_ascii_end().ends_with('>') {
+        if !previous.trimmed_end().ends_with('>') {
             return false;
         }
         let lines: Vec<&str> = self.output[..=index]
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty())
+            .filter(|line| !line.trimmed().is_empty())
             .take(16)
             .map(String::as_str)
             .collect();
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = self.output.code_of(line).trim_ascii_end();
-            let trimmed = code.trim_ascii_start();
+            let code = self.output.code_of(line).trimmed_end();
+            let trimmed = code.trimmed_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = self.output.code_of(line).trim_ascii_end();
+                        let code = self.output.code_of(line).trimmed_end();
                         angle_depth_delta(code)
                     })
                     .sum();
@@ -168,26 +169,26 @@ impl FormatEngine<'_> {
         let lines: Vec<&str> = self.output[..end]
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty())
+            .filter(|line| !line.trimmed().is_empty())
             .take(16)
             .map(String::as_str)
             .collect();
         let Some(previous) = lines.first() else {
             return false;
         };
-        let previous_code = self.output.code_of(previous).trim_ascii_end();
+        let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with('>') {
             return false;
         }
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = self.output.code_of(line).trim_ascii_end();
-            let trimmed = code.trim_ascii_start();
+            let code = self.output.code_of(line).trimmed_end();
+            let trimmed = code.trimmed_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = self.output.code_of(line).trim_ascii_end();
+                        let code = self.output.code_of(line).trimmed_end();
                         angle_depth_delta(code)
                     })
                     .sum();
@@ -211,7 +212,7 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty());
+            .find(|line| !line.trimmed().is_empty());
         if previous.is_some_and(|line| has_hash_outside_literals(line)) {
             return;
         }
@@ -249,15 +250,15 @@ impl FormatEngine<'_> {
             .find(|line| {
                 self.output
                     .code_of(line)
-                    .trim_ascii_start()
+                    .trimmed_start()
                     .starts_with("template <")
             })
-            .filter(|line| self.output.code_of(line).trim_ascii() == "template <")
+            .filter(|line| self.output.code_of(line).trimmed() == "template <")
             .map(|line| {
                 leading_visual_width(line, self.options.tab_width) + self.options.indent_width
             });
-        if self.template_continuation_closes_on_line(line.trim_ascii())
-            && line.trim_ascii() == ">"
+        if self.template_continuation_closes_on_line(line.trimmed())
+            && line.trimmed() == ">"
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             spaces = Some(leading_visual_width(previous, self.options.tab_width));
@@ -266,7 +267,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_template_declaration_line(&mut self, line: &str) {
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         let angle_delta = angle_depth_delta(trimmed);
         if trimmed.starts_with("template")
             && angle_delta > 0
@@ -302,7 +303,7 @@ fn angle_depth(line: &str) -> isize {
 }
 
 pub(crate) fn is_template_declaration_head_line(line: &str) -> bool {
-    let trimmed = line.trim_ascii_start();
+    let trimmed = line.trimmed_start();
     let Some(rest) = trimmed.strip_prefix("template") else {
         return false;
     };
@@ -325,7 +326,7 @@ pub(crate) fn is_template_declaration_head_line(line: &str) -> bool {
                 depth -= 1;
                 if saw_open && depth <= 0 {
                     let end = start + offset + ch.len_utf8();
-                    return trimmed[end..].trim_ascii().is_empty();
+                    return trimmed[end..].trimmed().is_empty();
                 }
             }
             _ => {}

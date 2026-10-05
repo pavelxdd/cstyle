@@ -16,6 +16,7 @@ use crate::formatter::lexer::{Token, tokenize};
 use crate::formatter::output::finish::EmptyFillSource;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::tabs;
+use crate::formatter::text::trim::Trimmed;
 use crate::source::line_endings;
 
 mod braces;
@@ -96,7 +97,7 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
     let lines: Vec<&str> = output.split(line_break).collect();
     let blank_lines = lines
         .iter()
-        .filter(|line| line.trim_ascii().is_empty())
+        .filter(|line| line.trimmed().is_empty())
         .count();
     // The split leaves an empty line after the final line break.
     let aligned = blank_lines == sources.len() + usize::from(output.ends_with(line_break));
@@ -114,16 +115,16 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
     for line in lines {
         let in_directive = continues_directive;
         continues_directive = !in_block_comment
-            && (in_directive || line.trim_ascii_start().starts_with('#'))
-            && line.trim_ascii_end().ends_with('\\');
+            && (in_directive || line.trimmed_start().starts_with('#'))
+            && line.trimmed_end().ends_with('\\');
         if in_directive && aligned {
             refilled.push(line);
-            if line.trim_ascii().is_empty() {
+            if line.trimmed().is_empty() {
                 sources.next();
             }
             continue;
         }
-        if line.trim_ascii().is_empty() {
+        if line.trimmed().is_empty() {
             let source = sources.next();
             let lead = match source {
                 _ if !aligned => *active.last().unwrap_or(&root),
@@ -144,7 +145,7 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
             continue;
         }
         let state = active.last_mut().unwrap_or(&mut root);
-        let code = line.trim_ascii_start();
+        let code = line.trimmed_start();
         if in_block_comment {
             if aligned {
                 *state = None;

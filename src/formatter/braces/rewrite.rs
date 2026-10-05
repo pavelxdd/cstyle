@@ -29,6 +29,7 @@ use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
     unmatched_open_paren_column,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 use std::collections::BTreeMap;
 
@@ -179,7 +180,7 @@ impl FormatEngine<'_> {
                     // The header's line holds the level a braceless body
                     // around it left no trace of.
                     if let Some(line) = self.output.last() {
-                        let code = line.trim_ascii();
+                        let code = line.trimmed();
                         let code = code.strip_prefix('}').map_or(code, str::trim_start);
                         if code.starts_with("else")
                             && line_is_control_body_header(code)
@@ -210,7 +211,7 @@ impl FormatEngine<'_> {
                     && !follows_comment_line
                     && !self.split_else_line_layout_active()
                     && let Some(else_line) = self.output.last()
-                    && else_line.trim_ascii() == "else"
+                    && else_line.trimmed() == "else"
                 {
                     let spaces = leading_visual_width(else_line, self.options.tab_width)
                         + self.adjusted_line_indent_delta(else_line)
@@ -314,11 +315,8 @@ impl FormatEngine<'_> {
             // `else if`, ends the chain.
             let broken_else_if = header_is_if && {
                 let lines = self.output.scoped();
-                let mut rows = lines
-                    .iter()
-                    .rev()
-                    .filter(|line| !line.trim_ascii().is_empty());
-                rows.nth(2).is_some_and(|line| line.trim_ascii() == "else")
+                let mut rows = lines.iter().rev().filter(|line| !line.trimmed().is_empty());
+                rows.nth(2).is_some_and(|line| line.trimmed() == "else")
             };
             let else_follows = tokens[semicolon + 1..]
                 .iter()
@@ -481,7 +479,7 @@ impl FormatEngine<'_> {
                 .collect::<String>();
             if self.current_is_blank() {
                 if let Some(previous) = self.output.last_mut() {
-                    previous.truncate(previous.trim_ascii_end().len());
+                    previous.truncate(previous.trimmed_end().len());
                     previous.push_str(&closing_gap);
                 }
             } else {
@@ -828,8 +826,8 @@ impl FormatEngine<'_> {
                         .previous_pre_adjust_line
                         .as_deref()
                         .is_some_and(|line| {
-                            let code = self.output.code_of(line).trim_ascii_end();
-                            code.trim_ascii_start() == "else" && line_ends_with_comment(line)
+                            let code = self.output.code_of(line).trimmed_end();
+                            code.trimmed_start() == "else" && line_ends_with_comment(line)
                         }) =>
             {
                 return false;
@@ -859,8 +857,8 @@ impl FormatEngine<'_> {
         let preserves_return_continuation_column = self.options.brace_style
             == BraceStyle::Whitesmith
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                let code = self.output.code_of(line).trim_ascii_end();
-                code.trim_ascii_start().starts_with("return ") && code.ends_with(':')
+                let code = self.output.code_of(line).trimmed_end();
+                code.trimmed_start().starts_with("return ") && code.ends_with(':')
             });
         let semantic_header = self
             .layout
@@ -1047,7 +1045,7 @@ impl FormatEngine<'_> {
                 matches!(
                     self.layout.nesting.last_closed_brace_type,
                     Some(BraceType::Array | BraceType::NonStatement)
-                ) && (begins_line || self.current.trim_ascii_end().ends_with('}'))
+                ) && (begins_line || self.current.trimmed_end().ends_with('}'))
             }
             _ => false,
         };
@@ -1056,13 +1054,13 @@ impl FormatEngine<'_> {
 
     fn previous_output_code_ends_assignment(&self) -> bool {
         self.output.last().is_some_and(|line| {
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             code.ends_with('=')
         })
     }
 
     fn current_or_previous_is_lambda_capture_header(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         is_lambda_capture_header(current)
             || (current.is_empty()
                 && self
@@ -1070,8 +1068,8 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
-                    .is_some_and(|line| is_lambda_capture_header(line.trim_ascii_end())))
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| is_lambda_capture_header(line.trimmed_end())))
     }
 
     fn in_declaration_brace_scope(&self) -> bool {
@@ -1150,7 +1148,7 @@ impl FormatEngine<'_> {
                 let previous_code = self
                     .output
                     .last()
-                    .map(|line| self.output.code_of(line).trim_ascii_end().to_string());
+                    .map(|line| self.output.code_of(line).trimmed_end().to_string());
                 (self.current_is_blank()
                     && previous_code
                         .as_deref()
@@ -1185,11 +1183,11 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| is_lambda_body_header(line.trim_ascii_end()));
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
         let lambda_header = self.current_is_lambda_body_header()
             || previous_line_lambda_header
-            || (self.current.trim_ascii_end().ends_with(')')
+            || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']')
                 && brace_type != BraceType::CompoundLiteral);
@@ -1212,7 +1210,7 @@ impl FormatEngine<'_> {
         if (lambda_header || inferred_capture_lambda)
             && self.options.break_one_line_blocks
             && !self.current.contains("->")
-            && !line_ends_compound_literal_cast(self.current.trim_ascii_end())
+            && !line_ends_compound_literal_cast(self.current.trimmed_end())
             && !is_empty_one_line_block_tokens(&tokens[start..=close_index])
             && !is_comment_only_one_line_block_tokens(&tokens[start..=close_index])
             && !is_semicolon_only_one_line_block_tokens(&tokens[start..=close_index])
@@ -1250,7 +1248,7 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && let Some(previous) = self.output.last()
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
+            let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(
@@ -1409,24 +1407,24 @@ impl FormatEngine<'_> {
                 && self.current_is_blank()
                 && self.macro_line_before_directives();
         let backslash_continuation_block =
-            !token_begins_line(tokens, start) && self.current.trim_ascii_end().ends_with('\\');
+            !token_begins_line(tokens, start) && self.current.trimmed_end().ends_with('\\');
         let previous_line_lambda_header = self.current_is_blank()
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| is_lambda_body_header(line.trim_ascii_end()));
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
         let previous_line_trailing_return_lambda_header = self.current_is_blank()
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .is_some_and(|line| {
-                    let line = line.trim_ascii_end();
+                    let line = line.trimmed_end();
                     is_lambda_body_header(line) && line.contains("->")
                 });
         // A control header's condition indexing an array opens no lambda.
@@ -1439,21 +1437,21 @@ impl FormatEngine<'_> {
                 matches!(header, "if" | "while" | "for" | "switch")
                     && self
                         .current
-                        .trim_ascii_start()
+                        .trimmed_start()
                         .trim_start_matches('}')
-                        .trim_ascii_start()
+                        .trimmed_start()
                         .trim_start_matches("else")
-                        .trim_ascii_start()
+                        .trimmed_start()
                         .starts_with(header)
             });
         let lambda_header = self.current_is_lambda_body_header()
             || previous_line_lambda_header
             || (!control_header_line
-                && self.current.trim_ascii_end().ends_with(')')
+                && self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
         let parameterized_lambda_header = self.current_is_lambda_body_header()
-            || (self.current.trim_ascii_end().ends_with(')')
+            || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
         let in_declaration_scope = match self.layout.nesting.brace_type_stack.last() {
@@ -1482,7 +1480,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let operator_header =
-            self.current.trim_ascii_end().ends_with(')') && self.current.contains("operator");
+            self.current.trimmed_end().ends_with(')') && self.current.contains("operator");
         let non_attaching_lambda_style = matches!(
             self.options.brace_style,
             BraceStyle::Allman
@@ -1676,11 +1674,7 @@ impl FormatEngine<'_> {
         self.set_input_whitespace(tokens, start, 0);
         self.token_input.token_begins_source_line = token_begins_line(tokens, start);
         self.push_open_brace(next, start, self.inferred_definition_brace(tokens, start));
-        if self
-            .output
-            .last()
-            .is_some_and(|line| line.trim_ascii() == "{")
-        {
+        if self.output.last().is_some_and(|line| line.trimmed() == "{") {
             let brace_line = self.output.len() - 1;
             self.source_run_in_brace_lines
                 .retain(|index| *index != brace_line);
@@ -1698,7 +1692,7 @@ impl FormatEngine<'_> {
         self.set_input_whitespace(tokens, close_index, 0);
         self.token_input.token_begins_source_line = token_begins_line(tokens, close_index);
         self.push_close_brace(next, false);
-        let trimmed_len = self.current.trim_ascii_end().len();
+        let trimmed_len = self.current.trimmed_end().len();
         if self.current[..trimmed_len].ends_with("{}") {
             let open = trimmed_len.saturating_sub(2);
             if self.should_space_before_one_line_block(BraceType::Command)
@@ -1721,7 +1715,7 @@ impl FormatEngine<'_> {
     /// one macro-like word, which astyle reads past as it does the lines.
     fn macro_line_before_directives(&self) -> bool {
         for (directives, line) in self.output.scoped().iter().rev().enumerate() {
-            let trimmed = line.trim_ascii();
+            let trimmed = line.trimmed();
             if !trimmed.starts_with('#') || trimmed.ends_with('\\') {
                 return directives > 0
                     && trimmed.split_whitespace().count() == 1
@@ -1750,7 +1744,7 @@ impl FormatEngine<'_> {
                 opening_body_gap.as_deref(),
                 self.output
                     .last()
-                    .is_some_and(|line| preprocessor_directive(line.trim_ascii_start()).is_some()),
+                    .is_some_and(|line| preprocessor_directive(line.trimmed_start()).is_some()),
             )
         };
         let braced_init = (brace_type == BraceType::Initializer
@@ -1759,12 +1753,12 @@ impl FormatEngine<'_> {
                 .command_state
                 .previous_command_char
                 .is_some_and(|ch| is_identifier_continue(ch) || ch == '>' || ch == ']')
-                || self.current.trim_ascii_end().ends_with('>')))
+                || self.current.trimmed_end().ends_with('>')))
             || self.is_nested_designated_init_field();
         let after_comma = self.layout.command_state.previous_command_char == Some(',');
         let run_in_array_gap_after_brace = self.current.ends_with([' ', '\t'])
             && matches!(
-                self.current.trim_ascii_end().chars().next_back(),
+                self.current.trimmed_end().chars().next_back(),
                 Some('{' | '[')
             )
             && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral);
@@ -1773,14 +1767,14 @@ impl FormatEngine<'_> {
         }
         let array_element_after_brace =
             matches!(
-                self.current.trim_ascii_end().chars().next_back(),
+                self.current.trimmed_end().chars().next_back(),
                 Some('{' | '[')
             ) && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral);
         match leading_gap {
             Some(gap) => self.current.push_str(gap),
             None if after_comma => {}
             None if array_element_after_brace && run_in_array_gap_after_brace => {
-                let target_column = if self.current.trim_ascii_end() == "{" {
+                let target_column = if self.current.trimmed_end() == "{" {
                     Some(
                         leading_visual_width(&self.current, self.options.tab_width)
                             + self.options.indent_width,
@@ -1817,7 +1811,7 @@ impl FormatEngine<'_> {
                 }
             }
             None if self.current_is_lambda_body_header()
-                && lambda_header_has_trailing_return(self.current.trim_ascii_end()) =>
+                && lambda_header_has_trailing_return(self.current.trimmed_end()) =>
             {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
@@ -1831,14 +1825,14 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
-                    .is_some_and(|line| line.trim_ascii_start().starts_with("#if")) =>
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| line.trimmed_start().starts_with("#if")) =>
             {
                 self.ensure_space();
             }
             None if braced_init
                 && unmatched_open_paren_column(&self.current).is_none()
-                && ((block.trim_ascii_start().starts_with("{-")
+                && ((block.trimmed_start().starts_with("{-")
                     && (self
                         .layout
                         .indentation
@@ -1850,14 +1844,14 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim_ascii().is_empty())
-                        .is_some_and(|line| line.trim_ascii_start().starts_with("#endif"))) =>
+                        .find(|line| !line.trimmed().is_empty())
+                        .is_some_and(|line| line.trimmed_start().starts_with("#endif"))) =>
             {
                 self.ensure_space();
             }
             None if braced_init
                 && self.options.pad_operators
-                && self.current.trim_ascii_end().ends_with('=') =>
+                && self.current.trimmed_end().ends_with('=') =>
             {
                 self.ensure_space();
             }
@@ -1908,14 +1902,14 @@ impl FormatEngine<'_> {
             return false;
         }
         if matches!(
-            self.current.trim_ascii_end().chars().next_back(),
+            self.current.trimmed_end().chars().next_back(),
             Some('{' | '[')
         ) && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
         {
             return false;
         }
         !matches!(brace_type, BraceType::Initializer)
-            || self.current.trim_ascii_end().ends_with('>')
+            || self.current.trimmed_end().ends_with('>')
             || !self
                 .layout
                 .command_state
@@ -1948,7 +1942,7 @@ impl FormatEngine<'_> {
                     self.emit_source_space();
                 }
             } else if braced_init {
-                if self.options.pad_operators && self.current.trim_ascii_end().ends_with('=') {
+                if self.options.pad_operators && self.current.trimmed_end().ends_with('=') {
                     self.emit_source_space_or_ensure();
                 } else {
                     self.emit_source_space();
@@ -1959,7 +1953,7 @@ impl FormatEngine<'_> {
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == '>')
                 && self.current_is_lambda_body_header()
-                && lambda_header_has_trailing_return(self.current.trim_ascii_end())
+                && lambda_header_has_trailing_return(self.current.trimmed_end())
             {
                 self.emit_source_space();
             } else {
@@ -1974,7 +1968,7 @@ impl FormatEngine<'_> {
     }
 
     fn inline_open_brace_is_aggregate(&self) -> bool {
-        if self.current.trim_ascii_end().ends_with('@') {
+        if self.current.trimmed_end().ends_with('@') {
             return true;
         }
         match self.inline_array.aggregate_braces.last() {
@@ -1999,7 +1993,7 @@ impl FormatEngine<'_> {
     /// astyle pads no brace that follows a comment directly or sits on the
     /// line after a directive.
     fn closing_brace_keeps_source_gap(&self) -> bool {
-        let follows_comment = self.current.trim_ascii_end().ends_with("*/")
+        let follows_comment = self.current.trimmed_end().ends_with("*/")
             && self
                 .token_input
                 .previous_input_whitespace
@@ -2014,7 +2008,7 @@ impl FormatEngine<'_> {
             && self
                 .current
                 .rsplit_once('{')
-                .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trim_ascii_end()));
+                .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trimmed_end()));
         // A compound literal keeps the gap before its `}`.
         let closes_cast_literal =
             self.layout.nesting.brace_type_stack.last() == Some(&BraceType::CompoundLiteral);
@@ -2114,7 +2108,7 @@ pub(crate) fn is_standard_add_braces_header(word: &str) -> bool {
 fn split_else_preprocessor_follows_closing_brace(output: &[String]) -> bool {
     let mut saw_preprocessor = false;
     for line in output.iter().rev().take(8) {
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         if trimmed.is_empty() {
             continue;
         }
@@ -3042,7 +3036,7 @@ fn format_one_line_block_tokens(
             .iter()
             .map(token_text)
             .collect::<String>()
-            .trim_ascii_end()
+            .trimmed_end()
             .to_string();
     }
     let adjusted_tokens = opening_body_gap.and_then(|gap| {
@@ -3116,7 +3110,7 @@ fn format_one_line_block_tokens(
             },
         );
     }
-    formatter.current.trim_ascii_end().to_string()
+    formatter.current.trimmed_end().to_string()
 }
 
 fn token_begins_line(tokens: &[Token], index: usize) -> bool {
@@ -3180,7 +3174,7 @@ fn one_line_block_contains_plain_lambda_body(tokens: &[Token]) -> bool {
 
 fn one_line_block_contains_operator_body(tokens: &[Token]) -> bool {
     one_line_block_contains_body_header(tokens, |head| {
-        head.trim_ascii_end().ends_with(')') && head.contains("operator")
+        head.trimmed_end().ends_with(')') && head.contains("operator")
     })
 }
 
@@ -3202,7 +3196,7 @@ fn one_line_block_contains_body_header(
             }
             head.insert_str(0, &token_text(token));
         }
-        matches_header(head.trim_ascii_end())
+        matches_header(head.trimmed_end())
     })
 }
 

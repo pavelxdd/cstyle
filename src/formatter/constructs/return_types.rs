@@ -10,11 +10,12 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
 
 impl FormatEngine<'_> {
     pub(crate) fn split_return_type_pointer_name_indent_spaces(&self, line: &str) -> Option<usize> {
-        if !is_pointer_prefixed_function_part(line.trim_ascii_start()) {
+        if !is_pointer_prefixed_function_part(line.trimmed_start()) {
             return None;
         }
         let previous = self
@@ -22,13 +23,13 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())?;
-        is_return_type_line(previous.trim_ascii())
+            .find(|line| !line.trimmed().is_empty())?;
+        is_return_type_line(previous.trimmed())
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
     pub(crate) fn split_trailing_return_arrow_indent_spaces(&self, line: &str) -> Option<usize> {
-        let current = line.trim_ascii_start();
+        let current = line.trimmed_start();
         if !current.starts_with("->") || current.starts_with("->*") {
             return None;
         }
@@ -40,10 +41,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty())
+            .filter(|line| !line.trimmed().is_empty())
             .take(16)
         {
-            let code = self.output.code_of(previous).trim_ascii_end();
+            let code = self.output.code_of(previous).trimmed_end();
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
@@ -55,10 +56,10 @@ impl FormatEngine<'_> {
                 && let Some(&column) = opens.last()
                 && code[column..].starts_with('(')
             {
-                let before = code[..column].trim_ascii_end();
+                let before = code[..column].trimmed_end();
                 let name_start = function_name_start(before)?;
-                let return_type = before[..name_start].trim_ascii_end();
-                let name = before[name_start..].trim_ascii_start();
+                let return_type = before[..name_start].trimmed_end();
+                let name = before[name_start..].trimmed_start();
                 if is_parameter_return_type_prefix(return_type)
                     && !name.is_empty()
                     && !is_header(self.options, name)
@@ -86,8 +87,8 @@ impl FormatEngine<'_> {
         }
         let mut closed_blocks = 0usize;
         for index in (0..self.output.len()).rev().take(24) {
-            let code = self.output.code_before_comment(index).trim_ascii_end();
-            let trimmed = code.trim_ascii_start();
+            let code = self.output.code_before_comment(index).trimmed_end();
+            let trimmed = code.trimmed_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -123,8 +124,8 @@ impl FormatEngine<'_> {
         let mut index = brace_index;
         while index > 0 {
             index -= 1;
-            let code = self.output.code_before_comment(index).trim_ascii_end();
-            let trimmed = code.trim_ascii_start();
+            let code = self.output.code_before_comment(index).trimmed_end();
+            let trimmed = code.trimmed_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -147,7 +148,7 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        let current = line.trim_ascii_start();
+        let current = line.trimmed_start();
         if !current.contains("= {}") || !current.contains(") ->") || !current.ends_with('{') {
             return None;
         }
@@ -156,18 +157,18 @@ impl FormatEngine<'_> {
             .iter()
             .enumerate()
             .rev()
-            .filter(|(_, line)| !line.trim_ascii().is_empty())
+            .filter(|(_, line)| !line.trimmed().is_empty())
             .take(8)
         {
             let previous_code = self
                 .output
                 .code_before_comment(previous_index)
-                .trim_ascii_end();
+                .trimmed_end();
             if let Some(open) = self.open_paren_column_of(previous_code) {
-                let before = previous_code[..open].trim_ascii_end();
+                let before = previous_code[..open].trimmed_end();
                 let name_start = function_name_start(before)?;
-                let return_type = before[..name_start].trim_ascii_end();
-                let name = before[name_start..].trim_ascii_start();
+                let return_type = before[..name_start].trimmed_end();
+                let name = before[name_start..].trimmed_start();
                 let prefixed_return_type = return_type
                     .split_whitespace()
                     .any(language::is_macro_like_word)
@@ -195,10 +196,10 @@ impl FormatEngine<'_> {
         signature_line: &str,
         open_paren: usize,
     ) -> Option<usize> {
-        let before = signature_line[..open_paren].trim_ascii_end();
+        let before = signature_line[..open_paren].trimmed_end();
         let name_start = function_name_start(before)?;
-        let return_type = before[..name_start].trim_ascii_end();
-        let name = before[name_start..].trim_ascii_start();
+        let return_type = before[..name_start].trimmed_end();
+        let name = before[name_start..].trimmed_start();
         if !is_parameter_return_type_prefix(return_type)
             || name.is_empty()
             || is_header(self.options, name)
@@ -206,7 +207,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let after_paren = &signature_line[open_paren + 1..];
-        let after_paren_indent = after_paren.len() - after_paren.trim_ascii_start().len();
+        let after_paren_indent = after_paren.len() - after_paren.trimmed_start().len();
         let visual_open =
             visual_width_from(&signature_line[..open_paren], 0, self.options.tab_width);
         let visual_after = visual_width_from(
@@ -338,7 +339,7 @@ impl FormatEngine<'_> {
         let previous = &self.output[previous_index];
         // AStyle attaches only return types it recognizes as types, and never
         // a split `struct Type *`.
-        let previous_trimmed = previous.trim_ascii();
+        let previous_trimmed = previous.trimmed();
         previous_is_return_type
             && !line_ends_with_comment(previous)
             && is_attachable_return_type_line(previous_trimmed)
@@ -358,8 +359,8 @@ impl FormatEngine<'_> {
             return false;
         };
         let previous = self.output.pop().expect("previous line exists");
-        let previous_trimmed = previous.trim_ascii();
-        let previous_prefix = &previous[..previous.len() - previous.trim_ascii_start().len()];
+        let previous_trimmed = previous.trimmed();
+        let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
         let separator = if previous_trimmed.ends_with(['*', '&', '^']) {
             ""
         } else {
@@ -382,7 +383,7 @@ impl FormatEngine<'_> {
             previous_indent,
         );
         // The joined head may outgrow the maximum code length.
-        let joined = format!("{previous_trimmed}{separator}{}", line.trim_ascii_start());
+        let joined = format!("{previous_trimmed}{separator}{}", line.trimmed_start());
         if self.options.max_code_length.is_some() && previous_prefix.chars().all(|ch| ch == ' ') {
             let level = previous_indent / self.options.indent_width.max(1);
             self.push_formatted_line_with_indent(
@@ -456,7 +457,7 @@ impl FormatEngine<'_> {
         ) else {
             return false;
         };
-        let return_type = line[..name_offset].trim_ascii_end().to_string();
+        let return_type = line[..name_offset].trimmed_end().to_string();
         let function_part = line[name_offset..].to_string();
         let return_type_last = self
             .tree
@@ -547,7 +548,7 @@ pub(crate) fn is_parameter_return_type_prefix(line: &str) -> bool {
         return false;
     }
     is_return_type_line(line)
-        || (!line.trim_ascii().is_empty()
+        || (!line.trimmed().is_empty()
             && line.chars().all(|ch| {
                 ch.is_whitespace()
                     || is_identifier_continue(ch)
@@ -564,7 +565,7 @@ fn is_pointer_prefixed_function_part(line: &str) -> bool {
     let Some(open_paren) = find_outside_quotes(rest, "(") else {
         return false;
     };
-    let before = rest[..open_paren].trim_ascii_end();
+    let before = rest[..open_paren].trimmed_end();
     !before.is_empty()
         && !language::is_header(before)
         && function_name_start(before).is_some_and(|start| start == 0)

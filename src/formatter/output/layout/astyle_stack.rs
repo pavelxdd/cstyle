@@ -15,6 +15,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
+use crate::formatter::text::trim::Trimmed;
 
 /// Statements longer than this are left to the engine.
 const MAX_REPLAYED_TOKENS: usize = 4000;
@@ -359,7 +360,7 @@ impl FormatEngine<'_> {
                         if token_line != start_line {
                             return None;
                         }
-                        let text = self.output.as_slice()[token_line].trim_ascii_start();
+                        let text = self.output.as_slice()[token_line].trimmed_start();
                         replay.stack.push(second_word_column(text, relative(index)?));
                         replay.continuation = true;
                     }

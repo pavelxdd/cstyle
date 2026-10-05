@@ -4,6 +4,7 @@ use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 
@@ -160,7 +161,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
         if index == line_start_index && line_may_be_raw(&source[index..], &assembly_macro_lines) {
             let line_end = line_end_from(source, index);
             let line = &source[index..line_end];
-            let trimmed = line.trim_ascii_start();
+            let trimmed = line.trimmed_start();
             if is_full_line_conflict_marker(trimmed) {
                 line_has_code = !trimmed.is_empty();
                 tokens.push(Token::RawLine(text(index, line_end)));
@@ -305,7 +306,7 @@ fn read_preprocessor(source: &str, start: usize) -> (PreprocessorToken, usize) {
     while index < bytes.len() {
         let byte = bytes[index];
         if byte == b'\n' {
-            let continued_line = source[line_start..index].trim_ascii_end().ends_with('\\')
+            let continued_line = source[line_start..index].trimmed_end().ends_with('\\')
                 && !following_physical_line_is_blank(bytes, index + 1);
             if continued_line || in_block_comment {
                 line_index += 1;
@@ -387,7 +388,7 @@ fn read_preprocessor(source: &str, start: usize) -> (PreprocessorToken, usize) {
     let text = if preserve_trailing_whitespace {
         output
     } else {
-        output.trim_ascii_end()
+        output.trimmed_end()
     };
     (
         PreprocessorToken {

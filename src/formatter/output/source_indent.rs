@@ -2,6 +2,7 @@ use crate::config::MinConditionalIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::trim::Trimmed;
 
 pub(crate) fn source_indented_macro_row(
     tokens: &[Token],
@@ -44,7 +45,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let trimmed = line.trim_ascii_start();
+        let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             return None;
         }

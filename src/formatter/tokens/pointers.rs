@@ -18,6 +18,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{last_unmatched_open_delimiter, trailing_matching_parens};
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     head_ends_assignment_operator, head_ends_binary_operator,
 };
@@ -60,7 +61,7 @@ impl FormatEngine<'_> {
             }
         } else if self.is_unary_pointer_operator() {
             PointerRole::UnaryOperator
-        } else if self.current.trim_ascii_end().ends_with(')')
+        } else if self.current.trimmed_end().ends_with(')')
             && is_type_like_pointer_word(trailing_word(self.current.trim_end_matches(')')))
         {
             PointerRole::CastTypeGroup
@@ -74,7 +75,7 @@ impl FormatEngine<'_> {
             pointer_role: self.pointer_role(operator, next),
             continuation_anchor_column: None,
             closing_anchor_column: None,
-            is_typedef: self.current.trim_ascii_start().starts_with("typedef "),
+            is_typedef: self.current.trimmed_start().starts_with("typedef "),
         });
     }
 
@@ -90,7 +91,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if self.current.trim_ascii_end().ends_with('*') {
+        if self.current.trimmed_end().ends_with('*') {
             return true;
         }
         if matches!(next, Some(Token::Symbol('[')))
@@ -99,11 +100,9 @@ impl FormatEngine<'_> {
             return true;
         }
         if matches!(next, Some(Token::Symbol('('))) {
-            let current = self.current.trim_ascii_end();
+            let current = self.current.trimmed_end();
             if current.rfind("operator ").is_some_and(|operator| {
-                !current[operator + "operator ".len()..]
-                    .trim_ascii()
-                    .is_empty()
+                !current[operator + "operator ".len()..].trimmed().is_empty()
             }) {
                 return true;
             }
@@ -143,7 +142,7 @@ impl FormatEngine<'_> {
             return false;
         }
         previous_word == language::AUTO
-            || self.current.trim_ascii_end().ends_with('>')
+            || self.current.trimmed_end().ends_with('>')
             || self.looks_like_pointer_declaration_context()
     }
 
@@ -163,8 +162,8 @@ impl FormatEngine<'_> {
         }
         // An increment or decrement after a logical operator is dereferenced.
         if self.layout.previous == PreviousToken::Operator
-            && (self.current.trim_ascii_end().ends_with("&&")
-                || self.current.trim_ascii_end().ends_with("||"))
+            && (self.current.trimmed_end().ends_with("&&")
+                || self.current.trimmed_end().ends_with("||"))
             && matches!(next, Some(Token::Operator(step)) if step == "++" || step == "--")
         {
             return false;
@@ -203,7 +202,7 @@ impl FormatEngine<'_> {
         if matches!(self.layout.previous, PreviousToken::Literal)
             || (self
                 .current
-                .trim_ascii_end()
+                .trimmed_end()
                 .chars()
                 .next_back()
                 .is_some_and(|ch| ch.is_ascii_digit() || ch == '\'' || ch == '"')
@@ -260,17 +259,14 @@ impl FormatEngine<'_> {
         if matches!(operator, "*" | "&")
             && self.layout.previous == PreviousToken::Operator
             && self.is_unary_pointer_operator()
-            && !self
-                .current
-                .trim_ascii_end()
-                .ends_with(['*', '&', '^', ':'])
+            && !self.current.trimmed_end().ends_with(['*', '&', '^', ':'])
         {
             return false;
         }
-        if self.current.trim_ascii_end().ends_with(['*', '&', '^']) {
+        if self.current.trimmed_end().ends_with(['*', '&', '^']) {
             return true;
         }
-        if self.current.trim_ascii_end().ends_with('}')
+        if self.current.trimmed_end().ends_with('}')
             && matches!(
                 self.layout.nesting.last_closed_brace_type,
                 Some(
@@ -294,14 +290,14 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if operator == "*" && self.current.trim_ascii_end().ends_with(')') {
+        if operator == "*" && self.current.trimmed_end().ends_with(')') {
             return self.current_ends_type_group();
         }
         if matches!(operator, "*")
             && matches!(next, Some(Token::Operator(next_operator)) if next_operator == "*")
         {
             if next_is_adjacent {
-                if self.current.trim_ascii().is_empty() {
+                if self.current.trimmed().is_empty() {
                     return self.is_function_declaration_parameter_continuation();
                 }
                 if self.layout.nesting.paren_depth > 0
@@ -318,7 +314,7 @@ impl FormatEngine<'_> {
             }
             return is_type_like_pointer_word(trailing_word(&self.current));
         }
-        if self.current.trim_ascii_end().ends_with('(') {
+        if self.current.trimmed_end().ends_with('(') {
             return matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')')))
                 || matches!(
                     next,
@@ -328,10 +324,10 @@ impl FormatEngine<'_> {
                     || self
                         .current
                         .rfind('(')
-                        .map(|open| trailing_word(self.current[..open].trim_ascii_end()))
+                        .map(|open| trailing_word(self.current[..open].trimmed_end()))
                         .is_some_and(is_type_like_pointer_word));
         }
-        if self.current.trim_ascii_end().ends_with("::") {
+        if self.current.trimmed_end().ends_with("::") {
             return matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')')))
                 || matches!(
                     next,
@@ -342,7 +338,7 @@ impl FormatEngine<'_> {
         if operator == "*"
             && matches!(next, Some(Token::Word(word)) if word == "const")
             && (self.looks_like_pointer_declaration_context()
-                || (self.current.trim_ascii_start().starts_with('(')
+                || (self.current.trimmed_start().starts_with('(')
                     && self
                         .current
                         .split_whitespace()
@@ -417,7 +413,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if operator == "*" && self.current.trim_ascii_end().ends_with(')') {
+        if operator == "*" && self.current.trimmed_end().ends_with(')') {
             return self.current_ends_type_group();
         }
         is_pointer_type_word(trailing_word(&self.current))
@@ -426,7 +422,7 @@ impl FormatEngine<'_> {
 
     fn continues_operator_expression(&self) -> bool {
         self.output.last_line_outside_comment().is_some_and(|line| {
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             if head_ends_assignment_operator(code) {
                 return true;
             }
@@ -438,11 +434,11 @@ impl FormatEngine<'_> {
             if code.ends_with('>') && code.contains('<') {
                 return false;
             }
-            let trimmed = code.trim_ascii_start();
+            let trimmed = code.trimmed_start();
             let ends_single_word_label = trimmed.split_once(':').is_some_and(|(label, rest)| {
                 rest.is_empty()
                     && !label.is_empty()
-                    && label.trim_ascii_end().chars().all(is_identifier_continue)
+                    && label.trimmed_end().chars().all(is_identifier_continue)
             });
             let ends_ternary_colon = code.ends_with(':')
                 && !is_case_label_start(trimmed)
@@ -469,13 +465,13 @@ impl FormatEngine<'_> {
             {
                 true
             }
-            Some(Token::Word(_)) if self.current.trim_ascii_start().starts_with("template") => {
+            Some(Token::Word(_)) if self.current.trimmed_start().starts_with("template") => {
                 let segment = self
                     .current
                     .rsplit(['<', ','])
                     .next()
                     .unwrap_or_default()
-                    .trim_ascii();
+                    .trimmed();
                 is_pointer_declaration_segment(segment)
             }
             _ => false,
@@ -483,7 +479,7 @@ impl FormatEngine<'_> {
     }
 
     fn current_ends_named_cast_type_argument(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(open) = current.rfind('<') else {
             return false;
         };
@@ -491,20 +487,20 @@ impl FormatEngine<'_> {
             return false;
         }
         matches!(
-            trailing_word(current[..open].trim_ascii_end()),
+            trailing_word(current[..open].trimmed_end()),
             "static_cast" | "const_cast" | "dynamic_cast" | "reinterpret_cast"
         )
     }
 
     fn current_ends_type_group(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some((open, close)) = trailing_matching_parens(current) else {
             return false;
         };
         if close + 1 != current.len() {
             return false;
         }
-        let before = current[..open].trim_ascii_end();
+        let before = current[..open].trimmed_end();
         let name = trailing_word(before);
         if name.is_empty()
             || !(matches!(
@@ -517,7 +513,7 @@ impl FormatEngine<'_> {
         let segment = before
             .rfind(['(', ',', ';', '{', '}'])
             .map_or(before, |index| &before[index + 1..])
-            .trim_ascii();
+            .trimmed();
         !segment.chars().any(|ch| {
             matches!(
                 ch,
@@ -527,13 +523,13 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn looks_like_pointer_declaration_context(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if current.is_empty() {
             return false;
         }
         let segment_start = self.current.declaration_segment_start();
-        let segment_text = strip_balanced_parens(current[segment_start..].trim_ascii());
-        let segment = segment_text.trim_ascii();
+        let segment_text = strip_balanced_parens(current[segment_start..].trimmed());
+        let segment = segment_text.trimmed();
         if segment.is_empty() || !is_pointer_declaration_segment(segment) {
             return false;
         }
@@ -557,7 +553,7 @@ impl FormatEngine<'_> {
             return declaration;
         }
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii_end();
+            let trimmed = line.trimmed_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
@@ -567,15 +563,15 @@ impl FormatEngine<'_> {
             let Some(open) = trimmed.find('(') else {
                 continue;
             };
-            let before = trimmed[..open].trim_ascii_end();
+            let before = trimmed[..open].trimmed_end();
             if before.is_empty() || before.contains('=') {
                 return false;
             }
             let Some(name_start) = function_name_start(before) else {
                 return false;
             };
-            let return_type = before[..name_start].trim_ascii_end();
-            let name = before[name_start..].trim_ascii_start();
+            let return_type = before[..name_start].trimmed_end();
+            let name = before[name_start..].trimmed_start();
             return !return_type.is_empty() && !name.is_empty() && !is_header(self.options, name);
         }
         false
@@ -583,7 +579,7 @@ impl FormatEngine<'_> {
 
     fn is_function_pointer_parameter_continuation(&self) -> bool {
         self.output.scoped().iter().rev().take(4).any(|line| {
-            let trimmed = line.trim_ascii_end();
+            let trimmed = line.trimmed_end();
             trimmed.contains("(*") && !trimmed.ends_with(';') && !trimmed.ends_with('}')
         })
     }
@@ -653,7 +649,7 @@ impl FormatEngine<'_> {
         }
         match last_unmatched_open_delimiter(&self.current) {
             Some(('(', open)) => {
-                let before = self.current[..open].trim_ascii_end();
+                let before = self.current[..open].trimmed_end();
                 if !before.is_empty() {
                     return self.paren_head_is_declaration(before);
                 }
@@ -663,8 +659,8 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
-                    .is_some_and(|line| self.paren_head_is_declaration(line.trim_ascii_end()))
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| self.paren_head_is_declaration(line.trimmed_end()))
             }
             Some(_) => false,
             None => {
@@ -684,7 +680,7 @@ impl FormatEngine<'_> {
     pub(super) fn paren_head_is_declaration(&self, before: &str) -> bool {
         // A head continued past an escaped newline still names the function.
         let before = before
-            .trim_ascii_end()
+            .trimmed_end()
             .strip_suffix('\\')
             .map_or(before, str::trim_end);
         if before.is_empty() || before.contains('?') || function_head_has_assignment(before) {
@@ -693,7 +689,7 @@ impl FormatEngine<'_> {
         if let Some((open, close)) = trailing_matching_parens(before)
             && close + 1 == before.len()
         {
-            let declarator = before[open + 1..close].trim_ascii_start();
+            let declarator = before[open + 1..close].trimmed_start();
             if declarator.starts_with(['*', '&', '^'])
                 || declarator.contains("::*")
                 || declarator.contains(":: *")
@@ -704,8 +700,8 @@ impl FormatEngine<'_> {
         let Some(name_start) = function_name_start(before) else {
             return false;
         };
-        let return_type = before[..name_start].trim_ascii_end();
-        let name = before[name_start..].trim_ascii_start();
+        let return_type = before[..name_start].trimmed_end();
+        let name = before[name_start..].trimmed_start();
         if name.is_empty() || is_header(self.options, name) || is_non_type_keyword(name) {
             return false;
         }
@@ -733,7 +729,7 @@ impl FormatEngine<'_> {
     /// continuation line.
     fn enclosing_open_paren_head(&self) -> Option<&str> {
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii_end();
+            let trimmed = line.trimmed_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
@@ -741,7 +737,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let open = trimmed.find('(')?;
-            return Some(trimmed[..open].trim_ascii_end());
+            return Some(trimmed[..open].trimmed_end());
         }
         None
     }
@@ -750,7 +746,7 @@ impl FormatEngine<'_> {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
-        let mut before = self.current[..open].trim_ascii_end();
+        let mut before = self.current[..open].trimmed_end();
         if before.ends_with('>') {
             let mut depth = 0usize;
             let mut template_open = None;
@@ -770,7 +766,7 @@ impl FormatEngine<'_> {
             let Some(template_open) = template_open else {
                 return false;
             };
-            before = before[..template_open].trim_ascii_end();
+            before = before[..template_open].trimmed_end();
         }
         if !before.ends_with(']') {
             return false;
@@ -794,7 +790,7 @@ impl FormatEngine<'_> {
         let Some(start) = start else {
             return false;
         };
-        let prefix = before[..start].trim_ascii_end();
+        let prefix = before[..start].trimmed_end();
         !prefix.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, ')' | ']'))
     }
 
@@ -805,7 +801,7 @@ impl FormatEngine<'_> {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
-        let before = self.current[..open].trim_ascii_end();
+        let before = self.current[..open].trimmed_end();
         !before.is_empty()
             && !function_head_has_assignment(before)
             && scoped_name_is_constructor(before)
@@ -840,7 +836,7 @@ impl FormatEngine<'_> {
         // The rest of a run whose first star went out alone joins it.
         if continues_sequence
             && self.pointer_run.star_count > 1
-            && self.current.trim_ascii_end().ends_with(operator)
+            && self.current.trimmed_end().ends_with(operator)
         {
             self.pointer_run.skip_adjacent_pointer_operators = self.pointer_run.star_count - 1;
             self.trim_current_end_horizontal_space();
@@ -868,7 +864,7 @@ impl FormatEngine<'_> {
                 next,
                 Some(Token::Operator(next_operator)) if matches!(next_operator.as_str(), "&" | "&&")
             );
-        if self.current.trim_ascii().is_empty()
+        if self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && self.is_function_declaration_parameter_continuation()
         {
@@ -877,13 +873,13 @@ impl FormatEngine<'_> {
             self.emit_trailing_source_space();
             return;
         }
-        if self.current.trim_ascii_end().ends_with('(') && !followed_by_reference {
+        if self.current.trimmed_end().ends_with('(') && !followed_by_reference {
             self.record_declaration_frame_for_pointer(operator, next);
             self.current.push_str(operator);
             self.emit_trailing_source_space();
             return;
         }
-        let is_after_scope_resolution = self.current.trim_ascii_end().ends_with(':');
+        let is_after_scope_resolution = self.current.trimmed_end().ends_with(':');
         if is_after_scope_resolution && operator == "*" {
             self.record_declaration_frame_for_pointer(operator, next);
             match resolved_pointer_align(self.options, operator) {
@@ -923,7 +919,7 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        if operator.starts_with('&') && self.current.trim_ascii_end().ends_with('*') {
+        if operator.starts_with('&') && self.current.trimmed_end().ends_with('*') {
             self.record_declaration_frame_for_pointer(operator, next);
             let align = resolved_pointer_align(self.options, operator);
             self.trim_current_end();
@@ -966,12 +962,12 @@ impl FormatEngine<'_> {
             return;
         }
         if operator == "*"
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_ascii_end().ends_with("*)"))
+                .is_some_and(|line| line.trimmed_end().ends_with("*)"))
         {
             self.current.push_str(operator);
             return;
@@ -1047,7 +1043,7 @@ impl FormatEngine<'_> {
     /// parts from it. astyle leaves the star of a `struct` type and of a
     /// conversion operator where it was.
     fn pointer_spaces_declarator_group(&self, operator: &str, next: Option<&Token>) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(before) = current.strip_suffix(operator) else {
             return false;
         };
@@ -1070,7 +1066,7 @@ impl FormatEngine<'_> {
     fn push_tagged_type_star_before_group(&mut self, operator: &str, next: Option<&Token>) -> bool {
         let tagged = self
             .current
-            .trim_ascii_end()
+            .trimmed_end()
             .split(|ch: char| !is_identifier_continue(ch))
             .filter(|word| !word.is_empty())
             .rev()
@@ -1197,8 +1193,7 @@ impl FormatEngine<'_> {
             }
             self.current.push_str(operator);
             self.ensure_space();
-        } else if self.current.trim_ascii().is_empty() && self.token_input.token_begins_source_line
-        {
+        } else if self.current.trimmed().is_empty() && self.token_input.token_begins_source_line {
             self.current.push_str(operator);
             if !matches!(next, Some(Token::Symbol(')' | ','))) {
                 self.ensure_space();
@@ -1244,7 +1239,7 @@ impl FormatEngine<'_> {
     ) -> bool {
         if matches!(next, Some(Token::Comment(_, _))) {
             self.emit_source_space_or_ensure();
-        } else if self.current.trim_ascii_end().ends_with('&')
+        } else if self.current.trimmed_end().ends_with('&')
             && (operator == "*"
                 || operator == "&"
                     && (!self.token_input.previous_input_was_adjacent
@@ -1259,16 +1254,16 @@ impl FormatEngine<'_> {
         } else if matches!(
             next,
             Some(Token::Operator(next_operator)) if next_operator == "&"
-        ) && !self.current.trim_ascii_end().ends_with('(')
+        ) && !self.current.trimmed_end().ends_with('(')
             && !is_after_scope_resolution
             && !self.looks_like_pointer_declaration_context()
         {
             self.trim_current_end();
-        } else if (self.current.trim_ascii_end().ends_with('(') || is_after_scope_resolution)
+        } else if (self.current.trimmed_end().ends_with('(') || is_after_scope_resolution)
             && followed_by_reference
         {
             self.ensure_space();
-        } else if self.current.trim_ascii_end().ends_with(operator)
+        } else if self.current.trimmed_end().ends_with(operator)
             && self
                 .token_input
                 .previous_input_whitespace
@@ -1280,9 +1275,9 @@ impl FormatEngine<'_> {
             self.current.push_str(&gap);
         } else if !is_after_scope_resolution
             && !self.current.ends_with('(')
-            && !self.current.trim_ascii_end().ends_with('*')
-            && !self.current.trim_ascii_end().ends_with('&')
-            && !self.current.trim_ascii_end().ends_with('^')
+            && !self.current.trimmed_end().ends_with('*')
+            && !self.current.trimmed_end().ends_with('&')
+            && !self.current.trimmed_end().ends_with('^')
         {
             if matches!(next, Some(Token::Operator(next_operator)) if next_operator == "=") {
                 self.trim_current_end();
@@ -1362,14 +1357,14 @@ impl FormatEngine<'_> {
     }
 
     fn function_pointer_parameter_type_words(&self) -> Option<Vec<&str>> {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(['*', '&', '^']) {
             return None;
         }
         let segment = current
             .rfind(['(', ',', ';', '{', '}'])
             .map_or(current, |index| &current[index + 1..])
-            .trim_ascii_end();
+            .trimmed_end();
         let before_operator = segment.trim_end_matches(['*', '&', '^']);
         Some(
             before_operator
@@ -1446,13 +1441,13 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_unary_pointer_operator(&self) -> bool {
-        if self.current.trim_ascii().is_empty()
+        if self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && self.layout.previous == PreviousToken::CloseParen
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_ascii_end().ends_with("*)"))
+                .is_some_and(|line| line.trimmed_end().ends_with("*)"))
         {
             return true;
         }
@@ -1468,7 +1463,7 @@ impl FormatEngine<'_> {
             | PreviousToken::CloseParen
             | PreviousToken::CloseBracket => false,
             PreviousToken::Operator => {
-                let current = self.current.trim_ascii_end();
+                let current = self.current.trimmed_end();
                 current.ends_with('=')
                     || current.ends_with('+')
                     || current.ends_with('-')
@@ -1492,7 +1487,7 @@ impl FormatEngine<'_> {
         if !(self.is_objc_method_line() || self.layout.objc.method_continuation) {
             return false;
         }
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(open) = current.rfind('(') else {
             return false;
         };
@@ -1501,34 +1496,34 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_in_parenthesized_type_operand(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(open) = current.rfind('(') else {
             return false;
         };
         if current[open + 1..].contains(')')
             || !matches!(
-                trailing_word(current[..open].trim_ascii_end()),
+                trailing_word(current[..open].trimmed_end()),
                 "sizeof" | "alignof" | "_Alignof" | "typeid"
             )
         {
             return false;
         }
-        is_pointer_declaration_segment(current[open + 1..].trim_ascii())
+        is_pointer_declaration_segment(current[open + 1..].trimmed())
     }
 
     pub(super) fn current_in_cast_type_group(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(open) = current.rfind('(') else {
             return false;
         };
         if current[open + 1..].contains(')') {
             return false;
         }
-        let before = current[..open].trim_ascii_end();
+        let before = current[..open].trimmed_end();
         if before.ends_with(|ch: char| ch.is_ascii_alphanumeric() || ch == '_' || ch == ')') {
             return false;
         }
-        let segment = current[open + 1..].trim_ascii();
+        let segment = current[open + 1..].trimmed();
         !segment.is_empty()
             && segment
                 .split_whitespace()

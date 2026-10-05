@@ -23,6 +23,7 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
     trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
     head_starts_binary_operator, starts_with_chain_operator,
@@ -99,10 +100,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             .is_some_and(|previous| {
-                let code = self.output.code_of(previous).trim_ascii_end();
-                let trimmed = code.trim_ascii_start();
+                let code = self.output.code_of(previous).trimmed_end();
+                let trimmed = code.trimmed_start();
                 !code.is_empty()
                     && (head_ends_binary_operator(code)
                         || code.ends_with(',')
@@ -136,14 +137,14 @@ impl FormatEngine<'_> {
         // Parens that later lines close match the last opens before them.
         let mut later_closes = 0usize;
         for (offset, line) in scoped.iter().enumerate().rev().take(12) {
-            if line.trim_ascii().is_empty() {
+            if line.trimmed().is_empty() {
                 return None;
             }
             // Lines a comment spans hold no code.
             if self.output.comment_start_index(start + offset) != start + offset {
                 continue;
             }
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             // Neither does a directive, nor the lines it continues over.
             if self.output.is_directive_line(start + offset)
                 || code.ends_with(';')
@@ -152,7 +153,7 @@ impl FormatEngine<'_> {
             {
                 return None;
             }
-            if is_comment_line(line.trim_ascii_start()) || code.trim_ascii().is_empty() {
+            if is_comment_line(line.trimmed_start()) || code.trimmed().is_empty() {
                 continue;
             }
             let (closes, mut opens) = self.paren_imbalance_of(code);
@@ -185,13 +186,13 @@ impl FormatEngine<'_> {
             .output
             .iter()
             .rposition(|line| {
-                let code = self.output.code_of(line).trim_ascii_end();
+                let code = self.output.code_of(line).trimmed_end();
                 code.ends_with([';', '{', '}'])
             })
             .map_or(0, |index| index + 1);
         let mut openers = Vec::new();
         for line in &self.output[start..] {
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             let (closes, opens) = self.paren_imbalance_of(code);
             for _ in 0..closes {
                 openers.pop();
@@ -222,7 +223,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn line_aligns_to_open_paren_content(&self, line: &str) -> bool {
-        if line.trim_ascii().is_empty() {
+        if line.trimmed().is_empty() {
             return false;
         }
         let mut balance: i32 = 0;
@@ -246,25 +247,25 @@ impl FormatEngine<'_> {
     pub(crate) fn is_top_level_table_macro_row(&self) -> bool {
         self.layout.nesting.brace_type_stack.is_empty()
             && self.layout.nesting.paren_depth == 0
-            && self.current.trim_ascii_start().starts_with('.')
+            && self.current.trimmed_start().starts_with('.')
     }
 
     fn line_ends_with_bare_angle_operator(&self) -> bool {
-        if self.current.trim_ascii_start().starts_with("template") {
+        if self.current.trimmed_start().starts_with("template") {
             return false;
         }
-        let trimmed = self.current.trim_ascii_end();
+        let trimmed = self.current.trimmed_end();
         (trimmed.ends_with('<') && !trimmed.ends_with("<<"))
             || (trimmed.ends_with('>') && !trimmed.ends_with(">>") && !trimmed.ends_with("->"))
     }
 
     fn current_ends_with_pointer_declarator(&self) -> bool {
-        let trimmed = self.current.trim_ascii_end();
+        let trimmed = self.current.trimmed_end();
         if trimmed.ends_with("||") {
             return false;
         }
         if let Some(before) = trimmed.strip_suffix("&&")
-            && !is_pointer_declaration_segment(before.trim_ascii_end())
+            && !is_pointer_declaration_segment(before.trimmed_end())
         {
             return false;
         }
@@ -277,19 +278,19 @@ impl FormatEngine<'_> {
         if self.is_complete_template_declaration_line() {
             return false;
         }
-        let trimmed = self.current.trim_ascii_end();
+        let trimmed = self.current.trimmed_end();
         if self.current_is_preindented && is_comment_only_line(trimmed) && trimmed.ends_with("*/") {
             return false;
         }
         if self.template_continuation_closes_on_line(trimmed) {
             return false;
         }
-        let code_before_trailing_comment = self.output.code_of(trimmed).trim_ascii_end();
+        let code_before_trailing_comment = self.output.code_of(trimmed).trimmed_end();
         let line_comment_limit = line_comment_split_limit(trimmed);
-        let code_before_line_comment = trimmed[..line_comment_limit].trim_ascii_end();
+        let code_before_line_comment = trimmed[..line_comment_limit].trimmed_end();
         if line_comment_limit < trimmed.len()
             && has_hash_outside_literals(code_before_line_comment)
-            && !code_before_line_comment.trim_ascii_start().starts_with('#')
+            && !code_before_line_comment.trimmed_start().starts_with('#')
         {
             return false;
         }
@@ -331,7 +332,7 @@ impl FormatEngine<'_> {
         self.layout.indentation.statement_depth() > 0
             || (self.next_line.leads_with_assignment
                 && self.layout.indentation.statement_depth() == 0
-                && !self.current.trim_ascii().is_empty())
+                && !self.current.trimmed().is_empty())
             || (matches!(self.layout.previous, PreviousToken::Operator)
                 && !bare_leading_operator_line
                 && !self.line_ends_with_bare_angle_operator()
@@ -355,12 +356,12 @@ impl FormatEngine<'_> {
             || self.layout.nesting.question_depth > 0
             || self.is_stream_continuation_break()
             || (self.layout.in_class_base_clause && !self.next_line.leads_with_open_brace)
-            || (!bare_question_line && self.current.trim_ascii_end().ends_with('?'))
-            || self.current.trim_ascii_end().ends_with(" :")
+            || (!bare_question_line && self.current.trimmed_end().ends_with('?'))
+            || self.current.trimmed_end().ends_with(" :")
     }
 
     fn current_looks_like_split_function_head(&self) -> bool {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if line.is_empty() || function_head_has_assignment(line) || is_header(self.options, line) {
             return false;
         }
@@ -382,16 +383,16 @@ impl FormatEngine<'_> {
         let Some(name_start) = function_name_start(line) else {
             return false;
         };
-        !line[..name_start].trim_ascii_end().is_empty()
-            && !line[name_start..].trim_ascii_start().is_empty()
+        !line[..name_start].trimmed_end().is_empty()
+            && !line[name_start..].trimmed_start().is_empty()
     }
 
     pub(crate) fn for_header_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
-        let trimmed = line.trim_ascii_start();
+        let line = self.current.trimmed_end();
+        let trimmed = line.trimmed_start();
         if !trimmed
             .strip_prefix("for")
-            .is_some_and(|tail| tail.trim_ascii_start().starts_with('('))
+            .is_some_and(|tail| tail.trimmed_start().starts_with('('))
         {
             return None;
         }
@@ -442,14 +443,14 @@ impl FormatEngine<'_> {
         } else {
             None
         };
-        let current = current.trim_end_matches('(').trim_ascii_end();
-        let current_prefix_len = current.len() - current.trim_ascii_start().len();
+        let current = current.trim_end_matches('(').trimmed_end();
+        let current_prefix_len = current.len() - current.trimmed_start().len();
         let mut line_indent_spaces = if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {
             current_prefix_len
         };
-        let code = current.trim_ascii_start();
+        let code = current.trimmed_start();
         line_indent_spaces = line_indent_spaces.max(self.token_input.token_source_line_indent);
         let brace = if let Some(brace) = current_line_brace {
             if brace >= current.len() {
@@ -467,7 +468,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn register_current_continuation_indent(&mut self, next: Option<&Token>) {
-        let current_prefix_len = self.current.len() - self.current.trim_ascii_start().len();
+        let current_prefix_len = self.current.len() - self.current.trimmed_start().len();
         let mut line_indent_spaces = if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {
@@ -497,7 +498,7 @@ impl FormatEngine<'_> {
             self.current_visual_width_from(line_indent_spaces)
         } else {
             visual_width_from(
-                self.current.trim_ascii_start(),
+                self.current.trimmed_start(),
                 line_indent_spaces,
                 self.options.tab_width,
             )
@@ -539,19 +540,14 @@ impl FormatEngine<'_> {
             spaces = spaces_for_params;
         }
         if !has_next
-            && self.current.trim_ascii_end().ends_with('(')
+            && self.current.trimmed_end().ends_with('(')
             && contains_word(&self.current, "new")
-            && self
-                .paren_imbalance_of(self.current.trim_ascii_end())
-                .1
-                .len()
-                == 1
+            && self.paren_imbalance_of(self.current.trimmed_end()).1.len() == 1
             && let Some(assignment_spaces) = self.assignment_continuation_indent_spaces()
         {
             spaces = assignment_spaces;
         }
-        let inline_brace_call_indent = if !has_next && self.current.trim_ascii_end().ends_with('(')
-        {
+        let inline_brace_call_indent = if !has_next && self.current.trimmed_end().ends_with('(') {
             self.inline_brace_call_indent_spaces(&self.current)
         } else {
             None
@@ -560,10 +556,10 @@ impl FormatEngine<'_> {
             spaces = indent + continuation_spaces;
         }
         let statement_base_spaces = self.continuation_base_indent() * self.options.indent_width;
-        let trailing_open_paren = !has_next && self.current.trim_ascii_end().ends_with('(');
+        let trailing_open_paren = !has_next && self.current.trimmed_end().ends_with('(');
         let trailing_first_paren = trailing_open_paren && self.layout.nesting.paren_depth == 1;
         let trailing_assignment = !has_next && {
-            let head = self.current.trim_ascii_end();
+            let head = self.current.trimmed_end();
             head.ends_with('=')
                 && !head.ends_with("==")
                 && !head.ends_with("!=")
@@ -631,7 +627,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.ternary_colon_branch_frame_indent() {
             return Some(spaces);
         }
-        let current = self.current.trim_ascii_start();
+        let current = self.current.trimmed_start();
         if current.starts_with([')', '}', '?', ':']) {
             return None;
         }
@@ -640,8 +636,8 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())?;
-        let previous_code = self.output.code_of(previous).trim_ascii_end();
+            .find(|line| !line.trimmed().is_empty())?;
+        let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(':') || !previous_code.contains('?') {
             return None;
         }
@@ -652,7 +648,7 @@ impl FormatEngine<'_> {
     }
 
     fn ternary_colon_branch_frame_indent(&self) -> Option<usize> {
-        let current = self.current.trim_ascii_start();
+        let current = self.current.trimmed_start();
         if current.starts_with([')', '}', '?', ':']) {
             return None;
         }
@@ -672,17 +668,17 @@ impl FormatEngine<'_> {
         &self,
         line_indent_spaces: usize,
     ) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if !line.ends_with('(') {
             return None;
         }
-        let before = line[..line.len() - 1].trim_ascii_end();
+        let before = line[..line.len() - 1].trimmed_end();
         if before.is_empty() || before.contains('=') {
             return None;
         }
         let name_start = function_name_start(before)?;
-        let return_type = before[..name_start].trim_ascii_end();
-        let name = before[name_start..].trim_ascii_start();
+        let return_type = before[..name_start].trimmed_end();
+        let name = before[name_start..].trimmed_start();
         if return_type.is_empty() || name.is_empty() || is_header(self.options, name) {
             return None;
         }
@@ -711,19 +707,18 @@ impl FormatEngine<'_> {
         if self.layout.nesting.question_depth > 0 {
             return false;
         }
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         let Some(before) = line.strip_suffix(':') else {
             return false;
         };
-        let before = before.trim_ascii_end();
+        let before = before.trimmed_end();
         if before.is_empty() || before.ends_with(':') || before.contains('?') {
             return false;
         }
         if before.ends_with(')') {
             return true;
         }
-        let statement =
-            crate::formatter::text::line_scan::statement_tail(before).trim_ascii_start();
+        let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
         statement
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
@@ -732,7 +727,7 @@ impl FormatEngine<'_> {
     fn class_base_clause_indent_spaces(&self) -> usize {
         let current_code = &self.current[..self.current_trailing_comment_split_limit()];
         if self.current_opens_class_base_clause()
-            || code_opens_class_base_clause(current_code.trim_ascii_end())
+            || code_opens_class_base_clause(current_code.trimmed_end())
             || self.current_ends_base_clause_colon()
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
@@ -740,11 +735,11 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev() {
             let line = &self.output[scan_index];
             let code = &self.output.code_before_comment(scan_index);
-            let trimmed = code.trim_ascii();
+            let trimmed = code.trimmed();
             if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
                 continue;
             }
-            if code_opens_class_base_clause(code.trim_ascii_end()) {
+            if code_opens_class_base_clause(code.trimmed_end()) {
                 return leading_visual_width(line, self.options.tab_width)
                     + self.options.indent_width;
             }
@@ -756,7 +751,7 @@ impl FormatEngine<'_> {
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
         // A case label continued before its colon goes on at its body
         // and one level in, whatever the continuation indent.
-        let current = self.current.trim_ascii_start();
+        let current = self.current.trimmed_start();
         if (current.starts_with("case ") || current.starts_with("case("))
             && find_case_colon(current).is_none()
             && self.layout.nesting.paren_depth == 0
@@ -769,7 +764,7 @@ impl FormatEngine<'_> {
         }
         if self.options.max_code_length.is_some()
             && let Some(spaces) = lambda_parameter_continuation_indent(
-                self.current.trim_ascii_end(),
+                self.current.trimmed_end(),
                 self.current_line_indent_spaces(),
                 self.options.indent_width,
                 self.options.max_continuation_indent,
@@ -796,15 +791,15 @@ impl FormatEngine<'_> {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
         if self.options.indent_after_parens
-            && self.current.trim_ascii_end().ends_with('(')
+            && self.current.trimmed_end().ends_with('(')
             && contains_word(&self.current, "new")
-            && unmatched_open_paren_columns(self.current.trim_ascii_end()).len() >= 2
+            && unmatched_open_paren_columns(self.current.trimmed_end()).len() >= 2
             && let Some(spaces) = self.assignment_continuation_indent_spaces()
         {
             return ContinuationIndent::Spaces(spaces + self.options.indent_width);
         }
         if self.options.indent_after_parens
-            && self.current.trim_ascii_end().ends_with(',')
+            && self.current.trimmed_end().ends_with(',')
             && contains_word(&self.current, "new")
             && let Some(previous) = self.output.last_line_outside_comment()
             && let Some((assignment, operator)) = find_assignment_operator(previous)
@@ -822,7 +817,7 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.active_ternary().is_some()
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
-            && head_ends_binary_operator(self.current.trim_ascii_end())
+            && head_ends_binary_operator(self.current.trimmed_end())
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
@@ -858,7 +853,7 @@ impl FormatEngine<'_> {
         }
         if !self.options.indent_after_parens
             && self.current_is_operator_led_continuation()
-            && unmatched_open_paren_column(self.current.trim_ascii_end()).is_none()
+            && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
@@ -885,9 +880,9 @@ impl FormatEngine<'_> {
         }
         if !self.options.indent_after_parens
             && self.current_ends_logical_operator()
-            && unmatched_open_paren_column(self.current.trim_ascii_end()).is_none()
+            && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
-            let line = self.current.trim_ascii_end();
+            let line = self.current.trimmed_end();
             if !line.ends_with("||")
                 && self.current_is_conditional_header_continuation()
                 && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
@@ -898,10 +893,10 @@ impl FormatEngine<'_> {
                 + self.options.continuation_indent * self.options.indent_width;
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 if line.ends_with("||")
-                    && line.trim_ascii_start().starts_with(['!', '('])
+                    && line.trimmed_start().starts_with(['!', '('])
                     && self.current_return_logical_tail_indent_spaces().is_some()
                     && line[..line.len().saturating_sub(2)]
-                        .trim_ascii_end()
+                        .trimmed_end()
                         .ends_with(')')
                 {
                     return ContinuationIndent::Spaces(spaces.saturating_sub(1));
@@ -924,14 +919,14 @@ impl FormatEngine<'_> {
         }
         if !self.options.indent_after_parens
             && self.current_ends_logical_operator()
-            && let Some(column) = unmatched_open_paren_column(self.current.trim_ascii_end())
-            && self.current.trim_ascii_end()[column + 1..].starts_with('(')
+            && let Some(column) = unmatched_open_paren_column(self.current.trimmed_end())
+            && self.current.trimmed_end()[column + 1..].starts_with('(')
             && let Some(spaces) = self.logical_continuation_indent_spaces()
         {
             return ContinuationIndent::Spaces(spaces);
         }
         if !self.options.indent_after_parens {
-            let line = self.current.trim_ascii_end();
+            let line = self.current.trimmed_end();
             if line.ends_with(':')
                 && line.contains('?')
                 && self.open_paren_column_of(line).is_none()
@@ -966,8 +961,8 @@ impl FormatEngine<'_> {
             return ContinuationIndent::Spaces(spaces);
         }
         if !self.options.indent_after_parens {
-            let line = self.current.trim_ascii_end();
-            if line.trim_ascii_start().starts_with(": ")
+            let line = self.current.trimmed_end();
+            if line.trimmed_start().starts_with(": ")
                 && head_ends_binary_operator(line)
                 && let Some(open) = self.open_paren_column_of(line)
             {
@@ -984,7 +979,7 @@ impl FormatEngine<'_> {
         if !self.options.indent_after_parens
             && !self.in_initializer_brace()
             && !self.in_aggregate_declaration_brace()
-            && head_ends_binary_operator(self.current.trim_ascii_end())
+            && head_ends_binary_operator(self.current.trimmed_end())
         {
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
@@ -1005,7 +1000,7 @@ impl FormatEngine<'_> {
         // A subscript left open aligns the next line past its bracket, as
         // astyle counts brackets as parentheses.
         if !self.options.indent_after_parens
-            && let line = self.current.trim_ascii_end()
+            && let line = self.current.trimmed_end()
             && let Some(open) = self.open_paren_column_of(line)
             && line[open..].starts_with('[')
             // An Objective-C message aligns its own way.
@@ -1017,7 +1012,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
         {
             let indent = self.current_line_indent_spaces();
-            let lead = self.current.len() - self.current.trim_ascii_start().len();
+            let lead = self.current.len() - self.current.trimmed_start().len();
             return ContinuationIndent::Spaces(
                 indent
                     + visual_width_from(
@@ -1035,7 +1030,7 @@ impl FormatEngine<'_> {
             return ContinuationIndent::Spaces(spaces);
         }
         if !self.options.indent_after_parens {
-            let line = self.current.trim_ascii_end();
+            let line = self.current.trimmed_end();
             if line.ends_with(':')
                 && line.contains('?')
                 && line.matches('(').count() >= 2
@@ -1079,7 +1074,7 @@ impl FormatEngine<'_> {
         }
 
         let base_indent = self.continuation_base_indent();
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if line.ends_with(':')
             && line.contains('?')
             && line.matches('(').count() >= 2
@@ -1106,19 +1101,16 @@ impl FormatEngine<'_> {
         let spaces =
             self.apply_min_conditional_indent(base_spaces, indent * self.options.indent_width);
         if line.contains('?')
-            && self
-                .output
-                .last()
-                .is_some_and(|line| line.trim_ascii() == "{")
+            && self.output.last().is_some_and(|line| line.trimmed() == "{")
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
                 .skip(1)
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .is_some_and(|line| {
-                    line.trim_ascii_end().ends_with(')')
+                    line.trimmed_end().ends_with(')')
                         && leading_visual_width(line, self.options.tab_width) > 0
                 })
         {
@@ -1128,9 +1120,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn macro_call_argument_indent_spaces(&self) -> Option<usize> {
-        let trimmed = self.current.trim_ascii_start();
+        let trimmed = self.current.trimmed_start();
         let open = trimmed.find('(')?;
-        let name = trimmed[..open].trim_ascii_end();
+        let name = trimmed[..open].trimmed_end();
         let unmatched = unmatched_open_paren_columns(trimmed);
         if !is_macro_like_word(name) || !unmatched.contains(&open) {
             return None;
@@ -1138,7 +1130,7 @@ impl FormatEngine<'_> {
         if unmatched.last() != Some(&open) {
             return None;
         }
-        let current_prefix_len = self.current.len() - self.current.trim_ascii_start().len();
+        let current_prefix_len = self.current.len() - self.current.trimmed_start().len();
         let base_spaces = if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {
@@ -1165,7 +1157,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn trailing_open_bracket_indent_spaces(&self) -> Option<usize> {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with('[') {
             return None;
         }
@@ -1218,7 +1210,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let open = self.current.rfind('(')?;
-        let before = self.current[..open].trim_ascii();
+        let before = self.current[..open].trimmed();
         if before.is_empty()
             || before.contains('=')
             || is_header(self.options, before)
@@ -1227,7 +1219,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last()?;
-        let previous_trimmed = previous.trim_ascii();
+        let previous_trimmed = previous.trimmed();
         if previous_trimmed.ends_with(':')
             || !is_return_type_line(previous_trimmed)
             || self
@@ -1237,8 +1229,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous_prefix_len = previous.len() - previous.trim_ascii_start().len();
-        let current_prefix_len = self.current.len() - self.current.trim_ascii_start().len();
+        let previous_prefix_len = previous.len() - previous.trimmed_start().len();
+        let current_prefix_len = self.current.len() - self.current.trimmed_start().len();
         let current_indent_spaces = current_indent_spaces.max(current_prefix_len);
         let separator_len = usize::from(!previous_trimmed.ends_with(['*', '&', '^']));
         Some(
@@ -1250,7 +1242,7 @@ impl FormatEngine<'_> {
     fn trailing_open_paren_continuation_indent_spaces(&self, base_spaces: usize) -> Option<usize> {
         let columns = unmatched_open_paren_columns(&self.current);
         let trailing_column = *columns.last()?;
-        if self.current.trim_ascii_end().chars().count() != trailing_column + 1 {
+        if self.current.trimmed_end().chars().count() != trailing_column + 1 {
             return None;
         }
         let previous_indent = if columns.len() >= 2 {
@@ -1272,7 +1264,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn logical_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if !self.current_ends_logical_operator() {
             return None;
         }
@@ -1285,7 +1277,7 @@ impl FormatEngine<'_> {
         if let Some(column) = self.open_paren_column_of(line) {
             let paren_offset = if line.ends_with("||")
                 && line[..line.len().saturating_sub(2)]
-                    .trim_ascii_end()
+                    .trimmed_end()
                     .ends_with(')')
                 && !line[column + 1..].starts_with('(')
             {
@@ -1305,7 +1297,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.logical_chain_head_indent_spaces() {
             if line.ends_with("||")
                 && line[..line.len().saturating_sub(2)]
-                    .trim_ascii_end()
+                    .trimmed_end()
                     .ends_with(')')
             {
                 return Some(spaces.saturating_sub(1));
@@ -1322,7 +1314,7 @@ impl FormatEngine<'_> {
     }
 
     fn current_ends_logical_operator(&self) -> bool {
-        ends_logical_operator(self.current.trim_ascii_end())
+        ends_logical_operator(self.current.trimmed_end())
     }
 
     fn logical_chain_head_indent_spaces(&self) -> Option<usize> {
@@ -1335,17 +1327,17 @@ impl FormatEngine<'_> {
     }
 
     fn current_assignment_logical_tail_indent_spaces(&self) -> Option<usize> {
-        let code = self.current.trim_ascii_start();
+        let code = self.current.trimmed_start();
         if (code.ends_with("&&") || code.ends_with("||")) && code.starts_with('=') {
             return Some(
-                self.current_line_indent_spaces() + code.len() - code[1..].trim_ascii_start().len(),
+                self.current_line_indent_spaces() + code.len() - code[1..].trimmed_start().len(),
             );
         }
         None
     }
 
     fn current_return_logical_tail_indent_spaces(&self) -> Option<usize> {
-        let code = self.current.trim_ascii_start();
+        let code = self.current.trimmed_start();
         if (code.ends_with("&&") || code.ends_with("||"))
             && !code.starts_with("return ")
             && !head_starts_binary_operator(code)
@@ -1363,11 +1355,11 @@ impl FormatEngine<'_> {
 
     fn previous_return_continuation_indent_spaces(&self) -> Option<usize> {
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii_start();
+            let trimmed = line.trimmed_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            let code = self.output.code_of(trimmed).trim_ascii_end();
+            let code = self.output.code_of(trimmed).trimmed_end();
             if code.starts_with("return ") && !code.ends_with(';') {
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
@@ -1387,8 +1379,8 @@ impl FormatEngine<'_> {
     }
 
     fn operator_led_return_continuation_indent_spaces(&self) -> Option<usize> {
-        let trimmed = self.current.trim_ascii_end();
-        let head = trimmed.trim_ascii_start();
+        let trimmed = self.current.trimmed_end();
+        let head = trimmed.trimmed_start();
         if !head_starts_binary_operator(head) {
             return None;
         }
@@ -1422,20 +1414,20 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if !line.ends_with(',') || line.contains('=') {
             return None;
         }
         if let Some(paren) = line.find('(') {
-            let before_paren = line[..paren].trim_ascii_end();
+            let before_paren = line[..paren].trimmed_end();
             if !before_paren.contains(char::is_whitespace) {
                 // A call or a cast leading a statement declares nothing:
                 // astyle continues nothing past its comma.
                 let leads_statement = before_paren
-                    .trim_ascii_start()
+                    .trimmed_start()
                     .chars()
                     .all(is_identifier_continue)
-                    && !is_header(self.options, before_paren.trim_ascii_start())
+                    && !is_header(self.options, before_paren.trimmed_start())
                     && self.open_paren_column_of(line).is_none()
                     && matches!(
                         self.layout.nesting.brace_type_stack.last(),
@@ -1444,7 +1436,7 @@ impl FormatEngine<'_> {
                 return leads_statement.then(|| self.current_line_indent_spaces());
             }
         }
-        let current_prefix_len = line.len() - line.trim_ascii_start().len();
+        let current_prefix_len = line.len() - line.trimmed_start().len();
         let prefix_len = if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {
@@ -1455,31 +1447,31 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
+            let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.ends_with(',')
                 && !previous_code.contains('=')
                 && previous_code.find('(').is_none_or(|paren| {
                     previous_code[..paren]
-                        .trim_ascii_end()
+                        .trimmed_end()
                         .contains(char::is_whitespace)
                 })
             {
                 let previous_prefix = leading_visual_width(previous, self.options.tab_width);
                 if previous_prefix
-                    + declaration_comma_continuation_column(previous_code.trim_ascii_start())
+                    + declaration_comma_continuation_column(previous_code.trimmed_start())
                     == prefix_len
                 {
                     return Some(prefix_len);
                 }
             }
         }
-        Some(prefix_len + declaration_comma_continuation_column(line.trim_ascii_start()))
+        Some(prefix_len + declaration_comma_continuation_column(line.trimmed_start()))
     }
 
     fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {
-        if !self.current.trim_ascii_start().starts_with(':') {
+        if !self.current.trimmed_start().starts_with(':') {
             return None;
         }
         let saw_asm = self.current.contains("asm")
@@ -1489,13 +1481,13 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(8)
-                .take_while(|line| !line.trim_ascii_end().ends_with(';'))
+                .take_while(|line| !line.trimmed_end().ends_with(';'))
                 .any(|line| line.contains("asm"));
         saw_asm.then_some(self.current_line_indent_spaces())
     }
 
     fn chained_ternary_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         let current_indent = self.current_line_indent_spaces();
         let base_indent = self.continuation_base_indent() * self.options.indent_width;
         (line.ends_with(':') && line.contains('?') && current_indent > base_indent)
@@ -1509,8 +1501,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.current.trim_ascii_end();
-        if line.trim_ascii_start().starts_with(['/', '*'])
+        let line = self.current.trimmed_end();
+        if line.trimmed_start().starts_with(['/', '*'])
             || ["//", "/*", "*/"]
                 .iter()
                 .any(|marker| line.contains(marker))
@@ -1532,13 +1524,10 @@ impl FormatEngine<'_> {
     }
 
     fn run_in_enum_assignment_continuation_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
-        let trimmed = line.trim_ascii_start();
+        let line = self.current.trimmed_end();
+        let trimmed = line.trimmed_start();
         let after_brace = trimmed.find('{')? + 1;
-        if !trimmed[..after_brace]
-            .trim_ascii_start()
-            .starts_with("enum")
-        {
+        if !trimmed[..after_brace].trimmed_start().starts_with("enum") {
             return None;
         }
         let after_brace_space = trimmed[after_brace..]
@@ -1554,7 +1543,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn enum_member_missing_comma_indent_spaces(&self, previous: &str) -> Option<usize> {
-        let previous_content = previous.trim_ascii_start();
+        let previous_content = previous.trimmed_start();
         if previous_content.starts_with("/*") || previous_content.starts_with("//") {
             return None;
         }
@@ -1563,12 +1552,12 @@ impl FormatEngine<'_> {
             .unwrap_or(previous_content.len());
         if let Some(block_comment) = previous_content.find("/*")
             && previous_content[..block_comment]
-                .trim_ascii_end()
+                .trimmed_end()
                 .ends_with(',')
         {
             comment_limit = comment_limit.min(block_comment);
         }
-        let previous_code = previous_content[..comment_limit].trim_ascii_end();
+        let previous_code = previous_content[..comment_limit].trimmed_end();
         let assignment = previous_code.rfind('=')?;
         if previous_code.contains("==")
             || previous_code.contains("!=")
@@ -1587,11 +1576,11 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .take_while(|line| {
-                let line = line.trim_ascii_start();
+                let line = line.trimmed_start();
                 !line.starts_with('}') && !line.ends_with(';')
             })
             .any(|line| {
-                let line = line.trim_ascii_start();
+                let line = line.trimmed_start();
                 line == "enum" || line.starts_with("enum ")
             });
         if !in_enum {
@@ -1616,7 +1605,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn array_bound_operator_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if !head_ends_binary_operator(line) {
             return None;
         }
@@ -1624,12 +1613,12 @@ impl FormatEngine<'_> {
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if self.layout.nesting.paren_depth == 0 || !head_ends_binary_operator(line) {
             return None;
         }
-        let content = line.trim_ascii_start();
-        let code = self.output.code_of(content).trim_ascii_end();
+        let content = line.trimmed_start();
+        let code = self.output.code_of(content).trimmed_end();
         let open = self.open_paren_column_of(code)?;
         let assignment = find_single_assignment_after(code, open + 1)?;
         let after_assignment = &code[assignment + 1..];
@@ -1652,8 +1641,8 @@ impl FormatEngine<'_> {
         if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
             return None;
         }
-        let line = self.current.trim_ascii_end();
-        let code = self.output.code_of(line).trim_ascii_end();
+        let line = self.current.trimmed_end();
+        let code = self.output.code_of(line).trimmed_end();
         if code.ends_with(',')
             || code.ends_with(';')
             || code.ends_with(':') && find_case_colon(code).is_some()
@@ -1663,7 +1652,7 @@ impl FormatEngine<'_> {
         let (operator_start, operator) = find_assignment_operator(code)?;
         let after_operator = operator_start + operator.len();
         let rest = &code[after_operator..];
-        let value = rest.trim_ascii_start();
+        let value = rest.trimmed_start();
         if value.is_empty() || value.starts_with(':') && !value.starts_with("::") {
             return None;
         }
@@ -1680,8 +1669,8 @@ impl FormatEngine<'_> {
         if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
             return None;
         }
-        let line = self.current.trim_ascii_end();
-        let code = self.output.code_of(line).trim_ascii_end();
+        let line = self.current.trimmed_end();
+        let code = self.output.code_of(line).trimmed_end();
         if code.ends_with(':') && find_case_colon(code).is_some() {
             return None;
         }
@@ -1696,7 +1685,7 @@ impl FormatEngine<'_> {
         let (operator_start, operator) = last_operator?;
         let after_operator = operator_start + operator.len();
         let rest = &code[after_operator..];
-        let value = rest.trim_ascii_start();
+        let value = rest.trimmed_start();
         if value.is_empty() || value.starts_with(':') && !value.starts_with("::") {
             return None;
         }
@@ -1710,13 +1699,13 @@ impl FormatEngine<'_> {
     }
 
     fn return_operator_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         (head_ends_binary_operator(line)).then(|| self.return_continuation_indent_spaces())?
     }
 
     pub(crate) fn return_continuation_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
-        let trimmed = line.trim_ascii_start();
+        let line = self.current.trimmed_end();
+        let trimmed = line.trimmed_start();
         let after_return = trimmed.strip_prefix("return")?;
         if after_return
             .chars()
@@ -1727,10 +1716,10 @@ impl FormatEngine<'_> {
             return None;
         }
         let base = self.continuation_base_indent() * self.options.indent_width;
-        let gap = after_return.len() - after_return.trim_ascii_start().len();
+        let gap = after_return.len() - after_return.trimmed_start().len();
         // A tab between `return` and its value still sets the value's column.
-        if !after_return.trim_ascii_start().is_empty()
-            && !after_return.trim_ascii_start().contains('\t')
+        if !after_return.trimmed_start().is_empty()
+            && !after_return.trimmed_start().contains('\t')
             && after_return[..gap].contains('\t')
         {
             let start = base + (line.len() - trimmed.len());
@@ -1754,14 +1743,14 @@ impl FormatEngine<'_> {
     }
 
     fn stream_operator_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         if line.ends_with("*/") && !line.contains("/*") {
             return None;
         }
         let code = &self.output.code_of(line);
-        let trimmed_code = code.trim_ascii_start();
+        let trimmed_code = code.trimmed_start();
         if (trimmed_code.starts_with("<<") || trimmed_code.starts_with(">>"))
-            && code.trim_ascii_end().ends_with('{')
+            && code.trimmed_end().ends_with('{')
         {
             return None;
         }
@@ -1835,7 +1824,7 @@ impl FormatEngine<'_> {
         if self.current_is_conditional_header_continuation() {
             return true;
         }
-        let line = self.current.trim_ascii_end();
+        let line = self.current.trimmed_end();
         line.ends_with('?') || line.ends_with(" :")
     }
 
@@ -1845,8 +1834,8 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        let trimmed = self.current.trim_ascii_start();
-        let trimmed_end = trimmed.trim_ascii_end();
+        let trimmed = self.current.trimmed_start();
+        let trimmed_end = trimmed.trimmed_end();
         if trimmed_end.is_empty() || trimmed_end.ends_with(';') {
             return false;
         }
@@ -1888,7 +1877,7 @@ impl FormatEngine<'_> {
 }
 
 fn is_nested_template_type(type_prefix: &str) -> bool {
-    if !type_prefix.trim_ascii_end().ends_with('>') {
+    if !type_prefix.trimmed_end().ends_with('>') {
         return false;
     }
     let mut depth = 0usize;
@@ -1956,7 +1945,7 @@ fn contains_word(line: &str, expected: &str) -> bool {
 }
 
 fn ends_logical_operator(line: &str) -> bool {
-    let line = line.trim_ascii_end();
+    let line = line.trimmed_end();
     if line.ends_with("||") || line.ends_with("&&") {
         return true;
     }
@@ -1999,21 +1988,21 @@ pub(crate) fn split_declaration_assignment_indent_spaces(
     previous: &str,
 ) -> Option<usize> {
     if current
-        .trim_ascii_start()
+        .trimmed_start()
         .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
     {
         return None;
     }
-    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_ascii_end();
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trimmed_end();
     let (assignment, operator) = find_assignment_operator(previous_code)?;
     if operator != "="
         || !previous_code[assignment + operator.len()..]
-            .trim_ascii()
+            .trimmed()
             .is_empty()
     {
         return None;
     }
-    let content = previous_code.trim_ascii_start();
+    let content = previous_code.trimmed_start();
     let declarator_offset = assignment_declarator_offset(content)?;
     if !is_nested_template_type(&content[..declarator_offset]) {
         return None;

@@ -16,19 +16,20 @@ use crate::formatter::text::line_scan::{has_hash_outside_literals, statement_tai
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 
 /// Whether `text` ends with a name alone in parentheses that no call
 /// opens, as a cast to a type name does.
 fn ends_parenthesized_name(text: &str) -> bool {
-    let Some(inner) = text.trim_ascii_end().strip_suffix(')') else {
+    let Some(inner) = text.trimmed_end().strip_suffix(')') else {
         return false;
     };
     let Some(open) = inner.rfind('(') else {
         return false;
     };
-    let name = inner[open + 1..].trim_ascii();
+    let name = inner[open + 1..].trimmed();
     !name.is_empty()
         && name
             .chars()
@@ -139,7 +140,7 @@ pub(crate) fn find_assignment_operator(line: &str) -> Option<(usize, &'static st
 }
 
 fn operator_overload_token_precedes(line: &str, index: usize) -> bool {
-    let before = line[..index].trim_ascii_end();
+    let before = line[..index].trimmed_end();
     before.ends_with("operator")
         && before[..before.len() - "operator".len()]
             .chars()
@@ -160,7 +161,7 @@ fn is_assignment_operator_boundary(line: &str, index: usize, operator: &str) -> 
 }
 
 pub(crate) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
-    let head = head.trim_ascii_end();
+    let head = head.trimmed_end();
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
         .find_map(|operator| {
@@ -178,17 +179,17 @@ pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
     // A subscript, after a name or a closed bracket or paren, continues
     // past its bracket; only a message send aligns under its operator.
     let subscript = head[..open]
-        .trim_ascii_end()
+        .trimmed_end()
         .chars()
         .next_back()
         .is_some_and(|ch| is_identifier_continue(ch) || matches!(ch, '.' | ']' | ')'));
     if subscript || head[..open].contains(']') {
         let after = &head[open + 1..];
-        return Some(open + 1 + after.len() - after.trim_ascii_start().len());
+        return Some(open + 1 + after.len() - after.trimmed_start().len());
     }
     // A ternary's `:` continues under its `?`.
     trailing_binary_operator_column(head).or_else(|| {
-        let trimmed = head.trim_ascii_end();
+        let trimmed = head.trimmed_end();
         (trimmed.ends_with(':') && !trimmed.ends_with("::"))
             .then(|| trimmed[open..].rfind('?').map(|at| open + at))
             .flatten()
@@ -196,7 +197,7 @@ pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
 }
 
 pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
-    let head = head.trim_ascii_end();
+    let head = head.trimmed_end();
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
         .any(|operator| head.ends_with(operator))
@@ -206,7 +207,7 @@ pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
 }
 
 pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
-    let head = head.trim_ascii_end();
+    let head = head.trimmed_end();
     let Some((start, operator)) = find_assignment_operator(head) else {
         return false;
     };
@@ -214,7 +215,7 @@ pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
 }
 
 pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
-    let head = head.trim_ascii_start();
+    let head = head.trimmed_start();
     if ["and", "or"].into_iter().any(|operator| {
         head.strip_prefix(operator).is_some_and(|tail| {
             tail.chars()
@@ -235,12 +236,12 @@ pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
 }
 
 pub(crate) fn starts_prefix_increment(line: &str) -> bool {
-    let trimmed = line.trim_ascii_start();
+    let trimmed = line.trimmed_start();
     trimmed.starts_with("++") || trimmed.starts_with("--")
 }
 
 pub(crate) fn is_prefix_increment_statement(line: &str) -> bool {
-    starts_prefix_increment(line) && line.trim_ascii_end().ends_with(';')
+    starts_prefix_increment(line) && line.trimmed_end().ends_with(';')
 }
 
 impl FormatEngine<'_> {
@@ -249,11 +250,11 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             .is_some_and(|line| {
-                let trimmed = line.trim_ascii_end();
+                let trimmed = line.trimmed_end();
                 !matches!(
-                    trimmed.trim_ascii_start(),
+                    trimmed.trimmed_start(),
                     "break" | "continue" | "throw" | "goto" | "co_return" | "co_yield" | "co_await"
                 ) && !has_hash_outside_literals(trimmed)
                     && !trimmed.ends_with(';')
@@ -273,7 +274,7 @@ impl FormatEngine<'_> {
         } = context;
         if matches!(operator, "*" | "&" | "&&" | "^")
             && statement_tail(&self.current)
-                .trim_ascii_start()
+                .trimmed_start()
                 .strip_prefix("using ")
                 .is_some_and(|alias| alias.contains('='))
             && self.layout.line_state.template_angle_depth == 0
@@ -288,7 +289,7 @@ impl FormatEngine<'_> {
         }
         let operator_role = self.operator_role_at(token_index);
         let split_rvalue_reference = operator == "&&"
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && matches!(next, Some(Token::Word(_)))
             && self
@@ -296,9 +297,9 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .is_some_and(|line| {
-                    let code = self.output.code_of(line).trim_ascii();
+                    let code = self.output.code_of(line).trimmed();
                     !code.starts_with('#')
                         && !starts_with_chain_operator(code)
                         && last_unmatched_open_delimiter(code).is_none()
@@ -495,7 +496,7 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .map_or(0, |line| leading_visual_width(line, self.options.tab_width));
             self.layout
                 .continuation_indent
@@ -506,7 +507,7 @@ impl FormatEngine<'_> {
             self.record_logical_operator_frame(operator);
         }
         if matches!(operator, "&&" | "||")
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !split_rvalue_reference
         {
             let current_operator = if operator == "&&" {
@@ -537,12 +538,12 @@ impl FormatEngine<'_> {
                                 .scoped()
                                 .iter()
                                 .rev()
-                                .find(|line| !line.trim_ascii().is_empty())
+                                .find(|line| !line.trimmed().is_empty())
                                 .and_then(|line| {
-                                    let line = line.trim_ascii_end();
+                                    let line = line.trimmed_end();
                                     let column = self.open_paren_column_of(line)?;
                                     let after = line[column + 1..].len()
-                                        - line[column + 1..].trim_ascii_start().len();
+                                        - line[column + 1..].trimmed_start().len();
                                     Some(column + 1 + after)
                                 })
                                 .filter(|spaces| *spaces <= self.options.max_continuation_indent)
@@ -566,7 +567,7 @@ impl FormatEngine<'_> {
             }
         }
         if matches!(operator, "<<" | ">>")
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.stream_line_follows_multiline_braced_operand()
             && let Some(stream) = self.layout.frame_stack.active_stream()
         {
@@ -575,7 +576,7 @@ impl FormatEngine<'_> {
                 .set_next_line_spaces(stream.chain_anchor_column);
         }
         if matches!(operator, "<<" | ">>")
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.layout.continuation_indent.next_line_indent.is_none()
             && self
                 .layout
@@ -631,7 +632,7 @@ impl FormatEngine<'_> {
                 return true;
             }
             TemplateAngle::Close(count) => {
-                if self.options.close_templates && self.current.trim_ascii_end().ends_with('>') {
+                if self.options.close_templates && self.current.trimmed_end().ends_with('>') {
                     self.trim_current_end();
                 } else {
                     self.emit_source_space();
@@ -680,7 +681,7 @@ impl FormatEngine<'_> {
             self.previous_was_newline = false;
             return true;
         }
-        if operator == ">" && self.current.trim_ascii_end().ends_with('?') {
+        if operator == ">" && self.current.trimmed_end().ends_with('?') {
             self.current.push('>');
             self.layout.command_state.observe_text(operator);
             self.layout.previous = PreviousToken::Other;
@@ -700,21 +701,21 @@ impl FormatEngine<'_> {
     }
 
     fn reset_stale_leading_operator_continuation(&mut self, operator: &str) {
-        if self.current.trim_ascii().is_empty()
+        if self.current.trimmed().is_empty()
             && is_leading_continuation_operator(operator)
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| self.output.code_of(line).trim_ascii() == "}")
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| self.output.code_of(line).trimmed() == "}")
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces =
                 Some(self.layout.indentation.indent() * self.options.indent_width);
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
-        } else if self.current.trim_ascii().is_empty()
+        } else if self.current.trimmed().is_empty()
             && is_leading_continuation_operator(operator)
             && self
                 .layout
@@ -729,7 +730,7 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .map(|line| {
                     leading_visual_width(line, self.options.tab_width) / self.options.indent_width
                         + 1
@@ -813,7 +814,7 @@ impl FormatEngine<'_> {
             }
             "!" | "~" => self.push_unary_prefix(operator),
             "+" | "-"
-                if self.current.trim_ascii().is_empty()
+                if self.current.trimmed().is_empty()
                     && self.layout.indentation.statement_depth() > 0
                     && self.options.pad_operators
                     && self.line_start_sign_is_unary(next) =>
@@ -821,7 +822,7 @@ impl FormatEngine<'_> {
                 self.push_unary_prefix(operator);
             }
             "+" | "-"
-                if self.current.trim_ascii().is_empty()
+                if self.current.trimmed().is_empty()
                     && self.layout.indentation.statement_depth() > 0
                     && self.options.pad_operators =>
             {
@@ -888,7 +889,7 @@ impl FormatEngine<'_> {
             // A `*` or `&` run after `return` dereferences or takes an
             // address.
             "*" | "&"
-                if trailing_word(self.current.trim_ascii_end().trim_end_matches(['*', '&']))
+                if trailing_word(self.current.trimmed_end().trim_end_matches(['*', '&']))
                     == "return" =>
             {
                 self.emit_source_space();
@@ -949,7 +950,7 @@ impl FormatEngine<'_> {
             }
             "*" if operator_role == OperatorRole::PointerDeclarator
                 && self.tree_declaration_context() != Some(true)
-                && self.current.trim_ascii_start().starts_with('(')
+                && self.current.trimmed_start().starts_with('(')
                 && is_macro_like_word(trailing_word(&self.current))
                 && matches!(next, Some(Token::Word(word)) if !is_macro_like_word(word)) =>
             {
@@ -965,7 +966,7 @@ impl FormatEngine<'_> {
                     // After a binary operator spaced off its left operand.
                     || self.layout.previous == PreviousToken::Operator
                         && self.current.ends_with(' ')
-                        && self.current.trim_ascii_end().ends_with(['&', '*'])
+                        && self.current.trimmed_end().ends_with(['&', '*'])
                     // No declarator puts a `*` right after a `&`.
                     || self.layout.previous == PreviousToken::Operator
                         && self.current.ends_with('&')
@@ -976,7 +977,7 @@ impl FormatEngine<'_> {
                         next_is_adjacent,
                         following_operator,
                     )
-                    || (self.current.trim_ascii_end().ends_with('*')
+                    || (self.current.trimmed_end().ends_with('*')
                         && !self.looks_like_pointer_declaration_context())) =>
             {
                 self.push_unary_prefix(operator);
@@ -1009,7 +1010,7 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
             "&" if operator_role == OperatorRole::PointerDeclarator
-                && self.current.trim_ascii_start().starts_with("return ")
+                && self.current.trimmed_start().starts_with("return ")
                 && self.layout.previous != PreviousToken::OpenParen
                 && !is_pointer_type_word(trailing_word(&self.current)) =>
             {
@@ -1168,7 +1169,7 @@ impl FormatEngine<'_> {
                 && (split_rvalue_reference
                     || (!self.current_paren_is_expression_context()
                         || trailing_word(&self.current) == language::AUTO
-                        || self.current.trim_ascii_end().ends_with('*')
+                        || self.current.trimmed_end().ends_with('*')
                         || self.current_in_cast_type_group()
                         || self.current_in_parenthesized_type_operand()
                         || self.current_paren_context_is_declaration()
@@ -1178,7 +1179,7 @@ impl FormatEngine<'_> {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
             }
             "&" | "*" | "^"
-                if self.current.trim_ascii().is_empty()
+                if self.current.trimmed().is_empty()
                     && self.token_input.token_begins_source_line
                     && self
                         .layout
@@ -1190,9 +1191,9 @@ impl FormatEngine<'_> {
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
             }
-            "*" if self.current.trim_ascii_end().ends_with('^') => self.push_unary_prefix(operator),
-            "^" if self.current.trim_ascii_end().ends_with("++")
-                || self.current.trim_ascii_end().ends_with("--") =>
+            "*" if self.current.trimmed_end().ends_with('^') => self.push_unary_prefix(operator),
+            "^" if self.current.trimmed_end().ends_with("++")
+                || self.current.trimmed_end().ends_with("--") =>
             {
                 self.emit_source_space();
                 self.current.push_str(operator);
@@ -1201,12 +1202,12 @@ impl FormatEngine<'_> {
             "&" if self.token_input.previous_input_was_adjacent
                 && self.options.pad_operators
                 && self.current.ends_with([' ', '\t'])
-                && self.current.trim_ascii_end().ends_with('*')
+                && self.current.trimmed_end().ends_with('*')
                 && self
                     .current
-                    .trim_ascii_end()
+                    .trimmed_end()
                     .strip_suffix('*')
-                    .is_some_and(|before| !before.trim_ascii_end().ends_with(['*', '&', '^']))
+                    .is_some_and(|before| !before.trimmed_end().ends_with(['*', '&', '^']))
                 && !self.looks_like_pointer_declaration_context() =>
             {
                 self.push_unary_prefix(operator);
@@ -1231,7 +1232,7 @@ impl FormatEngine<'_> {
             "<<" | ">>" => self.push_binary_operator(operator),
             _ if language::ASSIGNMENT_OPERATORS.contains(&operator)
                 && (self.current.ends_with(' ') || self.current.ends_with('\t'))
-                && self.current.trim_ascii_end().ends_with(['*', '&', '^'])
+                && self.current.trimmed_end().ends_with(['*', '&', '^'])
                 && (self.options.pointer_align != PointerAlign::None
                     || !matches!(
                         self.options.reference_align,
@@ -1275,13 +1276,13 @@ impl FormatEngine<'_> {
 
     fn should_attach_sizeof_after_standalone_call_argument(&self, next: Option<&Token>) -> bool {
         if !matches!(next, Some(Token::Word(word)) if word == "sizeof")
-            || !self.current.trim_ascii_end().ends_with(')')
-            || !self.current.trim_ascii_start().starts_with('(')
+            || !self.current.trimmed_end().ends_with(')')
+            || !self.current.trimmed_start().starts_with('(')
         {
             return false;
         }
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii_end();
+            let trimmed = line.trimmed_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 break;
             }
@@ -1291,7 +1292,7 @@ impl FormatEngine<'_> {
             let Some(open) = trimmed.find('(') else {
                 continue;
             };
-            let before = trimmed[..open].trim_ascii();
+            let before = trimmed[..open].trimmed();
             if !before.is_empty()
                 && !before.contains('=')
                 && !is_header(self.options, before)
@@ -1304,7 +1305,7 @@ impl FormatEngine<'_> {
     }
 
     fn is_trailing_return_arrow(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         current.starts_with("auto ") && current.ends_with(')')
     }
 
@@ -1352,7 +1353,7 @@ impl FormatEngine<'_> {
     /// Whether the current line ends with a cast to a pointer to a builtin
     /// type, as `(void *)`.
     fn current_ends_builtin_pointer_cast(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         self.current_ends_pointer_cast()
             && crate::formatter::engine::matching_open_paren_offset(current).is_some_and(|open| {
                 current[open + 1..]
@@ -1379,14 +1380,14 @@ impl FormatEngine<'_> {
         if !matches!(next, Some(Token::Number(_))) {
             return false;
         }
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(')') {
             return false;
         }
         let Some(open) = current.rfind('(') else {
             return false;
         };
-        if trailing_word(current[..open].trim_ascii_end()) != "sizeof" {
+        if trailing_word(current[..open].trimmed_end()) != "sizeof" {
             return false;
         }
         is_pointer_type_word(trailing_word(&current[open + 1..current.len() - 1]))
@@ -1404,12 +1405,12 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             // A comment line between leaves the sign to the code before it.
-            .find(|line| !self.output.code_of(line).trim_ascii().is_empty())
+            .find(|line| !self.output.code_of(line).trimmed().is_empty())
             .is_some_and(|previous| {
-                let code = self.output.code_of(previous).trim_ascii_end();
+                let code = self.output.code_of(previous).trimmed_end();
                 code.ends_with(['(', '[', '{', ',', '=', '?', ':'])
                     || head_ends_binary_operator(code)
-                    || code.trim_ascii_start().starts_with("return ")
+                    || code.trimmed_start().starts_with("return ")
             })
     }
 
@@ -1428,33 +1429,33 @@ impl FormatEngine<'_> {
                 | PreviousToken::OpenParen
                 | PreviousToken::OpenBracket
                 | PreviousToken::Comma
-        ) || self.current.trim_ascii_end().ends_with([':', '{'])
+        ) || self.current.trimmed_end().ends_with([':', '{'])
             || matches!(trailing_word(&self.current), "return" | "case")
             // A sign leading the line after an opening brace starts an
             // element or a statement.
-            || self.current.trim_ascii().is_empty()
+            || self.current.trimmed().is_empty()
                 && self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
+                    .find(|line| !line.trimmed().is_empty())
                     .is_some_and(|line| {
                         self.output.code_of(line)
-                            .trim_ascii_end()
+                            .trimmed_end()
                             .ends_with('{')
                     })
     }
 
     fn current_ends_prefix_increment_or_decrement(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         let Some(before) = current
             .strip_suffix("++")
             .or_else(|| current.strip_suffix("--"))
         else {
             return false;
         };
-        let before = before.trim_ascii_end();
+        let before = before.trimmed_end();
         before.is_empty()
             || before.ends_with(['(', '[', '{', ',', '=', '?', ':'])
             || trailing_word(before) == "return"
@@ -1462,12 +1463,12 @@ impl FormatEngine<'_> {
     }
 
     fn current_ends_postfix_increment_or_decrement(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         current.ends_with("++") || current.ends_with("--")
     }
 
     pub(super) fn is_in_case_label_expression(&self) -> bool {
-        let current = self.current.trim_ascii_start();
+        let current = self.current.trimmed_start();
         current
             .strip_prefix("case")
             .and_then(|rest| rest.chars().next())
@@ -1504,7 +1505,7 @@ impl FormatEngine<'_> {
     }
 
     fn stream_line_follows_multiline_braced_operand(&self) -> bool {
-        if !self.current.trim_ascii().is_empty() {
+        if !self.current.trimmed().is_empty() {
             return false;
         }
         let Some(previous_line) = self.output.len().checked_sub(1) else {
@@ -1525,7 +1526,7 @@ impl FormatEngine<'_> {
     }
 
     fn record_logical_operator_frame(&mut self, operator: &str) {
-        if self.current.trim_ascii() == ")"
+        if self.current.trimmed() == ")"
             && let Some(spaces) = self
                 .layout
                 .frame_stack
@@ -1542,9 +1543,9 @@ impl FormatEngine<'_> {
         };
         let line_indent_spaces = self.current_line_indent_spaces();
         let operator_output_column = line_indent_spaces + self.current_visual_width();
-        let operator_starts_output_line = self.current.trim_ascii().is_empty();
+        let operator_starts_output_line = self.current.trimmed().is_empty();
         let return_value_column = {
-            let current = self.current.trim_ascii_start();
+            let current = self.current.trimmed_start();
             current.starts_with("return ").then(|| {
                 let prefix_len = self.current.len() - current.len();
                 let after_return = &current["return".len()..];
@@ -1617,7 +1618,7 @@ impl FormatEngine<'_> {
 
     fn push_binary_operator(&mut self, operator: &str) {
         if matches!(operator, "<<" | ">>")
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.stream_line_follows_multiline_braced_operand()
             && self.layout.frame_stack.active_stream().is_some()
         {

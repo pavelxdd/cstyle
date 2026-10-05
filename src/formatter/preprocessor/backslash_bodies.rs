@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct BackslashBodyState {
     may_have_input: bool,
@@ -24,7 +25,7 @@ impl FormatEngine<'_> {
         if !self.backslash_body.may_have_input && self.backslash_body.parts.is_none() {
             return false;
         }
-        let current = line.trim_ascii();
+        let current = line.trimmed();
         if let Some((mut parts, indent)) = self.backslash_body.parts.take() {
             if current.starts_with('#') || current.starts_with("template") {
                 self.backslash_body.parts = Some((parts, indent));
@@ -37,9 +38,9 @@ impl FormatEngine<'_> {
             } else {
                 let part = current
                     .trim_start_matches('{')
-                    .trim_ascii()
+                    .trimmed()
                     .trim_end_matches('}')
-                    .trim_ascii();
+                    .trimmed();
                 if !part.is_empty() {
                     parts.push(part.to_string());
                 }
@@ -49,15 +50,15 @@ impl FormatEngine<'_> {
         }
         if current.starts_with('{')
             && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.trim_ascii_end().ends_with('\\')
-            && !line_opens_backslash_control_body(previous.trim_ascii_start())
+            && previous.trimmed_end().ends_with('\\')
+            && !line_opens_backslash_control_body(previous.trimmed_start())
         {
             let indent = leading_visual_width(previous, self.options.tab_width);
             let body = current
                 .trim_start_matches('{')
-                .trim_ascii()
+                .trimmed()
                 .trim_end_matches('}')
-                .trim_ascii();
+                .trimmed();
             let mut parts = Vec::new();
             if !body.is_empty() {
                 parts.push(body.to_string());
@@ -73,7 +74,7 @@ impl FormatEngine<'_> {
             || raw_prefix.contains('"')
             || raw_prefix.contains('@')
             || raw_prefix.contains('#')
-            || line_opens_backslash_control_body(raw_prefix.trim_ascii_start())
+            || line_opens_backslash_control_body(raw_prefix.trimmed_start())
         {
             return false;
         }
@@ -82,14 +83,11 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             .map(|line| leading_visual_width(line, self.options.tab_width))
             .unwrap_or(0);
-        let prefix = raw_prefix.trim_ascii_start().trim_ascii_end();
-        let body = line[split + 2..]
-            .trim_ascii()
-            .trim_end_matches('}')
-            .trim_ascii();
+        let prefix = raw_prefix.trimmed_start().trimmed_end();
+        let body = line[split + 2..].trimmed().trim_end_matches('}').trimmed();
         self.push_output_line_spaces(&format!("{prefix} \\"), 0, indent);
         let mut parts = Vec::new();
         if !body.is_empty() {
@@ -107,10 +105,7 @@ impl FormatEngine<'_> {
 }
 
 fn line_opens_backslash_control_body(line: &str) -> bool {
-    let head = line
-        .trim_ascii_end()
-        .trim_end_matches('\\')
-        .trim_ascii_end();
+    let head = line.trimmed_end().trim_end_matches('\\').trimmed_end();
     ["for", "if", "while", "switch", "else", "do"]
         .iter()
         .any(|keyword| {

@@ -1,4 +1,5 @@
 use crate::formatter::lexer::{CommentKind, Token, token_text, tokenize};
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_digit_separator;
 
 /// Byte-set membership for ASCII sets: one pass over the bytes, where a
@@ -24,7 +25,7 @@ pub(crate) fn statement_tail(text: &str) -> &str {
 }
 
 pub(crate) fn is_comment_line(line: &str) -> bool {
-    let trimmed = line.trim_ascii_start();
+    let trimmed = line.trimmed_start();
     // A block comment row leads with a bare `*`; code may lead with `*p`.
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
@@ -121,7 +122,7 @@ pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
 }
 
 pub(crate) fn line_ends_with_comment(line: &str) -> bool {
-    let trimmed = line.trim_ascii_end();
+    let trimmed = line.trimmed_end();
     if trimmed.ends_with("*/") {
         return true;
     }
@@ -518,13 +519,13 @@ pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
     }
     let mut after = stack.pop()?;
     loop {
-        after += line[after..].len() - line[after..].trim_ascii_start().len();
+        after += line[after..].len() - line[after..].trimmed_start().len();
         let Some(comment) = line[after..].strip_prefix("/*") else {
             break;
         };
         after += 2 + comment.find("*/")? + 2;
     }
-    (after < line.trim_ascii_end().len()).then_some(after)
+    (after < line.trimmed_end().len()).then_some(after)
 }
 
 pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
@@ -539,7 +540,7 @@ pub(crate) fn reverse_scan_skips_block_comment(trimmed: &str, in_block_comment: 
         }
         return true;
     }
-    let line = trimmed.trim_ascii_end();
+    let line = trimmed.trimmed_end();
     if let Some(body) = line.strip_suffix("*/")
         && !body.contains("/*")
     {
@@ -577,13 +578,13 @@ pub(crate) fn inline_brace_pair_range(line: &str) -> Option<(usize, usize)> {
 
 pub(crate) fn trailing_comment_split_limit(line: &str) -> usize {
     trailing_comment_start(line)
-        .map(|index| line[..index].trim_ascii_end().len())
+        .map(|index| line[..index].trimmed_end().len())
         .unwrap_or(line.len())
 }
 
 pub(crate) fn line_comment_split_limit(line: &str) -> usize {
     line_comment_start(line)
-        .map(|index| line[..index].trim_ascii_end().len())
+        .map(|index| line[..index].trimmed_end().len())
         .unwrap_or(line.len())
 }
 
@@ -709,10 +710,7 @@ fn line_comment_start(line: &str) -> Option<usize> {
 }
 
 pub(crate) fn preprocessor_directive(line: &str) -> Option<&str> {
-    let rest = line
-        .trim_ascii_start()
-        .strip_prefix('#')?
-        .trim_ascii_start();
+    let rest = line.trimmed_start().strip_prefix('#')?.trimmed_start();
     let end = rest
         .find(|ch: char| !ch.is_ascii_alphabetic())
         .unwrap_or(rest.len());

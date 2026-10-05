@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
 #[derive(Default)]
@@ -49,8 +50,8 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|line| {
                         let code = &self.output.code_of(line);
-                        !code.trim_ascii().is_empty()
-                            && line[code.len()..].trim_ascii_start().starts_with("/*")
+                        !code.trimmed().is_empty()
+                            && line[code.len()..].trimmed_start().starts_with("/*")
                     })
             {
                 self.block_spacing.append_blank = false;
@@ -69,10 +70,7 @@ impl FormatEngine<'_> {
                 && (!self.preprocessor.last_output_was_preprocessor
                     || self.comment_precedes_directives()))
             || (self.options.brace_style == BraceStyle::Pico
-                && self
-                    .output
-                    .last()
-                    .is_some_and(|line| line.trim_ascii() == "{"))
+                && self.output.last().is_some_and(|line| line.trimmed() == "{"))
         {
             return;
         }
@@ -110,7 +108,7 @@ impl FormatEngine<'_> {
         let Some(previous) = self.layout.previous_pre_adjust_line.as_deref() else {
             return;
         };
-        let previous = previous.trim_ascii_start();
+        let previous = previous.trimmed_start();
         if previous.is_empty()
             || self.layout.indentation.indent() == 0
             || (self.layout.command_state.previous_command_char == Some('{')
@@ -133,14 +131,14 @@ impl FormatEngine<'_> {
         tokens: &[Token],
         following_index: Option<usize>,
     ) -> bool {
-        if !self.options.break_blocks || !self.current.trim_ascii().is_empty() {
+        if !self.options.break_blocks || !self.current.trimmed().is_empty() {
             return false;
         }
         // Only the last of a run of empty lines stays.
         let follows_empty_line = self
             .output
             .last()
-            .is_some_and(|line| line.trim_ascii().is_empty());
+            .is_some_and(|line| line.trimmed().is_empty());
         if self.previous_block_spacing_line_is_comment_only()
             && following_index
                 .filter(|index| matches!(tokens.get(*index), Some(Token::Comment(_, _))))
@@ -222,7 +220,7 @@ impl FormatEngine<'_> {
             .is_some_and(|index| {
                 self.output
                     .code_before_comment(index)
-                    .trim_ascii_end()
+                    .trimmed_end()
                     .ends_with(':')
             })
     }
@@ -242,7 +240,7 @@ impl FormatEngine<'_> {
                 !self
                     .output
                     .code_before_comment(index)
-                    .trim_ascii_end()
+                    .trimmed_end()
                     .ends_with('{')
             })
     }
@@ -372,8 +370,8 @@ impl FormatEngine<'_> {
             .layout
             .previous_pre_adjust_line
             .as_deref()
-            .is_some_and(|previous| previous.trim_ascii_end().ends_with('{'));
-        if line.trim_ascii_start().starts_with('}') {
+            .is_some_and(|previous| previous.trimmed_end().ends_with('{'));
+        if line.trimmed_start().starts_with('}') {
             // A block of comments alone is as empty.
             let holds_no_code = self
                 .output
@@ -390,10 +388,7 @@ impl FormatEngine<'_> {
                     .previous_pre_adjust_line
                     .as_deref()
                     .is_some_and(|previous| {
-                        self.output
-                            .code_of(previous)
-                            .trim_ascii_end()
-                            .ends_with("{}")
+                        self.output.code_of(previous).trimmed_end().ends_with("{}")
                     });
             self.block_spacing.closed_empty_block =
                 previous_opens || holds_no_code || ends_empty_block;
@@ -401,12 +396,12 @@ impl FormatEngine<'_> {
         let case_block_before_directive =
             std::mem::take(&mut self.block_spacing.case_block_before_directive);
         if case_block_before_directive
-            && line.trim_ascii_start().starts_with('#')
+            && line.trimmed_start().starts_with('#')
             && self
                 .layout
                 .previous_pre_adjust_line
                 .as_deref()
-                .is_some_and(|previous| previous.trim_ascii() == "}")
+                .is_some_and(|previous| previous.trimmed() == "}")
         {
             self.block_spacing.prepend_blank = false;
             self.block_spacing.append_blank = false;
@@ -418,18 +413,18 @@ impl FormatEngine<'_> {
             return false;
         }
         match self.layout.previous_pre_adjust_line.as_deref() {
-            Some(previous) if !previous.trim_ascii().is_empty() => {}
+            Some(previous) if !previous.trimmed().is_empty() => {}
             None if prepend => return true,
             _ => return false,
         }
         if prepend {
             return true;
         }
-        let trimmed = line.trim_ascii_start();
+        let trimmed = line.trimmed_start();
         // An empty block stays closed up to its closing header.
         let closed_empty_block = self.block_spacing.closed_empty_block;
         if let Some(after) = trimmed.strip_prefix('}') {
-            let next = leading_identifier(after.trim_ascii_start());
+            let next = leading_identifier(after.trimmed_start());
             return self.options.break_closing_header_blocks
                 && !self.block_spacing.closed_empty_block
                 && is_break_blocks_closing_header(next);
@@ -490,13 +485,13 @@ impl FormatEngine<'_> {
             .previous_pre_adjust_line
             .as_deref()
             .is_some_and(|line| {
-                let trimmed = line.trim_ascii_start();
+                let trimmed = line.trimmed_start();
                 trimmed.starts_with("//")
                     || trimmed.starts_with("/*")
                         && trimmed
                             .find("*/")
                             .is_none_or(|close| {
-                                let rest = trimmed[close + 2..].trim_ascii();
+                                let rest = trimmed[close + 2..].trimmed();
                                 rest.is_empty() || rest.starts_with("//") || rest.starts_with("/*")
                             })
                     // The last row of a block comment that opened a line.

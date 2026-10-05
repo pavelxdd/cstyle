@@ -1,5 +1,6 @@
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
+use crate::formatter::text::trim::Trimmed;
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
@@ -40,7 +41,7 @@ impl CurrentLine {
     pub(crate) fn push_str(&mut self, text: &str) {
         let leads = self.leads_comment();
         self.text.push_str(text);
-        if !text.trim_ascii().is_empty() {
+        if !text.trimmed().is_empty() {
             self.record_active_token(leads);
         }
     }
@@ -62,7 +63,7 @@ impl CurrentLine {
     }
 
     pub(crate) fn insert(&mut self, index: usize, ch: char) {
-        let leads = self.leads_comment() && self.text[..index].trim_ascii().is_empty();
+        let leads = self.leads_comment() && self.text[..index].trimmed().is_empty();
         self.text.insert(index, ch);
         self.invalidate();
         if !ch.is_whitespace() {
@@ -83,7 +84,7 @@ impl CurrentLine {
     pub(crate) fn replace(&mut self, text: String) {
         self.text = text;
         self.invalidate();
-        if self.text.trim_ascii().is_empty() {
+        if self.text.trimmed().is_empty() {
             self.tokens = None;
             self.comments = LineComments::default();
         } else {
@@ -121,7 +122,7 @@ impl CurrentLine {
     /// Whether text added now would be the first text of the line and belong
     /// to a block comment.
     fn leads_comment(&self) -> bool {
-        self.active_comment.is_some() && self.text.trim_ascii().is_empty()
+        self.active_comment.is_some() && self.text.trimmed().is_empty()
     }
 
     fn record_active_token(&mut self, leads_comment: bool) {
@@ -227,7 +228,7 @@ impl CurrentLine {
         {
             return cached_blank;
         }
-        let blank = self.text.trim_ascii().is_empty();
+        let blank = self.text.trimmed().is_empty();
         self.blank.set(Some((len, blank)));
         blank
     }
@@ -305,7 +306,7 @@ impl CurrentLine {
             self.trailing_comment.set(Some(scan));
         }
         match scan.comment_start {
-            Some(index) => self.text[..index].trim_ascii_end().len(),
+            Some(index) => self.text[..index].trimmed_end().len(),
             None => len,
         }
     }
@@ -326,7 +327,7 @@ impl CurrentLine {
         if self.open_brace_run_len.get() == Some(self.text.len()) {
             return true;
         }
-        let trimmed = self.text.trim_ascii_start();
+        let trimmed = self.text.trimmed_start();
         !trimmed.is_empty()
             && trimmed
                 .chars()

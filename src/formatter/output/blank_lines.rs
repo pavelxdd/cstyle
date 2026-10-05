@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
     pub(crate) fn observe_blank_line_context(
@@ -58,7 +59,7 @@ impl FormatEngine<'_> {
         let Some(previous) = self.output.last() else {
             return false;
         };
-        let code = self.output.code_of(previous).trim_ascii();
+        let code = self.output.code_of(previous).trimmed();
         if !code.ends_with(')') || code.starts_with('#') {
             return false;
         }

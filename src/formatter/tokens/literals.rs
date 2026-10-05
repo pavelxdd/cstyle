@@ -3,6 +3,7 @@ use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::StringContinuationFrame;
 use crate::formatter::syntax::language::is_type_like_pointer_word;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
 use crate::source::lex::{is_identifier_continue, trailing_word};
 
@@ -108,7 +109,7 @@ pub(crate) fn string_literal_token_end(line: &str, start: usize) -> Option<usize
 
 pub(crate) fn string_literal_has_opening_context(line: &str, start: usize) -> bool {
     !matches!(
-        line[..start].trim_ascii_end().chars().next_back(),
+        line[..start].trimmed_end().chars().next_back(),
         Some(ch) if is_identifier_continue(ch) || matches!(ch, ')' | ']')
     )
 }
@@ -117,13 +118,13 @@ pub(crate) fn single_string_literal_comma_line(line: &str) -> bool {
     let Some(start) = first_string_literal_start(line) else {
         return false;
     };
-    if !line[..start].trim_ascii().is_empty() {
+    if !line[..start].trimmed().is_empty() {
         return false;
     }
     let Some(end) = string_literal_token_end(line, start) else {
         return false;
     };
-    line[end..].trim_ascii() == ","
+    line[end..].trimmed() == ","
 }
 
 pub(crate) fn last_string_literal_start(line: &str) -> Option<usize> {
@@ -164,7 +165,7 @@ impl FormatEngine<'_> {
         let line = if preserve_line_end {
             line
         } else {
-            line.trim_ascii_end().to_string()
+            line.trimmed_end().to_string()
         };
         self.adjust_and_publish_raw_literal_line(line, structural_start);
         self.reset_after_finished_line();
@@ -178,7 +179,7 @@ impl FormatEngine<'_> {
         }
         if quote.is_none()
             && self.layout.previous == PreviousToken::Operator
-            && self.current.trim_ascii_end().ends_with(['+', '-'])
+            && self.current.trimmed_end().ends_with(['+', '-'])
         {
             let before_sign = self.current.trim_end_matches([' ', '\t', '+', '-']);
             let cast_type = before_sign
@@ -186,9 +187,9 @@ impl FormatEngine<'_> {
                 .and_then(|head| head.rsplit_once('('))
                 .filter(|(before_open, ty)| {
                     !matches!(
-                        trailing_word(before_open.trim_ascii_end()),
+                        trailing_word(before_open.trimmed_end()),
                         "sizeof" | "alignof" | "_Alignof"
-                    ) && is_type_like_pointer_word(ty.trim_ascii())
+                    ) && is_type_like_pointer_word(ty.trimmed())
                 });
             // astyle keeps a space the source put after the sign.
             if cast_type.is_some()
@@ -202,7 +203,7 @@ impl FormatEngine<'_> {
             }
         }
         if quote.is_none()
-            && self.current.trim_ascii_end().ends_with('}')
+            && self.current.trimmed_end().ends_with('}')
             && self
                 .token_input
                 .previous_input_whitespace
@@ -248,7 +249,7 @@ impl FormatEngine<'_> {
                 line_indent_spaces,
                 literal_start_column: line_indent_spaces + self.current_visual_width(),
                 line_starts_with_chain_operator: starts_with_chain_operator(
-                    self.current.trim_ascii_start(),
+                    self.current.trimmed_start(),
                 ),
                 has_opening_context: self.current.contains('('),
                 has_open_brace_before_literal: self.current.contains('{'),

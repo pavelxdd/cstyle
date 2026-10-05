@@ -5,6 +5,7 @@ use crate::formatter::text::line_scan::{
     line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 use std::cell::{Cell, OnceCell};
@@ -76,8 +77,8 @@ fn structural_line(line: &str) -> Cow<'_, str> {
 
 fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
     let structural = structural_line(line);
-    let code = structural.trim_ascii_end();
-    let trimmed = code.trim_ascii_start();
+    let code = structural.trimmed_end();
+    let trimmed = code.trimmed_start();
     let (closes, opens) = line_brace_imbalance(code);
     let (paren_closes, paren_opens) = line_paren_imbalance(code);
     let open_shape = if trimmed == "{" {
@@ -97,17 +98,17 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         closes,
         opens,
         open_shape,
-        trim_start_byte: line.len() - line.trim_ascii_start().len(),
-        trim_end_byte: line.trim_ascii_end().len(),
+        trim_start_byte: line.len() - line.trimmed_start().len(),
+        trim_end_byte: line.trimmed_end().len(),
         code_end_byte: code.len(),
         paren_closes,
         paren_open_count: paren_opens.len(),
         paren_last_open_column: paren_opens.last().copied(),
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
-        else_line: is_else_line(line.trim_ascii()),
+        else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(
-            &line[(line.len() - line.trim_ascii_start().len()).min(code.len())..code.len()],
+            &line[(line.len() - line.trimmed_start().len()).min(code.len())..code.len()],
         ),
     }
 }
@@ -115,24 +116,24 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
 fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBraceMeta {
     let suffix = line.get(structural_start..).unwrap_or("");
     let structural = structural_line(suffix);
-    let code = structural.trim_ascii_end();
+    let code = structural.trimmed_end();
     let (closes, opens) = line_brace_imbalance(code);
     let (paren_closes, paren_opens) = line_paren_imbalance(code);
     LineBraceMeta {
-        code_starts_with_hash: code.trim_ascii_start().starts_with('#'),
+        code_starts_with_hash: code.trimmed_start().starts_with('#'),
         closes,
         opens,
         open_shape: OpenBraceShape::Other,
-        trim_start_byte: line.len() - line.trim_ascii_start().len(),
-        trim_end_byte: line.trim_ascii_end().len(),
+        trim_start_byte: line.len() - line.trimmed_start().len(),
+        trim_end_byte: line.trimmed_end().len(),
         code_end_byte: line.len(),
         paren_closes,
         paren_open_count: paren_opens.len(),
         paren_last_open_column: None,
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
-        else_line: is_else_line(line.trim_ascii()),
-        code_else_line: is_else_line(line.trim_ascii_start()),
+        else_line: is_else_line(line.trimmed()),
+        code_else_line: is_else_line(line.trimmed_start()),
     }
 }
 
@@ -233,7 +234,7 @@ pub(crate) struct OutputBuffer {
 
 impl OutputBuffer {
     fn record_hints(&mut self, line: &str, hints: OutputLineHints) {
-        if hints.has_colon && line.trim_ascii_end().ends_with('{') {
+        if hints.has_colon && line.trimmed_end().ends_with('{') {
             let meta = compute_line_brace_meta(line);
             self.may_have_label_open |= meta.open_shape == OpenBraceShape::Label;
         }
@@ -253,7 +254,7 @@ impl OutputBuffer {
     pub(super) fn push_with_hints(&mut self, line: String, hints: OutputLineHints) {
         self.record_hints(&line, hints);
         let index = self.lines.len();
-        let blank = line.trim_ascii().is_empty();
+        let blank = line.trimmed().is_empty();
         if !blank {
             self.last_non_empty_index.set(Some(index));
             self.last_non_empty_dirty.set(false);
@@ -271,7 +272,7 @@ impl OutputBuffer {
         self.may_have_new |= line.contains("new ");
         let meta = compute_raw_literal_line_meta(&line, structural_start);
         let index = self.lines.len();
-        let blank = line.trim_ascii().is_empty();
+        let blank = line.trimmed().is_empty();
         if !blank {
             self.last_non_empty_index.set(Some(index));
             self.last_non_empty_dirty.set(false);
@@ -413,7 +414,7 @@ impl OutputBuffer {
     /// Appends the text of line `from` to line `into`, after `separator`,
     /// and removes line `from`; `into` then holds the tokens of both.
     pub(crate) fn join_into(&mut self, into: usize, from: usize, separator: &str) {
-        let text = self.lines[from].trim_ascii().to_string();
+        let text = self.lines[from].trimmed().to_string();
         let span = match (self.tokens[into], self.tokens[from]) {
             (Some(a), Some(b)) => Some(TokenSpan {
                 first: a.first.min(b.first),
@@ -424,7 +425,7 @@ impl OutputBuffer {
         self.first_tokens_unordered |=
             span.map(|span| span.first) != self.tokens[into].map(|span| span.first);
         self.remove(from);
-        let mut line = self.lines[into].trim_ascii_end().to_string();
+        let mut line = self.lines[into].trimmed_end().to_string();
         line.push_str(separator);
         line.push_str(&text);
         self.set(into, line);
@@ -515,15 +516,15 @@ impl OutputBuffer {
                     closes: 0,
                     opens: 0,
                     open_shape: OpenBraceShape::Other,
-                    trim_start_byte: line.len() - line.trim_ascii_start().len(),
-                    trim_end_byte: line.trim_ascii_end().len(),
+                    trim_start_byte: line.len() - line.trimmed_start().len(),
+                    trim_end_byte: line.trimmed_end().len(),
                     code_end_byte: 0,
                     paren_closes: 0,
                     paren_open_count: 0,
                     paren_last_open_column: None,
                     comment_split_limit: trailing_comment_split_limit(line),
                     mentions_new: line.contains("new "),
-                    else_line: is_else_line(line.trim_ascii()),
+                    else_line: is_else_line(line.trimmed()),
                     code_else_line: false,
                 }
             } else {
@@ -536,7 +537,7 @@ impl OutputBuffer {
     /// `(`/`[`, outside literals and comments.
     pub(crate) fn paren_imbalance(&self, index: usize) -> (usize, &[usize]) {
         let (closes, opens) = self.parens[index]
-            .get_or_init(|| line_paren_imbalance(self.lines[index].trim_ascii_end()));
+            .get_or_init(|| line_paren_imbalance(self.lines[index].trimmed_end()));
         (*closes, opens)
     }
 
@@ -557,7 +558,7 @@ impl OutputBuffer {
         (line.as_bytes()[..offset]
             .iter()
             .all(u8::is_ascii_whitespace)
-            && (end == code.len() || end == code.trim_ascii_end().len()))
+            && (end == code.len() || end == code.trimmed_end().len()))
         .then_some((index, offset))
     }
 
@@ -781,7 +782,7 @@ impl OutputBuffer {
         let designator = self.lines[range]
             .iter()
             .rev()
-            .map(|line| line.trim_ascii_start())
+            .map(|line| line.trimmed_start())
             .take_while(|trimmed| !trimmed.starts_with("},"))
             .any(|trimmed| trimmed.starts_with('['));
         self.designator_cache
@@ -807,7 +808,7 @@ impl OutputBuffer {
             self.last_non_empty_index.set(
                 self.lines
                     .iter()
-                    .rposition(|line| !line.trim_ascii().is_empty()),
+                    .rposition(|line| !line.trimmed().is_empty()),
             );
             self.last_non_empty_dirty.set(false);
         }
@@ -906,7 +907,7 @@ impl OutputBuffer {
         for line in (0..index).rev() {
             if self.comments[line].mentions(comment) {
                 start = line;
-            } else if !self.lines[line].trim_ascii().is_empty() {
+            } else if !self.lines[line].trimmed().is_empty() {
                 break;
             }
         }
@@ -915,7 +916,7 @@ impl OutputBuffer {
 
     /// [`Self::comment_start_index`] for lines that recorded no tokens.
     fn text_comment_start_index(&self, index: usize) -> usize {
-        if !self.lines[index].trim_ascii_start().starts_with('*') {
+        if !self.lines[index].trimmed_start().starts_with('*') {
             return index;
         }
         self.lines[..index]

@@ -28,6 +28,7 @@ use crate::formatter::text::line_scan::{
     line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_brace_content_offset,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
@@ -40,10 +41,10 @@ fn comment_starts_header_word(line: &str, word: &str) -> bool {
 }
 
 fn post_closing_declaration_owns_comment(line: &str) -> bool {
-    let Some(tail) = line.trim_ascii_start().strip_prefix('}') else {
+    let Some(tail) = line.trimmed_start().strip_prefix('}') else {
         return false;
     };
-    let tail = tail.trim_ascii_start();
+    let tail = tail.trimmed_start();
     if tail.is_empty() || tail.ends_with('{') {
         return false;
     }
@@ -59,8 +60,8 @@ pub(crate) fn line_comment_backslash_trailing_space(line: &str) -> bool {
         return false;
     }
     let comment = trailing_comment_split_limit(line);
-    let tail = line[comment..].trim_ascii_start();
-    comment < line.len() && tail.starts_with("//") && tail.trim_ascii_end().ends_with('\\')
+    let tail = line[comment..].trimmed_start();
+    comment < line.len() && tail.starts_with("//") && tail.trimmed_end().ends_with('\\')
 }
 
 /// Indent candidates for a comment token, computed before it is placed.
@@ -112,13 +113,13 @@ impl FormatEngine<'_> {
             let Some(comment_line) = self.output.get(index + 1) else {
                 continue;
             };
-            let trimmed = comment_line.trim_ascii_start();
+            let trimmed = comment_line.trimmed_start();
             if !(trimmed.starts_with("//") || trimmed.starts_with("/*"))
                 || trimmed.contains("*INDENT-OFF*")
             {
                 continue;
             }
-            if self.output[index].trim_ascii() != "{" {
+            if self.output[index].trimmed() != "{" {
                 continue;
             }
             let comment_line = self.output.remove(index + 1);
@@ -127,7 +128,7 @@ impl FormatEngine<'_> {
                 "{}{}{}",
                 self.output[index],
                 fill,
-                comment_line.trim_ascii_start()
+                comment_line.trimmed_start()
             );
             self.output.set(index, merged);
         }
@@ -142,11 +143,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {
-        let trimmed = line.trim_ascii_start();
+        let trimmed = line.trimmed_start();
         let adjacent = trimmed
             .strip_prefix("/*")
             .and_then(|rest| rest.split_once("*/"))
-            .is_some_and(|(_, after)| after.trim_ascii_start().starts_with("/*"));
+            .is_some_and(|(_, after)| after.trimmed_start().starts_with("/*"));
         if !adjacent {
             return line;
         }
@@ -196,7 +197,7 @@ impl FormatEngine<'_> {
         output_spaces: usize,
         record_split_else_indent: bool,
     ) {
-        let trimmed = line.trim_ascii_start();
+        let trimmed = line.trimmed_start();
         if trimmed.starts_with("//") {
             if let Some(frame) = self.layout.frame_stack.active_comment_mut() {
                 frame.continuation_anchor_column = Some(output_spaces);
@@ -213,13 +214,13 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn split_else_comment_row_indent_spaces(&self, line: &str) -> Option<usize> {
-        if !is_comment_line(line.trim_ascii_start()) {
+        if !is_comment_line(line.trimmed_start()) {
             return None;
         }
         let mut result = self.split_else_preprocessor_branch_body_indent_spaces();
         if let Some(previous) = self.output.last_line_outside_comment() {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            let previous_trimmed = previous_code.trim_ascii_start();
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_trimmed = previous_code.trimmed_start();
             if previous_trimmed == "else" || previous_trimmed.ends_with("} else") {
                 result = Some(
                     leading_visual_width(previous, self.options.tab_width)
@@ -237,8 +238,8 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trim_ascii_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trim_ascii_start())
+            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || is_comment_line(line.trimmed_start())
         {
             return None;
         }
@@ -248,13 +249,13 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty())
+            .filter(|line| !line.trimmed().is_empty())
         {
-            if is_comment_line(previous.trim_ascii_start()) {
+            if is_comment_line(previous.trimmed_start()) {
                 comment_indent = Some(leading_visual_width(previous, self.options.tab_width));
                 continue;
             }
-            let previous_trimmed = previous.trim_ascii();
+            let previous_trimmed = previous.trimmed();
             if (previous_trimmed == "else" || previous_trimmed.ends_with("} else"))
                 && let Some(spaces) = comment_indent
             {
@@ -279,14 +280,14 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trim_ascii_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trim_ascii_start())
+            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || is_comment_line(line.trimmed_start())
             || !self.commented_split_else_preprocessor_region_active()
         {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !is_comment_line(previous.trim_ascii_start()) {
+        if !is_comment_line(previous.trimmed_start()) {
             return None;
         }
         let target = leading_visual_width(previous, self.options.tab_width);
@@ -300,13 +301,13 @@ impl FormatEngine<'_> {
         body_spaces: usize,
         structural_split_else_chain: bool,
     ) -> Option<usize> {
-        if !structural_split_else_chain || line.trim_ascii_start().starts_with('#') {
+        if !structural_split_else_chain || line.trimmed_start().starts_with('#') {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         (previous_spaces == body_spaces
-            && is_comment_line(previous.trim_ascii_start())
+            && is_comment_line(previous.trimmed_start())
             && current_spaces < body_spaces)
             .then_some(body_spaces)
     }
@@ -316,11 +317,11 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::Normal || line.trim_ascii_start().starts_with(['#', '{', '}']) {
+        if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['#', '{', '}']) {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if preprocessor_directive(previous.trim_ascii_start()) != Some("endif") {
+        if preprocessor_directive(previous.trimmed_start()) != Some("endif") {
             return None;
         }
         let mut before_lines = self
@@ -330,13 +331,12 @@ impl FormatEngine<'_> {
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
             .skip(1)
-            .filter(|line| !line.trim_ascii().is_empty());
+            .filter(|line| !line.trimmed().is_empty());
         let before = before_lines.next()?;
-        ((is_comment_line(before.trim_ascii_start())
-            || before.trim_ascii_start().starts_with("/*"))
-            && before_lines.next().is_some_and(|line| {
-                preprocessor_directive(line.trim_ascii_start()) == Some("else")
-            }))
+        ((is_comment_line(before.trimmed_start()) || before.trimmed_start().starts_with("/*"))
+            && before_lines
+                .next()
+                .is_some_and(|line| preprocessor_directive(line.trimmed_start()) == Some("else")))
         .then(|| leading_visual_width(before, self.options.tab_width))
     }
 
@@ -362,24 +362,24 @@ impl FormatEngine<'_> {
                     .unwrap_or(captured)
             });
         let line = self.take_current();
-        let mut trimmed = line.trim_ascii_end().to_string();
-        if trimmed.trim_ascii_start().starts_with("/*") {
+        let mut trimmed = line.trimmed_end().to_string();
+        if trimmed.trimmed_start().starts_with("/*") {
             let follows_switch = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .is_some_and(|line| {
-                    let code = self.output.code_of(line).trim_ascii_end();
-                    code.trim_ascii_start().starts_with("switch") && code.ends_with('{')
+                    let code = self.output.code_of(line).trimmed_end();
+                    code.trimmed_start().starts_with("switch") && code.ends_with('{')
                 });
             if !follows_switch {
                 if let Some(spaces) = self.split_else_preprocessor_branch_body_indent_spaces() {
                     let prefix = self
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);
-                    trimmed = format!("{prefix}{}", trimmed.trim_ascii_start());
+                    trimmed = format!("{prefix}{}", trimmed.trimmed_start());
                 } else if let Some(spaces) = line_continuation_indent.or_else(|| {
                     // A control header's condition placed its comments.
                     (!self
@@ -393,19 +393,19 @@ impl FormatEngine<'_> {
                     let prefix = self
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);
-                    trimmed = format!("{prefix}{}", trimmed.trim_ascii_start());
+                    trimmed = format!("{prefix}{}", trimmed.trimmed_start());
                 }
             }
         }
         if trimmed
             .split_once("*/")
-            .is_some_and(|(_, after)| after.trim_ascii_end().ends_with(';'))
+            .is_some_and(|(_, after)| after.trimmed_end().ends_with(';'))
         {
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.layout.nesting.clear_continuation_indents();
         }
-        if !trimmed.trim_ascii().is_empty() {
-            let closes_standalone_block_comment = trimmed.trim_ascii_start().starts_with("*/");
+        if !trimmed.trimmed().is_empty() {
+            let closes_standalone_block_comment = trimmed.trimmed_start().starts_with("*/");
             let frame_column = self
                 .layout
                 .frame_stack
@@ -414,7 +414,7 @@ impl FormatEngine<'_> {
                 .map(|frame| frame.output_column);
             let code_follows_comment = trimmed
                 .split_once("*/")
-                .is_some_and(|(_, after)| !after.trim_ascii().is_empty());
+                .is_some_and(|(_, after)| !after.trimmed().is_empty());
             if let Some((head, tail, spaces)) = self.split_comment_led_line(&trimmed) {
                 self.push_raw_comment_output_line(head);
                 let level = self.layout.indentation.indent();
@@ -462,7 +462,7 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             .is_some_and(|line| post_closing_declaration_owns_comment(line))
             && !self.last_line_closes_nested_block()
     }
@@ -470,13 +470,13 @@ impl FormatEngine<'_> {
     pub(crate) fn push_inline_comment(&mut self, comment: &str) {
         if self.token_input.previous_input_was_adjacent {
             self.trim_current_end();
-            if comment.trim_ascii_start().starts_with("//") {
+            if comment.trimmed_start().starts_with("//") {
                 self.ensure_space();
             }
         } else {
             self.emit_source_space();
         }
-        self.current.push_str(comment.trim_ascii_end());
+        self.current.push_str(comment.trimmed_end());
         self.emit_trailing_source_space();
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
@@ -508,13 +508,13 @@ impl FormatEngine<'_> {
 
     pub(super) fn reindent_trailing_comment(&mut self, line_kind: LineKind) -> bool {
         let mut end = self.output.len();
-        while end > 0 && self.output[end - 1].trim_ascii().is_empty() {
+        while end > 0 && self.output[end - 1].trimmed().is_empty() {
             end -= 1;
         }
         if end == 0 {
             return false;
         }
-        let last = self.output[end - 1].trim_ascii_start();
+        let last = self.output[end - 1].trimmed_start();
         // Code or a second block comment after a comment, as
         // `/* note */ MACRO`, makes the line a statement of the code before it.
         if text_follows_comment_close(last) {
@@ -525,7 +525,7 @@ impl FormatEngine<'_> {
         .saturating_sub(self.layout.line_adjuster.pending_case_unindent());
         if last.starts_with("//") {
             let mut start = end - 1;
-            while start > 0 && self.output[start - 1].trim_ascii_start().starts_with("//") {
+            while start > 0 && self.output[start - 1].trimmed_start().starts_with("//") {
                 start -= 1;
             }
             let prefix = self.options.indent_prefix(indent);
@@ -533,7 +533,7 @@ impl FormatEngine<'_> {
                 if line.starts_with("//") {
                     continue;
                 }
-                *line = format!("{prefix}{}", line.trim_ascii_start());
+                *line = format!("{prefix}{}", line.trimmed_start());
             }
             return true;
         }
@@ -547,8 +547,8 @@ impl FormatEngine<'_> {
             if last.contains("/*") {
                 return false;
             }
-            while start > 0 && !self.output[start].trim_ascii_start().starts_with("/*") {
-                let text = self.output[start].trim_ascii();
+            while start > 0 && !self.output[start].trimmed_start().starts_with("/*") {
+                let text = self.output[start].trimmed();
                 if text.is_empty()
                     || text.ends_with(';')
                     || text.ends_with('{')
@@ -558,7 +558,7 @@ impl FormatEngine<'_> {
                 }
                 start -= 1;
             }
-            if !self.output[start].trim_ascii_start().starts_with("/*")
+            if !self.output[start].trimmed_start().starts_with("/*")
                 || line_kind == LineKind::SwitchLabel && self.output_comment_trailed_code(start)
             {
                 return false;
@@ -575,8 +575,8 @@ impl FormatEngine<'_> {
 
         let mut start = end - 1;
         while start > 0 {
-            let text = self.output[start].trim_ascii_start();
-            let previous = self.output[start - 1].trim_ascii_start();
+            let text = self.output[start].trimmed_start();
+            let previous = self.output[start - 1].trimmed_start();
             if text.starts_with("/*") {
                 if text.ends_with("*/") && previous.starts_with("/*") && previous.ends_with("*/") {
                     start -= 1;
@@ -589,15 +589,15 @@ impl FormatEngine<'_> {
             }
             start -= 1;
         }
-        if !self.output[start].trim_ascii_start().starts_with("/*")
+        if !self.output[start].trimmed_start().starts_with("/*")
             || line_kind == LineKind::SwitchLabel && self.output_comment_trailed_code(start)
         {
             return false;
         }
         if line_kind == LineKind::SwitchLabel
             && let Some(switch_line) = self.output[..start].iter().rev().find(|line| {
-                let code = self.output.code_of(line).trim_ascii_end();
-                code.trim_ascii_start().starts_with("switch") && code.ends_with('{')
+                let code = self.output.code_of(line).trimmed_end();
+                code.trimmed_start().starts_with("switch") && code.ends_with('{')
             })
         {
             let switch_body_indent = usize::from(
@@ -634,7 +634,7 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width.max(1);
         let opener_leading = leading_visual_width(&self.output[start], tab_width);
         for (offset, line) in self.output.range_mut(start..end).iter_mut().enumerate() {
-            let text = line.trim_ascii_start();
+            let text = line.trimmed_start();
             if text.is_empty() {
                 line.clear();
             } else if offset == 0 || !preserve_relative {
@@ -669,7 +669,7 @@ impl FormatEngine<'_> {
             frame.body_indent_column
         };
         if let Some(line) = self.output.last_line_outside_comment().filter(|line| {
-            let code = self.output.code_of(line).trim_ascii();
+            let code = self.output.code_of(line).trimmed();
             code.starts_with('}') && !code.ends_with('{')
         }) {
             Some(leading_visual_width(line, self.options.tab_width).min(body_column))
@@ -684,14 +684,14 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())?;
-        let code = self.output.code_of(line).trim_ascii_end();
+            .find(|line| !line.trimmed().is_empty())?;
+        let code = self.output.code_of(line).trimmed_end();
         let candidate = code
-            .trim_ascii_start()
+            .trimmed_start()
             .strip_prefix('{')
-            .map_or(code.trim_ascii_start(), str::trim_start);
+            .map_or(code.trimmed_start(), str::trim_start);
         let colon = find_case_colon(candidate)?;
-        candidate[colon + 1..].trim_ascii().is_empty().then(|| {
+        candidate[colon + 1..].trimmed().is_empty().then(|| {
             let offset = code.len() - candidate.len();
             visual_width_from(&code[..offset], 0, self.options.tab_width)
                 + self.options.indent_width
@@ -728,7 +728,7 @@ impl FormatEngine<'_> {
                 self.current
                     .push_str(&" ".repeat(self.token_input.token_source_column));
             }
-            self.current.push_str(comment.trim_ascii_end());
+            self.current.push_str(comment.trimmed_end());
             self.disabled_formatting = Some(DisabledFormattingState::capture(self));
             return;
         }
@@ -750,7 +750,7 @@ impl FormatEngine<'_> {
             return;
         }
 
-        if definition_header_comment_indent.is_some() && self.current.trim_ascii().is_empty() {
+        if definition_header_comment_indent.is_some() && self.current.trimmed().is_empty() {
             let prefix = self.previous_output_indent_prefix();
             self.clear_current();
             self.current.push_str(&prefix);
@@ -758,7 +758,7 @@ impl FormatEngine<'_> {
         }
 
         if kind == CommentKind::Block
-            && self.current.trim_ascii_end().ends_with('{')
+            && self.current.trimmed_end().ends_with('{')
             && self
                 .layout
                 .nesting
@@ -781,7 +781,7 @@ impl FormatEngine<'_> {
 
         if kind == CommentKind::Line
             && !line_comment_starts_reordered_brace_body
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !self.token_input.token_begins_source_line
             && self
                 .token_input
@@ -791,7 +791,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_ascii_end().ends_with("*/"))
+                .is_some_and(|line| line.trimmed_end().ends_with("*/"))
         {
             let whitespace = self
                 .token_input
@@ -803,7 +803,7 @@ impl FormatEngine<'_> {
                     line.push_str(gap);
                 }
                 line.push_str(&whitespace);
-                line.push_str(comment.trim_ascii_end());
+                line.push_str(comment.trimmed_end());
             }
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
@@ -821,9 +821,9 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_constructor_initializer()
                 .is_some_and(|frame| frame.function_try)
-            && self.current.trim_ascii_end().ends_with(':');
+            && self.current.trimmed_end().ends_with(':');
         let standalone_line_comment = kind == CommentKind::Line
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && comment.starts_with("//");
         let open_paren_comment_indent = (self.layout.previous == PreviousToken::OpenParen)
             .then(|| self.comment_after_open_paren_indent_spaces());
@@ -839,11 +839,11 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| {
-                let head = line.trim_ascii_start();
+                let head = line.trimmed_start();
                 !head.starts_with('#') && !head.starts_with("//")
             })
             .is_some_and(|line| {
-                let head = self.output.code_of(line).trim_ascii_end();
+                let head = self.output.code_of(line).trimmed_end();
                 head_ends_binary_operator(head) || head_ends_assignment_operator(head)
             });
         let line_comment_can_carry_continuation = !standalone_line_comment
@@ -856,10 +856,10 @@ impl FormatEngine<'_> {
             && !self.in_enum_declaration_brace()
             && line_comment_can_carry_continuation
             && !(standalone_line_comment
-                && comment.trim_ascii_end().ends_with(':')
+                && comment.trimmed_end().ends_with(':')
                 && !previous_line_ends_operator)
             && (!has_hash_outside_literals(&self.current)
-                || self.current.trim_ascii_start().starts_with('#'))
+                || self.current.trimmed_start().starts_with('#'))
             && self.is_continuation_break())
         .then(|| {
             open_paren_comment_indent
@@ -881,11 +881,11 @@ impl FormatEngine<'_> {
             self.case_block_comment_indent_spaces(kind, switch_label_block_comment_indent);
         let definition_header_comment_indent = self.definition_header_comment_indent_spaces();
         let case_label_comment_indent = (kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty())
+            && self.current.trimmed().is_empty())
         .then(|| self.previous_case_label_body_indent_spaces())
         .flatten();
         let column1_case_label_comment_indent = (kind == CommentKind::Line
-            && self.current.trim_ascii().is_empty())
+            && self.current.trimmed().is_empty())
         .then(|| self.previous_case_label_body_indent_spaces())
         .flatten();
         let user_label_comment_indent = self.user_label_comment_indent_spaces(kind);
@@ -937,15 +937,15 @@ impl FormatEngine<'_> {
             ..
         } = *indents;
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.layout.frame_stack.active_brace().is_none()
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| self.output.code_of(line).trim_ascii_end().ends_with(';'))
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(';'))
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
@@ -953,17 +953,17 @@ impl FormatEngine<'_> {
             self.layout.nesting.clear_continuation_indents();
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if previous_code.trim_ascii_start() == "else"
-                || previous_code.trim_ascii_start().ends_with("} else")
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            if previous_code.trimmed_start() == "else"
+                || previous_code.trimmed_start().ends_with("} else")
             {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width;
@@ -977,18 +977,16 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Block
             && self.options.brace_style == BraceStyle::None
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if previous_code.ends_with('{')
-                && previous_code.trim_ascii_start().starts_with("} else")
-            {
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            if previous_code.ends_with('{') && previous_code.trimmed_start().starts_with("} else") {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width;
                 self.clear_current();
@@ -1001,16 +999,16 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Block
             && self.options.brace_style == BraceStyle::None
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            let previous_trimmed = previous_code.trim_ascii_start();
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_trimmed = previous_code.trimmed_start();
             if previous_code.ends_with('{')
                 && (comment_starts_header_word(previous_trimmed, "if")
                     || comment_starts_header_word(previous_trimmed, "while")
@@ -1018,11 +1016,7 @@ impl FormatEngine<'_> {
                     || previous_trimmed.starts_with("else if")
                     || previous_trimmed.starts_with("} else"))
                 && self.output.scoped().iter().rev().take(64).any(|line| {
-                    let trimmed = self
-                        .output
-                        .code_of(line)
-                        .trim_ascii_end()
-                        .trim_ascii_start();
+                    let trimmed = self.output.code_of(line).trimmed_end().trimmed_start();
                     trimmed == "else" || trimmed.ends_with("} else")
                 })
                 && self
@@ -1031,13 +1025,13 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take_while(|line| {
-                        let code = self.output.code_of(line).trim_ascii_end();
+                        let code = self.output.code_of(line).trimmed_end();
                         !(leading_visual_width(line, self.options.tab_width) == 0
                             && code.ends_with('{')
-                            && !code.trim_ascii_start().starts_with('#'))
+                            && !code.trimmed_start().starts_with('#'))
                     })
                     .take(64)
-                    .any(|line| line.trim_ascii_start().starts_with('#'))
+                    .any(|line| line.trimmed_start().starts_with('#'))
             {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width;
@@ -1048,17 +1042,17 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.preprocessor.split_else.extra_indent
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if previous_code.trim_ascii_start() == "}" {
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            if previous_code.trimmed_start() == "}" {
                 let spaces = leading_visual_width(previous, self.options.tab_width);
                 self.clear_current();
                 self.current.push_str(&" ".repeat(spaces));
@@ -1067,16 +1061,16 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if preprocessor_directive(previous_code.trim_ascii_start())
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            if preprocessor_directive(previous_code.trimmed_start())
                 .is_some_and(|directive| directive == "else" || directive.starts_with("elif"))
             {
                 let spaces = (self
@@ -1091,7 +1085,7 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(spaces) = self.preprocessor_split_braceless_comment_indent_spaces()
         {
             self.current.push_str(&" ".repeat(spaces));
@@ -1099,14 +1093,14 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
         if self.options.brace_style == BraceStyle::None
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-            && preprocessor_directive(previous.trim_ascii_start()) == Some("endif")
+                .find(|line| !line.trimmed().is_empty())
+            && preprocessor_directive(previous.trimmed_start()) == Some("endif")
             && let Some(header) = self
                 .output
                 .scoped()
@@ -1115,15 +1109,11 @@ impl FormatEngine<'_> {
                 .skip_while(|line| line.as_str() != previous.as_str())
                 .skip(1)
                 .find(|line| {
-                    let trimmed = line.trim_ascii_start();
+                    let trimmed = line.trimmed_start();
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
         {
-            let trimmed = self
-                .output
-                .code_of(header)
-                .trim_ascii_end()
-                .trim_ascii_start();
+            let trimmed = self.output.code_of(header).trimmed_end().trimmed_start();
             if trimmed == "else" || trimmed.ends_with("} else") {
                 let spaces = leading_visual_width(header, self.options.tab_width)
                     + self.options.indent_width;
@@ -1133,7 +1123,7 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && (self
                 .layout
                 .indentation
@@ -1145,16 +1135,14 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| {
-                    preprocessor_directive(line.trim_ascii_start()) == Some("endif")
-                })
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| preprocessor_directive(line.trimmed_start()) == Some("endif"))
         {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
         }
         if kind == CommentKind::Line
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(spaces) = self.enum_value_comment_continuation_indent_spaces()
         {
             self.current.push_str(&" ".repeat(spaces));
@@ -1162,18 +1150,16 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if previous_code.trim_ascii_start().starts_with("switch")
-                && previous_code.ends_with('{')
-            {
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            if previous_code.trimmed_start().starts_with("switch") && previous_code.ends_with('{') {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width * 2;
                 self.clear_current();
@@ -1183,21 +1169,21 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && self.last_line_closes_top_level_declaration()
         {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
         }
         if kind == CommentKind::Line
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-            && previous.trim_ascii_start().starts_with('?')
+                .find(|line| !line.trimmed().is_empty())
+            && previous.trimmed_start().starts_with('?')
         {
             let spaces = leading_visual_width(previous, self.options.tab_width);
             self.current.push_str(&" ".repeat(spaces));
@@ -1206,16 +1192,16 @@ impl FormatEngine<'_> {
         }
         let mut brace_element_comment_indent = None;
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let previous_code = self.output.code_of(previous).trim_ascii_end();
+            let previous_code = self.output.code_of(previous).trimmed_end();
             // A directive continues no statement into the comment.
             let after_directive = self
                 .output
@@ -1243,16 +1229,16 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && let Some(previous) = self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(previous).trim_ascii_end();
+            let code = self.output.code_of(previous).trimmed_end();
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let after_directive = self
                 .output
@@ -1272,7 +1258,7 @@ impl FormatEngine<'_> {
             }
         }
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && (self.preprocessor.split_else.extra_indent || self.preprocessor_split_else_active())
             && let Some(previous) = self
@@ -1280,9 +1266,9 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(previous).trim_ascii_end();
+            let code = self.output.code_of(previous).trimmed_end();
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             if code.ends_with(';')
                 && previous_indent > self.current_line_indent_spaces() + self.options.indent_width
@@ -1298,8 +1284,8 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
-            .is_some_and(|line| line.trim_ascii_start().starts_with("@interface"));
+            .find(|line| !line.trimmed().is_empty())
+            .is_some_and(|line| line.trimmed_start().starts_with("@interface"));
         // A control header's condition continues where its lines do, past
         // the minimum conditional indent.
         let in_header_condition = self
@@ -1313,9 +1299,9 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
+                    .find(|line| !line.trimmed().is_empty())
                     .filter(|line| {
-                        let trimmed = line.trim_ascii_start();
+                        let trimmed = line.trimmed_start();
                         !is_comment_only_line(trimmed)
                             && !["if", "while", "for"]
                                 .iter()
@@ -1328,7 +1314,7 @@ impl FormatEngine<'_> {
             })
             .flatten();
         if kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
             && let Some(spaces) = brace_element_comment_indent
@@ -1348,9 +1334,9 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim_ascii().is_empty())
+                        .find(|line| !line.trimmed().is_empty())
                         .and_then(|line| {
-                            let code = self.output.code_of(line).trim_ascii_end();
+                            let code = self.output.code_of(line).trimmed_end();
                             let previous_indent =
                                 leading_visual_width(line, self.options.tab_width);
                             self.block_comment_call_opener_indent_spaces(code, previous_indent)
@@ -1385,9 +1371,9 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim_ascii().is_empty())
+                        .find(|line| !line.trimmed().is_empty())
                         .and_then(|line| {
-                            let code = self.output.code_of(line).trim_ascii_end();
+                            let code = self.output.code_of(line).trimmed_end();
                             code.ends_with(',')
                                 .then(|| leading_visual_width(line, self.options.tab_width))
                         })
@@ -1397,10 +1383,10 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim_ascii().is_empty())
+                        .find(|line| !line.trimmed().is_empty())
                         .and_then(|line| {
-                            let code = self.output.code_of(line).trim_ascii_end();
-                            let trimmed = code.trim_ascii_start();
+                            let code = self.output.code_of(line).trimmed_end();
+                            let trimmed = code.trimmed_start();
                             (trimmed == "else" || trimmed.ends_with("} else")).then(|| {
                                 leading_visual_width(line, self.options.tab_width)
                                     + self.options.indent_width
@@ -1421,8 +1407,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .and_then(|line| self.open_paren_column_of(line.trim_ascii_end()))
+                .find(|line| !line.trimmed().is_empty())
+                .and_then(|line| self.open_paren_column_of(line.trimmed_end()))
                 .is_some()
             {
                 self.layout
@@ -1479,7 +1465,7 @@ impl FormatEngine<'_> {
             && !self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|line| line.trim_ascii_start().starts_with('?'))
+                .is_some_and(|line| line.trimmed_start().starts_with('?'))
         {
             let preprocessor_indent = self
                 .split_else_preprocessor_branch_body_indent_spaces()
@@ -1532,7 +1518,7 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
-        if self.current.trim_ascii().is_empty()
+        if self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && self.token_input.token_source_column == 0
             && !self.options.indent_col1_comments
@@ -1572,7 +1558,7 @@ impl FormatEngine<'_> {
             } else {
                 self.emit_source_space();
             }
-        } else if !self.current.trim_ascii().is_empty() {
+        } else if !self.current.trimmed().is_empty() {
             self.pad_before_trailing_comment(kind, comment);
         }
     }
@@ -1592,11 +1578,10 @@ impl FormatEngine<'_> {
             lambda_parameter: lambda_parameter_comment_indent,
             ..
         } = *indents;
-        let comment_text = if kind == CommentKind::Line && comment.trim_ascii_end().ends_with('\\')
-        {
+        let comment_text = if kind == CommentKind::Line && comment.trimmed_end().ends_with('\\') {
             comment
         } else {
-            comment.trim_ascii_end()
+            comment.trimmed_end()
         };
         if let Some(spaces) = line_comment_stream_chain_indent {
             self.clear_current();
@@ -1699,8 +1684,8 @@ impl FormatEngine<'_> {
         (kind == CommentKind::Line && standalone_line_comment)
             .then(|| {
                 let previous = self.output.last_line_outside_comment()?;
-                let code = self.output.code_of(previous).trim_ascii_end();
-                (code.trim_ascii_start().starts_with('?')
+                let code = self.output.code_of(previous).trimmed_end();
+                (code.trimmed_start().starts_with('?')
                     && self.open_paren_column_of(code).is_none()
                     && self.layout.frame_stack.active_ternary().is_some())
                 .then(|| leading_visual_width(previous, self.options.tab_width))
@@ -1714,13 +1699,13 @@ impl FormatEngine<'_> {
         comment: &str,
     ) -> Option<usize> {
         (kind == CommentKind::Block
-            && self.current.trim_ascii().is_empty()
+            && self.current.trimmed().is_empty()
             && comment.lines().any(|line| {
                 let trimmed = line
-                    .trim_ascii_start()
+                    .trimmed_start()
                     .strip_prefix("/*")
-                    .unwrap_or(line.trim_ascii_start())
-                    .trim_ascii_start();
+                    .unwrap_or(line.trimmed_start())
+                    .trimmed_start();
                 trimmed.starts_with("case ") || trimmed.starts_with("default:")
             })
             && self
@@ -1739,14 +1724,14 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         switch_label_block_comment_indent.or_else(|| {
             (kind == CommentKind::Block
-                && self.current.trim_ascii().is_empty()
+                && self.current.trimmed().is_empty()
                 && self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
-                    .is_some_and(|line| line.trim_ascii() == "}")
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| line.trimmed() == "}")
                 && self
                     .layout
                     .nesting
@@ -1776,7 +1761,7 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
+                    .find(|line| !line.trimmed().is_empty())
                     .map(|line| leading_visual_width(line, self.options.tab_width))
                     .unwrap_or(0);
                 if introduces_label {
@@ -1813,20 +1798,18 @@ impl FormatEngine<'_> {
     /// Lead of the header line of the block the last code line closes.
     fn closed_block_header_lead(&self) -> Option<usize> {
         let lines = self.output.scoped();
-        let close = lines
-            .iter()
-            .rposition(|line| !line.trim_ascii().is_empty())?;
+        let close = lines.iter().rposition(|line| !line.trimmed().is_empty())?;
         let mut depth = 0usize;
         for index in (0..=close).rev() {
             let line = &lines[index];
-            let code = self.output.code_of(line).trim_ascii();
+            let code = self.output.code_of(line).trimmed();
             let (closes, opens) = line_brace_imbalance(code);
             depth += closes;
             if index < close && opens >= depth {
                 let mut header = if code == "{" {
                     lines[..index]
                         .iter()
-                        .rposition(|line| !line.trim_ascii().is_empty())?
+                        .rposition(|line| !line.trimmed().is_empty())?
                 } else {
                     index
                 };
@@ -1855,7 +1838,7 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_constructor_initializer()
                 .is_none()
-            && self.current.trim_ascii().is_empty())
+            && self.current.trimmed().is_empty())
         .then(|| {
             let index = (0..self.output.len())
                 .rev()
@@ -1872,10 +1855,10 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .and_then(|line| {
-                    let code = self.output.code_of(line).trim_ascii_end();
-                    let trimmed = code.trim_ascii_start();
+                    let code = self.output.code_of(line).trimmed_end();
+                    let trimmed = code.trimmed_start();
                     let header = trimmed
                         .split(|ch: char| ch == '(' || ch.is_whitespace())
                         .next()
@@ -1893,16 +1876,16 @@ impl FormatEngine<'_> {
     }
 
     fn user_label_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {
-        (kind == CommentKind::Block && self.current.trim_ascii().is_empty())
+        (kind == CommentKind::Block && self.current.trimmed().is_empty())
             .then(|| {
                 let line = self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())?;
-                let code = self.output.code_of(line).trim_ascii();
-                let label = code.strip_suffix(':')?.trim_ascii_end();
+                    .find(|line| !line.trimmed().is_empty())?;
+                let code = self.output.code_of(line).trimmed();
+                let label = code.strip_suffix(':')?.trimmed_end();
                 (labels::line_kind(code, &self.options.access_labels) == LineKind::Label
                     && !labels::is_access_label_start(label, &self.options.access_labels))
                 .then(|| {
@@ -1918,7 +1901,7 @@ impl FormatEngine<'_> {
     }
 
     fn control_header_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {
-        (self.current.trim_ascii().is_empty()
+        (self.current.trimmed().is_empty()
             || (kind == CommentKind::Block && self.should_break_header_before_comment()))
         .then(|| {
             let header = self.layout.frame_stack.active_header()?;
@@ -1926,24 +1909,24 @@ impl FormatEngine<'_> {
             if matches!(current, "case" | "default") {
                 return None;
             }
-            let pending_header_line = if self.current.trim_ascii().is_empty() {
+            let pending_header_line = if self.current.trimmed().is_empty() {
                 self.output
                     .scoped()
                     .iter()
                     .rev()
                     .find(|line| {
-                        let trimmed = line.trim_ascii_start();
+                        let trimmed = line.trimmed_start();
                         !trimmed.is_empty() && !is_comment_only_line(trimmed)
                     })
                     .is_some_and(|line| {
-                        let code = self.output.code_of(line).trim_ascii_start();
+                        let code = self.output.code_of(line).trimmed_start();
                         let candidate = code
                             .strip_prefix('}')
-                            .map_or(code, |tail| tail.trim_ascii_start());
+                            .map_or(code, |tail| tail.trimmed_start());
                         candidate == current
                             || comment_starts_header_word(candidate, current)
                             || (self.layout.command_state.previous_command_char == Some(')')
-                                && candidate.trim_ascii_end().ends_with(')'))
+                                && candidate.trimmed_end().ends_with(')'))
                     })
             } else {
                 self.should_break_header_before_comment()
@@ -1978,7 +1961,7 @@ impl FormatEngine<'_> {
         kind: CommentKind,
         definition_header_comment_indent: Option<usize>,
     ) -> Option<usize> {
-        if kind != CommentKind::Block || !self.current.trim_ascii().is_empty() {
+        if kind != CommentKind::Block || !self.current.trimmed().is_empty() {
             return None;
         }
         let previous_line = self
@@ -1986,11 +1969,11 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty());
+            .find(|line| !line.trimmed().is_empty());
         if let Some(line) = previous_line {
-            let code = self.output.code_of(line).trim_ascii_end();
-            let trimmed = code.trim_ascii_start();
-            let raw_trimmed = line.trim_ascii();
+            let code = self.output.code_of(line).trimmed_end();
+            let trimmed = code.trimmed_start();
+            let raw_trimmed = line.trimmed();
             if raw_trimmed.starts_with("/*") && raw_trimmed.ends_with("*/") {
                 return Some(leading_visual_width(line, self.options.tab_width));
             }
@@ -2011,12 +1994,12 @@ impl FormatEngine<'_> {
             }
             if preprocessor_directive(trimmed) == Some("endif")
                 && let Some(header) = self.output.scoped().iter().rev().skip(1).find(|line| {
-                    let trimmed = line.trim_ascii_start();
+                    let trimmed = line.trimmed_start();
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
             {
-                let code = self.output.code_of(header).trim_ascii_end();
-                let trimmed = code.trim_ascii_start();
+                let code = self.output.code_of(header).trimmed_end();
+                let trimmed = code.trimmed_start();
                 if trimmed == "else" || trimmed.ends_with("} else") {
                     return Some(
                         leading_visual_width(header, self.options.tab_width)
@@ -2049,7 +2032,7 @@ impl FormatEngine<'_> {
                 };
                 let mut balance = 0isize;
                 for line in lines.iter().rev() {
-                    if line.trim_ascii().is_empty() {
+                    if line.trimmed().is_empty() {
                         break;
                     }
                     balance += paren_balance(line);
@@ -2063,7 +2046,7 @@ impl FormatEngine<'_> {
             }
         }
         let previous_statement_indent = previous_line.and_then(|line| {
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             let after_braceless_header = self
                 .output
                 .scoped()
@@ -2071,10 +2054,10 @@ impl FormatEngine<'_> {
                 .rev()
                 .skip_while(|candidate| candidate.as_str() != line.as_str())
                 .skip(1)
-                .find(|candidate| !candidate.trim_ascii().is_empty())
+                .find(|candidate| !candidate.trimmed().is_empty())
                 .is_some_and(|candidate| {
-                    let code = self.output.code_of(candidate).trim_ascii_end();
-                    let trimmed = code.trim_ascii_start();
+                    let code = self.output.code_of(candidate).trimmed_end();
+                    let trimmed = code.trimmed_start();
                     let header = trimmed
                         .split(|ch: char| ch != '_' && !ch.is_ascii_alphanumeric())
                         .next()
@@ -2098,13 +2081,13 @@ impl FormatEngine<'_> {
                 .then_some(previous_indent)
         });
         let previous_operator_indent = previous_line.and_then(|line| {
-            let head = line.trim_ascii_end();
+            let head = line.trimmed_end();
             (head_ends_binary_operator(head) || head_ends_assignment_operator(head))
                 .then(|| self.layout.nesting.current_continuation_indent_spaces())
                 .flatten()
         });
         let previous_opening_body_indent = previous_line.and_then(|line| {
-            let code = self.output.code_of(line).trim_ascii_end();
+            let code = self.output.code_of(line).trimmed_end();
             code.ends_with('{').then(|| {
                 let body_indent = (self
                     .layout
@@ -2113,7 +2096,7 @@ impl FormatEngine<'_> {
                     + self.case_body_indent_extra(LineKind::Normal)
                     + self.else_if_break_extra())
                     * self.options.indent_width;
-                let trimmed = code.trim_ascii_start();
+                let trimmed = code.trimmed_start();
                 if comment_starts_header_word(trimmed, "if")
                     || comment_starts_header_word(trimmed, "for")
                     || comment_starts_header_word(trimmed, "while")
@@ -2132,13 +2115,12 @@ impl FormatEngine<'_> {
             })
         });
         let previous_paren_indent = previous_line.and_then(|line| {
-            self.open_paren_column_of(line.trim_ascii_end())
-                .map(|column| {
-                    self.layout
-                        .nesting
-                        .current_continuation_indent_spaces()
-                        .unwrap_or(column + 1)
-                })
+            self.open_paren_column_of(line.trimmed_end()).map(|column| {
+                self.layout
+                    .nesting
+                    .current_continuation_indent_spaces()
+                    .unwrap_or(column + 1)
+            })
         });
         previous_statement_indent
             .or(previous_operator_indent)
@@ -2153,7 +2135,7 @@ impl FormatEngine<'_> {
             })
             .or_else(|| {
                 previous_line.and_then(|line| {
-                    let code = self.output.code_of(line).trim_ascii_end();
+                    let code = self.output.code_of(line).trimmed_end();
                     code.ends_with('{').then(|| {
                         let leading = leading_visual_width(line, self.options.tab_width);
                         if !self.options.indent_namespaces
@@ -2187,7 +2169,7 @@ impl FormatEngine<'_> {
     }
 
     fn lambda_parameter_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {
-        (kind == CommentKind::Block && self.current.trim_ascii().is_empty())
+        (kind == CommentKind::Block && self.current.trimmed().is_empty())
             .then(|| {
                 let frame = self
                     .layout
@@ -2230,7 +2212,7 @@ impl FormatEngine<'_> {
                     == Some("catch")
                     || self
                         .current
-                        .trim_ascii_start()
+                        .trimmed_start()
                         .strip_prefix("catch")
                         .is_some_and(|rest| rest.chars().next().is_some_and(char::is_whitespace));
                 catch_header.then(|| self.current_line_indent_spaces() + self.options.indent_width)
@@ -2242,8 +2224,8 @@ impl FormatEngine<'_> {
     fn previous_stream_chain_line_comment_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
         let previous = self.output.get(previous_line)?;
-        let previous_code = self.output.code_of(previous).trim_ascii_end();
-        if !starts_with_chain_operator(previous_code.trim_ascii_start())
+        let previous_code = self.output.code_of(previous).trimmed_end();
+        if !starts_with_chain_operator(previous_code.trimmed_start())
             || self.layout.frame_stack.active_delimiter().is_none()
             || self
                 .layout
@@ -2278,7 +2260,7 @@ impl FormatEngine<'_> {
             return assignment_value_indent;
         }
         if self.output.scoped().iter().rev().take(16).any(|line| {
-            preprocessor_directive(line.trim_ascii_start())
+            preprocessor_directive(line.trimmed_start())
                 .is_some_and(|directive| matches!(directive, "if" | "ifdef" | "ifndef"))
         }) {
             return Some(previous_indent + self.options.indent_width);
@@ -2301,7 +2283,7 @@ impl FormatEngine<'_> {
         let Some((assignment, _)) = find_assignment_operator(code) else {
             return false;
         };
-        let left = code[..assignment].trim_ascii();
+        let left = code[..assignment].trimmed();
         !left.is_empty()
             && self
                 .output
@@ -2309,11 +2291,11 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .skip(1)
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .and_then(|line| {
-                    let previous = self.output.code_of(line).trim_ascii_end();
+                    let previous = self.output.code_of(line).trimmed_end();
                     find_assignment_operator(previous)
-                        .map(|(assignment, _)| previous[..assignment].trim_ascii())
+                        .map(|(assignment, _)| previous[..assignment].trimmed())
                 })
                 .is_some_and(|previous_left| previous_left == left)
     }
@@ -2324,15 +2306,15 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())?
-            .trim_ascii_start()
+            .find(|line| !line.trimmed().is_empty())?
+            .trimmed_start()
             .starts_with("#endif")
         {
             return None;
         }
         let scope_start = self.output.len() - self.output.scoped().len();
         for (offset, line) in self.output.scoped().iter().enumerate().rev().skip(1) {
-            let trimmed = line.trim_ascii_start();
+            let trimmed = line.trimmed_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -2364,15 +2346,15 @@ impl FormatEngine<'_> {
         let Some(first) = lines.next() else {
             return;
         };
-        if !self.current.trim_ascii().is_empty() {
+        if !self.current.trimmed().is_empty() {
             self.pad_before_trailing_comment(CommentKind::Line, first);
         }
         let output_column = leading_visual_width(&self.current, self.options.tab_width.max(1));
         self.record_comment_frame(CommentKind::Line, output_column, true);
-        self.current.push_str(first.trim_ascii_end());
+        self.current.push_str(first.trimmed_end());
         self.finish_line();
         for line in lines {
-            self.push_output_line(line.trim_ascii(), self.layout.indentation.indent());
+            self.push_output_line(line.trimmed(), self.layout.indentation.indent());
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
@@ -2388,12 +2370,12 @@ impl FormatEngine<'_> {
         let interrupted_header = self.layout.command_state.current_header.clone();
         let open_paren_comment_indent = (self.layout.previous == PreviousToken::OpenParen)
             .then(|| self.comment_after_open_paren_indent_spaces());
-        if !self.current.trim_ascii().is_empty() {
+        if !self.current.trimmed().is_empty() {
             // The element after a comment trailing an element of a brace
             // stands with the elements.
             let element_column = self
                 .current
-                .trim_ascii_end()
+                .trimmed_end()
                 .ends_with(',')
                 .then(|| self.current_inline_array_column())
                 .flatten();
@@ -2427,10 +2409,7 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Namespace | BraceType::Extern)
             )
-            && self
-                .output
-                .last()
-                .is_some_and(|line| line.trim_ascii() == "{");
+            && self.output.last().is_some_and(|line| line.trimmed() == "{");
         let case_comment_unindent = if !self.options.indent_switches
             && self
                 .layout
@@ -2449,14 +2428,14 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
+                .find(|line| !line.trimmed().is_empty())
                 .map_or(0, |line| leading_visual_width(line, self.options.tab_width));
             " ".repeat(spaces)
         } else if self.token_input.token_line_opens_with_brace
             && !self.token_input.token_begins_source_line
         {
             let case_brace_extra = if self.output.last().is_some_and(|line| {
-                let trimmed = line.trim_ascii();
+                let trimmed = line.trimmed();
                 trimmed.starts_with("case ")
                     || trimmed.starts_with("default:") && trimmed.contains('{')
             }) {
@@ -2473,10 +2452,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             && {
-                let code = self.output.code_of(previous).trim_ascii_end();
-                code.trim_ascii_start().starts_with("switch") && code.ends_with('{')
+                let code = self.output.code_of(previous).trimmed_end();
+                code.trimmed_start().starts_with("switch") && code.ends_with('{')
             }
         {
             // A comment that trailed the brace stands in the case bodies.
@@ -2497,12 +2476,12 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             && {
-                let code = self.output.code_of(previous).trim_ascii_end();
+                let code = self.output.code_of(previous).trimmed_end();
                 code.ends_with('{')
-                    && (code.trim_ascii_start().starts_with("case ")
-                        || code.trim_ascii_start().starts_with("default:"))
+                    && (code.trimmed_start().starts_with("case ")
+                        || code.trimmed_start().starts_with("default:"))
             }
         {
             " ".repeat(
@@ -2524,8 +2503,8 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim_ascii().is_empty())
-                        .is_some_and(|line| line.trim_ascii_start().starts_with("@interface"))
+                        .find(|line| !line.trimmed().is_empty())
+                        .is_some_and(|line| line.trimmed_start().starts_with("@interface"))
                     {
                         self.options.indent_prefix(1)
                     } else {
@@ -2544,12 +2523,12 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(previous).trim_ascii_end();
+            let code = self.output.code_of(previous).trimmed_end();
             if code.ends_with('{')
-                && (code.trim_ascii_start().starts_with("case ")
-                    || code.trim_ascii_start().starts_with("default:"))
+                && (code.trimmed_start().starts_with("case ")
+                    || code.trimmed_start().starts_with("default:"))
             {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width
@@ -2582,8 +2561,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-            && previous.trim_ascii() == "}"
+                .find(|line| !line.trimmed().is_empty())
+            && previous.trimmed() == "}"
         {
             let previous_indent = leading_visual_width(previous, tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
@@ -2612,10 +2591,7 @@ impl FormatEngine<'_> {
                 Some(BraceType::Array | BraceType::Initializer) => true,
                 _ => false,
             }
-            && self
-                .output
-                .last()
-                .is_some_and(|line| line.trim_ascii() == "{");
+            && self.output.last().is_some_and(|line| line.trimmed() == "{");
         self.push_own_line_block_comment_lines(
             comment,
             &OwnLineBlockComment {
@@ -2652,7 +2628,7 @@ impl FormatEngine<'_> {
             }
             let output_column = leading_visual_width(&self.current, self.options.tab_width.max(1));
             self.record_comment_frame(CommentKind::Block, output_column, true);
-            self.current.push_str(first.trim_ascii_end());
+            self.current.push_str(first.trimmed_end());
             if lines.peek().is_some() {
                 self.finish_line();
             }
@@ -2663,7 +2639,7 @@ impl FormatEngine<'_> {
                     // after code at its column, past a leading `*`, and no
                     // further left than the code.
                     let tab_width = self.options.tab_width.max(1);
-                    let text = line.trim_ascii_start();
+                    let text = line.trimmed_start();
                     let body = if text.starts_with('*') && !text.starts_with("*/") {
                         &text[1..]
                     } else {
@@ -2672,31 +2648,31 @@ impl FormatEngine<'_> {
                     // Rows of `**` and rows without a `*` indented with tabs
                     // keep their text where it stands.
                     let keeps_row = if text.starts_with('*') {
-                        body.trim_ascii_start().starts_with('*')
+                        body.trimmed_start().starts_with('*')
                     } else {
                         line[..line.len() - text.len()].contains('\t')
                     };
                     let column = visual_width_from(
-                        &line[..line.len() - body.trim_ascii_start().len()],
+                        &line[..line.len() - body.trimmed_start().len()],
                         0,
                         tab_width,
                     )
                     .max(self.current_line_indent_spaces());
-                    if body.trim_ascii().is_empty() {
+                    if body.trimmed().is_empty() {
                         String::new()
                     } else if text.starts_with("*/") || keeps_row {
-                        line.trim_ascii_end().to_string()
+                        line.trimmed_end().to_string()
                     } else {
-                        format!("{}{}", " ".repeat(column), body.trim_ascii())
+                        format!("{}{}", " ".repeat(column), body.trimmed())
                     }
                 } else {
-                    line.trim_ascii_end().to_string()
+                    line.trimmed_end().to_string()
                 };
                 // astyle writes the rows of a comment opened after code as
                 // they stand.
-                let verbatim = shifted == line.trim_ascii_end();
+                let verbatim = shifted == line.trimmed_end();
                 let is_last_line = lines.peek().is_none();
-                let last_line_starts_with_star = line.trim_ascii_start().starts_with('*');
+                let last_line_starts_with_star = line.trimmed_start().starts_with('*');
                 let keep_line_open =
                     is_last_line && (last_line_has_trailing_token || !last_line_starts_with_star);
                 if keep_line_open {
@@ -2738,20 +2714,20 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| " ".into());
                 if let Some(brace_line) = self.output.last_mut() {
                     brace_line.push_str(&gap);
-                    brace_line.push_str(line.trim_ascii_end());
+                    brace_line.push_str(line.trimmed_end());
                 }
                 continue;
             }
             let formatted = if self.options.strip_comment_prefix {
                 strip_block_comment_line(self.options, line, index == 0, opener_prefix, trim_amount)
             } else if index == 0 {
-                format!("{opener_prefix}{}", line.trim_ascii_end())
+                format!("{opener_prefix}{}", line.trimmed_end())
             } else {
-                if line.trim_ascii().is_empty() {
+                if line.trimmed().is_empty() {
                     String::new()
                 } else {
                     let kept = drop_leading_columns(line, trim_amount, tab_width);
-                    let trimmed_kept = kept.trim_ascii_start();
+                    let trimmed_kept = kept.trimmed_start();
                     let is_last_line = lines.peek().is_none();
                     let decorative_closer = is_decorative_block_comment_closer(trimmed_kept);
                     let source_closer_leading = leading_visual_width(line, tab_width);
@@ -2762,7 +2738,7 @@ impl FormatEngine<'_> {
                             .and_then(|previous| {
                                 let leading =
                                     leading_visual_width(previous, self.options.tab_width);
-                                (previous.trim_ascii_start().starts_with('*')
+                                (previous.trimmed_start().starts_with('*')
                                     && if self.token_input.token_line_opens_with_brace {
                                         leading >= opener_output_column
                                             && source_closer_leading > trim_amount
@@ -2771,7 +2747,7 @@ impl FormatEngine<'_> {
                                             && leading == source_closer_leading
                                     })
                                 .then(|| {
-                                    previous[..previous.len() - previous.trim_ascii_start().len()]
+                                    previous[..previous.len() - previous.trimmed_start().len()]
                                         .to_string()
                                 })
                             })
@@ -2788,9 +2764,9 @@ impl FormatEngine<'_> {
                         && leading_visual_width(line, tab_width) < trim_amount
                         && (!decorative_closer || (!is_last_line && index > 2));
                     if let Some(prefix) = closer_prefix {
-                        format!("{}{}", prefix, trimmed_kept.trim_ascii_end())
+                        format!("{}{}", prefix, trimmed_kept.trimmed_end())
                     } else if unindented_namespace_run_in_comment {
-                        format!("{opener_prefix}{}", kept.trim_ascii_end())
+                        format!("{opener_prefix}{}", kept.trimmed_end())
                     } else if self.token_input.token_line_opens_with_brace {
                         let source_line_column = leading_visual_width(line, tab_width);
                         let body_offset = if decorative_closer && is_last_line {
@@ -2825,12 +2801,12 @@ impl FormatEngine<'_> {
                                 merged_comment_column / self.options.indent_width.max(1),
                                 target,
                             ),
-                            trimmed_kept.trim_ascii_end()
+                            trimmed_kept.trimmed_end()
                         )
                     } else if star_shift {
-                        format!("{opener_prefix} {}", kept.trim_ascii_end())
+                        format!("{opener_prefix} {}", kept.trimmed_end())
                     } else {
-                        format!("{opener_prefix}{}", kept.trim_ascii_end())
+                        format!("{opener_prefix}{}", kept.trimmed_end())
                     }
                 }
             };
@@ -2866,7 +2842,7 @@ impl FormatEngine<'_> {
 
     fn should_break_header_before_comment(&self) -> bool {
         self.previous_was_newline
-            && !self.current.trim_ascii().is_empty()
+            && !self.current.trimmed().is_empty()
             && self
                 .layout
                 .command_state
@@ -2885,9 +2861,9 @@ impl FormatEngine<'_> {
         let previous = self
             .output
             .last()
-            .filter(|line| !line.trim_ascii().is_empty())?;
+            .filter(|line| !line.trimmed().is_empty())?;
         let (code, _) = previous.split_once("//")?;
-        if code.trim_ascii_end().ends_with(',') {
+        if code.trimmed_end().ends_with(',') {
             return None;
         }
         let value_start = code.find('=')? + 1;
@@ -2945,7 +2921,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let source: usize = tokens[first..end].iter().map(token_char_len).sum();
-        let code = self.current.trim_ascii().chars().count();
+        let code = self.current.trimmed().chars().count();
         Some(code as isize - source as isize)
     }
 
@@ -2995,10 +2971,10 @@ impl FormatEngine<'_> {
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
         let had_formatter_space = (self.current.ends_with(' ') || self.current.ends_with('\t'))
             && matches!(
-                self.current.trim_ascii_end().chars().next_back(),
+                self.current.trimmed_end().chars().next_back(),
                 Some('*' | '&' | '^')
             )
-            && !self.current.trim_ascii_end().ends_with("&&");
+            && !self.current.trimmed_end().ends_with("&&");
         let formatter_gap = had_formatter_space.then(|| {
             let start = self.current.trim_end_matches([' ', '\t']).len();
             self.current[start..].to_string()
@@ -3047,7 +3023,7 @@ impl FormatEngine<'_> {
                     && gap.bytes().all(|byte| byte == b' ')
                     && self
                         .current
-                        .trim_ascii()
+                        .trimmed()
                         .chars()
                         .all(|ch| matches!(ch, '}' | ';' | ' '))
                 {
@@ -3072,7 +3048,7 @@ impl FormatEngine<'_> {
             return;
         }
         let case_body_split_from_label = self.output.last().is_some_and(|line| {
-            let trimmed = line.trim_ascii();
+            let trimmed = line.trimmed();
             trimmed.starts_with("case ") || trimmed == "default:"
         }) && self.layout.line_state.passed_colon
             && self.layout.line_state.passed_semicolon;
@@ -3093,7 +3069,7 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        if kind == CommentKind::Line && self.current.trim_ascii_end().ends_with("*/") {
+        if kind == CommentKind::Line && self.current.trimmed_end().ends_with("*/") {
             if gap.is_empty() {
                 self.ensure_space();
             } else {
@@ -3114,7 +3090,7 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Line
             && has_hash_outside_literals(&self.current)
-            && !self.current.trim_ascii_start().starts_with('#')
+            && !self.current.trimmed_start().starts_with('#')
         {
             if gap.is_empty() {
                 self.ensure_space();
@@ -3125,7 +3101,7 @@ impl FormatEngine<'_> {
         }
         let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| self.layout.line_state.trailing_comment_columns.remove(0));
-        let trimmed_code = self.current.trim_ascii();
+        let trimmed_code = self.current.trimmed();
         if trimmed_code.starts_with("case ") || trimmed_code.starts_with("default:") {
             self.current.push_str(&gap);
             return;
@@ -3148,7 +3124,7 @@ impl FormatEngine<'_> {
         // comment no further.
         if kind == CommentKind::Block
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
-            && self.current.trim_ascii_start().starts_with('{')
+            && self.current.trimmed_start().starts_with('{')
             && self.comment_follows_open_source_line_brace()
         {
             self.current.push_str(&gap);
@@ -3180,7 +3156,7 @@ impl FormatEngine<'_> {
             && target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
-            && !self.current.trim_ascii_end().ends_with(['*', '&', '^'])
+            && !self.current.trimmed_end().ends_with(['*', '&', '^'])
         {
             self.current.push_str(&gap);
             return;
@@ -3192,7 +3168,7 @@ impl FormatEngine<'_> {
                         && (!self.options.pad_operators
                             || self.layout.line_state.operator_padding_disabled);
                 if kind != CommentKind::Block
-                    && !self.current.trim_ascii_end().ends_with("*/")
+                    && !self.current.trimmed_end().ends_with("*/")
                     && !keeps_adjacent_comment
                 {
                     self.ensure_space();
@@ -3409,18 +3385,14 @@ fn strip_block_comment_line(
                 .map(|pos| content_start + 1 + pos)
             {
                 Some(next) if chars[next] != '*' => content_start = next,
-                _ => return format!("{prefix}{}", line.trim_ascii_end()),
+                _ => return format!("{prefix}{}", line.trimmed_end()),
             }
         }
         let content_column = visual_column_at(&chars, content_start, tab_width);
         let insert = indent_len.saturating_sub(content_column);
         let head: String = chars[..content_start].iter().collect();
         let tail: String = chars[content_start..].iter().collect();
-        return format!(
-            "{prefix}{head}{}{}",
-            " ".repeat(insert),
-            tail.trim_ascii_end()
-        );
+        return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trimmed_end());
     }
 
     let Some(first) = chars.iter().position(|&ch| ch != ' ' && ch != '\t') else {
@@ -3441,16 +3413,16 @@ fn strip_block_comment_line(
             let rel =
                 visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
             let content: String = chars[first..].iter().collect();
-            return format!("{prefix}{}{}", " ".repeat(rel), content.trim_ascii_end());
+            return format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end());
         }
         // A tab before the text leaves the line as it was, less its `*`.
         let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
         if own_lead.contains(&'\t') || chars[first + 1..second].contains(&'\t') {
             let mut kept: String = own_lead.iter().chain(&chars[first + 1..]).collect();
-            kept = kept.trim_ascii_end().to_string();
+            kept = kept.trimmed_end().to_string();
             if kept.ends_with('*') {
                 kept.pop();
-                kept = kept.trim_ascii_end().to_string();
+                kept = kept.trimmed_end().to_string();
             }
             return format!("{prefix}{kept}");
         }
@@ -3460,11 +3432,11 @@ fn strip_block_comment_line(
         let mut content = chars[second..]
             .iter()
             .collect::<String>()
-            .trim_ascii_end()
+            .trimmed_end()
             .to_string();
         if content.ends_with('*') {
             content.pop();
-            content = content.trim_ascii_end().to_string();
+            content = content.trimmed_end().to_string();
         }
         return format!("{prefix}{}{content}", " ".repeat(rel));
     }
@@ -3473,12 +3445,12 @@ fn strip_block_comment_line(
     let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
     if own_lead.contains(&'\t') {
         let lead: String = own_lead.iter().collect();
-        return format!("{prefix}{lead}{}", content.trim_ascii_end());
+        return format!("{prefix}{lead}{}", content.trimmed_end());
     }
     let rel = visual_column_at(&chars, first, tab_width)
         .saturating_sub(opener_source_column)
         .max(indent_len);
-    format!("{prefix}{}{}", " ".repeat(rel), content.trim_ascii_end())
+    format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end())
 }
 
 /// The part of the leading whitespace `lead` past visual column `column`.
@@ -3501,7 +3473,7 @@ fn lead_past_column(lead: &[char], column: usize, tab_width: usize) -> &[char] {
 /// `*/`.
 pub(crate) fn text_follows_comment_close(line: &str) -> bool {
     line.split_once("*/").is_some_and(|(_, after)| {
-        let after = after.trim_ascii();
+        let after = after.trimmed();
         !after.is_empty() && !after.starts_with("//")
     })
 }

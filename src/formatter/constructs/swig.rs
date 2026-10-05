@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct SwigState {
     may_have_input: bool,
@@ -29,15 +30,15 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        let current = line.trim_ascii_start();
+        let current = line.trimmed_start();
         if let Some((mut pending, spaces)) = self.swig.pending_typemap_line.take() {
-            let part = current.trim_ascii();
+            let part = current.trimmed();
             if !part.is_empty() {
                 pending.push(' ');
                 pending.push_str(part);
             }
             if part == "}" || part.ends_with('}') {
-                self.push_output_line_spaces(pending.trim_ascii_end(), 0, spaces);
+                self.push_output_line_spaces(pending.trimmed_end(), 0, spaces);
             } else {
                 self.swig.pending_typemap_line = Some((pending, spaces));
             }
@@ -58,7 +59,7 @@ impl FormatEngine<'_> {
                 .indentation
                 .line_indent(LineKind::Normal, self.options)
                 * self.options.indent_width;
-            self.swig.pending_typemap_line = Some((current.trim_ascii_end().to_string(), spaces));
+            self.swig.pending_typemap_line = Some((current.trimmed_end().to_string(), spaces));
             return true;
         }
         if current.starts_with("%pythoncode") && current.ends_with('{') {

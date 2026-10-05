@@ -11,6 +11,7 @@ use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_comment_split_limit, preprocessor_directive};
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 use std::collections::VecDeque;
 
@@ -201,9 +202,9 @@ pub(crate) fn output_has_active_preprocessor_branch(output: &[String]) -> bool {
     output
         .iter()
         .rev()
-        .filter(|line| !line.trim_ascii().is_empty())
+        .filter(|line| !line.trimmed().is_empty())
         .find_map(|line| {
-            let trimmed = line.trim_ascii_start();
+            let trimmed = line.trimmed_start();
             if trimmed.starts_with("#endif") {
                 return Some(false);
             }
@@ -378,7 +379,7 @@ fn collapse_pound_whitespace(line: &str) -> String {
     let Some(rest) = line.strip_prefix('#') else {
         return line.to_string();
     };
-    let trimmed = rest.trim_ascii_start();
+    let trimmed = rest.trimmed_start();
     if trimmed.len() == rest.len() {
         line.to_string()
     } else {
@@ -387,28 +388,25 @@ fn collapse_pound_whitespace(line: &str) -> String {
 }
 
 fn preprocessor_condition(line: &str) -> Option<&str> {
-    let line = line
-        .trim_ascii_start()
-        .strip_prefix('#')?
-        .trim_ascii_start();
+    let line = line.trimmed_start().strip_prefix('#')?.trimmed_start();
     let condition = line.strip_prefix("if")?;
-    Some(condition.trim_ascii_start())
+    Some(condition.trimmed_start())
 }
 
 fn is_not_defined_condition(condition: &str) -> bool {
-    let condition = condition.trim_ascii_start();
+    let condition = condition.trimmed_start();
     let Some(rest) = condition.strip_prefix('!') else {
         return false;
     };
-    let Some(rest) = rest.trim_ascii_start().strip_prefix("defined") else {
+    let Some(rest) = rest.trimmed_start().strip_prefix("defined") else {
         return false;
     };
     if rest.chars().next().is_some_and(is_identifier_continue) {
         return false;
     }
-    let rest = rest.trim_ascii_start();
+    let rest = rest.trimmed_start();
     if let Some(inner) = rest.strip_prefix('(') {
-        let name = inner.trim_ascii_start();
+        let name = inner.trimmed_start();
         let name_end = name
             .char_indices()
             .take_while(|(_, ch)| is_identifier_continue(*ch))
@@ -419,7 +417,7 @@ fn is_not_defined_condition(condition: &str) -> bool {
             .chars()
             .next()
             .is_some_and(is_identifier_start)
-            && name[name_end..].trim_ascii_start().starts_with(')');
+            && name[name_end..].trimmed_start().starts_with(')');
     }
     rest.chars().next().is_some_and(is_identifier_start)
 }
@@ -431,16 +429,16 @@ pub(crate) fn is_cplusplus_conditional(line: &str) -> bool {
             let Some(condition) = preprocessor_condition(line) else {
                 return false;
             };
-            let Some(rest) = condition.trim_ascii_start().strip_prefix("defined") else {
+            let Some(rest) = condition.trimmed_start().strip_prefix("defined") else {
                 return false;
             };
             if rest.chars().next().is_some_and(is_identifier_continue) {
                 return false;
             }
-            let Some(inner) = rest.trim_ascii_start().strip_prefix('(') else {
+            let Some(inner) = rest.trimmed_start().strip_prefix('(') else {
                 return false;
             };
-            let name = inner.trim_ascii_start();
+            let name = inner.trimmed_start();
             name.strip_prefix("__cplusplus")
                 .is_some_and(|tail| !tail.chars().next().is_some_and(is_identifier_continue))
         }
@@ -489,10 +487,7 @@ fn is_bare_macro_invocation(trimmed: &str) -> bool {
 }
 
 fn preprocessor_directive_argument(line: &str) -> Option<&str> {
-    let mut parts = line
-        .trim_ascii_start()
-        .strip_prefix('#')?
-        .split_whitespace();
+    let mut parts = line.trimmed_start().strip_prefix('#')?.split_whitespace();
     parts.next()?;
     parts.next()
 }
@@ -511,7 +506,7 @@ impl FormatEngine<'_> {
     fn preprocessor_line_follows_split_else_output(&self) -> bool {
         let mut saw_preprocessor = false;
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii();
+            let trimmed = line.trimmed();
             if trimmed.is_empty() {
                 continue;
             }
@@ -541,10 +536,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim_ascii().is_empty())
+            .find(|line| !line.trimmed().is_empty())
             .map(|line| {
                 (
-                    trailing_word(line.trim_ascii_end()).to_string(),
+                    trailing_word(line.trimmed_end()).to_string(),
                     leading_visual_width(line, self.options.tab_width),
                 )
             });
@@ -563,11 +558,11 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find(|line| {
-                    let trimmed = line.trim_ascii();
+                    let trimmed = line.trimmed();
                     !trimmed.is_empty() && !is_bare_macro_invocation(trimmed)
                 })
                 .is_some_and(|line| {
-                    let trimmed = line.trim_ascii();
+                    let trimmed = line.trimmed();
                     trimmed == "else" || trimmed.ends_with("} else")
                 })
         {
@@ -580,9 +575,9 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
+                    .find(|line| !line.trimmed().is_empty())
                     .is_some_and(|line| {
-                        let trimmed = line.trim_ascii();
+                        let trimmed = line.trimmed();
                         trimmed == "else" || trimmed.ends_with("} else")
                     }));
         if branch_separator_after_else {
@@ -612,7 +607,7 @@ impl FormatEngine<'_> {
         let parts: Vec<&str> = line.lines().collect();
         let continued_define_contains_directive = is_define
             && parts.iter().skip(1).any(|part| {
-                let part = part.trim_ascii_end();
+                let part = part.trimmed_end();
                 preprocessor_directive(part).is_some_and(is_known_preprocessor_directive)
                     && !part.ends_with('\\')
             });
@@ -620,7 +615,7 @@ impl FormatEngine<'_> {
         // no define body.
         let continued_by_backslashes = parts
             .first()
-            .is_some_and(|part| part.trim_ascii_end().ends_with('\\'));
+            .is_some_and(|part| part.trimmed_end().ends_with('\\'));
         if self.options.indent_preproc_define
             && is_define
             && parts.len() > 1
@@ -638,8 +633,7 @@ impl FormatEngine<'_> {
         let mut continued_line_comment = false;
         let mut open_paren_columns = Vec::new();
         for (index, part) in parts.iter().enumerate() {
-            let backslash_continued =
-                index > 0 && parts[index - 1].trim_ascii_end().ends_with('\\');
+            let backslash_continued = index > 0 && parts[index - 1].trimmed_end().ends_with('\\');
             self.push_preprocessor_part(
                 index,
                 part,
@@ -654,7 +648,7 @@ impl FormatEngine<'_> {
                 &mut open_paren_columns,
             );
         }
-        if is_define && !line.trim_ascii_end().ends_with('\\') {
+        if is_define && !line.trimmed_end().ends_with('\\') {
             if !(is_define && self.preprocessor_split_else_active()) {
                 self.layout.continuation_indent.clear_next_line();
                 self.layout
@@ -669,7 +663,7 @@ impl FormatEngine<'_> {
         if directive == Some("endif")
             && let Some(previous) = self.output.last()
             && has_hash_outside_literals(previous)
-            && !previous.trim_ascii_start().starts_with('#')
+            && !previous.trimmed_start().starts_with('#')
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces =
@@ -690,7 +684,7 @@ impl FormatEngine<'_> {
         } else {
             self.preprocessor.split_else.after_line = false;
         }
-        if line.trim_ascii_end().ends_with("&&")
+        if line.trimmed_end().ends_with("&&")
             && let Some(previous) = self.output.last()
         {
             self.layout.continuation_indent.next_line_indent = None;
@@ -726,7 +720,7 @@ impl FormatEngine<'_> {
         let part = if is_opaque_literal_line {
             part
         } else {
-            part.trim_ascii_end()
+            part.trimmed_end()
         };
         // On a line a backslash continues, a `#` before an unknown name
         // stringizes a macro parameter.
@@ -792,28 +786,28 @@ impl FormatEngine<'_> {
                     .continuation_indent_prefix(structural_level, spaces),
             };
             let body = if collapse {
-                collapse_pound_whitespace(part.trim_ascii_start())
+                collapse_pound_whitespace(part.trimmed_start())
             } else {
-                part.trim_ascii_start().to_string()
+                part.trimmed_start().to_string()
             };
             format!("{prefix}{body}")
         } else if collapse {
-            let leading = &part[..part.len() - part.trim_ascii_start().len()];
+            let leading = &part[..part.len() - part.trimmed_start().len()];
             format!(
                 "{leading}{}",
-                collapse_pound_whitespace(part.trim_ascii_start())
+                collapse_pound_whitespace(part.trimmed_start())
             )
         } else if force_unindented_branch_separator
             || line_is_continued_comment
             || (directive.is_some()
                 && (part_known_directive || self.token_input.token_source_line_indent == 0))
         {
-            part.trim_ascii_start().to_string()
+            part.trimmed_start().to_string()
         } else if directive.is_some() {
             format!(
                 "{}{}",
                 " ".repeat(self.token_input.token_source_line_indent),
-                part.trim_ascii_start()
+                part.trimmed_start()
             )
         } else {
             part.to_string()
@@ -851,12 +845,12 @@ impl FormatEngine<'_> {
                 index == 0 && branch_separator_after_else,
             );
         }
-        let line_ends_with_backslash = part.trim_ascii_end().ends_with('\\');
+        let line_ends_with_backslash = part.trimmed_end().ends_with('\\');
         *continued_line_comment = if line_is_continued_comment {
             line_ends_with_backslash
         } else if line_ends_with_backslash && !is_opaque_literal_line {
             let comment_start = line_comment_split_limit(part);
-            comment_start < part.len() && part[comment_start..].trim_ascii_start().starts_with("//")
+            comment_start < part.len() && part[comment_start..].trimmed_start().starts_with("//")
         } else {
             false
         };
@@ -981,15 +975,15 @@ impl FormatEngine<'_> {
                 self.layout.indentation.indent(),
             ));
         }
-        if line.trim_ascii_start().matches('#').count() > 1
+        if line.trimmed_start().matches('#').count() > 1
             && self.layout.indentation.indent() > 0
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| line.trim_ascii() == ";")
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| line.trimmed() == ";")
         {
             return Some(PreprocessorLineIndent::Level(
                 self.layout.indentation.indent(),

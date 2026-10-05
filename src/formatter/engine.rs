@@ -45,6 +45,7 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
 };
+use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
@@ -563,7 +564,7 @@ impl<'a> FormatEngine<'a> {
                 if let Some(previous) = self.output.last_mut()
                     && !line_ends_with_comment(previous)
                 {
-                    previous.truncate(previous.trim_ascii_end().len());
+                    previous.truncate(previous.trimmed_end().len());
                     previous.push_str(whitespace);
                 }
             } else {
@@ -663,7 +664,7 @@ impl<'a> FormatEngine<'a> {
             && !self
                 .output
                 .last()
-                .is_some_and(|line| operators::head_ends_binary_operator(line.trim_ascii_end()))
+                .is_some_and(|line| operators::head_ends_binary_operator(line.trimmed_end()))
         {
             self.layout
                 .continuation_indent
@@ -761,7 +762,7 @@ impl<'a> FormatEngine<'a> {
                 .iter()
                 .rev()
                 .find(|line| {
-                    line.trim_ascii_start()
+                    line.trimmed_start()
                         .strip_prefix("case")
                         .is_some_and(|rest| rest.chars().next().is_some_and(char::is_whitespace))
                 })
@@ -796,11 +797,11 @@ impl<'a> FormatEngine<'a> {
             .filter(|token| !matches!(token, Token::Newline))
             .map(token_text)
             .collect::<String>();
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         let Some(colon) = switch_cases::find_case_colon(trimmed) else {
             return false;
         };
-        let marker = trimmed[colon + 1..].trim_ascii_start();
+        let marker = trimmed[colon + 1..].trimmed_start();
         if !marker.starts_with("#line") {
             return false;
         }
@@ -827,7 +828,7 @@ impl<'a> FormatEngine<'a> {
             .filter(|token| !matches!(token, Token::Newline))
             .map(token_text)
             .collect::<String>();
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         if !trimmed.starts_with("{{") || !trimmed.ends_with('}') || !trimmed.contains("}{") {
             return false;
         }
@@ -836,17 +837,17 @@ impl<'a> FormatEngine<'a> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim_ascii().is_empty());
+            .filter(|line| !line.trimmed().is_empty());
         if !lines
             .next()
-            .is_some_and(|line| line.trim_ascii_start().starts_with('#'))
+            .is_some_and(|line| line.trimmed_start().starts_with('#'))
         {
             return false;
         }
         let Some(case_line) = lines.next() else {
             return false;
         };
-        let case_trimmed = case_line.trim_ascii_start();
+        let case_trimmed = case_line.trimmed_start();
         if !(case_trimmed.starts_with("case ") || case_trimmed.starts_with("default"))
             || !case_trimmed.ends_with(':')
         {
@@ -1061,7 +1062,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     fn push_raw_line(&mut self, line: &str) {
-        if !self.current.trim_ascii().is_empty() {
+        if !self.current.trimmed().is_empty() {
             self.finish_line();
         }
         let published = self.output.len();
@@ -1085,7 +1086,7 @@ impl<'a> FormatEngine<'a> {
             } else {
                 self.current.push_str(whitespace);
             }
-        } else if whitespace.contains('\x0c') && self.current.trim_ascii().is_empty() {
+        } else if whitespace.contains('\x0c') && self.current.trimmed().is_empty() {
             self.current.push('\x0c');
             self.current_is_preindented = true;
         }
@@ -1156,7 +1157,7 @@ impl<'a> FormatEngine<'a> {
         else {
             return;
         };
-        if self.current.trim_ascii().is_empty() && self.layout.line_state.has_literal_quote {
+        if self.current.trimmed().is_empty() && self.layout.line_state.has_literal_quote {
             self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
     }
@@ -1201,7 +1202,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_ends_pointer_cast(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(')') {
             return false;
         }
@@ -1209,26 +1210,26 @@ impl<'a> FormatEngine<'a> {
             return false;
         };
         current[open + 1..current.len() - 1]
-            .trim_ascii_end()
+            .trimmed_end()
             .ends_with(['*', '&', '^'])
     }
 
     pub(crate) fn current_ends_sizeof_pointer_expr(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(')') {
             return false;
         }
         let Some(open) = matching_open_paren_offset(current) else {
             return false;
         };
-        trailing_word(current[..open].trim_ascii_end()) == "sizeof"
+        trailing_word(current[..open].trimmed_end()) == "sizeof"
             && current[open + 1..current.len() - 1]
-                .trim_ascii_end()
+                .trimmed_end()
                 .ends_with(['*', '&', '^'])
     }
 
     pub(crate) fn current_ends_size_operator_call(&self) -> bool {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(')') {
             return false;
         }
@@ -1236,15 +1237,15 @@ impl<'a> FormatEngine<'a> {
             return false;
         };
         matches!(
-            trailing_word(current[..open].trim_ascii_end()),
+            trailing_word(current[..open].trimmed_end()),
             "sizeof" | "alignof" | "_Alignof"
         )
     }
 
     pub(crate) fn current_paren_started_by_expression_keyword(&self) -> bool {
-        let mut before = self.current.trim_ascii_end();
+        let mut before = self.current.trimmed_end();
         while let Some(open) = before.rfind('(') {
-            let prefix = before[..open].trim_ascii_end();
+            let prefix = before[..open].trimmed_end();
             if !prefix.ends_with('(') {
                 let word = trailing_word(prefix);
                 return matches!(
@@ -1258,9 +1259,9 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_paren_started_by_catch(&self) -> bool {
-        let mut before = self.current.trim_ascii_end();
+        let mut before = self.current.trimmed_end();
         while let Some(open) = before.rfind('(') {
-            let prefix = before[..open].trim_ascii_end();
+            let prefix = before[..open].trimmed_end();
             if !prefix.ends_with('(') {
                 return trailing_word(prefix) == "catch";
             }
@@ -1273,7 +1274,7 @@ impl<'a> FormatEngine<'a> {
         let Some(open) = self.current.rfind('(') else {
             return false;
         };
-        let prefix = self.current[..open].trim_ascii_end();
+        let prefix = self.current[..open].trimmed_end();
         self.current_paren_started_by_expression_keyword()
             || prefix.chars().any(|ch| {
                 matches!(
@@ -1284,7 +1285,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     fn current_cast_words(&self) -> Option<Vec<&str>> {
-        let current = self.current.trim_ascii_end();
+        let current = self.current.trimmed_end();
         if !current.ends_with(')') {
             return None;
         }
@@ -1297,7 +1298,7 @@ impl<'a> FormatEngine<'a> {
             return None;
         }
         if matches!(
-            trailing_word(current[..open].trim_ascii_end()),
+            trailing_word(current[..open].trimmed_end()),
             "sizeof" | "alignof" | "_Alignof"
         ) {
             return None;
@@ -1305,11 +1306,11 @@ impl<'a> FormatEngine<'a> {
         let inner = &current[open + 1..current.len() - 1];
         // No type starts with a parenthesis: `((int)x)` holds a cast and its
         // operand, `((x))` a group.
-        if inner.trim_ascii_start().starts_with('(') {
+        if inner.trimmed_start().starts_with('(') {
             return None;
         }
         // `(f(x) y)` holds a call, no type.
-        if inner.contains(')') && !inner.trim_ascii_end().ends_with(')') {
+        if inner.contains(')') && !inner.trimmed_end().ends_with(')') {
             return None;
         }
         if inner.chars().any(|ch| {
@@ -1317,7 +1318,7 @@ impl<'a> FormatEngine<'a> {
                 ch,
                 '+' | '-' | '/' | '%' | '|' | '&' | '^' | '=' | '<' | '>' | '?' | ':'
             )
-        }) || (inner.contains('*') && !inner.trim_ascii_end().ends_with('*'))
+        }) || (inner.contains('*') && !inner.trimmed_end().ends_with('*'))
         {
             return None;
         }
@@ -1338,7 +1339,7 @@ impl<'a> FormatEngine<'a> {
         if self.current_is_preindented && self.current.contains('\x0c') {
             self.finish_line();
             self.previous_was_newline = true;
-        } else if self.current.trim_ascii().is_empty() {
+        } else if self.current.trimmed().is_empty() {
             if self.next_line.leads_with_class_init || self.next_line.leads_with_class_base {
                 self.layout.nesting.clear_continuation_indents();
                 self.layout
@@ -1354,7 +1355,7 @@ impl<'a> FormatEngine<'a> {
                 self.push_empty_line();
             }
             self.previous_was_newline = true;
-        } else if is_split_export_head(self.current.trim_ascii())
+        } else if is_split_export_head(self.current.trimmed())
             && !self.next_line.leads_with_open_brace
         {
             self.finish_split_class_head_line();
@@ -1393,9 +1394,7 @@ impl<'a> FormatEngine<'a> {
                 .set_next_line_level(header_indent + 1);
             self.layout.in_class_base_clause = true;
             self.previous_was_newline = true;
-        } else if self.current.trim_ascii_end().ends_with(',')
-            && self.is_top_level_table_macro_row()
-        {
+        } else if self.current.trimmed_end().ends_with(',') && self.is_top_level_table_macro_row() {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(1);
             self.previous_was_newline = true;
@@ -1404,7 +1403,7 @@ impl<'a> FormatEngine<'a> {
             && self.layout.nesting.paren_depth == 0
             && line_ends_with_comment(&self.current)
             && self.current[..self.current_trailing_comment_split_limit()]
-                .trim_ascii_end()
+                .trimmed_end()
                 .ends_with(',')
         {
             self.finish_line();
@@ -1412,7 +1411,7 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_comma
             && self.layout.indentation.statement_depth() > 0
-            && self.current.trim_ascii_start().starts_with(',')
+            && self.current.trimmed_start().starts_with(',')
         {
             let spaces = self.current_line_indent_spaces();
             self.finish_line();
@@ -1426,13 +1425,13 @@ impl<'a> FormatEngine<'a> {
                 || self.in_enum_declaration_brace()
                 || self.current_inline_array_column().is_some())
         {
-            let direct_list_sibling_column = if self.current.trim_ascii_end().ends_with("},")
-                && !self.current.trim_ascii_start().starts_with('{')
+            let direct_list_sibling_column = if self.current.trimmed_end().ends_with("},")
+                && !self.current.trimmed_start().starts_with('{')
             {
                 self.output.scoped().iter().rev().take(64).find_map(|line| {
-                    let code = self.output.code_of(line).trim_ascii_end();
-                    let prefix = code.strip_suffix('{')?.trim_ascii_end();
-                    let prefix = prefix.trim_ascii_start();
+                    let code = self.output.code_of(line).trimmed_end();
+                    let prefix = code.strip_suffix('{')?.trimmed_end();
+                    let prefix = prefix.trimmed_start();
                     (!prefix.is_empty()
                         && !prefix.starts_with('{')
                         && !prefix.contains_any_byte(b"=(@"))
@@ -1444,7 +1443,7 @@ impl<'a> FormatEngine<'a> {
             let inline_column = self.current_inline_array_column();
             let clear_enum_continuation = self.in_enum_declaration_brace()
                 && !self.current.contains('{')
-                && unmatched_open_paren_column(self.current.trim_ascii_end()).is_none();
+                && unmatched_open_paren_column(self.current.trimmed_end()).is_none();
             self.finish_line();
             if clear_enum_continuation {
                 self.layout.continuation_indent.clear_next_line();
@@ -1472,7 +1471,7 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if (self.is_objc_method_line() || self.layout.objc.method_continuation)
             && !self.current[..self.current_trailing_comment_split_limit()]
-                .trim_ascii_end()
+                .trimmed_end()
                 .ends_with(';')
         {
             self.finish_line();
@@ -1485,7 +1484,7 @@ impl<'a> FormatEngine<'a> {
                 self.layout.objc.method_continuation = self.next_line.leads_with_open_brace;
             }
             self.previous_was_newline = true;
-        } else if self.current.trim_ascii_end().ends_with('\\')
+        } else if self.current.trimmed_end().ends_with('\\')
             && self.layout.nesting.paren_depth == 0
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
@@ -1494,7 +1493,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.previous_was_newline = true;
-        } else if self.current[..self.current_trailing_comment_split_limit()].trim_ascii() == ":"
+        } else if self.current[..self.current_trailing_comment_split_limit()].trimmed() == ":"
             && self
                 .layout
                 .frame_stack
@@ -1507,11 +1506,11 @@ impl<'a> FormatEngine<'a> {
                 .set_next_line_level(self.layout.indentation.indent() + 1);
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
-            .trim_ascii_end()
+            .trimmed_end()
             .ends_with(':')
-            && !self.current.trim_ascii_start().starts_with("//")
+            && !self.current.trimmed_start().starts_with("//")
             && !self.current[..self.current_trailing_comment_split_limit()]
-                .trim_ascii_end()
+                .trimmed_end()
                 .contains('?')
             && !self.current_ends_base_clause_colon()
             && (self.in_initializer_brace()
@@ -1526,9 +1525,9 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.set_next_line_spaces(column);
             self.previous_was_newline = true;
         } else if self.in_enum_declaration_brace()
-            && self.current.trim_ascii_end().ends_with(",")
+            && self.current.trimmed_end().ends_with(",")
             && !self.current.contains('{')
-            && unmatched_open_paren_column(self.current.trim_ascii_end()).is_none()
+            && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             self.finish_line();
             self.layout.continuation_indent.clear_next_line();
@@ -1547,18 +1546,17 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
             self.previous_was_newline = true;
         } else if self.is_continuation_break()
-            && !(self.current_is_preindented && self.current.trim_ascii_end().ends_with("*/"))
+            && !(self.current_is_preindented && self.current.trimmed_end().ends_with("*/"))
         {
             self.finish_continuation_line_at_newline();
-        } else if self.current.trim_ascii_end().ends_with(';')
-            || self.current.trim_ascii_end().ends_with("*/")
-            || macro_invocations::is_standalone_macro_invocation_line(self.current.trim_ascii())
+        } else if self.current.trimmed_end().ends_with(';')
+            || self.current.trimmed_end().ends_with("*/")
+            || macro_invocations::is_standalone_macro_invocation_line(self.current.trimmed())
         {
             self.finish_line();
             self.layout.objc.method_continuation = false;
             self.previous_was_newline = true;
-        } else if self.next_line.leads_with_open_brace
-            && self.current.trim_ascii_end().ends_with('[')
+        } else if self.next_line.leads_with_open_brace && self.current.trimmed_end().ends_with('[')
         {
             self.finish_line();
             self.previous_was_newline = true;
@@ -1572,8 +1570,8 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
-            && (self.current.trim_ascii_start().starts_with('}')
-                || self.current.trim_ascii_start().starts_with([
+            && (self.current.trimmed_start().starts_with('}')
+                || self.current.trimmed_start().starts_with([
                     '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~',
                 ]))
         {
@@ -1582,12 +1580,12 @@ impl<'a> FormatEngine<'a> {
             self.layout.nesting.clear_continuation_indents();
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
-            .trim_ascii_end()
+            .trimmed_end()
             .ends_with(':')
-            && !self.current.trim_ascii_start().starts_with("//")
+            && !self.current.trimmed_start().starts_with("//")
             && labels::is_label_start(
                 self.current[..self.current_trailing_comment_split_limit()]
-                    .trim_ascii()
+                    .trimmed()
                     .trim_end_matches(':'),
                 &self.options.access_labels,
             )
@@ -1596,9 +1594,9 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.newline_breaks_statement
             && self.header_allows_statement_break()
-            && self.current.trim_ascii() != "else"
+            && self.current.trimmed() != "else"
         {
-            let bare_return = self.current.trim_ascii() == "return";
+            let bare_return = self.current.trimmed() == "return";
             let incomplete_control_header = self.incomplete_control_header();
             let header_indent = self.layout.indentation.indent();
             self.finish_line();
@@ -1681,7 +1679,7 @@ impl<'a> FormatEngine<'a> {
             })
             .flatten();
         if is_logical_continuation
-            && unmatched_open_paren_column(self.current.trim_ascii_end()).is_none()
+            && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             self.layout.continuation_indent.logical_chain_indent_spaces =
                 Some(indent.columns(self.options.indent_width));
@@ -1693,7 +1691,7 @@ impl<'a> FormatEngine<'a> {
             .clear_continuation_after_line
             .is_some();
         let case_label_with_comment =
-            switch_cases::case_label_with_trailing_comment(self.current.trim_ascii());
+            switch_cases::case_label_with_trailing_comment(self.current.trimmed());
         self.finish_line();
         if matches!(
             previous_before_line,
@@ -1732,8 +1730,8 @@ impl<'a> FormatEngine<'a> {
         {
             return false;
         }
-        let code = self.current[..self.current_trailing_comment_split_limit()].trim_ascii_end();
-        let trimmed = code.trim_ascii_start();
+        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed_end();
+        let trimmed = code.trimmed_start();
         !trimmed.is_empty()
             && !trimmed.starts_with(['#', '{', '}'])
             && !code.ends_with([',', ';', '\\'])
@@ -1747,8 +1745,8 @@ impl<'a> FormatEngine<'a> {
         else {
             return false;
         };
-        let current = self.current.trim_ascii();
-        let code = self.current[..self.current_trailing_comment_split_limit()].trim_ascii();
+        let current = self.current.trimmed();
+        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
         (trailing_word(code) == header || trailing_word(current) == header)
             && self.layout.command_state.previous_command_char != Some(')')
             && self.header_paren.depth.is_none()
@@ -1761,7 +1759,7 @@ impl<'a> FormatEngine<'a> {
             Some("case" | "default") => {
                 let leading = self
                     .current
-                    .trim_ascii_start()
+                    .trimmed_start()
                     .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
                     .next()
                     .unwrap_or_default();

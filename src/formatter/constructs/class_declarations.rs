@@ -5,6 +5,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::signature_ends_with_parameter_list;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) fn has_base_access_token(tokens: &[Token]) -> bool {
@@ -69,13 +70,13 @@ impl FormatEngine<'_> {
         if self.layout.nesting.has_question_in_current_brace() {
             return false;
         }
-        if code_opens_class_base_clause(self.current.trim_ascii_end()) {
+        if code_opens_class_base_clause(self.current.trimmed_end()) {
             return true;
         }
         if self.layout.split_class_export_pending_base {
             return true;
         }
-        let current = self.current.trim_ascii();
+        let current = self.current.trimmed();
         let single_name = current.chars().next().is_some_and(is_identifier_start)
             && current.chars().all(is_identifier_continue);
         single_name
@@ -83,14 +84,14 @@ impl FormatEngine<'_> {
                 .layout
                 .previous_pre_adjust_line
                 .as_ref()
-                .is_some_and(|line| is_split_export_head(line.trim_ascii()))
+                .is_some_and(|line| is_split_export_head(line.trimmed()))
                 || self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim_ascii().is_empty())
-                    .is_some_and(|line| is_split_export_head(line.trim_ascii()))
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| is_split_export_head(line.trimmed()))
                 || self.in_open_class_head())
     }
 
@@ -100,26 +101,26 @@ impl FormatEngine<'_> {
         }
         if self.layout.nesting.has_question_in_current_brace()
             || !self.current[..self.current_trailing_comment_split_limit()]
-                .trim_ascii()
+                .trimmed()
                 .is_empty()
         {
             return false;
         }
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
-            let trimmed = line.trim_ascii_start();
+            let trimmed = line.trimmed_start();
             !trimmed.is_empty() && !trimmed.starts_with(['#', ':', ','])
         }) else {
             return false;
         };
         let code = &self.output.code_of(line);
-        code_opens_class_base_clause(code.trim_ascii_end())
+        code_opens_class_base_clause(code.trimmed_end())
     }
 
     pub(crate) fn try_join_class_base_line(&mut self, line: &str) -> bool {
         if !self.may_have_class_base_access {
             return false;
         }
-        let current = line.trim_ascii_start();
+        let current = line.trimmed_start();
         if !(current.starts_with("public ")
             || current.starts_with("protected ")
             || current.starts_with("private "))
@@ -129,7 +130,7 @@ impl FormatEngine<'_> {
         if !self
             .output
             .last()
-            .is_some_and(|previous| previous.trim_ascii_end().ends_with(':'))
+            .is_some_and(|previous| previous.trimmed_end().ends_with(':'))
         {
             return false;
         }
@@ -138,11 +139,11 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .take_while(|line| {
-                let trimmed = line.trim_ascii();
+                let trimmed = line.trimmed();
                 trimmed != "{" && !trimmed.starts_with("};")
             })
             .any(|line| {
-                let trimmed = line.trim_ascii();
+                let trimmed = line.trimmed();
                 matches!(trimmed, "class" | "struct" | "union") || is_split_export_head(trimmed)
             });
         if !in_class_head {
@@ -165,8 +166,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim_ascii().is_empty())
-                .is_some_and(|line| is_split_export_head(line.trim_ascii()))
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| is_split_export_head(line.trimmed()))
         {
             return;
         }
@@ -192,7 +193,7 @@ impl FormatEngine<'_> {
             return None;
         }
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim_ascii();
+            let trimmed = line.trimmed();
             if trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';') {
                 break;
             }
@@ -206,11 +207,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn simple_template_base_indent_spaces(&self, line: &str) -> Option<usize> {
-        if !line.trim_ascii_start().starts_with(':') {
+        if !line.trimmed_start().starts_with(':') {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        (previous.trim_ascii_start().starts_with("struct ")
+        (previous.trimmed_start().starts_with("struct ")
             && previous.contains(" <")
             && previous.contains('>'))
         .then(|| {
@@ -220,7 +221,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn commented_class_head_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line
-            .trim_ascii_start()
+            .trimmed_start()
             .chars()
             .next()
             .is_some_and(is_identifier_start)
@@ -228,12 +229,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        previous
-            .trim_ascii_start()
-            .starts_with("class //")
-            .then(|| {
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
-            })
+        previous.trimmed_start().starts_with("class //").then(|| {
+            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+        })
     }
 
     pub(crate) fn class_base_logical_operand_indent_spaces(
@@ -241,12 +239,12 @@ impl FormatEngine<'_> {
         line: &str,
         kind: LineKind,
     ) -> Option<usize> {
-        if kind != LineKind::Normal || !line.trim_ascii_start().starts_with("sizeof(") {
+        if kind != LineKind::Normal || !line.trimmed_start().starts_with("sizeof(") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trim_ascii_end();
-        let previous_trimmed = previous_code.trim_ascii_start();
+        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_trimmed = previous_code.trimmed_start();
         ((previous_trimmed.starts_with("struct ")
             || previous_trimmed.starts_with("class ")
             || previous_trimmed.starts_with("union "))
@@ -295,7 +293,7 @@ pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
     if signature_ends_with_parameter_list(before) {
         return false;
     }
-    let statement = crate::formatter::text::line_scan::statement_tail(before).trim_ascii_start();
+    let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
     statement
         .split(|ch: char| !is_identifier_continue(ch))
         .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
@@ -306,8 +304,8 @@ pub(crate) fn template_base_colon_indent_spaces(
     current: &str,
     previous: &str,
 ) -> Option<usize> {
-    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_ascii_end();
-    let previous_trimmed = previous_code.trim_ascii_start();
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trimmed_end();
+    let previous_trimmed = previous_code.trimmed_start();
     if !current.starts_with(':')
         || !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
         || max_template_angle_depth(previous_code) <= 1

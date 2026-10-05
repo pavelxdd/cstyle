@@ -2,6 +2,7 @@ use crate::config::LineBetweenMembers;
 use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::trim::Trimmed;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum MemberSpacingBoundary {
@@ -64,7 +65,7 @@ impl FormatEngine<'_> {
             .layout
             .previous_pre_adjust_line
             .as_deref()
-            .is_some_and(|line| !line.trim_ascii().is_empty())
+            .is_some_and(|line| !line.trimmed().is_empty())
         {
             self.push_empty_line();
         }
@@ -75,7 +76,7 @@ impl FormatEngine<'_> {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         if trimmed.is_empty() {
             return;
         }
@@ -107,7 +108,7 @@ impl FormatEngine<'_> {
     }
 
     fn current_member_spacing_boundary(&self, line: &str) -> Option<MemberSpacingBoundary> {
-        let trimmed = line.trim_ascii();
+        let trimmed = line.trimmed();
         if trimmed.is_empty()
             || trimmed.starts_with(['#', '{', '}'])
             || is_standard_access_label(trimmed)
@@ -148,7 +149,7 @@ impl FormatEngine<'_> {
 }
 
 fn line_clears_pending_member_spacing(line: &str) -> bool {
-    let trimmed = line.trim_ascii();
+    let trimmed = line.trimmed();
     trimmed.is_empty()
         || trimmed.starts_with(['#', '}'])
         || is_standard_access_label(trimmed)

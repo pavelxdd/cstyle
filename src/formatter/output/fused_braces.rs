@@ -2,6 +2,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::structure::groups::GroupId;
+use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
     /// Blocks opened back to back, as `{{{{`, and closed together, as
@@ -155,7 +156,7 @@ impl FormatEngine<'_> {
         for line in innermost + 1..first_close_line {
             let text = &self.output.as_slice()[line];
             let lead = text.len() - text.trim_start_matches(' ').len();
-            if self.output.is_verbatim(line) || text.trim_ascii().is_empty() || lead < shift {
+            if self.output.is_verbatim(line) || text.trimmed().is_empty() || lead < shift {
                 continue;
             }
             let text = text[shift..].to_string();
