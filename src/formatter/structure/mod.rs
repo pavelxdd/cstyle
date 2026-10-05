@@ -57,6 +57,8 @@ pub(crate) struct SourceTree {
     pub(crate) blocks: Blocks,
     pub(crate) functions: Functions,
     pub(crate) statements: Statements,
+    /// Indices of the directive tokens, in order.
+    directives: Vec<usize>,
 }
 
 impl SourceTree {
@@ -71,12 +73,19 @@ impl SourceTree {
         let functions = Functions::build(tokens, &groups, &blocks);
         blocks.mark_function_bodies(functions.heads().iter().filter_map(|head| head.body));
         let statements = Statements::build(tokens, &groups, &blocks);
+        let directives = tokens
+            .iter()
+            .enumerate()
+            .filter(|(_, token)| matches!(token, Token::Preprocessor(_)))
+            .map(|(index, _)| index)
+            .collect();
         Self {
             tokens: shared,
             groups,
             blocks,
             functions,
             statements,
+            directives,
         }
     }
 
@@ -106,6 +115,16 @@ impl SourceTree {
             offset += text.len();
         }
         None
+    }
+
+    /// Whether a directive token lies in `range`.
+    pub(crate) fn has_directive_in(&self, range: std::ops::Range<usize>) -> bool {
+        let at = self
+            .directives
+            .partition_point(|&index| index < range.start);
+        self.directives
+            .get(at)
+            .is_some_and(|&index| index < range.end)
     }
 
     /// Last code token before `index`.

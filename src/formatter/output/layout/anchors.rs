@@ -679,9 +679,7 @@ impl FormatEngine<'_> {
         }
         let open_line = self.output.line_with_token(open)?;
         if self.output.line_tokens(open_line)?.first != open
-            || tokens[open..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(open..first)
         {
             return None;
         }
@@ -1050,9 +1048,7 @@ impl FormatEngine<'_> {
                             })
                     })
             })
-            || tokens[start..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(start..first)
         {
             return None;
         }
@@ -1160,9 +1156,7 @@ impl FormatEngine<'_> {
             || !matches!(&tokens[label], Token::Word(word) if word == "case" || word == "default")
             || groups.enclosing(label) != groups.enclosing(first)
             || !self.in_switch_body(first)
-            || tokens[colon..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(colon..first)
         {
             return None;
         }
@@ -1508,9 +1502,7 @@ impl FormatEngine<'_> {
                 if !matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
             || !matches!(tokens[second], Token::Word(_))
             || second >= registering
-            || tokens[start..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(start..first)
         {
             return None;
         }
@@ -1759,9 +1751,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.tree.previous_code_token(first)?;
         if matches!(tokens[previous], Token::Symbol(';' | '{' | '}' | ':'))
-            || tokens[previous..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(previous..first)
         {
             return None;
         }
@@ -1870,9 +1860,7 @@ impl FormatEngine<'_> {
             start = before;
         }
         if matches!(&tokens[start], Token::Word(word) if word == "return" || is_header(word))
-            || tokens[start..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(start..first)
         {
             return None;
         }
@@ -2633,9 +2621,8 @@ impl FormatEngine<'_> {
         }
         self.output.line_with_token(colon)?;
         let group = groups.enclosing(colon);
-        let question = (0..colon)
-            .rev()
-            .filter(|&index| groups.enclosing(index) == group)
+        let question = groups
+            .members_before(group, colon)
             .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}' | ',')))
             .find(|&index| matches!(tokens[index], Token::Symbol('?' | ':')))?;
         if !matches!(tokens[question], Token::Symbol('?')) {
@@ -2965,9 +2952,8 @@ impl FormatEngine<'_> {
             .previous_code_token(first)
             .is_some_and(|previous| {
                 matches!(tokens[previous], Token::Symbol('?' | ':'))
-                    && (0..previous)
-                        .rev()
-                        .filter(|&index| groups.enclosing(index) == groups.enclosing(previous))
+                    && groups
+                        .members_before(groups.enclosing(previous), previous)
                         .take_while(|&index| {
                             !matches!(tokens[index], Token::Symbol(';' | '{' | '}'))
                         })
@@ -3928,9 +3914,7 @@ impl FormatEngine<'_> {
             && self.layout.line_adjuster.total_case_unindent_depth() == 0
             && let Some(keyword) = self.tree.previous_code_token(first)
             && matches!(&tokens[keyword], Token::Word(word) if word == "else")
-            && tokens[keyword..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            && self.tree.has_directive_in(keyword..first)
         {
             let offset = if matches!(
                 self.options.brace_style,
@@ -3953,9 +3937,7 @@ impl FormatEngine<'_> {
         let open = self.tree.groups.get(block).open;
         let keyword = self.tree.previous_code_token(open)?;
         if !matches!(&tokens[keyword], Token::Word(word) if word == "else")
-            || !tokens[keyword..open]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || !self.tree.has_directive_in(keyword..open)
         {
             return None;
         }
@@ -3980,9 +3962,7 @@ impl FormatEngine<'_> {
             .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "do"))
             .or_else(|| self.tree.blocks.owner(block))?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "do")
-            || tokens[close..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(close..first)
         {
             return None;
         }
@@ -4007,16 +3987,14 @@ impl FormatEngine<'_> {
     fn braceless_do_while_indent(&self, semicolon: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let group = self.tree.groups.enclosing(semicolon);
-        let do_token = (0..semicolon)
-            .rev()
-            .filter(|&index| self.tree.groups.enclosing(index) == group)
+        let do_token = self
+            .tree
+            .groups
+            .members_before(group, semicolon)
             .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
             .find_map(|index| self.tree.statements.braceless_header(index))
             .filter(|&header| matches!(&tokens[header], Token::Word(word) if word == "do"))?;
-        if tokens[do_token..semicolon]
-            .iter()
-            .any(|token| matches!(token, Token::Preprocessor(_)))
-        {
+        if self.tree.has_directive_in(do_token..semicolon) {
             return None;
         }
         // Only a `do` leading its line, or run in after a `{`, places it.
@@ -4090,10 +4068,7 @@ impl FormatEngine<'_> {
             return None;
         }
         // Headers split by directives start in column one at file scope.
-        if tokens[start..first]
-            .iter()
-            .any(|token| matches!(token, Token::Preprocessor(_)))
-        {
+        if self.tree.has_directive_in(start..first) {
             return Some(self.options.indent_width);
         }
         let line = self.output.line_with_token(start)?;
@@ -4150,9 +4125,7 @@ impl FormatEngine<'_> {
             .tree
             .previous_code_token(first)
             .is_some_and(|close| matches!(tokens[close], Token::Symbol(')')))
-            || tokens[owner..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || self.tree.has_directive_in(owner..first)
         {
             return None;
         }
@@ -4295,9 +4268,7 @@ impl FormatEngine<'_> {
             && !matches!(tokens[first], Token::Symbol(';'))
             && !matches!(&tokens[first], Token::Word(word) if is_header(word))
             && !self.statement_spans_lines(first)
-            && !tokens[header..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            && !self.tree.has_directive_in(header..first)
         {
             return None;
         }
@@ -4362,14 +4333,11 @@ impl FormatEngine<'_> {
     /// indent.
     fn parameter_line_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
-        let tokens = &self.tree.tokens;
         let group = groups.enclosing(first)?;
         let previous = self.tree.previous_code_token(first)?;
         if !self.tree.functions.is_parameter_list(group)
             || self.options.indent_after_parens
-            || !tokens[previous + 1..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            || !self.tree.has_directive_in(previous + 1..first)
         {
             return None;
         }
@@ -4606,11 +4574,11 @@ impl FormatEngine<'_> {
         }
         let tokens = &self.tree.tokens;
         // A `{` right after a directive stands where the branches leave it.
-        if self.tree.previous_code_token(open).is_some_and(|header| {
-            tokens[header + 1..open]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
-        }) {
+        if self
+            .tree
+            .previous_code_token(open)
+            .is_some_and(|header| self.tree.has_directive_in(header + 1..open))
+        {
             return None;
         }
         // Branches with unbalanced braces and labels inside leave the

@@ -51,6 +51,12 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
 /// line endings when `options.line_ending` is `Preserve`, and a missing final
 /// line break.
 pub fn format_bytes(input: &[u8], options: &FormatOptions) -> io::Result<Vec<u8>> {
+    if u32::try_from(input.len()).is_err() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "input is larger than 4 GiB",
+        ));
+    }
     let source = DecodedSource::from_bytes(input)?;
     let options = resolve_preserved_line_ending(options, source.observed_line_ending());
     let mut output = formatter::format(source.text(), &options);

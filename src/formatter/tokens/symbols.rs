@@ -1917,20 +1917,20 @@ fn text_after_last_statement_boundary(text: &str) -> &str {
     let mut start = 0;
     let mut quote = None;
     let mut escaped = false;
-    for (index, ch) in text.char_indices() {
+    for (index, &byte) in text.as_bytes().iter().enumerate() {
         if let Some(open) = quote {
             if escaped {
                 escaped = false;
-            } else if ch == '\\' {
+            } else if byte == b'\\' {
                 escaped = true;
-            } else if ch == open {
+            } else if byte == open {
                 quote = None;
             }
             continue;
         }
-        match ch {
-            '"' | '\'' => quote = Some(ch),
-            '{' | ';' => start = index + 1,
+        match byte {
+            b'"' | b'\'' => quote = Some(byte),
+            b'{' | b';' => start = index + 1,
             _ => {}
         }
     }

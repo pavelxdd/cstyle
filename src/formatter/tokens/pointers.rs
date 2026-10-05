@@ -114,11 +114,7 @@ impl FormatEngine<'_> {
             return true;
         }
         let is_trailing_return_reference = matches!(next, Some(Token::Symbol(';' | '{')))
-            && self
-                .current
-                .rsplit([';', '{', '}'])
-                .next()
-                .is_some_and(|statement| statement.contains("->"));
+            && crate::formatter::text::line_scan::statement_tail(&self.current).contains("->");
         if self.pointer_in_template_type_context(next)
             || matches!(next, Some(Token::Symbol(')')))
                 && (self.current_in_cast_type_group()
@@ -535,28 +531,7 @@ impl FormatEngine<'_> {
         if current.is_empty() {
             return false;
         }
-        let mut segment_start = 0usize;
-        let mut saved_starts: Vec<usize> = Vec::new();
-        let mut angle_depth = 0u32;
-        for (index, ch) in current.char_indices() {
-            match ch {
-                '(' => {
-                    saved_starts.push(segment_start);
-                    segment_start = index + ch.len_utf8();
-                }
-                ')' => {
-                    if let Some(previous) = saved_starts.pop() {
-                        segment_start = previous;
-                    }
-                }
-                '<' => angle_depth += 1,
-                '>' => angle_depth = angle_depth.saturating_sub(1),
-                ',' | ';' | '{' | '}' if saved_starts.is_empty() && angle_depth == 0 => {
-                    segment_start = index + ch.len_utf8();
-                }
-                _ => {}
-            }
-        }
+        let segment_start = self.current.declaration_segment_start();
         let segment_text = strip_balanced_parens(current[segment_start..].trim_ascii());
         let segment = segment_text.trim_ascii();
         if segment.is_empty() || !is_pointer_declaration_segment(segment) {

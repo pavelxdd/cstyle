@@ -30,6 +30,7 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+use std::collections::BTreeMap;
 
 impl FormatEngine<'_> {
     pub(crate) fn try_add_braces_to_statement(
@@ -228,9 +229,9 @@ impl FormatEngine<'_> {
             } else {
                 " ".to_string()
             };
-            block_tokens.push(Token::Whitespace(body_gap));
+            block_tokens.push(Token::Whitespace(body_gap.into()));
             block_tokens.extend_from_slice(&tokens[statement_start..=semicolon]);
-            block_tokens.push(Token::Whitespace(" ".to_string()));
+            block_tokens.push(Token::Whitespace(" ".to_string().into()));
             block_tokens.push(Token::Symbol('}'));
             // A block one-line braces add takes the gap the statement had
             // after its header.
@@ -416,7 +417,7 @@ impl FormatEngine<'_> {
         let removed_opening_gap =
             (!self.options.break_one_line_blocks && !block_starts_line).then(|| {
                 let mut gap = match tokens.get(start.wrapping_sub(1)) {
-                    Some(Token::Whitespace(whitespace)) => whitespace.clone(),
+                    Some(Token::Whitespace(whitespace)) => whitespace.to_string(),
                     _ => String::new(),
                 };
                 for token in &tokens[start + 1..statement_start] {
@@ -2139,14 +2140,14 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     comment_gap: usize,
 ) -> AddedBraces {
     let tokens = owned_tokens.as_slice();
-    let mut insert_before = vec![Vec::<Token>::new(); tokens.len() + 1];
+    let mut insert_before = BTreeMap::<usize, Vec<Token>>::new();
     // Columns an added `{` takes past the gap before a comment, by input
     // index of its insertion.
     let mut opener_overruns = IndexMap::default();
-    let mut replace: Vec<Option<Token>> = vec![None; tokens.len()];
+    let mut replace = BTreeMap::<usize, Token>::new();
     // astyle sets the comment after a braced statement an indent past it,
     // and takes the brace it attaches out of the gap before a comment.
-    let set_statement_comment_gap = |replace: &mut Vec<Option<Token>>, close_insert: usize| {
+    let set_statement_comment_gap = |replace: &mut BTreeMap<usize, Token>, close_insert: usize| {
         let mut index = close_insert;
         while index > 0 && matches!(tokens[index - 1], Token::Newline | Token::Whitespace(_)) {
             index -= 1;
@@ -2157,7 +2158,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             && index >= 3
             && matches!(tokens[index - 3], Token::Symbol(';'))
         {
-            replace[index - 2] = Some(Token::Whitespace(" ".repeat(comment_gap)));
+            replace.insert(index - 2, Token::Whitespace(" ".repeat(comment_gap).into()));
         }
     };
     let mut covered_until = 0usize;
@@ -2180,8 +2181,14 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                 .find(|&index| matches!(tokens[index], Token::Comment(_, _)));
             match comment {
                 Some(comment) => {
-                    insert_before[header_end + 1].push(Token::Whitespace(" ".to_owned()));
-                    insert_before[header_end + 1].push(Token::Symbol('{'));
+                    insert_before
+                        .entry(header_end + 1)
+                        .or_default()
+                        .push(Token::Whitespace(" ".to_owned().into()));
+                    insert_before
+                        .entry(header_end + 1)
+                        .or_default()
+                        .push(Token::Symbol('{'));
                     // The brace takes its two columns out of the start of the
                     // gap, a tab freeing both.
                     if comment == header_end + 2
@@ -2196,9 +2203,12 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                         if freed < 2 {
                             opener_overruns.insert(header_end + 1, 2 - freed);
                         }
-                        replace[header_end + 1] = Some(Token::Whitespace(kept.to_owned()));
+                        replace.insert(header_end + 1, Token::Whitespace(kept.to_owned().into()));
                     } else if comment == header_end + 1 {
-                        insert_before[comment].push(Token::Whitespace(" ".to_owned()));
+                        insert_before
+                            .entry(comment)
+                            .or_default()
+                            .push(Token::Whitespace(" ".to_owned().into()));
                     }
                 }
                 None => {
@@ -2207,14 +2217,23 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                         && matches!(tokens[open_insert - 2], Token::Whitespace(_))
                         && matches!(tokens[open_insert - 1], Token::Newline)
                     {
-                        replace[open_insert - 2] = Some(Token::Whitespace(" ".to_owned()));
+                        replace.insert(open_insert - 2, Token::Whitespace(" ".to_owned().into()));
                     }
-                    insert_before[open_insert - 1].push(Token::Symbol('{'));
+                    insert_before
+                        .entry(open_insert - 1)
+                        .or_default()
+                        .push(Token::Symbol('{'));
                 }
             }
         } else {
-            insert_before[open_insert].push(Token::Symbol('{'));
-            insert_before[open_insert].push(Token::Newline);
+            insert_before
+                .entry(open_insert)
+                .or_default()
+                .push(Token::Symbol('{'));
+            insert_before
+                .entry(open_insert)
+                .or_default()
+                .push(Token::Newline);
         }
         // A closer kept on its statement's line goes before the statement's
         // comment, which keeps its gap.
@@ -2229,25 +2248,37 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             && matches!(tokens[code_end - 2], Token::Whitespace(_))
             && matches!(tokens[code_end - 3], Token::Symbol(';'))
         {
-            insert_before[code_end - 2].push(Token::Whitespace(" ".to_owned()));
-            insert_before[code_end - 2].push(Token::Symbol('}'));
+            insert_before
+                .entry(code_end - 2)
+                .or_default()
+                .push(Token::Whitespace(" ".to_owned().into()));
+            insert_before
+                .entry(code_end - 2)
+                .or_default()
+                .push(Token::Symbol('}'));
             // Joining the closer back takes a space of the gap; this one
             // was never moved.
             if let Token::Whitespace(gap) = &tokens[code_end - 2]
                 && gap.bytes().all(|byte| byte == b' ')
             {
-                replace[code_end - 2] = Some(Token::Whitespace(format!("{gap} ")));
+                replace.insert(code_end - 2, Token::Whitespace(format!("{gap} ").into()));
             }
         } else {
-            insert_before[close_insert].push(Token::Newline);
-            insert_before[close_insert].push(Token::Symbol('}'));
+            insert_before
+                .entry(close_insert)
+                .or_default()
+                .push(Token::Newline);
+            insert_before
+                .entry(close_insert)
+                .or_default()
+                .push(Token::Symbol('}'));
             set_statement_comment_gap(&mut replace, close_insert);
         }
         covered_until = close_insert;
     }
 
-    let added = insert_before.iter().map(Vec::len).sum::<usize>();
-    if added == 0 && replace.iter().all(Option::is_none) {
+    let added = insert_before.values().map(Vec::len).sum::<usize>();
+    if added == 0 && replace.is_empty() {
         return AddedBraces {
             tokens: owned_tokens,
             closers: IndexSet::default(),
@@ -2276,14 +2307,25 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             }
         };
     for (index, token) in owned_tokens.into_iter().enumerate() {
-        append_inserted(
-            &mut output,
-            &mut insert_before[index],
-            opener_overruns.get(&index).copied(),
-        );
-        output.push(replace[index].take().unwrap_or(token));
+        if let Some(mut inserted) = insert_before
+            .first_entry()
+            .filter(|entry| *entry.key() == index)
+        {
+            append_inserted(
+                &mut output,
+                inserted.get_mut(),
+                opener_overruns.get(&index).copied(),
+            );
+            inserted.remove();
+        }
+        match replace.first_entry().filter(|entry| *entry.key() == index) {
+            Some(replacement) => output.push(replacement.remove()),
+            None => output.push(token),
+        }
     }
-    append_inserted(&mut output, &mut insert_before[token_count], None);
+    if let Some(mut inserted) = insert_before.remove(&token_count) {
+        append_inserted(&mut output, &mut inserted, None);
+    }
     AddedBraces {
         tokens: output,
         closers: added_closers,
@@ -2475,7 +2517,7 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
     for (index, token) in tokens.iter().cloned().enumerate() {
         let token = if replace_with_space[index] {
             gap_from_removal = true;
-            Some(Token::Whitespace(" ".to_string()))
+            Some(Token::Whitespace(" ".to_string().into()))
         } else if remove[index] {
             gap_from_removal |= matches!(output.last(), Some(Token::Whitespace(_)));
             None
@@ -2488,7 +2530,7 @@ pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token>
         match token {
             Token::Whitespace(whitespace) => {
                 if let Some(Token::Whitespace(previous)) = output.last_mut() {
-                    previous.push_str(&whitespace);
+                    *previous = format!("{previous}{whitespace}").into();
                 } else {
                     output.push(Token::Whitespace(whitespace));
                 }
@@ -3009,7 +3051,7 @@ fn format_one_line_block_tokens(
             return None;
         }
         let mut adjusted = tokens.to_vec();
-        adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string())]);
+        adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
         Some(adjusted)
     });
     let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
@@ -3038,13 +3080,13 @@ fn format_one_line_block_tokens(
             .then(|| tokens.get(index - 1))
             .flatten()
             .and_then(|token| match token {
-                Token::Whitespace(ws) => Some(ws.clone().into()),
+                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
                 _ => None,
             })
             .filter(|_| !matches!(tokens.get(index.wrapping_sub(2)), Some(Token::Newline)));
         formatter.token_input.next_input_whitespace =
             tokens.get(index + 1).and_then(|token| match token {
-                Token::Whitespace(ws) => Some(ws.clone().into()),
+                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
                 _ => None,
             });
         formatter.token_input.token_begins_source_line = tokens[..index]

@@ -722,11 +722,8 @@ impl FormatEngine<'_> {
         if before.ends_with(')') {
             return true;
         }
-        let statement = before
-            .rsplit([';', '{', '}'])
-            .next()
-            .unwrap_or(before)
-            .trim_ascii_start();
+        let statement =
+            crate::formatter::text::line_scan::statement_tail(before).trim_ascii_start();
         statement
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))

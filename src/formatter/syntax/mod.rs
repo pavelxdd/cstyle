@@ -177,9 +177,81 @@ pub(crate) fn template_angle_role(
     end: usize,
     template_depth: usize,
 ) -> TemplateAngle {
+    known_template_angle_role(tokens, index, template_depth, || {
+        looks_like_template_opener(tokens, index, end)
+    })
+}
+
+/// Which tokens are `<`s that open a template, as
+/// `looks_like_template_opener` finds each one reading on to the end, found
+/// in one pass: each `<` still open is resolved by the token that ends its
+/// own scan.
+pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
+    let end = tokens.len();
+    let mut opens = vec![false; end];
+    let closing_follows = |cursor: usize| {
+        next_non_whitespace(tokens, cursor + 1, end)
+            .and_then(|next| tokens.get(next))
+            .is_none_or(|token| !matches!(token, Token::Number(_)))
+    };
+    // The `<`s still open, innermost last, with the paren depth each stands
+    // at and whether what follows it lets it open at all.
+    let mut open: Vec<(usize, isize, bool)> = Vec::new();
+    let mut paren_depth = 0isize;
+    for (cursor, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
+            Token::Word(_) | Token::Number(_) => {}
+            Token::Operator(operator) if operator == "<" => {
+                let first_after_open =
+                    next_non_whitespace(tokens, cursor + 1, end).and_then(|next| tokens.get(next));
+                let viable = first_after_open.is_some_and(
+                    |token| !matches!(token, Token::Operator(operator) if operator == "="),
+                );
+                open.push((cursor, paren_depth, viable));
+            }
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                for _ in 0..operator.len() {
+                    let Some((opener, opener_depth, viable)) = open.pop() else {
+                        break;
+                    };
+                    opens[opener] =
+                        viable && opener_depth == paren_depth && closing_follows(cursor);
+                }
+            }
+            Token::Operator(operator)
+                if matches!(
+                    operator.as_str(),
+                    "::" | "*" | "&" | "&&" | "^" | "=" | "!" | "!="
+                ) => {}
+            Token::Symbol('(') => paren_depth += 1,
+            Token::Symbol(')') => {
+                while open
+                    .last()
+                    .is_some_and(|&(_, opener_depth, _)| opener_depth == paren_depth)
+                {
+                    open.pop();
+                }
+                paren_depth -= 1;
+            }
+            Token::Symbol(',' | ':' | '[' | ']') => {}
+            _ => open.clear(),
+        }
+    }
+    opens
+}
+
+/// The role of the angle at `index` when `opens` tells whether a `<` there
+/// would open a template outside one.
+pub(crate) fn known_template_angle_role(
+    tokens: &[Token],
+    index: usize,
+    template_depth: usize,
+    opens: impl FnOnce() -> bool,
+) -> TemplateAngle {
     match tokens.get(index) {
         Some(Token::Operator(operator)) if operator == "<" => {
-            if template_depth > 0 || looks_like_template_opener(tokens, index, end) {
+            if template_depth > 0 || opens() {
                 TemplateAngle::Open
             } else {
                 TemplateAngle::None
@@ -1119,7 +1191,9 @@ pub(crate) enum TemplateAngle {
 
 #[cfg(test)]
 mod tests {
-    use super::{OperatorRole, SyntaxRole, classify_syntax};
+    use super::{
+        OperatorRole, SyntaxRole, classify_syntax, looks_like_template_opener, template_openers,
+    };
     use crate::formatter::lexer::{Token, tokenize};
     use crate::formatter::structure::SourceTree;
 
@@ -1264,5 +1338,38 @@ mod tests {
             word_roles("MAYBE(value) name;\n", "MAYBE"),
             [SyntaxRole::Unknown]
         );
+    }
+
+    #[test]
+    fn template_openers_match_the_scan_from_each_angle() {
+        const PIECES: [&str; 18] = [
+            "<", ">", ">>", "(", ")", "a", "1", " ", ",", ";", "=", "::", "*", "[", "]", "+", "\n",
+            "<<",
+        ];
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        for _ in 0..4000 {
+            let mut source = String::new();
+            for _ in 0..(state % 24) {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                source.push_str(PIECES[(state % PIECES.len() as u64) as usize]);
+                source.push(' ');
+            }
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let tokens = tokenize(&source);
+            let openers = template_openers(&tokens);
+            for (index, token) in tokens.iter().enumerate() {
+                if matches!(token, Token::Operator(operator) if operator == "<") {
+                    assert_eq!(
+                        openers[index],
+                        looks_like_template_opener(&tokens, index, tokens.len()),
+                        "{source:?} at {index}"
+                    );
+                }
+            }
+        }
     }
 }

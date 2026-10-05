@@ -106,12 +106,11 @@ impl FormatEngine<'_> {
     pub(crate) fn is_directive_block(&self, block: GroupId) -> bool {
         let open = self.tree.groups.get(block).open;
         self.tree.blocks.kind(block) == Some(BlockKind::Block)
-            && self.tree.tokens[self
-                .tree
-                .previous_code_token(open)
-                .map_or(0, |before| before + 1)..open]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
+            && self.tree.has_directive_in(
+                self.tree
+                    .previous_code_token(open)
+                    .map_or(0, |before| before + 1)..open,
+            )
     }
 
     /// A line inside brackets whose `[` ends its line stands at the top of
@@ -183,10 +182,7 @@ impl FormatEngine<'_> {
                     Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
                 )
             })
-            || !self.options.indent_after_parens
-                && tokens[start..first]
-                    .iter()
-                    .any(|token| matches!(token, Token::Preprocessor(_)))
+            || !self.options.indent_after_parens && self.tree.has_directive_in(start..first)
             || !(start..first).any(|index| {
                 groups.enclosing(index) == group
                     && matches!(&tokens[index], Token::Operator(operator)
@@ -654,8 +650,21 @@ impl FormatEngine<'_> {
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 )
         };
+        let tokens_address = self.tree.tokens.as_ptr() as usize;
+        // The look back depends on nothing but where it stands, so it ends
+        // where the last one did once it reaches the token that one left.
+        let cached = self
+            .stack_start_cache
+            .get()
+            .filter(|&(address, from, _)| address == tokens_address && from <= index);
         let mut start = index;
         while let Some(before) = self.tree.previous_code_token(start) {
+            if let Some((_, from, cached_start)) = cached
+                && start == from
+            {
+                start = cached_start;
+                break;
+            }
             // A directive outside parentheses ends what astyle stacks when
             // the lines before it carry the indent of their block.
             if self.options.indent_preproc_block
@@ -722,6 +731,8 @@ impl FormatEngine<'_> {
             }
             start = before;
         }
+        self.stack_start_cache
+            .set(Some((tokens_address, index, start)));
         (start != index).then_some(start)
     }
 

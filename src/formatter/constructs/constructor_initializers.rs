@@ -390,9 +390,10 @@ impl FormatEngine<'_> {
             && matches!(self.tree.tokens[colon], Token::Symbol(':'))
         {
             let group = self.tree.groups.enclosing(colon);
-            return (0..colon)
-                .rev()
-                .filter(|&index| self.tree.groups.enclosing(index) == group)
+            return self
+                .tree
+                .groups
+                .members_before(group, colon)
                 .take_while(|&index| {
                     !matches!(self.tree.tokens[index], Token::Symbol(';' | '{' | '}'))
                 })

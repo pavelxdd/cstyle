@@ -250,3 +250,58 @@ fn mixed_template_struct_malformed_input_stays_bounded() {
         "mixed malformed template struct input took {elapsed:?}, expected bounded runtime (< 5s)"
     );
 }
+
+#[test]
+fn long_multi_line_expression_stays_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = format!("int x = a\n{};\n", "    + a\n".repeat(30_000));
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "multi-line expression took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn many_parenthesized_ternary_arms_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = format!(
+        "void f() {{\n{}}}\n",
+        "    x = f(a ?\n          b : c);\n".repeat(20_000)
+    );
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "parenthesized ternary arms took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn long_line_split_at_maximum_length_stays_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let terms = vec!["a"; 30_000].join(" + ");
+    let input = format!("int x = {terms};\n");
+    let mut options = FormatOptions::default();
+    options.max_code_length = Some(100);
+    let start = Instant::now();
+    let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+    let elapsed = start.elapsed();
+    assert!(output.len() > input.len());
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "splitting a long line took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}

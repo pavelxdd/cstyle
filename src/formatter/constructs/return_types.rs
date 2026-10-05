@@ -276,9 +276,7 @@ impl FormatEngine<'_> {
                 Token::Symbol(';' | '{' | '}' | ':') => true,
                 // A macro left without a semicolon, with no directive
                 // between.
-                Token::Word(_) => !tokens[previous..head.start]
-                    .iter()
-                    .any(|token| matches!(token, Token::Preprocessor(_))),
+                Token::Word(_) => !self.tree.has_directive_in(previous..head.start),
                 // `template<class T>`
                 Token::Operator(operator) if operator == ">" => {
                     template_arguments_start(tokens, previous)
@@ -295,11 +293,9 @@ impl FormatEngine<'_> {
     /// keeps astyle from moving the return type.
     fn parameters_hold_directive(&self, head: &FunctionHead) -> bool {
         let params = self.tree.groups.get(head.params);
-        params.close.is_some_and(|close| {
-            self.tree.tokens[params.open..close]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)))
-        })
+        params
+            .close
+            .is_some_and(|close| self.tree.has_directive_in(params.open..close))
     }
 
     /// Whether the function name line starting at token `first` joins the

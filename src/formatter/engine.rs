@@ -37,7 +37,8 @@ use crate::formatter::syntax::language::{
     is_numeric_variable_word, is_type_like_pointer_word, is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
-    OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
+    OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, known_template_angle_role,
+    template_openers,
 };
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -112,6 +113,10 @@ pub(crate) type OpenParenLine = (usize, usize);
 /// and the index of that line's first line comment.
 pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
 
+/// The line count, version and scope start of the output, and the indent of
+/// the switch it stands in.
+pub(crate) type OpenSwitchCache = ((usize, u64, usize), Option<usize>);
+
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
     /// Indent style of the finished output; the engine itself may lay out a
@@ -135,6 +140,13 @@ pub(crate) struct FormatEngine<'a> {
     /// The first line comment of the last token line asked about: the
     /// address and length of its tokens, its start, and the comment's index.
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
+    /// Which tokens of the tree open a template.
+    template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// The last statement start astyle's stack found: the address of the
+    /// tokens, the token it looked back from, and the start.
+    pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last look back for the switch the output stands in.
+    pub(crate) open_switch_cache: std::cell::Cell<Option<OpenSwitchCache>>,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
     line_brace_match_start: usize,
@@ -203,6 +215,9 @@ impl<'a> FormatEngine<'a> {
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
             line_comment_cache: std::cell::Cell::new(None),
+            stack_start_cache: std::cell::Cell::new(None),
+            template_openers: std::cell::OnceCell::new(),
+            open_switch_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -582,6 +597,14 @@ impl<'a> FormatEngine<'a> {
         );
     }
 
+    fn template_opener_at(&self, index: usize) -> bool {
+        self.template_openers
+            .get_or_init(|| template_openers(&self.tree.tokens))
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+    }
+
     fn token_push_context<'t>(
         &mut self,
         tokens: &'t [Token],
@@ -686,11 +709,11 @@ impl<'a> FormatEngine<'a> {
         {
             self.observe_block_spacing_comment(tokens, index);
         }
-        let mut template_angle = template_angle_role(
+        let mut template_angle = known_template_angle_role(
             tokens,
             index,
-            tokens.len(),
             self.layout.line_state.template_angle_depth,
+            || self.template_opener_at(index),
         );
         if matches!(template_angle, TemplateAngle::None)
             && self.template_continuation_active()
@@ -1104,7 +1127,7 @@ impl<'a> FormatEngine<'a> {
             }
             self.pointer_run.star_count = (last - index + 1) * operator.chars().count();
             self.pointer_run.trailing_ws = match tokens.get(last + 1) {
-                Some(Token::Whitespace(ws)) => Some(ws.clone()),
+                Some(Token::Whitespace(ws)) => Some(ws.to_string()),
                 _ => None,
             };
             let after_run_index = next_non_whitespace(tokens, last + 1, tokens.len());
@@ -1168,11 +1191,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_statement_contains_assignment(&self) -> bool {
-        self.current
-            .rsplit([';', '{', '}'])
-            .next()
-            .unwrap_or(&self.current)
-            .contains('=')
+        crate::formatter::text::line_scan::statement_tail(&self.current).contains('=')
     }
 
     pub(crate) fn current_ends_numeric_cast(&self) -> bool {

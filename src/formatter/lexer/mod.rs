@@ -8,19 +8,22 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 
 pub(crate) mod raw_strings;
+mod text;
+
+pub(crate) use text::TokenText;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Token {
-    Word(String),
-    Number(String),
-    StringLiteral(String),
-    CharLiteral(String),
-    Comment(CommentKind, String),
+    Word(TokenText),
+    Number(TokenText),
+    StringLiteral(TokenText),
+    CharLiteral(TokenText),
+    Comment(CommentKind, TokenText),
     Preprocessor(Box<PreprocessorToken>),
-    RawLine(String),
-    Operator(String),
+    RawLine(TokenText),
+    Operator(TokenText),
     Symbol(char),
-    Whitespace(String),
+    Whitespace(TokenText),
     Newline,
 }
 
@@ -143,6 +146,8 @@ fn is_known_hash_directive(directive: &str) -> bool {
 }
 
 pub(crate) fn tokenize(source: &str) -> Vec<Token> {
+    let shared = std::rc::Rc::new(source.to_owned());
+    let text = |start: usize, end: usize| TokenText::slice(&shared, start, end);
     let bytes = source.as_bytes();
     // A token takes some four bytes of source on average.
     let mut tokens = Vec::with_capacity(source.len() / 4);
@@ -158,17 +163,17 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
             let trimmed = line.trim_ascii_start();
             if is_full_line_conflict_marker(trimmed) {
                 line_has_code = !trimmed.is_empty();
-                tokens.push(Token::RawLine(line.to_string()));
+                tokens.push(Token::RawLine(text(index, line_end)));
                 index = line_end;
                 continue;
             } else if let Some(output) = assembly_macro_lines.take_raw_line(line) {
-                tokens.push(Token::RawLine(output));
+                tokens.push(Token::RawLine(output.into()));
                 index = line_end;
                 line_has_code = !line.is_empty();
                 continue;
             }
         }
-        if let Some((token, next_index)) = read_prefixed_literal(source, index) {
+        if let Some((token, next_index)) = read_prefixed_literal(&shared, index) {
             tokens.push(token);
             index = next_index;
             line_has_code = true;
@@ -187,7 +192,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
             }
             ch if ch.is_whitespace() => {
                 let next_index = read_while(source, index, |ch| ch.is_whitespace() && ch != '\n');
-                tokens.push(Token::Whitespace(source[index..next_index].to_string()));
+                tokens.push(Token::Whitespace(text(index, next_index)));
                 index = next_index;
             }
             '#' if !line_has_code
@@ -208,55 +213,49 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
             }
             '/' if next == Some(b'/') => {
                 let next_index = read_line_comment(source, index);
-                tokens.push(Token::Comment(
-                    CommentKind::Line,
-                    source[index..next_index].to_string(),
-                ));
+                tokens.push(Token::Comment(CommentKind::Line, text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             '/' if next == Some(b'*') => {
                 let next_index = read_block_comment(source, index);
-                tokens.push(Token::Comment(
-                    CommentKind::Block,
-                    source[index..next_index].to_string(),
-                ));
+                tokens.push(Token::Comment(CommentKind::Block, text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             '"' => {
                 let (next_index, _) = read_quoted(source, index, b'"');
-                tokens.push(Token::StringLiteral(source[index..next_index].to_string()));
+                tokens.push(Token::StringLiteral(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             '\'' => {
                 let (next_index, _) = read_quoted(source, index, b'\'');
-                tokens.push(Token::CharLiteral(source[index..next_index].to_string()));
+                tokens.push(Token::CharLiteral(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             '.' if next.is_some_and(|byte| byte.is_ascii_digit()) => {
                 let next_index = read_number(source, index);
-                tokens.push(Token::Number(source[index..next_index].to_string()));
+                tokens.push(Token::Number(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             ch if is_identifier_start(ch) => {
                 let next_index = read_while(source, index, is_identifier_continue);
-                tokens.push(Token::Word(source[index..next_index].to_string()));
+                tokens.push(Token::Word(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             ch if ch.is_ascii_digit() => {
                 let next_index = read_number(source, index);
-                tokens.push(Token::Number(source[index..next_index].to_string()));
+                tokens.push(Token::Number(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
             }
             _ => {
                 if let Some(operator) = language::match_operator(source, index) {
-                    tokens.push(Token::Operator(operator.to_string()));
+                    tokens.push(Token::Operator(text(index, index + operator.len())));
                     index += operator.len();
                 } else {
                     tokens.push(Token::Symbol(ch));
@@ -267,6 +266,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
         }
     }
 
+    tokens.shrink_to_fit();
     tokens
 }
 
@@ -428,7 +428,8 @@ fn read_block_comment(source: &str, start: usize) -> usize {
         .map_or(source.len(), |offset| start + 2 + offset + 2)
 }
 
-fn read_prefixed_literal(source: &str, start: usize) -> Option<(Token, usize)> {
+fn read_prefixed_literal(shared: &std::rc::Rc<String>, start: usize) -> Option<(Token, usize)> {
+    let source: &str = shared;
     // Every prefix starts with one of these.
     if !matches!(
         source.as_bytes().get(start),
@@ -439,7 +440,7 @@ fn read_prefixed_literal(source: &str, start: usize) -> Option<(Token, usize)> {
     if let Some(prefix_len) = raw_string_prefix_len(source, start) {
         let (next_index, _) = read_raw_string(source, start, prefix_len);
         return Some((
-            Token::StringLiteral(source[start..next_index].to_string()),
+            Token::StringLiteral(TokenText::slice(shared, start, next_index)),
             next_index,
         ));
     }
@@ -454,7 +455,7 @@ fn read_prefixed_literal(source: &str, start: usize) -> Option<(Token, usize)> {
             _ => continue,
         };
         let (next_index, _) = read_quoted(source, start + prefix.len(), quote);
-        let text = source[start..next_index].to_string();
+        let text = TokenText::slice(shared, start, next_index);
         let token = if quote == b'"' {
             Token::StringLiteral(text)
         } else {

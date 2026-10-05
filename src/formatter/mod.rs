@@ -40,7 +40,12 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     let converted_source = (options.convert_tabs && input.contains('\t'))
         .then(|| tabs::source_to_spaces(&input, options.tab_width));
     let source = converted_source.as_deref().unwrap_or(&input);
+    let may_have_backslash_body = source.contains('\\');
+    let may_have_swig = source.contains('%');
+    let may_have_hash = source.contains('#');
     let tokens = tokenize(source);
+    drop(converted_source);
+    drop(input);
     // Tab-indented styles are laid out in spaces and get their tabs once the
     // output is finished.
     let spaced_options = (options.indent_style != IndentStyle::Spaces).then(|| {
@@ -63,10 +68,10 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     if !line_observer_needed_for_tokens(&tokens, options) {
         engine.layout.line_adjuster.set_line_observe_enabled(false);
     }
-    engine.set_may_have_backslash_body(input.contains('\\'));
-    engine.set_may_have_swig(input.contains('%'));
+    engine.set_may_have_backslash_body(may_have_backslash_body);
+    engine.set_may_have_swig(may_have_swig);
     engine.may_have_class_base_access = class_declarations::has_base_access_token(&tokens);
-    engine.preprocessor.may_have_preprocessor = input.contains('#')
+    engine.preprocessor.may_have_preprocessor = may_have_hash
         || tokens
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)));

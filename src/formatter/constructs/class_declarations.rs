@@ -295,11 +295,7 @@ pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
     if signature_ends_with_parameter_list(before) {
         return false;
     }
-    let statement = before
-        .rsplit([';', '{', '}'])
-        .next()
-        .unwrap_or(before)
-        .trim_ascii_start();
+    let statement = crate::formatter::text::line_scan::statement_tail(before).trim_ascii_start();
     statement
         .split(|ch: char| !is_identifier_continue(ch))
         .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))

@@ -462,7 +462,7 @@ impl FormatEngine<'_> {
                     }
                 }
                 Token::Comment(_, _) => newline_run = 0,
-                Token::Word(word) => return Some(word.clone()),
+                Token::Word(word) => return Some(word.to_string()),
                 _ => return None,
             }
         }

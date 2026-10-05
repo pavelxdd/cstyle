@@ -15,6 +15,14 @@ impl ContainsAnyByte for str {
     }
 }
 
+/// The text after the last `;`, `{` or `}`.
+pub(crate) fn statement_tail(text: &str) -> &str {
+    text.as_bytes()
+        .iter()
+        .rposition(|byte| matches!(byte, b';' | b'{' | b'}'))
+        .map_or(text, |index| &text[index + 1..])
+}
+
 pub(crate) fn is_comment_line(line: &str) -> bool {
     let trimmed = line.trim_ascii_start();
     // A block comment row leads with a bare `*`; code may lead with `*p`.
@@ -35,10 +43,12 @@ pub(crate) fn is_comment_only_line(line: &str) -> bool {
 }
 
 pub(crate) fn has_unclosed_delimiter_after(text: &str, open: &str, close: &str) -> bool {
-    text.rfind(open).is_some_and(|open_index| {
-        text.rfind(close)
-            .is_none_or(|close_index| close_index < open_index)
-    })
+    let last = |pattern: &str| match pattern.as_bytes() {
+        &[byte] => text.rfind(char::from(byte)),
+        _ => text.rfind(pattern),
+    };
+    last(open)
+        .is_some_and(|open_index| last(close).is_none_or(|close_index| close_index < open_index))
 }
 
 pub(crate) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {

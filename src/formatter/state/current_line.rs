@@ -1,6 +1,6 @@
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
 #[derive(Default)]
@@ -13,6 +13,7 @@ pub(crate) struct CurrentLine {
     visual_width_from: Cell<Option<(usize, usize, usize)>>,
     last_open_brace: Cell<Option<(usize, Option<usize>)>>,
     trailing_comment: Cell<Option<TrailingCommentScan>>,
+    declaration_segment: RefCell<DeclarationSegmentScan>,
     /// Code tokens whose text is on the line so far.
     tokens: Option<TokenSpan>,
     /// Code token being pushed; text added meanwhile belongs to it.
@@ -309,6 +310,18 @@ impl CurrentLine {
         }
     }
 
+    /// Where the declaration the line ends in starts: past the last `,`,
+    /// `;`, `{` or `}` outside parentheses and angles, or past the open
+    /// parenthesis the line ends inside.
+    pub(crate) fn declaration_segment_start(&self) -> usize {
+        let mut scan = self.declaration_segment.borrow_mut();
+        if scan.scanned > self.text.len() {
+            *scan = DeclarationSegmentScan::default();
+        }
+        scan.advance(self.text.as_bytes());
+        scan.start
+    }
+
     pub(crate) fn is_open_brace_run(&self) -> bool {
         if self.open_brace_run_len.get() == Some(self.text.len()) {
             return true;
@@ -332,6 +345,7 @@ impl CurrentLine {
         self.visual_width_from.set(None);
         self.last_open_brace.set(None);
         self.trailing_comment.set(None);
+        self.declaration_segment.take();
     }
 }
 
@@ -340,6 +354,41 @@ impl Deref for CurrentLine {
 
     fn deref(&self) -> &Self::Target {
         &self.text
+    }
+}
+
+#[derive(Default)]
+struct DeclarationSegmentScan {
+    scanned: usize,
+    start: usize,
+    saved_starts: Vec<usize>,
+    angle_depth: u32,
+}
+
+impl DeclarationSegmentScan {
+    fn advance(&mut self, bytes: &[u8]) {
+        for (index, byte) in bytes.iter().enumerate().skip(self.scanned) {
+            match byte {
+                b'(' => {
+                    self.saved_starts.push(self.start);
+                    self.start = index + 1;
+                }
+                b')' => {
+                    if let Some(previous) = self.saved_starts.pop() {
+                        self.start = previous;
+                    }
+                }
+                b'<' => self.angle_depth += 1,
+                b'>' => self.angle_depth = self.angle_depth.saturating_sub(1),
+                b',' | b';' | b'{' | b'}'
+                    if self.saved_starts.is_empty() && self.angle_depth == 0 =>
+                {
+                    self.start = index + 1;
+                }
+                _ => {}
+            }
+        }
+        self.scanned = bytes.len();
     }
 }
 

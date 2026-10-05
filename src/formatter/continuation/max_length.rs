@@ -15,7 +15,8 @@ use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
-    TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
+    TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
+    template_openers,
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -1026,14 +1027,18 @@ struct SplitResult {
 }
 
 fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
+    if !line.contains('<') {
+        return Vec::new();
+    }
     let tokens = tokenize(line);
+    let openers = template_openers(&tokens);
     let mut ranges = Vec::new();
     let mut outer_start = None;
     let mut depth = 0usize;
     let mut offset = 0usize;
     for (index, token) in tokens.iter().enumerate() {
         let text = token_text(token);
-        match template_angle_role(&tokens, index, tokens.len(), depth) {
+        match known_template_angle_role(&tokens, index, depth, || openers[index]) {
             TemplateAngle::Open => {
                 if depth == 0 {
                     outer_start = Some(offset);
@@ -1790,10 +1795,27 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
 }
 
 fn holds_code(text: &str) -> bool {
-    tokenize(text).iter().any(is_code_token)
+    let mut rest = text.trim_ascii_start();
+    loop {
+        if rest.is_empty() || rest.starts_with("//") {
+            return false;
+        }
+        let Some(body) = rest.strip_prefix("/*") else {
+            break;
+        };
+        let Some(close) = body.find("*/") else {
+            return false;
+        };
+        rest = body[close + 2..].trim_ascii_start();
+    }
+    // A `#` lexes as a directive at the start of what is lexed.
+    !rest.starts_with('#') || tokenize(text).iter().any(is_code_token)
 }
 
 fn unopened_closing_braces(line: &str) -> usize {
+    if !line.contains('}') {
+        return 0;
+    }
     let mut depth = 0isize;
     let mut lowest = 0isize;
     for token in tokenize(line) {

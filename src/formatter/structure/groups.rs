@@ -165,6 +165,31 @@ impl Groups {
             .filter(|&id| self.groups[id.index()].close == Some(index))
     }
 
+    /// The tokens before `index` that `group` holds itself, nearest first:
+    /// a nested group is passed over from its closing to its opening.
+    pub(crate) fn members_before(
+        &self,
+        group: Option<GroupId>,
+        index: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let start = group.map_or(0, |id| self.groups[id.index()].open + 1);
+        let mut next = index.max(start);
+        std::iter::from_fn(move || {
+            while next > start {
+                next -= 1;
+                let at = next;
+                if self.enclosing(at) != group {
+                    continue;
+                }
+                if let Some(closed) = self.closed_at(at) {
+                    next = self.groups[closed.index()].open + 1;
+                }
+                return Some(at);
+            }
+            None
+        })
+    }
+
     /// `id` and its enclosing groups, innermost first.
     pub(crate) fn ancestors(&self, id: GroupId) -> impl Iterator<Item = GroupId> + '_ {
         std::iter::successors(Some(id), |&id| self.groups[id.index()].parent)

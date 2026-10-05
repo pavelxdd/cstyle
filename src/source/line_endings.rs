@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ObservedLineEnding {
     None,
@@ -6,8 +8,12 @@ pub(crate) enum ObservedLineEnding {
     Cr,
 }
 
-pub(crate) fn normalize(source: &str) -> String {
-    source.replace("\r\n", "\n").replace('\r', "\n")
+pub(crate) fn normalize(source: &str) -> Cow<'_, str> {
+    if source.contains('\r') {
+        Cow::Owned(source.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        Cow::Borrowed(source)
+    }
 }
 
 pub(crate) fn preferred_line_ending(source: &str) -> ObservedLineEnding {
