@@ -1314,3 +1314,30 @@ fn a_braceless_header_kept_on_a_case_label_line_indents_its_body_past_the_case_b
         )
     );
 }
+
+#[test]
+fn lisp_breaking_a_return_type_keeps_the_next_directive_branch_at_file_scope() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--break-return-type".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "#ifndef N\nstatic void check(void* arg) {\n  int r;\n}\n#else\nint b;\n#endif\nint c;\n",
+            &options,
+        ),
+        fixture!(
+            "#ifndef N",
+            "static void",
+            "check(void* arg) {",
+            "    int r; }",
+            "#else",
+            "int b;",
+            "#endif",
+            "int c;",
+        )
+    );
+}

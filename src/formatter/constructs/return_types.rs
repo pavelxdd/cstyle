@@ -474,6 +474,7 @@ impl FormatEngine<'_> {
             last: span.last,
         };
         self.output.set_pending_tokens(Some(return_type_span));
+        let return_type_line = self.output.len();
         if let Some(spaces) = exact_indent_spaces {
             self.push_formatted_line_exact(&return_type, indent, spaces);
             self.output.set_pending_tokens(Some(function_span));
@@ -482,6 +483,14 @@ impl FormatEngine<'_> {
             self.push_formatted_line(&return_type, indent);
             self.output.set_pending_tokens(Some(function_span));
             self.push_formatted_line(&function_part, indent);
+        }
+        // The return type line opens the body of a directive's branch as
+        // a line laid out whole would.
+        if return_type_line < self.output.len() {
+            let spaces = self
+                .output
+                .lead_width(return_type_line, self.options.tab_width);
+            self.record_preprocessor_branch_body_indent(&return_type, spaces);
         }
         true
     }
