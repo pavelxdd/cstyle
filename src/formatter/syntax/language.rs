@@ -69,6 +69,7 @@ pub const OPERATORS: &[&str] = &[
     "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<?", ">?", "+", "-", "*", "/", "%", "?", ":",
     "=", "<", ">", "!", "|", "&", "~", "^",
 ];
+#[cfg(test)]
 const TOKEN_OPERATORS: &[&str] = &[
     ">>=", "<<=", "++", "--", "->", "==", "!=", "<=>", ">=", ">>", "<=", "<<", "&&", "||", "::",
     "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<?", ">?", "+", "-", "*", "/", "%", "=", "<",
@@ -313,16 +314,78 @@ pub fn match_operator(source: &str, index: usize) -> Option<&'static str> {
     if !lex::is_potential_operator_char(ch) {
         return None;
     }
-    let rest = &source[index..];
-    TOKEN_OPERATORS
-        .iter()
-        .copied()
-        .find(|operator| rest.starts_with(operator))
+    let rest = &source.as_bytes()[index..];
+    let second = rest.get(1).copied();
+    let third = rest.get(2).copied();
+    // The first of `TOKEN_OPERATORS` that `rest` starts with.
+    Some(match (rest[0], second, third) {
+        (b'>', Some(b'>'), Some(b'=')) => ">>=",
+        (b'<', Some(b'<'), Some(b'=')) => "<<=",
+        (b'<', Some(b'='), Some(b'>')) => "<=>",
+        (b'+', Some(b'+'), _) => "++",
+        (b'-', Some(b'-'), _) => "--",
+        (b'-', Some(b'>'), _) => "->",
+        (b'=', Some(b'='), _) => "==",
+        (b'!', Some(b'='), _) => "!=",
+        (b'>', Some(b'='), _) => ">=",
+        (b'>', Some(b'>'), _) => ">>",
+        (b'<', Some(b'='), _) => "<=",
+        (b'<', Some(b'<'), _) => "<<",
+        (b'&', Some(b'&'), _) => "&&",
+        (b'|', Some(b'|'), _) => "||",
+        (b':', Some(b':'), _) => "::",
+        (b'+', Some(b'='), _) => "+=",
+        (b'-', Some(b'='), _) => "-=",
+        (b'*', Some(b'='), _) => "*=",
+        (b'/', Some(b'='), _) => "/=",
+        (b'%', Some(b'='), _) => "%=",
+        (b'|', Some(b'='), _) => "|=",
+        (b'&', Some(b'='), _) => "&=",
+        (b'^', Some(b'='), _) => "^=",
+        (b'<', Some(b'?'), _) => "<?",
+        (b'>', Some(b'?'), _) => ">?",
+        (b'+', ..) => "+",
+        (b'-', ..) => "-",
+        (b'*', ..) => "*",
+        (b'/', ..) => "/",
+        (b'%', ..) => "%",
+        (b'=', ..) => "=",
+        (b'<', ..) => "<",
+        (b'>', ..) => ">",
+        (b'!', ..) => "!",
+        (b'|', ..) => "|",
+        (b'&', ..) => "&",
+        (b'~', ..) => "~",
+        (b'^', ..) => "^",
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matches_the_first_listed_operator() {
+        let alphabet: Vec<char> = (b'!'..=b'~').map(char::from).chain(['a', ' ']).collect();
+        for &a in &alphabet {
+            for &b in &alphabet {
+                for &c in &alphabet {
+                    for text in [format!("{a}{b}{c}"), format!("{a}{b}"), a.to_string()] {
+                        let by_list = lex::is_potential_operator_char(a)
+                            .then(|| {
+                                TOKEN_OPERATORS
+                                    .iter()
+                                    .copied()
+                                    .find(|operator| text.starts_with(operator))
+                            })
+                            .flatten();
+                        assert_eq!(match_operator(&text, 0), by_list, "{text:?}");
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn classifies_control_headers() {

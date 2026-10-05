@@ -450,9 +450,8 @@ impl SwitchCaseLineTransformer {
     }
 
     pub(crate) fn scan_raw_literal_line(&mut self, line: &str) {
-        let mut scan = line.to_string();
-        let is_preprocessor = scan.trimmed_start().starts_with('#');
-        self.parse_line(&mut scan, is_preprocessor);
+        let is_preprocessor = line.trimmed_start().starts_with('#');
+        self.scan_line(line, is_preprocessor);
     }
 
     pub(crate) fn transform_line(&mut self, mut line: String) -> String {
@@ -484,12 +483,20 @@ impl SwitchCaseLineTransformer {
     }
 
     fn parse_line(&mut self, line: &mut String, is_preprocessor: bool) {
-        let scan = line.clone();
+        for levels in self.scan_line(line, is_preprocessor) {
+            self.unindent_line(line, levels);
+        }
+    }
+
+    /// Reads a line's switches, labels, and braces; returns the unindents
+    /// due to the line, in order.
+    fn scan_line(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
+        let mut unindents = Vec::new();
         let mut pos = 0;
 
-        while let Some(ch) = char_at(&scan, pos) {
+        while let Some(ch) = char_at(scan, pos) {
             if let Some(delimiter) = self.raw_string_delimiter.clone() {
-                let Some(end) = raw_strings::closing_end(&scan, pos, &delimiter) else {
+                let Some(end) = raw_strings::closing_end(scan, pos, &delimiter) else {
                     break;
                 };
                 self.raw_string_delimiter = None;
@@ -515,7 +522,7 @@ impl SwitchCaseLineTransformer {
                 {
                     self.should_unindent_comment = true;
                 }
-                if ch == '*' && starts_with_at(&scan, pos, "*/") {
+                if ch == '*' && starts_with_at(scan, pos, "*/") {
                     self.in_block_comment = false;
                     pos += 2;
                 } else {
@@ -526,7 +533,7 @@ impl SwitchCaseLineTransformer {
 
             if self.in_quote {
                 if ch == '\\' {
-                    pos = after_char(&scan, pos + 1);
+                    pos = after_char(scan, pos + 1);
                     continue;
                 }
                 if ch == self.quote_char {
@@ -537,12 +544,12 @@ impl SwitchCaseLineTransformer {
             }
 
             if ch == '\\' {
-                pos = after_char(&scan, pos + 1);
+                pos = after_char(scan, pos + 1);
                 continue;
             }
 
             if matches!(ch, 'u' | 'L' | 'U' | 'R')
-                && let Some(raw) = raw_strings::start(&scan, pos)
+                && let Some(raw) = raw_strings::start(scan, pos)
             {
                 if let Some(end) = raw.end {
                     pos = end;
@@ -560,11 +567,11 @@ impl SwitchCaseLineTransformer {
                 continue;
             }
 
-            if ch == '/' && starts_with_at(&scan, pos, "//") {
-                if has_windows_line_marker_after_line_comment(&scan, pos) {
+            if ch == '/' && starts_with_at(scan, pos, "//") {
+                if has_windows_line_marker_after_line_comment(scan, pos) {
                     self.line_number = self.line_number.saturating_sub(1);
                 }
-                if first_non_ws_byte(&scan) == Some(pos)
+                if first_non_ws_byte(scan) == Some(pos)
                     && self.case_block_state.switch_brace_count == 1
                     && self.case_block_state.unindent_case
                 {
@@ -572,7 +579,7 @@ impl SwitchCaseLineTransformer {
                 }
                 break;
             }
-            if ch == '/' && starts_with_at(&scan, pos, "/*") {
+            if ch == '/' && starts_with_at(scan, pos, "/*") {
                 if self.case_block_state.switch_brace_count == 1
                     && self.case_block_state.unindent_case
                 {
@@ -591,11 +598,11 @@ impl SwitchCaseLineTransformer {
             }
 
             let is_potential_keyword = is_identifier_start(ch);
-            if is_potential_keyword && keyword_at(&scan, pos, "switch") {
+            if is_potential_keyword && keyword_at(scan, pos, "switch") {
                 self.switch_depth += 1;
                 self.case_stack.push(self.case_block_state.clone());
                 self.case_block_state = CaseBlockState::default();
-                pos = skip_identifier(&scan, pos);
+                pos = skip_identifier(scan, pos);
                 continue;
             }
 
@@ -604,16 +611,17 @@ impl SwitchCaseLineTransformer {
                 || (is_preprocessor && !self.indent_preproc_define)
             {
                 pos = if is_potential_keyword {
-                    skip_identifier(&scan, pos)
+                    skip_identifier(scan, pos)
                 } else {
                     pos + ch.len_utf8()
                 };
                 continue;
             }
 
-            pos = self.process_switch_block(&scan, pos, ch, line);
+            pos = self.process_switch_block(scan, pos, ch, &mut unindents);
         }
         self.marked_label_colon = None;
+        unindents
     }
 
     /// Processes the character `ch` at byte `pos` of a switch's line and
@@ -623,7 +631,7 @@ impl SwitchCaseLineTransformer {
         scan: &str,
         pos: usize,
         ch: char,
-        line: &mut String,
+        unindents: &mut Vec<usize>,
     ) -> usize {
         let is_potential_keyword = is_identifier_start(ch);
 
@@ -650,7 +658,7 @@ impl SwitchCaseLineTransformer {
                 }
                 if self.should_unindent_line {
                     if line_unindent > 0 {
-                        self.unindent_line(line, line_unindent);
+                        unindents.push(line_unindent);
                     }
                     self.should_unindent_line = false;
                 }

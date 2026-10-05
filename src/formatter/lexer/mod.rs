@@ -243,7 +243,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
                 line_has_code = true;
             }
             ch if is_identifier_start(ch) => {
-                let next_index = read_while(source, index, is_identifier_continue);
+                let next_index = read_identifier(source, index);
                 tokens.push(Token::Word(text(index, next_index)));
                 index = next_index;
                 line_has_code = true;
@@ -541,6 +541,27 @@ fn read_number(source: &str, start: usize) -> usize {
 }
 
 /// The end of the run of characters from `start` that `predicate` holds for.
+/// `read_while(source, start, is_identifier_continue)`, ASCII bytes read
+/// without decoding.
+fn read_identifier(source: &str, start: usize) -> usize {
+    let bytes = source.as_bytes();
+    let mut index = start;
+    while let Some(&byte) = bytes.get(index) {
+        if byte.is_ascii() {
+            if !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')) {
+                break;
+            }
+            index += 1;
+        } else {
+            match source[index..].chars().next() {
+                Some(ch) if is_identifier_continue(ch) => index += ch.len_utf8(),
+                _ => break,
+            }
+        }
+    }
+    index
+}
+
 fn read_while(source: &str, start: usize, predicate: impl Fn(char) -> bool) -> usize {
     let mut index = start;
     while let Some(ch) = char_at(source, index).filter(|&ch| predicate(ch)) {
