@@ -1372,3 +1372,27 @@ fn gnu_places_the_labels_of_an_else_switch_at_its_broken_brace() {
         )
     );
 }
+
+#[test]
+fn mozilla_breaks_an_enum_brace_with_its_trailing_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=mozilla".to_owned()])
+        .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "enum t {   // c4\n    B,\n};\nstruct s {   // c3\n    int a;\n};\n",
+            &options,
+        ),
+        fixture!(
+            "enum t",
+            "{   // c4",
+            "    B,",
+            "};",
+            "struct s     // c3",
+            "{",
+            "    int a;",
+            "};",
+        )
+    );
+}

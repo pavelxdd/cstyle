@@ -1448,7 +1448,9 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && (matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
                 || (brace_type == BraceType::Command
-                    && self.layout.command_state.current_header.is_none()))
+                    && self.layout.command_state.current_header.is_none())
+                // An enum brace the style breaks takes its comment along.
+                || brace_type == BraceType::Enum && !self.options.attach_enum)
             && (!matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
                 || self.token_input.token_followed_by_final_line_comment)
             && !self.options.add_braces
@@ -1456,6 +1458,9 @@ impl FormatEngine<'_> {
         {
             if brace_type == BraceType::Definition {
                 self.trim_current_end();
+            } else if brace_type == BraceType::Enum {
+                self.trim_current_end();
+                self.finish_line();
             } else {
                 self.emit_opening_brace_space(brace_type);
             }
