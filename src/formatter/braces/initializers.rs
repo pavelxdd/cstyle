@@ -1127,8 +1127,12 @@ impl FormatEngine<'_> {
                             }
                         }
                         let prefix_len = leading_visual_width(previous, self.options.tab_width);
-                        // Ratliff closes a group opened after code at its rows.
-                        let closes_at_rows = self.options.brace_style == BraceStyle::Ratliff
+                        // Ratliff closes a group opened after code at its rows, as
+                        // a style indenting braces closes a compound literal.
+                        let closes_at_rows = (self.options.brace_style == BraceStyle::Ratliff
+                            || self.layout.nesting.last_closed_brace_type
+                                == Some(BraceType::CompoundLiteral)
+                                && self.should_indent_brace_line(BraceType::Array))
                             && !previous.trimmed_start().starts_with(['{', '}']);
                         let inner_levels = levels - usize::from(closing && !closes_at_rows);
                         return Some(prefix_len + inner_levels * self.options.indent_width);

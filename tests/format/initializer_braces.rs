@@ -4292,3 +4292,27 @@ fn elements_after_a_leading_nested_brace_stand_a_level_in() {
         )
     );
 }
+
+// Styles indenting braces close each compound literal a level past the line
+// that opened it, the cast before the brace notwithstanding.
+#[test]
+fn indented_brace_styles_close_nested_compound_literals_at_their_fields() {
+    for (style, function_brace) in [("whitesmith", "    "), ("vtk", "")] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[format!("--style={style}"), "--mode=c".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(
+            format_exact(
+                "void f()\n{\n    y = (U){ .a = (V){\n        1 } };\n}\n",
+                &options
+            ),
+            format!(
+                "void f()\n{function_brace}{{\n    y = (U) {{\n        .a = (V){{\n            1\n            }}\n        }};\n{function_brace}}}\n"
+            ),
+            "{style}"
+        );
+    }
+}

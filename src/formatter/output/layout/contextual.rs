@@ -2109,6 +2109,10 @@ impl FormatEngine<'_> {
                 self.layout.nesting.last_closed_brace_header.as_deref(),
                 Some("case" | "default")
             )
+            // A style indenting braces closes a compound literal at its
+            // fields, past the cast that opened it.
+            && !(self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral)
+                && self.should_indent_brace_line(BraceType::Array))
             && layout
                 .exact_indent_spaces
                 .unwrap_or(layout.indent * self.options.indent_width)
