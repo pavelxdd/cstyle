@@ -2964,3 +2964,36 @@ fn a_function_pointer_declaration_split_before_its_attribute_registers_no_indent
         "int (*fffffffffffffffffffffff)(int rrrrrrrrrrrr)\nATTRIBUTEXXXXXXX;\nint * (*fffffffffffffffffff)(int rrrrrrrrrrrr)\nATTRIBUTEXXXXXXX;\n",
     );
 }
+
+#[test]
+fn a_switch_whose_header_splits_closes_at_its_first_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=1tbs".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n    switch (x) {\n    case 1: {\n        switch( sqlite3_value_encoding(sqlite3_column_value(pStmt,i)) ){\n        case 2: {\n            abort();\n        }\n        }\n        break;\n    }\n    }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    switch (x) {",
+            "    case 1: {",
+            "        switch( sqlite3_value_encoding(sqlite3_column_value(pStmt,",
+            "                                       i)) ) {",
+            "        case 2: {",
+            "            abort();",
+            "        }",
+            "        }",
+            "        break;",
+            "    }",
+            "    }",
+            "}",
+        )
+    );
+}

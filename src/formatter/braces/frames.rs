@@ -409,9 +409,47 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn update_current_brace_indent_from_last_output_line(&mut self) {
-        let Some(line) = self.output.last() else {
+        let Some(mut line) = self.output.last() else {
             return;
         };
+        // A header continued onto the brace's line, as a max-code-length
+        // split leaves it, stands where its first line does.
+        if let Some(header) = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Command)
+            .and_then(|frame| frame.header.as_deref())
+        {
+            let starts_header = |line: &str| {
+                let code = line.trim_start().trim_start_matches('}').trim_start();
+                let code = code
+                    .strip_prefix("else")
+                    .filter(|_| header != "else")
+                    .map_or(code, str::trim_start);
+                code.strip_prefix(header).is_some_and(|rest| {
+                    !rest.starts_with(|ch: char| ch.is_alphanumeric() || ch == '_')
+                })
+            };
+            let code = line[..trailing_comment_split_limit(line)].trim();
+            if code != "{"
+                && !starts_header(line)
+                && let Some(header_line) = self
+                    .output
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(8)
+                    .take_while(|line| {
+                        !line[..trailing_comment_split_limit(line)]
+                            .trim_end()
+                            .ends_with([';', '{', '}'])
+                    })
+                    .find(|line| starts_header(line))
+            {
+                line = header_line;
+            }
+        }
         let code = line[..trailing_comment_split_limit(line)].trim();
         if self
             .layout
