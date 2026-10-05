@@ -16,7 +16,7 @@ pub(crate) enum Token {
     StringLiteral(String),
     CharLiteral(String),
     Comment(CommentKind, String),
-    Preprocessor(PreprocessorToken),
+    Preprocessor(Box<PreprocessorToken>),
     RawLine(String),
     Operator(String),
     Symbol(char),
@@ -183,7 +183,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
                 } else {
                     assembly_macro_lines.observe_preprocessor();
                     let (preprocessor, next_index) = read_preprocessor(&chars, index);
-                    tokens.push(Token::Preprocessor(preprocessor));
+                    tokens.push(Token::Preprocessor(Box::new(preprocessor)));
                     index = next_index;
                     line_has_code = true;
                 }

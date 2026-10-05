@@ -340,15 +340,17 @@ impl<'a> FormatEngine<'a> {
         self.previous_was_newline = false;
     }
 
-    pub(crate) fn format_into(mut self, tokens: &[Token]) -> Self {
-        let rewritten_tokens;
+    #[cfg(test)]
+    pub(crate) fn format_into(self, tokens: &[Token]) -> Self {
+        self.format_owned(tokens.to_vec())
+    }
+
+    pub(crate) fn format_owned(mut self, tokens: Vec<Token>) -> Self {
         let tokens = if self.options.remove_braces {
-            rewritten_tokens = remove_cross_line_statement_braces(tokens);
-            rewritten_tokens.as_slice()
+            remove_cross_line_statement_braces(&tokens)
         } else {
             tokens
         };
-        let added_brace_tokens;
         let tokens = if self.options.add_braces && !self.options.add_one_line_braces {
             let attach_added_braces = matches!(
                 self.options.brace_style,
@@ -360,7 +362,7 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Lisp
             );
             let added = add_marked_cross_line_statement_braces(
-                tokens,
+                &tokens,
                 attach_added_braces,
                 matches!(
                     self.options.brace_style,
@@ -368,14 +370,15 @@ impl<'a> FormatEngine<'a> {
                 ),
                 self.options.indent_width,
             );
-            added_brace_tokens = added.tokens;
             self.added_closing_braces = added.closers;
             self.added_opener_overruns = added.opener_overruns;
-            added_brace_tokens.as_slice()
+            added.tokens
         } else {
             tokens
         };
-        self.tree = SourceTree::build(tokens);
+        let tokens = std::rc::Rc::new(tokens);
+        self.tree = SourceTree::build_shared(std::rc::Rc::clone(&tokens));
+        let tokens = tokens.as_slice();
         self.syntax_roles = classify_syntax(tokens, &self.tree);
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);

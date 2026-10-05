@@ -70,7 +70,7 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
         || tokens
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)));
-    let (output, fill_sources) = engine.format_into(&tokens).finish();
+    let (output, fill_sources) = engine.format_owned(tokens).finish();
     let output = postprocess_brace_style(output, options);
     if options.empty_line_fill
         && matches!(

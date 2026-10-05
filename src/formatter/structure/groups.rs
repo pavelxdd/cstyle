@@ -4,12 +4,19 @@ use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::text::line_scan::preprocessor_directive;
 
+/// A group's index, stored past zero so that an absent group costs no space
+/// in the per-token tables.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub(crate) struct GroupId(usize);
+pub(crate) struct GroupId(std::num::NonZeroU32);
 
 impl GroupId {
+    fn new(index: usize) -> Self {
+        let stored = u32::try_from(index + 1).expect("fewer than 2^32 groups");
+        Self(std::num::NonZeroU32::new(stored).expect("stored past zero"))
+    }
+
     pub(crate) fn index(self) -> usize {
-        self.0
+        self.0.get() as usize - 1
     }
 }
 
@@ -87,7 +94,7 @@ impl Groups {
             if let Token::Preprocessor(directive) = token {
                 track_conditional(&directive.text, &mut stack, &mut conditionals);
             } else if let Some(delimiter) = Delimiter::opened_by(token) {
-                let id = GroupId(groups.groups.len());
+                let id = GroupId::new(groups.groups.len());
                 groups.groups.push(Group {
                     delimiter,
                     open: index,
@@ -101,9 +108,9 @@ impl Groups {
             {
                 let id = stack[depth];
                 stack.truncate(depth);
-                groups.groups[id.0].close = Some(index);
+                groups.groups[id.index()].close = Some(index);
                 groups.delimits[index] = Some(id);
-                groups.enclosing[index] = groups.groups[id.0].parent;
+                groups.enclosing[index] = groups.groups[id.index()].parent;
             }
         }
         groups
@@ -112,7 +119,7 @@ impl Groups {
     /// Stack depth of the group a closing `delimiter` ends, if any.
     fn matching_open_depth(&self, stack: &[GroupId], delimiter: Delimiter) -> Option<usize> {
         for (depth, id) in stack.iter().enumerate().rev() {
-            let open = self.groups[id.0].delimiter;
+            let open = self.groups[id.index()].delimiter;
             if open == delimiter {
                 return Some(depth);
             }
@@ -124,7 +131,7 @@ impl Groups {
     }
 
     pub(crate) fn get(&self, id: GroupId) -> &Group {
-        &self.groups[id.0]
+        &self.groups[id.index()]
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -132,7 +139,7 @@ impl Groups {
     }
 
     pub(crate) fn ids(&self) -> impl Iterator<Item = GroupId> + '_ {
-        (0..self.groups.len()).map(GroupId)
+        (0..self.groups.len()).map(GroupId::new)
     }
 
     /// Innermost group containing the token at `index`, not counting the
@@ -149,18 +156,18 @@ impl Groups {
     /// Group opened by the token at `index`.
     pub(crate) fn opened_at(&self, index: usize) -> Option<GroupId> {
         self.delimited_by(index)
-            .filter(|&id| self.groups[id.0].open == index)
+            .filter(|&id| self.groups[id.index()].open == index)
     }
 
     /// Group closed by the token at `index`.
     pub(crate) fn closed_at(&self, index: usize) -> Option<GroupId> {
         self.delimited_by(index)
-            .filter(|&id| self.groups[id.0].close == Some(index))
+            .filter(|&id| self.groups[id.index()].close == Some(index))
     }
 
     /// `id` and its enclosing groups, innermost first.
     pub(crate) fn ancestors(&self, id: GroupId) -> impl Iterator<Item = GroupId> + '_ {
-        std::iter::successors(Some(id), |&id| self.groups[id.0].parent)
+        std::iter::successors(Some(id), |&id| self.groups[id.index()].parent)
     }
 }
 

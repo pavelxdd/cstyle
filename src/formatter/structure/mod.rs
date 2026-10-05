@@ -19,6 +19,7 @@ use blocks::{Blocks, is_code_token, next_code_token};
 use functions::Functions;
 use groups::Groups;
 use statements::Statements;
+use std::rc::Rc;
 
 /// First and last code token of an output line, as token indices.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -50,7 +51,8 @@ impl LineComments {
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct SourceTree {
-    pub(crate) tokens: Vec<Token>,
+    /// The tokens the tree describes, shared with the formatting pass.
+    pub(crate) tokens: Rc<Vec<Token>>,
     pub(crate) groups: Groups,
     pub(crate) blocks: Blocks,
     pub(crate) functions: Functions,
@@ -59,13 +61,18 @@ pub(crate) struct SourceTree {
 
 impl SourceTree {
     pub(crate) fn build(tokens: &[Token]) -> Self {
+        Self::build_shared(Rc::new(tokens.to_vec()))
+    }
+
+    pub(crate) fn build_shared(shared: Rc<Vec<Token>>) -> Self {
+        let tokens = shared.as_slice();
         let groups = Groups::build(tokens);
         let mut blocks = Blocks::build(tokens, &groups);
         let functions = Functions::build(tokens, &groups, &blocks);
         blocks.mark_function_bodies(functions.heads().iter().filter_map(|head| head.body));
         let statements = Statements::build(tokens, &groups, &blocks);
         Self {
-            tokens: tokens.to_vec(),
+            tokens: shared,
             groups,
             blocks,
             functions,
