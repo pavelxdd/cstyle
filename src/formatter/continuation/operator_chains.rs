@@ -474,21 +474,20 @@ impl FormatEngine<'_> {
         output_line_index: usize,
         code: &str,
     ) {
-        let paren_imbalance = self.paren_imbalance_of(code);
-        let unmatched_open_paren = self.open_paren_column_of(code);
+        let (paren_closes, unmatched_open_paren) = self.paren_closes_and_open_column_of(code);
         self.layout.frame_stack.mark_stream_line_context(
             output_line_index,
             code.ends_with("<<") || code.ends_with(">>"),
             code.contains("{ {"),
             unmatched_open_paren.is_some(),
             code.ends_with(')'),
-            paren_imbalance.0 > 0,
+            paren_closes > 0,
         );
         self.layout.frame_stack.mark_logical_line_context(
             output_line_index,
             unmatched_open_paren,
             code.ends_with(')'),
-            paren_imbalance.0 > 0,
+            paren_closes > 0,
         );
         if self.layout.line_state.ternary_colon || code.trimmed_start().starts_with(':') {
             self.layout
@@ -1827,9 +1826,9 @@ impl FormatEngine<'_> {
         current: &str,
         previous_code: &str,
     ) -> Option<usize> {
-        if current.starts_with(['#', '(', ')', '{', '}'])
+        if !previous_code.ends_with('(')
+            || current.starts_with(['#', '(', ')', '{', '}'])
             || !current.contains("{ {")
-            || !previous_code.ends_with('(')
         {
             return None;
         }

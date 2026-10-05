@@ -237,7 +237,7 @@ impl FormatEngine<'_> {
         let class_scope_label = layout.class_scope_label;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
-        let (line_closing_parens, line_opening_parens) = self.paren_imbalance_of(line);
+        let (line_closing_parens, line_opening_parens) = line.paren_imbalance();
         let line_closes_outer_delimiter = line_closing_parens > line_opening_parens.len();
         let line_has_owned_continuation = self.layout.frame_stack.active_delimiter().is_some()
             || self.operator_chain_owns_continuation(line);

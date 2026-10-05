@@ -1,5 +1,5 @@
 mod anchors;
-mod astyle_stack;
+pub(crate) mod astyle_stack;
 mod contextual;
 mod corrections;
 mod indent;

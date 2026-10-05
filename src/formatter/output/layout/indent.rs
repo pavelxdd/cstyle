@@ -1514,33 +1514,38 @@ impl FormatEngine<'_> {
         {
             return Some(leading_visual_width(previous, tab_width));
         }
-        let previous_name = previous_code
-            .split(':')
-            .next()
-            .unwrap_or_default()
-            .trimmed();
-        let previous_previous_ends_question = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .skip(1)
-            .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|line| line.trimmed_end().ends_with('?'));
-        let current_code = self.output.code_of(current).trimmed_end();
-        if previous_code.contains(':')
+        let previous_name = || {
+            previous_code
+                .split(':')
+                .next()
+                .unwrap_or_default()
+                .trimmed()
+        };
+        let previous_previous_ends_question = || {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| line.trimmed_end().ends_with('?'))
+        };
+        if previous_code.ends_with(',')
+            && previous_code.contains(':')
             && !previous_code.contains("::")
-            && !previous_name.contains(char::is_whitespace)
-            && previous_code.ends_with(',')
+            && !previous_name().contains(char::is_whitespace)
             && !previous_code.contains('?')
-            && !previous_previous_ends_question
-            && current_code.contains(':')
-            && !current_code.contains('?')
-            && !current_code.starts_with(['"', '\''])
-            && !current_code.contains("::")
-            && (current_code.ends_with(',') || current_code.ends_with(';'))
+            && !previous_previous_ends_question()
         {
-            return Some(leading_visual_width(previous, tab_width));
+            let current_code = self.output.code_of(current).trimmed_end();
+            if current_code.contains(':')
+                && !current_code.contains('?')
+                && !current_code.starts_with(['"', '\''])
+                && !current_code.contains("::")
+                && (current_code.ends_with(',') || current_code.ends_with(';'))
+            {
+                return Some(leading_visual_width(previous, tab_width));
+            }
         }
         if current.starts_with(':')
             && previous_trimmed.starts_with("//")
@@ -1671,17 +1676,17 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        if has_inline_constructor_initializer_colon(previous_code) && previous_code.ends_with('(') {
+        if previous_code.ends_with('(') && has_inline_constructor_initializer_colon(previous_code) {
             return Some(leading_visual_width(previous, tab_width) + width * 2);
         }
-        if has_inline_constructor_initializer_colon(previous_code)
-            && previous_code.ends_with(',')
+        if previous_code.ends_with(',')
+            && has_inline_constructor_initializer_colon(previous_code)
             && previous[trailing_comment_split_limit(previous)..].contains("//")
         {
             return Some(natural + width);
         }
-        if previous[trailing_comment_split_limit(previous)..].contains("//")
-            && previous_code.ends_with(',')
+        if previous_code.ends_with(',')
+            && previous[trailing_comment_split_limit(previous)..].contains("//")
             && self
                 .output
                 .scoped()

@@ -20,6 +20,22 @@ use crate::formatter::text::trim::Trimmed;
 /// Statements longer than this are left to the engine.
 const MAX_REPLAYED_TOKENS: usize = 4000;
 
+/// The replay of a statement up to a line, kept so the next line of the
+/// statement goes on from it: the tokens' address, the statement start, the
+/// output version, the token reached, and the state there.
+pub(crate) struct ReplayCache {
+    address: usize,
+    start: usize,
+    version: u64,
+    index: usize,
+    replay: Replay,
+    line: Option<usize>,
+    saw_question: bool,
+    /// Whether a shift outside parens stacked before `index`; a line
+    /// leading with a shift ends the replay there.
+    shift_stacked: bool,
+}
+
 struct Replay {
     stack: Vec<usize>,
     sizes: Vec<usize>,
@@ -295,20 +311,43 @@ impl FormatEngine<'_> {
                 || self.tree.groups.enclosing(start).is_some_and(|group| {
                     self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
                 });
-        let mut replay = Replay {
-            stack: Vec::new(),
-            sizes: Vec::new(),
-            parens: Vec::new(),
-            paren_statements: Vec::new(),
-            continuation: false,
-            depth: 0,
-            line_space: 0,
-            assigned_this_line: false,
-            header_paren: None,
-        };
-        let mut line = None;
-        let mut saw_question = false;
-        let mut index = start;
+        let address = tokens.as_ptr() as usize;
+        let version = self.output.version();
+        let first_is_shift = matches!(&tokens[first], Token::Operator(shift) if matches!(shift.as_str(), "<<" | ">>"));
+        // The tokens before an earlier line replay as they did then.
+        let (mut replay, mut line, mut saw_question, mut index, mut shift_stacked) =
+            match self.astyle_replay_cache.take().filter(|cached| {
+                (cached.address, cached.start, cached.version) == (address, start, version)
+                    && cached.index <= first
+            }) {
+                Some(cached) => (
+                    cached.replay,
+                    cached.line,
+                    cached.saw_question,
+                    cached.index,
+                    cached.shift_stacked,
+                ),
+                None => (
+                    Replay {
+                        stack: Vec::new(),
+                        sizes: Vec::new(),
+                        parens: Vec::new(),
+                        paren_statements: Vec::new(),
+                        continuation: false,
+                        depth: 0,
+                        line_space: 0,
+                        assigned_this_line: false,
+                        header_paren: None,
+                    },
+                    None,
+                    false,
+                    start,
+                    false,
+                ),
+            };
+        if shift_stacked && first_is_shift {
+            return None;
+        }
         while index < first {
             let token = &tokens[index];
             if !is_code_token(token) {
@@ -406,10 +445,10 @@ impl FormatEngine<'_> {
                     if !self.options.indent_after_parens {
                         // A line leading with a shift continues the chain its
                         // own way; others stack at the first shift.
-                        if matches!(&tokens[first], Token::Operator(shift) if matches!(shift.as_str(), "<<" | ">>"))
-                        {
+                        if first_is_shift {
                             return None;
                         }
+                        shift_stacked = true;
                         if replay.stack.is_empty() {
                             let mut column = relative(index)?;
                             if column > self.options.max_continuation_indent {
@@ -483,10 +522,21 @@ impl FormatEngine<'_> {
         }
         // A `)` starting its line takes the indent its paren saved.
         let top = if matches!(tokens[first], Token::Symbol(')')) || closes_stacked_brace {
-            replay.parens.last().copied()?
+            replay.parens.last().copied()
         } else {
-            replay.stack.last().copied()?
+            replay.stack.last().copied()
         };
+        self.astyle_replay_cache.set(Some(ReplayCache {
+            address,
+            start,
+            version,
+            index,
+            replay,
+            line,
+            saw_question,
+            shift_stacked,
+        }));
+        let top = top?;
         Some(
             block_lead
                 + top
@@ -792,21 +842,22 @@ impl FormatEngine<'_> {
 
 /// Whether a string or character literal ends at its closing quote.
 pub(super) fn literal_closed(text: &str) -> bool {
-    let Some(quote) = text
-        .chars()
-        .last()
-        .filter(|quote| matches!(quote, '"' | '\''))
+    // The quotes and the backslash are ASCII, and no byte of a wider
+    // character equals one.
+    let Some((&quote, body)) = text
+        .as_bytes()
+        .split_last()
+        .filter(|(quote, _)| matches!(quote, b'"' | b'\''))
     else {
         return false;
     };
-    let body = &text[..text.len() - 1];
-    let Some(open) = body.find(quote) else {
+    let Some(open) = body.iter().position(|&byte| byte == quote) else {
         return false;
     };
     let escapes = body[open + 1..]
-        .chars()
+        .iter()
         .rev()
-        .take_while(|ch| *ch == '\\')
+        .take_while(|&&byte| byte == b'\\')
         .count();
     escapes % 2 == 0
 }
@@ -830,5 +881,47 @@ fn second_word_column(line: &str, comma: usize) -> usize {
     match line[after..].find(|ch: char| !matches!(ch, ' ' | '\t')) {
         Some(offset) if after + offset < comma => after + offset,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::literal_closed;
+
+    fn closed_by_chars(text: &str) -> bool {
+        let Some(quote) = text
+            .chars()
+            .last()
+            .filter(|quote| matches!(quote, '"' | '\''))
+        else {
+            return false;
+        };
+        let body = &text[..text.len() - 1];
+        let Some(open) = body.find(quote) else {
+            return false;
+        };
+        let escapes = body[open + 1..]
+            .chars()
+            .rev()
+            .take_while(|ch| *ch == '\\')
+            .count();
+        escapes % 2 == 0
+    }
+
+    #[test]
+    fn reads_literal_ends_as_a_walk_over_characters_does() {
+        let pieces = ["\"", "'", "\\", "a", "é", "L", "u8", " ", "\\\\"];
+        let mut state = 0x2545_f491_u32;
+        for _ in 0..20_000 {
+            let mut text = String::new();
+            for _ in 0..(state % 7) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                text.push_str(pieces[state as usize % pieces.len()]);
+            }
+            state = state.wrapping_add(1);
+            assert_eq!(literal_closed(&text), closed_by_chars(&text), "{text:?}");
+        }
     }
 }

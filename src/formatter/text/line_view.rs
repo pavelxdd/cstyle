@@ -1,17 +1,22 @@
 //! A line being laid out, trimmed once: the layout rules read the same
 //! line's trimmed forms hundreds of times.
 
+use std::cell::OnceCell;
 use std::fmt;
 use std::ops::Deref;
 
+use crate::formatter::text::line_scan::line_paren_imbalance;
 use crate::formatter::text::trim::Trimmed;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct LineView<'a> {
     text: &'a str,
     start: &'a str,
     trimmed: &'a str,
     end: &'a str,
+    /// Unmatched `)`/`]` and the columns of unmatched `(`/`[`, read once a
+    /// rule asks.
+    parens: OnceCell<(usize, Vec<usize>)>,
 }
 
 impl<'a> LineView<'a> {
@@ -28,6 +33,7 @@ impl<'a> LineView<'a> {
             start,
             trimmed,
             end,
+            parens: OnceCell::new(),
         }
     }
 
@@ -41,6 +47,12 @@ impl<'a> LineView<'a> {
 
     pub(crate) fn trimmed_end(&self) -> &'a str {
         self.end
+    }
+
+    /// `line_paren_imbalance` of the line.
+    pub(crate) fn paren_imbalance(&self) -> (usize, &[usize]) {
+        let (closes, opens) = self.parens.get_or_init(|| line_paren_imbalance(self.text));
+        (*closes, opens)
     }
 }
 

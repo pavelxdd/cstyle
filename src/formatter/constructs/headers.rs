@@ -379,7 +379,7 @@ impl FormatEngine<'_> {
         if !line.trimmed_start().starts_with(')') {
             return None;
         }
-        let mut close_line_pending = self.paren_closes_of(line.trimmed_end());
+        let mut close_line_pending = line.paren_imbalance().0;
         let mut intervening_closes = 0usize;
         let mut candidate = None;
         for previous in self

@@ -2939,6 +2939,18 @@ impl FormatEngine<'_> {
         let Some(first) = self.output.line_tokens(line).map(|span| span.first) else {
             return;
         };
+        // Only comment lines above the line move: past blank lines and
+        // directives, a line of code ends the walk below.
+        if (0..line)
+            .rev()
+            .find(|&index| {
+                let text = self.output.trimmed(index);
+                !text.is_empty() && !text.starts_with('#')
+            })
+            .is_none_or(|index| self.output.line_tokens(index).is_some())
+        {
+            return;
+        }
         let statements = &self.tree.statements;
         // A continuation inside parentheses takes the comments inside them.
         let continues_parens = self.continues_parentheses_past_comments(first)

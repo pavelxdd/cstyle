@@ -150,6 +150,10 @@ pub(crate) struct FormatEngine<'a> {
     /// The last statement start astyle's stack found: the address of the
     /// tokens, the token it looked back from, and the start.
     pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last replay of astyle's stack, for the next line of its
+    /// statement.
+    pub(crate) astyle_replay_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::ReplayCache>>,
     /// The last look back for the switch the output stands in.
     pub(crate) open_switch_cache: std::cell::Cell<Option<OpenSwitchCache>>,
     pub(crate) layout: LayoutState,
@@ -223,6 +227,7 @@ impl<'a> FormatEngine<'a> {
             macro_call_context_cache: std::cell::Cell::new(None),
             line_comment_cache: std::cell::Cell::new(None),
             stack_start_cache: std::cell::Cell::new(None),
+            astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
             case_labels: std::cell::OnceCell::new(),
@@ -1231,6 +1236,20 @@ impl<'a> FormatEngine<'a> {
             }
             None => line_paren_imbalance(text),
         }
+    }
+
+    /// `paren_closes_of(text)` and `open_paren_column_of(text)`, scanning
+    /// the text once.
+    pub(crate) fn paren_closes_and_open_column_of(&self, text: &str) -> (usize, Option<usize>) {
+        if self.output.code_line_of(text).is_some() {
+            return (self.paren_closes_of(text), self.open_paren_column_of(text));
+        }
+        let (closes, opens) = line_paren_imbalance(text);
+        let open = opens
+            .into_iter()
+            .rev()
+            .find(|&column| text[column + 1..].chars().any(|ch| !ch.is_whitespace()));
+        (closes, open)
     }
 
     /// `paren_imbalance_of(text).0`, without collecting the open parens.

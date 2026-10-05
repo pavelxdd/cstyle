@@ -1542,14 +1542,11 @@ impl FormatEngine<'_> {
         }
         let previous_code = previous_content[..comment_limit].trimmed_end();
         let assignment = previous_code.rfind('=')?;
-        if previous_code.contains("==")
+        if previous_code.ends_with([',', ';', '{', '}'])
+            || previous_code.contains("==")
             || previous_code.contains("!=")
             || previous_code.contains("<=")
             || previous_code.contains(">=")
-            || previous_code.ends_with(',')
-            || previous_code.ends_with(';')
-            || previous_code.ends_with('{')
-            || previous_code.ends_with('}')
         {
             return None;
         }

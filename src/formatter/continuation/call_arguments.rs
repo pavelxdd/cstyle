@@ -989,7 +989,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed_end = line.trimmed_end();
-        let closes_enclosing_call = self.paren_closes_of(trimmed_end) > 0;
+        let closes_enclosing_call = line.paren_imbalance().0 > 0;
         if self.layout.nesting.paren_depth == 0 && !closes_enclosing_call {
             return None;
         }
@@ -1888,6 +1888,11 @@ impl FormatEngine<'_> {
         if argument.role != CommaRole::CallArgument {
             return None;
         }
+        // Only a line the source put at the anchor stays there.
+        let anchor = argument.sibling_anchor_column?;
+        if self.token_input.token_source_line_indent != anchor {
+            return None;
+        }
         let code = self.output.code_of(line).trimmed_end();
         if code.ends_with('{')
             && (line_opens_lambda_block(line)
@@ -1914,12 +1919,11 @@ impl FormatEngine<'_> {
                 return None;
             }
         }
-        let anchor = argument.sibling_anchor_column?;
         let previous = self.output.last_non_empty_scoped()?;
         let case_unindent = (self.layout.line_adjuster.total_case_unindent_depth()
             * self.options.indent_width)
             .max(self.adjusted_line_indent_delta(previous));
-        (self.token_input.token_source_line_indent == anchor).then_some(anchor + case_unindent)
+        Some(anchor + case_unindent)
     }
 
     pub(crate) fn outer_call_argument_after_closed_inner_call_indent_spaces(

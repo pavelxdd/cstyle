@@ -6,7 +6,7 @@ pub(crate) mod buffer;
 mod emission;
 pub(crate) mod finish;
 mod fused_braces;
-mod layout;
+pub(crate) mod layout;
 pub(crate) mod line_adjust;
 pub(crate) mod member_spacing;
 mod model;
