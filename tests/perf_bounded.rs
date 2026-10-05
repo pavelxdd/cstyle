@@ -321,3 +321,20 @@ fn braceless_headers_nested_past_the_stack_stay_bounded() {
         "deeply nested headers took {elapsed:?}, expected bounded runtime (< 5s)"
     );
 }
+
+#[test]
+fn nested_ternary_colons_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 20_000;
+    let input = format!("x = {}1{};\n", "a ? ".repeat(n), " : 2".repeat(n));
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "nested ternary colons took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}

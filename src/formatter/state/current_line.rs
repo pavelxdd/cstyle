@@ -15,6 +15,7 @@ pub(crate) struct CurrentLine {
     last_open_brace: Cell<Option<(usize, Option<usize>)>>,
     trailing_comment: Cell<Option<TrailingCommentScan>>,
     declaration_segment: RefCell<DeclarationSegmentScan>,
+    marks: Cell<LineMarks>,
     /// Code tokens whose text is on the line so far.
     tokens: Option<TokenSpan>,
     /// Code token being pushed; text added meanwhile belongs to it.
@@ -323,6 +324,47 @@ impl CurrentLine {
         scan.start
     }
 
+    fn marks(&self) -> LineMarks {
+        let mut marks = self.marks.get();
+        if marks.scanned > self.text.len() {
+            marks = LineMarks::default();
+        }
+        if marks.scanned < self.text.len() {
+            marks.advance(self.text.as_bytes());
+            self.marks.set(marks);
+        }
+        marks
+    }
+
+    /// Where the statement the line ends in starts: past the last `{` or
+    /// `;` outside literals.
+    pub(crate) fn statement_start(&self) -> usize {
+        self.marks().statement_start
+    }
+
+    /// Whether a `[` follows the last `]`.
+    pub(crate) fn has_unclosed_bracket(&self) -> bool {
+        let marks = self.marks();
+        marks
+            .last_open_bracket
+            .is_some_and(|open| marks.last_close_bracket.is_none_or(|close| close < open))
+    }
+
+    /// The byte index of the last `?`.
+    pub(crate) fn last_question(&self) -> Option<usize> {
+        self.marks().last_question
+    }
+
+    /// Whether the line holds `@ {`, which opens a dictionary literal.
+    pub(crate) fn holds_dictionary_opener(&self) -> bool {
+        self.marks().dictionary_opener
+    }
+
+    /// Whether the line holds `asm(` or `__asm__(`.
+    pub(crate) fn holds_asm_call(&self) -> bool {
+        self.marks().asm_call
+    }
+
     pub(crate) fn is_open_brace_run(&self) -> bool {
         if self.open_brace_run_len.get() == Some(self.text.len()) {
             return true;
@@ -347,6 +389,7 @@ impl CurrentLine {
         self.last_open_brace.set(None);
         self.trailing_comment.set(None);
         self.declaration_segment.take();
+        self.marks.take();
     }
 }
 
@@ -355,6 +398,54 @@ impl Deref for CurrentLine {
 
     fn deref(&self) -> &Self::Target {
         &self.text
+    }
+}
+
+/// Marks of the line read once as it grows.
+#[derive(Clone, Copy, Default)]
+struct LineMarks {
+    scanned: usize,
+    quote: Option<u8>,
+    escaped: bool,
+    statement_start: usize,
+    last_open_bracket: Option<usize>,
+    last_close_bracket: Option<usize>,
+    last_question: Option<usize>,
+    dictionary_opener: bool,
+    asm_call: bool,
+}
+
+impl LineMarks {
+    fn advance(&mut self, bytes: &[u8]) {
+        // A text sought may start before the bytes read last.
+        let tail = &bytes[self.scanned.saturating_sub(7)..];
+        self.dictionary_opener |= tail.windows(3).any(|window| window == b"@ {");
+        self.asm_call |= tail.windows(4).any(|window| window == b"asm(")
+            || tail.windows(8).any(|window| window == b"__asm__(");
+        for (index, &byte) in bytes.iter().enumerate().skip(self.scanned) {
+            match byte {
+                b'[' => self.last_open_bracket = Some(index),
+                b']' => self.last_close_bracket = Some(index),
+                b'?' => self.last_question = Some(index),
+                _ => {}
+            }
+            if let Some(open) = self.quote {
+                if self.escaped {
+                    self.escaped = false;
+                } else if byte == b'\\' {
+                    self.escaped = true;
+                } else if byte == open {
+                    self.quote = None;
+                }
+                continue;
+            }
+            match byte {
+                b'"' | b'\'' => self.quote = Some(byte),
+                b'{' | b';' => self.statement_start = index + 1,
+                _ => {}
+            }
+        }
+        self.scanned = bytes.len();
     }
 }
 

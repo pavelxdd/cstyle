@@ -11,7 +11,6 @@ use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
@@ -46,7 +45,7 @@ impl FormatEngine<'_> {
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
             && !self.current.trimmed_start().starts_with("@interface ")
-            && !has_unclosed_delimiter_after(self.current.trimmed_end(), "[", "]")
+            && !self.current.has_unclosed_bracket()
             && self.current.trimmed_end().ends_with(':')
             && !self.current.trimmed_end().ends_with("::")
             && !self.current.contains('?')

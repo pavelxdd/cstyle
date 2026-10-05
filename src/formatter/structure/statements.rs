@@ -190,8 +190,8 @@ struct Parser<'a> {
     depth: usize,
 }
 
-/// Statements nested deeper than this are passed over unparsed, which keeps
-/// the parse within the stack for any input.
+/// Statements and blocks nested deeper than this are passed over
+/// unparsed, which keeps the parse within the stack for any input.
 const MAX_STATEMENT_DEPTH: usize = 2000;
 
 impl Parser<'_> {
@@ -217,6 +217,15 @@ impl Parser<'_> {
 
     /// Parses the statements in `start..end`.
     fn items(&mut self, start: usize, end: usize) {
+        if self.depth >= MAX_STATEMENT_DEPTH {
+            return;
+        }
+        self.depth += 1;
+        self.block_items(start, end);
+        self.depth -= 1;
+    }
+
+    fn block_items(&mut self, start: usize, end: usize) {
         let mut position = start;
         // The last statement of the block that is no label and ended with
         // its `;` or block, as its first token and the index after it.
@@ -802,5 +811,27 @@ mod tests {
     fn else_inside_lambda_and_statement_expression() {
         let source = "int x = ({ if (a) 1; else 2; });\nauto f = [](int v) { if (v) return 1; else return 2; };\n";
         assert_eq!(else_lines(source), [Some(0), Some(1)]);
+    }
+
+    #[test]
+    fn deep_nesting_parses_within_a_small_stack() {
+        let sources = [
+            "void f() { ".to_owned() + &"if (a) ".repeat(20_000) + "x(); }",
+            "auto x = ".to_owned()
+                + &"[](){ return ".repeat(20_000)
+                + "1"
+                + &"; }()".repeat(20_000)
+                + ";",
+        ];
+        for source in sources {
+            std::thread::Builder::new()
+                .stack_size(1 << 20)
+                .spawn(move || {
+                    crate::formatter::structure::SourceTree::build(&tokenize(&source));
+                })
+                .expect("spawn")
+                .join()
+                .expect("parse within the stack");
+        }
     }
 }

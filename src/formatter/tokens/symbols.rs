@@ -21,9 +21,7 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, is_comment_only_line, trailing_matching_parens,
-};
+use crate::formatter::text::line_scan::{is_comment_only_line, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1342,7 +1340,7 @@ impl FormatEngine<'_> {
             )
             && (self
                 .current
-                .rfind('?')
+                .last_question()
                 .is_some_and(|index| self.current[index + 1..].contains('{'))
                 || (self.current.trimmed_end().ends_with('}')
                     && self.layout.nesting.last_closed_brace_type.is_some()));
@@ -1396,7 +1394,7 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.current.contains("@ {")
+        let in_objc_dictionary_literal = self.current.holds_dictionary_opener()
             || self
                 .output
                 .scoped()
@@ -1410,7 +1408,7 @@ impl FormatEngine<'_> {
             && !is_objc_colon
             && !matches!(next, Some(Token::Newline) | None)
         {
-            let spaces = if self.current.contains("@ {") {
+            let spaces = if self.current.holds_dictionary_opener() {
                 self.layout
                     .previous_pre_adjust_line
                     .as_ref()
@@ -1517,7 +1515,7 @@ impl FormatEngine<'_> {
             && self.is_bit_field_colon(next);
         let has_question = self.layout.nesting.has_question_in_current_brace();
         let is_range_for = !has_question && self.is_range_for_colon();
-        let label_text = text_after_last_statement_boundary(self.current.trimmed()).trimmed();
+        let label_text = self.current[self.current.statement_start()..].trimmed();
         let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
@@ -1556,7 +1554,7 @@ impl FormatEngine<'_> {
             && !is_objc_colon
             && !is_objc_interface_colon
             && !aligned_continuation_colon;
-        let in_objc_message = has_unclosed_delimiter_after(self.current.trimmed_end(), "[", "]");
+        let in_objc_message = self.current.has_unclosed_bracket();
         let is_objc_method_def_colon = is_objc_colon
             && !in_objc_message
             && (self.is_objc_method_line() || self.layout.objc.method_continuation);
@@ -1621,8 +1619,7 @@ impl FormatEngine<'_> {
 
     fn is_asm_operand_colon(&self) -> bool {
         let current = self.current.trimmed_start();
-        current.contains("asm(")
-            || current.contains("__asm__(")
+        self.current.holds_asm_call()
             || current.starts_with("asm ")
             || current.starts_with("asm\t")
             || current.starts_with("_asm ")
@@ -1899,29 +1896,4 @@ fn is_semicolonless_macro_call_name(name: &str) -> bool {
         && macro_part
             .chars()
             .any(|ch| ch.is_ascii_uppercase() || ch == '_')
-}
-
-/// The text after the last `{` or `;` outside literals.
-fn text_after_last_statement_boundary(text: &str) -> &str {
-    let mut start = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    for (index, &byte) in text.as_bytes().iter().enumerate() {
-        if let Some(open) = quote {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == open {
-                quote = None;
-            }
-            continue;
-        }
-        match byte {
-            b'"' | b'\'' => quote = Some(byte),
-            b'{' | b';' => start = index + 1,
-            _ => {}
-        }
-    }
-    &text[start..]
 }
