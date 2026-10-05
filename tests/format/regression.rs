@@ -6192,6 +6192,16 @@ fn cast_compound_literals_stay_on_one_line() {
     check(expected, &["--style=allman"], expected);
 }
 
+// A cast after an operator of an expression is a value's, not a
+// declarator's; a function returning a pointer keeps its body.
+#[test]
+fn cast_compound_literals_after_operators_stay_on_one_line() {
+    let input = "void f(void)\n{\n    x = a * (int *)(int[]){1};\n    z = *(int *)(int[]){1};\n    f(a & (int *)(int[]){1});\n    return a ^ (T)(U){1};\n}\nint *(g)(int a[]) {\n    return 0;\n}\n";
+    let expected = "void f(void)\n{\n    x = a * (int *)(int[]) {1};\n    z = *(int *)(int[]) {1};\n    f(a & (int *)(int[]) {1});\n    return a ^ (T)(U) {1};\n}\nint *(g)(int a[])\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
 #[test]
 fn compound_literal_closing_brace_leaves_the_last_row() {
     let input = "void f(void)\n{\n    p = (int[]){\n        1, 2, 3 };\n    g((int[]){\n        1, 2, 3 });\n}\n";

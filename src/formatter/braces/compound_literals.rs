@@ -49,13 +49,50 @@ fn ends_with_value_cast(text: &str) -> bool {
     if close == open + 1 || has_top_level_comma_in_text(&text[open + 1..close]) {
         return false;
     }
-    // After `*`, `&` or `^` the parentheses may be a declarator's.
+    // After `*`, `&` or `^` the parentheses may be a declarator's, unless
+    // the operator joins two values of an expression.
     let before = text[..open].trimmed_end();
     match before.chars().next_back() {
-        Some(')' | ']' | '*' | '&' | '^') => false,
+        Some('*' | '&' | '^') => operator_in_expression(&before[..before.len() - 1]),
+        Some(')' | ']') => false,
         Some(ch) if is_word_char(ch) => trailing_word(before) == language::RETURN,
         _ => true,
     }
+}
+
+/// Whether an operator after `text` stands in an expression: as a unary
+/// operator, or joining a value that an assignment, a `return` or an open
+/// parenthesis starts, where a declaration's star would follow its type.
+fn operator_in_expression(text: &str) -> bool {
+    let text = text.trimmed_end();
+    if !text
+        .chars()
+        .next_back()
+        .is_some_and(|ch| is_word_char(ch) || matches!(ch, ')' | ']'))
+    {
+        return true;
+    }
+    let bytes = text.as_bytes();
+    let mut depth = 0isize;
+    for (index, &byte) in bytes.iter().enumerate().rev() {
+        match byte {
+            b')' | b']' => depth += 1,
+            b'(' | b'[' if depth == 0 => return true,
+            b'(' | b'[' => depth -= 1,
+            b'=' if depth == 0
+                && bytes.get(index + 1) != Some(&b'=')
+                && !index
+                    .checked_sub(1)
+                    .is_some_and(|before| matches!(bytes[before], b'=' | b'!' | b'<' | b'>')) =>
+            {
+                return true;
+            }
+            b';' | b'{' | b'}' if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    let words = text.split(|ch: char| !is_word_char(ch));
+    words.into_iter().any(|word| word == language::RETURN)
 }
 
 fn ends_with_operator_overload_name(text: &str) -> bool {
