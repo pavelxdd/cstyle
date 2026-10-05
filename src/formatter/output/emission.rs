@@ -5,13 +5,14 @@ use crate::formatter::output::buffer;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
 
 impl FormatEngine<'_> {
     pub(super) fn publish_formatted_line_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         layout: &LineLayout,
     ) -> usize {
         let emitted_indent_spaces = layout
@@ -263,7 +264,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn deferred_post_emission_layout(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         layout: &LineLayout,
         restore_objc_message_align: Option<usize>,
     ) -> PostEmissionLayout {
@@ -279,7 +280,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn apply_post_emission_state(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         layout: &LineLayout,
         output_spaces: usize,
         emitted_indent_spaces: usize,

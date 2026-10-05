@@ -23,6 +23,7 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
@@ -215,7 +216,7 @@ impl FormatEngine<'_> {
             .or(Some(base + self.options.indent_width * 2))
     }
 
-    pub(crate) fn line_aligns_to_open_paren_content(&self, line: &str) -> bool {
+    pub(crate) fn line_aligns_to_open_paren_content(&self, line: &LineView<'_>) -> bool {
         if line.trimmed().is_empty() {
             return false;
         }

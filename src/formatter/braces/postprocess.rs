@@ -10,6 +10,7 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct MaxLengthBraceRowLayout {
@@ -166,7 +167,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &LineView<'_>) -> bool {
         let line_trimmed = line.trimmed();
         if !(matches!(
             self.options.brace_style,
@@ -195,7 +196,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(crate) fn try_split_lambda_body_header(&mut self, line: &str) -> bool {
+    pub(crate) fn try_split_lambda_body_header(&mut self, line: &LineView<'_>) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Allman
@@ -232,7 +233,7 @@ impl FormatEngine<'_> {
         true
     }
 
-    pub(crate) fn try_split_operator_body(&mut self, line: &str) -> bool {
+    pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Allman

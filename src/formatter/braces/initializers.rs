@@ -16,6 +16,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     preprocessor_directive, trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct CompoundLiteralOpeningLayout {
@@ -125,7 +126,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn designated_initializer_source_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn designated_initializer_source_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if self.options.min_conditional_indent != MinConditionalIndent::Zero {
             return None;
         }
@@ -155,7 +159,10 @@ impl FormatEngine<'_> {
         Some(self.token_input.input_source_indent)
     }
 
-    pub(crate) fn range_designator_source_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn range_designator_source_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if self.options.min_conditional_indent != MinConditionalIndent::Zero
             || !line_start.starts_with('[')
@@ -175,7 +182,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn designated_initializer_source_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         kind: LineKind,
         current: Option<usize>,
     ) -> Option<usize> {
@@ -192,7 +199,7 @@ impl FormatEngine<'_> {
             .then(|| current.map_or(spaces, |value| value.max(spaces)))
     }
 
-    pub(crate) fn recent_double_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn recent_double_brace_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let opening = self
             .output
             .scoped()
@@ -212,7 +219,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn closed_initializer_or_array_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
         normal_indent: usize,
     ) -> Option<usize> {
@@ -240,7 +247,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn initializer_or_array_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || !matches!(
@@ -295,7 +302,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn initializer_or_array_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "}" {
             return None;
@@ -321,7 +328,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn compound_literal_opening_layout(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         normal_indent: usize,
         indent: usize,
         exact_indent_spaces: Option<usize>,
@@ -919,7 +926,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_initializer_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         closing: bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -969,7 +976,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn initializer_member_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !self.in_initializer_brace() {
             return None;
         }
@@ -1157,7 +1164,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn initializer_brace_continuation_anchor(&self, line: &str) -> Option<usize> {
+    pub(crate) fn initializer_brace_continuation_anchor(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let head = line.trimmed_end().strip_suffix('{')?.trimmed_end();
         if !head.starts_with('=') || head.as_bytes().get(1) == Some(&b'=') {
             return None;
@@ -1196,7 +1206,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn preprocessor_branch_initializer_member_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed_start().starts_with('#')
             || !(self.current_inline_array_column().is_some()
@@ -1251,7 +1261,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_initializer_closing_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
         case_unindent_spaces: usize,
     ) -> Option<usize> {
@@ -1267,7 +1277,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_commented_aggregate_member_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_extra_indent: bool,
         case_unindent_spaces: usize,
@@ -1291,7 +1301,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn aggregate_member_case_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
         normal_indent: usize,
         case_unindent_spaces: usize,

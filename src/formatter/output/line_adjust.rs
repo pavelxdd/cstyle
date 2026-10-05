@@ -2,6 +2,7 @@ use crate::config::FormatOptions;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::{SwitchCaseLineTransformer, SwitchCaseObserver};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::tabs;
 use crate::formatter::text::trim::Trimmed;
 
@@ -60,7 +61,7 @@ impl LineAdjuster {
         self.switch_case_transformer.mark_label_colon(byte_index);
     }
 
-    pub fn observe_line(&mut self, line: &str) -> LineKind {
+    pub fn observe_line(&mut self, line: &LineView<'_>) -> LineKind {
         if !self.line_observe_enabled {
             return LineKind::Normal;
         }
@@ -335,10 +336,19 @@ mod tests {
         options.tab_width = 2;
         let mut line_adjuster = LineAdjuster::new(&options);
 
-        assert_eq!(line_adjuster.observe_line("switch (x)"), LineKind::Normal);
-        assert_eq!(line_adjuster.observe_line("{"), LineKind::Normal);
+        assert_eq!(
+            line_adjuster.observe_line(&LineView::new("switch (x)")),
+            LineKind::Normal
+        );
+        assert_eq!(
+            line_adjuster.observe_line(&LineView::new("{")),
+            LineKind::Normal
+        );
         assert_eq!(line_adjuster.switch_depth(), 1);
-        assert_eq!(line_adjuster.observe_line("case 1:"), LineKind::SwitchLabel);
+        assert_eq!(
+            line_adjuster.observe_line(&LineView::new("case 1:")),
+            LineKind::SwitchLabel
+        );
         assert_eq!(
             line_adjuster.adjust_line("\treturn;".to_string()),
             "  return;"

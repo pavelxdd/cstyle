@@ -10,11 +10,15 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
 
 impl FormatEngine<'_> {
-    pub(crate) fn split_return_type_pointer_name_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_return_type_pointer_name_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if !is_pointer_prefixed_function_part(line.trimmed_start()) {
             return None;
         }
@@ -23,7 +27,10 @@ impl FormatEngine<'_> {
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(crate) fn split_trailing_return_arrow_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_trailing_return_arrow_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let current = line.trimmed_start();
         if !current.starts_with("->") || current.starts_with("->*") {
             return None;
@@ -343,7 +350,7 @@ impl FormatEngine<'_> {
 
     /// Joins a function name line to the return type on the previous output
     /// line (`--attach-return-type`, `--attach-return-type-decl`).
-    pub(crate) fn try_publish_attached_return_type(&mut self, line: &str) -> bool {
+    pub(crate) fn try_publish_attached_return_type(&mut self, line: &LineView<'_>) -> bool {
         let Some(span) = self.output.pending_tokens() else {
             return false;
         };
@@ -399,7 +406,7 @@ impl FormatEngine<'_> {
     /// (`--break-return-type`, `--break-return-type-decl`).
     pub(crate) fn try_publish_split_return_type(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
         exact_indent_spaces: Option<usize>,
     ) -> bool {

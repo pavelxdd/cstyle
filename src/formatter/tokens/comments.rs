@@ -28,6 +28,7 @@ use crate::formatter::text::line_scan::{
     line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_brace_content_offset,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -178,7 +179,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_formatted_output_comment_frame(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         output_spaces: usize,
     ) {
         self.observe_output_comment_frame(line, output_spaces, true);
@@ -213,7 +214,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn split_else_comment_row_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_else_comment_row_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if !is_comment_line(line.trimmed_start()) {
             return None;
         }
@@ -233,7 +237,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn none_style_post_comment_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -274,7 +278,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_immediate_post_comment_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
         output_spaces: usize,
@@ -298,7 +302,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn structural_split_else_post_comment_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
         body_spaces: usize,
         structural_split_else_chain: bool,
@@ -316,7 +320,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn preprocessor_else_comment_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['#', '{', '}']) {

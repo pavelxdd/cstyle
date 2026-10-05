@@ -5,6 +5,7 @@ use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
 
@@ -167,7 +168,7 @@ pub(crate) struct ObjCLineAlignment {
 impl FormatEngine<'_> {
     pub(crate) fn objc_dictionary_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         mut current: Option<usize>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -273,7 +274,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn record_closed_objc_message_indent(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         closed_brackets: &[BracketFrame],
     ) {
         let indent_spaces = closed_brackets
@@ -291,7 +292,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_objc_message_alignment(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         closed_brackets: &[BracketFrame],
         mut indent_level: usize,
         mut exact_indent_spaces: Option<usize>,
@@ -435,7 +436,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn objc_line_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn objc_line_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
         let line_start = line.trimmed_start();
         let mut spaces = None;
         if let Some(header) = ["@try", "@catch", "@finally"].into_iter().find(|header| {

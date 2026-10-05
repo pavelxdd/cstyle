@@ -12,6 +12,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     is_comment_line, is_comment_only_line, preprocessor_directive,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
@@ -155,7 +156,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn take_split_else_comment_body_indent_spaces(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if !self.preprocessor.split_else.extra_indent
@@ -192,7 +193,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn nonconditional_directive_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         normal_indent: usize,
     ) -> Option<usize> {
         let current = line.trimmed_start();
@@ -221,7 +222,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn none_style_split_else_blank_gap_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: usize,
     ) -> Option<usize> {
@@ -275,7 +276,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn none_style_split_else_body_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_state_active: bool,
         current_spaces: usize,
@@ -350,7 +351,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn structural_split_else_body_context(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<StructuralSplitElseBodyContext> {
         let trimmed = line.trimmed_start();
@@ -424,7 +425,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn structural_split_else_ordinary_row_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
         context: &StructuralSplitElseBodyContext,
     ) -> Option<usize> {
@@ -529,7 +530,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_reduced_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -601,7 +602,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn restored_preprocessor_branch_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let spaces = is_preprocessor_branch_body(line).then(|| {
             self.preprocessor.branch_stack.last().and_then(|branch| {
@@ -655,7 +656,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn prepare_split_else_line_start(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> SplitElseLineStart {
         if line_kind == LineKind::Normal
@@ -697,7 +698,7 @@ impl FormatEngine<'_> {
         self.preprocessor.split_else.reset();
     }
 
-    fn update_preprocessor_split_else_state(&mut self, line: &str, line_kind: LineKind) {
+    fn update_preprocessor_split_else_state(&mut self, line: &LineView<'_>, line_kind: LineKind) {
         if line_kind != LineKind::Normal {
             return;
         }
@@ -1088,7 +1089,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_branch_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || self.layout.frame_stack.active_brace().is_some_and(|frame| {
@@ -1123,7 +1124,11 @@ impl FormatEngine<'_> {
         Some(branch_body_spaces.max(nearest_body_spaces))
     }
 
-    pub(crate) fn observe_split_else_body_closing(&mut self, line: &str, output_spaces: usize) {
+    pub(crate) fn observe_split_else_body_closing(
+        &mut self,
+        line: &LineView<'_>,
+        output_spaces: usize,
+    ) {
         if !self.preprocessor.split_else.extra_indent {
             return;
         }
@@ -1156,7 +1161,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_local_type_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
         if !split_else_context {
@@ -1203,7 +1208,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_local_type_line_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_context: bool,
         case_unindent_spaces: usize,
@@ -1248,7 +1253,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_braced_member_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         normal_indent: usize,
         current_spaces: Option<usize>,

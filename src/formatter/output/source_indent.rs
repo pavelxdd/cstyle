@@ -2,7 +2,7 @@ use crate::config::MinConditionalIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::text::trim::Trimmed;
+use crate::formatter::text::line_view::LineView;
 
 pub(crate) fn source_indented_macro_row(
     tokens: &[Token],
@@ -37,7 +37,7 @@ pub(crate) fn source_indented_macro_row(
 impl FormatEngine<'_> {
     pub(crate) fn source_indent_override_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if self.options.min_conditional_indent != MinConditionalIndent::Zero

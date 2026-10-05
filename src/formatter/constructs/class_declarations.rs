@@ -5,6 +5,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::signature_ends_with_parameter_list;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -113,7 +114,7 @@ impl FormatEngine<'_> {
         code_opens_class_base_clause(code.trimmed_end())
     }
 
-    pub(crate) fn try_join_class_base_line(&mut self, line: &str) -> bool {
+    pub(crate) fn try_join_class_base_line(&mut self, line: &LineView<'_>) -> bool {
         if !self.may_have_class_base_access {
             return false;
         }
@@ -200,7 +201,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn simple_template_base_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn simple_template_base_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !line.trimmed_start().starts_with(':') {
             return None;
         }
@@ -213,7 +214,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn commented_class_head_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn commented_class_head_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !line
             .trimmed_start()
             .chars()
@@ -230,7 +231,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn class_base_logical_operand_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         kind: LineKind,
     ) -> Option<usize> {
         if kind != LineKind::Normal || !line.trimmed_start().starts_with("sizeof(") {

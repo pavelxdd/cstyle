@@ -8,6 +8,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
@@ -16,7 +17,7 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_w
 impl FormatEngine<'_> {
     pub(crate) fn apply_spacing_new_call_and_stream_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -105,7 +106,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_lambda_return_call_and_stream_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -247,7 +248,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_comment_brace_and_ternary_operand_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_trimmed = line.trimmed();
@@ -362,7 +363,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_late_call_and_operator_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();

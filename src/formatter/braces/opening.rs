@@ -32,6 +32,7 @@ use crate::formatter::text::line_scan::{
     is_comment_only_line, line_comment_split_limit, reverse_scan_skips_block_comment,
     trailing_comment_split_limit,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
@@ -207,7 +208,7 @@ struct OpenBracePlacement<'t> {
 impl FormatEngine<'_> {
     pub(crate) fn continuation_adjacent_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if !matches!(
             self.options.brace_style,
@@ -275,7 +276,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn isolated_opening_brace_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -337,7 +338,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn lambda_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn lambda_opening_brace_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if line.trimmed() != "{" {
             return None;
         }
@@ -359,7 +360,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn lambda_body_indent_spaces_after_opening_brace(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if line_start.starts_with(['{', '}'])
@@ -379,7 +380,10 @@ impl FormatEngine<'_> {
             .map(|frame| frame.body_indent_column)
     }
 
-    pub(crate) fn embedded_capture_lambda_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn embedded_capture_lambda_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if self.options.brace_style != BraceStyle::None {
             return None;
         }
@@ -423,7 +427,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn whitesmith_identifier_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         normal_indent: usize,
     ) -> Option<usize> {
         if line.trimmed() != "{"
@@ -447,7 +451,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn whitesmith_operator_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
@@ -481,7 +485,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn whitesmith_definition_or_command_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
@@ -635,7 +639,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn gnu_continuation_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn gnu_continuation_opening_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if line.trimmed() != "{" || self.options.brace_style != BraceStyle::Gnu {
             return None;
         }
@@ -664,7 +671,10 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn gnu_command_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn gnu_command_opening_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if self.options.brace_style != BraceStyle::Gnu || line.trimmed() != "{" {
             return None;
         }
@@ -707,7 +717,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn vtk_or_ratliff_headerless_command_opening_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if !matches!(
             self.options.brace_style,

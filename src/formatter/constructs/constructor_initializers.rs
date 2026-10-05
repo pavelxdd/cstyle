@@ -13,6 +13,7 @@ use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line,
     trailing_comment_split_limit, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -161,7 +162,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn replayed_constructor_lambda_header_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if self.options.max_code_length.is_none()
             || self
@@ -418,7 +419,10 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn constructor_initializer_header_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn constructor_initializer_header_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !trimmed.starts_with(':') || trimmed.starts_with("::") {
             return None;
@@ -464,7 +468,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_continuation_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
@@ -498,7 +502,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_preprocessor_branch_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || !trimmed.starts_with(',') || self.layout.nesting.paren_depth > 0 {
@@ -541,7 +545,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_open_paren_arg_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}', ')']) {
@@ -581,7 +585,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_argument_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
@@ -598,7 +602,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_closing_paren_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !trimmed.starts_with(')')
@@ -636,7 +640,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn constructor_initializer_ternary_arm_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !trimmed.starts_with(['?', ':'])

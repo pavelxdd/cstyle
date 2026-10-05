@@ -26,6 +26,7 @@ use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     unmatched_open_paren_column,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::{
@@ -47,7 +48,7 @@ struct InitialLineFacts {
 impl FormatEngine<'_> {
     pub(crate) fn initial_line_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         observed_line_kind: LineKind,
         replay: &LineReplayLayout,
     ) -> LineLayout {
@@ -188,7 +189,7 @@ impl FormatEngine<'_> {
 
     fn normal_line_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         split_else_line_start: &SplitElseLineStart,
         facts: &InitialLineFacts,
@@ -311,7 +312,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_initial_syntax_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -401,7 +402,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_initial_operator_and_header_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -556,7 +557,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_separated_header_and_comment_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         if layout.line_kind == LineKind::Normal
@@ -710,7 +711,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_label_and_conditional_context_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -901,7 +902,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_top_level_and_initializer_prefix_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         if layout.line_kind == LineKind::Normal
@@ -1052,7 +1053,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_constructor_and_call_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -1139,7 +1140,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_ternary_template_and_source_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -1347,7 +1348,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_brace_array_and_objc_dictionary_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -1522,7 +1523,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_objc_pre_alignment_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -1569,7 +1570,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn align_objc_and_publish_return_type(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         line_closed_brackets: &[BracketFrame],
         mut layout: LineLayout,
     ) -> LineRoute<AlignedLineLayout> {

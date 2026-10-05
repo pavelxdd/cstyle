@@ -31,6 +31,7 @@ use crate::formatter::text::line_scan::{
     code_holds_word, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::tokens::operators::{
@@ -42,7 +43,7 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_id
 impl FormatEngine<'_> {
     pub(crate) fn begin_contextual_line_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -252,7 +253,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_previous_output_call_and_initializer_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -428,7 +429,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_source_indent_brace_and_style_operator_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         case_unindent_closing_line: bool,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -615,7 +616,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_previous_statement_and_operator_prefix_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
@@ -839,7 +840,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_label_else_and_conditional_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -1097,7 +1098,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_none_style_else_and_conditional_body_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -1466,7 +1467,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_normal_literal_comma_and_split_else_entry_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -1607,7 +1608,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_none_style_split_else_body_and_closing_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -1734,7 +1735,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_emitted_split_else_call_initializer_and_ternary_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -1938,7 +1939,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_header_label_and_switch_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -2235,7 +2236,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_structural_split_else_body_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let output_spaces = contextual.output_spaces;
@@ -2337,7 +2338,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_string_call_and_emitted_split_else_case_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -2579,7 +2580,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_macro_case_brace_and_return_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -2737,7 +2738,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_conditional_literal_paren_and_else_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -2899,7 +2900,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn apply_call_initializer_and_case_control_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
@@ -3283,7 +3284,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_final_sibling_and_directive_contextual_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
@@ -3298,7 +3299,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_preprocessor_and_split_else_recovery_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let split_else_state_active = contextual.split_else_state_active;

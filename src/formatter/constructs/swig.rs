@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct SwigState {
@@ -23,7 +24,7 @@ impl FormatEngine<'_> {
         self.swig.may_have_input = may_have_input;
     }
 
-    pub(crate) fn try_emit_swig_line(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_swig_line(&mut self, line: &LineView<'_>) -> bool {
         if !self.swig.may_have_input
             && self.swig.pending_typemap_line.is_none()
             && self.swig.pythoncode_indent_spaces.is_none()

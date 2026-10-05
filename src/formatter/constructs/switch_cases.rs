@@ -11,6 +11,7 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -891,7 +892,7 @@ struct ActiveCaseLayout {
 impl FormatEngine<'_> {
     pub(crate) fn split_else_header_operator_case_compensation_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
         header_operator_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -916,7 +917,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_switch_comment_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_output_context: bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -940,7 +941,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_adjusted_case_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_context: bool,
         current_spaces: Option<usize>,
@@ -997,7 +998,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_case_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_context: bool,
     ) -> Option<usize> {
@@ -1050,7 +1051,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_case_closed_block_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1117,7 +1118,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_case_completed_call_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         normal_indent: usize,
         current_spaces: Option<usize>,
@@ -1174,7 +1175,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn case_parenthesized_block_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
     ) -> Option<usize> {
         let case_unindent =
@@ -1187,7 +1188,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn case_control_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         normal_indent: usize,
         current_spaces: usize,
     ) -> Option<usize> {
@@ -1211,7 +1212,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn case_post_comment_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1251,7 +1252,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn logical_case_unindent_adjusted_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
         normal_indent: usize,
     ) -> Option<usize> {
@@ -1391,7 +1392,7 @@ impl FormatEngine<'_> {
     pub(crate) fn case_preprocessor_body_indent_extra(
         &self,
         line_kind: LineKind,
-        line: &str,
+        line: &LineView<'_>,
     ) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
@@ -1613,7 +1614,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn initial_switch_case_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         mut exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1704,7 +1705,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn emitted_case_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
@@ -1789,7 +1790,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn immediate_case_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         closing_line_needs_unindent: bool,
     ) -> Option<usize> {
         if !closing_line_needs_unindent || self.options.indent_cases {
@@ -1831,7 +1832,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn case_label_block_indent_override(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         structural_indent: usize,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1874,7 +1875,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_case_control_closing_indent_override(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         structural_indent: usize,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1944,7 +1945,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn compound_case_label_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn compound_case_label_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
         if self.options.indent_cases {
             return None;
         }
@@ -1972,7 +1973,10 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn split_switch_closing_indent_override(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_switch_closing_indent_override(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if line.trimmed() != "}" {
             return None;
         }
@@ -1985,7 +1989,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn post_block_case_body_indent_override(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         closes_outer_delimiter: bool,
         has_owned_continuation: bool,
@@ -2039,7 +2043,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_case_block_body_layout(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         uses_normal_indent: bool,
         closes_outer_delimiter: bool,
@@ -2117,7 +2121,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn switch_case_frame_closing_indent_override(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         if line.trimmed() != "}" {

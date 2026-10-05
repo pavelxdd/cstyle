@@ -14,6 +14,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_brace_imbalance, preprocessor_directive};
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
@@ -47,7 +48,10 @@ fn split_return_call_with_comment(line: &mut String) -> Option<String> {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn compound_closing_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn compound_closing_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if !line.trimmed_start().starts_with("}, ") {
             return None;
         }
@@ -75,7 +79,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn unmatched_closing_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn unmatched_closing_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         (line.trimmed() == "}" && self.layout.nesting.last_closed_brace_type.is_none()).then_some(0)
     }
 
@@ -128,7 +135,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn isolated_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         case_unindent_closing_line: bool,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
@@ -178,7 +185,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn continuation_adjacent_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if !matches!(
             self.options.brace_style,
@@ -206,7 +213,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn gnu_command_closing_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn gnu_command_closing_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if self.options.brace_style != BraceStyle::Gnu || line.trimmed() != "}" {
             return None;
         }
@@ -224,7 +234,10 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn ratliff_command_closing_header_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn ratliff_command_closing_header_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if self.options.brace_style != BraceStyle::Ratliff
             || !line.trimmed_start().starts_with("} ")
         {
@@ -237,7 +250,7 @@ impl FormatEngine<'_> {
             .map(|frame| frame.header_indent_column + self.options.indent_width)
     }
 
-    pub(crate) fn lambda_closing_brace_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn lambda_closing_brace_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !line.trimmed_start().starts_with('}') {
             return None;
         }
@@ -849,7 +862,10 @@ impl FormatEngine<'_> {
         Some(line)
     }
 
-    pub(crate) fn split_else_body_closing_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_else_body_closing_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         (self.preprocessor.split_else.extra_indent
             && line.trimmed() == "}"
             && self.layout.indentation.indent() <= self.preprocessor.split_else.brace_indent)
@@ -863,7 +879,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_closing_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -882,7 +898,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn nested_closing_brace_indent_reset(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
         output_spaces: usize,
     ) -> Option<usize> {
@@ -901,7 +917,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn root_preprocessor_closing_brace_indent_reset(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
         output_spaces: usize,
     ) -> Option<usize> {
@@ -917,7 +933,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn nested_if_closing_brace_indent_reset(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
         output_spaces: usize,
     ) -> Option<usize> {
@@ -937,7 +953,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn same_line_nested_header_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if line.trimmed() != "}" {
             return None;
@@ -976,7 +992,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ratliff_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         normal_indent: usize,
     ) -> Option<usize> {
         if line.trimmed() != "}" || self.options.brace_style != BraceStyle::Ratliff {
@@ -1024,7 +1040,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn same_line_nested_header_closing_brace_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
         if line.trimmed() != "}" {
@@ -1056,7 +1072,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_none_style_closing_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_state_active: bool,
         current_spaces: Option<usize>,
@@ -1084,7 +1100,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn none_style_conditional_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: usize,
     ) -> Option<usize> {
@@ -1160,7 +1176,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn preprocessor_interrupted_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
         if !split_else_context {
@@ -1231,7 +1247,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn structural_split_else_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: usize,
         structural_split_else_chain: bool,
     ) -> Option<usize> {
@@ -1307,7 +1323,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_case_closing_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -1337,7 +1353,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_closing_indent_ceiling(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
         if !self.preprocessor.split_else.extra_indent
@@ -1355,7 +1371,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn preprocessor_directive_closing_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
     ) -> Option<usize> {
         if line.trimmed() != "}"
@@ -1378,7 +1394,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn recent_split_else_command_closing_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
         current_spaces: Option<usize>,
         recent_split_else_chain: bool,

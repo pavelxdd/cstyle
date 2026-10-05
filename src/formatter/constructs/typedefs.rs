@@ -3,6 +3,7 @@ use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::PointerRole;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -58,7 +59,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn update_typedef_function_pointer_frame(&mut self, line: &str) {
+    pub(crate) fn update_typedef_function_pointer_frame(&mut self, line: &LineView<'_>) {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
         let trimmed = line.trimmed_start();

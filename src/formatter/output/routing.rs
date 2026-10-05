@@ -1,10 +1,11 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
-    fn route_line_before_layout(&mut self, line: &str) -> LineRoute<LineKind> {
+    fn route_line_before_layout(&mut self, line: &LineView<'_>) -> LineRoute<LineKind> {
         if self.try_emit_whitesmith_lambda_close(line)
             || self.try_split_lambda_body_header(line)
             || self.try_split_operator_body(line)
@@ -28,6 +29,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn finish_line_text(&mut self, line: &str) {
+        let line = &LineView::new(line);
         let replay = self.take_line_replay_layout(line);
         let line_closed_brackets = self.layout.frame_stack.take_line_closed_brackets();
         self.record_closed_objc_message_indent(line, &line_closed_brackets);

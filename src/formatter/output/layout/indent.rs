@@ -27,6 +27,7 @@ use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_only_line, reverse_scan_skips_block_comment,
     trailing_comment_split_limit, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::{
     first_string_literal_start, last_string_literal_start, single_string_literal_comma_line,
@@ -39,7 +40,11 @@ use crate::formatter::tokens::operators::{
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 impl FormatEngine<'_> {
-    pub(super) fn member_init_continuation_extra(&self, line_kind: LineKind, line: &str) -> usize {
+    pub(super) fn member_init_continuation_extra(
+        &self,
+        line_kind: LineKind,
+        line: &LineView<'_>,
+    ) -> usize {
         if line_kind != LineKind::Normal {
             return 0;
         }
@@ -97,7 +102,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn string_literal_continuation_after_layout_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !starts_string_literal_token(trimmed) {
@@ -328,7 +333,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn function_parameter_continuation_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed_line = line.trimmed_start();
         if trimmed_line.is_empty()
@@ -574,7 +579,7 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(super) fn asm_colon_line_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(super) fn asm_colon_line_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !line.trimmed_start().starts_with(':') {
             return None;
         }
@@ -600,7 +605,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn contextual_line_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         indent: usize,
         normal_indent: usize,
         exact_indent_spaces: Option<usize>,
@@ -677,7 +682,7 @@ impl FormatEngine<'_> {
     /// matching rule wins.
     fn previous_line_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current: &str,
         previous_index: usize,
         natural: usize,

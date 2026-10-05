@@ -3,9 +3,10 @@ use crate::formatter::constructs::labels::replayed_inline_access_body_indent_spa
 use crate::formatter::constructs::switch_cases::replayed_inline_case_body_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::LineReplayLayout;
+use crate::formatter::text::line_view::LineView;
 
 impl FormatEngine<'_> {
-    pub(super) fn take_line_replay_layout(&mut self, line: &str) -> LineReplayLayout {
+    pub(super) fn take_line_replay_layout(&mut self, line: &LineView<'_>) -> LineReplayLayout {
         let input_continuation_indent = self
             .layout
             .continuation_indent

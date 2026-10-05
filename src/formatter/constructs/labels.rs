@@ -15,6 +15,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
@@ -203,7 +204,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn following_label_body_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         if line.trimmed_start().starts_with(['{', '}', '#']) {
@@ -260,7 +261,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn label_block_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         let line_trimmed = line.trimmed();
@@ -307,7 +308,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_label_block_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         kind: LineKind,
         uses_normal_indent: bool,
         closes_outer_delimiter: bool,
@@ -352,7 +353,7 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn closed_label_block_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn closed_label_block_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if line.trimmed() != "}" {
             return None;
         }
@@ -370,7 +371,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_emitted_label_body_indent(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         kind: LineKind,
         line_indent_spaces: usize,
     ) {

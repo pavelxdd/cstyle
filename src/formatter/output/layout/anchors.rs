@@ -19,6 +19,7 @@ use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::preprocessor_directive;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -116,7 +117,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_tree_anchor_layout(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         if layout.line_kind == LineKind::SwitchLabel

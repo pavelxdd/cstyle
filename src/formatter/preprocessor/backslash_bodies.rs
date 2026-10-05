@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct BackslashBodyState {
@@ -21,7 +22,7 @@ impl FormatEngine<'_> {
         self.backslash_body.may_have_input = may_have_input;
     }
 
-    pub(crate) fn try_emit_backslash_body(&mut self, line: &str) -> bool {
+    pub(crate) fn try_emit_backslash_body(&mut self, line: &LineView<'_>) -> bool {
         if !self.backslash_body.may_have_input && self.backslash_body.parts.is_none() {
             return false;
         }

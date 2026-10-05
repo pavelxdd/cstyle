@@ -2,6 +2,7 @@ use crate::config::LineBetweenMembers;
 use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -37,7 +38,7 @@ fn nested_type_start(trimmed: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn insert_member_spacing_before_line(&mut self, line: &str) {
+    pub(crate) fn insert_member_spacing_before_line(&mut self, line: &LineView<'_>) {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }
@@ -72,7 +73,7 @@ impl FormatEngine<'_> {
         self.layout.pending_member_spacing = None;
     }
 
-    pub(super) fn observe_member_spacing_boundary(&mut self, line: &str) {
+    pub(super) fn observe_member_spacing_boundary(&mut self, line: &LineView<'_>) {
         if self.options.line_between_members == LineBetweenMembers::None {
             return;
         }
@@ -107,7 +108,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn current_member_spacing_boundary(&self, line: &str) -> Option<MemberSpacingBoundary> {
+    fn current_member_spacing_boundary(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<MemberSpacingBoundary> {
         let trimmed = line.trimmed();
         if trimmed.is_empty()
             || trimmed.starts_with(['#', '{', '}'])

@@ -4,6 +4,7 @@ use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_litera
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
@@ -233,7 +234,10 @@ impl FormatEngine<'_> {
             && self.layout.template_declaration.angle_depth + angle_depth_delta(line) <= 0
     }
 
-    pub(crate) fn template_continuation_line_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn template_continuation_line_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let line_trimmed = line.trimmed();
         if !self.layout.template_declaration.uses_source_indent {
             return None;
@@ -262,7 +266,7 @@ impl FormatEngine<'_> {
         spaces
     }
 
-    pub(crate) fn observe_template_declaration_line(&mut self, line: &str) {
+    pub(crate) fn observe_template_declaration_line(&mut self, line: &LineView<'_>) {
         let trimmed = line.trimmed();
         let starts_template = trimmed.starts_with("template");
         if !starts_template && !self.layout.template_declaration.uses_source_indent {

@@ -15,6 +15,7 @@ pub(crate) mod groups;
 pub(crate) mod statements;
 
 use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::text::line_view::LineView;
 use blocks::{Blocks, is_code_token, next_code_token};
 use functions::Functions;
 use groups::Groups;
@@ -94,7 +95,7 @@ impl SourceTree {
     /// `None` when the line's tokens do not follow the source up to `target`.
     pub(crate) fn token_offset_in_line(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         first: usize,
         target: usize,
     ) -> Option<usize> {

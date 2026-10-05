@@ -18,6 +18,7 @@ use crate::formatter::text::line_scan::{
     is_comment_line, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::{starts_string_literal_token, string_literal_token_end};
 use crate::formatter::tokens::operators::{
@@ -95,7 +96,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn replayed_header_operator_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         delimiter_owner: Option<usize>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -116,7 +117,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn maximum_length_return_chain_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         kind: LineKind,
     ) -> Option<usize> {
         let current = line.trimmed_start();
@@ -148,7 +149,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn first_ordinary_ternary_arm_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         // Indenting after parens stacks nothing for a `?`.
@@ -195,7 +196,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ordinary_ternary_colon_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         normal_indent: usize,
     ) -> Option<usize> {
@@ -227,7 +228,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn completed_ternary_call_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['?', ':']) {
@@ -251,7 +252,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn operand_after_question_row_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
@@ -278,7 +279,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn leading_operator_after_ternary_colon_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
@@ -307,7 +308,10 @@ impl FormatEngine<'_> {
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(crate) fn scoped_ternary_continuation_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn scoped_ternary_continuation_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if line.trimmed_start().starts_with(['}', '#'])
             || !line
                 .trimmed_start()
@@ -326,7 +330,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn allman_operator_or_preprocessor_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         normal_indent: usize,
         header_indent_spaces: Option<usize>,
@@ -411,7 +415,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn stream_after_closed_or_inline_row_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
         if !(current.starts_with("<<") || current.starts_with(">>"))
@@ -432,7 +436,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn logical_continuation_after_commented_noexcept_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if line_start.starts_with("//") || line_start.starts_with('{') {
@@ -545,7 +549,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn stream_chain_frame_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn stream_chain_frame_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !trimmed.starts_with("<<") && !trimmed.starts_with(">>") {
             return None;
@@ -558,7 +562,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn parenthesized_after_trailing_stream_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if !line.trimmed_start().starts_with('(') {
             return None;
@@ -584,7 +588,10 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn comment_separated_stream_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn comment_separated_stream_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if !starts_with_chain_operator(line.trimmed_start()) {
             return None;
         }
@@ -615,7 +622,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn comment_separated_leading_operator_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if !starts_with_chain_operator(line.trimmed_start()) {
             return None;
@@ -638,7 +645,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn comment_terminated_logical_chain_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
@@ -657,7 +664,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn maximum_length_logical_header_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -701,7 +708,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn set_next_line_indent_after_ternary_colon(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: usize,
     ) {
@@ -735,7 +742,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn pico_leading_operator_after_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         if self.options.brace_style != BraceStyle::Pico
             || !line.trimmed_start().starts_with([
@@ -818,7 +825,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn line_start_stream_adjacent_string_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if !starts_string_literal_token(line_start) {
@@ -926,7 +933,10 @@ impl FormatEngine<'_> {
         Some(spaces + case_unindent)
     }
 
-    pub(crate) fn ternary_operator_sibling_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn ternary_operator_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
@@ -955,7 +965,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn assignment_ternary_branch_after_colon_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
@@ -990,7 +1000,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn return_ternary_branch_after_colon_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
@@ -1020,7 +1030,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn return_ternary_call_argument_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn return_ternary_call_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
@@ -1051,7 +1064,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ternary_call_clear_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal || !line.trimmed_end().ends_with(");") {
@@ -1181,7 +1194,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn contextual_ternary_arm_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         previous: &str,
     ) -> Option<usize> {
         let current = line.trimmed_start();
@@ -1425,7 +1438,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn operator_chain_owns_continuation(&self, line: &str) -> bool {
+    pub(crate) fn operator_chain_owns_continuation(&self, line: &LineView<'_>) -> bool {
         let follows_stream_operator =
             self.output
                 .last_line_outside_comment()
@@ -1439,7 +1452,10 @@ impl FormatEngine<'_> {
             || starts_with_chain_operator(line.trimmed_start())
     }
 
-    pub(crate) fn header_operator_continuation_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn header_operator_continuation_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !(trimmed.starts_with("&&") || trimmed.starts_with("||")) {
             return None;
@@ -1548,7 +1564,10 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(crate) fn logical_condition_sibling_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn logical_condition_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with(['#', '{', '}']) {
             return None;
@@ -1659,7 +1678,10 @@ impl FormatEngine<'_> {
         None
     }
 
-    pub(crate) fn return_ternary_tail_output_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn return_ternary_tail_output_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         if !line.trimmed_start().starts_with('?') {
             return None;
         }
@@ -2196,7 +2218,7 @@ impl FormatEngine<'_> {
             })
     }
 
-    pub(crate) fn split_else_operator_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_else_operator_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         // Outside the body of a split `else`, the tree places the line.
         if self.output.pending_tokens().is_some_and(|span| {
             !self.tree.statements.in_split_else_body(span.first)
@@ -2280,7 +2302,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_ternary_sibling_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
         if !split_else_context || !line.contains(" ? ") {
@@ -2293,7 +2315,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_ternary_comma_sibling_indent_floor(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
         current_spaces: usize,
     ) -> Option<usize> {
@@ -2310,7 +2332,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_completed_ternary_call_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
@@ -2333,7 +2355,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_else_brace_logical_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         structural_split_else_chain: bool,
     ) -> Option<usize> {
         let split_else_chain =
@@ -2383,7 +2405,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn none_style_split_else_logical_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
         split_else_state_active: bool,
     ) -> Option<usize> {
@@ -2440,7 +2462,10 @@ impl FormatEngine<'_> {
         })?
     }
 
-    pub(crate) fn split_else_assignment_logical_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_else_assignment_logical_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let current = line.trimmed_start();
         if !(current.starts_with("&&") || current.starts_with("||"))
             || !self.recent_split_else_output_chain_active()
@@ -2464,7 +2489,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_split_else_logical_statement_indent(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         line_kind: LineKind,
     ) {
         if line_kind != LineKind::Normal || !line.trimmed_end().ends_with(';') {

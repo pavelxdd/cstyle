@@ -9,13 +9,14 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{code_holds_word, preprocessor_directive};
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_brace_header_case_and_initializer_correction_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -227,7 +228,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn apply_label_switch_case_and_opening_brace_correction_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
@@ -313,7 +314,7 @@ impl FormatEngine<'_> {
     /// `if`, from the structure tree.
     pub(crate) fn apply_final_recovery_floor_and_replay_layout(
         &mut self,
-        line: &str,
+        line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut layout: LineLayout,
     ) -> LineLayout {
