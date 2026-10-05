@@ -1452,7 +1452,15 @@ impl FormatEngine<'_> {
                             rest.starts_with("switch ") || rest.starts_with("switch(")
                         })
                 {
-                    return Some(self.output.lead_width(index, tab_width));
+                    let lead = self.output.lead_width(index, tab_width);
+                    // VTK indents the brace a level, where the labels stand.
+                    let indented_brace =
+                        self.options.brace_style == BraceStyle::Vtk && self.options.indent_switches;
+                    return Some(
+                        lead.saturating_sub(
+                            usize::from(indented_brace) * self.options.indent_width,
+                        ),
+                    );
                 }
             }
             depth = depth.saturating_sub(meta.opens);

@@ -1431,3 +1431,37 @@ fn vtk_indented_switches_indent_an_initializer_brace_in_a_case_block() {
         )
     );
 }
+
+#[test]
+fn vtk_indented_switches_place_else_switch_labels_at_the_indented_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=vtk".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n  if (a)\n    x();\n  else switch (idx) {\n    case 1: return 2;\n    default: { y(); return 3; }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)",
+            "        x();",
+            "    else switch (idx)",
+            "            {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "                {",
+            "                y();",
+            "                return 3;",
+            "                }",
+            "            }",
+            "}",
+        )
+    );
+}
