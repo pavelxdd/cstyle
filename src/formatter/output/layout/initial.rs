@@ -20,6 +20,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
@@ -368,7 +369,7 @@ impl FormatEngine<'_> {
         );
         if layout.line_kind == LineKind::Normal
             && line.trim_start().starts_with('#')
-            && line.contains(['{', '}'])
+            && line.contains_any_byte(b"{}")
             && preprocessor_directive(line)
                 .is_some_and(|directive| !is_known_preprocessor_directive(directive))
         {

@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{advance_quoted_literal, unmatched_open_paren_columns};
 use crate::source::lex::{
     is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
@@ -410,7 +411,7 @@ fn define_body_is_expression_continuation(parts: &[&str]) -> bool {
             && !trimmed.starts_with('#')
             && !trimmed.starts_with("//")
             && !trimmed.starts_with("/*")
-            && !trimmed.contains(['{', '}', ';'])
+            && !trimmed.contains_any_byte(b"{};")
             // A control header starts statements, not an expression.
             && !["if", "for", "while", "switch", "do", "else"].iter().any(|header| {
                 trimmed.strip_prefix(header).is_some_and(|rest| {
@@ -927,7 +928,7 @@ impl FormatEngine<'_> {
             define_expression_continuation_spaces(first_line, self.options.tab_width)
                 .or_else(|| {
                     // An assignment the replacement starts registers its value.
-                    (!first_replacement.contains(['{', ';']))
+                    (!first_replacement.contains_any_byte(b"{;"))
                         .then(|| {
                             let (body, _) = strip_define_backslash(first_line);
                             define_assignment_align_column(body.trim_end(), self.options.tab_width)

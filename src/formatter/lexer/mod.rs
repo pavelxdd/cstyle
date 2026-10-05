@@ -2,6 +2,7 @@
 
 use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
@@ -42,7 +43,7 @@ fn hash_after_statement_opens_preprocessor(chars: &[char], line_start: usize, ha
         .map_or(chars.len(), |offset| hash + offset);
     let line = chars[hash..line_end].iter().collect::<String>();
     let prefix = &chars[line_start..hash];
-    if line.contains(['{', '}'])
+    if line.contains_any_byte(b"{}")
         || line[1..].contains('#')
         || prefix.contains(&'#')
         || has_unclosed_grouping(prefix)
@@ -92,7 +93,7 @@ fn unknown_hash_line_has_brace_code(line: &str) -> bool {
     let Some(directive) = preprocessor_directive(line) else {
         return false;
     };
-    !is_known_hash_directive(directive) && line.contains(['{', '}'])
+    !is_known_hash_directive(directive) && line.contains_any_byte(b"{}")
 }
 
 fn is_known_hash_directive(directive: &str) -> bool {

@@ -389,14 +389,7 @@ impl FormatEngine<'_> {
                     && !code.ends_with(';')
                     && leading_visual_width(line, self.options.tab_width) == body_indent_spaces
             });
-        let split_else_chain = structural_chain
-            || self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(128)
-                .any(|line| line.trim() == "else" || line.trim_end().ends_with("} else"));
+        let split_else_chain = structural_chain || self.output.recent_scoped_else_line(128);
         let recent_preprocessor = split_else_chain
             && self
                 .output
@@ -985,14 +978,7 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         if matches!(previous_directive, "if" | "ifdef" | "ifndef") {
-            let split_else_chain = active_split_else
-                || self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .take(128)
-                    .any(|line| line.trim() == "else" || line.trim_end().ends_with("} else"));
+            let split_else_chain = active_split_else || self.output.recent_scoped_else_line(128);
             if split_else_chain {
                 for branch in self
                     .output

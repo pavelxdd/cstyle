@@ -1,6 +1,19 @@
 use crate::formatter::lexer::{CommentKind, Token, token_text, tokenize};
 use crate::source::lex::is_digit_separator;
 
+/// Byte-set membership for ASCII sets: one pass over the bytes, where a
+/// `char` array pattern decodes every character.
+pub(crate) trait ContainsAnyByte {
+    fn contains_any_byte(&self, set: &[u8]) -> bool;
+}
+
+impl ContainsAnyByte for str {
+    fn contains_any_byte(&self, set: &[u8]) -> bool {
+        debug_assert!(set.is_ascii());
+        self.bytes().any(|byte| set.contains(&byte))
+    }
+}
+
 pub(crate) fn is_comment_line(line: &str) -> bool {
     let trimmed = line.trim_start();
     // A block comment row leads with a bare `*`; code may lead with `*p`.
@@ -249,7 +262,7 @@ fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
 /// ignoring braces inside strings and comments. A `}` without a matching `{` earlier on the
 /// same line counts as an unmatched close; a `{` left open at the end counts as an open.
 pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
-    if !line.contains(['{', '}']) {
+    if !line.contains_any_byte(b"{}") {
         return (0, 0);
     }
     // Every byte that matters is ASCII, and no byte of a wider character

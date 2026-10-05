@@ -1075,13 +1075,14 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trim().is_empty())?;
         let previous_code = self.output.code_of(previous).trim_end();
-        let in_preprocessor_else_context = self.output.may_have_else()
-            && self.output.may_have_hash()
-            && self.output.scoped_range().rev().take(128).any(|index| {
+        if !previous_code.ends_with(',') || unmatched_open_paren_column(previous_code).is_none() {
+            return None;
+        }
+        let in_preprocessor_else_context =
+            self.output.scoped_range().rev().take(128).any(|index| {
                 let trimmed = self.output.code_before_comment(index).trim();
                 trimmed == "else" || trimmed.ends_with("} else")
-            })
-            && self
+            }) && self
                 .output
                 .scoped_range()
                 .rev()
@@ -1093,10 +1094,8 @@ impl FormatEngine<'_> {
                 })
                 .take(128)
                 .any(|index| self.output.trimmed(index).starts_with('#'));
-        (in_preprocessor_else_context
-            && previous_code.ends_with(',')
-            && unmatched_open_paren_column(previous_code).is_some())
-        .then_some(leading_visual_width(previous, self.options.tab_width))
+        in_preprocessor_else_context
+            .then_some(leading_visual_width(previous, self.options.tab_width))
     }
 
     pub(crate) fn recent_ternary_argument_sibling_indent_spaces(

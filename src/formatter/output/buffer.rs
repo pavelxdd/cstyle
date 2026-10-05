@@ -34,6 +34,12 @@ pub(crate) struct LineBraceMeta {
     comment_split_limit: usize,
     /// Whether the line's text holds `new `.
     mentions_new: bool,
+    /// Whether the trimmed line is `else` or ends with `} else`.
+    else_line: bool,
+}
+
+fn is_else_line(trimmed: &str) -> bool {
+    trimmed == "else" || trimmed.ends_with("} else")
 }
 
 fn is_raw_literal(token: &Token) -> bool {
@@ -97,6 +103,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         paren_last_open_column: paren_opens.last().copied(),
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
+        else_line: is_else_line(line.trim()),
     }
 }
 
@@ -119,6 +126,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         paren_last_open_column: None,
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
+        else_line: is_else_line(line.trim()),
     }
 }
 
@@ -187,11 +195,14 @@ pub(crate) struct OutputBuffer {
     may_have_question: bool,
     last_non_empty_index: Cell<Option<usize>>,
     last_non_empty_dirty: Cell<bool>,
-    /// Counts changes to lines already pushed.
+    /// Counts changes to lines already pushed and to the scope.
     version: u64,
     /// The last look back for the open brace a closing brace would close:
     /// the line count and version it read, and the line it found.
     closing_brace_open_cache: Cell<Option<(usize, u64, Option<usize>)>>,
+    /// The last line outside comments, with the line count and version it
+    /// was found for.
+    last_outside_comment_cache: Cell<Option<(usize, u64, Option<usize>)>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -469,6 +480,7 @@ impl OutputBuffer {
                     paren_last_open_column: None,
                     comment_split_limit: trailing_comment_split_limit(line),
                     mentions_new: line.contains("new "),
+                    else_line: is_else_line(line.trim()),
                 }
             } else {
                 compute_line_brace_meta(line)
@@ -633,6 +645,15 @@ impl OutputBuffer {
         self.scope_start.min(self.lines.len())..self.lines.len()
     }
 
+    /// Whether one of the last `count` lines in scope is `else` or ends
+    /// with `} else`.
+    pub(crate) fn recent_scoped_else_line(&self, count: usize) -> bool {
+        self.scoped_range()
+            .rev()
+            .take(count)
+            .any(|index| self.brace_meta(index).else_line)
+    }
+
     /// Whether one of the last `count` lines in scope holds `new `.
     pub(crate) fn recent_scoped_line_mentions_new(&self, count: usize) -> bool {
         self.scoped_range()
@@ -644,6 +665,8 @@ impl OutputBuffer {
     pub(crate) fn clear_scope(&mut self) {
         self.scope_start = 0;
         self.pending_scope_start = None;
+        // What layout reads back depends on the scope.
+        self.version += 1;
     }
 
     /// Starts a new top-level construct at line `index` once a line after
@@ -664,6 +687,20 @@ impl OutputBuffer {
     /// The last non-empty line, unless it continues a block comment: the
     /// tail of a comment is no code, whatever its words.
     pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {
+        let key = (self.lines.len(), self.version);
+        let index = match self.last_outside_comment_cache.get() {
+            Some((len, version, index)) if (len, version) == key => index,
+            _ => {
+                let index = self.find_last_line_outside_comment();
+                self.last_outside_comment_cache
+                    .set(Some((key.0, key.1, index)));
+                index
+            }
+        };
+        index.map(|index| &self.lines[index])
+    }
+
+    fn find_last_line_outside_comment(&self) -> Option<usize> {
         let index = self.last_non_empty_index()?;
         // A backslash-continued macro body is no code of the lines after it.
         if self
@@ -674,7 +711,7 @@ impl OutputBuffer {
         {
             return None;
         }
-        (self.comment_start_index(index) == index).then(|| &self.lines[index])
+        (self.comment_start_index(index) == index).then_some(index)
     }
 
     /// The last non-empty line in the current scope that is not only a

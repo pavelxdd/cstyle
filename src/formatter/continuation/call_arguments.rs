@@ -13,6 +13,7 @@ use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
     line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
@@ -1143,6 +1144,18 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn enclosing_macro_call_output_context(&self) -> bool {
+        let key = (self.output.len(), self.output.version());
+        if let Some((cached, context)) = self.macro_call_context_cache.get()
+            && cached == key
+        {
+            return context;
+        }
+        let context = self.scan_enclosing_macro_call_output_context();
+        self.macro_call_context_cache.set(Some((key, context)));
+        context
+    }
+
+    fn scan_enclosing_macro_call_output_context(&self) -> bool {
         let mut close_pending = 0usize;
         let mut in_block_comment = false;
         for previous in self.output.scoped().iter().rev().take(8) {
@@ -1427,7 +1440,7 @@ impl FormatEngine<'_> {
                                     .chars()
                                     .next_back()
                                     .is_none_or(|ch| !is_identifier_continue(ch))
-                                    && !code[index + "new ".len()..open].contains(['(', ')'])
+                                    && !code[index + "new ".len()..open].contains_any_byte(b"()")
                             })
                     });
                 if has_over_max_new_call {
@@ -1536,6 +1549,10 @@ impl FormatEngine<'_> {
     }
 
     fn new_empty_call_base_indent_spaces(&self) -> Option<usize> {
+        // Only a line holding ` new ` gives the base.
+        if !self.output.recent_scoped_line_mentions_new(64) {
+            return None;
+        }
         for line in self
             .output
             .scoped()
@@ -1552,7 +1569,7 @@ impl FormatEngine<'_> {
                 let new_index = trimmed.rfind(" new ")?;
                 let open_index = trimmed.rfind('(')?;
                 if new_index < open_index
-                    && !trimmed[new_index + "new ".len()..open_index].contains(['(', ')'])
+                    && !trimmed[new_index + "new ".len()..open_index].contains_any_byte(b"()")
                 {
                     return Some(
                         leading_visual_width(line, self.options.tab_width)

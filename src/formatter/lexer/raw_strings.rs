@@ -1,3 +1,4 @@
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -21,7 +22,7 @@ pub(crate) fn start(line: &str, start: usize) -> Option<RawStringStart> {
         .find(|prefix| rest.starts_with(prefix))?;
     let after_prefix = &rest[prefix.len()..];
     let open = after_prefix.find('(')?;
-    if after_prefix[..open].contains(['\r', '\n']) {
+    if after_prefix[..open].contains_any_byte(b"\r\n") {
         return None;
     }
     let delimiter = &after_prefix[..open];

@@ -10,6 +10,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
@@ -511,7 +512,7 @@ fn leads_with_goto_label(line: &str) -> bool {
         && rest.starts_with([' ', '\t', ';'])
         && !rest.trim_start().starts_with(['{', ':', '/'])
         // A statement follows; message arguments and base lists do not.
-        && !rest.contains([']', '['])
+        && !rest.contains_any_byte(b"][")
         && !matches!(
             leading_identifier(rest.trim_start()),
             "public" | "protected" | "private" | "virtual"
@@ -522,7 +523,7 @@ fn leads_with_goto_label(line: &str) -> bool {
         && {
             let statement = rest.trim_start();
             statement.starts_with(';')
-                || statement.contains(['(', '='])
+                || statement.contains_any_byte(b"(=")
                 || matches!(
                     leading_identifier(statement),
                     "return" | "break" | "continue" | "goto"
@@ -568,8 +569,7 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
 
 /// Text with operators between names continues an expression; no label.
 fn is_operator_expression(text: &str) -> bool {
-    text.contains(['|', '&', '+', '^', '%', '<', '>', '=', '!', '~', ','])
-        && text.chars().any(is_identifier_continue)
+    text.contains_any_byte(b"|&+^%<>=!~,") && text.chars().any(is_identifier_continue)
 }
 
 fn is_plain_label(line: &str, access_labels: &[String]) -> bool {

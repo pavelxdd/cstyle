@@ -22,6 +22,7 @@ use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_only_line, line_paren_imbalance,
     reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
@@ -1072,7 +1073,7 @@ impl FormatEngine<'_> {
             && let Some(prefix) = current.strip_suffix('{')
             && !prefix.trim().is_empty()
             && !prefix.trim_start().starts_with('{')
-            && !prefix.contains(['=', '(', '@'])
+            && !prefix.contains_any_byte(b"=(@")
         {
             for line in self.output.scoped().iter().rev().skip(1).take(64) {
                 let code = self.output.code_of(line).trim_end();
@@ -1080,7 +1081,7 @@ impl FormatEngine<'_> {
                     let prefix = prefix.trim_start();
                     if !prefix.is_empty()
                         && !prefix.starts_with('{')
-                        && !prefix.contains(['=', '(', '@'])
+                        && !prefix.contains_any_byte(b"=(@")
                     {
                         return Some(leading_visual_width(line, tab_width));
                     }

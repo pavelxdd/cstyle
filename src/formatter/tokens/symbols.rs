@@ -20,6 +20,7 @@ use crate::formatter::syntax::{
     assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, is_comment_only_line, trailing_matching_parens,
     unmatched_open_paren_column,
@@ -79,7 +80,7 @@ fn is_single_lvalue_assignment(line: &str) -> bool {
                 }
                 let head = line[..i].trim();
                 if head.is_empty()
-                    || head.contains([' ', '\t', ',', '(', ')', '{', '}'])
+                    || head.contains_any_byte(b" \t,(){}")
                     || !is_word_char(head.chars().next().unwrap_or(' '))
                 {
                     return false;

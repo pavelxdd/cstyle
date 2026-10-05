@@ -8,6 +8,7 @@ use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,
     trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
@@ -38,6 +39,9 @@ impl MaxLengthConstructorReplay {
 }
 
 fn paren_depth_delta(line: &str) -> isize {
+    if !line.contains_any_byte(b"()") {
+        return 0;
+    }
     let mut depth = 0;
     let mut in_string = false;
     let mut in_char = false;
@@ -72,6 +76,10 @@ fn paren_depth_delta(line: &str) -> isize {
 }
 
 pub(crate) fn has_inline_constructor_initializer_colon(line: &str) -> bool {
+    // The colon follows a closing paren.
+    if !line.contains(')') || !line.contains(':') {
+        return false;
+    }
     let mut in_string = false;
     let mut in_char = false;
     let mut escaped = false;
@@ -201,6 +209,18 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn output_has_constructor_initializer_colon(&self) -> bool {
+        let key = (self.output.len(), self.output.version());
+        if let Some((cached, colon)) = self.constructor_colon_cache.get()
+            && cached == key
+        {
+            return colon;
+        }
+        let colon = self.scan_output_constructor_initializer_colon();
+        self.constructor_colon_cache.set(Some((key, colon)));
+        colon
+    }
+
+    fn scan_output_constructor_initializer_colon(&self) -> bool {
         for index in (0..self.output.len()).rev().take(64) {
             let trimmed = self.output.code_trimmed(index);
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
@@ -503,7 +523,7 @@ impl FormatEngine<'_> {
             if previous.starts_with(':')
                 && !previous.starts_with("::")
                 && !previous.ends_with(';')
-                && !previous.contains(['{', '}'])
+                && !previous.contains_any_byte(b"{}")
             {
                 return Some(leading_visual_width(raw, self.options.tab_width));
             }
@@ -529,14 +549,13 @@ impl FormatEngine<'_> {
         }
         let base_indent = self.constructor_initializer_base_indent_spaces();
         let total = self.output.len();
-        for previous in (total - self.output.scoped().len()..total)
+        for index in (total - self.output.scoped().len()..total)
             .rev()
             .take(64)
             .filter(|&index| self.output.comment_start_index(index) == index)
-            .map(|index| &self.output[index])
-            .filter(|line| !line.trim().is_empty())
+            .filter(|&index| !self.output.trimmed(index).is_empty())
         {
-            let code = self.output.code_of(previous).trim_end();
+            let code = self.output.code_before_comment(index).trim_end();
             let previous_trimmed = code.trim_start();
             if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
                 || (base_indent.is_some() && previous_trimmed.ends_with(',')))

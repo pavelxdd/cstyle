@@ -2029,14 +2029,8 @@ impl FormatEngine<'_> {
         let previous_code = self.output.code_of(previous).trim_end();
         let closing_multiline_header_indent = self.current_closing_multiline_header_indent();
         let open_spaces = closing_multiline_header_indent.unwrap_or(open_spaces);
-        let split_else_chain = structural_split_else_chain
-            || self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(128)
-                .any(|line| line.trim() == "else" || line.trim_end().ends_with("} else"));
+        let split_else_chain =
+            structural_split_else_chain || self.output.recent_scoped_else_line(128);
         let recent_adjacent_string_call =
             self.output.scoped().iter().rev().take(8).any(|line| {
                 let code = self.output.code_of(line).trim_end();

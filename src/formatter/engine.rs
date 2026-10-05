@@ -39,6 +39,7 @@ use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
 };
 use crate::formatter::text::columns;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{line_ends_with_comment, unmatched_open_paren_column};
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
@@ -121,6 +122,10 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back for a line leaving a paren open, keyed by the
     /// output it read.
     pub(crate) open_paren_scan_cache: std::cell::Cell<Option<(OutputKey, Option<OpenParenLine>)>>,
+    /// Whether the output last read holds a constructor initializer colon.
+    pub(crate) constructor_colon_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// Whether the output last read stands inside a macro call's arguments.
+    pub(crate) macro_call_context_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
     line_brace_match_start: usize,
@@ -187,6 +192,8 @@ impl<'a> FormatEngine<'a> {
             output: buffer::OutputBuffer::default(),
             constructor_scan_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
+            macro_call_context_cache: std::cell::Cell::new(None),
+            constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
                 command_state: CommandState::default(),
@@ -1364,7 +1371,7 @@ impl<'a> FormatEngine<'a> {
                     let prefix = prefix.trim_start();
                     (!prefix.is_empty()
                         && !prefix.starts_with('{')
-                        && !prefix.contains(['=', '(', '@']))
+                        && !prefix.contains_any_byte(b"=(@"))
                     .then(|| columns::leading_visual_width(line, self.options.tab_width))
                 })
             } else {

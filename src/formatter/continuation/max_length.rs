@@ -18,6 +18,7 @@ use crate::formatter::syntax::{
     TemplateAngle, function_name_start, scoped_name_is_constructor, template_angle_role,
 };
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, last_unmatched_open_delimiter, unmatched_open_bracket_column,
     unmatched_open_paren_column, unmatched_open_paren_columns,
@@ -892,7 +893,7 @@ fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Opt
     let shift = line.find("<<")?;
     let operand = line[..shift].trim_end();
     if operand.is_empty()
-        || operand.contains(['(', '=', '?'])
+        || operand.contains_any_byte(b"(=?")
         || operand.trim_start().starts_with("return")
     {
         return None;

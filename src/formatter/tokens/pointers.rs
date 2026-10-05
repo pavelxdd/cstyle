@@ -16,6 +16,7 @@ use crate::formatter::syntax::{
     function_head_has_assignment, function_name_start, language, scoped_name_is_constructor,
 };
 use crate::formatter::text::columns::visual_width_from;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{last_unmatched_open_delimiter, trailing_matching_parens};
 use crate::formatter::tokens::operators::{
     head_ends_assignment_operator, head_ends_binary_operator,
@@ -737,7 +738,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|brace_type| is_class_like_brace_type(*brace_type));
         }
         // A head inside an open paren is a call's argument.
-        if return_type.contains(['.', '[', ']'])
+        if return_type.contains_any_byte(b".[]")
             || has_unclosed_balanced_delimiter(return_type, "(", ")")
         {
             return false;

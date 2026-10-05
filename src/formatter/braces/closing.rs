@@ -1261,14 +1261,8 @@ impl FormatEngine<'_> {
                     && !starts_string_literal_token(code.trim_start())
                     && !code.ends_with(';')
             });
-        let split_else_chain = structural_split_else_chain
-            || self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(128)
-                .any(|line| line.trim() == "else" || line.trim_end().ends_with("} else"));
+        let split_else_chain =
+            structural_split_else_chain || self.output.recent_scoped_else_line(128);
         if structural_split_else_chain
             && !open_trimmed.starts_with("} else")
             && !open_trimmed.starts_with("}else")

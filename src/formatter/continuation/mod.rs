@@ -1,5 +1,6 @@
 //! Indentation of continuation lines and maximum-length line splitting.
 
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
@@ -1507,7 +1508,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(|marker| line.contains(marker))
             || line.ends_with([';', '{', '}', '='])
-            || line.contains(['(', '[', ')', ']', ','])
+            || line.contains_any_byte(b"([)],")
             || self.next_line.leads_with_class_base
         {
             return None;

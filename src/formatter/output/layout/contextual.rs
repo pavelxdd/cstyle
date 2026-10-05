@@ -25,6 +25,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     code_holds_word, has_unmatched_open_brace, is_comment_line, line_paren_imbalance,
@@ -191,18 +192,18 @@ impl FormatEngine<'_> {
                 .exact_indent_spaces
                 .unwrap_or(layout.indent * self.options.indent_width);
             let base = self.continuation_base_indent() * self.options.indent_width;
-            let stream_indent = (0..self.output.len()).rev().take(8).find_map(|index| {
-                let code = self.output.code(index);
-                if has_unmatched_open_brace(code) {
-                    code.find(" << ")
-                        .or_else(|| code.find(" >> "))
-                        .map(|index| index + 1)
-                } else {
-                    None
-                }
-            });
             if spaces.saturating_sub(base) > self.options.max_continuation_indent
-                && let Some(stream_indent) = stream_indent
+                && let Some(stream_indent) =
+                    (0..self.output.len()).rev().take(8).find_map(|index| {
+                        let code = self.output.code(index);
+                        if has_unmatched_open_brace(code) {
+                            code.find(" << ")
+                                .or_else(|| code.find(" >> "))
+                                .map(|index| index + 1)
+                        } else {
+                            None
+                        }
+                    })
             {
                 layout.exact_indent_spaces = Some(stream_indent);
             }
@@ -229,7 +230,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| previous.contains(['{', '}']))
+                .is_some_and(|previous| previous.contains_any_byte(b"{}"))
         {
             layout.exact_indent_spaces = Some(layout.indent * self.options.indent_width);
         }

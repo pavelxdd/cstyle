@@ -8,6 +8,7 @@ use crate::formatter::structure::SourceTree;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, trailing_word,
 };
@@ -304,7 +305,7 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
     }
     let eq = eq?;
     let head = line[..eq].trim_end();
-    if head.contains(['(', ')', ',', '{', '}']) {
+    if head.contains_any_byte(b"(),{}") {
         return None;
     }
     let head_bytes = head.as_bytes();
