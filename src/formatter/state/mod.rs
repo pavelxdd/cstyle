@@ -8,8 +8,8 @@ pub(crate) mod next_line;
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct TokenInputState {
     pub(crate) previous_input_was_adjacent: bool,
-    pub(crate) previous_input_whitespace: Option<String>,
-    pub(crate) next_input_whitespace: Option<String>,
+    pub(crate) previous_input_whitespace: Option<std::borrow::Cow<'static, str>>,
+    pub(crate) next_input_whitespace: Option<std::borrow::Cow<'static, str>>,
     pub(crate) token_begins_source_line: bool,
     pub(crate) token_source_column: usize,
     pub(crate) token_source_line_indent: usize,

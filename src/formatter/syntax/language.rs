@@ -308,27 +308,16 @@ fn is_core_typedef_word(word: &str) -> bool {
     )
 }
 
-pub fn match_operator(source: &[char], index: usize) -> Option<&'static str> {
-    let ch = *source.get(index)?;
+pub fn match_operator(source: &str, index: usize) -> Option<&'static str> {
+    let ch = char::from(*source.as_bytes().get(index)?);
     if !lex::is_potential_operator_char(ch) {
         return None;
     }
+    let rest = &source[index..];
     TOKEN_OPERATORS
         .iter()
         .copied()
-        .find(|operator| matches_at(source, index, operator))
-}
-
-fn matches_at(source: &[char], index: usize, needle: &str) -> bool {
-    let mut chars = needle.chars();
-    let mut offset = 0;
-    loop {
-        match chars.next() {
-            Some(expected) if source.get(index + offset) == Some(&expected) => offset += 1,
-            Some(_) => return false,
-            None => return true,
-        }
-    }
+        .find(|operator| rest.starts_with(operator))
 }
 
 #[cfg(test)]
@@ -378,22 +367,22 @@ mod tests {
 
     #[test]
     fn matches_longest_operator_token() {
-        let line = "<<= <? >? :: ? : ...".chars().collect::<Vec<_>>();
-        assert_eq!(match_operator(&line, 0), Some("<<="));
-        assert_eq!(match_operator(&line, 4), Some("<?"));
-        assert_eq!(match_operator(&line, 7), Some(">?"));
-        assert_eq!(match_operator(&line, 10), Some("::"));
-        assert_eq!(match_operator(&line, 13), None);
-        assert_eq!(match_operator(&line, 15), None);
-        assert_eq!(match_operator(&line, 17), None);
+        let line = "<<= <? >? :: ? : ...";
+        assert_eq!(match_operator(line, 0), Some("<<="));
+        assert_eq!(match_operator(line, 4), Some("<?"));
+        assert_eq!(match_operator(line, 7), Some(">?"));
+        assert_eq!(match_operator(line, 10), Some("::"));
+        assert_eq!(match_operator(line, 13), None);
+        assert_eq!(match_operator(line, 15), None);
+        assert_eq!(match_operator(line, 17), None);
     }
 
     #[test]
     fn tokenizer_rejects_non_operator_starts_and_out_of_bounds_indices() {
-        let line = "word + value".chars().collect::<Vec<_>>();
-        assert_eq!(match_operator(&line, 0), None);
-        assert_eq!(match_operator(&line, line.len()), None);
-        assert_eq!(match_operator(&line, 5), Some("+"));
+        let line = "word + value";
+        assert_eq!(match_operator(line, 0), None);
+        assert_eq!(match_operator(line, line.len()), None);
+        assert_eq!(match_operator(line, 5), Some("+"));
     }
 
     #[test]

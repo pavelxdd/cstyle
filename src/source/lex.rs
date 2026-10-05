@@ -26,7 +26,7 @@ pub fn is_digit_separator(chars: &[char], index: usize) -> bool {
 }
 
 pub fn trailing_word(line: &str) -> &str {
-    let line = line.trim_end();
+    let line = line.trim_ascii_end();
     let Some((last_index, last_char)) = line.char_indices().next_back() else {
         return "";
     };
@@ -45,7 +45,7 @@ pub fn trailing_word(line: &str) -> &str {
 }
 
 pub fn leading_identifier(line: &str) -> &str {
-    let line = line.trim_start();
+    let line = line.trim_ascii_start();
     let end = line
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(line.len());

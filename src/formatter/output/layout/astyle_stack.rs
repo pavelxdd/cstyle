@@ -363,7 +363,7 @@ impl FormatEngine<'_> {
                         if token_line != start_line {
                             return None;
                         }
-                        let text = self.output.as_slice()[token_line].trim_start();
+                        let text = self.output.as_slice()[token_line].trim_ascii_start();
                         replay.stack.push(second_word_column(text, relative(index)?));
                         replay.continuation = true;
                     }

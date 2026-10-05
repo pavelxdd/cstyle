@@ -22,14 +22,14 @@ pub(crate) struct ObjCLineState {
 }
 
 fn line_is_label_style_dictionary_key(line: &str) -> bool {
-    let trimmed = line.trim_end();
+    let trimmed = line.trim_ascii_end();
     let Some(before) = trimmed.strip_suffix(':') else {
         return false;
     };
     if !before.ends_with(char::is_whitespace) {
         return false;
     }
-    let key = before.trim_end();
+    let key = before.trim_ascii_end();
     !key.is_empty()
         && key
             .chars()
@@ -60,7 +60,7 @@ fn objc_message_selector_indent_spaces(
             Token::Symbol('[') if in_message => depth += 1,
             Token::Symbol(']') if in_message => depth = depth.saturating_sub(1),
             Token::Symbol(':') if in_message && depth == 1 => {
-                let before = line[..offset].trim_end();
+                let before = line[..offset].trim_ascii_end();
                 let selector_len = before
                     .chars()
                     .rev()
@@ -169,7 +169,7 @@ impl FormatEngine<'_> {
         line: &str,
         mut current: Option<usize>,
     ) -> Option<usize> {
-        if line.trim_start().starts_with("};")
+        if line.trim_ascii_start().starts_with("};")
             && self
                 .output
                 .scoped()
@@ -204,7 +204,7 @@ impl FormatEngine<'_> {
                     })
             };
         }
-        if !line.trim_start().starts_with('}')
+        if !line.trim_ascii_start().starts_with('}')
             && !line_is_label_style_dictionary_key(line)
             && self
                 .output
@@ -222,20 +222,20 @@ impl FormatEngine<'_> {
                 leading_visual_width(opener, self.options.tab_width) + self.options.indent_width,
             );
         }
-        if !line.trim_start().starts_with('}')
+        if !line.trim_ascii_start().starts_with('}')
             && !line_is_label_style_dictionary_key(line)
             && self
                 .layout
                 .previous_pre_adjust_line
                 .as_ref()
-                .is_some_and(|previous| previous.trim_end().ends_with(','))
+                .is_some_and(|previous| previous.trim_ascii_end().ends_with(','))
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
                 .take(64)
-                .take_while(|line| !line.trim_end().ends_with("};"))
+                .take_while(|line| !line.trim_ascii_end().ends_with("};"))
                 .any(|line| line.contains("@ {"))
         {
             current = self
@@ -244,12 +244,12 @@ impl FormatEngine<'_> {
                 .as_ref()
                 .map(|previous| leading_visual_width(previous, self.options.tab_width));
         }
-        if line.trim_start().starts_with("@ {")
+        if line.trim_ascii_start().starts_with("@ {")
             && self
                 .layout
                 .previous_pre_adjust_line
                 .as_ref()
-                .is_some_and(|previous| previous.trim_end().ends_with('='))
+                .is_some_and(|previous| previous.trim_ascii_end().ends_with('='))
         {
             current = self
                 .layout
@@ -292,7 +292,7 @@ impl FormatEngine<'_> {
             .layout
             .previous_pre_adjust_line
             .as_deref()
-            .is_some_and(|previous| previous.trim_end().ends_with('{'))
+            .is_some_and(|previous| previous.trim_ascii_end().ends_with('{'))
         {
             self.layout.objc.colon_align = None;
         }
@@ -316,8 +316,8 @@ impl FormatEngine<'_> {
             closed_nested_bracket.and_then(|frame| frame.parent_objc_message_align);
         let mut force_message_align = false;
         if let Some(previous) = &self.layout.previous_pre_adjust_line {
-            let previous_text = previous.trim_start();
-            let line_text = line.trim_start();
+            let previous_text = previous.trim_ascii_start();
+            let line_text = line.trim_ascii_start();
             let simple_selector_line = line_text.split_once(':').is_some_and(|(key, rest)| {
                 !rest.contains('?')
                     && key
@@ -326,7 +326,7 @@ impl FormatEngine<'_> {
             });
             let follows_nested_type_argument = previous_text
                 .split_once(':')
-                .is_some_and(|(key, _)| key.trim() == "type")
+                .is_some_and(|(key, _)| key.trim_ascii() == "type")
                 && previous_text.ends_with(']')
                 && !previous_text.starts_with('[');
             let follows_simple_selector = previous_text.split_once(':').is_some_and(|(key, _)| {
@@ -370,7 +370,7 @@ impl FormatEngine<'_> {
                 }
             }
         } else if let Some(align) = self.layout.objc.message_align
-            && !line.trim_start().starts_with(['{', '}'])
+            && !line.trim_ascii_start().starts_with(['{', '}'])
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
@@ -394,16 +394,16 @@ impl FormatEngine<'_> {
             {
                 exact_indent_spaces = Some(align_column - colon);
             }
-            let trimmed_end = line.trim_end();
+            let trimmed_end = line.trim_ascii_end();
             if trimmed_end.ends_with(';') || trimmed_end.ends_with('{') {
                 self.layout.objc.colon_align = None;
             }
         }
-        if line.trim_start().starts_with('{')
+        if line.trim_ascii_start().starts_with('{')
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                line.trim_start()
+                line.trim_ascii_start()
                     .strip_prefix(['-', '+'])
-                    .is_some_and(|rest| rest.trim_start().starts_with('('))
+                    .is_some_and(|rest| rest.trim_ascii_start().starts_with('('))
             })
         {
             indent_level = 0;
@@ -429,11 +429,13 @@ impl FormatEngine<'_> {
     pub(crate) fn objc_line_indent_override(&self, line: &str) -> Option<usize> {
         let mut spaces = None;
         if let Some(header) = ["@try", "@catch", "@finally"].into_iter().find(|header| {
-            line.trim_start().strip_prefix(header).is_some_and(|rest| {
-                rest.is_empty()
-                    || rest.starts_with(char::is_whitespace)
-                    || rest.starts_with(['(', '{'])
-            })
+            line.trim_ascii_start()
+                .strip_prefix(header)
+                .is_some_and(|rest| {
+                    rest.is_empty()
+                        || rest.starts_with(char::is_whitespace)
+                        || rest.starts_with(['(', '{'])
+                })
         }) {
             let active = self.layout.frame_stack.active_brace();
             let owner = if active.is_some_and(|frame| frame.header.as_deref() == Some(header)) {
@@ -444,10 +446,10 @@ impl FormatEngine<'_> {
             spaces = Some(owner.map_or(0, |frame| frame.body_indent_column));
         }
 
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         let interface_member = trimmed
             .strip_prefix(['+', '-'])
-            .is_some_and(|rest| rest.trim_start().starts_with('('))
+            .is_some_and(|rest| rest.trim_ascii_start().starts_with('('))
             || ["@property", "@required", "@optional"]
                 .into_iter()
                 .any(|word| {
@@ -463,8 +465,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .take_while(|line| !line.trim_start().starts_with("@end"))
-                .any(|line| line.trim_start().starts_with("@interface"))
+                .take_while(|line| !line.trim_ascii_start().starts_with("@end"))
+                .any(|line| line.trim_ascii_start().starts_with("@interface"))
         {
             spaces = Some(0);
         }
@@ -475,7 +477,7 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        let line_start = line.trim_start();
+        let line_start = line.trim_ascii_start();
         if line_start != "}" {
             return None;
         }
@@ -500,17 +502,17 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim().is_empty())
+            .filter(|line| !line.trim_ascii().is_empty())
             .take(64)
         {
             let code = &self.output.code_of(line);
-            if code.trim_end().ends_with([';', '{', '}']) {
+            if code.trim_ascii_end().ends_with([';', '{', '}']) {
                 return None;
             }
             if code
-                .trim_start()
+                .trim_ascii_start()
                 .strip_prefix(['+', '-'])
-                .is_some_and(|rest| rest.trim_start().starts_with('('))
+                .is_some_and(|rest| rest.trim_ascii_start().starts_with('('))
             {
                 return Some(leading_visual_width(line, self.options.tab_width));
             }
@@ -519,7 +521,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn is_objc_selector_or_message_colon(&self) -> bool {
-        let current = self.current.trim_end();
+        let current = self.current.trim_ascii_end();
         self.layout.frame_stack.bracket_depth() > 0
             || self.layout.objc.method_continuation
             || self.is_objc_method_line()
@@ -531,13 +533,13 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth > 0 {
             return false;
         }
-        let line = self.current.trim_start();
+        let line = self.current.trim_ascii_start();
         line.strip_prefix(['-', '+'])
-            .is_some_and(|rest| rest.trim_start().starts_with('('))
+            .is_some_and(|rest| rest.trim_ascii_start().starts_with('('))
     }
 
     pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
-        matches!(next, Some(Token::Symbol('('))) && self.current.trim().is_empty()
+        matches!(next, Some(Token::Symbol('('))) && self.current.trim_ascii().is_empty()
     }
 
     pub(crate) fn compute_objc_method_colon_align(
@@ -676,7 +678,7 @@ fn objc_method_first_colon_output_column(
     let colon = close + 1 + source[close + 1..].find(':')?;
     let selector_start =
         close + 1 + source[close + 1..colon].find(|ch: char| !ch.is_whitespace())?;
-    let selector_end = source[..colon].trim_end().len();
+    let selector_end = source[..colon].trim_ascii_end().len();
     if selector_start > selector_end {
         return None;
     }

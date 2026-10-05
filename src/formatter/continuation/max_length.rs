@@ -103,7 +103,7 @@ impl FormatEngine<'_> {
             self.max_length_brace_row_layout(line, structural_level, base_indent_width, width);
         // The space before a brace the source attached to the line counts
         // in its length though the brace moves to a line of its own.
-        let broken_attached_brace = !line.trim_end().ends_with('{')
+        let broken_attached_brace = !line.trim_ascii_end().ends_with('{')
             && self.output.pending_tokens().is_some_and(|span| {
                 matches!(
                     self.tree.tokens.get(span.last + 1),
@@ -123,7 +123,7 @@ impl FormatEngine<'_> {
                     })
             });
         let first_width = brace_row_layout.first_width;
-        let suffix_width = if line.trim_end().ends_with(';') {
+        let suffix_width = if line.trim_ascii_end().ends_with(';') {
             self.max_length_line.suffix_width()
         } else {
             usize::from(broken_attached_brace)
@@ -134,17 +134,17 @@ impl FormatEngine<'_> {
         // so the line splits where the whole of it would, and not before
         // the `while` when it would split there.
         let while_suffix = line
-            .trim_end()
+            .trim_ascii_end()
             .ends_with(';')
             .then(|| self.max_length_line.while_suffix.clone())
             .flatten();
         let split = match &while_suffix {
             Some(suffix) => split_result(
-                &format!("{}{suffix}", line.trim_end()),
+                &format!("{}{suffix}", line.trim_ascii_end()),
                 first_width,
                 first_rules.with_closers_following_statement(),
             )
-            .filter(|split| split.split_at < line.trim_end().len())
+            .filter(|split| split.split_at < line.trim_ascii_end().len())
             .and_then(|split| split_result_at(line, split.split_at, first_width, first_rules)),
             None => split_result(line, first_width, first_rules).or_else(|| {
                 (suffix_width > 0).then(|| split_result(line, final_first_width, first_rules))?
@@ -216,7 +216,7 @@ impl FormatEngine<'_> {
         // A `goto` split from its label continues one level in.
         if split
             .head
-            .trim_end()
+            .trim_ascii_end()
             .strip_suffix("goto")
             .is_some_and(|before| !before.ends_with(is_identifier_continue))
         {
@@ -298,7 +298,7 @@ impl FormatEngine<'_> {
             tail = split.tail;
             next_indent = following_indent;
         }
-        if !tail.trim().is_empty() {
+        if !tail.trim_ascii().is_empty() {
             self.set_split_part_tokens(source_tokens, line, &tail);
             if let Some(spaces) = self.split_part_indent(&tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
@@ -326,7 +326,7 @@ impl FormatEngine<'_> {
     fn split_part_indent(&self, part: &str) -> Option<usize> {
         let first = self.output.pending_tokens()?.first;
         let token = self.tree.tokens.get(first)?;
-        if !part.trim_start().starts_with(&*token_text(token)) {
+        if !part.trim_ascii_start().starts_with(&*token_text(token)) {
             return None;
         }
         self.split_part_stack_indent(first)
@@ -339,7 +339,7 @@ impl FormatEngine<'_> {
         let Some(source) = source else {
             return;
         };
-        let part = part.trim_start();
+        let part = part.trim_ascii_start();
         if !line.ends_with(part) {
             return;
         }
@@ -366,7 +366,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn maximum_length_using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
-        let current = line.trim_start();
+        let current = line.trim_ascii_start();
         if self.options.max_code_length.is_none()
             || current.is_empty()
             || current.starts_with(['#', '{', '}'])
@@ -378,9 +378,9 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .find(|line| !line.trim().is_empty())?;
-        let previous_code = self.output.code_of(previous).trim_end();
-        let previous_trimmed = previous_code.trim_start();
+            .find(|line| !line.trim_ascii().is_empty())?;
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
+        let previous_trimmed = previous_code.trim_ascii_start();
         if !previous_trimmed.starts_with("using ") || !previous_code.ends_with('=') {
             return None;
         }
@@ -394,7 +394,7 @@ impl FormatEngine<'_> {
 /// A split right after a block comment that follows a finished statement
 /// starts the next statement.
 fn ends_statement_before_comment(head: &str) -> bool {
-    let mut code = head.trim_end();
+    let mut code = head.trim_ascii_end();
     if !code.ends_with("*/") {
         return false;
     }
@@ -402,7 +402,7 @@ fn ends_statement_before_comment(head: &str) -> bool {
         let Some(open) = code.rfind("/*") else {
             return false;
         };
-        code = code[..open].trim_end();
+        code = code[..open].trim_ascii_end();
     }
     code.is_empty() || code.ends_with([';', '{', '}'])
 }
@@ -439,8 +439,8 @@ impl FormatEngine<'_> {
     /// Splits a row led by a block comment with code after it.
     pub(crate) fn split_comment_led_line(&self, line: &str) -> Option<(String, String, usize)> {
         let width = self.options.max_code_length?.max(1);
-        let lead = &line[..line.len() - line.trim_start().len()];
-        let code = line.trim_start();
+        let lead = &line[..line.len() - line.trim_ascii_start().len()];
+        let code = line.trim_ascii_start();
         if !code.starts_with("/*") || code.contains('\x0c') || self.initializer_row() {
             return None;
         }
@@ -460,7 +460,7 @@ impl FormatEngine<'_> {
 }
 
 fn should_skip_split(line: &str) -> bool {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     trimmed.starts_with("//")
         || trimmed.starts_with("/*")
             && trimmed
@@ -481,7 +481,7 @@ fn is_single_string_call_at(line: &str, open: usize) -> bool {
     let Some(close) = matching_close_paren(line, open) else {
         return false;
     };
-    let arg = line[open + 1..close].trim();
+    let arg = line[open + 1..close].trim_ascii();
     arg.starts_with('"') && arg.ends_with('"')
 }
 
@@ -514,15 +514,15 @@ fn matching_close_paren(line: &str, open: usize) -> Option<usize> {
 }
 
 fn line_has_constructor_initializer(line: &str) -> bool {
-    let line = line.trim_start();
+    let line = line.trim_ascii_start();
     let Some(open) = line.find('(') else {
         return false;
     };
     let Some(close) = matching_close_paren(line, open) else {
         return false;
     };
-    scoped_name_is_constructor(line[..open].trim_end())
-        && line[close + 1..].trim_start().starts_with(':')
+    scoped_name_is_constructor(line[..open].trim_ascii_end())
+        && line[close + 1..].trim_ascii_start().starts_with(':')
 }
 
 pub(super) fn lambda_parameter_continuation_indent(
@@ -533,8 +533,8 @@ pub(super) fn lambda_parameter_continuation_indent(
     configured_continuation_spaces: usize,
     break_style: bool,
 ) -> Option<usize> {
-    let line = line.trim_end();
-    let before_lambda = line.strip_suffix('(')?.trim_end();
+    let line = line.trim_ascii_end();
+    let before_lambda = line.strip_suffix('(')?.trim_ascii_end();
     if !is_lambda_capture_header(before_lambda) {
         return None;
     }
@@ -566,7 +566,7 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let base = leading_visual_width(previous, self.options.tab_width);
         lambda_parameter_continuation_indent(
-            previous.trim_start(),
+            previous.trim_ascii_start(),
             base,
             self.options.indent_width,
             self.options.max_continuation_indent,
@@ -592,7 +592,7 @@ struct SplitIndentInputs {
 }
 
 fn splits_before_label(split: &SplitResult) -> bool {
-    split.head.trim_end().ends_with(':')
+    split.head.trim_ascii_end().ends_with(':')
         && ["case", "default"].into_iter().any(|word| {
             split.tail.starts_with(word)
                 && !split.tail[word.len()..].starts_with(is_identifier_continue)
@@ -625,8 +625,8 @@ fn continuation_indent_for_split(
         && split.tail.starts_with(is_identifier_continue)
         && head.match_indices('(').all(|(at, _)| {
             // A function pointer's `(*name)` and the parameters after it.
-            head[at + 1..].trim_start().starts_with('*')
-                || head[..at].trim_end().ends_with(')')
+            head[at + 1..].trim_ascii_start().starts_with('*')
+                || head[..at].trim_ascii_end().ends_with(')')
                 || head[..at]
                     .rsplit(|ch: char| !is_identifier_continue(ch))
                     .next()
@@ -682,11 +682,11 @@ fn continuation_indent_for_split(
     ) {
         return Some(ContinuationIndent::Spaces(spaces));
     }
-    if head.trim_end().ends_with("<=>") {
+    if head.trim_ascii_end().ends_with("<=>") {
         return Some(configured_indent);
     }
     if split.kind == SplitKind::Delimiter
-        && head.trim_end().ends_with('(')
+        && head.trim_ascii_end().ends_with('(')
         && split_function_declaration_head(head)
     {
         return Some(configured_indent);
@@ -700,7 +700,7 @@ fn continuation_indent_for_split(
         }
         if has_open_paren
             && current_indent_width > base_indent_width
-            && head.trim_end().ends_with('(')
+            && head.trim_ascii_end().ends_with('(')
             && !head.contains(')')
         {
             return Some(ContinuationIndent::Spaces(
@@ -728,7 +728,7 @@ fn continuation_indent_for_split(
             | SplitKind::AssignmentOrComparison
             | SplitKind::ArithmeticOperator
             | SplitKind::StringConcat
-    ) && !head.trim_end().ends_with(['(', '[']);
+    ) && !head.trim_ascii_end().ends_with(['(', '[']);
     // A paren opened after the assignment stacks past its value.
     let paren_after_assignment = top_level_assignment_index(line).is_some_and(|assignment| {
         unmatched_open_paren_columns(head)
@@ -748,9 +748,12 @@ fn continuation_indent_for_split(
     }
 
     let open_columns = unmatched_open_paren_columns(head);
-    if let Some(spaces) =
-        nested_new_continuation_indent(line, &open_columns, inputs, head.trim_end().ends_with('('))
-    {
+    if let Some(spaces) = nested_new_continuation_indent(
+        line,
+        &open_columns,
+        inputs,
+        head.trim_ascii_end().ends_with('('),
+    ) {
         return Some(ContinuationIndent::Spaces(spaces));
     }
     let all_openers_over_max = !open_columns.is_empty()
@@ -759,7 +762,7 @@ fn continuation_indent_for_split(
             .all(|column| *column >= max_continuation_indent);
     if all_openers_over_max && let Some(spaces) = assignment_value_indent(line, base_indent_width) {
         let call_body_extra =
-            usize::from(head.trim_end().ends_with('(')) * configured_continuation_spaces;
+            usize::from(head.trim_ascii_end().ends_with('(')) * configured_continuation_spaces;
         let target = spaces + call_body_extra;
         if target.saturating_sub(base_indent_width) > max_continuation_indent {
             return Some(ContinuationIndent::Spaces(
@@ -770,7 +773,7 @@ fn continuation_indent_for_split(
     }
     if all_openers_over_max
         && following_split
-        && head.trim_end().ends_with('(')
+        && head.trim_ascii_end().ends_with('(')
         && !head.contains(')')
     {
         return Some(ContinuationIndent::Spaces(
@@ -780,7 +783,7 @@ fn continuation_indent_for_split(
 
     // A paren ending the line stacks one continuation past the indent
     // before it.
-    if !following_split && head.trim_end().ends_with('(') {
+    if !following_split && head.trim_ascii_end().ends_with('(') {
         let columns = unmatched_open_paren_columns(head);
         let previous = match columns.len().checked_sub(2).map(|outer| columns[outer]) {
             Some(outer) => {
@@ -789,7 +792,7 @@ fn continuation_indent_for_split(
                 } else {
                     base_indent_width + indent_width * 2
                 };
-                if language::is_header(trailing_word(head[..outer].trim_end())) {
+                if language::is_header(trailing_word(head[..outer].trim_ascii_end())) {
                     registered.max(base_indent_width + inputs.min_conditional_spaces)
                 } else {
                     registered
@@ -818,7 +821,7 @@ fn continuation_indent_for_split(
 }
 
 fn split_function_declaration_head(head: &str) -> bool {
-    let Some(before) = head.trim_end().strip_suffix('(').map(str::trim_end) else {
+    let Some(before) = head.trim_ascii_end().strip_suffix('(').map(str::trim_end) else {
         return false;
     };
     if top_level_assignment_index(before).is_some()
@@ -834,7 +837,7 @@ fn split_function_declaration_head(head: &str) -> bool {
     let Some(name_start) = function_name_start(before) else {
         return false;
     };
-    let return_type = before[..name_start].trim_end();
+    let return_type = before[..name_start].trim_ascii_end();
     !return_type.is_empty() && !return_type.ends_with('.') && !return_type.ends_with("->")
 }
 
@@ -891,10 +894,10 @@ fn nested_new_continuation_indent(
 
 fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Option<usize> {
     let shift = line.find("<<")?;
-    let operand = line[..shift].trim_end();
+    let operand = line[..shift].trim_ascii_end();
     if operand.is_empty()
         || operand.contains_any_byte(b"(=?")
-        || operand.trim_start().starts_with("return")
+        || operand.trim_ascii_start().starts_with("return")
     {
         return None;
     }
@@ -902,13 +905,13 @@ fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Opt
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {
-    let leading = line.len() - line.trim_start().len();
-    let trimmed = line.trim_start();
+    let leading = line.len() - line.trim_ascii_start().len();
+    let trimmed = line.trim_ascii_start();
     let tail = trimmed.strip_prefix("return")?;
     if tail.chars().next().is_some_and(is_identifier_continue) {
         return None;
     }
-    let gap = tail.len() - tail.trim_start().len();
+    let gap = tail.len() - tail.trim_ascii_start().len();
     Some(base_indent_width + leading + "return".len() + gap)
 }
 
@@ -947,7 +950,7 @@ fn assignment_continuation_indent(
     head: &str,
     base_indent_width: usize,
 ) -> Option<ContinuationIndent> {
-    let head = head.trim_end();
+    let head = head.trim_ascii_end();
     if head.ends_with('=') || head.ends_with('(') {
         return None;
     }
@@ -1065,8 +1068,8 @@ fn split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResu
 }
 
 fn split_result_kind(line: &str, split_at: usize, priority: usize) -> SplitKind {
-    let head = line[..split_at].trim_end();
-    let tail = line[split_at..].trim_start();
+    let head = line[..split_at].trim_ascii_end();
+    let tail = line[split_at..].trim_ascii_start();
     if head.ends_with(['(', '[']) {
         return SplitKind::Delimiter;
     }
@@ -1121,7 +1124,7 @@ fn is_objc_selector_colon(line: &str, colon: usize) -> bool {
         return false;
     }
     segment
-        .trim_end()
+        .trim_ascii_end()
         .chars()
         .next_back()
         .is_some_and(is_identifier_continue)
@@ -1135,7 +1138,7 @@ fn is_objc_message_open(line: &str, open: usize) -> bool {
 }
 
 fn ends_single_string_call(line: &str) -> bool {
-    let line = line.trim_end();
+    let line = line.trim_ascii_end();
     if !line.ends_with(')') {
         return false;
     }
@@ -1163,7 +1166,7 @@ fn split_point_at(
                 .take_while(|ch| is_identifier_continue(*ch))
                 .map(char::len_utf8)
                 .sum::<usize>();
-            return (line[..argument_start + argument_len].trim_end().len() > width)
+            return (line[..argument_start + argument_len].trim_ascii_end().len() > width)
                 .then_some((end, 55));
         }
         if matches!(operator, "::" | "->" | "<<" | ">>" | "~" | "!")
@@ -1172,7 +1175,7 @@ fn split_point_at(
             return None;
         }
         if is_pointer_split_operator(line, start, end, operator)
-            || line[end..].trim_start().starts_with("/*")
+            || line[end..].trim_ascii_start().starts_with("/*")
         {
             return None;
         }
@@ -1203,14 +1206,15 @@ fn split_point_at(
         } else if language::ASSIGNMENT_OPERATORS.contains(&operator)
             || matches!(operator, "==" | "!=" | "<=>" | "<=" | ">=" | "<" | ">")
         {
-            if line[..end].trim_end().len() > width && ends_single_string_call(&line[..start]) {
+            if line[..end].trim_ascii_end().len() > width && ends_single_string_call(&line[..start])
+            {
                 Some((start, 70))
             } else {
                 Some((end, 70))
             }
         } else if operator == "+"
             && line[..start]
-                .trim_end()
+                .trim_ascii_end()
                 .chars()
                 .next_back()
                 .is_some_and(|ch| ch == '"')
@@ -1241,12 +1245,17 @@ fn split_point_at(
     match ch {
         ',' => Some((end, 60)),
         // A line splits before no closing brace.
-        ';' if line[end..].trim_start().starts_with('}') => None,
+        ';' if line[end..].trim_ascii_start().starts_with('}') => None,
         ';' => Some((end, 75)),
         // astyle splits after no paren that a literal or paren follows.
-        '(' if line[end..].trim_start().starts_with([')', '(', '"', '\'']) => None,
+        '(' if line[end..]
+            .trim_ascii_start()
+            .starts_with([')', '(', '"', '\'']) =>
+        {
+            None
+        }
         '(' if is_single_string_call_at(line, index) => None,
-        '(' if is_lambda_capture_header(line[..index].trim_end()) => Some((end, 75)),
+        '(' if is_lambda_capture_header(line[..index].trim_ascii_end()) => Some((end, 75)),
         '(' if is_function_call_split(line, index) => Some((end, 55)),
         // astyle splits after no bracket.
         '[' => None,
@@ -1258,7 +1267,7 @@ fn split_point_at(
             Some((end, 39))
         }
         // A block's opening brace stays with its head.
-        ' ' | '\t' if line[end..].trim_start().starts_with('{') => None,
+        ' ' | '\t' if line[end..].trim_ascii_start().starts_with('{') => None,
         ' ' | '\t'
             if !whitespace_touches_pointer_operator(line, index)
                 || declarator_pointer_follows(line, index) =>
@@ -1271,7 +1280,7 @@ fn split_point_at(
 
 /// Whether an operator after `before` applies to the operand after it.
 fn is_prefix_operator(before: &str) -> bool {
-    let before = before.trim_end();
+    let before = before.trim_ascii_end();
     match before.chars().next_back() {
         None => true,
         Some(ch) if is_identifier_continue(ch) => {
@@ -1317,8 +1326,8 @@ fn is_pointer_split_operator(line: &str, start: usize, end: usize, operator: &st
     if !matches!(operator, "*" | "&" | "^") {
         return false;
     }
-    let before = line[..start].trim_end();
-    let after = line[end..].trim_start();
+    let before = line[..start].trim_ascii_end();
+    let after = line[end..].trim_ascii_start();
     if after
         .chars()
         .next()
@@ -1335,7 +1344,7 @@ fn is_pointer_split_operator(line: &str, start: usize, end: usize, operator: &st
 }
 
 fn is_local_pointer_declarator(line: &str, operator_start: usize) -> bool {
-    let before = line[..operator_start].trim_end();
+    let before = line[..operator_start].trim_ascii_end();
     let Some((delimiter_index, delimiter)) = before
         .char_indices()
         .rev()
@@ -1346,7 +1355,7 @@ fn is_local_pointer_declarator(line: &str, operator_start: usize) -> bool {
     if matches!(delimiter, ';' | '{' | '}') {
         return false;
     }
-    let segment = before[delimiter_index + delimiter.len_utf8()..].trim();
+    let segment = before[delimiter_index + delimiter.len_utf8()..].trim_ascii();
     if !is_pointer_declaration_segment(segment) {
         return false;
     }
@@ -1358,7 +1367,7 @@ fn is_local_pointer_declarator(line: &str, operator_start: usize) -> bool {
         };
         open_index
     };
-    is_declaration_head(before[..open_index].trim_end())
+    is_declaration_head(before[..open_index].trim_ascii_end())
 }
 
 fn containing_open_paren_before(line: &str, limit: usize) -> Option<usize> {
@@ -1385,8 +1394,8 @@ fn is_declaration_head(head: &str) -> bool {
     let Some(name_start) = function_name_start(head) else {
         return false;
     };
-    let return_type = head[..name_start].trim_end();
-    let name = head[name_start..].trim_start();
+    let return_type = head[..name_start].trim_ascii_end();
+    let name = head[name_start..].trim_ascii_start();
     if return_type.is_empty() || name.is_empty() || language::is_header(name) {
         return false;
     }
@@ -1410,9 +1419,9 @@ fn is_declarator_pointer(line: &str, start: usize, end: usize) -> bool {
         && unmatched_open_paren_column(before).is_none()
         && top_level_assignment_index(before).is_none()
         && {
-            let word = trailing_word(before.trim_end());
+            let word = trailing_word(before.trim_ascii_end());
             !word.is_empty()
-                && before.trim_end().ends_with(word)
+                && before.trim_ascii_end().ends_with(word)
                 && !language::is_non_type_keyword(word)
         }
 }
@@ -1727,7 +1736,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                     }
                     b')' => {
                         let member_access =
-                            next == b'-' && line[end..].trim_start().starts_with("->");
+                            next == b'-' && line[end..].trim_ascii_start().starts_with("->");
                         if !(matches!(next, b')' | b' ' | b';' | b',' | b'.') || member_access) {
                             register((&mut fit, &mut pending), WHITESPACE, end, end <= width);
                         }
@@ -1863,13 +1872,13 @@ fn split_result_at(
     rules: SplitRules,
 ) -> Option<SplitResult> {
     let break_after_logical = rules.break_after_logical;
-    let head = line[..split_at].trim_end().to_string();
-    let tail = line[split_at..].trim_start().to_string();
+    let head = line[..split_at].trim_ascii_end().to_string();
+    let tail = line[split_at..].trim_ascii_start().to_string();
     if head.is_empty() || tail.is_empty() {
         return None;
     }
     // The split takes the class of the strongest point at it.
-    let head_end = line[..split_at].trim_end().len();
+    let head_end = line[..split_at].trim_ascii_end().len();
     let priority = (split_at.saturating_sub(4)..(split_at + 3).min(line.len()))
         .filter(|&index| line.is_char_boundary(index))
         .filter_map(|index| {
@@ -1880,7 +1889,7 @@ fn split_result_at(
             ]
             .into_iter()
             .flatten()
-            .filter(|&(at, _)| line[..at].trim_end().len() == head_end)
+            .filter(|&(at, _)| line[..at].trim_ascii_end().len() == head_end)
             .map(|(_, priority)| priority)
             .max()
         })

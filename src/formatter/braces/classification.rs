@@ -16,21 +16,21 @@ use crate::formatter::text::line_scan::{
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     let Some(head) = trimmed.strip_suffix('{') else {
         return false;
     };
-    let head = head.trim_end();
+    let head = head.trim_ascii_end();
     is_lambda_body_header(head)
         || head
             .rfind('[')
-            .is_some_and(|index| is_lambda_body_header(head[index..].trim_start()))
+            .is_some_and(|index| is_lambda_body_header(head[index..].trim_ascii_start()))
 }
 
 pub(crate) fn is_lambda_body_header(head: &str) -> bool {
-    let mut head = head.trim_end();
+    let mut head = head.trim_ascii_end();
     if let Some(arrow) = head.rfind("->") {
-        let before = head[..arrow].trim_end();
+        let before = head[..arrow].trim_ascii_end();
         if before.ends_with(')') {
             head = before;
         }
@@ -41,28 +41,28 @@ pub(crate) fn is_lambda_body_header(head: &str) -> bool {
     let Some(open) = matching_open_index(head, '(', ')') else {
         return false;
     };
-    let capture = head[..open].trim_end();
+    let capture = head[..open].trim_ascii_end();
     if !capture.ends_with(']') {
         return false;
     }
     let Some(lb) = matching_open_index(capture, '[', ']') else {
         return false;
     };
-    match capture[..lb].trim_end().chars().next_back() {
+    match capture[..lb].trim_ascii_end().chars().next_back() {
         None => true,
         Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
     }
 }
 
 pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
-    let head = head.trim_end();
+    let head = head.trim_ascii_end();
     if !head.ends_with(']') {
         return false;
     }
     let Some(lb) = matching_open_index(head, '[', ']') else {
         return false;
     };
-    match head[..lb].trim_end().chars().next_back() {
+    match head[..lb].trim_ascii_end().chars().next_back() {
         None => true,
         Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
     }
@@ -72,40 +72,40 @@ pub(super) fn line_opens_parameterized_lambda_block(line: &str) -> bool {
     if !line_opens_lambda_block(line) {
         return false;
     }
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     let Some(head) = trimmed.strip_suffix('{') else {
         return false;
     };
     let Some(capture_end) = head.rfind(']') else {
         return false;
     };
-    head[capture_end + 1..].trim_start().starts_with('(')
+    head[capture_end + 1..].trim_ascii_start().starts_with('(')
 }
 
 pub(crate) fn line_opens_lambda_or_capture_only_block(line: &str) -> bool {
     if line_opens_lambda_block(line) {
         return true;
     }
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     let Some(head) = trimmed.strip_suffix('{') else {
         return false;
     };
-    let head = head.trim_end();
+    let head = head.trim_ascii_end();
     let Some(capture_start) = head.rfind('[') else {
         return false;
     };
-    let capture = head[capture_start..].trim();
+    let capture = head[capture_start..].trim_ascii();
     if !capture.ends_with(']') {
         return false;
     }
-    match head[..capture_start].trim_end().chars().next_back() {
+    match head[..capture_start].trim_ascii_end().chars().next_back() {
         None => true,
         Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
     }
 }
 
 fn is_namespace_block_header(line: &str) -> bool {
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     trimmed == "namespace"
         || trimmed.starts_with("namespace ")
         || trimmed.starts_with("inline namespace ")
@@ -118,13 +118,13 @@ fn current_ends_block_literal_header(head: &str) -> bool {
     let Some(open) = matching_open_index(head, '(', ')') else {
         return false;
     };
-    let before = head[..open].trim_end().trim_end_matches(|ch: char| {
+    let before = head[..open].trim_ascii_end().trim_end_matches(|ch: char| {
         is_word_char(ch) || matches!(ch, '*' | '&' | ' ' | '\t' | ':')
     });
     let Some(rest) = before.strip_suffix('^') else {
         return false;
     };
-    match rest.trim_end().chars().next_back() {
+    match rest.trim_ascii_end().chars().next_back() {
         None => true,
         Some(ch) => matches!(ch, '=' | '(' | ',' | '[' | ':' | '{'),
     }
@@ -149,7 +149,7 @@ fn matching_open_index(text: &str, open: char, close: char) -> Option<usize> {
 }
 
 pub(super) fn is_namespace_or_module_block_header(line: &str) -> bool {
-    is_namespace_block_header(line) || line.trim_start().starts_with("module ")
+    is_namespace_block_header(line) || line.trim_ascii_start().starts_with("module ")
 }
 
 impl FormatEngine<'_> {
@@ -169,7 +169,7 @@ impl FormatEngine<'_> {
             _ => block_word,
         };
         let lambda_header = self.current_is_lambda_body_header()
-            || is_lambda_capture_header(self.current.trim_end());
+            || is_lambda_capture_header(self.current.trim_ascii_end());
         let lambda_in_block_scope = lambda_header
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
@@ -202,10 +202,10 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
+                .find(|line| !line.trim_ascii().is_empty())
                 .is_some_and(|line| {
                     let code = &self.output.code_of(line);
-                    is_namespace_block_header(code) && !code.trim_end().ends_with('{')
+                    is_namespace_block_header(code) && !code.trim_ascii_end().ends_with('{')
                 });
         // Only a deferred block kept on one line reads as an array; a longer
         // one is the header's block.
@@ -221,14 +221,14 @@ impl FormatEngine<'_> {
             || (self.current_is_blank() && self.output_ends_objc_method_header())
         {
             BraceType::Definition
-        } else if current_ends_block_literal_header(self.current.trim_end())
+        } else if current_ends_block_literal_header(self.current.trim_ascii_end())
             || lambda_in_block_scope
         {
             BraceType::Command
         } else if lambda_header {
             BraceType::Definition
         } else if (header_condition_closed
-            || header.is_none() && is_conditional_header_line(self.current.trim_start()))
+            || header.is_none() && is_conditional_header_line(self.current.trim_ascii_start()))
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
@@ -245,7 +245,7 @@ impl FormatEngine<'_> {
         } else if current_namespace_header || previous_namespace_header {
             BraceType::Namespace
         } else if self.layout.command_state.previous_command_char == Some('=')
-            || trailing_word(self.current.trim_end()) == language::RETURN
+            || trailing_word(self.current.trim_ascii_end()) == language::RETURN
             || self
                 .layout
                 .nesting
@@ -278,10 +278,10 @@ impl FormatEngine<'_> {
             BraceType::Union
         } else if block_word.as_deref() == Some("enum") {
             BraceType::Enum
-        } else if self.current.trim_start().starts_with(':')
+        } else if self.current.trim_ascii_start().starts_with(':')
             && self
                 .current
-                .trim_end()
+                .trim_ascii_end()
                 .chars()
                 .next_back()
                 .is_some_and(is_word_char)
@@ -305,7 +305,7 @@ impl FormatEngine<'_> {
         {
             BraceType::Definition
         } else if header.is_some()
-            || matches!(self.current.trim(), "-" | "+")
+            || matches!(self.current.trim_ascii(), "-" | "+")
             || self.current_ends_definition_header()
                 && matches!(
                     self.layout.nesting.brace_type_stack.last(),
@@ -318,24 +318,24 @@ impl FormatEngine<'_> {
         } else if matches!(
             self.layout.command_state.previous_command_char,
             Some(':' | ';' | '{' | '}' | '(')
-        ) || language::is_non_paren_header(trailing_word(self.current.trim_end()))
+        ) || language::is_non_paren_header(trailing_word(self.current.trim_ascii_end()))
         {
             BraceType::Command
-        } else if self.current.trim_start().starts_with("->")
-            && unmatched_open_paren_column(self.current.trim_end()).is_some()
+        } else if self.current.trim_ascii_start().starts_with("->")
+            && unmatched_open_paren_column(self.current.trim_ascii_end()).is_some()
         {
             BraceType::NonStatement
         } else if self.layout.nesting.brace_type_stack.is_empty()
-            && !self.current.trim().is_empty()
-            && self.current.trim().chars().all(is_word_char)
+            && !self.current.trim_ascii().is_empty()
+            && self.current.trim_ascii().chars().all(is_word_char)
             && self
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = self.output.code_of(previous).trim_end();
+                    let code = self.output.code_of(previous).trim_ascii_end();
                     code.is_empty()
                         || code.ends_with([';', '}'])
-                        || code.trim_start().starts_with('#')
+                        || code.trim_ascii_start().starts_with('#')
                 })
             && (self.token_input.token_begins_source_line
                 || self
@@ -351,14 +351,14 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Command | BraceType::Definition)
             )
-            && !self.current.trim().is_empty()
-            && self.current.trim().chars().all(is_word_char)
+            && !self.current.trim_ascii().is_empty()
+            && self.current.trim_ascii().chars().all(is_word_char)
             && self
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = self.output.code_of(previous).trim_end();
-                    code.ends_with([';', '{', '}']) || code.trim_start().starts_with('#')
+                    let code = self.output.code_of(previous).trim_ascii_end();
+                    code.ends_with([';', '{', '}']) || code.trim_ascii_start().starts_with('#')
                 })
         {
             // A macro word heading a block in code, as `SEH_TRY`.
@@ -383,19 +383,19 @@ impl FormatEngine<'_> {
         if !scope_allows {
             return false;
         }
-        let trimmed = self.current.trim_start();
+        let trimmed = self.current.trim_ascii_start();
         if (trimmed.starts_with(':') && !trimmed.starts_with("::")) || trimmed.starts_with(',') {
             return true;
         }
-        line_has_constructor_init_colon(self.current.trim())
+        line_has_constructor_init_colon(self.current.trim_ascii())
     }
 
     pub(super) fn current_is_lambda_body_header(&self) -> bool {
-        let head = self.current.trim_end();
+        let head = self.current.trim_ascii_end();
         is_lambda_body_header(head)
             || head
                 .rfind('[')
-                .is_some_and(|index| is_lambda_body_header(head[index..].trim_start()))
+                .is_some_and(|index| is_lambda_body_header(head[index..].trim_ascii_start()))
     }
 
     pub(super) fn current_ends_trailing_return_definition(&self) -> bool {
@@ -405,10 +405,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim().is_empty())
+            .filter(|line| !line.trim_ascii().is_empty())
             .take(16)
         {
-            let code = self.output.code_of(line).trim_end();
+            let code = self.output.code_of(line).trim_ascii_end();
             if code.ends_with([';', '{', '}']) {
                 break;
             }
@@ -416,7 +416,7 @@ impl FormatEngine<'_> {
         }
         lines.reverse();
         if !self.current_is_blank() {
-            lines.push(self.current.trim_end());
+            lines.push(self.current.trim_ascii_end());
         }
         let source = lines.join("\n");
         let chars: Vec<char> = source.chars().collect();
@@ -456,7 +456,7 @@ impl FormatEngine<'_> {
     pub(super) fn current_ends_definition_header(&self) -> bool {
         let source = if self.current_is_blank() {
             match self.output.scoped().iter().rev().find(|line| {
-                let trimmed = line.trim_start();
+                let trimmed = line.trim_ascii_start();
                 !trimmed.is_empty() && !is_comment_only_line(trimmed)
             }) {
                 Some(line) => self.output.code_of(line),
@@ -474,13 +474,13 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
+                .find(|line| !line.trim_ascii().is_empty())
         } else {
             None
         };
         let trimmed = match header {
-            Some(line) => line.trim_end(),
-            None => self.current.trim_end(),
+            Some(line) => line.trim_ascii_end(),
+            None => self.current.trim_ascii_end(),
         };
         trailing_matching_parens(trimmed).is_some_and(|(_, close)| close + 1 == trimmed.len())
     }
@@ -492,13 +492,16 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|last| line_ends_compound_literal_cast(last));
         }
-        if matches!(self.current.trim_start().chars().next(), Some(':' | ',')) {
+        if matches!(
+            self.current.trim_ascii_start().chars().next(),
+            Some(':' | ',')
+        ) {
             return false;
         }
         if !line_ends_compound_literal_cast(&self.current) {
             return false;
         }
-        let trimmed = self.current.trim();
+        let trimmed = self.current.trim_ascii();
         let leading_paren_group = trimmed.starts_with('(')
             && trailing_matching_parens(trimmed) == Some((0, trimmed.len() - 1));
         if leading_paren_group && self.previous_output_line_ends_with_declarator() {
@@ -508,7 +511,7 @@ impl FormatEngine<'_> {
     }
 
     fn previous_output_line_ends_with_declarator(&self) -> bool {
-        let Some(previous) = self.output.last().map(|line| line.trim_end()) else {
+        let Some(previous) = self.output.last().map(|line| line.trim_ascii_end()) else {
             return false;
         };
         previous.chars().next_back().is_some_and(is_word_char)
@@ -704,24 +707,24 @@ pub(crate) fn contains_one_line_block(line: &str) -> bool {
 
 pub(crate) fn lambda_header_has_trailing_return(line: &str) -> bool {
     line.match_indices("->")
-        .any(|(index, _)| line[..index].trim_end().ends_with(')'))
+        .any(|(index, _)| line[..index].trim_ascii_end().ends_with(')'))
 }
 
 pub(super) fn line_ends_lambda_parameter_list(line: &str) -> bool {
-    let current = line.trim_end();
+    let current = line.trim_ascii_end();
     let Some((open_pos, _)) = trailing_matching_parens(current) else {
         return false;
     };
-    current[..open_pos].trim_end().ends_with(']')
+    current[..open_pos].trim_ascii_end().ends_with(']')
 }
 
 pub(crate) fn code_ends_definition_header(source: &str) -> bool {
-    let mut rest = source.trim_end();
+    let mut rest = source.trim_ascii_end();
     loop {
         if rest.ends_with(')') {
             return true;
         }
-        let stripped = rest.trim_end_matches('&').trim_end();
+        let stripped = rest.trim_end_matches('&').trim_ascii_end();
         if stripped.len() != rest.len() {
             rest = stripped;
             continue;
@@ -732,7 +735,7 @@ pub(crate) fn code_ends_definition_header(source: &str) -> bool {
         {
             return false;
         }
-        let candidate = rest[..rest.len() - word.len()].trim_end();
+        let candidate = rest[..rest.len() - word.len()].trim_ascii_end();
         if candidate.is_empty() {
             return false;
         }

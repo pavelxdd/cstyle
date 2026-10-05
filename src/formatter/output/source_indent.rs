@@ -44,7 +44,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             return None;
         }

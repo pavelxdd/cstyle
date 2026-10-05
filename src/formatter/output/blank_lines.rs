@@ -58,7 +58,7 @@ impl FormatEngine<'_> {
         let Some(previous) = self.output.last() else {
             return false;
         };
-        let code = self.output.code_of(previous).trim();
+        let code = self.output.code_of(previous).trim_ascii();
         if !code.ends_with(')') || code.starts_with('#') {
             return false;
         }

@@ -25,13 +25,13 @@ pub(crate) enum OperatorRole {
 }
 
 pub(crate) fn signature_ends_with_parameter_list(line: &str) -> bool {
-    let mut rest = line.trim_end();
+    let mut rest = line.trim_ascii_end();
     loop {
         if rest.ends_with(')') {
             return true;
         }
         if let Some(stripped) = rest.strip_suffix("&&").or_else(|| rest.strip_suffix('&')) {
-            rest = stripped.trim_end();
+            rest = stripped.trim_ascii_end();
             continue;
         }
         let word = trailing_word(rest);
@@ -39,7 +39,7 @@ pub(crate) fn signature_ends_with_parameter_list(line: &str) -> bool {
             word,
             "const" | "volatile" | "noexcept" | "override" | "final" | "mutable" | "try"
         ) {
-            rest = rest[..rest.len() - word.len()].trim_end();
+            rest = rest[..rest.len() - word.len()].trim_ascii_end();
             continue;
         }
         return false;
@@ -47,7 +47,7 @@ pub(crate) fn signature_ends_with_parameter_list(line: &str) -> bool {
 }
 
 pub(crate) fn function_name_start(before_open_paren: &str) -> Option<usize> {
-    let end = before_open_paren.trim_end().len();
+    let end = before_open_paren.trim_ascii_end().len();
     let head = &before_open_paren[..end];
     let bytes = head.as_bytes();
     let identifier_segment_start = |limit: usize| {
@@ -123,7 +123,7 @@ fn operator_function_name_start(before_open_paren: &str) -> Option<usize> {
     {
         return None;
     }
-    let after = before_open_paren[start + language::OPERATOR.len()..].trim_start();
+    let after = before_open_paren[start + language::OPERATOR.len()..].trim_ascii_start();
     (!after.is_empty()
         && (!after.chars().next().is_some_and(is_identifier_start)
             || first_operator_word(after).is_some_and(is_named_operator_word)))
@@ -304,7 +304,7 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
         i += 1;
     }
     let eq = eq?;
-    let head = line[..eq].trim_end();
+    let head = line[..eq].trim_ascii_end();
     if head.contains_any_byte(b"(),{}") {
         return None;
     }

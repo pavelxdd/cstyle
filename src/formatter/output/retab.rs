@@ -94,14 +94,14 @@ impl FormatEngine<'_> {
                 // text; an initializer row's spaces align its values.
                 Some(rest)
                     if rest.starts_with("  ")
-                        && !rest.trim().is_empty()
-                        && !rest.trim_start().starts_with("/*")
-                        && !rest.trim_start().starts_with("//")
+                        && !rest.trim_ascii().is_empty()
+                        && !rest.trim_ascii_start().starts_with("/*")
+                        && !rest.trim_ascii_start().starts_with("//")
                         && (self.starts_with_block_brace(index)
                             || self.output.line_tokens(index).is_none()
-                            || rest.trim_start().starts_with('{')) =>
+                            || rest.trim_ascii_start().starts_with('{')) =>
                 {
-                    let body = rest.trim_start();
+                    let body = rest.trim_ascii_start();
                     let target = width + 1 + (rest.len() - body.len());
                     let fill = horstmann_run_in_fill(
                         &format!("{prefix}{{"),
@@ -200,12 +200,12 @@ impl FormatEngine<'_> {
         };
         let mut depth = open_on_directive.max(0);
         for row in directive + 1..index {
-            let code = self.output.code_before_comment(row).trim_end();
-            let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
+            let code = self.output.code_before_comment(row).trim_ascii_end();
+            let code = code.strip_suffix('\\').unwrap_or(code).trim_ascii_end();
             depth += code.matches('(').count() as isize - code.matches(')').count() as isize;
             // An initializer's brace opens rows that align.
             let opens_block = code.strip_suffix('{').is_some_and(|head| {
-                head.trim_end()
+                head.trim_ascii_end()
                     .strip_suffix('=')
                     .is_none_or(|before| before.ends_with(['=', '!', '<', '>']))
             });
@@ -456,7 +456,7 @@ impl FormatEngine<'_> {
     fn untracked_statement_indent_width(&self, index: usize) -> Option<usize> {
         let ends_statement = |line: usize| {
             let code = self.output.code_trimmed(line);
-            let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
+            let code = code.strip_suffix('\\').unwrap_or(code).trim_ascii_end();
             code.is_empty()
                 || code.starts_with('#')
                 || code.ends_with([';', '{', '}'])
@@ -572,7 +572,7 @@ fn ends_label(code: &str) -> bool {
     let Some(label) = code.strip_suffix(':') else {
         return false;
     };
-    let label = label.trim();
+    let label = label.trim_ascii();
     label.starts_with("case ")
         || label == "default"
         || !label.is_empty() && label.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
@@ -581,9 +581,12 @@ fn ends_label(code: &str) -> bool {
 /// The replacement text on a `#define` line: what follows the macro's name
 /// and parameters.
 fn define_replacement(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix('#')?.trim_start();
+    let rest = line
+        .trim_ascii_start()
+        .strip_prefix('#')?
+        .trim_ascii_start();
     let rest = rest.strip_prefix("define")?;
-    let rest = rest.trim_start();
+    let rest = rest.trim_ascii_start();
     let name_end = rest
         .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
         .unwrap_or(rest.len());

@@ -108,7 +108,7 @@ pub(crate) fn string_literal_token_end(line: &str, start: usize) -> Option<usize
 
 pub(crate) fn string_literal_has_opening_context(line: &str, start: usize) -> bool {
     !matches!(
-        line[..start].trim_end().chars().next_back(),
+        line[..start].trim_ascii_end().chars().next_back(),
         Some(ch) if is_identifier_continue(ch) || matches!(ch, ')' | ']')
     )
 }
@@ -117,13 +117,13 @@ pub(crate) fn single_string_literal_comma_line(line: &str) -> bool {
     let Some(start) = first_string_literal_start(line) else {
         return false;
     };
-    if !line[..start].trim().is_empty() {
+    if !line[..start].trim_ascii().is_empty() {
         return false;
     }
     let Some(end) = string_literal_token_end(line, start) else {
         return false;
     };
-    line[end..].trim() == ","
+    line[end..].trim_ascii() == ","
 }
 
 pub(crate) fn last_string_literal_start(line: &str) -> Option<usize> {
@@ -164,7 +164,7 @@ impl FormatEngine<'_> {
         let line = if preserve_line_end {
             line
         } else {
-            line.trim_end().to_string()
+            line.trim_ascii_end().to_string()
         };
         self.adjust_and_publish_raw_literal_line(line, structural_start);
         self.reset_after_finished_line();
@@ -178,7 +178,7 @@ impl FormatEngine<'_> {
         }
         if quote.is_none()
             && self.layout.previous == PreviousToken::Operator
-            && self.current.trim_end().ends_with(['+', '-'])
+            && self.current.trim_ascii_end().ends_with(['+', '-'])
         {
             let before_sign = self.current.trim_end_matches([' ', '\t', '+', '-']);
             let cast_type = before_sign
@@ -186,9 +186,9 @@ impl FormatEngine<'_> {
                 .and_then(|head| head.rsplit_once('('))
                 .filter(|(before_open, ty)| {
                     !matches!(
-                        trailing_word(before_open.trim_end()),
+                        trailing_word(before_open.trim_ascii_end()),
                         "sizeof" | "alignof" | "_Alignof"
-                    ) && is_type_like_pointer_word(ty.trim())
+                    ) && is_type_like_pointer_word(ty.trim_ascii())
                 });
             // astyle keeps a space the source put after the sign.
             if cast_type.is_some()
@@ -202,7 +202,7 @@ impl FormatEngine<'_> {
             }
         }
         if quote.is_none()
-            && self.current.trim_end().ends_with('}')
+            && self.current.trim_ascii_end().ends_with('}')
             && self
                 .token_input
                 .previous_input_whitespace
@@ -248,7 +248,7 @@ impl FormatEngine<'_> {
                 line_indent_spaces,
                 literal_start_column: line_indent_spaces + self.current_visual_width(),
                 line_starts_with_chain_operator: starts_with_chain_operator(
-                    self.current.trim_start(),
+                    self.current.trim_ascii_start(),
                 ),
                 has_opening_context: self.current.contains('('),
                 has_open_brace_before_literal: self.current.contains('{'),

@@ -61,7 +61,7 @@ impl FormatEngine<'_> {
     pub(crate) fn update_typedef_function_pointer_frame(&mut self, line: &str) {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         if leading_visual_width(line, tab_width) == 0
             && trimmed.starts_with("typedef ")
             && trimmed.contains("(*")
@@ -69,8 +69,8 @@ impl FormatEngine<'_> {
             && !trimmed.contains('\\')
             && unmatched_open_paren_column(trimmed).is_some()
         {
-            let target = if trimmed.trim_end().ends_with(',') {
-                unmatched_open_paren_column(trimmed.trim_end()).map_or(width, |open| {
+            let target = if trimmed.trim_ascii_end().ends_with(',') {
+                unmatched_open_paren_column(trimmed.trim_ascii_end()).map_or(width, |open| {
                     let column = visual_width_from(&trimmed[..open + 1], 0, tab_width);
                     if column > self.options.max_continuation_indent {
                         width * 2
@@ -110,7 +110,7 @@ pub(crate) fn immediate_typedef_template_indent_spaces(
     current: &str,
     previous: &str,
 ) -> Option<usize> {
-    let previous_trimmed = previous.trim();
+    let previous_trimmed = previous.trim_ascii();
     if current.starts_with('<') && previous_trimmed.starts_with("typedef typename ") {
         return Some(leading_visual_width(previous, options.tab_width));
     }

@@ -15,10 +15,10 @@ impl FormatEngine<'_> {
         }
         let observed_line_kind = self.layout.line_adjuster.observe_line(line);
         if observed_line_kind == LineKind::Normal
-            && line.trim_start() == "&else"
+            && line.trim_ascii_start() == "&else"
             && let Some(previous) = self.output.last_mut()
             && previous.contains("#if")
-            && !previous.trim_start().starts_with('#')
+            && !previous.trim_ascii_start().starts_with('#')
         {
             previous.push_str(" & else");
             return LineRoute::Published;
@@ -110,7 +110,7 @@ impl FormatEngine<'_> {
         let mut layout = self.apply_tree_anchor_layout(line, layout);
         if self.preprocessor.group_blocks.contains(&true)
             && layout.line_kind == LineKind::Normal
-            && !line.trim_start().starts_with('#')
+            && !line.trim_ascii_start().starts_with('#')
         {
             layout.exact_indent_spaces =
                 Some(self.layout.indentation.indent() * self.options.indent_width);

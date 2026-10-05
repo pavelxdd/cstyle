@@ -14,7 +14,7 @@ pub(crate) struct AssemblyMacroLines {
 
 impl AssemblyMacroLines {
     pub(crate) fn take_raw_line(&mut self, line: &str) -> Option<String> {
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         if self.active && trimmed.starts_with('#') {
             self.after_preprocessor = true;
             return None;
@@ -73,7 +73,7 @@ fn format_macro_line(
     preserve_leading: bool,
     after_preprocessor_indent: Option<usize>,
 ) -> String {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     if !preserve_leading {
         return trimmed.to_string();
     }
@@ -99,7 +99,7 @@ fn format_macro_line(
 
 impl FormatEngine<'_> {
     pub(crate) fn is_in_asm_operator_context(&self) -> bool {
-        let current = self.current.trim_start();
+        let current = self.current.trim_ascii_start();
         ((current.starts_with("asm(") || current.starts_with("__asm__("))
             && self.layout.nesting.paren_depth > 0)
             || current.starts_with("_asm ")

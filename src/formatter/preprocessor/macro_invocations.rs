@@ -30,7 +30,7 @@ impl FormatEngine<'_> {
         }
         // Collapsing commas never changes how the line ends.
         if !last_visible_token(line_tokens)
-            .is_some_and(|token| token_text(token).trim_end().ends_with(')'))
+            .is_some_and(|token| token_text(token).trim_ascii_end().ends_with(')'))
         {
             return false;
         }
@@ -40,7 +40,7 @@ impl FormatEngine<'_> {
             .map(token_text)
             .collect::<String>();
         let line = collapse_empty_comma_arguments(&line);
-        let trimmed = line.trim();
+        let trimmed = line.trim_ascii();
         if is_header(self.options, leading_identifier(trimmed)) {
             return false;
         }
@@ -96,7 +96,7 @@ impl FormatEngine<'_> {
                 .previous_pre_adjust_line
                 .as_ref()
                 .and_then(|previous| {
-                    headers::line_is_control_body_header(previous.trim_start()).then(|| {
+                    headers::line_is_control_body_header(previous.trim_ascii_start()).then(|| {
                         columns::leading_visual_width(previous, self.options.tab_width)
                             + self.options.indent_width
                     })
@@ -152,7 +152,7 @@ pub(crate) fn is_standalone_macro_invocation_line(line: &str) -> bool {
     if depth != 0 {
         return false;
     }
-    let name = line[..open].trim();
+    let name = line[..open].trim_ascii();
     !name.is_empty()
         && name
             .chars()

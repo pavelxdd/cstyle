@@ -125,7 +125,7 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
         }
-        if layout.line_kind != LineKind::Normal || line.trim_start().starts_with('#') {
+        if layout.line_kind != LineKind::Normal || line.trim_ascii_start().starts_with('#') {
             return layout;
         }
         let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
@@ -133,7 +133,7 @@ impl FormatEngine<'_> {
         };
         // Tokens that the engine moved across lines map to no line of theirs.
         if !line
-            .trim_start()
+            .trim_ascii_start()
             .starts_with(&*token_text(&self.tree.tokens[first]))
         {
             return layout;
@@ -387,11 +387,11 @@ impl FormatEngine<'_> {
         } else {
             let mut start = line;
             while start > 0 {
-                let code = self.output.code(start - 1).trim_end();
+                let code = self.output.code(start - 1).trim_ascii_end();
                 if code.is_empty()
                     || self.output.line_tokens(start - 1).is_none()
                     || code.ends_with([';', '{', '}', ','])
-                    || code.trim_start().starts_with('#')
+                    || code.trim_ascii_start().starts_with('#')
                 {
                     break;
                 }
@@ -573,11 +573,11 @@ impl FormatEngine<'_> {
             return Some(self.token_column(element)? + self.case_unindent_spaces());
         }
         // The row may follow a comment on its line.
-        let text = self.output.as_slice()[line].trim_start();
+        let text = self.output.as_slice()[line].trim_ascii_start();
         let text = text
             .strip_prefix("/*")
             .and_then(|rest| rest.split_once("*/"))
-            .map_or(text, |(_, rest)| rest.trim_start());
+            .map_or(text, |(_, rest)| rest.trim_ascii_start());
         if !text.starts_with(&*token_text(&tokens[row])) {
             return None;
         }
@@ -872,7 +872,9 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(open)?;
         if self.output.line_tokens(line)?.first != open
-            || !self.output.as_slice()[line].trim_start().starts_with('{')
+            || !self.output.as_slice()[line]
+                .trim_ascii_start()
+                .starts_with('{')
         {
             return None;
         }
@@ -999,7 +1001,9 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(open)?;
         // A brace attached to the line before after layout closes its way.
         (self.output.line_tokens(line)?.first == open
-            && self.output.as_slice()[line].trim_start().starts_with('{'))
+            && self.output.as_slice()[line]
+                .trim_ascii_start()
+                .starts_with('{'))
         .then(|| self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
@@ -1274,7 +1278,7 @@ impl FormatEngine<'_> {
     /// such lines out as comments.
     pub(crate) fn comment_led_statement_line(&self, line: &str) -> Option<String> {
         let tokens = &self.tree.tokens;
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         if !trimmed.starts_with("/*") {
             return None;
         }
@@ -1283,7 +1287,7 @@ impl FormatEngine<'_> {
         let close = trimmed.find("*/")?;
         if !is_code_token(&tokens[code])
             || !trimmed[close + 2..]
-                .trim_start()
+                .trim_ascii_start()
                 .starts_with(&*token_text(&tokens[code]))
             || matches!(&tokens[code], Token::Word(word) if word == "case" || word == "default")
         {
@@ -1521,7 +1525,7 @@ impl FormatEngine<'_> {
         let comma_column = self.token_column(registering)?;
         let mut column = lead;
         let mut chars = 0;
-        for ch in text.trim_start().chars() {
+        for ch in text.trim_ascii_start().chars() {
             if column >= comma_column {
                 break;
             }
@@ -1670,9 +1674,9 @@ impl FormatEngine<'_> {
             BraceStyle::Allman | BraceStyle::Pico | BraceStyle::Horstmann
         ) || self.options.indent_blocks
             || self.options.indent_braces
-            || !(line.trim() == "{"
+            || !(line.trim_ascii() == "{"
                 || self.options.brace_style != BraceStyle::Allman
-                    && line.trim_start().starts_with('{'))
+                    && line.trim_ascii_start().starts_with('{'))
             || self.layout.line_adjuster.total_case_unindent_depth() > 0
             || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
         {
@@ -1716,7 +1720,7 @@ impl FormatEngine<'_> {
         if current == spaces || self.options.brace_style != BraceStyle::Allman && current > spaces {
             return line;
         }
-        format!("{}{}", " ".repeat(spaces), line.trim_start())
+        format!("{}{}", " ".repeat(spaces), line.trim_ascii_start())
     }
 
     /// Whether the innermost group around `index` is a `switch` body.
@@ -2271,9 +2275,9 @@ impl FormatEngine<'_> {
                 .output
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
+                .find(|line| !line.trim_ascii().is_empty())
                 .is_some_and(|line| {
-                    let code = self.output.code_of(line).trim();
+                    let code = self.output.code_of(line).trim_ascii();
                     code.starts_with('{') && code.ends_with('}') && code.len() > 2
                 })
     }
@@ -2553,18 +2557,20 @@ impl FormatEngine<'_> {
         let Some(previous) = self.tree.previous_code_token(first) else {
             return false;
         };
-        // Standalone comments or blank lines: tokens on lines of their own.
-        let between: Vec<&Token> = tokens[previous + 1..first]
-            .iter()
-            .filter(|token| !matches!(token, Token::Whitespace(_)))
-            .collect();
-        let standalone_comment = between.windows(2).any(|pair| {
-            matches!(pair[0], Token::Newline)
-                && matches!(pair[1], Token::Comment(_, _) | Token::Newline)
-        });
         let Some(group) = groups.enclosing(first) else {
             return false;
         };
+        // Standalone comments or blank lines: tokens on lines of their own.
+        let mut between = tokens[previous + 1..first]
+            .iter()
+            .filter(|token| !matches!(token, Token::Whitespace(_)));
+        let mut after_newline = false;
+        let standalone_comment = between.any(|token| {
+            let standalone =
+                after_newline && matches!(token, Token::Comment(_, _) | Token::Newline);
+            after_newline = matches!(token, Token::Newline);
+            standalone
+        });
         standalone_comment
             && groups.get(group).delimiter == Delimiter::Paren
             && groups.enclosing(previous) == Some(group)
@@ -3075,7 +3081,7 @@ impl FormatEngine<'_> {
             Some(spaces) => self
                 .options
                 .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces),
-            None => code[..code.len() - code.trim_start().len()].to_string(),
+            None => code[..code.len() - code.trim_ascii_start().len()].to_string(),
         };
         let tab_width = self.options.tab_width.max(1);
         let mut end = line;
@@ -3120,7 +3126,8 @@ impl FormatEngine<'_> {
             }
             let lead = self.output.lead_width(start, tab_width);
             let opener_line = &self.output.as_slice()[start];
-            let opener_prefix = &opener_line[..opener_line.len() - opener_line.trim_start().len()];
+            let opener_prefix =
+                &opener_line[..opener_line.len() - opener_line.trim_ascii_start().len()];
             // A comment that starts the source line keeps column one.
             let source_column_one = self
                 .output
@@ -3162,8 +3169,8 @@ impl FormatEngine<'_> {
         // The line may hold only what follows the label.
         matches!(&tokens[first], Token::Word(word)
         if !matches!(word.as_str(), "case" | "default")
-            && line.trim_start().strip_prefix(word.as_str()).is_some_and(|rest| {
-                rest.trim_start().starts_with(':')
+            && line.trim_ascii_start().strip_prefix(word.as_str()).is_some_and(|rest| {
+                rest.trim_ascii_start().starts_with(':')
             }))
             && is_colon(colon)
             && !is_colon(colon.and_then(|colon| next_code_token(tokens, colon + 1)))
@@ -3647,7 +3654,7 @@ impl FormatEngine<'_> {
             _ => return None,
         };
         let close = self.tree.groups.get(group).close?;
-        let code = self.output.code_of(line).trim_end();
+        let code = self.output.code_of(line).trim_ascii_end();
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)
             || !code.ends_with('}')
             || self.tree.tokens[first..close]
@@ -4741,7 +4748,10 @@ impl FormatEngine<'_> {
                 self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces(),
             );
         }
-        if !self.output.as_slice()[line].trim_start().starts_with('{') {
+        if !self.output.as_slice()[line]
+            .trim_ascii_start()
+            .starts_with('{')
+        {
             return None;
         }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())

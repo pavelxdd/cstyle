@@ -37,8 +37,7 @@ mod tests;
 
 pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     let input = line_endings::normalize(source);
-    let converted_source = options
-        .convert_tabs
+    let converted_source = (options.convert_tabs && input.contains('\t'))
         .then(|| tabs::source_to_spaces(&input, options.tab_width));
     let source = converted_source.as_deref().unwrap_or(&input);
     let tokens = tokenize(source);
@@ -90,7 +89,10 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
 /// the line now before them in the state they were filled from.
 fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource]) -> String {
     let lines: Vec<&str> = output.split(line_break).collect();
-    let blank_lines = lines.iter().filter(|line| line.trim().is_empty()).count();
+    let blank_lines = lines
+        .iter()
+        .filter(|line| line.trim_ascii().is_empty())
+        .count();
     // The split leaves an empty line after the final line break.
     let aligned = blank_lines == sources.len() + usize::from(output.ends_with(line_break));
     let mut sources = sources.iter();
@@ -107,16 +109,16 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
     for line in lines {
         let in_directive = continues_directive;
         continues_directive = !in_block_comment
-            && (in_directive || line.trim_start().starts_with('#'))
-            && line.trim_end().ends_with('\\');
+            && (in_directive || line.trim_ascii_start().starts_with('#'))
+            && line.trim_ascii_end().ends_with('\\');
         if in_directive && aligned {
             refilled.push(line);
-            if line.trim().is_empty() {
+            if line.trim_ascii().is_empty() {
                 sources.next();
             }
             continue;
         }
-        if line.trim().is_empty() {
+        if line.trim_ascii().is_empty() {
             let source = sources.next();
             let lead = match source {
                 _ if !aligned => *active.last().unwrap_or(&root),
@@ -137,7 +139,7 @@ fn refill_empty_lines(output: &str, line_break: &str, sources: &[EmptyFillSource
             continue;
         }
         let state = active.last_mut().unwrap_or(&mut root);
-        let code = line.trim_start();
+        let code = line.trim_ascii_start();
         if in_block_comment {
             if aligned {
                 *state = None;

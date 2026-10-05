@@ -134,7 +134,7 @@ fn import_option_tokens(source: &str) -> Vec<OptionToken> {
 }
 
 fn push_option_token(tokens: &mut Vec<OptionToken>, token: &mut String, line_number: usize) {
-    let text = token.trim();
+    let text = token.trim_ascii();
     if !text.is_empty() {
         tokens.push(OptionToken {
             text: text.to_string(),
@@ -150,7 +150,7 @@ fn apply_option_token(
     options: &mut FormatOptions,
     source: OptionSource,
 ) -> Result<(), ConfigError> {
-    let token = token.trim();
+    let token = token.trim_ascii();
     if token.is_empty() {
         return Ok(());
     }
@@ -220,39 +220,45 @@ fn apply_single_option(
         return apply_flag(at, option, options, source);
     };
 
-    match key.trim() {
-        "indent" => apply_indent(at, value.trim(), options),
-        "style" => apply_style(at, value.trim(), options),
-        "indent-continuation" => {
-            apply_usize_range(at, value.trim(), "continuation indent", 0, 4, |value| {
-                options.continuation_indent = value
-            })
-        }
+    match key.trim_ascii() {
+        "indent" => apply_indent(at, value.trim_ascii(), options),
+        "style" => apply_style(at, value.trim_ascii(), options),
+        "indent-continuation" => apply_usize_range(
+            at,
+            value.trim_ascii(),
+            "continuation indent",
+            0,
+            4,
+            |value| options.continuation_indent = value,
+        ),
         "max-continuation-indent" | "max-instatement-indent" => apply_usize_range(
             at,
-            value.trim(),
+            value.trim_ascii(),
             "max continuation indent",
             40,
             120,
             |value| options.max_continuation_indent = value,
         ),
-        "min-conditional-indent" => apply_min_conditional_indent(at, value.trim(), options),
-        "align-pointer" => apply_pointer_align(at, value.trim(), options),
-        "align-reference" => apply_reference_align(at, value.trim(), options),
-        "max-code-length" => {
-            apply_usize_range(at, value.trim(), "max code length", 50, 200, |value| {
-                options.max_code_length = Some(value)
-            })
-        }
-        "break-blocks" => apply_break_blocks_value(at, value.trim(), options),
-        "pad-method-colon" => apply_method_colon_pad(at, value.trim(), options),
-        "line-between-members" => apply_line_between_members(at, value.trim(), options),
-        "lineend" => apply_line_end(at, value.trim(), options),
-        "mode" => apply_mode(at, value.trim(), options),
-        "access-label" => apply_access_label(at, value.trim(), options),
-        "macro-block" => apply_macro_block(at, value.trim(), options),
-        "control-header" => apply_control_header(at, value.trim(), options),
-        "non-paren-header" => apply_non_paren_header(at, value.trim(), options),
+        "min-conditional-indent" => apply_min_conditional_indent(at, value.trim_ascii(), options),
+        "align-pointer" => apply_pointer_align(at, value.trim_ascii(), options),
+        "align-reference" => apply_reference_align(at, value.trim_ascii(), options),
+        "max-code-length" => apply_usize_range(
+            at,
+            value.trim_ascii(),
+            "max code length",
+            50,
+            200,
+            |value| options.max_code_length = Some(value),
+        ),
+        "break-blocks" => apply_break_blocks_value(at, value.trim_ascii(), options),
+        "pad-method-colon" => apply_method_colon_pad(at, value.trim_ascii(), options),
+        "line-between-members" => apply_line_between_members(at, value.trim_ascii(), options),
+        "lineend" => apply_line_end(at, value.trim_ascii(), options),
+        "mode" => apply_mode(at, value.trim_ascii(), options),
+        "access-label" => apply_access_label(at, value.trim_ascii(), options),
+        "macro-block" => apply_macro_block(at, value.trim_ascii(), options),
+        "control-header" => apply_control_header(at, value.trim_ascii(), options),
+        "non-paren-header" => apply_non_paren_header(at, value.trim_ascii(), options),
         key => Err(unknown_option_error(at, key, source)),
     }
 }
@@ -876,7 +882,7 @@ fn apply_access_label(
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let label = value.trim().trim_end_matches(':').trim();
+    let label = value.trim_ascii().trim_end_matches(':').trim_ascii();
     if label.is_empty() {
         return Err(ConfigError::at(at, "access-label must not be empty"));
     }
@@ -899,7 +905,7 @@ fn apply_control_header(
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let header = value.trim();
+    let header = value.trim_ascii();
     if !is_macro_name(header) {
         return Err(ConfigError::at(at, "control-header must be an identifier"));
     }
@@ -912,7 +918,7 @@ fn apply_non_paren_header(
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let header = value.trim();
+    let header = value.trim_ascii();
     if !is_macro_name(header) {
         return Err(ConfigError::at(
             at,
@@ -938,8 +944,8 @@ fn apply_macro_block(
     let Some((begin, end)) = value.split_once(':') else {
         return Err(ConfigError::at(at, "macro-block must be BEGIN:END"));
     };
-    let begin = begin.trim();
-    let end = end.trim();
+    let begin = begin.trim_ascii();
+    let end = end.trim_ascii();
     if !is_macro_name(begin) || !is_macro_name(end) {
         return Err(ConfigError::at(at, "macro-block names must be identifiers"));
     }

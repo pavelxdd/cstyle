@@ -9,8 +9,8 @@ pub struct LineAdjuster {
     switch_observer: SwitchCaseObserver,
     switch_case_transformer: SwitchCaseLineTransformer,
     macro_block_depth: usize,
-    access_labels: Vec<String>,
-    macro_blocks: Vec<(String, String)>,
+    access_labels: std::rc::Rc<[String]>,
+    macro_blocks: std::rc::Rc<[(String, String)]>,
     tab_converter: tabs::Converter,
     tab_width: usize,
     indent_width: usize,
@@ -25,8 +25,8 @@ impl LineAdjuster {
             switch_observer: SwitchCaseObserver::default(),
             switch_case_transformer: SwitchCaseLineTransformer::new(options),
             macro_block_depth: 0,
-            access_labels: options.access_labels.clone(),
-            macro_blocks: options.macro_blocks.clone(),
+            access_labels: options.access_labels.as_slice().into(),
+            macro_blocks: options.macro_blocks.as_slice().into(),
             tab_converter: tabs::Converter::new(options.convert_tabs),
             tab_width: options.tab_width,
             indent_width: options.indent_width,
@@ -50,7 +50,7 @@ impl LineAdjuster {
 
     pub fn observe_raw_comment_line(&mut self, line: &str) {
         if self.line_observe_enabled {
-            let kind = labels::line_kind(line.trim_start(), &self.access_labels);
+            let kind = labels::line_kind(line.trim_ascii_start(), &self.access_labels);
             self.switch_observer.observe_line(line, kind);
         }
     }
@@ -63,7 +63,7 @@ impl LineAdjuster {
         if !self.line_observe_enabled {
             return LineKind::Normal;
         }
-        let kind = labels::line_kind(line.trim_start(), &self.access_labels);
+        let kind = labels::line_kind(line.trim_ascii_start(), &self.access_labels);
         self.switch_observer.observe_line(line, kind)
     }
 
@@ -90,7 +90,7 @@ impl LineAdjuster {
         if self.line_observe_enabled
             && let Some(suffix) = observed_suffix
         {
-            let kind = labels::line_kind(suffix.trim_start(), &self.access_labels);
+            let kind = labels::line_kind(suffix.trim_ascii_start(), &self.access_labels);
             self.switch_observer.observe_line(suffix, kind);
         }
         self.convert_line_tabs(line)
@@ -104,7 +104,7 @@ impl LineAdjuster {
         if self.macro_blocks.is_empty() {
             return line;
         }
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         let is_begin = macro_block_end_for(trimmed, &self.macro_blocks).is_some();
         let is_end = macro_block_end_macro(trimmed, &self.macro_blocks);
         let is_preprocessor = trimmed.starts_with('#');
@@ -179,7 +179,7 @@ fn macro_block_line_starts_with(line: &str, name: &str) -> bool {
     macro_call_starts_with(line, name)
         || line
             .strip_prefix("#define")
-            .is_some_and(|rest| macro_call_starts_with(rest.trim_start(), name))
+            .is_some_and(|rest| macro_call_starts_with(rest.trim_ascii_start(), name))
 }
 
 pub(crate) fn macro_call_starts_with(line: &str, name: &str) -> bool {

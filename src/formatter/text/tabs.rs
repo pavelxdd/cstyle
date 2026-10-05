@@ -59,43 +59,56 @@ fn to_spaces_stateful(
     start_raw_delimiter: Option<&str>,
 ) -> (String, bool, Option<char>, Option<String>) {
     let tab_width = tab_width.max(1);
-    let mut output = String::new();
+    let bytes = line.as_bytes();
+    let mut output = String::with_capacity(line.len() + line.len() / 8);
+    // Bytes up to `copied` are in the output; only tabs are rewritten.
+    let mut copied = 0usize;
     let mut column = 0usize;
-    let mut quote = start_quote;
+    let mut quote = start_quote.map(|ch| ch as u8);
     let mut raw_delimiter = start_raw_delimiter.map(str::to_string);
     let mut in_line_comment = false;
     let mut at_indent = true;
-    let mut previous = '\0';
-    let mut chars = line.char_indices().peekable();
+    let mut previous = 0u8;
+    let mut index = 0usize;
 
-    while let Some((byte_index, ch)) = chars.next() {
-        if ch == '\n' && raw_delimiter.is_none() {
-            output.push(ch);
+    // Advances the column over the byte at `at`, which stays in the output.
+    let advance = |column: &mut usize, byte: u8| match byte {
+        b'\n' => *column = 0,
+        b'\t' => *column += tab_width - (*column % tab_width),
+        // A UTF-8 continuation byte adds no column.
+        _ if byte & 0xC0 == 0x80 => {}
+        _ => *column += 1,
+    };
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\n' && raw_delimiter.is_none() {
             column = 0;
             in_line_comment = false;
             at_indent = true;
-            previous = '\0';
+            previous = 0;
+            index += 1;
             continue;
         }
         let raw = if let Some(delimiter) = raw_delimiter.take() {
-            let end = raw_strings::closing_end(line, byte_index, &delimiter);
+            let end = raw_strings::closing_end(line, index, &delimiter);
             Some((delimiter, end))
-        } else if quote.is_none() && !in_block_comment && !in_line_comment {
-            raw_strings::start(line, byte_index).map(|raw| (raw.delimiter, raw.end))
+        } else if quote.is_none()
+            && !in_block_comment
+            && !in_line_comment
+            && matches!(byte, b'u' | b'L' | b'U' | b'R')
+        {
+            raw_strings::start(line, index).map(|raw| (raw.delimiter, raw.end))
         } else {
             None
         };
         if let Some((delimiter, end)) = raw {
-            let span_end = end.unwrap_or(line.len());
-            push_char(&mut output, &mut column, ch, tab_width);
-            previous = ch;
-            while chars.peek().is_some_and(|(index, _)| *index < span_end) {
-                let Some((_, next)) = chars.next() else {
-                    break;
-                };
-                push_char(&mut output, &mut column, next, tab_width);
-                previous = next;
+            let span_end = end.unwrap_or(line.len()).max(index + 1);
+            for &span_byte in &bytes[index..span_end] {
+                advance(&mut column, span_byte);
             }
+            previous = bytes[span_end - 1];
+            index = span_end;
             at_indent = false;
             if end.is_none() {
                 raw_delimiter = Some(delimiter);
@@ -103,63 +116,69 @@ fn to_spaces_stateful(
             continue;
         }
 
-        let is_digit_separator = ch == '\''
+        let is_digit_separator = byte == b'\''
             && previous.is_ascii_hexdigit()
-            && chars
-                .peek()
-                .is_some_and(|(_, next)| next.is_ascii_hexdigit());
-        previous = ch;
+            && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit);
+        previous = byte;
 
-        let in_leading_indent = at_indent && matches!(ch, ' ' | '\t');
-        if !matches!(ch, ' ' | '\t') {
+        let blank = matches!(byte, b' ' | b'\t');
+        let in_leading_indent = at_indent && blank;
+        if !blank {
             at_indent = false;
         }
 
-        if ch == '\t' && quote.is_none() && !(keep_indent_tabs && in_leading_indent) {
+        if byte == b'\t' && quote.is_none() && !(keep_indent_tabs && in_leading_indent) {
+            output.push_str(&line[copied..index]);
             let spaces = tab_width - (column % tab_width);
-            output.push_str(&" ".repeat(spaces));
+            output.extend(std::iter::repeat_n(' ', spaces));
             column += spaces;
+            index += 1;
+            copied = index;
             continue;
         }
 
-        push_char(&mut output, &mut column, ch, tab_width);
+        advance(&mut column, byte);
+        index += 1;
 
         if in_line_comment {
             continue;
         }
 
-        if let Some(quote_char) = quote {
-            if ch == '\\' {
-                if let Some((_, next)) = chars.next() {
-                    push_char(&mut output, &mut column, next, tab_width);
+        if let Some(quote_byte) = quote {
+            if byte == b'\\' {
+                // The escaped character, whole.
+                let next_len = line[index..].chars().next().map_or(0, char::len_utf8);
+                for &escaped in &bytes[index..index + next_len] {
+                    advance(&mut column, escaped);
                 }
-            } else if ch == quote_char {
+                index += next_len;
+            } else if byte == quote_byte {
                 quote = None;
             }
             continue;
         }
 
         if in_block_comment {
-            if ch == '*' && matches!(chars.peek(), Some((_, '/'))) {
-                push_char(&mut output, &mut column, '/', tab_width);
-                chars.next();
+            if byte == b'*' && bytes.get(index) == Some(&b'/') {
+                advance(&mut column, b'/');
+                index += 1;
                 in_block_comment = false;
             }
             continue;
         }
 
-        match ch {
-            '"' => quote = Some(ch),
-            '\'' if !is_digit_separator => quote = Some(ch),
-            '/' => match chars.peek() {
-                Some((_, '/')) => {
-                    push_char(&mut output, &mut column, '/', tab_width);
-                    chars.next();
+        match byte {
+            b'"' => quote = Some(byte),
+            b'\'' if !is_digit_separator => quote = Some(byte),
+            b'/' => match bytes.get(index) {
+                Some(b'/') => {
+                    advance(&mut column, b'/');
+                    index += 1;
                     in_line_comment = true;
                 }
-                Some((_, '*')) => {
-                    push_char(&mut output, &mut column, '*', tab_width);
-                    chars.next();
+                Some(b'*') => {
+                    advance(&mut column, b'*');
+                    index += 1;
                     in_block_comment = true;
                 }
                 _ => {}
@@ -167,18 +186,13 @@ fn to_spaces_stateful(
             _ => {}
         }
     }
-    (output, in_block_comment, quote, raw_delimiter)
-}
-
-fn push_char(output: &mut String, column: &mut usize, ch: char, tab_width: usize) {
-    output.push(ch);
-    if ch == '\n' {
-        *column = 0;
-    } else if ch == '\t' {
-        *column += tab_width - (*column % tab_width);
-    } else {
-        *column += 1;
-    }
+    output.push_str(&line[copied..]);
+    (
+        output,
+        in_block_comment,
+        quote.map(char::from),
+        raw_delimiter,
+    )
 }
 
 #[cfg(test)]

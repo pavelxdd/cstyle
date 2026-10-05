@@ -36,7 +36,7 @@ use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
 
 fn is_semicolonless_call_line(line: &str) -> bool {
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     let Some(open) = trimmed.find('(') else {
         return false;
     };
@@ -47,7 +47,7 @@ fn is_semicolonless_call_line(line: &str) -> bool {
     {
         return false;
     }
-    let name = trimmed[..open].trim();
+    let name = trimmed[..open].trim_ascii();
     let macro_part = name.strip_prefix("wx").unwrap_or(name);
     if macro_part.is_empty()
         || !macro_part
@@ -77,8 +77,8 @@ fn is_semicolonless_call_line(line: &str) -> bool {
 
 fn attach_case_label_brace_to_line(line: &str, access_labels: &[String]) -> Option<String> {
     let comment_start = trailing_comment_split_limit(line);
-    let code = line[..comment_start].trim_end();
-    let trimmed = code.trim();
+    let code = line[..comment_start].trim_ascii_end();
+    let trimmed = code.trim_ascii();
     if !trimmed.ends_with(':')
         || !labels::is_label_start(trimmed.trim_end_matches(':'), access_labels)
     {
@@ -100,19 +100,19 @@ fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
     if comment_start == line.len() {
         return None;
     }
-    let code = line[..comment_start].trim_end();
+    let code = line[..comment_start].trim_ascii_end();
     if code.is_empty() {
         return None;
     }
     let rest = &line[comment_start..];
-    let comment = rest.trim_start();
+    let comment = rest.trim_ascii_start();
     let gap = rest.len() - comment.len();
     if rest[..gap].contains('\t') {
         let mut gap_text = rest[..gap].to_string();
         if gap_text.chars().count() > 1 {
             gap_text.pop();
         }
-        return Some(format!("{code} {{{gap_text}{}", comment.trim_end()));
+        return Some(format!("{code} {{{gap_text}{}", comment.trim_ascii_end()));
     }
     if gap == 0 {
         return Some(attach_brace_to_code_and_comment(code, rest));
@@ -121,12 +121,12 @@ fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
     Some(format!(
         "{code} {{{}{}",
         " ".repeat(new_gap),
-        comment.trim_end()
+        comment.trim_ascii_end()
     ))
 }
 
 fn is_single_trailing_block_comment(comment: &str) -> bool {
-    let comment = comment.trim();
+    let comment = comment.trim_ascii();
     comment
         .strip_prefix("/*")
         .and_then(|rest| rest.find("*/").map(|end| &rest[end + 2..]))
@@ -135,7 +135,7 @@ fn is_single_trailing_block_comment(comment: &str) -> bool {
 
 fn attach_brace_to_code_and_comment(code: &str, comment: &str) -> String {
     let mut output = format!("{code} {{");
-    let comment = comment.trim_start();
+    let comment = comment.trim_ascii_start();
     if !comment.is_empty() {
         output.push(' ');
         output.push_str(comment);
@@ -215,7 +215,7 @@ impl FormatEngine<'_> {
                 | BraceStyle::Vtk
                 | BraceStyle::Horstmann
                 | BraceStyle::Pico
-        ) || line.trim() != "{"
+        ) || line.trim_ascii() != "{"
         {
             return None;
         }
@@ -225,8 +225,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = &self.output[previous_index];
-        let previous_code = self.output.code_before_comment(previous_index).trim_end();
-        if previous_code.trim_start().starts_with([':', ',']) {
+        let previous_code = self
+            .output
+            .code_before_comment(previous_index)
+            .trim_ascii_end();
+        if previous_code.trim_ascii_start().starts_with([':', ',']) {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
         let is_header_condition_continuation =
@@ -234,7 +237,7 @@ impl FormatEngine<'_> {
         if previous_code.contains("#define")
             || is_header_condition_continuation
             // A variadic `...` parameter leads with no operator.
-            || previous_code.trim_start().starts_with("...")
+            || previous_code.trim_ascii_start().starts_with("...")
             // Nor a parameter's declarator split from its type.
             || self.output.line_tokens(previous_index).is_some_and(|span| {
                 let tokens = &self.tree.tokens;
@@ -260,7 +263,7 @@ impl FormatEngine<'_> {
             })
             || !(head_ends_binary_operator(previous_code)
                 || previous_code.ends_with("->")
-                || previous_code.trim_start().starts_with([
+                || previous_code.trim_ascii_start().starts_with([
                     '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', '.', '~',
                 ]))
         {
@@ -275,10 +278,10 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trim_start().starts_with(['{', '}', '#'])
+            || line.trim_ascii_start().starts_with(['{', '}', '#'])
             || ["do", "if", "for", "while", "switch"]
                 .iter()
-                .any(|word| starts_header_word(line.trim_start(), word))
+                .any(|word| starts_header_word(line.trim_ascii_start(), word))
             || self
                 .layout
                 .frame_stack
@@ -288,7 +291,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let opening_brace = self.output.last_line_outside_comment()?;
-        if self.output.code_of(opening_brace).trim() != "{" {
+        if self.output.code_of(opening_brace).trim_ascii() != "{" {
             return None;
         }
         let opening_indent = leading_visual_width(opening_brace, self.options.tab_width);
@@ -333,7 +336,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn lambda_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
-        if line.trim() != "{" {
+        if line.trim_ascii() != "{" {
             return None;
         }
         let frame = self
@@ -356,13 +359,18 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trim_start().starts_with(['{', '}'])
-            || line.trim_end().ends_with('{')
-            || is_lambda_body_header(line.trim_start())
+        if line.trim_ascii_start().starts_with(['{', '}'])
+            || line.trim_ascii_end().ends_with('{')
+            || is_lambda_body_header(line.trim_ascii_start())
             || !self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| self.output.code_of(previous).trim_end().ends_with('{'))
+                .is_some_and(|previous| {
+                    self.output
+                        .code_of(previous)
+                        .trim_ascii_end()
+                        .ends_with('{')
+                })
         {
             return None;
         }
@@ -377,12 +385,12 @@ impl FormatEngine<'_> {
         if self.options.brace_style != BraceStyle::None {
             return None;
         }
-        let current = line.trim_start();
+        let current = line.trim_ascii_start();
         if current.is_empty() || current.starts_with('#') {
             return None;
         }
         for previous in self.output.scoped().iter().rev().take(8) {
-            let trimmed = previous.trim_start();
+            let trimmed = previous.trim_ascii_start();
             if trimmed.is_empty() {
                 continue;
             }
@@ -392,9 +400,10 @@ impl FormatEngine<'_> {
             let embedded = previous
                 .rfind('[')
                 .is_some_and(|index| previous[..index].contains('{'));
-            if embedded && line_opens_lambda_or_capture_only_block(previous.trim_end()) {
+            if embedded && line_opens_lambda_or_capture_only_block(previous.trim_ascii_end()) {
                 let base = leading_visual_width(previous, self.options.tab_width);
-                let parameterized = line_opens_parameterized_lambda_block(previous.trim_end());
+                let parameterized =
+                    line_opens_parameterized_lambda_block(previous.trim_ascii_end());
                 return if current.starts_with('}') {
                     Some(if parameterized {
                         base
@@ -420,7 +429,7 @@ impl FormatEngine<'_> {
         line: &str,
         normal_indent: usize,
     ) -> Option<usize> {
-        if line.trim() != "{"
+        if line.trim_ascii() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
             || !self
                 .output
@@ -428,7 +437,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| {
                     !is_namespace_or_module_block_header(previous)
                         && previous
-                            .trim_start()
+                            .trim_ascii_start()
                             .chars()
                             .next()
                             .is_some_and(is_identifier_start)
@@ -443,7 +452,7 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trim() != "{"
+        if line.trim_ascii() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
             || self.innermost_brace_is_compound_literal()
         {
@@ -452,7 +461,7 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         self.output
             .code_of(previous)
-            .trim_start()
+            .trim_ascii_start()
             .starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
             ])
@@ -477,7 +486,7 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trim() != "{"
+        if line.trim_ascii() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
             // A compound literal's element brace stands at its elements.
             || self.innermost_brace_is_compound_literal()
@@ -490,20 +499,20 @@ impl FormatEngine<'_> {
                 leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
             );
         }
-        let previous_code = self.output.code_of(previous).trim_end();
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
         if is_namespace_or_module_block_header(previous_code) && !self.options.indent_namespaces {
             return None;
         }
         let previous_is_header_continuation = previous_code.ends_with(')')
-            && !line_is_control_body_header(previous_code.trim_start());
+            && !line_is_control_body_header(previous_code.trim_ascii_start());
         let previous_definition_brace_spaces = (!self.output_ends_objc_method_header())
             .then(|| {
                 let owner = self.output.scoped().iter().rev().find(|line| {
-                    let trimmed = line.trim_start();
+                    let trimmed = line.trim_ascii_start();
                     !trimmed.is_empty() && !is_comment_only_line(trimmed)
                 })?;
-                let code = self.output.code_of(owner).trim_end();
-                if code.trim_start().starts_with('#') {
+                let code = self.output.code_of(owner).trim_ascii_end();
+                if code.trim_ascii_start().starts_with('#') {
                     return None;
                 }
                 let (closes, opens) = line_scan::line_paren_imbalance(code);
@@ -564,7 +573,7 @@ impl FormatEngine<'_> {
                     // A directive line says nothing of the code's column; the
                     // line of the code before it does.
                     let code_line = previous
-                        .trim_start()
+                        .trim_ascii_start()
                         .starts_with('#')
                         .then(|| {
                             let first = self.output.pending_tokens()?.first;
@@ -589,10 +598,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim().is_empty())
+            .filter(|line| !line.trim_ascii().is_empty())
             .take(32)
         {
-            let code = self.output.code_of(previous).trim_end();
+            let code = self.output.code_of(previous).trim_ascii_end();
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
@@ -602,12 +611,12 @@ impl FormatEngine<'_> {
             let (closes, mut opens) = line_paren_imbalance(code);
             if close_pending > 0 {
                 for &column in opens.iter().rev().take(close_pending) {
-                    let before = code[..column].trim_end();
+                    let before = code[..column].trim_ascii_end();
                     let Some(name_start) = function_name_start(before) else {
                         continue;
                     };
-                    let return_type = before[..name_start].trim_end();
-                    let name = before[name_start..].trim_start();
+                    let return_type = before[..name_start].trim_ascii_end();
+                    let name = before[name_start..].trim_ascii_start();
                     if !name.is_empty()
                         && !is_header(self.options, name)
                         && (is_parameter_return_type_prefix(return_type)
@@ -630,11 +639,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn gnu_continuation_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
-        if line.trim() != "{" || self.options.brace_style != BraceStyle::Gnu {
+        if line.trim_ascii() != "{" || self.options.brace_style != BraceStyle::Gnu {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trim_end();
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
         if !head_ends_binary_operator(previous_code)
             && !["<=", ">=", "==", "!="]
                 .iter()
@@ -660,7 +669,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn gnu_command_opening_brace_indent_spaces(&self, line: &str) -> Option<usize> {
-        if self.options.brace_style != BraceStyle::Gnu || line.trim() != "{" {
+        if self.options.brace_style != BraceStyle::Gnu || line.trim_ascii() != "{" {
             return None;
         }
         let header = self.layout.frame_stack.active_header()?;
@@ -707,7 +716,7 @@ impl FormatEngine<'_> {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Vtk | BraceStyle::Ratliff
-        ) || line.trim() != "{"
+        ) || line.trim_ascii() != "{"
         {
             return None;
         }
@@ -727,7 +736,7 @@ impl FormatEngine<'_> {
                 };
                 lines
                     .iter()
-                    .rposition(|line| !line.trim().is_empty())
+                    .rposition(|line| !line.trim_ascii().is_empty())
                     .filter(|&index| paren_balance(&lines[index]) < 0)
                     .map_or(frame.header_indent_column, |mut index| {
                         let mut balance = paren_balance(&lines[index]);
@@ -744,7 +753,7 @@ impl FormatEngine<'_> {
     /// A `{` alone after an `else` line stands at least where the style
     /// puts it, from the adjusted `else` line.
     pub(crate) fn align_else_opening_brace_after_adjustment(&self, line: String) -> String {
-        if line.trim() != "{" {
+        if line.trim_ascii() != "{" {
             return line;
         }
         let Some(else_indent) = self
@@ -778,7 +787,7 @@ impl FormatEngine<'_> {
 
     fn current_split_lambda_body_header(&self) -> Option<(String, usize)> {
         let current = &self.current[..trailing_comment_split_limit(&self.current)];
-        let mut head = current.trim().to_string();
+        let mut head = current.trim_ascii().to_string();
         let body_indent = self.continuation_base_indent() * self.options.indent_width;
         if is_lambda_body_header(&head) {
             return Some((head, body_indent));
@@ -788,10 +797,10 @@ impl FormatEngine<'_> {
             .scoped()
             .iter()
             .rev()
-            .filter(|line| !line.trim().is_empty())
+            .filter(|line| !line.trim_ascii().is_empty())
             .take(12)
         {
-            let code = self.output.code_of(raw).trim();
+            let code = self.output.code_of(raw).trim_ascii();
             if code.starts_with('#') {
                 break;
             }
@@ -826,18 +835,18 @@ impl FormatEngine<'_> {
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
             .is_some_and(|token| matches!(token, Token::Symbol('}')))
-            && !self.current.trim_start().starts_with('}')
+            && !self.current.trim_ascii_start().starts_with('}')
     }
 
     fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
-        if comment.trim_start().starts_with("//")
-            && self.current.trim() == "{"
+        if comment.trim_ascii_start().starts_with("//")
+            && self.current.trim_ascii() == "{"
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
             self.trim_current_end();
             let gap = initializer_brace_line_comment_gap(self.options, &self.current);
             self.current.push_str(&gap);
-            self.current.push_str(comment.trim_end());
+            self.current.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
             return;
         }
@@ -868,7 +877,7 @@ impl FormatEngine<'_> {
                 // out go into the gap.
                 let unpad_parens = self.options.unpad_parens;
                 let column_gap = |current: &str, target: usize| {
-                    let code_len = current.trim().chars().count();
+                    let code_len = current.trim_ascii().chars().count();
                     // Unpadding takes at most a space off each side of a paren.
                     let deficit = target.saturating_sub(code_len + ws.len());
                     if unpad_parens && deficit <= 2 * current.matches(['(', ')']).count() {
@@ -880,16 +889,16 @@ impl FormatEngine<'_> {
                 // The space joining a closing brace to its header counts as no
                 // padding.
                 if let Some(target) = target
-                    && !self.current.trim_start().starts_with('}')
+                    && !self.current.trim_ascii_start().starts_with('}')
                 {
                     // A line that lost a `}` broken off before it keeps its
                     // comment at the source column.
                     let gap = if self.closing_brace_broken_off_source_line()
                         && is_break_blocks_closing_header(leading_identifier(
-                            self.current.trim_start(),
+                            self.current.trim_ascii_start(),
                         )) {
                         target
-                            .saturating_sub(self.current.trim().chars().count())
+                            .saturating_sub(self.current.trim_ascii().chars().count())
                             .max(1)
                     } else {
                         column_gap(&self.current, target)
@@ -917,7 +926,7 @@ impl FormatEngine<'_> {
             // A comment written against its brace stays there.
             _ => {}
         }
-        self.current.push_str(comment.trim_end());
+        self.current.push_str(comment.trim_ascii_end());
         self.comments.skip_next_attached_comment = true;
     }
 
@@ -945,7 +954,7 @@ impl FormatEngine<'_> {
             return false;
         }
         let line_is_open_brace_run = |line: &str| {
-            let trimmed = line.trim_start();
+            let trimmed = line.trim_ascii_start();
             !trimmed.is_empty()
                 && trimmed
                     .chars()
@@ -1094,7 +1103,7 @@ impl FormatEngine<'_> {
     /// Pushes a brace that opens no block: inside `#define`, after a backslash
     /// continuation, in one-line block mode, or in a bare brace run.
     fn try_push_open_brace_without_block(&mut self) -> bool {
-        if self.current.trim_start().starts_with("#define") {
+        if self.current.trim_ascii_start().starts_with("#define") {
             self.emit_source_space_or_ensure();
             self.current.push('{');
             self.layout.command_state.observe_char('{');
@@ -1102,7 +1111,9 @@ impl FormatEngine<'_> {
             self.previous_was_newline = false;
             return true;
         }
-        if !self.token_input.token_begins_source_line && self.current.trim_end().ends_with('\\') {
+        if !self.token_input.token_begins_source_line
+            && self.current.trim_ascii_end().ends_with('\\')
+        {
             self.ensure_space();
             self.current.push('{');
             self.emit_trailing_source_space();
@@ -1123,14 +1134,17 @@ impl FormatEngine<'_> {
 
     fn break_source_line_before_open_brace(&mut self) {
         if self.token_input.token_begins_source_line
-            && line_ends_compound_literal_cast(self.current.trim_end())
+            && line_ends_compound_literal_cast(self.current.trim_ascii_end())
         {
             self.finish_line();
             self.previous_was_newline = true;
         }
         if self.token_input.token_begins_source_line
             && is_semicolonless_call_line(&self.current)
-            && !is_header(self.options, leading_identifier(self.current.trim_start()))
+            && !is_header(
+                self.options,
+                leading_identifier(self.current.trim_ascii_start()),
+            )
         {
             self.finish_line();
             self.layout.pending_braceless_block_bias = None;
@@ -1168,9 +1182,9 @@ impl FormatEngine<'_> {
         }
         if brace_type == BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
-            && ((self.current.trim_end().ends_with('(') && self.current.trim() != "(")
-                || (self.current.trim_start().starts_with("for (")
-                    && !self.current.trim_end().ends_with(')')
+            && ((self.current.trim_ascii_end().ends_with('(') && self.current.trim_ascii() != "(")
+                || (self.current.trim_ascii_start().starts_with("for (")
+                    && !self.current.trim_ascii_end().ends_with(')')
                     && !matches!(
                         self.options.brace_style,
                         BraceStyle::Allman
@@ -1198,7 +1212,7 @@ impl FormatEngine<'_> {
     }
 
     fn open_brace_lambda_context(&mut self) -> OpenBraceLambda {
-        let capture_only_lambda = is_lambda_capture_header(self.current.trim_end());
+        let capture_only_lambda = is_lambda_capture_header(self.current.trim_ascii_end());
         let line_opens_lambda_body = self.current_is_lambda_body_header() || capture_only_lambda;
         let previous_lambda_header = (!line_opens_lambda_body)
             .then(|| self.current_split_lambda_body_header())
@@ -1228,7 +1242,7 @@ impl FormatEngine<'_> {
             previous_lambda_header.as_ref().map(|(_, indent)| *indent)
         };
         let lambda_body_has_trailing_return = if line_opens_lambda_body {
-            lambda_header_has_trailing_return(self.current.trim_end())
+            lambda_header_has_trailing_return(self.current.trim_ascii_end())
         } else {
             previous_lambda_header
                 .as_ref()
@@ -1275,10 +1289,12 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+                .find(|line| {
+                    !line.trim_ascii().is_empty() && !line.trim_ascii_start().starts_with('#')
+                })
                 .filter(|line| {
                     brace_header.is_some_and(is_break_blocks_closing_header)
-                        || is_break_blocks_closing_header(line.trim())
+                        || is_break_blocks_closing_header(line.trim_ascii())
                 })
                 .map(|line| leading_visual_width(line, self.options.tab_width));
             if brace_type == BraceType::Command
@@ -1335,7 +1351,7 @@ impl FormatEngine<'_> {
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim().is_empty())
+                    .find(|line| !line.trim_ascii().is_empty())
                     .is_some_and(|line| is_semicolonless_call_line(line)));
         if block_after_semicolonless_call {
             self.layout.pending_braceless_block_bias = None;
@@ -1362,14 +1378,14 @@ impl FormatEngine<'_> {
     fn realign_compound_literal_cast_brace(&mut self, brace_type: BraceType) {
         if brace_type == BraceType::CompoundLiteral
             && self.layout.nesting.paren_depth > 0
-            && line_ends_compound_literal_cast(self.current.trim_end())
+            && line_ends_compound_literal_cast(self.current.trim_ascii_end())
             && self
                 .output
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with(','))
+                .find(|line| !line.trim_ascii().is_empty())
+                .is_some_and(|line| self.output.code_of(line).trim_ascii_end().ends_with(','))
         {
             let level = self
                 .layout
@@ -1524,7 +1540,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Pico
             )
         {
-            let is_closing_header = is_break_blocks_closing_header(self.current.trim());
+            let is_closing_header = is_break_blocks_closing_header(self.current.trim_ascii());
             self.trim_current_end();
             self.current.push('{');
             self.layout.command_state.observe_char('{');
@@ -1534,7 +1550,7 @@ impl FormatEngine<'_> {
                 self.current.push_str("    ");
             }
             if let Some(comment) = attached_line_comment {
-                self.current.push_str(comment.trim_end());
+                self.current.push_str(comment.trim_ascii_end());
                 self.comments.skip_next_attached_comment = true;
             }
             self.finish_line();
@@ -1566,8 +1582,8 @@ impl FormatEngine<'_> {
         let range_for_init_run_in = matches!(
             brace_type,
             BraceType::Command | BraceType::Array | BraceType::Initializer
-        ) && self.current.trim_start().starts_with("for (")
-            && self.current.trim_end().ends_with(':')
+        ) && self.current.trim_ascii_start().starts_with("for (")
+            && self.current.trim_ascii_end().ends_with(':')
             && matches!(
                 self.options.brace_style,
                 BraceStyle::None
@@ -1643,7 +1659,7 @@ impl FormatEngine<'_> {
                 | BraceStyle::Gnu
                 | BraceStyle::Horstmann
                 | BraceStyle::Pico
-        ) && self.current.trim_start().starts_with([
+        ) && self.current.trim_ascii_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
         ]);
         // An enum brace that starts its source line stays broken.
@@ -1675,7 +1691,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_end().ends_with('['))
+                .is_some_and(|line| line.trim_ascii_end().ends_with('['))
         {
             let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
             self.current.replace(line);
@@ -1705,8 +1721,8 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim().is_empty())
-                        .is_some_and(|line| is_break_blocks_closing_header(line.trim()))))
+                        .find(|line| !line.trim_ascii().is_empty())
+                        .is_some_and(|line| is_break_blocks_closing_header(line.trim_ascii()))))
             && matches!(next, None | Some(Token::Newline))
             && self.current_inline_array_column().is_some()
             && !self.current_open_brace_is_lambda_body()
@@ -1768,14 +1784,14 @@ impl FormatEngine<'_> {
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && self.output.last().is_some_and(|line| {
                 let code = &self.output.code_of(line);
-                let trimmed = code.trim();
+                let trimmed = code.trim_ascii();
                 let first = trimmed
                     .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
                     .next()
                     .unwrap_or_default();
                 trimmed.ends_with(')')
                     && !line[trailing_comment_split_limit(line)..]
-                        .trim_start()
+                        .trim_ascii_start()
                         .starts_with("/*")
                     && !trimmed.starts_with('#')
                     && !is_header(self.options, first)
@@ -1786,7 +1802,7 @@ impl FormatEngine<'_> {
             line.push('{');
             if let Some(Token::Comment(CommentKind::Line, comment)) = next {
                 line.push(' ');
-                line.push_str(comment.trim_end());
+                line.push_str(comment.trim_ascii_end());
                 self.comments.skip_next_attached_comment = true;
             }
             self.layout.command_state.observe_char('{');
@@ -1798,7 +1814,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_end().ends_with('['))
+                .is_some_and(|line| line.trim_ascii_end().ends_with('['))
         {
             let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
             self.current.replace(line);
@@ -1826,6 +1842,7 @@ impl FormatEngine<'_> {
                     .previous_input_whitespace
                     .clone()
                     .unwrap_or_default()
+                    .into_owned()
             };
             let after_brace = self
                 .token_input
@@ -1836,14 +1853,14 @@ impl FormatEngine<'_> {
             self.current.push_str(&before_brace);
             self.current.push(' ');
             self.current.push_str(&after_brace);
-            self.current.push_str(comment.trim_end());
+            self.current.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
             self.finish_line();
             self.current.push('{');
             self.layout.command_state.observe_char('{');
             self.finish_line();
-        } else if self.current.trim_start().starts_with('}')
-            && self.current.trim_end().ends_with('[')
+        } else if self.current.trim_ascii_start().starts_with('}')
+            && self.current.trim_ascii_end().ends_with('[')
         {
             self.emit_source_space_or_ensure();
             self.current.push('{');
@@ -1929,14 +1946,14 @@ impl FormatEngine<'_> {
             && !line_already_has_line_comment
             && !line_comment_starts_body
         {
-            if line.trim() == "{"
+            if line.trim_ascii() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
                 line.push_str(&initializer_brace_line_comment_gap(self.options, &line));
             } else {
                 line.push(' ');
             }
-            line.push_str(comment.trim_end());
+            line.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
         } else if matches!(next, Some(Token::Comment(CommentKind::Line, _)))
             && line_comment_starts_body
@@ -1955,7 +1972,7 @@ impl FormatEngine<'_> {
             } else {
                 line.push(' ');
             }
-            line.push_str(comment.trim_end());
+            line.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
         } else if attached_case_label_output_brace
             && let Some(Token::Comment(CommentKind::Block, comment)) = next
@@ -1968,7 +1985,7 @@ impl FormatEngine<'_> {
             } else {
                 line.push(' ');
             }
-            line.push_str(comment.trim_end());
+            line.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
         }
         if attached_case_label_output_brace {
@@ -2020,7 +2037,7 @@ impl FormatEngine<'_> {
                     && !gap.is_empty()
                     && !gap.contains('\n')
                 {
-                    self.comments.reordered_brace_line_comment_gap = Some(gap);
+                    self.comments.reordered_brace_line_comment_gap = Some(gap.into_owned());
                 }
             }
             self.current.replace(reordered);
@@ -2095,7 +2112,7 @@ impl FormatEngine<'_> {
         let gnu_macro_open_brace =
             self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
-            && self.current.trim_start().starts_with([
+            && self.current.trim_ascii_start().starts_with([
                 '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
             ]);
         let source_attached_malformed_open_brace = !self.options.remove_braces
@@ -2111,11 +2128,11 @@ impl FormatEngine<'_> {
             && !allman_operator_led_brace
             && (source_attached_initializer_line
                 || matches!(next, Some(Token::Symbol('{' | '#')))
-                || self.current.trim_end().ends_with('{')
-                || (self.current.trim_start().starts_with('}')
-                    && self.current.trim_end().ends_with('[')));
+                || self.current.trim_ascii_end().ends_with('{')
+                || (self.current.trim_ascii_start().starts_with('}')
+                    && self.current.trim_ascii_end().ends_with('[')));
         if source_attached_malformed_open_brace {
-            if self.current.trim_end().ends_with('[') {
+            if self.current.trim_ascii_end().ends_with('[') {
                 self.emit_source_space_or_ensure();
             } else {
                 self.emit_source_space();
@@ -2196,8 +2213,8 @@ impl FormatEngine<'_> {
             };
             let line = format!(
                 "{}{gap}{}",
-                self.output[index].trim_end(),
-                comment.trim_end()
+                self.output[index].trim_ascii_end(),
+                comment.trim_ascii_end()
             );
             self.output.set(index, line);
             self.comments.skip_next_attached_comment = true;
@@ -2213,16 +2230,16 @@ impl FormatEngine<'_> {
         }
         let objc_method_brace = self.is_objc_method_line()
             || (brace_type == BraceType::Definition && self.output_ends_objc_method_header());
-        let header_text = self.current.trim_start();
-        let header_is_standalone_colon = header_text.trim() == ":"
-            || (header_text.trim().is_empty()
+        let header_text = self.current.trim_ascii_start();
+        let header_is_standalone_colon = header_text.trim_ascii() == ":"
+            || (header_text.trim_ascii().is_empty()
                 && self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim().is_empty())
-                    .is_some_and(|line| line.trim() == ":"));
+                    .find(|line| !line.trim_ascii().is_empty())
+                    .is_some_and(|line| line.trim_ascii() == ":"));
         let inline_initializer_command_brace_spaces = (!objc_method_brace)
             .then_some(headerless_inline_command_column)
             .flatten();
@@ -2238,7 +2255,7 @@ impl FormatEngine<'_> {
                         .scoped()
                         .iter()
                         .rev()
-                        .find(|line| !line.trim().is_empty())
+                        .find(|line| !line.trim_ascii().is_empty())
                         .map(|line| leading_visual_width(line, self.options.tab_width))
                         .unwrap_or(0)
                 } else {
@@ -2280,7 +2297,7 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
+                .find(|line| !line.trim_ascii().is_empty())
                 .map(|line| leading_visual_width(line, self.options.tab_width))
                 .unwrap_or(0)
                 + if self.options.brace_style == BraceStyle::Gnu {
@@ -2303,9 +2320,9 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
+                .find(|line| !line.trim_ascii().is_empty())
                 .filter(|line| {
-                    let trimmed = line.trim_start();
+                    let trimmed = line.trim_ascii_start();
                     line.contains("#if") && !trimmed.starts_with('#')
                 })
                 .map(|line| leading_visual_width(line, self.options.tab_width))
@@ -2319,10 +2336,12 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .find(|line| {
-                        !self.output.code_of(line).trim().is_empty()
-                            && !line.trim_start().starts_with('#')
+                        !self.output.code_of(line).trim_ascii().is_empty()
+                            && !line.trim_ascii_start().starts_with('#')
                     })
-                    .filter(|line| brace.header.as_deref() == Some("else") || line.trim() == "else")
+                    .filter(|line| {
+                        brace.header.as_deref() == Some("else") || line.trim_ascii() == "else"
+                    })
                     .map(|line| leading_visual_width(line, self.options.tab_width))
             })
             .flatten();
@@ -2373,7 +2392,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_end().ends_with("})"))
+                .is_some_and(|line| line.trim_ascii_end().ends_with("})"))
         {
             let level = self.layout.indentation.indent() + 1;
             self.layout.continuation_indent.set_next_line_level(level);
@@ -2385,8 +2404,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| line.trim() == "else")
+                .find(|line| !line.trim_ascii().is_empty())
+                .is_some_and(|line| line.trim_ascii() == "else")
         {
             self.clear_current();
         }
@@ -2420,8 +2439,8 @@ impl FormatEngine<'_> {
             None
         };
         if let Some(comment) = runin_comment {
-            if comment.trim_start().starts_with("//")
-                && self.current.trim() == "{"
+            if comment.trim_ascii_start().starts_with("//")
+                && self.current.trim_ascii() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
                 let gap = initializer_brace_line_comment_gap(self.options, &self.current);
@@ -2434,7 +2453,7 @@ impl FormatEngine<'_> {
                     _ => self.current.push(' '),
                 }
             }
-            self.current.push_str(comment.trim_end());
+            self.current.push_str(comment.trim_ascii_end());
             self.comments.skip_next_attached_comment = true;
         }
         if (!objc_method_brace && self.should_indent_brace_line(brace_type))
@@ -2501,7 +2520,10 @@ impl FormatEngine<'_> {
                     brace_type,
                     BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
                 ))
-            && self.output.last().is_some_and(|line| line.trim() == "{")
+            && self
+                .output
+                .last()
+                .is_some_and(|line| line.trim_ascii() == "{")
         {
             self.source_run_in_brace_lines.push(self.output.len() - 1);
         }
@@ -2521,6 +2543,7 @@ impl FormatEngine<'_> {
                 .previous_input_whitespace
                 .clone()
                 .unwrap_or_default()
+                .into_owned()
         };
         let after_gap = self
             .token_input
@@ -2534,7 +2557,7 @@ impl FormatEngine<'_> {
         {
             // The comment keeps its source column past code that a moved
             // closing brace and the broken brace left.
-            let code_len = self.current.trim().chars().count();
+            let code_len = self.current.trim_ascii().chars().count();
             let target = target.saturating_sub(self.broken_else_if_prefix_width());
             self.current
                 .push_str(&" ".repeat(target.saturating_sub(code_len).max(1)));
@@ -2543,7 +2566,7 @@ impl FormatEngine<'_> {
             self.current.push(' ');
             self.current.push_str(&after_gap);
         }
-        self.current.push_str(comment.trim_end());
+        self.current.push_str(comment.trim_ascii_end());
         self.comments.skip_next_attached_comment = true;
     }
 
@@ -2577,11 +2600,11 @@ impl FormatEngine<'_> {
     }
 
     fn broken_else_if_prefix_width(&self) -> usize {
-        if !self.current.trim_start().starts_with("if")
+        if !self.current.trim_ascii_start().starts_with("if")
             || !self
                 .output
                 .last()
-                .is_some_and(|line| line.trim_end().ends_with("else"))
+                .is_some_and(|line| line.trim_ascii_end().ends_with("else"))
         {
             return 0;
         }
@@ -2674,7 +2697,7 @@ impl FormatEngine<'_> {
                 && self
                     .output
                     .last()
-                    .is_some_and(|line| line.trim_end().ends_with("{{"));
+                    .is_some_and(|line| line.trim_ascii_end().ends_with("{{"));
             let double_brace_extra = usize::from(
                 matches!(
                     brace_type,
@@ -2699,8 +2722,8 @@ impl FormatEngine<'_> {
             self.emit_source_space_or_ensure();
             return;
         }
-        if is_lambda_capture_header(self.current.trim_end()) {
-            let current = self.current.trim_end();
+        if is_lambda_capture_header(self.current.trim_ascii_end()) {
+            let current = self.current.trim_ascii_end();
             let embedded = current
                 .rfind('[')
                 .is_some_and(|index| current[..index].contains('{'));
@@ -2717,7 +2740,7 @@ impl FormatEngine<'_> {
                 .command_state
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == ']' || ch == '>')
-                || self.current.trim_end().ends_with('>'));
+                || self.current.trim_ascii_end().ends_with('>'));
         // A compound literal nested in an aggregate keeps the gap written
         // before its brace, as any brace there does.
         let nested_compound_literal = brace_type == BraceType::CompoundLiteral
@@ -2726,7 +2749,7 @@ impl FormatEngine<'_> {
                 Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
             );
         if self.is_nested_designated_init_field() || nested_compound_literal {
-            if self.options.pad_operators && self.current.trim_end().ends_with('=') {
+            if self.options.pad_operators && self.current.trim_ascii_end().ends_with('=') {
                 self.emit_source_space_or_ensure();
             } else {
                 self.emit_source_space();
@@ -2756,8 +2779,8 @@ impl FormatEngine<'_> {
         !self.current_is_blank()
             && brace_type == BraceType::CompoundLiteral
             && matches!(next, None | Some(Token::Newline))
-            && line_ends_compound_literal_cast(self.current.trim_end())
-            && !line_ends_lambda_parameter_list(self.current.trim_end())
+            && line_ends_compound_literal_cast(self.current.trim_ascii_end())
+            && !line_ends_lambda_parameter_list(self.current.trim_ascii_end())
             && self.should_attach_opening_brace(brace_type, next)
     }
 
@@ -2806,7 +2829,7 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && self.layout.nesting.paren_depth > 0
             && self.output.last().is_some_and(|line| {
-                let trimmed = line.trim();
+                let trimmed = line.trim_ascii();
                 trimmed.starts_with("for (") && trimmed.ends_with(':')
             })
     }
@@ -2883,9 +2906,9 @@ impl FormatEngine<'_> {
 
     fn output_line_is_case_label(&self, index: usize) -> bool {
         let line = &self.output[index];
-        let trimmed = self.output.code_before_comment(index).trim();
+        let trimmed = self.output.code_before_comment(index).trim_ascii();
         trimmed.ends_with(':')
-            && trimmed.len() == line.trim().len()
+            && trimmed.len() == line.trim_ascii().len()
             && labels::is_label_start(trimmed.trim_end_matches(':'), &self.options.access_labels)
     }
 
@@ -2897,7 +2920,7 @@ impl FormatEngine<'_> {
         }
         let after_case_label = self.output.last().is_some_and(|line| {
             let code = &self.output.code_of(line);
-            let trimmed = code.trim();
+            let trimmed = code.trim_ascii();
             trimmed.ends_with(':')
                 && labels::is_label_start(
                     trimmed.trim_end_matches(':'),
@@ -2930,16 +2953,16 @@ impl FormatEngine<'_> {
         let Some(last) = self.output.last() else {
             return false;
         };
-        let last = last.trim_end();
+        let last = last.trim_ascii_end();
         // A directive line takes no brace.
-        if last.trim_start().starts_with('#') {
+        if last.trim_ascii_start().starts_with('#') {
             return false;
         }
         // A brace that would take the line past the maximum length stays on
         // its own.
         if self.options.max_code_length.is_some_and(|max| {
             leading_visual_width(last, self.options.tab_width)
-                + last.trim_start().len()
+                + last.trim_ascii_start().len()
                 + " {".len()
                 > max
         }) {
@@ -2984,7 +3007,7 @@ impl FormatEngine<'_> {
             && self.output.last().is_some_and(|last| {
                 let comment_start =
                     line_comment_split_limit(last).min(trailing_comment_split_limit(last));
-                let code = last[..comment_start].trim();
+                let code = last[..comment_start].trim_ascii();
                 comment_start < last.len()
                     && !code.is_empty()
                     && !code.starts_with('#')
@@ -3027,7 +3050,7 @@ impl FormatEngine<'_> {
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && self.token_input.token_followed_by_line_comment_on_line
             && self.output.last().is_some_and(|line| {
-                let trimmed = line.trim_end();
+                let trimmed = line.trim_ascii_end();
                 trimmed.ends_with("*/") && trimmed.contains("/*")
             })
         {
@@ -3043,7 +3066,7 @@ impl FormatEngine<'_> {
                 trailing_comment_split_limit(last)
             };
             let code = &last[..comment_start];
-            let trimmed = code.trim();
+            let trimmed = code.trim_ascii();
             if trimmed.starts_with('#') {
                 return false;
             }
@@ -3052,7 +3075,7 @@ impl FormatEngine<'_> {
                     || is_lambda_body_header(trimmed)
                     || objc_method_header;
             }
-            let comment = last[comment_start..].trim();
+            let comment = last[comment_start..].trim_ascii();
             if brace_type != BraceType::Command {
                 return matches!(
                     self.options.brace_style,
@@ -3080,13 +3103,13 @@ impl FormatEngine<'_> {
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && brace_type != BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
-            && self.current.trim_end().ends_with(')')
+            && self.current.trim_ascii_end().ends_with(')')
             && self.current.contains('(')
             && !matches!(
                 self.current
-                    .trim_start()
+                    .trim_ascii_start()
                     .trim_start_matches('}')
-                    .trim_start()
+                    .trim_ascii_start()
                     .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
                     .next(),
                 Some("if" | "else" | "for" | "while" | "switch" | "catch" | "__except")
@@ -3187,7 +3210,7 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.current.trim_end().ends_with(')')
+        if self.current.trim_ascii_end().ends_with(')')
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Command | BraceType::Definition)
@@ -3203,9 +3226,9 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.current.trim_start().starts_with('[')
+        if self.current.trim_ascii_start().starts_with('[')
             && self.current_is_lambda_body_header()
-            && lambda_header_has_trailing_return(self.current.trim_end())
+            && lambda_header_has_trailing_return(self.current.trim_ascii_end())
             && matches!(
                 self.options.brace_style,
                 BraceStyle::Attach

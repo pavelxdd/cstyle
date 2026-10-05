@@ -4,7 +4,7 @@ use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
-use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
+use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 
 pub(crate) mod raw_strings;
@@ -36,48 +36,70 @@ pub(crate) struct PreprocessorToken {
     pub(crate) opaque_literal_line_ranges: Vec<(usize, usize)>,
 }
 
-fn hash_after_statement_opens_preprocessor(chars: &[char], line_start: usize, hash: usize) -> bool {
-    let line_end = chars[hash..]
+// The lexer walks the source by byte: every character it tells apart is
+// ASCII, and no byte of a wider character equals one.
+
+/// The character starting at byte `index`, ASCII without decoding.
+fn char_at(source: &str, index: usize) -> Option<char> {
+    let byte = *source.as_bytes().get(index)?;
+    if byte.is_ascii() {
+        Some(char::from(byte))
+    } else {
+        source[index..].chars().next()
+    }
+}
+
+/// The byte of the line break ending the line that holds `index`.
+fn line_end_from(source: &str, index: usize) -> usize {
+    source.as_bytes()[index..]
         .iter()
-        .position(|&ch| ch == '\n')
-        .map_or(chars.len(), |offset| hash + offset);
-    let line = chars[hash..line_end].iter().collect::<String>();
-    let prefix = &chars[line_start..hash];
+        .position(|&byte| byte == b'\n')
+        .map_or(source.len(), |offset| index + offset)
+}
+
+fn previous_char(source: &str, index: usize) -> Option<char> {
+    source[..index].chars().next_back()
+}
+
+fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash: usize) -> bool {
+    let line_end = line_end_from(source, hash);
+    let line = &source[hash..line_end];
+    let prefix = &source[line_start..hash];
     if line.contains_any_byte(b"{}")
         || line[1..].contains('#')
-        || prefix.contains(&'#')
+        || prefix.contains('#')
         || has_unclosed_grouping(prefix)
-        || has_unclosed_grouping(&chars[hash..line_end])
+        || has_unclosed_grouping(line)
     {
         return false;
     }
-    let Some(directive) = preprocessor_directive(&line) else {
+    let Some(directive) = preprocessor_directive(line) else {
         return false;
     };
     if !is_known_hash_directive(directive) {
         return false;
     }
-    chars[line_start..hash]
-        .iter()
-        .rev()
-        .find(|ch| !ch.is_whitespace())
+    prefix
+        .trim_end()
+        .chars()
+        .next_back()
         .is_some_and(|ch| matches!(ch, '{' | '}' | ';'))
 }
 
-fn has_unclosed_grouping(chars: &[char]) -> bool {
+fn has_unclosed_grouping(text: &str) -> bool {
     let mut paren_depth = 0;
     let mut bracket_depth = 0;
-    for ch in chars {
-        match ch {
-            '(' => paren_depth += 1,
-            ')' => {
+    for byte in text.bytes() {
+        match byte {
+            b'(' => paren_depth += 1,
+            b')' => {
                 if paren_depth == 0 {
                     return true;
                 }
                 paren_depth -= 1;
             }
-            '[' => bracket_depth += 1,
-            ']' => {
+            b'[' => bracket_depth += 1,
+            b']' => {
                 if bracket_depth == 0 {
                     return true;
                 }
@@ -121,40 +143,41 @@ fn is_known_hash_directive(directive: &str) -> bool {
 }
 
 pub(crate) fn tokenize(source: &str) -> Vec<Token> {
-    let chars = source.chars().collect::<Vec<_>>();
-    let mut tokens = Vec::new();
+    let bytes = source.as_bytes();
+    // A token takes some four bytes of source on average.
+    let mut tokens = Vec::with_capacity(source.len() / 4);
     let mut index = 0;
     let mut line_has_code = false;
     let mut line_start_index = 0usize;
     let mut assembly_macro_lines = AssemblyMacroLines::default();
 
-    while index < chars.len() {
-        if index == line_start_index && line_may_be_raw(&chars[index..], &assembly_macro_lines) {
-            let line_end = chars[index..]
-                .iter()
-                .position(|&ch| ch == '\n')
-                .map_or(chars.len(), |offset| index + offset);
-            let line = chars[index..line_end].iter().collect::<String>();
-            let trimmed = line.trim_start();
+    while index < bytes.len() {
+        if index == line_start_index && line_may_be_raw(&source[index..], &assembly_macro_lines) {
+            let line_end = line_end_from(source, index);
+            let line = &source[index..line_end];
+            let trimmed = line.trim_ascii_start();
             if is_full_line_conflict_marker(trimmed) {
                 line_has_code = !trimmed.is_empty();
-                tokens.push(Token::RawLine(line));
+                tokens.push(Token::RawLine(line.to_string()));
                 index = line_end;
                 continue;
-            } else if let Some(output) = assembly_macro_lines.take_raw_line(&line) {
+            } else if let Some(output) = assembly_macro_lines.take_raw_line(line) {
                 tokens.push(Token::RawLine(output));
                 index = line_end;
                 line_has_code = !line.is_empty();
                 continue;
             }
         }
-        if let Some((token, next_index)) = read_prefixed_literal(&chars, index) {
+        if let Some((token, next_index)) = read_prefixed_literal(source, index) {
             tokens.push(token);
             index = next_index;
             line_has_code = true;
             continue;
         }
-        let ch = chars[index];
+        let Some(ch) = char_at(source, index) else {
+            break;
+        };
+        let next = bytes.get(index + 1).copied();
         match ch {
             '\n' => {
                 tokens.push(Token::Newline);
@@ -163,80 +186,81 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
                 line_start_index = index;
             }
             ch if ch.is_whitespace() => {
-                let (whitespace, next_index) =
-                    read_while(&chars, index, |ch| ch.is_whitespace() && ch != '\n');
-                tokens.push(Token::Whitespace(whitespace));
+                let next_index = read_while(source, index, |ch| ch.is_whitespace() && ch != '\n');
+                tokens.push(Token::Whitespace(source[index..next_index].to_string()));
                 index = next_index;
             }
             '#' if !line_has_code
-                || hash_after_statement_opens_preprocessor(&chars, line_start_index, index) =>
+                || hash_after_statement_opens_preprocessor(source, line_start_index, index) =>
             {
-                let line_end = chars[index..]
-                    .iter()
-                    .position(|&ch| ch == '\n')
-                    .map_or(chars.len(), |offset| index + offset);
-                let line = chars[index..line_end].iter().collect::<String>();
-                if !line_has_code && unknown_hash_line_has_brace_code(&line) {
+                let line = &source[index..line_end_from(source, index)];
+                if !line_has_code && unknown_hash_line_has_brace_code(line) {
                     tokens.push(Token::Symbol(ch));
                     index += 1;
                     line_has_code = true;
                 } else {
                     assembly_macro_lines.observe_preprocessor();
-                    let (preprocessor, next_index) = read_preprocessor(&chars, index);
+                    let (preprocessor, next_index) = read_preprocessor(source, index);
                     tokens.push(Token::Preprocessor(Box::new(preprocessor)));
                     index = next_index;
                     line_has_code = true;
                 }
             }
-            '/' if chars.get(index + 1) == Some(&'/') => {
-                let (comment, next_index) = read_line_comment(&chars, index);
-                tokens.push(Token::Comment(CommentKind::Line, comment));
+            '/' if next == Some(b'/') => {
+                let next_index = read_line_comment(source, index);
+                tokens.push(Token::Comment(
+                    CommentKind::Line,
+                    source[index..next_index].to_string(),
+                ));
                 index = next_index;
                 line_has_code = true;
             }
-            '/' if chars.get(index + 1) == Some(&'*') => {
-                let (comment, next_index) = read_block_comment(&chars, index);
-                tokens.push(Token::Comment(CommentKind::Block, comment));
+            '/' if next == Some(b'*') => {
+                let next_index = read_block_comment(source, index);
+                tokens.push(Token::Comment(
+                    CommentKind::Block,
+                    source[index..next_index].to_string(),
+                ));
                 index = next_index;
                 line_has_code = true;
             }
             '"' => {
-                let (literal, next_index, _) = read_quoted(&chars, index, '"');
-                tokens.push(Token::StringLiteral(literal));
+                let (next_index, _) = read_quoted(source, index, b'"');
+                tokens.push(Token::StringLiteral(source[index..next_index].to_string()));
                 index = next_index;
                 line_has_code = true;
             }
             '\'' => {
-                let (literal, next_index, _) = read_quoted(&chars, index, '\'');
-                tokens.push(Token::CharLiteral(literal));
+                let (next_index, _) = read_quoted(source, index, b'\'');
+                tokens.push(Token::CharLiteral(source[index..next_index].to_string()));
                 index = next_index;
                 line_has_code = true;
             }
-            '.' if chars.get(index + 1).is_some_and(char::is_ascii_digit) => {
-                let (number, next_index) = read_number(&chars, index);
-                tokens.push(Token::Number(number));
+            '.' if next.is_some_and(|byte| byte.is_ascii_digit()) => {
+                let next_index = read_number(source, index);
+                tokens.push(Token::Number(source[index..next_index].to_string()));
                 index = next_index;
                 line_has_code = true;
             }
             ch if is_identifier_start(ch) => {
-                let (word, next_index) = read_while(&chars, index, is_identifier_continue);
-                tokens.push(Token::Word(word));
+                let next_index = read_while(source, index, is_identifier_continue);
+                tokens.push(Token::Word(source[index..next_index].to_string()));
                 index = next_index;
                 line_has_code = true;
             }
             ch if ch.is_ascii_digit() => {
-                let (number, next_index) = read_number(&chars, index);
-                tokens.push(Token::Number(number));
+                let next_index = read_number(source, index);
+                tokens.push(Token::Number(source[index..next_index].to_string()));
                 index = next_index;
                 line_has_code = true;
             }
             _ => {
-                if let Some(operator) = language::match_operator(&chars, index) {
+                if let Some(operator) = language::match_operator(source, index) {
                     tokens.push(Token::Operator(operator.to_string()));
-                    index += operator.chars().count();
+                    index += operator.len();
                 } else {
                     tokens.push(Token::Symbol(ch));
-                    index += 1;
+                    index += ch.len_utf8();
                 }
                 line_has_code = true;
             }
@@ -248,10 +272,9 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
 
 /// Whether the line starting `rest` may be a conflict marker or an
 /// assembly macro line, from its first character past leading whitespace.
-fn line_may_be_raw(rest: &[char], assembly_macro_lines: &AssemblyMacroLines) -> bool {
+fn line_may_be_raw(rest: &str, assembly_macro_lines: &AssemblyMacroLines) -> bool {
     let first = rest
-        .iter()
-        .copied()
+        .chars()
         .take_while(|&ch| ch != '\n')
         .find(|ch| !ch.is_whitespace());
     matches!(first, Some('<' | '=' | '>' | '|'))
@@ -265,77 +288,70 @@ fn is_full_line_conflict_marker(trimmed: &str) -> bool {
         || trimmed.starts_with("|||||||")
 }
 
-fn read_preprocessor(chars: &[char], start: usize) -> (PreprocessorToken, usize) {
+/// A directive from its `#` on: its text runs to the line break no `\`
+/// continues, past breaks inside a block comment, as written.
+fn read_preprocessor(source: &str, start: usize) -> (PreprocessorToken, usize) {
+    let bytes = source.as_bytes();
     let mut index = start;
-    let mut output = String::new();
     let mut in_block_comment = false;
     let mut in_line_comment = false;
     let mut quote = None;
     let mut quote_start_line = None;
     let mut escaped = false;
-    let mut line_start = 0usize;
+    let mut line_start = start;
     let mut line_index = 0usize;
     let mut preserve_trailing_whitespace = false;
     let mut opaque_literal_line_ranges = Vec::new();
-    while index < chars.len() {
-        let ch = chars[index];
-        if ch == '\n' {
-            let current_line = &output[line_start..];
-            let continued_line = current_line.trim_end().ends_with('\\')
-                && !following_physical_line_is_blank(chars, index + 1);
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\n' {
+            let continued_line = source[line_start..index].trim_ascii_end().ends_with('\\')
+                && !following_physical_line_is_blank(bytes, index + 1);
             if continued_line || in_block_comment {
-                output.push('\n');
                 line_index += 1;
                 index += 1;
-                line_start = output.len();
+                line_start = index;
                 escaped = false;
                 continue;
             }
             break;
         }
         if in_line_comment {
-            output.push(ch);
             index += 1;
             continue;
         }
         if in_block_comment {
-            if ch == '*' && chars.get(index + 1) == Some(&'/') {
+            if byte == b'*' && bytes.get(index + 1) == Some(&b'/') {
                 in_block_comment = false;
-                output.push('*');
-                output.push('/');
                 index += 2;
             } else {
-                output.push(ch);
                 index += 1;
             }
             continue;
         }
-        if let Some(quote_char) = quote {
-            output.push(ch);
-            index += 1;
+        if let Some(quote_byte) = quote {
+            let len = char_at(source, index).map_or(1, char::len_utf8);
+            index += len;
             if escaped {
                 escaped = false;
-            } else if ch == '\\' {
+            } else if byte == b'\\' {
                 escaped = true;
-            } else if ch == quote_char {
+            } else if byte == quote_byte {
                 quote = None;
                 quote_start_line = None;
             }
             continue;
         }
         let starts_literal = index == start
-            || chars
-                .get(index.wrapping_sub(1))
-                .is_none_or(|ch| !is_identifier_continue(*ch));
-        if starts_literal && let Some(prefix_len) = raw_string_prefix_len(chars, index) {
-            let (_, next_index, terminated) = read_raw_string(chars, index, prefix_len);
+            || previous_char(source, index).is_none_or(|ch| !is_identifier_continue(ch));
+        if starts_literal && let Some(prefix_len) = raw_string_prefix_len(source, index) {
+            let (next_index, terminated) = read_raw_string(source, index, prefix_len);
             preserve_trailing_whitespace |= !terminated;
             let first_raw_line = line_index;
-            for literal_ch in &chars[index..next_index] {
-                output.push(*literal_ch);
-                if *literal_ch == '\n' {
+            for (offset, literal_byte) in bytes[index..next_index].iter().enumerate() {
+                if *literal_byte == b'\n' {
                     line_index += 1;
-                    line_start = output.len();
+                    line_start = index + offset + 1;
                 }
             }
             if first_raw_line != line_index || !terminated {
@@ -344,244 +360,191 @@ fn read_preprocessor(chars: &[char], start: usize) -> (PreprocessorToken, usize)
             index = next_index;
             continue;
         }
-        if ch == '"' || ch == '\'' {
-            quote = Some(ch);
+        if byte == b'"' || byte == b'\'' {
+            quote = Some(byte);
             quote_start_line = Some(line_index);
             escaped = false;
-            output.push(ch);
             index += 1;
             continue;
         }
-        if ch == '/' && chars.get(index + 1) == Some(&'/') {
+        if byte == b'/' && bytes.get(index + 1) == Some(&b'/') {
             in_line_comment = true;
-            output.push('/');
-            output.push('/');
             index += 2;
             continue;
         }
-        if ch == '/' && chars.get(index + 1) == Some(&'*') {
+        if byte == b'/' && bytes.get(index + 1) == Some(&b'*') {
             in_block_comment = true;
-            output.push('/');
-            output.push('*');
             index += 2;
             continue;
         }
-        output.push(ch);
-        index += 1;
+        index += char_at(source, index).map_or(1, char::len_utf8);
     }
     if let Some(start_line) = quote_start_line {
         preserve_trailing_whitespace = true;
         opaque_literal_line_ranges.push((start_line, line_index));
     }
+    let output = &source[start..index];
     let text = if preserve_trailing_whitespace {
         output
     } else {
-        output.trim_end().to_string()
+        output.trim_ascii_end()
     };
     (
         PreprocessorToken {
-            text,
+            text: text.to_string(),
             opaque_literal_line_ranges,
         },
         index,
     )
 }
 
-fn following_physical_line_is_blank(chars: &[char], start: usize) -> bool {
+fn following_physical_line_is_blank(bytes: &[u8], start: usize) -> bool {
+    bytes[start.min(bytes.len())..]
+        .iter()
+        .take_while(|&&byte| byte != b'\n')
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r'))
+}
+
+/// The end of a line comment: the line break no `\` before it continues.
+fn read_line_comment(source: &str, start: usize) -> usize {
+    let bytes = source.as_bytes();
+    let mut line_start = start;
     let mut index = start;
-    while index < chars.len() && chars[index] != '\n' {
-        if !matches!(chars[index], ' ' | '\t' | '\r') {
-            return false;
+    loop {
+        let end = line_end_from(source, index);
+        if end < bytes.len() && source[line_start..end].ends_with('\\') {
+            index = end + 1;
+            line_start = index;
+            continue;
         }
-        index += 1;
+        return end;
     }
-    true
 }
 
-fn read_line_comment(chars: &[char], start: usize) -> (String, usize) {
-    let mut index = start;
-    let mut output = String::new();
-    let mut line_start = 0usize;
-    while index < chars.len() {
-        let ch = chars[index];
-        if ch == '\n' {
-            if output[line_start..].ends_with('\\') {
-                output.push(ch);
-                index += 1;
-                line_start = output.len();
-                continue;
-            }
-            break;
-        }
-        output.push(ch);
-        index += 1;
-    }
-    (output, index)
+/// The end of a block comment: past its `*/`, or the source's end.
+fn read_block_comment(source: &str, start: usize) -> usize {
+    source[start + 2..]
+        .find("*/")
+        .map_or(source.len(), |offset| start + 2 + offset + 2)
 }
 
-fn read_block_comment(chars: &[char], start: usize) -> (String, usize) {
-    let mut index = start + 2;
-    let mut output = String::from("/*");
-    while index < chars.len() {
-        let ch = chars[index];
-        output.push(ch);
-        index += 1;
-        if ch == '*' && chars.get(index) == Some(&'/') {
-            output.push('/');
-            index += 1;
-            break;
-        }
-    }
-    (output, index)
-}
-
-fn read_prefixed_literal(chars: &[char], start: usize) -> Option<(Token, usize)> {
+fn read_prefixed_literal(source: &str, start: usize) -> Option<(Token, usize)> {
     // Every prefix starts with one of these.
-    if !matches!(chars.get(start), Some('u' | 'U' | 'L' | 'R')) {
+    if !matches!(
+        source.as_bytes().get(start),
+        Some(b'u' | b'U' | b'L' | b'R')
+    ) {
         return None;
     }
-    if let Some(prefix_len) = raw_string_prefix_len(chars, start) {
-        let (literal, next_index, _) = read_raw_string(chars, start, prefix_len);
-        return Some((Token::StringLiteral(literal), next_index));
+    if let Some(prefix_len) = raw_string_prefix_len(source, start) {
+        let (next_index, _) = read_raw_string(source, start, prefix_len);
+        return Some((
+            Token::StringLiteral(source[start..next_index].to_string()),
+            next_index,
+        ));
     }
 
     for prefix in ["u8", "L", "u", "U"] {
-        if !chars_match(chars, start, prefix) {
+        if !source[start..].starts_with(prefix) {
             continue;
         }
-        match chars.get(start + prefix.len()).copied() {
-            Some('"') => {
-                let (quoted, next_index, _) = read_quoted(chars, start + prefix.len(), '"');
-                return Some((
-                    Token::StringLiteral(format!("{prefix}{quoted}")),
-                    next_index,
-                ));
-            }
-            Some('\'') => {
-                let (quoted, next_index, _) = read_quoted(chars, start + prefix.len(), '\'');
-                return Some((Token::CharLiteral(format!("{prefix}{quoted}")), next_index));
-            }
-            _ => {}
-        }
+        let quote = match source.as_bytes().get(start + prefix.len()) {
+            Some(b'"') => b'"',
+            Some(b'\'') => b'\'',
+            _ => continue,
+        };
+        let (next_index, _) = read_quoted(source, start + prefix.len(), quote);
+        let text = source[start..next_index].to_string();
+        let token = if quote == b'"' {
+            Token::StringLiteral(text)
+        } else {
+            Token::CharLiteral(text)
+        };
+        return Some((token, next_index));
     }
 
     None
 }
 
-fn raw_string_prefix_len(chars: &[char], start: usize) -> Option<usize> {
+fn raw_string_prefix_len(source: &str, start: usize) -> Option<usize> {
+    let rest = &source[start..];
     ["u8R", "LR", "uR", "UR", "R"]
         .into_iter()
-        .find(|prefix| {
-            chars_match(chars, start, prefix) && chars.get(start + prefix.len()) == Some(&'"')
-        })
+        .find(|prefix| rest.starts_with(prefix) && rest.as_bytes().get(prefix.len()) == Some(&b'"'))
         .map(str::len)
 }
 
-fn chars_match(chars: &[char], start: usize, text: &str) -> bool {
-    text.chars()
-        .enumerate()
-        .all(|(offset, ch)| chars.get(start + offset) == Some(&ch))
-}
-
-fn read_raw_string(chars: &[char], start: usize, prefix_len: usize) -> (String, usize, bool) {
+/// The end of a raw string literal and whether it closed; one whose
+/// delimiter never opens reads as a plain literal.
+fn read_raw_string(source: &str, start: usize, prefix_len: usize) -> (usize, bool) {
     let quote_index = start + prefix_len;
-    let mut open_paren = quote_index + 1;
-    while open_paren < chars.len() && chars[open_paren] != '(' {
-        if chars[open_paren] == '\n' {
-            return read_prefixed_quoted_fallback(chars, start, prefix_len);
-        }
-        open_paren += 1;
+    let Some(open_offset) = source[quote_index + 1..].find(['(', '\n']) else {
+        return read_quoted(source, quote_index, b'"');
+    };
+    let open_paren = quote_index + 1 + open_offset;
+    if source.as_bytes()[open_paren] == b'\n' {
+        return read_quoted(source, quote_index, b'"');
     }
-    if open_paren >= chars.len() {
-        return read_prefixed_quoted_fallback(chars, start, prefix_len);
+    let delimiter = &source[quote_index + 1..open_paren];
+    let closing = format!("){delimiter}\"");
+    match source[open_paren + 1..].find(&closing) {
+        Some(offset) => (open_paren + 1 + offset + closing.len(), true),
+        None => (source.len(), false),
     }
+}
 
-    let delimiter = chars[quote_index + 1..open_paren]
+/// The end of a quoted literal opening at `start`, and whether it closed: a
+/// line break ends one, unless escaped.
+fn read_quoted(source: &str, start: usize, quote: u8) -> (usize, bool) {
+    let bytes = source.as_bytes();
+    let mut index = start + 1;
+    while let Some(offset) = bytes[index.min(bytes.len())..]
         .iter()
-        .collect::<Vec<_>>();
-    let mut index = open_paren + 1;
-    while index < chars.len() {
-        if chars[index] == ')'
-            && delimiter
-                .iter()
-                .enumerate()
-                .all(|(offset, ch)| chars.get(index + 1 + offset) == Some(ch))
-            && chars.get(index + 1 + delimiter.len()) == Some(&'"')
-        {
-            let end = index + 2 + delimiter.len();
-            return (chars[start..end].iter().collect(), end, true);
-        }
-        index += 1;
-    }
-
-    (chars[start..].iter().collect(), chars.len(), false)
-}
-
-fn read_prefixed_quoted_fallback(
-    chars: &[char],
-    start: usize,
-    prefix_len: usize,
-) -> (String, usize, bool) {
-    let (quoted, next_index, terminated) = read_quoted(chars, start + prefix_len, '"');
-    let prefix = chars[start..start + prefix_len].iter().collect::<String>();
-    (format!("{prefix}{quoted}"), next_index, terminated)
-}
-
-fn read_quoted(chars: &[char], start: usize, quote: char) -> (String, usize, bool) {
-    let mut index = start;
-    let mut output = String::new();
-    let mut escaped = false;
-    let mut first = true;
-    let mut terminated = false;
-    while index < chars.len() {
-        let ch = chars[index];
-        if ch == '\n' && !escaped {
-            break;
-        }
-        output.push(ch);
-        index += 1;
-        if first {
-            first = false;
-        } else if escaped {
-            escaped = false;
-        } else if ch == '\\' {
-            escaped = true;
-        } else if ch == quote {
-            terminated = true;
-            break;
+        .position(|&byte| byte == b'\\' || byte == quote || byte == b'\n')
+    {
+        index += offset;
+        match bytes[index] {
+            b'\n' => return (index, false),
+            b'\\' => {
+                index = (index + 1 + char_at(source, index + 1).map_or(0, char::len_utf8))
+                    .min(bytes.len())
+            }
+            _ => return (index + 1, true),
         }
     }
-    (output, index, terminated)
+    (bytes.len(), false)
 }
 
-fn read_number(chars: &[char], start: usize) -> (String, usize) {
+fn read_number(source: &str, start: usize) -> usize {
+    let bytes = source.as_bytes();
     let mut index = start;
-    let mut output = String::new();
-    while let Some(&ch) = chars.get(index) {
-        if ch.is_ascii_alphanumeric()
-            || matches!(ch, '.' | '_')
-            || is_digit_separator(chars, index)
-            || matches!(ch, '+' | '-')
-                && output
-                    .chars()
-                    .last()
-                    .is_some_and(|previous| matches!(previous, 'e' | 'E' | 'p' | 'P'))
+    while let Some(&byte) = bytes.get(index) {
+        let digit_separator = byte == b'\''
+            && index > 0
+            && bytes[index - 1].is_ascii_hexdigit()
+            && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit);
+        if byte.is_ascii_alphanumeric()
+            || matches!(byte, b'.' | b'_')
+            || digit_separator
+            || matches!(byte, b'+' | b'-')
+                && index > start
+                && matches!(bytes[index - 1], b'e' | b'E' | b'p' | b'P')
         {
-            output.push(ch);
             index += 1;
         } else {
             break;
         }
     }
-    (output, index)
+    index
 }
 
-fn read_while(chars: &[char], start: usize, predicate: impl Fn(char) -> bool) -> (String, usize) {
-    let end = chars[start..]
-        .iter()
-        .position(|&ch| !predicate(ch))
-        .map_or(chars.len(), |offset| start + offset);
-    (chars[start..end].iter().collect(), end)
+/// The end of the run of characters from `start` that `predicate` holds for.
+fn read_while(source: &str, start: usize, predicate: impl Fn(char) -> bool) -> usize {
+    let mut index = start;
+    while let Some(ch) = char_at(source, index).filter(|&ch| predicate(ch)) {
+        index += ch.len_utf8();
+    }
+    index
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

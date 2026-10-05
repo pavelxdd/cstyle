@@ -69,13 +69,13 @@ impl FormatEngine<'_> {
         if self.layout.nesting.has_question_in_current_brace() {
             return false;
         }
-        if code_opens_class_base_clause(self.current.trim_end()) {
+        if code_opens_class_base_clause(self.current.trim_ascii_end()) {
             return true;
         }
         if self.layout.split_class_export_pending_base {
             return true;
         }
-        let current = self.current.trim();
+        let current = self.current.trim_ascii();
         let single_name = current.chars().next().is_some_and(is_identifier_start)
             && current.chars().all(is_identifier_continue);
         single_name
@@ -83,14 +83,14 @@ impl FormatEngine<'_> {
                 .layout
                 .previous_pre_adjust_line
                 .as_ref()
-                .is_some_and(|line| is_split_export_head(line.trim()))
+                .is_some_and(|line| is_split_export_head(line.trim_ascii()))
                 || self
                     .output
                     .scoped()
                     .iter()
                     .rev()
-                    .find(|line| !line.trim().is_empty())
-                    .is_some_and(|line| is_split_export_head(line.trim()))
+                    .find(|line| !line.trim_ascii().is_empty())
+                    .is_some_and(|line| is_split_export_head(line.trim_ascii()))
                 || self.in_open_class_head())
     }
 
@@ -100,26 +100,26 @@ impl FormatEngine<'_> {
         }
         if self.layout.nesting.has_question_in_current_brace()
             || !self.current[..self.current_trailing_comment_split_limit()]
-                .trim()
+                .trim_ascii()
                 .is_empty()
         {
             return false;
         }
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
-            let trimmed = line.trim_start();
+            let trimmed = line.trim_ascii_start();
             !trimmed.is_empty() && !trimmed.starts_with(['#', ':', ','])
         }) else {
             return false;
         };
         let code = &self.output.code_of(line);
-        code_opens_class_base_clause(code.trim_end())
+        code_opens_class_base_clause(code.trim_ascii_end())
     }
 
     pub(crate) fn try_join_class_base_line(&mut self, line: &str) -> bool {
         if !self.may_have_class_base_access {
             return false;
         }
-        let current = line.trim_start();
+        let current = line.trim_ascii_start();
         if !(current.starts_with("public ")
             || current.starts_with("protected ")
             || current.starts_with("private "))
@@ -129,7 +129,7 @@ impl FormatEngine<'_> {
         if !self
             .output
             .last()
-            .is_some_and(|previous| previous.trim_end().ends_with(':'))
+            .is_some_and(|previous| previous.trim_ascii_end().ends_with(':'))
         {
             return false;
         }
@@ -138,11 +138,11 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .take_while(|line| {
-                let trimmed = line.trim();
+                let trimmed = line.trim_ascii();
                 trimmed != "{" && !trimmed.starts_with("};")
             })
             .any(|line| {
-                let trimmed = line.trim();
+                let trimmed = line.trim_ascii();
                 matches!(trimmed, "class" | "struct" | "union") || is_split_export_head(trimmed)
             });
         if !in_class_head {
@@ -165,8 +165,8 @@ impl FormatEngine<'_> {
                 .scoped()
                 .iter()
                 .rev()
-                .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| is_split_export_head(line.trim()))
+                .find(|line| !line.trim_ascii().is_empty())
+                .is_some_and(|line| is_split_export_head(line.trim_ascii()))
         {
             return;
         }
@@ -192,7 +192,7 @@ impl FormatEngine<'_> {
             return None;
         }
         for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trim();
+            let trimmed = line.trim_ascii();
             if trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';') {
                 break;
             }
@@ -206,11 +206,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn simple_template_base_indent_spaces(&self, line: &str) -> Option<usize> {
-        if !line.trim_start().starts_with(':') {
+        if !line.trim_ascii_start().starts_with(':') {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        (previous.trim_start().starts_with("struct ")
+        (previous.trim_ascii_start().starts_with("struct ")
             && previous.contains(" <")
             && previous.contains('>'))
         .then(|| {
@@ -220,7 +220,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn commented_class_head_indent_spaces(&self, line: &str) -> Option<usize> {
         if !line
-            .trim_start()
+            .trim_ascii_start()
             .chars()
             .next()
             .is_some_and(is_identifier_start)
@@ -228,9 +228,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        previous.trim_start().starts_with("class //").then(|| {
-            leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
-        })
+        previous
+            .trim_ascii_start()
+            .starts_with("class //")
+            .then(|| {
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+            })
     }
 
     pub(crate) fn class_base_logical_operand_indent_spaces(
@@ -238,12 +241,12 @@ impl FormatEngine<'_> {
         line: &str,
         kind: LineKind,
     ) -> Option<usize> {
-        if kind != LineKind::Normal || !line.trim_start().starts_with("sizeof(") {
+        if kind != LineKind::Normal || !line.trim_ascii_start().starts_with("sizeof(") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trim_end();
-        let previous_trimmed = previous_code.trim_start();
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
+        let previous_trimmed = previous_code.trim_ascii_start();
         ((previous_trimmed.starts_with("struct ")
             || previous_trimmed.starts_with("class ")
             || previous_trimmed.starts_with("union "))
@@ -296,7 +299,7 @@ pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
         .rsplit([';', '{', '}'])
         .next()
         .unwrap_or(before)
-        .trim_start();
+        .trim_ascii_start();
     statement
         .split(|ch: char| !is_identifier_continue(ch))
         .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
@@ -307,8 +310,8 @@ pub(crate) fn template_base_colon_indent_spaces(
     current: &str,
     previous: &str,
 ) -> Option<usize> {
-    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
-    let previous_trimmed = previous_code.trim_start();
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_ascii_end();
+    let previous_trimmed = previous_code.trim_ascii_start();
     if !current.starts_with(':')
         || !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
         || max_template_angle_depth(previous_code) <= 1

@@ -89,7 +89,7 @@ impl FormatEngine<'_> {
         {
             line
         } else {
-            line.trim_end()
+            line.trim_ascii_end()
         };
         let mut output = self.options.indent_prefix(indent);
         output.reserve(body.len());
@@ -125,7 +125,7 @@ impl FormatEngine<'_> {
         {
             line
         } else {
-            line.trim_end()
+            line.trim_ascii_end()
         };
         let structural_level = self.constructor_initializer_prefix_level(structural_level);
         let mut output = self
@@ -157,8 +157,8 @@ impl FormatEngine<'_> {
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
         self.layout.previous_pre_adjust_line = Some(line.clone());
-        self.adjuster_before_lone_brace =
-            (line.trim() == "}").then(|| (self.output.len(), self.layout.line_adjuster.clone()));
+        self.adjuster_before_lone_brace = (line.trim_ascii() == "}")
+            .then(|| (self.output.len(), self.layout.line_adjuster.clone()));
         let line = self.layout.line_adjuster.adjust_line(line);
         let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);
@@ -179,7 +179,7 @@ impl FormatEngine<'_> {
         if !self.layout.line_adjuster.is_in_macro_block() || self.options.macro_blocks.is_empty() {
             return line;
         }
-        let trimmed = line.trim_start();
+        let trimmed = line.trim_ascii_start();
         if trimmed.is_empty()
             || trimmed.starts_with('#')
             || self
@@ -212,23 +212,23 @@ impl FormatEngine<'_> {
     pub(crate) fn publish_ready_line(&mut self, line: String) {
         let line = self.normalize_ready_preprocessor_line(line);
         let line = if let Some(spaces) = self.ready_objc_method_closing_brace_indent_spaces(&line) {
-            format!("{}{}", " ".repeat(spaces), line.trim_start())
+            format!("{}{}", " ".repeat(spaces), line.trim_ascii_start())
         } else {
             self.align_isolated_closing_brace_line(line)
         };
         let line = if let Some(spaces) = self.ready_non_paren_header_indent_spaces(&line) {
-            format!("{}{}", " ".repeat(spaces), line.trim_start())
+            format!("{}{}", " ".repeat(spaces), line.trim_ascii_start())
         } else {
             line
         };
         let line =
             if let Some(spaces) = self.ready_embedded_preprocessor_return_indent_spaces(&line) {
-                format!("{}{}", " ".repeat(spaces), line.trim_start())
+                format!("{}{}", " ".repeat(spaces), line.trim_ascii_start())
             } else {
                 line
             };
         let output_line_index = self.output.len();
-        let line_start = line.trim_start();
+        let line_start = line.trim_ascii_start();
         let output_line_hints = buffer::output_line_hints(line_start);
         self.finish_define_line(&line);
         let anchored_part = self.max_length_line.take_anchored_part();
@@ -242,7 +242,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&line))
         {
             if leading_visual_width(&line, self.options.tab_width) != spaces {
-                format!("{}{}", " ".repeat(spaces), line.trim_start())
+                format!("{}{}", " ".repeat(spaces), line.trim_ascii_start())
             } else {
                 line
             }
@@ -305,7 +305,7 @@ impl FormatEngine<'_> {
         self.update_typedef_function_pointer_frame(line);
         self.observe_formatted_output_comment_frame(line, output_spaces);
         if matches!(
-            line.trim_start(),
+            line.trim_ascii_start(),
             text if text.starts_with("//")
                 || text.starts_with("/*")
                 || text.starts_with("*/")
@@ -318,8 +318,8 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .skip(1)
-            .find(|line| !line.trim().is_empty())
-            .is_some_and(|previous| previous.trim() == "else")
+            .find(|line| !line.trim_ascii().is_empty())
+            .is_some_and(|previous| previous.trim_ascii() == "else")
         {
             let level = output_spaces / self.options.indent_width;
             self.layout.continuation_indent.set_next_line_level(level);

@@ -288,7 +288,7 @@ fn render(display: &str, version: &str) -> String {
     for (title, rows) in SECTIONS {
         text.push_str(&format!("\n{title}:\n"));
         for (option, description) in *rows {
-            text.push_str(format!("  {option:<width$}{description}").trim_end());
+            text.push_str(format!("  {option:<width$}{description}").trim_ascii_end());
             text.push('\n');
         }
     }
@@ -309,7 +309,7 @@ mod tests {
             .filter(|line| line.starts_with("  -"))
             .map(|line| {
                 let option_end = line[2..].find("  ").expect("option has a description") + 2;
-                option_end + line[option_end..].len() - line[option_end..].trim_start().len()
+                option_end + line[option_end..].len() - line[option_end..].trim_ascii_start().len()
             })
             .collect();
         assert!(columns.windows(2).all(|pair| pair[0] == pair[1]), "{text}");

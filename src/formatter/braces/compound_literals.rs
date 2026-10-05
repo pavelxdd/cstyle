@@ -13,7 +13,7 @@ pub(crate) struct CompoundLiteralState {
 }
 
 pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
-    let current = line.trim_end();
+    let current = line.trim_ascii_end();
     if !current.ends_with(')') {
         return false;
     }
@@ -27,7 +27,7 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
         return false;
     }
 
-    let before_open = current[..open_pos].trim_end();
+    let before_open = current[..open_pos].trim_ascii_end();
     if ends_with_operator_overload_name(before_open) {
         return false;
     }
@@ -49,7 +49,7 @@ fn ends_with_value_cast(text: &str) -> bool {
         return false;
     }
     // After `*`, `&` or `^` the parentheses may be a declarator's.
-    let before = text[..open].trim_end();
+    let before = text[..open].trim_ascii_end();
     match before.chars().next_back() {
         Some(')' | ']' | '*' | '&' | '^') => false,
         Some(ch) if is_word_char(ch) => trailing_word(before) == language::RETURN,
@@ -62,5 +62,5 @@ fn ends_with_operator_overload_name(text: &str) -> bool {
     if stripped.len() == text.len() {
         return false;
     }
-    trailing_word(stripped.trim_end()) == "operator"
+    trailing_word(stripped.trim_ascii_end()) == "operator"
 }

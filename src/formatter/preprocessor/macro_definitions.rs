@@ -48,7 +48,7 @@ fn is_define_case_label(line: &str) -> bool {
     if word != "case" && word != "default" {
         return false;
     }
-    line.trim_start()[word.len()..]
+    line.trim_ascii_start()[word.len()..]
         .split(';')
         .next()
         .is_some_and(|head| head.contains(':'))
@@ -61,8 +61,8 @@ fn is_define_user_label(line: &str) -> bool {
             word,
             "case" | "default" | "public" | "private" | "protected"
         )
-        && line.trim_start()[word.len()..]
-            .trim_start()
+        && line.trim_ascii_start()[word.len()..]
+            .trim_ascii_start()
             .strip_prefix(':')
             .is_some_and(|rest| !rest.starts_with(':'))
 }
@@ -200,7 +200,7 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         trailing_header,
         opens,
         closes,
-        leading_close: content.trim_start().starts_with('}'),
+        leading_close: content.trim_ascii_start().starts_with('}'),
         is_case_label: is_define_case_label(content),
         ends_semicolon,
         semicolon_ends_statement,
@@ -255,9 +255,9 @@ fn define_block_comment_state(line: &str, mut in_comment: bool, tab_width: usize
 }
 
 fn strip_define_backslash(line: &str) -> (&str, bool) {
-    let trimmed = line.trim_end();
+    let trimmed = line.trim_ascii_end();
     if let Some(body) = trimmed.strip_suffix('\\') {
-        (body.trim_end(), true)
+        (body.trim_ascii_end(), true)
     } else {
         (trimmed, false)
     }
@@ -265,9 +265,9 @@ fn strip_define_backslash(line: &str) -> (&str, bool) {
 
 fn define_replacement_text(first_line: &str) -> &str {
     let (body, _) = strip_define_backslash(first_line);
-    let trimmed = body.trim_start();
+    let trimmed = body.trim_ascii_start();
     let rest = match trimmed.strip_prefix('#') {
-        Some(after_pound) => after_pound.trim_start(),
+        Some(after_pound) => after_pound.trim_ascii_start(),
         None => return "",
     };
     let directive_end = rest
@@ -276,7 +276,7 @@ fn define_replacement_text(first_line: &str) -> &str {
     if &rest[..directive_end] != "define" {
         return "";
     }
-    let after_directive = rest[directive_end..].trim_start();
+    let after_directive = rest[directive_end..].trim_ascii_start();
     let name_end = after_directive
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(after_directive.len());
@@ -301,7 +301,7 @@ fn define_replacement_text(first_line: &str) -> &str {
     } else {
         after_name
     };
-    after_params.trim_start()
+    after_params.trim_ascii_start()
 }
 
 fn is_define_header_frame(frame: DefineFrame) -> bool {
@@ -377,9 +377,9 @@ fn apply_define_frame_transition(
 }
 
 fn define_expression_continuation_spaces(line: &str, tab_width: usize) -> Option<usize> {
-    let trimmed = line.trim_end();
+    let trimmed = line.trim_ascii_end();
     let source_body = trimmed.strip_suffix('\\').unwrap_or(trimmed);
-    let body = source_body.trim_end();
+    let body = source_body.trim_ascii_end();
     let mut parens = Vec::new();
     for (index, ch) in body.char_indices() {
         match ch {
@@ -406,7 +406,7 @@ fn define_expression_continuation_spaces(line: &str, tab_width: usize) -> Option
 fn define_body_is_expression_continuation(parts: &[&str]) -> bool {
     parts.iter().all(|part| {
         let (body, _) = strip_define_backslash(part);
-        let trimmed = body.trim_start();
+        let trimmed = body.trim_ascii_start();
         !trimmed.is_empty()
             && !trimmed.starts_with('#')
             && !trimmed.starts_with("//")
@@ -429,7 +429,7 @@ fn next_define_expression_indent(line: &str, base_spaces: usize, options: &Forma
     if aligned <= options.max_continuation_indent {
         return aligned;
     }
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     let levels = if trimmed.starts_with("if ")
         || trimmed.starts_with("if(")
         || line.contains(" if ")
@@ -445,7 +445,7 @@ fn next_define_expression_indent(line: &str, base_spaces: usize, options: &Forma
 /// A designator row ends with its comma, or is the last row and ends
 /// with its value.
 fn define_complete_designated_initializer_row(line: &str) -> bool {
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     (trimmed.starts_with('.') || trimmed.starts_with('['))
         && (trimmed.ends_with(',')
             || !(trimmed.ends_with(['=', '(', '[', '{'])
@@ -528,7 +528,7 @@ fn define_row_paren_continuation(
 ) -> Option<usize> {
     let (body, _) = strip_define_backslash(line);
     let open = *unmatched_open_paren_columns(body).last()?;
-    let full: Vec<char> = line.trim_end().chars().collect();
+    let full: Vec<char> = line.trim_ascii_end().chars().collect();
     let open = body[..open].chars().count();
     let next = full[open + 1..]
         .iter()
@@ -552,13 +552,13 @@ fn define_row_paren_continuation(
 /// line.
 fn define_return_value_column(row: &str, tab_width: usize) -> Option<usize> {
     let (body, _) = strip_define_backslash(row);
-    let trimmed = body.trim_start();
+    let trimmed = body.trim_ascii_start();
     let rest = trimmed.strip_prefix("return")?;
-    if !rest.starts_with(char::is_whitespace) || body.trim_end().ends_with(';') {
+    if !rest.starts_with(char::is_whitespace) || body.trim_ascii_end().ends_with(';') {
         return None;
     }
-    let value = body.len() - rest.trim_start().len();
-    (value < body.trim_end().len()).then(|| visual_width_from(&body[..value], 0, tab_width))
+    let value = body.len() - rest.trim_ascii_start().len();
+    (value < body.trim_ascii_end().len()).then(|| visual_width_from(&body[..value], 0, tab_width))
 }
 
 /// The column rows continuing at `column` take: past the maximum from the
@@ -583,7 +583,7 @@ const ASSIGNMENT_ANCHOR: usize = usize::MAX;
 /// The column a row continuing at the top of `anchors` takes: a row led
 /// by `)` stands where its paren saved, others at the top anchor.
 fn define_row_anchor(anchors: &[(usize, usize)], row: &str) -> Option<usize> {
-    if row.trim_start().starts_with(')') {
+    if row.trim_ascii_start().starts_with(')') {
         anchors
             .iter()
             .rev()
@@ -625,7 +625,7 @@ fn update_define_expression_paren_anchors(
     let fallback = 2 * options.indent_width + row_indent;
     let (body, _) = strip_define_backslash(line);
     let chars: Vec<char> = body.chars().collect();
-    let full: Vec<char> = line.trim_end().chars().collect();
+    let full: Vec<char> = line.trim_ascii_end().chars().collect();
     // astyle aligns at the first character after the paren or the
     // assignment, a continuing backslash included.
     let register = |anchors: &Vec<(usize, usize)>, index: usize| {
@@ -748,11 +748,11 @@ fn update_define_expression_paren_anchors(
 
 impl FormatEngine<'_> {
     pub(crate) fn finish_define_line(&mut self, line: &str) {
-        let line_start = line.trim_start();
+        let line_start = line.trim_ascii_start();
         if !line_start.starts_with("#define") {
             return;
         }
-        let code = self.output.code_of(line).trim_end();
+        let code = self.output.code_of(line).trim_ascii_end();
         if code.ends_with('\\') {
             return;
         }
@@ -770,7 +770,7 @@ impl FormatEngine<'_> {
         };
         let define_base = self.preprocessor_base_level();
         let define_prefix = self.options.indent_prefix(define_base);
-        let first_line = format!("{define_prefix}{}", first.trim_start());
+        let first_line = format!("{define_prefix}{}", first.trim_ascii_start());
         self.adjust_and_publish_line(first_line.clone());
 
         // astyle indents no body past a `#define` whose parameter list
@@ -784,7 +784,7 @@ impl FormatEngine<'_> {
                 1
             };
         if let Some(spaces) =
-            define_expression_continuation_spaces(first.trim_start(), self.options.tab_width)
+            define_expression_continuation_spaces(first.trim_ascii_start(), self.options.tab_width)
                 .map(|spaces| spaces + define_base * self.options.indent_width)
             && define_body_is_expression_continuation(body_parts)
         {
@@ -829,7 +829,7 @@ impl FormatEngine<'_> {
             if index > 0
                 && let Some(previous) = previous_line.as_deref()
             {
-                let current = strip_define_backslash(part).0.trim_start();
+                let current = strip_define_backslash(part).0.trim_ascii_start();
                 line_spaces = if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
                     anchor + extra
                 } else {
@@ -839,7 +839,7 @@ impl FormatEngine<'_> {
             let prefix = self
                 .options
                 .continuation_indent_prefix(body_level, line_spaces);
-            let line = format!("{prefix}{}", part.trim_start());
+            let line = format!("{prefix}{}", part.trim_ascii_start());
             self.adjust_and_publish_line(line.clone());
             if update_define_expression_paren_anchors(
                 &line,
@@ -850,7 +850,7 @@ impl FormatEngine<'_> {
             ) {
                 extra = self.options.indent_width;
             }
-            previous_line = Some(line.trim_end_matches('\\').trim_end().to_string());
+            previous_line = Some(line.trim_end_matches('\\').trim_ascii_end().to_string());
         }
     }
 
@@ -859,7 +859,7 @@ impl FormatEngine<'_> {
         let mut paren_anchors = Vec::new();
         let mut line_spaces = base_spaces;
         for (index, part) in body_parts.iter().enumerate() {
-            let current = strip_define_backslash(part).0.trim_start();
+            let current = strip_define_backslash(part).0.trim_ascii_start();
             let current_starts_assignment =
                 current.starts_with('=') && current.as_bytes().get(1) != Some(&b'=');
             // Inside parens a leading `=` stands at them like any row.
@@ -871,7 +871,7 @@ impl FormatEngine<'_> {
             let prefix = self
                 .options
                 .continuation_indent_prefix(body_level, line_spaces);
-            let line = format!("{prefix}{}", part.trim_start());
+            let line = format!("{prefix}{}", part.trim_ascii_start());
             self.adjust_and_publish_line(line.clone());
             update_define_expression_paren_anchors(
                 &line,
@@ -931,7 +931,10 @@ impl FormatEngine<'_> {
                     (!first_replacement.contains_any_byte(b"{;"))
                         .then(|| {
                             let (body, _) = strip_define_backslash(first_line);
-                            define_assignment_align_column(body.trim_end(), self.options.tab_width)
+                            define_assignment_align_column(
+                                body.trim_ascii_end(),
+                                self.options.tab_width,
+                            )
                         })
                         .flatten()
                 })
@@ -948,9 +951,9 @@ impl FormatEngine<'_> {
         let mut comment_output_open_column = 0usize;
         let mut comment_structural_level = base_level;
         for (part_index, part) in body_parts.iter().enumerate() {
-            let display = part.trim_start();
+            let display = part.trim_ascii_start();
             let (body, had_backslash) = strip_define_backslash(part);
-            let content = body.trim_start();
+            let content = body.trim_ascii_start();
 
             if in_comment {
                 let line = if display.is_empty() {
@@ -1059,9 +1062,9 @@ impl FormatEngine<'_> {
                             && (part_index + 1 < body_parts.len()
                                 || !content
                                     .trim_end_matches('\\')
-                                    .trim_end()
+                                    .trim_ascii_end()
                                     .trim_start_matches('}')
-                                    .trim()
+                                    .trim_ascii()
                                     .is_empty())
                             && frames.len() == 1
                             && frames.last().copied().is_some_and(is_define_command_frame))
@@ -1254,8 +1257,10 @@ impl FormatEngine<'_> {
                 // backslash included.
                 let row = format!("{prefix}{display}");
                 let row_indent = leading_visual_width(&row, self.options.tab_width);
-                define_assignment_align_column(row.trim_end(), self.options.tab_width)
-                    .or_else(|| define_return_value_column(row.trim_end(), self.options.tab_width))
+                define_assignment_align_column(row.trim_ascii_end(), self.options.tab_width)
+                    .or_else(|| {
+                        define_return_value_column(row.trim_ascii_end(), self.options.tab_width)
+                    })
                     .map(|column| {
                         if self.options.indent_after_parens {
                             row_indent
@@ -1284,7 +1289,7 @@ fn parameters_tail(open: isize, text: &str) -> &str {
             ')' => {
                 balance -= 1;
                 if balance == 0 {
-                    return text[index + 1..].trim_start();
+                    return text[index + 1..].trim_ascii_start();
                 }
             }
             _ => {}

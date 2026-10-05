@@ -31,8 +31,11 @@ impl FormatEngine<'_> {
         if self.options.break_one_line_headers
             && !self.one_line_block_mode
             && matches!(word, "else" | "while")
-            && self.current.trim_end().ends_with(';')
-            && !is_header(self.options, leading_identifier(self.current.trim_start()))
+            && self.current.trim_ascii_end().ends_with(';')
+            && !is_header(
+                self.options,
+                leading_identifier(self.current.trim_ascii_start()),
+            )
         {
             self.finish_line();
         }
@@ -41,24 +44,24 @@ impl FormatEngine<'_> {
             && !self.current_line_has_class_initializer_colon
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
-            && !self.current.trim_start().starts_with("@interface ")
-            && !has_unclosed_delimiter_after(self.current.trim_end(), "[", "]")
-            && self.current.trim_end().ends_with(':')
-            && !self.current.trim_end().ends_with("::")
+            && !self.current.trim_ascii_start().starts_with("@interface ")
+            && !has_unclosed_delimiter_after(self.current.trim_ascii_end(), "[", "]")
+            && self.current.trim_ascii_end().ends_with(':')
+            && !self.current.trim_ascii_end().ends_with("::")
             && !self.current.contains('?')
-            && switch_cases::find_case_colon(self.current.trim_end()).is_none()
-            && !self.current.trim_start().starts_with('#')
+            && switch_cases::find_case_colon(self.current.trim_ascii_end()).is_none()
+            && !self.current.trim_ascii_start().starts_with('#')
             && self
                 .current
-                .trim_end()
+                .trim_ascii_end()
                 .trim_end_matches(':')
-                .trim_end()
+                .trim_ascii_end()
                 .contains(|ch: char| {
                     !(ch.is_ascii_alphanumeric() || ch == '_' || ch.is_whitespace())
                 })
         {
             let return_continuation = (!self.unmatched_closing_brace_recovery
-                && self.current.trim_start().starts_with("return "))
+                && self.current.trim_ascii_start().starts_with("return "))
             .then(|| self.current_line_indent_spaces() + "return ".len());
             self.finish_line();
             if let Some(spaces) = return_continuation {
@@ -66,7 +69,7 @@ impl FormatEngine<'_> {
             }
             self.previous_was_newline = true;
         }
-        if self.current.trim().is_empty()
+        if self.current.trim_ascii().is_empty()
             && self.layout.nesting.has_question_in_current_brace()
             && matches!(
                 word,
@@ -89,7 +92,7 @@ impl FormatEngine<'_> {
             .is_some_and(|header| matches!(header, "for" | "while" | "switch" | "catch"))
             && self
                 .current
-                .trim()
+                .trim_ascii()
                 .eq(previous_header.as_deref().unwrap_or_default())
             && !matches!(next, Some(Token::Symbol('(')))
         {
@@ -138,7 +141,7 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| {
                         if previous_header.as_deref() == Some("else")
                             && let Some(previous) = self.output.last()
-                            && previous.trim() == "else"
+                            && previous.trim_ascii() == "else"
                         {
                             leading_visual_width(previous, self.options.tab_width)
                                 / self.options.indent_width
@@ -168,7 +171,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with(';'))
+                .is_some_and(|line| self.output.code_of(line).trim_ascii_end().ends_with(';'))
         {
             while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
@@ -185,14 +188,14 @@ impl FormatEngine<'_> {
             }
 
             let mut index = self.output.len() - 1;
-            let last_trimmed = self.output[index].trim_start();
+            let last_trimmed = self.output[index].trim_ascii_start();
             let last_is_same_line_if = (last_trimmed.starts_with("if")
                 || last_trimmed.starts_with("else if"))
                 && last_trimmed.ends_with(';');
             if !last_is_same_line_if {
                 while index > 0 {
-                    let above = self.output[index - 1].trim_end();
-                    let above_code = self.output.code_of(above).trim_end();
+                    let above = self.output[index - 1].trim_ascii_end();
+                    let above_code = self.output.code_of(above).trim_ascii_end();
                     if above_code.ends_with(';')
                         || above_code.ends_with('{')
                         || above_code.ends_with('}')
@@ -205,12 +208,12 @@ impl FormatEngine<'_> {
                 }
             }
             while index > 0 {
-                let trimmed = self.output[index].trim_start();
+                let trimmed = self.output[index].trim_ascii_start();
                 if !(trimmed.starts_with('?') || trimmed.starts_with(':')) {
                     break;
                 }
                 index -= 1;
-                while index > 0 && self.output[index].trim().is_empty() {
+                while index > 0 && self.output[index].trim_ascii().is_empty() {
                     index -= 1;
                 }
             }
@@ -220,7 +223,7 @@ impl FormatEngine<'_> {
                 && previous_indent.is_multiple_of(self.options.indent_width)
             {
                 let previous_level = previous_indent / self.options.indent_width;
-                let body_trimmed = body_line.trim_start();
+                let body_trimmed = body_line.trim_ascii_start();
                 let same_line_if_body = (body_trimmed.starts_with("if")
                     || body_trimmed.starts_with("else if"))
                     && body_trimmed.ends_with(';');
@@ -228,7 +231,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take(4)
-                    .any(|line| line.trim_start().starts_with("})"));
+                    .any(|line| line.trim_ascii_start().starts_with("})"));
                 let mut match_level = previous_level.saturating_sub(usize::from(
                     !same_line_if_body && !previous_body_follows_compound_condition,
                 ));
@@ -275,7 +278,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with('}'))
+                .is_some_and(|line| self.output.code_of(line).trim_ascii_end().ends_with('}'))
             && let Some((base, delta)) = self.layout.indentation.last_braceless_block()
             && self.layout.indentation.indent() == base + delta
         {
@@ -290,7 +293,7 @@ impl FormatEngine<'_> {
             if self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with(';'))
+                .is_some_and(|line| self.output.code_of(line).trim_ascii_end().ends_with(';'))
             {
                 self.match_closing_while_to_braceless_do();
             } else if matches!(
@@ -303,7 +306,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Pico
             ) && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
                 && let Some(previous) = self.output.last()
-                && self.output.code_of(previous).trim() == "}"
+                && self.output.code_of(previous).trim_ascii() == "}"
             {
                 let closing_brace_indent = leading_visual_width(previous, self.options.tab_width)
                     / self.options.indent_width;
@@ -332,7 +335,7 @@ impl FormatEngine<'_> {
             && (self.options.break_one_line_statements
                 || (self.options.brace_style == BraceStyle::Pico
                     && !(word == "while" && self.options.attach_closing_while)))
-            && contains_one_line_block(self.current.trim())
+            && contains_one_line_block(self.current.trim_ascii())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
                 || (word == "while"
                     && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")))
@@ -350,18 +353,23 @@ impl FormatEngine<'_> {
                 Some(BraceType::Struct | BraceType::Union | BraceType::Enum | BraceType::Class)
             );
         let is_word_operator = matches!(word, "and" | "or");
-        let current_ends_pointer_operator = self.current.trim_end().ends_with(['*', '&', '^']);
+        let current_ends_pointer_operator =
+            self.current.trim_ascii_end().ends_with(['*', '&', '^']);
         let attaches_after_pointer_array_const = word == "const"
             && self.layout.previous == PreviousToken::Operator
-            && self.current.trim_end().ends_with('*')
+            && self.current.trim_ascii_end().ends_with('*')
             && matches!(next, Some(Token::Symbol('[')))
             && matches!(self.options.pointer_align, PointerAlign::Name);
-        let current_without_references = self.current.trim_end().trim_end_matches('&').trim_end();
+        let current_without_references = self
+            .current
+            .trim_ascii_end()
+            .trim_end_matches('&')
+            .trim_ascii_end();
         let pointer_name_aligns_mixed_declarator = self.options.pointer_align == PointerAlign::Name
             && current_without_references.ends_with(['*', '^']);
-        let trailing_operator = if self.current.trim_end().ends_with('&') {
+        let trailing_operator = if self.current.trim_ascii_end().ends_with('&') {
             "&"
-        } else if self.current.trim_end().ends_with('^') {
+        } else if self.current.trim_ascii_end().ends_with('^') {
             "^"
         } else {
             "*"
@@ -378,7 +386,7 @@ impl FormatEngine<'_> {
                 .is_none_or(str::is_empty);
         let attaches_after_literal_operator_name = self.layout.previous == PreviousToken::Literal
             && word.starts_with('_')
-            && self.current.trim_end().ends_with("operator\"\"")
+            && self.current.trim_ascii_end().ends_with("operator\"\"")
             && self
                 .token_input
                 .previous_input_whitespace
@@ -402,7 +410,7 @@ impl FormatEngine<'_> {
                 self.emit_source_space_or_ensure();
             }
         } else if !attached_closing_header
-            && self.current.trim_end().ends_with('}')
+            && self.current.trim_ascii_end().ends_with('}')
             && self
                 .token_input
                 .previous_input_whitespace

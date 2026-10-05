@@ -19,11 +19,11 @@ impl FormatEngine<'_> {
             return;
         }
         if let Some(ws) = self.token_input.previous_input_whitespace.clone() {
-            if !ws.is_empty() && self.current.ends_with(&ws) {
+            if !ws.is_empty() && self.current.ends_with(&*ws) {
                 return;
             }
             self.trim_current_end();
-            if !ws.is_empty() && self.current.ends_with(&ws) {
+            if !ws.is_empty() && self.current.ends_with(&*ws) {
                 return;
             }
             self.current.push_str(&ws);
@@ -44,7 +44,7 @@ impl FormatEngine<'_> {
         }
         match self.token_input.previous_input_whitespace.clone() {
             Some(ws) if !ws.is_empty() => {
-                if self.current.ends_with(&ws) {
+                if self.current.ends_with(&*ws) {
                     return;
                 }
                 self.trim_current_end();

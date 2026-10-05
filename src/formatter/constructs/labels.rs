@@ -68,9 +68,9 @@ pub(crate) fn reconcile_line_kind(
         kind = LineKind::Normal;
     }
     if kind == LineKind::Label
-        && !line.trim_end().ends_with(':')
+        && !line.trim_ascii_end().ends_with(':')
         && context.previous_line.is_some_and(|previous| {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_ascii_end();
             previous_code.ends_with('(')
                 || (previous_code.ends_with(',')
                     && unmatched_open_paren_column(previous_code).is_some())
@@ -106,7 +106,7 @@ pub(crate) fn class_scope_indent(
 
 /// Whether `line` ends its code with an operator the next line continues.
 pub(crate) fn ends_with_binary_operator(line: &str) -> bool {
-    let code = line[..trailing_comment_split_limit(line)].trim_end();
+    let code = line[..trailing_comment_split_limit(line)].trim_ascii_end();
     code.ends_with(['|', '&', '+', '-', '*', '/', '^', '<', '>', '=']) && !code.ends_with("->")
 }
 
@@ -130,7 +130,7 @@ pub(crate) fn current_line_indent_spaces(
     if options.indent_labels {
         return None;
     }
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     let is_class_access_label = starts_access_label(line, &options.access_labels)
         && enclosing_brace.is_some_and(is_class_like_brace_type);
     let is_unindented_label = kind == LineKind::Label
@@ -162,11 +162,11 @@ pub(crate) fn access_label_body_indent_spaces(
     enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
-    let current = line.trim_start();
+    let current = line.trim_ascii_start();
     let previous_trimmed = previous[..trailing_comment_split_limit(previous)]
-        .trim_end()
-        .trim_start();
-    if !is_access_label(previous_trimmed.trim(), &options.access_labels)
+        .trim_ascii_end()
+        .trim_ascii_start();
+    if !is_access_label(previous_trimmed.trim_ascii(), &options.access_labels)
         || current.starts_with(['#', '}', ')', ';'])
         || current.ends_with(':')
     {
@@ -184,7 +184,7 @@ pub(crate) fn access_label_body_indent_spaces(
 
 impl FormatEngine<'_> {
     pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
-        let previous_code = self.output.code_of(previous).trim_end();
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
             && self.layout.pending_braceless_block_bias.is_none()
@@ -201,12 +201,12 @@ impl FormatEngine<'_> {
         line: &str,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        if line.trim_start().starts_with(['{', '}', '#']) {
+        if line.trim_ascii_start().starts_with(['{', '}', '#']) {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trim_end();
-        let previous_trimmed = previous_code.trim_start();
+        let previous_code = self.output.code_of(previous).trim_ascii_end();
+        let previous_trimmed = previous_code.trim_ascii_start();
         if !is_user_label_candidate(previous_trimmed, &self.options.access_labels)
             && !is_attached_user_label(previous_trimmed)
         {
@@ -219,14 +219,15 @@ impl FormatEngine<'_> {
             .rev()
             .skip_while(|line| line.as_str() != previous.as_str())
             .skip(1)
-            .find(|line| !line.trim().is_empty())?;
-        let before_code = self.output.code_of(before).trim_end();
-        let before_trimmed = before_code.trim_start();
+            .find(|line| !line.trim_ascii().is_empty())?;
+        let before_code = self.output.code_of(before).trim_ascii_end();
+        let before_trimmed = before_code.trim_ascii_start();
         let split_else_chain = is_attached_user_label(previous_trimmed)
             || self.recent_split_else_output_chain_active();
         let current = current_indent_spaces.unwrap_or(0);
         if is_user_label_candidate(previous_trimmed, &self.options.access_labels)
-            && (is_comment_line(before.trim_start()) || before.trim_start().starts_with("/*"))
+            && (is_comment_line(before.trim_ascii_start())
+                || before.trim_ascii_start().starts_with("/*"))
             && split_else_chain
         {
             return Some(current.max(leading_visual_width(before, self.options.tab_width)));
@@ -260,7 +261,7 @@ impl FormatEngine<'_> {
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
-        if line.trim() == "}" && self.current_closes_label_block() {
+        if line.trim_ascii() == "}" && self.current_closes_label_block() {
             return Some(
                 self.layout
                     .frame_stack
@@ -272,7 +273,7 @@ impl FormatEngine<'_> {
                     ),
             );
         }
-        if line.trim() == "}" {
+        if line.trim_ascii() == "}" {
             let (open_spaces, open_trimmed) = self
                 .output
                 .current_closing_brace_open(self.options.tab_width)
@@ -296,7 +297,7 @@ impl FormatEngine<'_> {
                     * self.options.indent_width,
             );
         }
-        (!line.trim_start().starts_with(['#', '{']))
+        (!line.trim_ascii_start().starts_with(['#', '{']))
             .then(|| current_indent_spaces.unwrap_or(0).max(body_spaces))
     }
 
@@ -312,7 +313,7 @@ impl FormatEngine<'_> {
             || !uses_normal_indent
             || closes_outer_delimiter
             || has_owned_continuation
-            || line.trim_start().starts_with([')', ']', '}'])
+            || line.trim_ascii_start().starts_with([')', ']', '}'])
         {
             return None;
         }
@@ -334,7 +335,7 @@ impl FormatEngine<'_> {
                     .and(frame_stack.enclosing_brace())
                     .filter(|frame| frame.label_block)
             })?;
-        let target = if line.trim_start().starts_with('{') {
+        let target = if line.trim_ascii_start().starts_with('{') {
             frame.sibling_indent_column
         } else {
             frame.body_indent_column
@@ -347,7 +348,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn closed_label_block_indent_spaces(&self, line: &str) -> Option<usize> {
-        if line.trim() != "}" {
+        if line.trim_ascii() != "}" {
             return None;
         }
         let frame = self
@@ -368,12 +369,12 @@ impl FormatEngine<'_> {
         kind: LineKind,
         line_indent_spaces: usize,
     ) {
-        if !line.trim_end().ends_with(':')
+        if !line.trim_ascii_end().ends_with(':')
             || self.output.code_of(line).contains('?')
             || !(kind == LineKind::Label
                 || is_user_label_candidate(line, &self.options.access_labels)
                     && line_indent_spaces == 0
-                || has_hash_outside_literals(line) && !line.trim_start().starts_with('#'))
+                || has_hash_outside_literals(line) && !line.trim_ascii_start().starts_with('#'))
         {
             return;
         }
@@ -390,7 +391,11 @@ impl FormatEngine<'_> {
         }
         if kind == LineKind::Label
             && self.output.scoped().iter().rev().take(128).any(|line| {
-                let trimmed = self.output.code_of(line).trim_end().trim_start();
+                let trimmed = self
+                    .output
+                    .code_of(line)
+                    .trim_ascii_end()
+                    .trim_ascii_start();
                 trimmed == "else" || trimmed.ends_with("} else")
             })
             && let Some(previous) = self
@@ -399,8 +404,9 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .skip(1)
-                .find(|line| !line.trim().is_empty())
-            && (is_comment_line(previous.trim_start()) || previous.trim_start().starts_with("/*"))
+                .find(|line| !line.trim_ascii().is_empty())
+            && (is_comment_line(previous.trim_ascii_start())
+                || previous.trim_ascii_start().starts_with("/*"))
         {
             next_spaces = next_spaces.max(leading_visual_width(previous, self.options.tab_width));
         }
@@ -453,7 +459,7 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let before = (0..label_index)
             .rev()
-            .find(|index| !self.output[*index].trim().is_empty());
+            .find(|index| !self.output[*index].trim_ascii().is_empty());
         let Some(before) = before else {
             return self.output.lead_width(label_index, tab_width) + indent_width;
         };
@@ -481,9 +487,12 @@ pub(crate) fn is_access_label_start(line: &str, access_labels: &[String]) -> boo
 }
 
 pub(crate) fn is_access_label(line: &str, access_labels: &[String]) -> bool {
-    let trimmed = line.trim();
+    let trimmed = line.trim_ascii();
     trimmed.ends_with(':')
-        && is_access_label_start(trimmed.trim_end_matches(':').trim_end(), access_labels)
+        && is_access_label_start(
+            trimmed.trim_end_matches(':').trim_ascii_end(),
+            access_labels,
+        )
 }
 
 pub(crate) fn is_standard_access_label(line: &str) -> bool {
@@ -491,17 +500,17 @@ pub(crate) fn is_standard_access_label(line: &str) -> bool {
 }
 
 fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
     };
-    !rest.starts_with(':') && is_access_label_start(label.trim_end(), access_labels)
+    !rest.starts_with(':') && is_access_label_start(label.trim_ascii_end(), access_labels)
 }
 
 /// Whether the line starts with a goto label that a statement follows on
 /// the line, as `next: x(); }` where the style keeps one-line statements.
 fn leads_with_goto_label(line: &str) -> bool {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
     };
@@ -513,18 +522,18 @@ fn leads_with_goto_label(line: &str) -> bool {
         )
         && !label.starts_with(|ch: char| ch.is_ascii_digit())
         && rest.starts_with([' ', '\t', ';'])
-        && !rest.trim_start().starts_with(['{', ':', '/'])
+        && !rest.trim_ascii_start().starts_with(['{', ':', '/'])
         // A statement follows; message arguments and base lists do not.
         && !rest.contains_any_byte(b"][")
         && !matches!(
-            leading_identifier(rest.trim_start()),
+            leading_identifier(rest.trim_ascii_start()),
             "public" | "protected" | "private" | "virtual"
         )
-        && strip_trailing_comment(rest).trim_end().ends_with([';', '}'])
+        && strip_trailing_comment(rest).trim_ascii_end().ends_with([';', '}'])
         // A bit-field width is a constant; a statement calls, assigns or
         // jumps.
         && {
-            let statement = rest.trim_start();
+            let statement = rest.trim_ascii_start();
             statement.starts_with(';')
                 || statement.contains_any_byte(b"(=")
                 || matches!(
@@ -535,7 +544,7 @@ fn leads_with_goto_label(line: &str) -> bool {
 }
 
 pub(crate) fn is_attached_user_label(line: &str) -> bool {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim_ascii_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
         return false;
     };
@@ -548,13 +557,16 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
     {
         return false;
     }
-    let rest = rest.trim_start();
+    let rest = rest.trim_ascii_start();
     rest.starts_with('{') && !rest.starts_with("::")
 }
 
 fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
-    let trimmed = line[..trailing_comment_split_limit(line)].trim();
-    let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trim_end();
+    let trimmed = line[..trailing_comment_split_limit(line)].trim_ascii();
+    let before_colon = trimmed
+        .strip_suffix(':')
+        .unwrap_or(trimmed)
+        .trim_ascii_end();
     trimmed.ends_with(':')
         && !is_scope_resolution_prefix(trimmed)
         && !trimmed.starts_with([':', '}'])
@@ -576,14 +588,14 @@ fn is_operator_expression(text: &str) -> bool {
 }
 
 fn is_plain_label(line: &str, access_labels: &[String]) -> bool {
-    let code = strip_trailing_comment(line).trim_end();
+    let code = strip_trailing_comment(line).trim_ascii_end();
     if code.ends_with("::") {
         return false;
     }
     let Some(label) = code.strip_suffix(':') else {
         return false;
     };
-    is_plain_label_start(label.trim_end(), access_labels)
+    is_plain_label_start(label.trim_ascii_end(), access_labels)
 }
 
 fn strip_trailing_comment(line: &str) -> &str {
@@ -616,7 +628,7 @@ fn strip_trailing_comment(line: &str) -> &str {
                     return line;
                 };
                 let after = index + 2 + end + 2;
-                if line[after..].trim().is_empty() {
+                if line[after..].trim_ascii().is_empty() {
                     return &line[..index];
                 }
                 index = after;
@@ -692,11 +704,11 @@ pub(crate) fn replayed_inline_access_body_indent_spaces(
     if options.max_code_length.is_none()
         || !delimiter_replayed
         || !starts_access_label(previous, &options.access_labels)
-        || previous.trim_end().ends_with('(')
+        || previous.trim_ascii_end().ends_with('(')
     {
         return None;
     }
-    let trimmed = previous.trim_start();
+    let trimmed = previous.trim_ascii_start();
     unmatched_open_paren_column(trimmed).map(|open| {
         leading_visual_width(previous, options.tab_width) + open + 1 + options.indent_width
     })
@@ -708,9 +720,9 @@ pub(crate) fn max_length_inline_access_body_indent_extra(
 ) -> Option<usize> {
     (starts_access_label(line, &options.access_labels)
         && line
-            .trim_start()
+            .trim_ascii_start()
             .split_once(':')
-            .is_some_and(|(_, body)| !body.trim().is_empty()))
+            .is_some_and(|(_, body)| !body.trim_ascii().is_empty()))
     .then_some(options.indent_width)
 }
 
@@ -719,7 +731,7 @@ pub(crate) fn else_after_candidate_label_indent_spaces(
     kind: LineKind,
     previous: &str,
 ) -> Option<usize> {
-    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+    let previous_code = previous[..trailing_comment_split_limit(previous)].trim_ascii_end();
     (kind == LineKind::Normal && is_user_label_candidate(previous_code, &options.access_labels))
         .then(|| leading_visual_width(previous, options.tab_width) + options.indent_width)
 }
