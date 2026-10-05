@@ -2554,15 +2554,21 @@ impl FormatEngine<'_> {
             unindented_namespace_run_in_comment,
         } = *layout;
         let tab_width = self.options.tab_width.max(1);
+        // A source run-in brace takes the opener back onto its line later.
+        let opener_on_own_line = !run_in_opener
+            && !self
+                .source_run_in_brace_lines
+                .contains(&self.output.len().wrapping_sub(1));
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
             if index == 0 && run_in_opener {
+                // The comment keeps the gap it had after the brace.
                 let gap = self
                     .token_input
                     .previous_input_whitespace
                     .clone()
-                    .filter(|ws| !ws.is_empty() && !ws.contains('\n'))
-                    .unwrap_or_else(|| " ".into());
+                    .filter(|ws| !ws.contains('\n'))
+                    .unwrap_or_default();
                 if let Some(brace_line) = self.output.last_mut() {
                     brace_line.push_str(&gap);
                     brace_line.push_str(line.trimmed_end());
@@ -2618,6 +2624,22 @@ impl FormatEngine<'_> {
                         format!("{}{}", prefix, trimmed_kept.trimmed_end())
                     } else if unindented_namespace_run_in_comment {
                         format!("{opener_prefix}{}", kept.trimmed_end())
+                    } else if self.token_input.token_line_opens_with_brace && opener_on_own_line {
+                        // The opener stands on its own line, which the rows
+                        // follow wherever the line moves.
+                        let source_line_column = leading_visual_width(line, tab_width);
+                        let body_offset = if decorative_closer && is_last_line {
+                            0
+                        } else if trimmed_kept.starts_with('*') {
+                            source_line_column.saturating_sub(trim_amount).min(1)
+                        } else {
+                            source_line_column.saturating_sub(trim_amount)
+                        };
+                        format!(
+                            "{}{}",
+                            " ".repeat(opener_output_column + body_offset),
+                            trimmed_kept.trimmed_end()
+                        )
                     } else if self.token_input.token_line_opens_with_brace {
                         let source_line_column = leading_visual_width(line, tab_width);
                         let body_offset = if decorative_closer && is_last_line {
