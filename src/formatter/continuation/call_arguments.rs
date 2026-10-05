@@ -1594,6 +1594,10 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         let current = line.trimmed_start();
         if current.starts_with(['#', '(', ')', '{', '}']) {
             return None;
@@ -1663,6 +1667,10 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         let current = line.trimmed_start();
         if current.starts_with(['#', '(', ')', '{', '}']) {
             return None;
@@ -1700,6 +1708,10 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         let current = line.trimmed_start();
         if current.starts_with(['#', '(', ')', '{', '}']) {
             return None;
@@ -1738,6 +1750,10 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         if !self.preprocessor.split_else.extra_indent {
             return None;
         }
@@ -1774,6 +1790,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn split_new_call_owner_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         let current = line.trimmed_start();
         if current.starts_with(['#', '(', ')', '{', '}']) {
             return None;
@@ -1813,6 +1833,10 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
         let current = line.trimmed_start();
         if current.starts_with(['#', '(', ')', '{', '}']) {
             return None;

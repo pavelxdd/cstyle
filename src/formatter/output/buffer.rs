@@ -1265,6 +1265,11 @@ impl OutputBuffer {
     }
 
     /// Whether a line may hold `@`; false while no line ever did.
+    /// Whether a line may hold `new `.
+    pub(crate) fn may_have_new(&self) -> bool {
+        self.may_have_new
+    }
+
     pub(crate) fn may_have_at(&self) -> bool {
         self.may_have_at
     }

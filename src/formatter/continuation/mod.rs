@@ -1526,6 +1526,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn enum_member_missing_comma_indent_spaces(&self, previous: &str) -> Option<usize> {
+        // The member before is assigned.
+        if !previous.contains('=') {
+            return None;
+        }
         let previous_content = previous.trimmed_start();
         if previous_content.starts_with("/*") || previous_content.starts_with("//") {
             return None;

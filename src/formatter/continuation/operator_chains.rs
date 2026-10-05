@@ -1132,12 +1132,14 @@ impl FormatEngine<'_> {
         current: &str,
         previous: &str,
     ) -> Option<usize> {
-        let previous_code = self.output.code_of(previous).trimmed_end();
         if current.starts_with(['#', '(', ')', '{', '}'])
-            || !previous_code.ends_with(',')
             || !current.ends_with(");")
-            || self.open_paren_column_of(previous_code).is_some()
+            || !self.output.may_have_question()
         {
+            return None;
+        }
+        let previous_code = self.output.code_of(previous).trimmed_end();
+        if !previous_code.ends_with(',') || self.open_paren_column_of(previous_code).is_some() {
             return None;
         }
         let follows_ternary_argument = self
@@ -1198,6 +1200,10 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let current = line.trimmed_start();
         let previous_code = self.output.code_of(previous).trimmed_end();
+        // An arm leads the line, or the line follows one ending with `:`.
+        if !current.starts_with(['?', ':']) && !previous_code.ends_with(':') {
+            return None;
+        }
         let previous_trimmed = previous_code.trimmed_start();
         let tab_width = self.options.tab_width;
         let width = self.options.indent_width;
@@ -1344,9 +1350,12 @@ impl FormatEngine<'_> {
         previous: &str,
         natural: usize,
     ) -> Option<usize> {
+        if !starts_with_chain_operator(current) {
+            return None;
+        }
         let previous_code = self.output.code_of(previous).trimmed_end();
         let previous_trimmed = previous_code.trimmed_start();
-        if !starts_with_chain_operator(current) || !starts_header_word(previous_trimmed, "return") {
+        if !starts_header_word(previous_trimmed, "return") {
             return None;
         }
         if self.options.indent_after_parens {
@@ -1371,6 +1380,9 @@ impl FormatEngine<'_> {
         current: &str,
         previous: &str,
     ) -> Option<usize> {
+        if !current.starts_with(':') {
+            return None;
+        }
         if let Some(spaces) =
             nested_ternary_colon_sibling_indent_spaces(self.options, current, previous)
         {
@@ -2195,11 +2207,13 @@ impl FormatEngine<'_> {
         current: &str,
         previous: &str,
     ) -> Option<usize> {
+        if current.starts_with([':', ')', '}']) || !self.output.may_have_question() {
+            return None;
+        }
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.trimmed_start().starts_with(':')
             || !previous_code.ends_with(',')
             || self.open_paren_column_of(previous_code).is_some()
-            || current.starts_with([':', ')', '}'])
         {
             return None;
         }
