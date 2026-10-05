@@ -434,14 +434,14 @@ impl FormatEngine<'_> {
         let scope_start = self.output.len() - self.output.scoped().len();
         for index in (scope_start..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
-            depth += meta.closes;
-            if meta.opens > depth && meta.open_shape == OpenBraceShape::Label {
+            depth += meta.closes();
+            if meta.opens() > depth && meta.open_shape == OpenBraceShape::Label {
                 let trimmed = self.output.code_trimmed(index);
                 if is_attached_user_label(trimmed) {
                     return Some(self.label_block_body_indent_spaces(index));
                 }
             }
-            depth = depth.saturating_sub(meta.opens);
+            depth = depth.saturating_sub(meta.opens());
         }
         None
     }

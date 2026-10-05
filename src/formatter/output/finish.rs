@@ -531,7 +531,7 @@ impl FormatEngine<'_> {
                 }
                 continue;
             }
-            state.0 += meta.opens as isize - meta.closes as isize;
+            state.0 += meta.opens() as isize - meta.closes() as isize;
         }
         sources
     }

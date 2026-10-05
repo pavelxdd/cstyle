@@ -111,8 +111,8 @@ impl FormatEngine<'_> {
                     _ => {}
                 }
             }
-            depth += meta.closes;
-            if meta.opens > depth {
+            depth += meta.closes();
+            if meta.opens() > depth {
                 return match meta.open_shape {
                     OpenBraceShape::Isolated => Some(self.output.lead_width(index, tab_width)),
                     OpenBraceShape::Label => {
@@ -121,7 +121,7 @@ impl FormatEngine<'_> {
                     OpenBraceShape::Other => None,
                 };
             }
-            depth -= meta.opens;
+            depth -= meta.opens();
         }
         None
     }

@@ -1095,7 +1095,7 @@ impl FormatEngine<'_> {
                         break;
                     }
                     let meta = self.output.brace_meta(index);
-                    depth = (depth + meta.closes).saturating_sub(meta.opens);
+                    depth = (depth + meta.closes()).saturating_sub(meta.opens());
                 }
             }
             return Some(spaces);

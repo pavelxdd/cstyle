@@ -225,9 +225,9 @@ impl FormatEngine<'_> {
             if self.output.code_trimmed(index).is_empty() {
                 continue;
             }
-            balance += meta.paren_open_count as i32 - meta.paren_closes as i32;
+            balance += meta.paren_open_count() as i32 - meta.paren_closes() as i32;
             if balance > 0 {
-                let Some(column) = meta.paren_last_open_column else {
+                let Some(column) = meta.paren_last_open_column() else {
                     return false;
                 };
                 let code = self.output.code(index);

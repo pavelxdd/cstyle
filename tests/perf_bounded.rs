@@ -305,3 +305,19 @@ fn long_line_split_at_maximum_length_stays_bounded() {
         "splitting a long line took {elapsed:?}, expected bounded runtime (< 5s)"
     );
 }
+
+#[test]
+fn braceless_headers_nested_past_the_stack_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = "if(a) ".repeat(60_000);
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "deeply nested headers took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}

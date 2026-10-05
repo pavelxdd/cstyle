@@ -21,24 +21,113 @@ pub(crate) enum OpenBraceShape {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LineBraceMeta {
     pub(crate) code_starts_with_hash: bool,
-    pub(crate) closes: usize,
-    pub(crate) opens: usize,
+    closes: u32,
+    opens: u32,
     pub(crate) open_shape: OpenBraceShape,
-    trim_start_byte: usize,
-    trim_end_byte: usize,
-    code_end_byte: usize,
-    pub(crate) paren_closes: usize,
-    pub(crate) paren_open_count: usize,
-    pub(crate) paren_last_open_column: Option<usize>,
+    trim_start_byte: u32,
+    trim_end_byte: u32,
+    code_end_byte: u32,
+    paren_closes: u32,
+    paren_open_count: u32,
+    paren_last_open_column: Option<u32>,
     /// End of the code before a trailing comment, as
     /// `trailing_comment_split_limit` finds it.
-    comment_split_limit: usize,
+    comment_split_limit: u32,
     /// Whether the line's text holds `new `.
     mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
     else_line: bool,
     /// The same for the line's code without comments.
     code_else_line: bool,
+}
+
+impl LineBraceMeta {
+    pub(crate) fn closes(&self) -> usize {
+        self.closes as usize
+    }
+
+    pub(crate) fn opens(&self) -> usize {
+        self.opens as usize
+    }
+
+    pub(crate) fn paren_closes(&self) -> usize {
+        self.paren_closes as usize
+    }
+
+    pub(crate) fn paren_open_count(&self) -> usize {
+        self.paren_open_count as usize
+    }
+
+    pub(crate) fn paren_last_open_column(&self) -> Option<usize> {
+        self.paren_last_open_column.map(|column| column as usize)
+    }
+}
+
+/// A line's token span in half the room; `u32::MAX` marks a line with
+/// none.
+#[derive(Clone, Copy)]
+struct PackedSpan {
+    first: u32,
+    last: u32,
+}
+
+impl PackedSpan {
+    const NONE: Self = Self {
+        first: u32::MAX,
+        last: u32::MAX,
+    };
+
+    fn pack(span: Option<TokenSpan>) -> Self {
+        span.map_or(Self::NONE, |span| Self {
+            first: narrow_index(span.first),
+            last: narrow_index(span.last),
+        })
+    }
+
+    fn get(self) -> Option<TokenSpan> {
+        (self.first != u32::MAX).then_some(TokenSpan {
+            first: self.first as usize,
+            last: self.last as usize,
+        })
+    }
+}
+
+/// A line's block comments in half the room; `u32::MAX` marks none.
+#[derive(Clone, Copy)]
+struct PackedComments {
+    lead: u32,
+    last: u32,
+}
+
+impl PackedComments {
+    fn pack(comments: LineComments) -> Self {
+        let pack = |token: Option<usize>| token.map_or(u32::MAX, narrow_index);
+        Self {
+            lead: pack(comments.lead),
+            last: pack(comments.last),
+        }
+    }
+
+    fn get(self) -> LineComments {
+        let get = |token: u32| (token != u32::MAX).then_some(token as usize);
+        LineComments {
+            lead: get(self.lead),
+            last: get(self.last),
+        }
+    }
+}
+
+/// A token index, which the source's size bounds below `u32::MAX`.
+fn narrow_index(index: usize) -> u32 {
+    u32::try_from(index)
+        .ok()
+        .filter(|&index| index != u32::MAX)
+        .expect("a token index fits in u32")
+}
+
+/// A length or column of one line, which the source's size bounds.
+fn narrow(value: usize) -> u32 {
+    u32::try_from(value).expect("a line is shorter than 4 GiB")
 }
 
 fn is_else_line(trimmed: &str) -> bool {
@@ -96,16 +185,16 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
     };
     LineBraceMeta {
         code_starts_with_hash: trimmed.starts_with('#'),
-        closes,
-        opens,
+        closes: narrow(closes),
+        opens: narrow(opens),
         open_shape,
-        trim_start_byte: line.len() - line_start.len(),
-        trim_end_byte: line.trimmed_end().len(),
-        code_end_byte: code.len(),
-        paren_closes,
-        paren_open_count: paren_opens.len(),
-        paren_last_open_column: paren_opens.last().copied(),
-        comment_split_limit: trailing_comment_split_limit(line),
+        trim_start_byte: narrow(line.len() - line_start.len()),
+        trim_end_byte: narrow(line.trimmed_end().len()),
+        code_end_byte: narrow(code.len()),
+        paren_closes: narrow(paren_closes),
+        paren_open_count: narrow(paren_opens.len()),
+        paren_last_open_column: (paren_opens.last().copied()).map(narrow),
+        comment_split_limit: narrow(trailing_comment_split_limit(line)),
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(
@@ -123,16 +212,16 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
     let (paren_closes, paren_opens) = line_paren_imbalance(code);
     LineBraceMeta {
         code_starts_with_hash: code.trimmed_start().starts_with('#'),
-        closes,
-        opens,
+        closes: narrow(closes),
+        opens: narrow(opens),
         open_shape: OpenBraceShape::Other,
-        trim_start_byte: line.len() - line_start.len(),
-        trim_end_byte: line.trimmed_end().len(),
-        code_end_byte: line.len(),
-        paren_closes,
-        paren_open_count: paren_opens.len(),
-        paren_last_open_column: None,
-        comment_split_limit: trailing_comment_split_limit(line),
+        trim_start_byte: narrow(line.len() - line_start.len()),
+        trim_end_byte: narrow(line.trimmed_end().len()),
+        code_end_byte: narrow(line.len()),
+        paren_closes: narrow(paren_closes),
+        paren_open_count: narrow(paren_opens.len()),
+        paren_last_open_column: (None).map(narrow),
+        comment_split_limit: narrow(trailing_comment_split_limit(line)),
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(line_start),
@@ -183,11 +272,11 @@ pub(crate) struct OutputBuffer {
     /// line, read once a layout rule asks.
     parens: Vec<OnceCell<(usize, Vec<usize>)>>,
     /// Source tokens of each line, when the line came from one current line.
-    tokens: Vec<Option<TokenSpan>>,
+    tokens: Vec<PackedSpan>,
     /// Tokens of the current line just taken, for the next pushed line.
     pending_tokens: Option<TokenSpan>,
     /// Block comments of each line.
-    comments: Vec<LineComments>,
+    comments: Vec<PackedComments>,
     /// Lines kept as the source wrote them: disabled regions, raw lines,
     /// and multi-line literal rows. Their whitespace is content.
     verbatim: Vec<bool>,
@@ -341,8 +430,9 @@ impl OutputBuffer {
         self.verbatim.push(false);
         self.indented_directive_continuation.push(false);
         if blank {
-            self.tokens.push(None);
-            self.comments.push(LineComments::default());
+            self.tokens.push(PackedSpan::NONE);
+            self.comments
+                .push(PackedComments::pack(LineComments::default()));
             return;
         }
         let tokens = self.pending_tokens.take();
@@ -355,17 +445,17 @@ impl OutputBuffer {
                     .map_or(span.first, |largest| largest.max(span.first)),
             );
         }
-        self.tokens.push(tokens);
+        self.tokens.push(PackedSpan::pack(tokens));
         let comments = self.pending_comments.take().unwrap_or(LineComments {
             lead: self.active_comment,
             last: self.active_comment,
         });
-        self.comments.push(comments);
+        self.comments.push(PackedComments::pack(comments));
     }
 
     /// Removes the last line with the code tokens it held.
     pub(crate) fn pop_with_tokens(&mut self) -> Option<(String, Option<TokenSpan>)> {
-        let tokens = self.tokens.last().copied().flatten();
+        let tokens = self.tokens.last().and_then(|span| span.get());
         self.pop().map(|line| (line, tokens))
     }
 
@@ -436,7 +526,7 @@ impl OutputBuffer {
     /// and removes line `from`; `into` then holds the tokens of both.
     pub(crate) fn join_into(&mut self, into: usize, from: usize, separator: &str) {
         let text = self.lines[from].trimmed().to_string();
-        let span = match (self.tokens[into], self.tokens[from]) {
+        let span = match (self.tokens[into].get(), self.tokens[from].get()) {
             (Some(a), Some(b)) => Some(TokenSpan {
                 first: a.first.min(b.first),
                 last: a.last.max(b.last),
@@ -444,13 +534,13 @@ impl OutputBuffer {
             (a, b) => a.or(b),
         };
         self.first_tokens_unordered |=
-            span.map(|span| span.first) != self.tokens[into].map(|span| span.first);
+            span.map(|span| span.first) != self.tokens[into].get().map(|span| span.first);
         self.remove(from);
         let mut line = self.lines[into].trimmed_end().to_string();
         line.push_str(separator);
         line.push_str(&text);
         self.set(into, line);
-        self.tokens[into] = span;
+        self.tokens[into] = PackedSpan::pack(span);
     }
 
     pub(crate) fn set(&mut self, index: usize, line: String) {
@@ -493,7 +583,7 @@ impl OutputBuffer {
     /// token on the line; `last` can run past the line when the line was
     /// split after it was formed.
     pub(crate) fn line_tokens(&self, index: usize) -> Option<TokenSpan> {
-        self.tokens.get(index).copied().flatten()
+        self.tokens.get(index).and_then(|span| span.get())
     }
 
     /// Changes with every edit of a line already pushed; with the line
@@ -531,19 +621,19 @@ impl OutputBuffer {
         self.meta[index].get_or_init(|| {
             let line = &self.lines[index];
             // A row of a block comment holds no code.
-            if self.tokens[index].is_none() && self.comments[index].lead.is_some() {
+            if self.tokens[index].get().is_none() && self.comments[index].get().lead.is_some() {
                 LineBraceMeta {
                     code_starts_with_hash: false,
-                    closes: 0,
-                    opens: 0,
+                    closes: narrow(0),
+                    opens: narrow(0),
                     open_shape: OpenBraceShape::Other,
-                    trim_start_byte: line.len() - line.trimmed_start().len(),
-                    trim_end_byte: line.trimmed_end().len(),
-                    code_end_byte: 0,
-                    paren_closes: 0,
-                    paren_open_count: 0,
-                    paren_last_open_column: None,
-                    comment_split_limit: trailing_comment_split_limit(line),
+                    trim_start_byte: narrow(line.len() - line.trimmed_start().len()),
+                    trim_end_byte: narrow(line.trimmed_end().len()),
+                    code_end_byte: narrow(0),
+                    paren_closes: narrow(0),
+                    paren_open_count: narrow(0),
+                    paren_last_open_column: (None).map(narrow),
+                    comment_split_limit: narrow(trailing_comment_split_limit(line)),
                     mentions_new: line.contains("new "),
                     else_line: is_else_line(line.trimmed()),
                     code_else_line: false,
@@ -598,18 +688,19 @@ impl OutputBuffer {
 
     pub(crate) fn trimmed(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
-        &self.lines[index][meta.trim_start_byte..meta.trim_end_byte.max(meta.trim_start_byte)]
+        &self.lines[index]
+            [meta.trim_start_byte as usize..meta.trim_end_byte.max(meta.trim_start_byte) as usize]
     }
 
     pub(crate) fn code(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
-        &self.lines[index][..meta.code_end_byte]
+        &self.lines[index][..meta.code_end_byte as usize]
     }
 
     /// Line `index` up to its trailing comment, as
     /// `trailing_comment_split_limit` cuts it.
     pub(crate) fn code_before_comment(&self, index: usize) -> &str {
-        &self.lines[index][..self.brace_meta(index).comment_split_limit]
+        &self.lines[index][..self.brace_meta(index).comment_split_limit as usize]
     }
 
     /// `line` up to its trailing comment, as `trailing_comment_split_limit`
@@ -628,7 +719,8 @@ impl OutputBuffer {
 
     pub(crate) fn code_trimmed(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
-        &self.lines[index][meta.trim_start_byte.min(meta.code_end_byte)..meta.code_end_byte]
+        &self.lines[index]
+            [meta.trim_start_byte.min(meta.code_end_byte) as usize..meta.code_end_byte as usize]
     }
 
     pub(crate) fn lead_width(&self, index: usize, tab_width: usize) -> usize {
@@ -641,11 +733,15 @@ impl OutputBuffer {
         let index = if self.first_tokens_unordered {
             self.tokens
                 .iter()
-                .rposition(|span| span.is_some_and(|span| span.first <= token))
+                .rposition(|span| span.get().is_some_and(|span| span.first <= token))
         } else {
             self.last_line_starting_by(token)
         };
-        index.filter(|&index| self.tokens[index].is_some_and(|span| span.contains(token)))
+        index.filter(|&index| {
+            self.tokens[index]
+                .get()
+                .is_some_and(|span| span.contains(token))
+        })
     }
 
     /// The last line whose first token is at most `token`, by binary search
@@ -656,8 +752,8 @@ impl OutputBuffer {
         let first_at = |index: usize| {
             self.tokens[..=index]
                 .iter()
-                .rposition(Option::is_some)
-                .map(|line| (self.tokens[line].map_or(0, |span| span.first), line))
+                .rposition(|span| span.get().is_some())
+                .map(|line| (self.tokens[line].get().map_or(0, |span| span.first), line))
         };
         let (mut low, mut high) = (0, self.tokens.len());
         while low < high {
@@ -734,11 +830,11 @@ impl OutputBuffer {
         {
             return Some(index);
         }
-        *depth += meta.closes;
-        if meta.opens > *depth {
+        *depth += meta.closes();
+        if meta.opens() > *depth {
             return Some(index);
         }
-        *depth = depth.saturating_sub(meta.opens);
+        *depth = depth.saturating_sub(meta.opens());
         None
     }
 
@@ -973,18 +1069,18 @@ impl OutputBuffer {
 
     /// The first comment token recorded on line `index`.
     pub(crate) fn comment_token(&self, index: usize) -> Option<usize> {
-        let comments = self.comments.get(index)?;
+        let comments = self.comments.get(index)?.get();
         comments.lead.or(comments.last)
     }
 
     /// Index of the line that opens the comment on line `index`: a block
     /// comment continuation line maps to the line holding its `/*`.
     pub(crate) fn comment_start_index(&self, index: usize) -> usize {
-        let comments = self.comments[index];
+        let comments = self.comments[index].get();
         if let Some(comment) = comments.lead {
             return self.comment_opening_line(index, comment);
         }
-        if comments.last.is_some() || self.tokens[index].is_some() {
+        if comments.last.is_some() || self.tokens[index].get().is_some() {
             return index;
         }
         self.text_comment_start_index(index)
@@ -995,7 +1091,7 @@ impl OutputBuffer {
     fn comment_opening_line(&self, index: usize, comment: usize) -> usize {
         let mut start = index;
         for line in (0..index).rev() {
-            if self.comments[line].mentions(comment) {
+            if self.comments[line].get().mentions(comment) {
                 start = line;
             } else if !self.lines[line].trimmed().is_empty() {
                 break;

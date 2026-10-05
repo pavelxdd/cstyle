@@ -479,13 +479,13 @@ impl FormatEngine<'_> {
             let meta = self.output.brace_meta(index);
             let trimmed = self.output.code_trimmed(index);
             if depth == 0
-                && meta.opens > 0
+                && meta.opens() > 0
                 && (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
             {
                 return None;
             }
-            depth += meta.closes;
-            if meta.opens > depth {
+            depth += meta.closes();
+            if meta.opens() > depth {
                 if trimmed.ends_with('{')
                     && !starts_header_word(trimmed, "if")
                     && !starts_header_word(trimmed, "for")
@@ -520,7 +520,7 @@ impl FormatEngine<'_> {
                 }
                 return None;
             }
-            depth = depth.saturating_sub(meta.opens);
+            depth = depth.saturating_sub(meta.opens());
         }
         None
     }
@@ -1072,12 +1072,12 @@ impl FormatEngine<'_> {
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
-            if meta.opens > depth {
+            if meta.opens() > depth {
                 let trimmed = self.output.code_trimmed(index);
                 return trimmed.starts_with("} else") || trimmed.starts_with("}else");
             }
-            depth = depth.saturating_sub(meta.opens);
-            depth += meta.closes;
+            depth = depth.saturating_sub(meta.opens());
+            depth += meta.closes();
         }
         false
     }
@@ -1674,8 +1674,8 @@ impl FormatEngine<'_> {
         let mut depth = 0usize;
         for index in (0..close_index).rev() {
             let meta = self.output.brace_meta(index);
-            depth += meta.closes;
-            if meta.opens > depth {
+            depth += meta.closes();
+            if meta.opens() > depth {
                 let trimmed = self.output.code_trimmed(index);
                 let matches_if =
                     starts_header_word(trimmed, "if") || trimmed.starts_with("else if");
@@ -1687,7 +1687,7 @@ impl FormatEngine<'_> {
                     )
                 });
             }
-            depth = depth.saturating_sub(meta.opens);
+            depth = depth.saturating_sub(meta.opens());
         }
         None
     }

@@ -1418,8 +1418,8 @@ impl FormatEngine<'_> {
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
-            depth += meta.closes;
-            if meta.opens > depth {
+            depth += meta.closes();
+            if meta.opens() > depth {
                 let mut trimmed = self.output.code_trimmed(index);
                 // Ratliff closes a case block at its body, past the label.
                 while self.options.brace_style != BraceStyle::Ratliff
@@ -1432,7 +1432,7 @@ impl FormatEngine<'_> {
                 return trimmed.ends_with('{')
                     && (trimmed.starts_with("case ") || trimmed.starts_with("default:"));
             }
-            depth -= meta.opens;
+            depth -= meta.opens();
         }
         false
     }
@@ -1484,8 +1484,8 @@ impl FormatEngine<'_> {
         for index in lines {
             let meta = self.output.brace_meta(index);
             // A `}` before the line's `{` closes an earlier block.
-            let opens_block = meta.opens > depth;
-            depth += meta.closes;
+            let opens_block = meta.opens() > depth;
+            depth += meta.closes();
             if opens_block {
                 let trimmed = self.output.code_trimmed(index);
                 if trimmed.starts_with("switch ") || trimmed.starts_with("switch(") {
@@ -1529,7 +1529,7 @@ impl FormatEngine<'_> {
                     )));
                 }
             }
-            depth = depth.saturating_sub(meta.opens);
+            depth = depth.saturating_sub(meta.opens());
         }
         Err(depth)
     }
@@ -2161,7 +2161,7 @@ impl FormatEngine<'_> {
         let mut depth = 0usize;
         for index in (0..self.output.len()).rev() {
             let meta = self.output.brace_meta(index);
-            depth += meta.closes;
+            depth += meta.closes();
             // A row of a comment holds no label.
             if depth == 0 && self.output.comment_start_index(index) == index {
                 let code = self.output.code_trimmed(index);
@@ -2169,10 +2169,10 @@ impl FormatEngine<'_> {
                     return Some(self.output.lead_width(index, tab_width));
                 }
             }
-            if meta.opens > depth {
+            if meta.opens() > depth {
                 return None;
             }
-            depth -= meta.opens;
+            depth -= meta.opens();
         }
         None
     }

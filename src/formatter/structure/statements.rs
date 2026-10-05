@@ -57,6 +57,7 @@ impl Statements {
             block_statements: IndexSet::default(),
             else_bodies: Vec::new(),
             unterminated: false,
+            depth: 0,
         };
         parser.file_items(tokens.len());
         Self {
@@ -185,7 +186,13 @@ struct Parser<'a> {
     else_bodies: Vec<ElseBody>,
     /// Whether the last expression statement ended at a keyword, not `;`.
     unterminated: bool,
+    /// Statements being parsed inside one another.
+    depth: usize,
 }
+
+/// Statements nested deeper than this are passed over unparsed, which keeps
+/// the parse within the stack for any input.
+const MAX_STATEMENT_DEPTH: usize = 2000;
 
 impl Parser<'_> {
     fn next(&self, from: usize, end: usize) -> Option<usize> {
@@ -356,6 +363,19 @@ impl Parser<'_> {
     /// Parses the statement starting at the code token `at`; returns the
     /// index after it.
     fn statement(&mut self, at: usize, end: usize) -> usize {
+        if self.depth >= MAX_STATEMENT_DEPTH {
+            return match self.close_of(at) {
+                Some(close) if self.is_symbol(at, '{') => close + 1,
+                _ => self.simple(at, end),
+            };
+        }
+        self.depth += 1;
+        let after = self.nested_statement(at, end);
+        self.depth -= 1;
+        after
+    }
+
+    fn nested_statement(&mut self, at: usize, end: usize) -> usize {
         match self.word(at) {
             Some("if") => return self.if_statement(at, end),
             Some("for" | "while" | "switch" | "foreach") => {
