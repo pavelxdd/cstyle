@@ -6,3 +6,8 @@ license = "MIT"
 
 [lints.clippy]
 self_named_module_files = "warn"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
