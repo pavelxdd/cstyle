@@ -825,7 +825,12 @@ mod tests {
         ];
         for source in sources {
             std::thread::Builder::new()
-                .stack_size(1 << 20)
+                // Unoptimized builds take far larger frames.
+                .stack_size(if cfg!(debug_assertions) {
+                    16 << 20
+                } else {
+                    1 << 20
+                })
                 .spawn(move || {
                     crate::formatter::structure::SourceTree::build(&tokenize(&source));
                 })
