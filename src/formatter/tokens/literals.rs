@@ -31,6 +31,10 @@ fn raw_literal_is_unterminated(literal: &str) -> bool {
 }
 
 pub(crate) fn first_string_literal_start(line: &str) -> Option<usize> {
+    // Every literal, prefixed or not, has a `"`.
+    if !line.contains('"') {
+        return None;
+    }
     let code = &line[..trailing_comment_split_limit(line)];
     let prefixes = [
         "u8R\"", "u8\"", "uR\"", "UR\"", "LR\"", "R\"", "u\"", "U\"", "L\"",
@@ -54,9 +58,10 @@ pub(crate) fn first_string_literal_start(line: &str) -> Option<usize> {
             continue;
         }
         if ch == '"'
-            || prefixes
-                .iter()
-                .any(|prefix| code[index..].starts_with(prefix))
+            || matches!(ch, 'u' | 'U' | 'L' | 'R')
+                && prefixes
+                    .iter()
+                    .any(|prefix| code[index..].starts_with(prefix))
         {
             return Some(index);
         }

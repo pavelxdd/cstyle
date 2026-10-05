@@ -551,52 +551,7 @@ pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
 }
 
 pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
-    let chars = line.chars().collect::<Vec<_>>();
-    let mut depth = 0usize;
-    let mut index = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
-
-    while index < chars.len() {
-        let ch = chars[index];
-        let next = chars.get(index + 1).copied();
-        if in_block_comment {
-            if ch == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            index += 1;
-            continue;
-        }
-        if ch == '/' && next == Some('/') {
-            break;
-        }
-        if ch == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
-            index += 1;
-            continue;
-        }
-        match ch {
-            '{' => depth += 1,
-            '}' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-        index += 1;
-    }
-
-    depth > 0
+    line_brace_imbalance(line).1 > 0
 }
 
 // A middle line of a multiline block comment has no lexical marker of its own.
