@@ -2353,7 +2353,10 @@ impl FormatEngine<'_> {
                 previous_else_indent_spaces
                     .map(|spaces| spaces + self.options.indent_width)
                     .unwrap_or_else(|| {
-                        (self.layout.indentation.indent() + 1) * self.options.indent_width
+                        (self.layout.indentation.indent()
+                            + 1
+                            + self.case_body_indent_extra(LineKind::Normal))
+                            * self.options.indent_width
                     })
             });
         if self.current_is_blank()

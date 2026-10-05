@@ -1396,3 +1396,38 @@ fn mozilla_breaks_an_enum_brace_with_its_trailing_comment() {
         )
     );
 }
+
+#[test]
+fn vtk_indented_switches_indent_an_initializer_brace_in_a_case_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=vtk".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int x)\n{\n  switch (x) {\n    case 1: {\n      const char *az[] = {\n        \"sql\", \"indexes\", 0\n      };\n      break;\n    }\n    case 2:\n      g();\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int x)",
+            "{",
+            "    switch (x)",
+            "        {",
+            "        case 1:",
+            "            {",
+            "            const char *az[] =",
+            "                {",
+            "                \"sql\", \"indexes\", 0",
+            "                };",
+            "            break;",
+            "            }",
+            "        case 2:",
+            "            g();",
+            "        }",
+            "}",
+        )
+    );
+}
