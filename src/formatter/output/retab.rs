@@ -200,8 +200,7 @@ impl FormatEngine<'_> {
         };
         let mut depth = open_on_directive.max(0);
         for row in directive + 1..index {
-            let line = &self.output[row];
-            let code = self.output.code_of(line).trim_end();
+            let code = self.output.code_before_comment(row).trim_end();
             let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
             depth += code.matches('(').count() as isize - code.matches(')').count() as isize;
             // An initializer's brace opens rows that align.

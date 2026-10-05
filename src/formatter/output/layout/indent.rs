@@ -954,7 +954,7 @@ impl FormatEngine<'_> {
                             continue;
                         }
                         let indent = leading_visual_width(line, tab_width);
-                        let trimmed = self.output.code_of(line).trim_start();
+                        let trimmed = self.output.code_before_comment(if_index).trim_start();
                         if indent == previous_indent
                             && trimmed.starts_with("if")
                             && trimmed.ends_with(';')
@@ -1633,8 +1633,7 @@ impl FormatEngine<'_> {
             };
             let mut decided = None;
             for line_index in (read_from..len).rev() {
-                let line = &self.output[line_index];
-                let code = self.output.code_of(line).trim_end();
+                let code = self.output.code_before_comment(line_index).trim_end();
                 if code.ends_with(';') || code.contains('{') || code.contains('}') {
                     decided = Some(None);
                     break;

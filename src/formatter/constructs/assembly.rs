@@ -43,6 +43,12 @@ impl AssemblyMacroLines {
         Some(output)
     }
 
+    /// Whether a line starting with `first` might be taken raw: inside a
+    /// macro body any line can be, outside one only a `.macro` line.
+    pub(crate) fn may_take_line_starting_with(&self, first: Option<char>) -> bool {
+        self.active || first == Some('.')
+    }
+
     pub(crate) fn observe_preprocessor(&mut self) {
         if self.active {
             self.after_preprocessor = true;

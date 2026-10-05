@@ -11,7 +11,7 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
-use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
+use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
 pub(crate) fn find_case_colon(line: &str) -> Option<usize> {
     let trimmed = line.trim_start();
@@ -101,7 +101,6 @@ pub(crate) fn is_default_label_start(line: &str) -> bool {
 
 fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     let chars = line.char_indices().collect::<Vec<_>>();
-    let code_chars = line.chars().collect::<Vec<_>>();
     let mut index = chars.partition_point(|(byte_index, _)| *byte_index < start);
     let mut quote: Option<char> = None;
     let mut escaped = false;
@@ -142,7 +141,7 @@ fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
             index = chars.partition_point(|(index, _)| *index < end);
             continue;
         }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&code_chars, index)) {
+        if ch == '"' || (ch == '\'' && !is_byte_digit_separator(line.as_bytes(), byte_index)) {
             quote = Some(ch);
             index += 1;
             continue;
@@ -200,25 +199,29 @@ fn code_delimiters_stateful(
     start: usize,
     state: &mut CodeDelimiterState,
 ) -> Vec<(usize, char)> {
-    let chars = line.char_indices().collect::<Vec<_>>();
-    let code_chars = line.chars().collect::<Vec<_>>();
-    let mut index = chars.partition_point(|(byte_index, _)| *byte_index < start);
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
+    let mut index = start;
+    while index < bytes.len() && !line.is_char_boundary(index) {
+        index += 1;
+    }
     let mut braces = Vec::new();
 
-    while let Some(&(byte_index, ch)) = chars.get(index) {
-        let next = chars.get(index + 1).map(|(_, ch)| *ch);
+    while let Some(&byte) = bytes.get(index) {
+        let next = bytes.get(index + 1).copied();
 
         if let Some(delimiter) = state.raw_delimiter.clone() {
-            let Some(end) = raw_strings::closing_end(line, byte_index, &delimiter) else {
+            let Some(end) = raw_strings::closing_end(line, index, &delimiter) else {
                 break;
             };
             state.raw_delimiter = None;
-            index = chars.partition_point(|(index, _)| *index < end);
+            index = end;
             continue;
         }
 
         if state.in_block_comment {
-            if ch == '*' && next == Some('/') {
+            if byte == b'*' && next == Some(b'/') {
                 state.in_block_comment = false;
                 index += 2;
             } else {
@@ -230,45 +233,52 @@ fn code_delimiters_stateful(
         if let Some(quote_char) = state.quote {
             if state.escaped {
                 state.escaped = false;
-            } else if ch == '\\' {
+            } else if byte == b'\\' {
                 state.escaped = true;
-            } else if ch == quote_char {
+            } else if char::from(byte) == quote_char {
                 state.quote = None;
             }
             index += 1;
             continue;
         }
 
-        if ch == '/' && next == Some('/') {
+        if byte == b'/' && next == Some(b'/') {
             break;
         }
-        if ch == '/' && next == Some('*') {
+        if byte == b'/' && next == Some(b'*') {
             state.in_block_comment = true;
             index += 2;
             continue;
         }
-        if let Some(raw) = raw_strings::start(line, byte_index) {
+        if let Some(raw) = raw_strings::start(line, index) {
             if let Some(end) = raw.end {
-                index = chars.partition_point(|(index, _)| *index < end);
+                index = end;
             } else {
                 state.raw_delimiter = Some(raw.delimiter);
                 break;
             }
             continue;
         }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&code_chars, index)) {
-            state.quote = Some(ch);
+        if byte == b'"' || (byte == b'\'' && !is_byte_digit_separator(bytes, index)) {
+            state.quote = Some(char::from(byte));
             state.escaped = false;
             index += 1;
             continue;
         }
-        if matches!(ch, '(' | ')' | '{' | '}') {
-            braces.push((byte_index, ch));
+        if matches!(byte, b'(' | b')' | b'{' | b'}') {
+            braces.push((index, char::from(byte)));
         }
         index += 1;
     }
 
     braces
+}
+
+/// Whether the `'` at byte `index` separates digits of a number.
+fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
+    index > 0
+        && bytes[index - 1].is_ascii_hexdigit()
+        && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit)
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -461,7 +471,6 @@ impl SwitchCaseLineTransformer {
     fn parse_line(&mut self, line: &mut String, is_preprocessor: bool) {
         let scan = line.clone();
         let chars: Vec<(usize, char)> = scan.char_indices().collect();
-        let code_chars = scan.chars().collect::<Vec<_>>();
         let mut index = 0;
 
         while let Some(&(byte_index, ch)) = chars.get(index) {
@@ -492,7 +501,7 @@ impl SwitchCaseLineTransformer {
                 {
                     self.should_unindent_comment = true;
                 }
-                if starts_with_at(&scan, byte_index, "*/") {
+                if ch == '*' && starts_with_at(&scan, byte_index, "*/") {
                     self.in_block_comment = false;
                     index += 2;
                 } else {
@@ -513,7 +522,7 @@ impl SwitchCaseLineTransformer {
                 continue;
             }
 
-            if starts_with_at(&scan, byte_index, "\\\\") {
+            if ch == '\\' && starts_with_at(&scan, byte_index, "\\\\") {
                 index += 2;
                 continue;
             }
@@ -532,14 +541,14 @@ impl SwitchCaseLineTransformer {
                 continue;
             }
 
-            if ch == '"' || (ch == '\'' && !is_digit_separator(&code_chars, index)) {
+            if ch == '"' || (ch == '\'' && !is_byte_digit_separator(scan.as_bytes(), byte_index)) {
                 self.in_quote = true;
                 self.quote_char = ch;
                 index += 1;
                 continue;
             }
 
-            if starts_with_at(&scan, byte_index, "//") {
+            if ch == '/' && starts_with_at(&scan, byte_index, "//") {
                 if has_windows_line_marker_after_line_comment(&scan, byte_index) {
                     self.line_number = self.line_number.saturating_sub(1);
                 }
@@ -551,7 +560,7 @@ impl SwitchCaseLineTransformer {
                 }
                 break;
             }
-            if starts_with_at(&scan, byte_index, "/*") {
+            if ch == '/' && starts_with_at(&scan, byte_index, "/*") {
                 if self.case_block_state.switch_brace_count == 1
                     && self.case_block_state.unindent_case
                 {

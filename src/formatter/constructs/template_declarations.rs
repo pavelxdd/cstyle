@@ -121,7 +121,7 @@ impl FormatEngine<'_> {
         if !line.trim_end().ends_with('>') {
             return false;
         }
-        let code = self.output.code_of(line).trim_end();
+        let code = self.output.code_before_comment(index).trim_end();
         let trimmed = code.trim_start();
         is_template_declaration_head_line(trimmed)
             && template_declaration_line_complete(trimmed)

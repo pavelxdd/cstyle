@@ -225,7 +225,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = &self.output[previous_index];
-        let previous_code = self.output.code_of(previous).trim_end();
+        let previous_code = self.output.code_before_comment(previous_index).trim_end();
         if previous_code.trim_start().starts_with([':', ',']) {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
@@ -2882,7 +2882,7 @@ impl FormatEngine<'_> {
 
     fn output_line_is_case_label(&self, index: usize) -> bool {
         let line = &self.output[index];
-        let trimmed = self.output.code_of(line).trim();
+        let trimmed = self.output.code_before_comment(index).trim();
         trimmed.ends_with(':')
             && trimmed.len() == line.trim().len()
             && labels::is_label_start(trimmed.trim_end_matches(':'), &self.options.access_labels)

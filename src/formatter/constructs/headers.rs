@@ -260,7 +260,7 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|line| !line.trim().is_empty())?;
         let before = &self.output[before_index];
-        let before_code = self.output.code_of(before).trim_end();
+        let before_code = self.output.code_before_comment(before_index).trim_end();
         let before_trimmed = before_code.trim_start();
         if before_trimmed == "else"
             || before_trimmed.ends_with("} else")

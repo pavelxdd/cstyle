@@ -129,7 +129,7 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
     let mut assembly_macro_lines = AssemblyMacroLines::default();
 
     while index < chars.len() {
-        if index == line_start_index {
+        if index == line_start_index && line_may_be_raw(&chars[index..], &assembly_macro_lines) {
             let line_end = chars[index..]
                 .iter()
                 .position(|&ch| ch == '\n')
@@ -244,6 +244,18 @@ pub(crate) fn tokenize(source: &str) -> Vec<Token> {
     }
 
     tokens
+}
+
+/// Whether the line starting `rest` may be a conflict marker or an
+/// assembly macro line, from its first character past leading whitespace.
+fn line_may_be_raw(rest: &[char], assembly_macro_lines: &AssemblyMacroLines) -> bool {
+    let first = rest
+        .iter()
+        .copied()
+        .take_while(|&ch| ch != '\n')
+        .find(|ch| !ch.is_whitespace());
+    matches!(first, Some('<' | '=' | '>' | '|'))
+        || assembly_macro_lines.may_take_line_starting_with(first)
 }
 
 fn is_full_line_conflict_marker(trimmed: &str) -> bool {
@@ -424,6 +436,10 @@ fn read_block_comment(chars: &[char], start: usize) -> (String, usize) {
 }
 
 fn read_prefixed_literal(chars: &[char], start: usize) -> Option<(Token, usize)> {
+    // Every prefix starts with one of these.
+    if !matches!(chars.get(start), Some('u' | 'U' | 'L' | 'R')) {
+        return None;
+    }
     if let Some(prefix_len) = raw_string_prefix_len(chars, start) {
         let (literal, next_index, _) = read_raw_string(chars, start, prefix_len);
         return Some((Token::StringLiteral(literal), next_index));
@@ -561,16 +577,11 @@ fn read_number(chars: &[char], start: usize) -> (String, usize) {
 }
 
 fn read_while(chars: &[char], start: usize, predicate: impl Fn(char) -> bool) -> (String, usize) {
-    let mut index = start;
-    let mut output = String::new();
-    while let Some(&ch) = chars.get(index) {
-        if !predicate(ch) {
-            break;
-        }
-        output.push(ch);
-        index += 1;
-    }
-    (output, index)
+    let end = chars[start..]
+        .iter()
+        .position(|&ch| !predicate(ch))
+        .map_or(chars.len(), |offset| start + offset);
+    (chars[start..end].iter().collect(), end)
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

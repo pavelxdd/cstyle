@@ -375,7 +375,7 @@ impl FormatEngine<'_> {
         for line_index in output_line_index..self.output.len() {
             self.observe_ternary_colon_output_line(line_index);
             let output_line = &self.output[line_index];
-            let output_code = self.output.code_of(output_line).trim_end();
+            let output_code = self.output.code_before_comment(line_index).trim_end();
             if output_code.trim_start().starts_with("return ")
                 && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')

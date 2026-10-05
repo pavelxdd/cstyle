@@ -985,7 +985,7 @@ impl FormatEngine<'_> {
             && self.output[previous_index].trim_end().ends_with('>')
         {
             let previous = &self.output[previous_index];
-            let previous_code = self.output.code_of(previous).trim_end();
+            let previous_code = self.output.code_before_comment(previous_index).trim_end();
             let previous_trimmed = previous_code.trim_start();
             if is_template_declaration_head_line(previous_trimmed)
                 && !line.trim_start().starts_with(['#', '{', '}', ':', ','])
@@ -1524,7 +1524,7 @@ impl FormatEngine<'_> {
             && self.output[previous_index].trim_end().ends_with(',')
         {
             let previous = &self.output[previous_index];
-            let previous_code = self.output.code_of(previous).trim_end();
+            let previous_code = self.output.code_before_comment(previous_index).trim_end();
             if !previous_code.contains(" new ")
                 && !previous_code.contains("(new ")
                 && !previous_code.contains('{')

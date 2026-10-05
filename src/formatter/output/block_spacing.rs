@@ -216,8 +216,10 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with("/*")
             })
             .is_some_and(|index| {
-                let line = &self.output[index];
-                self.output.code_of(line).trim_end().ends_with(':')
+                self.output
+                    .code_before_comment(index)
+                    .trim_end()
+                    .ends_with(':')
             })
     }
 
@@ -233,8 +235,11 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with("/*")
             })
             .is_some_and(|index| {
-                let line = &self.output[index];
-                !self.output.code_of(line).trim_end().ends_with('{')
+                !self
+                    .output
+                    .code_before_comment(index)
+                    .trim_end()
+                    .ends_with('{')
             })
     }
 

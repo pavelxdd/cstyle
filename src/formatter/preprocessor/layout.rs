@@ -1116,7 +1116,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .find_map(|index| {
                 let line = &self.output[index];
-                let code = self.output.code_of(line).trim_end();
+                let code = self.output.code_before_comment(index).trim_end();
                 let trimmed = code.trim_start();
                 if trimmed.is_empty() || self.output.is_directive_line(index) {
                     return None;

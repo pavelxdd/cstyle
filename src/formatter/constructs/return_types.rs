@@ -124,8 +124,7 @@ impl FormatEngine<'_> {
         let mut index = brace_index;
         while index > 0 {
             index -= 1;
-            let line = &self.output[index];
-            let code = self.output.code_of(line).trim_end();
+            let code = self.output.code_before_comment(index).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

@@ -345,7 +345,7 @@ impl FormatEngine<'_> {
         }
         let previous_index = self.output.last_non_empty_index()?;
         let previous = &self.output[previous_index];
-        let previous_code = self.output.code_of(previous).trim_end();
+        let previous_code = self.output.code_before_comment(previous_index).trim_end();
         let previous_trimmed = previous_code.trim_start();
         let current_starts_operator = current.starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
@@ -513,15 +513,12 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_ternary_colon_output_line(&mut self, output_line_index: usize) {
-        let starts_with_colon = self
-            .output
-            .get(output_line_index)
-            .is_some_and(|output_line| {
-                self.output
-                    .code_of(output_line)
-                    .trim_start()
-                    .starts_with(':')
-            });
+        let starts_with_colon = output_line_index < self.output.len()
+            && self
+                .output
+                .code_before_comment(output_line_index)
+                .trim_start()
+                .starts_with(':');
         if starts_with_colon {
             self.layout
                 .frame_stack
@@ -2098,7 +2095,7 @@ impl FormatEngine<'_> {
             if text.trim().is_empty() || self.output.is_directive_line(index) {
                 continue;
             }
-            let code = self.output.code_of(text).trim_end();
+            let code = self.output.code_before_comment(index).trim_end();
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
@@ -2117,8 +2114,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous_index = self.output.last_non_empty_index()?;
-        let previous = &self.output[previous_index];
-        let code = self.output.code_of(previous).trim_end();
+        let code = self.output.code_before_comment(previous_index).trim_end();
         if !code.ends_with('?') {
             return None;
         }

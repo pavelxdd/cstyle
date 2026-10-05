@@ -205,51 +205,92 @@ fn scan_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     {
         return (0, Vec::new());
     }
-    let mut stack: Vec<usize> = Vec::new();
+    let mut opens = OpenColumns::default();
     let mut unmatched_closes = 0usize;
-    let mut index = 0;
-    let mut quote: Option<u8> = None;
-    let mut escaped = false;
-    let mut in_block_comment = continues_block_comment(line);
-
-    while let Some(&byte) = bytes.get(index) {
-        let next = bytes.get(index + 1).copied();
-        if in_block_comment {
-            if byte == b'*' && next == Some(b'/') {
-                in_block_comment = false;
-                index += 2;
-            } else {
-                index += 1;
-            }
-            continue;
-        }
-        if let Some(open) = quote {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == open {
-                quote = None;
-            }
-            index += 1;
-            continue;
-        }
-        match byte {
-            b'/' if next == Some(b'/') => break,
-            b'/' if next == Some(b'*') => {
-                in_block_comment = true;
-                index += 2;
+    let mut index = match continues_block_comment(line) {
+        true => find_comment_close(line).map_or(bytes.len(), |close| close + 2),
+        false => 0,
+    };
+    while let Some(offset) = bytes[index.min(bytes.len())..]
+        .iter()
+        .position(|&byte| matches!(byte, b'/' | b'"' | b'\'' | b'(' | b')' | b'[' | b']'))
+    {
+        index += offset;
+        match bytes[index] {
+            b'/' if bytes.get(index + 1) == Some(&b'/') => break,
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index = find_comment_close(&line[index + 2..])
+                    .map_or(bytes.len(), |close| index + 2 + close + 2);
                 continue;
             }
-            b'"' => quote = Some(byte),
-            b'\'' if !is_byte_digit_separator(bytes, index) => quote = Some(byte),
-            b'(' | b'[' => stack.push(index),
-            b')' | b']' if stack.pop().is_none() => unmatched_closes += 1,
+            b'"' => {
+                index = skip_quoted(bytes, index + 1, b'"');
+                continue;
+            }
+            b'\'' if !is_byte_digit_separator(bytes, index) => {
+                index = skip_quoted(bytes, index + 1, b'\'');
+                continue;
+            }
+            b'(' | b'[' => opens.push(index),
+            b')' | b']' if opens.pop().is_none() => unmatched_closes += 1,
             _ => {}
         }
         index += 1;
     }
-    (unmatched_closes, stack)
+    (unmatched_closes, opens.into_vec())
+}
+
+/// Index after the `quote` that closes a literal whose text starts at
+/// `from`, or the end of `bytes` when it stays open.
+fn skip_quoted(bytes: &[u8], from: usize, quote: u8) -> usize {
+    let mut index = from;
+    while let Some(offset) = bytes[index.min(bytes.len())..]
+        .iter()
+        .position(|&byte| byte == b'\\' || byte == quote)
+    {
+        index += offset;
+        if bytes[index] == quote {
+            return index + 1;
+        }
+        index += 2;
+    }
+    bytes.len()
+}
+
+/// A stack of open paren columns that holds a few in place before it
+/// allocates.
+#[derive(Default)]
+struct OpenColumns {
+    near: [usize; 8],
+    depth: usize,
+    deep: Vec<usize>,
+}
+
+impl OpenColumns {
+    fn push(&mut self, column: usize) {
+        match self.near.get_mut(self.depth) {
+            Some(slot) => *slot = column,
+            None => self.deep.push(column),
+        }
+        self.depth += 1;
+    }
+
+    fn pop(&mut self) -> Option<usize> {
+        self.depth = self.depth.checked_sub(1)?;
+        match self.near.get(self.depth) {
+            Some(&column) => Some(column),
+            None => self.deep.pop(),
+        }
+    }
+
+    fn into_vec(self) -> Vec<usize> {
+        if self.depth == 0 {
+            return Vec::new();
+        }
+        let mut columns = self.near[..self.depth.min(self.near.len())].to_vec();
+        columns.extend(self.deep);
+        columns
+    }
 }
 
 /// Whether the `'` at byte `index` separates digits of a number.
