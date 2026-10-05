@@ -1437,6 +1437,23 @@ impl FormatEngine<'_> {
                         self.output.lead_width(index, tab_width) + self.options.indent_width,
                     );
                 }
+                // A brace opening the line after one holds the switch at
+                // its own column.
+                if trimmed.starts_with('{')
+                    && let Some(header) = (scope_start..index)
+                        .rev()
+                        .find(|&line| !self.output.code_trimmed(line).is_empty())
+                    && self
+                        .output
+                        .code_trimmed(header)
+                        .strip_prefix("else")
+                        .map(str::trim_start)
+                        .is_some_and(|rest| {
+                            rest.starts_with("switch ") || rest.starts_with("switch(")
+                        })
+                {
+                    return Some(self.output.lead_width(index, tab_width));
+                }
             }
             depth = depth.saturating_sub(meta.opens);
         }

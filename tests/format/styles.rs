@@ -1341,3 +1341,34 @@ fn lisp_breaking_a_return_type_keeps_the_next_directive_branch_at_file_scope() {
         )
     );
 }
+
+#[test]
+fn gnu_places_the_labels_of_an_else_switch_at_its_broken_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()])
+        .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n  if (a)\n    x();\n  else switch (idx) {\n    case 1: return 2;\n    default: { y(); return 3; }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)",
+            "        x();",
+            "    else switch (idx)",
+            "            {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "            {",
+            "                y();",
+            "                return 3;",
+            "            }",
+            "            }",
+            "}",
+        )
+    );
+}
