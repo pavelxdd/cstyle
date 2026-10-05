@@ -127,8 +127,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         if !starts_header_word(previous_trimmed, "return")
             || last_unmatched_open_delimiter(previous_code).is_some_and(|(open, _)| open == '[')
@@ -164,8 +163,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         // A `?` in a literal asks nothing; one inside parentheses leaves
         // its arms to the parentheses' continuation, as does an arm whose
         // line continues parentheses opened after the `?`.
@@ -205,8 +203,7 @@ impl FormatEngine<'_> {
         if !current.starts_with(':') {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let mut spaces = previous.trimmed_start().starts_with('?').then(|| {
             leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
@@ -236,8 +233,7 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['?', ':']) {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with("),")
             || !previous_code.contains('?')
             || !previous_code.contains(':')
@@ -267,8 +263,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         (previous_trimmed != "?"
             && previous_trimmed.starts_with('?')
@@ -307,8 +302,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         (previous_code.contains('?') && previous_code.ends_with(':'))
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
@@ -323,8 +317,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         (previous_code.contains('?')
             && previous_code.contains("::")
             && self.open_paren_column_of(previous_code).is_none())
@@ -445,8 +438,7 @@ impl FormatEngine<'_> {
         if line_start.starts_with("//") || line_start.starts_with('{') {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous.contains("//")
             || !previous_code.ends_with("&&")
             || !(0..self.output.len()).rev().take(8).any(|index| {
@@ -676,8 +668,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         let configured = (self.continuation_base_indent() + self.options.continuation_indent)
             * self.options.indent_width;
@@ -696,8 +687,7 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with("<<") && !previous_code.ends_with(">>") {
             return None;
         }
@@ -754,8 +744,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         previous_code
             .ends_with('}')
             .then(|| leading_visual_width(previous, self.options.tab_width))
@@ -942,8 +931,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !head_ends_binary_operator(previous_code) {
             return None;
         }
@@ -1965,8 +1953,7 @@ impl FormatEngine<'_> {
         if !(current.starts_with(": ") || current == ":") {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.trimmed_start().starts_with(':') || !previous_code.contains('?') {
             return None;
         }
@@ -2301,8 +2288,7 @@ impl FormatEngine<'_> {
         if !split_else_context || !line.contains(" ? ") {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         (previous_code.ends_with(':') && previous_code.contains(" ? "))
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
@@ -2316,8 +2302,7 @@ impl FormatEngine<'_> {
         if !split_else_context || !line.contains(" ? ") {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with(',') || !previous_code.contains(" ? ") {
             return None;
         }
@@ -2337,8 +2322,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with(");") || !previous_code.contains(" ? ") {
             return None;
         }
@@ -2359,8 +2343,7 @@ impl FormatEngine<'_> {
         if !split_else_chain {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let current = line.trimmed_start();
         let mut spaces = if (current.starts_with("&&") || current.starts_with("||"))
             && (previous_code.ends_with("&&") || previous_code.ends_with("||"))
@@ -2417,16 +2400,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         (previous_code.trimmed_start().starts_with("&&")
             && self.open_paren_column_of(previous_code).is_some())
         .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 
     pub(crate) fn split_else_completed_logical_statement_indent_spaces(&self) -> Option<usize> {
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if (previous_code.trimmed_start().starts_with("||")
             || previous_code.trimmed_start().starts_with("&&"))
             && previous_code.ends_with(';')

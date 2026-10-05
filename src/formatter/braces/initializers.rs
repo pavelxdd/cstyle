@@ -1281,8 +1281,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with(';')
             || !(previous_code.len() < previous.trimmed_end().len() || previous_code.contains("/*"))
         {

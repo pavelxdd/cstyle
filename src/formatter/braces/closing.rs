@@ -1072,8 +1072,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !((previous_code.ends_with(';') && !previous_code.ends_with("};"))
             || previous_code.trimmed() == "}")
         {
@@ -1096,8 +1095,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let mut spaces = None;
         if previous_code.ends_with(';')
             && !previous_code.ends_with("};")
@@ -1244,8 +1242,7 @@ impl FormatEngine<'_> {
         let (open_spaces, _, open_trimmed) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = if structural_split_else_chain {
             self.current_closing_multiline_header_indent()

@@ -918,8 +918,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.trimmed_start().starts_with("switch") || !previous_code.ends_with('{') {
             return None;
         }
@@ -947,8 +946,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         let adjusted_delta = self.adjusted_line_indent_delta(previous);
         let target = if previous_code.ends_with('{')
@@ -1130,8 +1128,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let body_spaces = normal_indent * self.options.indent_width;
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let call_indent = self
             .output
             .scoped()
@@ -1190,8 +1187,7 @@ impl FormatEngine<'_> {
         if self.layout.line_adjuster.total_case_unindent_depth() == 0 {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         let trimmed = line.trimmed_start();
         let owns_case_floor = previous_code.ends_with(") {")
             || trimmed == "}"

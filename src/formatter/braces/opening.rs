@@ -639,8 +639,7 @@ impl FormatEngine<'_> {
         if line.trimmed() != "{" || self.options.brace_style != BraceStyle::Gnu {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !head_ends_binary_operator(previous_code)
             && !["<=", ">=", "==", "!="]
                 .iter()

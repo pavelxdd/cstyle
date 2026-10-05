@@ -236,8 +236,7 @@ impl FormatEngine<'_> {
         if kind != LineKind::Normal || !line.trimmed_start().starts_with("sizeof(") {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         ((previous_trimmed.starts_with("struct ")
             || previous_trimmed.starts_with("class ")

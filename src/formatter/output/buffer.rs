@@ -33,6 +33,8 @@ pub(crate) struct LineBraceMeta {
     /// End of the code before a trailing comment, as
     /// `trailing_comment_split_limit` finds it.
     comment_split_limit: u32,
+    /// The same end with the blanks before it dropped.
+    comment_code_end: u32,
     /// Whether the line's text holds `new `.
     mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
@@ -183,6 +185,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
     } else {
         OpenBraceShape::Other
     };
+    let (comment_split_limit, comment_code_end) = comment_split(line);
     LineBraceMeta {
         code_starts_with_hash: trimmed.starts_with('#'),
         closes: narrow(closes),
@@ -194,13 +197,21 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (paren_opens.last().copied()).map(narrow),
-        comment_split_limit: narrow(trailing_comment_split_limit(line)),
+        comment_split_limit,
+        comment_code_end,
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(
             &line[(line.len() - line_start.len()).min(code.len())..code.len()],
         ),
     }
+}
+
+/// Where `line`'s code before a trailing comment ends, before and after
+/// the blanks ahead of the comment.
+fn comment_split(line: &str) -> (u32, u32) {
+    let limit = trailing_comment_split_limit(line);
+    (narrow(limit), narrow(line[..limit].trimmed_end().len()))
 }
 
 fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBraceMeta {
@@ -210,6 +221,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
     let code = structural.trimmed_end();
     let (closes, opens) = line_brace_imbalance(code);
     let (paren_closes, paren_opens) = line_paren_imbalance(code);
+    let (comment_split_limit, comment_code_end) = comment_split(line);
     LineBraceMeta {
         code_starts_with_hash: code.trimmed_start().starts_with('#'),
         closes: narrow(closes),
@@ -221,7 +233,8 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (None).map(narrow),
-        comment_split_limit: narrow(trailing_comment_split_limit(line)),
+        comment_split_limit,
+        comment_code_end,
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(line_start),
@@ -330,6 +343,9 @@ pub(crate) struct OutputBuffer {
     /// Whether a line ever recorded a first token before that of an earlier
     /// line; until then lines can be searched by token.
     first_tokens_unordered: bool,
+    /// The line [`Self::line_with_token`] found last; lookups of nearby
+    /// tokens start from it.
+    token_line_hint: Cell<usize>,
 }
 
 /// The last line from `floor` on that a look back found, for a buffer of
@@ -622,6 +638,7 @@ impl OutputBuffer {
             let line = &self.lines[index];
             // A row of a block comment holds no code.
             if self.tokens[index].get().is_none() && self.comments[index].get().lead.is_some() {
+                let (comment_split_limit, comment_code_end) = comment_split(line);
                 LineBraceMeta {
                     code_starts_with_hash: false,
                     closes: narrow(0),
@@ -633,7 +650,8 @@ impl OutputBuffer {
                     paren_closes: narrow(0),
                     paren_open_count: narrow(0),
                     paren_last_open_column: (None).map(narrow),
-                    comment_split_limit: narrow(trailing_comment_split_limit(line)),
+                    comment_split_limit,
+                    comment_code_end,
                     mentions_new: line.contains("new "),
                     else_line: is_else_line(line.trimmed()),
                     code_else_line: false,
@@ -703,6 +721,11 @@ impl OutputBuffer {
         &self.lines[index][..self.brace_meta(index).comment_split_limit as usize]
     }
 
+    /// `code_before_comment` without the blanks at its end.
+    pub(crate) fn code_before_comment_trimmed(&self, index: usize) -> &str {
+        &self.lines[index][..self.brace_meta(index).comment_code_end as usize]
+    }
+
     /// `line` up to its trailing comment, as `trailing_comment_split_limit`
     /// cuts it; one of the last lines is cut from its cached metadata.
     pub(crate) fn code_of<'a>(&'a self, line: &'a str) -> &'a str {
@@ -730,6 +753,11 @@ impl OutputBuffer {
     /// Index of the output line that holds the source token `token`, among
     /// lines that recorded their tokens.
     pub(crate) fn line_with_token(&self, token: usize) -> Option<usize> {
+        if !self.first_tokens_unordered
+            && let Some(found) = self.line_with_token_near_hint(token)
+        {
+            return found;
+        }
         let index = if self.first_tokens_unordered {
             self.tokens
                 .iter()
@@ -737,11 +765,45 @@ impl OutputBuffer {
         } else {
             self.last_line_starting_by(token)
         };
+        if let Some(index) = index {
+            self.token_line_hint.set(index);
+        }
         index.filter(|&index| {
             self.tokens[index]
                 .get()
                 .is_some_and(|span| span.contains(token))
         })
+    }
+
+    /// `line_with_token` read on from the line found last, when that line
+    /// starts by `token` and a later line soon starts past it; `None` when
+    /// the hint does not settle the answer.
+    fn line_with_token_near_hint(&self, token: usize) -> Option<Option<usize>> {
+        let hint = self.token_line_hint.get();
+        if self.tokens.get(hint)?.get()?.first > token {
+            return None;
+        }
+        let mut found = hint;
+        let mut lines_read = 0;
+        for (index, span) in self.tokens.iter().enumerate().skip(hint + 1) {
+            if let Some(span) = span.get() {
+                if span.first > token {
+                    break;
+                }
+                found = index;
+            }
+            lines_read += 1;
+            if lines_read == 8 {
+                return None;
+            }
+        }
+        self.token_line_hint.set(found);
+        Some(
+            self.tokens[found]
+                .get()
+                .is_some_and(|span| span.contains(token))
+                .then_some(found),
+        )
     }
 
     /// The last line whose first token is at most `token`, by binary search
@@ -1004,8 +1066,20 @@ impl OutputBuffer {
     /// The last non-empty line, unless it continues a block comment: the
     /// tail of a comment is no code, whatever its words.
     pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {
+        self.last_line_outside_comment_index()
+            .map(|index| &self.lines[index])
+    }
+
+    /// `last_line_outside_comment` with its code before a trailing comment,
+    /// trimmed at the end.
+    pub(crate) fn last_code_outside_comment(&self) -> Option<(&String, &str)> {
+        self.last_line_outside_comment_index()
+            .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))
+    }
+
+    fn last_line_outside_comment_index(&self) -> Option<usize> {
         let key = (self.lines.len(), self.version);
-        let index = match self.last_outside_comment_cache.get() {
+        match self.last_outside_comment_cache.get() {
             Some((len, version, index)) if (len, version) == key => index,
             _ => {
                 let index = self.find_last_line_outside_comment();
@@ -1013,8 +1087,7 @@ impl OutputBuffer {
                     .set(Some((key.0, key.1, index)));
                 index
             }
-        };
-        index.map(|index| &self.lines[index])
+        }
     }
 
     fn find_last_line_outside_comment(&self) -> Option<usize> {

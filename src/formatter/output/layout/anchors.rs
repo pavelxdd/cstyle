@@ -1954,7 +1954,15 @@ impl FormatEngine<'_> {
                 continue;
             }
             let piece = token_text(piece_token);
-            let offset = text.get(position..)?.find(&*piece)?;
+            let rest = text.get(position..)?;
+            // Tokens most often follow each other past blanks only; a code
+            // token starts with no blank, so that is its first occurrence.
+            let blanks = rest.len() - rest.trimmed_start().len();
+            let offset = if !piece.is_empty() && rest[blanks..].starts_with(&*piece) {
+                blanks
+            } else {
+                rest.find(&*piece)?
+            };
             if index == token {
                 return Some(visual_width_from(
                     &text[..position + offset],

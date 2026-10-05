@@ -242,8 +242,7 @@ impl FormatEngine<'_> {
         if !after_blank {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous_code.trimmed_start();
         let mut spaces = None;
         if previous_trimmed == "else" || previous_trimmed.ends_with("} else") {
@@ -291,8 +290,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let anchor = if preprocessor_directive(previous_code.trimmed_start()).is_some() {
             self.output.scoped().iter().rev().skip(1).find(|line| {
                 let trimmed = line.trimmed_start();
@@ -433,8 +431,7 @@ impl FormatEngine<'_> {
         if line_start.starts_with(['{', '}']) {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = context.body_indent_spaces;
         if context.recent_preprocessor
@@ -509,8 +506,7 @@ impl FormatEngine<'_> {
         current_spaces: usize,
         context: &StructuralSplitElseBodyContext,
     ) -> Option<usize> {
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         (context.recent_adjacent_string_call_body
             && previous_code.ends_with(");")
             && starts_string_literal_token(previous_code.trimmed_start())
@@ -523,8 +519,7 @@ impl FormatEngine<'_> {
         current_spaces: usize,
     ) -> Option<usize> {
         let spaces = self.split_else_preprocessor_branch_body_indent_spaces()?;
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         (current_spaces < spaces
             || preprocessor_directive(previous_code.trimmed_start())
                 .is_some_and(|directive| directive == "else" || directive.starts_with("elif")))
@@ -1169,8 +1164,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed = line.trimmed_start();
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if previous_code.ends_with('{')
             && (trimmed.contains("struct")
                 || previous_code.trimmed_start().contains("struct")
@@ -1270,8 +1264,7 @@ impl FormatEngine<'_> {
         if case_unindent_spaces == 0 {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         let normal_spaces = normal_indent * self.options.indent_width;
         let follows_braced_declaration = previous_code.trimmed() == "};"

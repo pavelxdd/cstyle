@@ -164,8 +164,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !head_ends_binary_operator(previous_code)
             || !line_is_control_body_header(previous_code.trimmed_start())
         {
@@ -188,8 +187,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if previous_code.trimmed_start().starts_with(')')
             && let Some(header_indent) = self.current_closing_multiline_header_indent()
         {
@@ -297,8 +295,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with('{') {
             return None;
         }
@@ -637,8 +634,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let mut spaces = if previous_code.trimmed_start().starts_with("else ") {
             self.open_paren_column_of(previous_code)
                 .map(|open| open + 1)
@@ -724,8 +720,7 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['{', '}', '#']) {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.trimmed_start().starts_with(')') || !previous_code.ends_with('{') {
             return None;
         }
@@ -943,8 +938,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         if (line_start.starts_with("} else") || line_start.starts_with("}else"))
             && preprocessor_directive(previous_code.trimmed_start()).is_some()
             && let Some(header) = self
@@ -1040,8 +1034,7 @@ impl FormatEngine<'_> {
         if !line.trimmed_start().starts_with("else") {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with(';') {
             return None;
         }
@@ -1898,8 +1891,7 @@ impl FormatEngine<'_> {
         if !(trimmed.starts_with("} else") || trimmed.starts_with("}else")) {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_directive = preprocessor_directive(previous_code.trimmed_start());
         let mut result = None;
         if previous_directive.is_some()
@@ -2028,8 +2020,7 @@ impl FormatEngine<'_> {
         let (open_spaces, _, _) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
         let closing_multiline_header_indent = self.current_closing_multiline_header_indent();
         let open_spaces = closing_multiline_header_indent.unwrap_or(open_spaces);
         let split_else_chain =
@@ -2139,8 +2130,7 @@ impl FormatEngine<'_> {
         if current_spaces.is_some() || line.trimmed() != "{" {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.trimmed_start().starts_with("} else") {
             return None;
         }
