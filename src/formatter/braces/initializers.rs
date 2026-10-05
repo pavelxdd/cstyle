@@ -14,8 +14,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_brace_content_offset,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::trim::Trimmed;
 
@@ -1188,7 +1187,7 @@ impl FormatEngine<'_> {
             if code.ends_with(';') || trimmed == "{" || trimmed == "}" {
                 return false;
             }
-            if has_unmatched_open_brace(code) {
+            if self.output.code_has_unmatched_open_brace(index) {
                 return code.contains("({") || code.contains("= {") || code.contains("{{");
             }
         }

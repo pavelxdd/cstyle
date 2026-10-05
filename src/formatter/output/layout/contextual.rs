@@ -329,7 +329,7 @@ impl FormatEngine<'_> {
             if case_unindent > 0
                 && self.token_input.token_source_line_indent > 0
                 && previous_code.ends_with(',')
-                && self.paren_imbalance_of(previous_code).0 > 0
+                && self.paren_closes_of(previous_code) > 0
                 && !current.starts_with(['#', '(', ')', '{', '}'])
             {
                 let target = self.token_input.token_source_line_indent + case_unindent;
@@ -341,7 +341,7 @@ impl FormatEngine<'_> {
                 && self.token_input.token_source_line_indent
                     > layout.exact_indent_spaces.unwrap_or(0)
                 && previous_code.ends_with(',')
-                && !self.paren_imbalance_of(previous_code).1.is_empty()
+                && self.leaves_paren_open(previous_code)
                 && !current.starts_with(['#', '(', ')', '{', '}'])
                 && let Some(spaces) = layout.exact_indent_spaces.as_mut()
             {
@@ -2824,7 +2824,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
             && starts_string_literal_token(previous.trimmed_start())
             // A string row closing a paren ends the operand it continued.
-            && self.paren_imbalance_of(self.output.code_of(previous)).0 == 0
+            && self.paren_closes_of(self.output.code_of(previous)) == 0
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
@@ -3043,7 +3043,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.ends_with(';')
                 && !previous_code.ends_with("};")
-                && self.paren_imbalance_of(previous_code).0 == 0
+                && self.paren_closes_of(previous_code) == 0
             {
                 let previous_indent = leading_visual_width(previous, self.options.tab_width);
                 let target = if line_trimmed == "}" {

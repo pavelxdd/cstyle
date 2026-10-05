@@ -228,8 +228,8 @@ impl FormatEngine<'_> {
             let closed_inner_logical_tail = starts_with_chain_operator(current_trimmed)
                 && starts_with_chain_operator(previous_trimmed)
                 && previous_trimmed.ends_with(')')
-                && self.paren_imbalance_of(previous_code).0 > 0;
-            let previous_closes_inner_call = self.paren_imbalance_of(previous_code).0 > 0;
+                && self.paren_closes_of(previous_code) > 0;
+            let previous_closes_inner_call = self.paren_closes_of(previous_code) > 0;
             let wanted = leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if !uses_outer_call_column

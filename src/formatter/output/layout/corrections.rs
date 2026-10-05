@@ -334,7 +334,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| {
                     let previous_code = self.output.code_of(previous).trimmed_end();
                     previous_code.ends_with(',')
-                        && self.paren_imbalance_of(previous_code).0 > 0
+                        && self.paren_closes_of(previous_code) > 0
                         && !(self.options.indent_after_parens
                             && code_holds_word(previous_code, "new"))
                 })

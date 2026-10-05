@@ -1233,6 +1233,22 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    /// `paren_imbalance_of(text).0`, without collecting the open parens.
+    pub(crate) fn paren_closes_of(&self, text: &str) -> usize {
+        match self.output.code_line_of(text) {
+            Some((index, _)) => self.output.paren_imbalance(index).0,
+            None => line_paren_imbalance(text).0,
+        }
+    }
+
+    /// Whether `text` leaves a paren open, as `paren_imbalance_of` finds.
+    pub(crate) fn leaves_paren_open(&self, text: &str) -> bool {
+        match self.output.code_line_of(text) {
+            Some((index, _)) => !self.output.paren_imbalance(index).1.is_empty(),
+            None => !line_paren_imbalance(text).1.is_empty(),
+        }
+    }
+
     pub(crate) fn current_ends_cast(&self) -> bool {
         self.current_cast_words()
             .is_some_and(|words| words.iter().any(|word| is_type_like_pointer_word(word)))

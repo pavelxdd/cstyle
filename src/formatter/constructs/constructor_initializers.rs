@@ -191,7 +191,7 @@ impl FormatEngine<'_> {
             ConstructorInitializerLayout::SameLine
         };
         let colon_line_indent_spaces = if layout == ConstructorInitializerLayout::SameLine
-            && self.paren_imbalance_of(self.current.trimmed_end()).0 > 0
+            && self.paren_closes_of(self.current.trimmed_end()) > 0
         {
             self.layout
                 .frame_stack
@@ -489,7 +489,7 @@ impl FormatEngine<'_> {
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
         if self.layout.nesting.paren_depth > 0
             && previous_code.ends_with(',')
-            && self.paren_imbalance_of(previous_code).0 == 0
+            && self.paren_closes_of(previous_code) == 0
         {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }

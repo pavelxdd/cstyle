@@ -375,7 +375,7 @@ impl FormatEngine<'_> {
         if !line.trimmed_start().starts_with(')') {
             return None;
         }
-        let mut close_line_pending = self.paren_imbalance_of(line.trimmed_end()).0;
+        let mut close_line_pending = self.paren_closes_of(line.trimmed_end());
         let mut intervening_closes = 0usize;
         let mut candidate = None;
         for previous in self
@@ -664,7 +664,7 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trimmed().is_empty())
             && header.trimmed_start().starts_with("else ")
             && unmatched_open_paren_column(self.output.code_of(header)).is_some()
-            && self.paren_imbalance_of(previous_code).0 == 0
+            && self.paren_closes_of(previous_code) == 0
         {
             spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }

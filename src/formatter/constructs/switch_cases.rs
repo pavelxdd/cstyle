@@ -104,8 +104,13 @@ pub(crate) fn is_default_label_start(line: &str) -> bool {
 }
 
 fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
-    let chars = line.char_indices().collect::<Vec<_>>();
-    let mut index = chars.partition_point(|(byte_index, _)| *byte_index < start);
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
+    let mut index = start;
+    while index < bytes.len() && !line.is_char_boundary(index) {
+        index += 1;
+    }
     let mut quote: Option<char> = None;
     let mut escaped = false;
     let mut in_block_comment = false;
@@ -114,11 +119,11 @@ fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
     let mut brace_depth = 0usize;
     let mut ternary_contexts = Vec::new();
 
-    while let Some(&(byte_index, ch)) = chars.get(index) {
-        let next = chars.get(index + 1).map(|(_, ch)| *ch);
+    while let Some(&byte) = bytes.get(index) {
+        let next = bytes.get(index + 1).copied();
 
         if in_block_comment {
-            if ch == '*' && next == Some('/') {
+            if byte == b'*' && next == Some(b'/') {
                 in_block_comment = false;
                 index += 2;
             } else {
@@ -128,47 +133,49 @@ fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
         }
 
         if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
+            advance_quoted_literal(char::from(byte), &mut quote, &mut escaped);
             index += 1;
             continue;
         }
 
-        if ch == '/' && next == Some('/') {
+        if byte == b'/' && next == Some(b'/') {
             return None;
         }
-        if ch == '/' && next == Some('*') {
+        if byte == b'/' && next == Some(b'*') {
             in_block_comment = true;
             index += 2;
             continue;
         }
-        if let Some(end) = raw_strings::end(line, byte_index) {
-            index = chars.partition_point(|(index, _)| *index < end);
+        if matches!(byte, b'u' | b'L' | b'U' | b'R')
+            && let Some(end) = raw_strings::end(line, index)
+        {
+            index = end;
             continue;
         }
-        if ch == '"' || (ch == '\'' && !is_byte_digit_separator(line.as_bytes(), byte_index)) {
-            quote = Some(ch);
+        if byte == b'"' || (byte == b'\'' && !is_byte_digit_separator(bytes, index)) {
+            quote = Some(char::from(byte));
             index += 1;
             continue;
         }
-        match ch {
-            '(' => paren_depth += 1,
-            ')' => paren_depth = paren_depth.saturating_sub(1),
-            '[' => bracket_depth += 1,
-            ']' => bracket_depth = bracket_depth.saturating_sub(1),
-            '{' => brace_depth += 1,
-            '}' => brace_depth = brace_depth.saturating_sub(1),
-            '?' => ternary_contexts.push((paren_depth, bracket_depth, brace_depth)),
-            ':' if next == Some(':') => {
+        match byte {
+            b'(' => paren_depth += 1,
+            b')' => paren_depth = paren_depth.saturating_sub(1),
+            b'[' => bracket_depth += 1,
+            b']' => bracket_depth = bracket_depth.saturating_sub(1),
+            b'{' => brace_depth += 1,
+            b'}' => brace_depth = brace_depth.saturating_sub(1),
+            b'?' => ternary_contexts.push((paren_depth, bracket_depth, brace_depth)),
+            b':' if next == Some(b':') => {
                 index += 2;
                 continue;
             }
-            ':' if ternary_contexts.last().copied()
+            b':' if ternary_contexts.last().copied()
                 == Some((paren_depth, bracket_depth, brace_depth)) =>
             {
                 ternary_contexts.pop();
             }
-            ':' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
-                return Some(byte_index);
+            b':' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                return Some(index);
             }
             _ => {}
         }

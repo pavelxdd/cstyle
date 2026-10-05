@@ -35,6 +35,8 @@ pub(crate) struct LineBraceMeta {
     comment_split_limit: u32,
     /// The same end with the blanks before it dropped.
     comment_code_end: u32,
+    /// Unmatched `{` that `line_brace_imbalance` finds in `code`.
+    code_opens: u32,
     /// The ASCII bytes the line's code holds, one bit each.
     code_bytes: [u64; 2],
     /// Whether the line's text holds `new `.
@@ -197,6 +199,10 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(code.len()),
         code_bytes: ascii_bytes(&line.as_bytes()[..code.len()]),
+        code_opens: match structural {
+            Cow::Borrowed(_) => narrow(opens),
+            Cow::Owned(_) => narrow(line_brace_imbalance(&line[..code.len()]).1),
+        },
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (paren_opens.last().copied()).map(narrow),
@@ -245,6 +251,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(line.len()),
         code_bytes: ascii_bytes(line.as_bytes()),
+        code_opens: narrow(line_brace_imbalance(line).1),
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (None).map(narrow),
@@ -665,6 +672,7 @@ impl OutputBuffer {
                     trim_end_byte: narrow(line.trimmed_end().len()),
                     code_end_byte: narrow(0),
                     code_bytes: [0; 2],
+                    code_opens: narrow(0),
                     paren_closes: narrow(0),
                     paren_open_count: narrow(0),
                     paren_last_open_column: (None).map(narrow),
@@ -756,6 +764,12 @@ impl OutputBuffer {
             return self.code_before_comment(index);
         }
         &line[..trailing_comment_split_limit(line)]
+    }
+
+    /// Whether `code(index)` leaves a `{` open, as `has_unmatched_open_brace`
+    /// finds.
+    pub(crate) fn code_has_unmatched_open_brace(&self, index: usize) -> bool {
+        self.brace_meta(index).code_opens > 0
     }
 
     /// Whether `code(index)` holds the ASCII `byte`.
@@ -1070,28 +1084,33 @@ impl OutputBuffer {
     ) -> bool {
         let len = self.lines.len();
         let start = start.min(len);
-        let found = match cache
+        // The cache holds the last match among the lines from its floor on.
+        let (floor, found) = match cache
             .get()
             .filter(|cached| cached.version == self.version && cached.len <= len)
         {
-            Some(cached) => (cached.len.max(start)..len)
-                .rev()
-                .find(|&index| matches(index))
-                .or(cached.found.filter(|&index| index >= start))
-                .or_else(|| {
-                    (start..cached.floor.min(len))
-                        .rev()
-                        .find(|&index| matches(index))
-                }),
-            None => (start..len).rev().find(|&index| matches(index)),
+            Some(cached) => {
+                let found = (cached.len..len)
+                    .rev()
+                    .find(|&index| matches(index))
+                    .or(cached.found);
+                if start < cached.floor {
+                    let found =
+                        found.or_else(|| (start..cached.floor).rev().find(|&index| matches(index)));
+                    (start, found)
+                } else {
+                    (cached.floor, found)
+                }
+            }
+            None => (start, (start..len).rev().find(|&index| matches(index))),
         };
         cache.set(Some(RecentMatch {
             len,
             version: self.version,
-            floor: start,
+            floor,
             found,
         }));
-        found.is_some()
+        found.is_some_and(|index| index >= start)
     }
 
     /// The last non-empty line, unless it continues a block comment: the

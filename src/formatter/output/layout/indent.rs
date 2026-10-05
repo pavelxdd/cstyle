@@ -767,7 +767,7 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_uppercase())
         {
-            if previous_code.ends_with("),") && self.paren_imbalance_of(previous_code).0 > 0 {
+            if previous_code.ends_with("),") && self.paren_closes_of(previous_code) > 0 {
                 return Some(base);
             }
             if self

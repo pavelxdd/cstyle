@@ -1565,9 +1565,7 @@ impl FormatEngine<'_> {
             let base = self.continuation_base_indent() * self.options.indent_width;
             let standard = base + self.options.continuation_indent * self.options.indent_width;
             let conditional_floor = base + min_conditional_indent_spaces(self.options);
-            if is_braceless_header_line(code.trimmed_start())
-                && !self.paren_imbalance_of(code).1.is_empty()
-            {
+            if is_braceless_header_line(code.trimmed_start()) && self.leaves_paren_open(code) {
                 return None;
             }
             if code.ends_with(") ||")
