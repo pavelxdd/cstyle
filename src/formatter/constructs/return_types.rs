@@ -18,12 +18,7 @@ impl FormatEngine<'_> {
         if !is_pointer_prefixed_function_part(line.trimmed_start()) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         is_return_type_line(previous.trimmed())
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }

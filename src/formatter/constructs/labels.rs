@@ -163,6 +163,10 @@ pub(crate) fn access_label_body_indent_spaces(
     enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
+    // An access label ends with its colon.
+    if !previous.contains(':') {
+        return None;
+    }
     let current = line.trimmed_start();
     let previous_trimmed = previous[..trailing_comment_split_limit(previous)]
         .trimmed_end()

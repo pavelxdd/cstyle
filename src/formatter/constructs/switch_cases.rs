@@ -2236,19 +2236,12 @@ impl FormatEngine<'_> {
                     .switch_case_layout
                     .unindent_brace_depths
                     .push(current + 1);
-                if self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|previous| {
-                        let previous = previous.trimmed_start();
-                        previous.starts_with('#')
-                            && !preprocessor_directive(previous)
-                                .is_some_and(is_conditional_preprocessor)
-                    })
-                {
+                if self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    let previous = previous.trimmed_start();
+                    previous.starts_with('#')
+                        && !preprocessor_directive(previous)
+                            .is_some_and(is_conditional_preprocessor)
+                }) {
                     self.layout
                         .switch_case_layout
                         .preprocessor_brace_depths

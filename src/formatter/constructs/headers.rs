@@ -1516,10 +1516,7 @@ impl FormatEngine<'_> {
                 if !self.current_is_blank()
                     || !self
                         .output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trimmed().is_empty())
+                        .last_non_empty_scoped()
                         .is_some_and(|line| line.trimmed_start().starts_with('#'))
                 {
                     return None;
@@ -1704,12 +1701,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(';') {
             return None;

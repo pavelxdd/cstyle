@@ -87,10 +87,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| is_split_export_head(line.trimmed()))
                 || self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| is_split_export_head(line.trimmed()))
                 || self.in_open_class_head())
     }
@@ -163,10 +160,7 @@ impl FormatEngine<'_> {
             || !self.current.is_empty()
             || !self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| is_split_export_head(line.trimmed()))
         {
             return;
@@ -304,10 +298,12 @@ pub(crate) fn template_base_colon_indent_spaces(
     current: &str,
     previous: &str,
 ) -> Option<usize> {
+    if !current.starts_with(':') {
+        return None;
+    }
     let previous_code = previous[..trailing_comment_split_limit(previous)].trimmed_end();
     let previous_trimmed = previous_code.trimmed_start();
-    if !current.starts_with(':')
-        || !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
+    if !(previous_trimmed.starts_with("struct ") || previous_trimmed.starts_with("class "))
         || max_template_angle_depth(previous_code) <= 1
     {
         return None;

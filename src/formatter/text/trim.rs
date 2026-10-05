@@ -11,16 +11,59 @@ pub(crate) trait Trimmed {
 impl Trimmed for str {
     #[inline(never)]
     fn trimmed(&self) -> &str {
-        self.trim_ascii()
+        self[leading_whitespace(self.as_bytes())..].trim_ascii_end()
     }
 
     #[inline(never)]
     fn trimmed_start(&self) -> &str {
-        self.trim_ascii_start()
+        &self[leading_whitespace(self.as_bytes())..]
     }
 
     #[inline(never)]
     fn trimmed_end(&self) -> &str {
         self.trim_ascii_end()
+    }
+}
+
+/// The length of the ASCII whitespace `bytes` start with; an indent of
+/// spaces is passed over eight bytes at a time.
+fn leading_whitespace(bytes: &[u8]) -> usize {
+    const SPACES: u64 = u64::from_ne_bytes([b' '; 8]);
+    if !bytes.first().is_some_and(u8::is_ascii_whitespace) {
+        return 0;
+    }
+    let mut index = 0;
+    while let Some(chunk) = bytes.get(index..index + 8)
+        && u64::from_ne_bytes(chunk.try_into().expect("eight bytes")) == SPACES
+    {
+        index += 8;
+    }
+    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+        index += 1;
+    }
+    index
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Trimmed;
+
+    #[test]
+    fn trims_as_the_standard_library_does() {
+        for text in [
+            "",
+            " ",
+            "        ",
+            "         x ",
+            "\t\t  x\n",
+            "x",
+            "                 \r\nab  \t",
+            "        \u{a0}x",
+            "  é ",
+        ] {
+            assert_eq!(text.trimmed_start(), text.trim_ascii_start(), "{text:?}");
+            assert_eq!(text.trimmed(), text.trim_ascii(), "{text:?}");
+            assert_eq!(text.trimmed_end(), text.trim_ascii_end(), "{text:?}");
+        }
     }
 }

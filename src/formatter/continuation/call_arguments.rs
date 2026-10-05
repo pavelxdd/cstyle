@@ -1009,12 +1009,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(',') || !self.paren_imbalance_of(previous_code).1.is_empty() {
             return None;
@@ -1216,13 +1211,7 @@ impl FormatEngine<'_> {
             .previous_pre_adjust_line
             .as_ref()
             .filter(|line| !line.trimmed().is_empty())
-            .or_else(|| {
-                self.output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
-            })?;
+            .or_else(|| self.output.last_non_empty_scoped())?;
         let code = self.output.code_of(previous).trimmed_end();
         if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
             return None;
@@ -1363,12 +1352,7 @@ impl FormatEngine<'_> {
     fn recent_call_argument_indent_spaces(&self) -> Option<usize> {
         let indent_width = self.options.indent_width;
         let tab_width = self.options.tab_width;
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(',') {
             return None;
@@ -1458,28 +1442,18 @@ impl FormatEngine<'_> {
         }
         let base_indent = self.new_over_max_call_base_indent_spaces()?;
         let comment_string_spaces = if starts_string_literal_token(line.trimmed_start()) {
-            self.output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .and_then(|previous| {
-                    is_comment_line(previous.trimmed_start())
-                        .then_some(leading_visual_width(previous, self.options.tab_width))
-                })
+            self.output.last_non_empty_scoped().and_then(|previous| {
+                is_comment_line(previous.trimmed_start())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
         } else {
             None
         };
         let comma_after_string_spaces = if line.trimmed_start().starts_with(',') {
-            self.output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .and_then(|previous| {
-                    starts_string_literal_token(previous.trimmed_start())
-                        .then_some(leading_visual_width(previous, self.options.tab_width))
-                })
+            self.output.last_non_empty_scoped().and_then(|previous| {
+                starts_string_literal_token(previous.trimmed_start())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
         } else {
             None
         };
@@ -1842,13 +1816,7 @@ impl FormatEngine<'_> {
         if !self.output.recent_scoped_line_mentions_new(64) {
             return None;
         }
-        if let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-        {
+        if let Some(previous) = self.output.last_non_empty_scoped() {
             let code = self.output.code_of(previous).trimmed_end();
             if code.trimmed() != "(" && self.open_paren_column_of(code).is_some() {
                 return None;
@@ -1926,12 +1894,7 @@ impl FormatEngine<'_> {
             }
         }
         let anchor = argument.sibling_anchor_column?;
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let case_unindent = (self.layout.line_adjuster.total_case_unindent_depth()
             * self.options.indent_width)
             .max(self.adjusted_line_indent_delta(previous));
@@ -1946,12 +1909,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if previous_code.ends_with("),") {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
@@ -2090,12 +2048,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         // The indent never changes how the line ends.
         if !self.output.code_of(previous).trimmed_end().ends_with(',') {
             return None;
@@ -2252,12 +2205,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous.trimmed_end().ends_with('(') {
             return None;
@@ -2294,12 +2242,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(',') || !self.paren_imbalance_of(previous_code).1.is_empty() {
             return None;
@@ -2326,12 +2269,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if previous_code.ends_with(',') && self.previous_output_line_closes_lambda_body() {
             return Some(leading_visual_width(previous, self.options.tab_width));

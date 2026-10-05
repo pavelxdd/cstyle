@@ -2260,15 +2260,10 @@ impl FormatEngine<'_> {
     /// Whether the line before is a one-line block that adding braces made.
     fn follows_added_one_line_block(&self) -> bool {
         (self.options.add_braces || self.options.add_one_line_braces)
-            && self
-                .output
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| {
-                    let code = self.output.code_of(line).trimmed();
-                    code.starts_with('{') && code.ends_with('}') && code.len() > 2
-                })
+            && self.output.last_non_empty().is_some_and(|line| {
+                let code = self.output.code_of(line).trimmed();
+                code.starts_with('{') && code.ends_with('}') && code.len() > 2
+            })
     }
 
     /// Column of a directive opening a conditional within a block of an

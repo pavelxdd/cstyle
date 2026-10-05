@@ -263,13 +263,7 @@ impl FormatEngine<'_> {
         {
             return base;
         }
-        let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-        else {
+        let Some(previous) = self.output.last_non_empty_scoped() else {
             return base;
         };
         let previous_code = self.output.code_of(previous).trimmed_end();

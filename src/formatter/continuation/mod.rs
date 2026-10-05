@@ -21,7 +21,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
@@ -95,27 +95,20 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
 
 impl FormatEngine<'_> {
     pub(crate) fn reset_continuation_after_empty_line(&mut self) {
-        let in_continuation = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|previous| {
-                let code = self.output.code_of(previous).trimmed_end();
-                let trimmed = code.trimmed_start();
-                !code.is_empty()
-                    && (head_ends_binary_operator(code)
-                        || code.ends_with(',')
-                        || self.open_paren_column_of(code).is_some()
-                        || starts_with_chain_operator(trimmed)
-                        || trimmed.starts_with(['+', '-', '*', '/', '%']))
-            })
-            || self
-                .layout
-                .nesting
-                .current_continuation_indent_spaces()
-                .is_some();
+        let in_continuation = self.output.last_non_empty_scoped().is_some_and(|previous| {
+            let code = self.output.code_of(previous).trimmed_end();
+            let trimmed = code.trimmed_start();
+            !code.is_empty()
+                && (head_ends_binary_operator(code)
+                    || code.ends_with(',')
+                    || self.open_paren_column_of(code).is_some()
+                    || starts_with_chain_operator(trimmed)
+                    || trimmed.starts_with(['+', '-', '*', '/', '%']))
+        }) || self
+            .layout
+            .nesting
+            .current_continuation_indent_spaces()
+            .is_some();
         if in_continuation {
             return;
         }
@@ -631,12 +624,7 @@ impl FormatEngine<'_> {
         if current.starts_with([')', '}', '?', ':']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(':') || !previous_code.contains('?') {
             return None;
@@ -1442,13 +1430,7 @@ impl FormatEngine<'_> {
         } else {
             current_prefix_len
         };
-        if let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-        {
+        if let Some(previous) = self.output.last_non_empty_scoped() {
             let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.ends_with(',')
                 && !previous_code.contains('=')
@@ -1986,14 +1968,15 @@ pub(crate) fn split_declaration_assignment_indent_spaces(
     options: &FormatOptions,
     current: &str,
     previous: &str,
+    previous_code: &str,
 ) -> Option<usize> {
-    if current
-        .trimmed_start()
-        .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
+    if !previous_code.ends_with('=')
+        || current
+            .trimmed_start()
+            .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
     {
         return None;
     }
-    let previous_code = previous[..trailing_comment_split_limit(previous)].trimmed_end();
     let (assignment, operator) = find_assignment_operator(previous_code)?;
     if operator != "="
         || !previous_code[assignment + operator.len()..]

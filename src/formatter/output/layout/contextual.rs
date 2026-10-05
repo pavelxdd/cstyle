@@ -255,13 +255,7 @@ impl FormatEngine<'_> {
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
         let layout = &mut contextual.layout;
-        if let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-        {
+        if let Some(previous) = self.output.last_non_empty_scoped() {
             let previous_trimmed = previous.trimmed_start();
             let current = line.trimmed_start();
             if starts_with_chain_operator(current) && previous_trimmed.starts_with("//") {
@@ -765,12 +759,7 @@ impl FormatEngine<'_> {
         }
         if line.trimmed_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]) && let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+        ]) && let Some(previous) = self.output.last_non_empty_scoped()
         {
             let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.trimmed_start().starts_with('#')
@@ -785,12 +774,7 @@ impl FormatEngine<'_> {
         }
         if line.trimmed_start().starts_with([
             '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]) && let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+        ]) && let Some(previous) = self.output.last_non_empty_scoped()
         {
             let previous_code = self.output.code_of(previous).trimmed_end();
             if previous_code.trimmed_start().starts_with('#')
@@ -2185,16 +2169,10 @@ impl FormatEngine<'_> {
         if replay.input_continuation_indent.is_none()
             && !line.trimmed_start().starts_with(['#', '{', '}'])
             && (is_comment_line(line.trimmed_start())
-                || self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|previous| {
-                        is_comment_line(previous.trimmed_start())
-                            && !previous.trimmed_end().ends_with(';')
-                    }))
+                || self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    is_comment_line(previous.trimmed_start())
+                        && !previous.trimmed_end().ends_with(';')
+                }))
             && let Some(spaces) = self.recent_paren_continuation_indent_spaces()
         {
             layout.exact_indent_spaces = Some(spaces);

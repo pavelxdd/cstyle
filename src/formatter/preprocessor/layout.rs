@@ -944,12 +944,7 @@ impl FormatEngine<'_> {
         {
             return Some(frame.body_indent_spaces);
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         let (previous, _previous_code, previous_directive) =
             if let Some(directive) = preprocessor_directive(previous_code.trimmed_start()) {

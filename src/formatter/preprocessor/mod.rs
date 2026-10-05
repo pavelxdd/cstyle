@@ -531,18 +531,12 @@ impl FormatEngine<'_> {
     ) {
         self.finish_line();
         let directive = line.lines().next().and_then(preprocessor_directive);
-        let header_before_preprocessor = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .map(|line| {
-                (
-                    trailing_word(line.trimmed_end()).to_string(),
-                    leading_visual_width(line, self.options.tab_width),
-                )
-            });
+        let header_before_preprocessor = self.output.last_non_empty_scoped().map(|line| {
+            (
+                trailing_word(line.trimmed_end()).to_string(),
+                leading_visual_width(line, self.options.tab_width),
+            )
+        });
         let indent_continued_conditional = self.options.indent_preproc_conditional
             && directive.is_some_and(is_conditional_preprocessor);
         let indent_continued_block_conditional = self.options.indent_preproc_block
@@ -570,16 +564,10 @@ impl FormatEngine<'_> {
         }
         let branch_separator_after_else = branch_separator
             && (self.layout.command_state.current_header.as_deref() == Some("else")
-                || self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|line| {
-                        let trimmed = line.trimmed();
-                        trimmed == "else" || trimmed.ends_with("} else")
-                    }));
+                || self.output.last_non_empty_scoped().is_some_and(|line| {
+                    let trimmed = line.trimmed();
+                    trimmed == "else" || trimmed.ends_with("} else")
+                }));
         if branch_separator_after_else {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
@@ -979,10 +967,7 @@ impl FormatEngine<'_> {
             && self.layout.indentation.indent() > 0
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| line.trimmed() == ";")
         {
             return Some(PreprocessorLineIndent::Level(

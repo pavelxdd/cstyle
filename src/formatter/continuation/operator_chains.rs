@@ -969,12 +969,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(':') {
             return None;
@@ -1009,12 +1004,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(':') {
             return None;
@@ -1043,12 +1033,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '?', ':', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with('(') {
             return None;
@@ -1080,12 +1065,7 @@ impl FormatEngine<'_> {
         if line_kind != LineKind::Normal || !line.trimmed_end().ends_with(");") {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(',') || self.open_paren_column_of(previous_code).is_none() {
             return None;
@@ -1447,15 +1427,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn line_follows_logical_operator(&self) -> bool {
-        self.output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|previous| {
-                let code = self.output.code_of(previous).trimmed_end();
-                code.ends_with("||") || code.ends_with("&&")
-            })
+        self.output.last_non_empty_scoped().is_some_and(|previous| {
+            let code = self.output.code_of(previous).trimmed_end();
+            code.ends_with("||") || code.ends_with("&&")
+        })
     }
 
     pub(crate) fn operator_chain_owns_continuation(&self, line: &str) -> bool {
@@ -1489,12 +1464,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         let previous_trimmed = previous_code.trimmed_start();
         let previous_header = previous_trimmed
@@ -1597,12 +1567,7 @@ impl FormatEngine<'_> {
         }) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let code = self.output.code_of(previous).trimmed_end();
         if code.ends_with("||") {
             let base = self.continuation_base_indent() * self.options.indent_width;
@@ -1743,24 +1708,19 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn ternary_operator_tail_indent_spaces(&self, line: &str) -> Option<usize> {
-        self.output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .and_then(|previous| {
-                let previous_code = self.output.code_of(previous).trimmed_end();
-                let previous_trimmed = previous_code.trimmed_start();
-                if line.trimmed_start().starts_with('(')
-                    && previous_trimmed.starts_with(": ")
-                    && head_ends_binary_operator(previous_code)
-                {
-                    self.open_paren_column_of(previous_code)
-                        .map(|open| open + 1)
-                } else {
-                    None
-                }
-            })
+        self.output.last_non_empty_scoped().and_then(|previous| {
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_trimmed = previous_code.trimmed_start();
+            if line.trimmed_start().starts_with('(')
+                && previous_trimmed.starts_with(": ")
+                && head_ends_binary_operator(previous_code)
+            {
+                self.open_paren_column_of(previous_code)
+                    .map(|open| open + 1)
+            } else {
+                None
+            }
+        })
     }
 
     fn split_ternary_colon_after_chained_true_arm(&self, line: &str) -> Option<(String, String)> {
@@ -1769,12 +1729,7 @@ impl FormatEngine<'_> {
         if tail.is_empty() {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         if !self
             .output
             .code_of(previous)
@@ -1813,12 +1768,7 @@ impl FormatEngine<'_> {
         if !(current.starts_with(": ") || current == ":") {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         if !self
             .output
             .code_of(previous)

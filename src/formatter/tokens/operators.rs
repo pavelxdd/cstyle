@@ -246,21 +246,16 @@ pub(crate) fn is_prefix_increment_statement(line: &str) -> bool {
 
 impl FormatEngine<'_> {
     fn has_continuable_previous_statement(&self) -> bool {
-        self.output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|line| {
-                let trimmed = line.trimmed_end();
-                !matches!(
-                    trimmed.trimmed_start(),
-                    "break" | "continue" | "throw" | "goto" | "co_return" | "co_yield" | "co_await"
-                ) && !has_hash_outside_literals(trimmed)
-                    && !trimmed.ends_with(';')
-                    && !trimmed.ends_with('{')
-                    && !trimmed.ends_with('}')
-            })
+        self.output.last_non_empty_scoped().is_some_and(|line| {
+            let trimmed = line.trimmed_end();
+            !matches!(
+                trimmed.trimmed_start(),
+                "break" | "continue" | "throw" | "goto" | "co_return" | "co_yield" | "co_await"
+            ) && !has_hash_outside_literals(trimmed)
+                && !trimmed.ends_with(';')
+                && !trimmed.ends_with('{')
+                && !trimmed.ends_with('}')
+        })
     }
 
     pub(crate) fn push_operator(&mut self, operator: &str, context: TokenPushContext<'_>) {
@@ -292,19 +287,13 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && self.token_input.token_begins_source_line
             && matches!(next, Some(Token::Word(_)))
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| {
-                    let code = self.output.code_of(line).trimmed();
-                    !code.starts_with('#')
-                        && !starts_with_chain_operator(code)
-                        && last_unmatched_open_delimiter(code).is_none()
-                        && is_pointer_declaration_segment(code)
-                });
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let code = self.output.code_of(line).trimmed();
+                !code.starts_with('#')
+                    && !starts_with_chain_operator(code)
+                    && last_unmatched_open_delimiter(code).is_none()
+                    && is_pointer_declaration_segment(code)
+            });
         self.set_leading_operator_continuation(operator, split_rvalue_reference);
         if self.try_push_operator_special_case(operator, next, template_angle) {
             return;
@@ -493,10 +482,7 @@ impl FormatEngine<'_> {
         if split_rvalue_reference {
             let indent_spaces = self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .map_or(0, |line| leading_visual_width(line, self.options.tab_width));
             self.layout
                 .continuation_indent
@@ -535,10 +521,7 @@ impl FormatEngine<'_> {
                         .is_none()
                         .then(|| {
                             self.output
-                                .scoped()
-                                .iter()
-                                .rev()
-                                .find(|line| !line.trimmed().is_empty())
+                                .last_non_empty_scoped()
                                 .and_then(|line| {
                                     let line = line.trimmed_end();
                                     let column = self.open_paren_column_of(line)?;
@@ -705,10 +688,7 @@ impl FormatEngine<'_> {
             && is_leading_continuation_operator(operator)
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_of(line).trimmed() == "}")
         {
             self.layout.continuation_indent.next_line_indent = None;
@@ -727,10 +707,7 @@ impl FormatEngine<'_> {
         {
             let stale_level = self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .map(|line| {
                     leading_visual_width(line, self.options.tab_width) / self.options.indent_width
                         + 1
@@ -1434,12 +1411,7 @@ impl FormatEngine<'_> {
             // A sign leading the line after an opening brace starts an
             // element or a statement.
             || self.current.trimmed().is_empty()
-                && self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                && self.output.last_non_empty_scoped()
                     .is_some_and(|line| {
                         self.output.code_of(line)
                             .trimmed_end()

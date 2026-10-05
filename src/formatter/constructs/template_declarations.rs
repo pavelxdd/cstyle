@@ -207,12 +207,7 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty());
+        let previous = self.output.last_non_empty_scoped();
         if previous.is_some_and(|line| has_hash_outside_literals(line)) {
             return;
         }

@@ -202,16 +202,10 @@ impl FormatEngine<'_> {
             is_namespace_block_header(&self.current[..split])
         };
         let previous_namespace_header = self.current_is_blank()
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| {
-                    let code = &self.output.code_of(line);
-                    is_namespace_block_header(code) && !code.trimmed_end().ends_with('{')
-                });
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let code = &self.output.code_of(line);
+                is_namespace_block_header(code) && !code.trimmed_end().ends_with('{')
+            });
         // Only a deferred block kept on one line reads as an array; a longer
         // one is the header's block.
         if header.is_some_and(is_defer_header)
@@ -475,11 +469,7 @@ impl FormatEngine<'_> {
 
     fn aggregate_header_ends_with_paren_group(&self) -> bool {
         let header = if self.current_is_blank() {
-            self.output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+            self.output.last_non_empty_scoped()
         } else {
             None
         };

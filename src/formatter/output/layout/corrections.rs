@@ -147,10 +147,7 @@ impl FormatEngine<'_> {
                 && starts_header_word(line.trimmed_start(), "if")
                 && self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|previous| matches!(previous.trimmed(), "else" | "} else")))
             && let Some(header) = self.layout.frame_stack.active_header().filter(|header| {
                 header

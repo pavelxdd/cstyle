@@ -392,12 +392,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         let previous_trimmed = previous_code.trimmed_start();
         if !previous_trimmed.starts_with("using ") || !previous_code.ends_with('=') {

@@ -815,6 +815,18 @@ impl OutputBuffer {
         self.last_non_empty_index.get()
     }
 
+    /// The last line that is not blank.
+    pub(crate) fn last_non_empty(&self) -> Option<&String> {
+        self.last_non_empty_index().map(|index| &self.lines[index])
+    }
+
+    /// The last line in scope that is not blank.
+    pub(crate) fn last_non_empty_scoped(&self) -> Option<&String> {
+        self.last_non_empty_index()
+            .filter(|&index| index >= self.scope_start)
+            .map(|index| &self.lines[index])
+    }
+
     /// The last non-empty line, unless it continues a block comment: the
     /// tail of a comment is no code, whatever its words.
     pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {

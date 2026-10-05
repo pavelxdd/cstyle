@@ -656,10 +656,7 @@ impl FormatEngine<'_> {
                 // The enclosing open paren starts this line; its head is the
                 // preceding output line.
                 self.output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| self.paren_head_is_declaration(line.trimmed_end()))
             }
             Some(_) => false,

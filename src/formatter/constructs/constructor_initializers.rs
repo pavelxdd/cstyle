@@ -421,12 +421,7 @@ impl FormatEngine<'_> {
         if !trimmed.starts_with(':') || trimmed.starts_with("::") {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let code = self.output.code_of(previous).trimmed_end();
         if !constructor_signature_ends_with_parameter_list(code) || code.ends_with(';') {
             return None;
@@ -509,10 +504,7 @@ impl FormatEngine<'_> {
         }
         if !self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?
+            .last_non_empty_scoped()?
             .trimmed_start()
             .starts_with('#')
         {
@@ -593,12 +585,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with('(') {
             return None;
@@ -655,12 +642,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if trimmed.starts_with(':') && previous_code.trimmed_start().starts_with('?') {
             return Some(leading_visual_width(previous, self.options.tab_width));

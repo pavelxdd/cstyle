@@ -215,10 +215,7 @@ impl FormatEngine<'_> {
         if line.trimmed() != "}"
             || !self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(')'))
         {
             return None;
@@ -304,10 +301,7 @@ impl FormatEngine<'_> {
         }
         let previous_ends_comma = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+            .last_non_empty_scoped()
             .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(','));
         Some(open_spaces + usize::from(previous_ends_comma) * self.options.indent_width)
     }
@@ -354,10 +348,7 @@ impl FormatEngine<'_> {
                         .unwrap_or_else(|| exact_indent_spaces.unwrap_or(normal_spaces))
                 } else {
                     self.output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trimmed().is_empty())
+                        .last_non_empty_scoped()
                         .and_then(|previous| {
                             let code = self.output.code_of(previous).trimmed_end();
                             code.ends_with('{').then(|| {

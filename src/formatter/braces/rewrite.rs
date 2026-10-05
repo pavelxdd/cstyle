@@ -1065,10 +1065,7 @@ impl FormatEngine<'_> {
             || (current.is_empty()
                 && self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| is_lambda_capture_header(line.trimmed_end())))
     }
 
@@ -1180,10 +1177,7 @@ impl FormatEngine<'_> {
         let previous_line_lambda_header = self.current_is_blank()
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
         let lambda_header = self.current_is_lambda_body_header()
             || previous_line_lambda_header
@@ -1411,22 +1405,13 @@ impl FormatEngine<'_> {
         let previous_line_lambda_header = self.current_is_blank()
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
         let previous_line_trailing_return_lambda_header = self.current_is_blank()
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| {
-                    let line = line.trimmed_end();
-                    is_lambda_body_header(line) && line.contains("->")
-                });
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let line = line.trimmed_end();
+                is_lambda_body_header(line) && line.contains("->")
+            });
         // A control header's condition indexing an array opens no lambda.
         let control_header_line = self
             .layout
@@ -1822,10 +1807,7 @@ impl FormatEngine<'_> {
             None if braced_init
                 && self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| line.trimmed_start().starts_with("#if")) =>
             {
                 self.ensure_space();
@@ -1841,10 +1823,7 @@ impl FormatEngine<'_> {
                         || !self.preprocessor.branch_stack.is_empty()))
                     || self
                         .output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trimmed().is_empty())
+                        .last_non_empty_scoped()
                         .is_some_and(|line| line.trimmed_start().starts_with("#endif"))) =>
             {
                 self.ensure_space();

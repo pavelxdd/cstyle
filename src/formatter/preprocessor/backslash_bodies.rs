@@ -80,10 +80,7 @@ impl FormatEngine<'_> {
         }
         let indent = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+            .last_non_empty_scoped()
             .map(|line| leading_visual_width(line, self.options.tab_width))
             .unwrap_or(0);
         let prefix = raw_prefix.trimmed_start().trimmed_end();

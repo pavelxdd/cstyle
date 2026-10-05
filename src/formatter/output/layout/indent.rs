@@ -337,12 +337,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if let Some(previous) = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+        if let Some(previous) = self.output.last_non_empty_scoped()
             && previous.trimmed() == "("
             && !self
                 .output
@@ -466,25 +461,20 @@ impl FormatEngine<'_> {
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
         }
-        self.output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
-            .and_then(|previous| {
-                let previous_code = self.output.code_of(previous).trimmed_end();
-                let previous_trimmed = previous_code.trimmed_start();
-                if previous_trimmed.starts_with("using ") && previous_code.ends_with('=') {
-                    let previous_indent = leading_visual_width(previous, self.options.tab_width);
-                    if self.recent_base_trailing_return_function_header() {
-                        Some(previous_indent)
-                    } else {
-                        Some(previous_indent + self.options.indent_width)
-                    }
+        self.output.last_non_empty_scoped().and_then(|previous| {
+            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_trimmed = previous_code.trimmed_start();
+            if previous_trimmed.starts_with("using ") && previous_code.ends_with('=') {
+                let previous_indent = leading_visual_width(previous, self.options.tab_width);
+                if self.recent_base_trailing_return_function_header() {
+                    Some(previous_indent)
                 } else {
-                    None
+                    Some(previous_indent + self.options.indent_width)
                 }
-            })
+            } else {
+                None
+            }
+        })
     }
 
     pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
@@ -493,10 +483,7 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())
+            .last_non_empty_scoped()
             .filter(|previous| !is_comment_text_line(previous))
             .and_then(|previous| {
                 let previous_code = self.output.code_of(previous).trimmed_end();
@@ -556,12 +543,7 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
-        let previous = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
+        let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.trimmed_start().starts_with("})") {
             return None;
@@ -1011,9 +993,14 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        if let Some(spaces) =
-            split_declaration_assignment_indent_spaces(self.options, current, previous)
-        {
+        if let Some(spaces) = split_declaration_assignment_indent_spaces(
+            self.options,
+            current,
+            previous,
+            self.output
+                .code_before_comment(previous_index)
+                .trimmed_end(),
+        ) {
             return Some(spaces);
         }
         if current.starts_with('.')

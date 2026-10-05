@@ -1340,10 +1340,7 @@ impl FormatEngine<'_> {
                 .is_some_and(is_semicolonless_call_line)
                 || self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| is_semicolonless_call_line(line)));
         if block_after_semicolonless_call {
             self.layout.pending_braceless_block_bias = None;
@@ -1373,10 +1370,7 @@ impl FormatEngine<'_> {
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(','))
         {
             let level = self
@@ -1710,10 +1704,7 @@ impl FormatEngine<'_> {
                     .is_some_and(is_break_blocks_closing_header)
                     || self
                         .output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trimmed().is_empty())
+                        .last_non_empty_scoped()
                         .is_some_and(|line| is_break_blocks_closing_header(line.trimmed()))))
             && matches!(next, None | Some(Token::Newline))
             && self.current_inline_array_column().is_some()
@@ -2227,10 +2218,7 @@ impl FormatEngine<'_> {
             || (header_text.trimmed().is_empty()
                 && self
                     .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .find(|line| !line.trimmed().is_empty())
+                    .last_non_empty_scoped()
                     .is_some_and(|line| line.trimmed() == ":"));
         let inline_initializer_command_brace_spaces = (!objc_method_brace)
             .then_some(headerless_inline_command_column)
@@ -2244,10 +2232,7 @@ impl FormatEngine<'_> {
             .then(|| {
                 let header_spaces = if self.current_is_blank() {
                     self.output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .find(|line| !line.trimmed().is_empty())
+                        .last_non_empty_scoped()
                         .map(|line| leading_visual_width(line, self.options.tab_width))
                         .unwrap_or(0)
                 } else {
@@ -2286,10 +2271,7 @@ impl FormatEngine<'_> {
             ))
         .then(|| {
             self.output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .map(|line| leading_visual_width(line, self.options.tab_width))
                 .unwrap_or(0)
                 + if self.options.brace_style == BraceStyle::Gnu {
@@ -2309,10 +2291,7 @@ impl FormatEngine<'_> {
             ))
         .then(|| {
             self.output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .filter(|line| {
                     let trimmed = line.trimmed_start();
                     line.contains("#if") && !trimmed.starts_with('#')
@@ -2393,10 +2372,7 @@ impl FormatEngine<'_> {
         if self.current_is_blank()
             && self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .find(|line| !line.trimmed().is_empty())
+                .last_non_empty_scoped()
                 .is_some_and(|line| line.trimmed() == "else")
         {
             self.clear_current();
