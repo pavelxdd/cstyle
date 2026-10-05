@@ -318,15 +318,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
-        let key = (self.output.len(), self.output.version());
-        let scan = match self.constructor_scan_cache.get() {
-            Some((cached, scan)) if cached == key => scan,
-            _ => {
-                let scan = self.scan_constructor_initializer();
-                self.constructor_scan_cache.set(Some((key, scan)));
-                scan
-            }
-        };
+        let scan = self.constructor_initializer_scan();
         match scan {
             ConstructorScan::Colon { index, after_colon } => {
                 let leading = leading_visual_width(&self.output[index], self.options.tab_width);
@@ -353,38 +345,69 @@ impl FormatEngine<'_> {
 
     /// Looks back from the last output line for the line that starts a
     /// constructor initializer list.
-    fn scan_constructor_initializer(&self) -> ConstructorScan {
-        let total = self.output.len();
-        for offset in 0..total.min(64) {
-            let index = total - 1 - offset;
-            // The body of a block comment holds no code.
-            if self.output.comment_start_index(index) != index {
-                continue;
-            }
-            let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = code.trimmed_start();
-            if trimmed.starts_with(':') && !trimmed.starts_with("::") {
-                if code.ends_with('{') || code.ends_with('}') {
-                    return ConstructorScan::Stop;
+    /// The look back for the line that starts a constructor initializer
+    /// list. Lines pushed since the last look back are read first; with no
+    /// answer among them, the last answer holds while its line is within
+    /// reach, and the look back finds nothing once it is not, as the lines
+    /// after it decide nothing.
+    fn constructor_initializer_scan(&self) -> ConstructorScan {
+        let (len, version) = (self.output.len(), self.output.version());
+        let floor = len.saturating_sub(CONSTRUCTOR_SCAN_REACH);
+        let cached = self
+            .constructor_scan_cache
+            .get()
+            .filter(|cached| cached.version == version && cached.len <= len);
+        let read_from = cached.map_or(floor, |cached| cached.len.max(floor));
+        let mut found = (read_from..len)
+            .rev()
+            .find_map(|index| Some((self.constructor_scan_step(index)?, Some(index))));
+        if found.is_none() {
+            found = Some(match cached {
+                Some(cached) if cached.decided_at.is_some_and(|at| at >= floor) => {
+                    (cached.scan, cached.decided_at)
                 }
-                if self.colon_line_is_ternary_arm(index) {
-                    return ConstructorScan::Stop;
-                }
-                let after_colon = (trimmed != ":")
-                    .then(|| trimmed[1..].len() - trimmed[1..].trimmed_start().len());
-                return ConstructorScan::Colon { index, after_colon };
-            }
-            if trimmed.ends_with(':') && !trimmed.starts_with(['?', ':']) && trimmed.contains('(') {
-                if trimmed.contains('?') || self.colon_line_is_ternary_arm(index) {
-                    return ConstructorScan::Stop;
-                }
-                return ConstructorScan::Head { index };
-            }
-            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
-                return ConstructorScan::Stop;
-            }
+                _ => (ConstructorScan::Exhausted, None),
+            });
         }
-        ConstructorScan::Exhausted
+        let (scan, decided_at) = found.expect("an answer");
+        self.constructor_scan_cache.set(Some(ConstructorScanCache {
+            len,
+            version,
+            scan,
+            decided_at,
+        }));
+        scan
+    }
+
+    /// What output line `index` decides for the look back, if anything.
+    fn constructor_scan_step(&self, index: usize) -> Option<ConstructorScan> {
+        // The body of a block comment holds no code.
+        if self.output.comment_start_index(index) != index {
+            return None;
+        }
+        let code = self.output.code_before_comment(index).trimmed_end();
+        let trimmed = code.trimmed_start();
+        if trimmed.starts_with(':') && !trimmed.starts_with("::") {
+            if code.ends_with('{') || code.ends_with('}') {
+                return Some(ConstructorScan::Stop);
+            }
+            if self.colon_line_is_ternary_arm(index) {
+                return Some(ConstructorScan::Stop);
+            }
+            let after_colon =
+                (trimmed != ":").then(|| trimmed[1..].len() - trimmed[1..].trimmed_start().len());
+            return Some(ConstructorScan::Colon { index, after_colon });
+        }
+        if trimmed.ends_with(':') && !trimmed.starts_with(['?', ':']) && trimmed.contains('(') {
+            if trimmed.contains('?') || self.colon_line_is_ternary_arm(index) {
+                return Some(ConstructorScan::Stop);
+            }
+            return Some(ConstructorScan::Head { index });
+        }
+        if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+            return Some(ConstructorScan::Stop);
+        }
+        None
     }
 
     fn colon_line_is_ternary_arm(&self, colon_index: usize) -> bool {
@@ -950,6 +973,20 @@ pub(crate) fn constructor_initializer_name_indent_from_line(
     let name_start = trimmed[punctuation.len_utf8()..].find(|ch: char| !ch.is_whitespace())?
         + punctuation.len_utf8();
     Some(leading + name_start)
+}
+
+/// How many output lines the look back for a constructor initializer list
+/// reads.
+const CONSTRUCTOR_SCAN_REACH: usize = 64;
+
+/// The last look back for a constructor initializer list: the line count
+/// and version it read, its answer, and the line that decided it.
+#[derive(Clone, Copy)]
+pub(crate) struct ConstructorScanCache {
+    len: usize,
+    version: u64,
+    scan: ConstructorScan,
+    decided_at: Option<usize>,
 }
 
 /// What the look back for a constructor initializer list found.

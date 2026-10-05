@@ -124,12 +124,9 @@ pub(crate) struct FormatEngine<'a> {
     /// tab-indented style in spaces.
     pub(crate) output_indent_style: IndentStyle,
     pub(crate) output: buffer::OutputBuffer,
-    /// The last constructor initializer scan, keyed by the output it read.
+    /// The last constructor initializer scan.
     pub(crate) constructor_scan_cache: std::cell::Cell<
-        Option<(
-            (usize, u64),
-            crate::formatter::constructs::constructor_initializers::ConstructorScan,
-        )>,
+        Option<crate::formatter::constructs::constructor_initializers::ConstructorScanCache>,
     >,
     /// The last look back for a line leaving a paren open, keyed by the
     /// output it read.
