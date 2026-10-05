@@ -1,6 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::has_hash_outside_literals;
+use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
 use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_paren_column,
 };
@@ -16,6 +16,9 @@ pub(crate) fn template_declaration_line_complete(line: &str) -> bool {
 }
 
 fn angle_depth_delta(line: &str) -> isize {
+    if !line.contains_any_byte(b"<>") {
+        return 0;
+    }
     angle_chars(line).fold(0, |depth, (_, ch)| match ch {
         '<' => depth + 1,
         _ => depth - 1,

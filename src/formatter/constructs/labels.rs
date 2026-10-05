@@ -18,7 +18,10 @@ use crate::formatter::text::line_scan::{
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
 pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
-    if find_case_colon(line).is_some() {
+    // Every label ends at a colon.
+    if !line.contains(':') {
+        LineKind::Normal
+    } else if find_case_colon(line).is_some() {
         LineKind::SwitchLabel
     } else if is_plain_label(line, access_labels) || leads_with_goto_label(line) {
         LineKind::Label

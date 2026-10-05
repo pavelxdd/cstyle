@@ -673,6 +673,9 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
+        if current.is_empty() || current.starts_with(['#', '{', '}']) {
+            return None;
+        }
         let mut paren_depth = 0isize;
         let mut initializer = None;
         for (offset, index) in (0..self.output.len()).rev().take(32).enumerate() {
@@ -732,9 +735,6 @@ impl FormatEngine<'_> {
             }
         }
         let (member_indent, arg_indent, open_depth) = initializer?;
-        if current.is_empty() || current.starts_with(['#', '{', '}']) {
-            return None;
-        }
         if let Some(arg_indent) = arg_indent
             && open_depth > 0
         {

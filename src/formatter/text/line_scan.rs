@@ -10,7 +10,8 @@ pub(crate) trait ContainsAnyByte {
 impl ContainsAnyByte for str {
     fn contains_any_byte(&self, set: &[u8]) -> bool {
         debug_assert!(set.is_ascii());
-        self.bytes().any(|byte| set.contains(&byte))
+        let mask = set.iter().fold(0u128, |mask, &byte| mask | 1 << byte);
+        self.bytes().any(|byte| byte < 128 && mask >> byte & 1 != 0)
     }
 }
 
@@ -182,7 +183,7 @@ pub(crate) fn unmatched_open_bracket_column(line: &str) -> Option<usize> {
 /// Whether `line` starts inside a block comment it closes: a row that a
 /// comment opened on an earlier line.
 fn continues_block_comment(line: &str) -> bool {
-    line.find("*/").is_some_and(|close| {
+    find_comment_close(line).is_some_and(|close| {
         let before = &line[..close];
         !before.contains("/*") && !before.contains('"')
     })
@@ -556,6 +557,20 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
         cache.insert(line.to_owned(), start);
     });
     start
+}
+
+/// Byte index of the first `*/` in `line`.
+fn find_comment_close(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut from = 0;
+    while let Some(offset) = bytes[from..].iter().position(|&byte| byte == b'*') {
+        let star = from + offset;
+        if bytes.get(star + 1) == Some(&b'/') {
+            return Some(star);
+        }
+        from = star + 1;
+    }
+    None
 }
 
 /// Whether `line` holds `//` or `/*`, in one pass.

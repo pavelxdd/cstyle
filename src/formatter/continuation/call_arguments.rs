@@ -2119,14 +2119,27 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
+        // The indent never changes how the line ends.
+        if !self.output.code_of(previous).trim_end().ends_with(',') {
+            return None;
+        }
         // Byte offsets in the line are its columns once its indent's tabs
         // are spaces.
-        let expanded = format!(
-            "{}{}",
-            " ".repeat(leading_visual_width(previous, self.options.tab_width)),
-            previous.trim_start()
-        );
-        let previous = expanded.as_str();
+        let expanded;
+        let previous_start = previous.trim_start();
+        let previous = if previous[..previous.len() - previous_start.len()]
+            .bytes()
+            .all(|byte| byte == b' ')
+        {
+            previous.as_str()
+        } else {
+            expanded = format!(
+                "{}{}",
+                " ".repeat(leading_visual_width(previous, self.options.tab_width)),
+                previous_start
+            );
+            expanded.as_str()
+        };
         let previous_code = self.output.code_of(previous).trim_end();
         if !previous_code.ends_with(',')
             || previous_code.contains(" new ")

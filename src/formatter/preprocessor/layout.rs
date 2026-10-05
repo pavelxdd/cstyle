@@ -100,6 +100,9 @@ impl SplitElseLineStart {
 }
 
 fn embedded_branch_separator(code: &str) -> bool {
+    if !code.contains('#') {
+        return false;
+    }
     let trimmed = code.trim_start();
     if trimmed.starts_with('#') || code.contains("#if") {
         return false;
@@ -755,10 +758,7 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        (0..self.output.len()).rev().take(limit).any(|index| {
-            let trimmed = self.output.code_trimmed(index);
-            trimmed == "else" || trimmed.ends_with("} else")
-        })
+        self.output.recent_code_else_line(limit)
     }
 
     fn recent_output_has_preprocessor(&self, limit: usize) -> bool {

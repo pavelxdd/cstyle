@@ -9,6 +9,10 @@ pub(crate) struct RawStringStart {
 
 pub(crate) fn start(line: &str, start: usize) -> Option<RawStringStart> {
     let rest = line.get(start..)?;
+    // Every prefix starts with one of these.
+    if !matches!(rest.as_bytes().first(), Some(b'u' | b'L' | b'U' | b'R')) {
+        return None;
+    }
     if line
         .get(..start)?
         .chars()

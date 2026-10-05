@@ -70,7 +70,11 @@ pub(crate) fn first_string_literal_start(line: &str) -> Option<usize> {
 }
 
 pub(crate) fn starts_string_literal_token(line: &str) -> bool {
-    first_string_literal_start(line) == Some(0)
+    // A literal starts with its quote or a prefix letter.
+    matches!(
+        line.as_bytes().first(),
+        Some(b'"' | b'u' | b'U' | b'L' | b'R')
+    ) && first_string_literal_start(line) == Some(0)
 }
 
 pub(crate) fn string_literal_token_end(line: &str, start: usize) -> Option<usize> {

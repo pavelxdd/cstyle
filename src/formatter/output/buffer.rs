@@ -36,6 +36,8 @@ pub(crate) struct LineBraceMeta {
     mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
     else_line: bool,
+    /// The same for the line's code without comments.
+    code_else_line: bool,
 }
 
 fn is_else_line(trimmed: &str) -> bool {
@@ -104,6 +106,9 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trim()),
+        code_else_line: is_else_line(
+            &line[(line.len() - line.trim_start().len()).min(code.len())..code.len()],
+        ),
     }
 }
 
@@ -127,6 +132,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trim()),
+        code_else_line: is_else_line(line.trim_start()),
     }
 }
 
@@ -137,6 +143,8 @@ pub(super) struct OutputLineHints {
     has_hash: bool,
     has_slash: bool,
     has_question: bool,
+    has_at: bool,
+    has_new: bool,
     starts_star: bool,
 }
 
@@ -153,6 +161,8 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
             b'#' => hints.has_hash = true,
             b'/' => hints.has_slash = true,
             b'?' => hints.has_question = true,
+            b'@' => hints.has_at = true,
+            b'n' if bytes[index..].starts_with(b"new ") => hints.has_new = true,
             b'e' if bytes[index..].starts_with(b"else") => hints.has_else = true,
             _ => {}
         }
@@ -193,6 +203,11 @@ pub(crate) struct OutputBuffer {
     may_have_hash: bool,
     may_have_comment: bool,
     may_have_question: bool,
+    may_have_at: bool,
+    may_have_new: bool,
+    /// The last answer of [`Self::recent_scoped_line_mentions_new`]: the
+    /// line count, version and line count looked at, and the answer.
+    mentions_new_cache: Cell<Option<(usize, u64, usize, bool)>>,
     last_non_empty_index: Cell<Option<usize>>,
     last_non_empty_dirty: Cell<bool>,
     /// Counts changes to lines already pushed and to the scope.
@@ -220,6 +235,8 @@ impl OutputBuffer {
         self.may_have_hash |= hints.has_hash;
         self.may_have_comment |= hints.has_slash || hints.starts_star;
         self.may_have_question |= hints.has_question;
+        self.may_have_at |= hints.has_at;
+        self.may_have_new |= hints.has_new;
     }
 
     pub(crate) fn push(&mut self, line: String) {
@@ -243,6 +260,8 @@ impl OutputBuffer {
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
         let suffix = line.get(structural_start..).unwrap_or("");
         self.record_hints(suffix, output_line_hints(suffix));
+        self.may_have_at |= line.contains('@');
+        self.may_have_new |= line.contains("new ");
         let meta = compute_raw_literal_line_meta(&line, structural_start);
         let index = self.lines.len();
         let blank = line.trim().is_empty();
@@ -342,6 +361,8 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
+            self.may_have_at = true;
+            self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
         }
@@ -356,6 +377,8 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
+            self.may_have_at = true;
+            self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
         }
@@ -456,6 +479,8 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
+            self.may_have_at = true;
+            self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
         }
@@ -481,6 +506,7 @@ impl OutputBuffer {
                     comment_split_limit: trailing_comment_split_limit(line),
                     mentions_new: line.contains("new "),
                     else_line: is_else_line(line.trim()),
+                    code_else_line: false,
                 }
             } else {
                 compute_line_brace_meta(line)
@@ -654,12 +680,33 @@ impl OutputBuffer {
             .any(|index| self.brace_meta(index).else_line)
     }
 
-    /// Whether one of the last `count` lines in scope holds `new `.
-    pub(crate) fn recent_scoped_line_mentions_new(&self, count: usize) -> bool {
-        self.scoped_range()
+    /// Whether one of the last `count` lines has the code `else` or code
+    /// ending with `} else`.
+    pub(crate) fn recent_code_else_line(&self, count: usize) -> bool {
+        (0..self.lines.len())
             .rev()
             .take(count)
-            .any(|index| self.brace_meta(index).mentions_new)
+            .any(|index| self.brace_meta(index).code_else_line)
+    }
+
+    /// Whether one of the last `count` lines in scope holds `new `.
+    pub(crate) fn recent_scoped_line_mentions_new(&self, count: usize) -> bool {
+        if !self.may_have_new {
+            return false;
+        }
+        if let Some((len, version, cached_count, mentions)) = self.mentions_new_cache.get()
+            && (len, version, cached_count) == (self.lines.len(), self.version, count)
+        {
+            return mentions;
+        }
+        let mentions = self
+            .scoped_range()
+            .rev()
+            .take(count)
+            .any(|index| self.brace_meta(index).mentions_new);
+        self.mentions_new_cache
+            .set(Some((self.lines.len(), self.version, count, mentions)));
+        mentions
     }
 
     pub(crate) fn clear_scope(&mut self) {
@@ -821,6 +868,11 @@ impl OutputBuffer {
 
     pub(crate) fn may_have_question(&self) -> bool {
         self.may_have_question
+    }
+
+    /// Whether a line may hold `@`; false while no line ever did.
+    pub(crate) fn may_have_at(&self) -> bool {
+        self.may_have_at
     }
 }
 

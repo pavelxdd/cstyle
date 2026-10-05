@@ -1157,14 +1157,15 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Comma;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .take(64)
-            .take_while(|line| !line.trim_end().ends_with(';'))
-            .any(|line| line.contains("@ {"));
+        let in_objc_dictionary_literal = self.output.may_have_at()
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(64)
+                .take_while(|line| !line.trim_end().ends_with(';'))
+                .any(|line| line.contains("@ {"));
         if in_objc_dictionary_literal {
             let spaces = self.current_line_indent_spaces();
             self.layout.continuation_indent.next_line_indent = None;

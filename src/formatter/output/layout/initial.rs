@@ -670,35 +670,36 @@ impl FormatEngine<'_> {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let mut seen_header = false;
             let mut seen_comment = false;
-            let after_braceless_else_comment = self
-                .output
-                .scoped_range()
-                .rev()
-                .filter(|&index| !self.output.trimmed(index).is_empty())
-                .skip(1)
-                .take(12)
-                .any(|index| {
-                    let line = &self.output[index];
-                    let code = self.output.code_before_comment(index).trim_end();
-                    let trimmed = code.trim_start();
-                    if !seen_header {
-                        seen_header = code.ends_with('{')
-                            && (starts_header_word(trimmed, "if")
-                                || starts_header_word(trimmed, "while")
-                                || starts_header_word(trimmed, "for")
-                                || trimmed.starts_with("else if"));
-                        return false;
-                    }
-                    if is_comment_line(line.trim_start()) {
-                        seen_comment = true;
-                        return false;
-                    }
-                    seen_comment && (trimmed == "else" || trimmed.ends_with("} else"))
-                });
+            let mut after_braceless_else_comment = || {
+                self.output
+                    .scoped_range()
+                    .rev()
+                    .filter(|&index| !self.output.trimmed(index).is_empty())
+                    .skip(1)
+                    .take(12)
+                    .any(|index| {
+                        let line = &self.output[index];
+                        let code = self.output.code_before_comment(index).trim_end();
+                        let trimmed = code.trim_start();
+                        if !seen_header {
+                            seen_header = code.ends_with('{')
+                                && (starts_header_word(trimmed, "if")
+                                    || starts_header_word(trimmed, "while")
+                                    || starts_header_word(trimmed, "for")
+                                    || trimmed.starts_with("else if"));
+                            return false;
+                        }
+                        if is_comment_line(line.trim_start()) {
+                            seen_comment = true;
+                            return false;
+                        }
+                        seen_comment && (trimmed == "else" || trimmed.ends_with("} else"))
+                    })
+            };
             if previous_code.ends_with(';')
                 && !is_comment_line(previous.trim_start())
-                && after_braceless_else_comment
                 && layout.exact_indent_spaces.unwrap_or(0) < previous_indent
+                && after_braceless_else_comment()
             {
                 layout.exact_indent_spaces = Some(previous_indent);
             }
