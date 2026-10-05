@@ -19,12 +19,13 @@ impl FormatEngine<'_> {
         line: &str,
         mut layout: LineLayout,
     ) -> LineLayout {
+        let line_start = line.trimmed_start();
         self.insert_member_spacing_before_line(line);
         if self.take_block_spacing_blank(line) {
             self.push_empty_line();
         }
-        if line.trimmed_start().starts_with('|')
-            && !line.trimmed_start().starts_with("||")
+        if line_start.starts_with('|')
+            && !line_start.starts_with("||")
             && let Some(previous) = self.output.last_line_outside_comment()
             && previous.contains("CHECK(")
         {

@@ -153,6 +153,9 @@ pub(crate) fn line_ends_with_comment(line: &str) -> bool {
 }
 
 pub(crate) fn find_outside_quotes(line: &str, needle: &str) -> Option<usize> {
+    if !line.contains(needle) {
+        return None;
+    }
     let mut in_string = false;
     let mut in_char = false;
     let mut escaped = false;
@@ -740,9 +743,10 @@ pub(crate) fn has_hash_outside_literals(line: &str) -> bool {
 /// Whether `line` holds the word `word` as code, outside literals and
 /// comments.
 pub(crate) fn code_holds_word(line: &str, word: &str) -> bool {
-    tokenize(line)
-        .iter()
-        .any(|token| matches!(token, Token::Word(text) if text == word))
+    line.contains(word)
+        && tokenize(line)
+            .iter()
+            .any(|token| matches!(token, Token::Word(text) if text == word))
 }
 
 #[cfg(test)]

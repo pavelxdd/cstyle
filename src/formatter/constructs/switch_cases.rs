@@ -212,8 +212,8 @@ fn code_delimiters_stateful(
     while let Some(&byte) = bytes.get(index) {
         let next = bytes.get(index + 1).copied();
 
-        if let Some(delimiter) = state.raw_delimiter.clone() {
-            let Some(end) = raw_strings::closing_end(line, index, &delimiter) else {
+        if let Some(delimiter) = state.raw_delimiter.as_deref() {
+            let Some(end) = raw_strings::closing_end(line, index, delimiter) else {
                 break;
             };
             state.raw_delimiter = None;
@@ -251,7 +251,9 @@ fn code_delimiters_stateful(
             index += 2;
             continue;
         }
-        if let Some(raw) = raw_strings::start(line, index) {
+        if matches!(byte, b'u' | b'L' | b'U' | b'R')
+            && let Some(raw) = raw_strings::start(line, index)
+        {
             if let Some(end) = raw.end {
                 index = end;
             } else {
@@ -528,7 +530,9 @@ impl SwitchCaseLineTransformer {
                 continue;
             }
 
-            if let Some(raw) = raw_strings::start(&scan, pos) {
+            if matches!(ch, 'u' | 'L' | 'U' | 'R')
+                && let Some(raw) = raw_strings::start(&scan, pos)
+            {
                 if let Some(end) = raw.end {
                     pos = end;
                 } else {

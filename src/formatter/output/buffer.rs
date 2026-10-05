@@ -227,6 +227,9 @@ pub(crate) struct OutputBuffer {
     last_outside_comment_cache: Cell<Option<(usize, u64, Option<usize>)>>,
     /// The last look back for a line that is `else` or ends with `} else`.
     recent_else_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line whose code is `else` or ends with
+    /// `} else`.
+    recent_code_else_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line led by `#`.
     recent_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
@@ -758,10 +761,11 @@ impl OutputBuffer {
     /// Whether one of the last `count` lines has the code `else` or code
     /// ending with `} else`.
     pub(crate) fn recent_code_else_line(&self, count: usize) -> bool {
-        (0..self.lines.len())
-            .rev()
-            .take(count)
-            .any(|index| self.brace_meta(index).code_else_line)
+        self.has_line_from(
+            &self.recent_code_else_cache,
+            self.lines.len().saturating_sub(count),
+            |index| self.brace_meta(index).code_else_line,
+        )
     }
 
     /// Whether one of the last `count` lines in scope holds `new `.

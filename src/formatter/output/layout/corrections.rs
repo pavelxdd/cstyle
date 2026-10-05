@@ -18,6 +18,7 @@ impl FormatEngine<'_> {
         line: &str,
         mut layout: LineLayout,
     ) -> LineLayout {
+        let line_start = line.trimmed_start();
         let line_kind = layout.line_kind;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
@@ -27,7 +28,7 @@ impl FormatEngine<'_> {
                 BraceStyle::None | BraceStyle::Allman
             )
             && line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '{', '}'])
+            && !line_start.starts_with(['#', '{', '}'])
         {
             let previous_brace_indent =
                 self.output
@@ -49,8 +50,8 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if self.current_line_has_class_initializer_colon
-            && line.trimmed_start().starts_with(':')
-            && !line.trimmed_start().starts_with("::")
+            && line_start.starts_with(':')
+            && !line_start.starts_with("::")
         {
             exact_indent_spaces = Some(indent * self.options.indent_width);
         }
@@ -63,7 +64,7 @@ impl FormatEngine<'_> {
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line.trimmed_start().starts_with(['.', '['])
+        ) && line_start.starts_with(['.', '['])
             && self.current_inline_array_column().is_none()
             && let Some(frame) = self
                 .layout
@@ -75,7 +76,7 @@ impl FormatEngine<'_> {
         }
         if self.options.brace_style == BraceStyle::Whitesmith
             && line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '{', '}', '/'])
+            && !line_start.starts_with(['#', '{', '}', '/'])
             && self
                 .output
                 .last_line_outside_comment()
@@ -102,7 +103,7 @@ impl FormatEngine<'_> {
             active_brace
         };
         if line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '{', '}'])
+            && !line_start.starts_with(['#', '{', '}'])
             && self
                 .output
                 .last_line_outside_comment()
@@ -130,7 +131,7 @@ impl FormatEngine<'_> {
         {
             exact_indent_spaces = Some(spaces);
         } else if line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '{', '}', '/'])
+            && !line_start.starts_with(['#', '{', '}', '/'])
             && !is_header(self.options, leading_identifier(line))
             && self
                 .output
@@ -142,9 +143,9 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::Normal
             && is_header(self.options, leading_identifier(line))
-            && same_line_nested_header_extra(line.trimmed_start()) == 0
+            && same_line_nested_header_extra(line_start) == 0
             && !(self.options.no_indent_if_after_else
-                && starts_header_word(line.trimmed_start(), "if")
+                && starts_header_word(line_start, "if")
                 && self
                     .output
                     .last_non_empty_scoped()
@@ -160,7 +161,7 @@ impl FormatEngine<'_> {
                 exact_indent_spaces = Some(header.line_indent_spaces);
             }
         }
-        if line.trimmed_start().starts_with("else")
+        if line_start.starts_with("else")
             && let Some(header) = self
                 .layout
                 .frame_stack
@@ -184,13 +185,13 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && line.trimmed_start().starts_with(']')
+            && line_start.starts_with(']')
             && let Some(spaces) = self.bracket_rows_closing_indent_spaces()
         {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && line.trimmed_start().starts_with(']')
+            && line_start.starts_with(']')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_of(previous).trimmed_end();
@@ -207,7 +208,7 @@ impl FormatEngine<'_> {
         }
         if let Some((column, true)) = self.inline_array.current_closed_body_column.take()
             && line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with('}')
+            && !line_start.starts_with('}')
             && line.contains('}')
         {
             exact_indent_spaces = Some(column);
@@ -229,6 +230,7 @@ impl FormatEngine<'_> {
         line: &str,
         mut layout: LineLayout,
     ) -> LineLayout {
+        let line_start = line.trimmed_start();
         let line_kind = layout.line_kind;
         let normal_indent = layout.normal_indent;
         let class_scope_label = layout.class_scope_label;
@@ -293,7 +295,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && (line.trimmed_start().starts_with("///") || line.trimmed_start().starts_with("//!"))
+            && (line_start.starts_with("///") || line_start.starts_with("//!"))
             && self
                 .layout
                 .frame_stack
@@ -315,11 +317,12 @@ impl FormatEngine<'_> {
         replay: &LineReplayLayout,
         mut layout: LineLayout,
     ) -> LineLayout {
+        let line_start = line.trimmed_start();
         let line_kind = layout.line_kind;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
         if line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '(', ')', '{', '}'])
+            && !line_start.starts_with(['#', '(', ')', '{', '}'])
             && self
                 .argument_after_lambda_call_argument_indent_spaces(line)
                 .is_none()
@@ -391,8 +394,8 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['{', '}'])
-            && !starts_header_word(line.trimmed_start(), "switch")
+            && !line_start.starts_with(['{', '}'])
+            && !starts_header_word(line_start, "switch")
             && let Some(spaces) = self.direct_switch_body_indent_spaces()
         {
             let current = exact_indent_spaces.unwrap_or(indent * self.options.indent_width);

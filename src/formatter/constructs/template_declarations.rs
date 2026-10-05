@@ -263,8 +263,12 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_template_declaration_line(&mut self, line: &str) {
         let trimmed = line.trimmed();
+        let starts_template = trimmed.starts_with("template");
+        if !starts_template && !self.layout.template_declaration.uses_source_indent {
+            return;
+        }
         let angle_delta = angle_depth_delta(trimmed);
-        if trimmed.starts_with("template")
+        if starts_template
             && angle_delta > 0
             && !trimmed.ends_with(';')
             && !template_declaration_line_complete(trimmed)
