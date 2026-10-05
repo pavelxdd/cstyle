@@ -1,7 +1,7 @@
 use crate::formatter::constructs::headers;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{Token, token_text};
+use crate::formatter::lexer::{Token, last_visible_token, token_text};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::is_code_token;
@@ -18,16 +18,6 @@ impl FormatEngine<'_> {
         line_end: usize,
     ) -> bool {
         let line_tokens = &tokens[line_start..line_end];
-        let line = line_tokens
-            .iter()
-            .filter(|token| !matches!(token, Token::Newline))
-            .map(token_text)
-            .collect::<String>();
-        let line = collapse_empty_comma_arguments(&line);
-        let trimmed = line.trim();
-        if is_header(self.options, leading_identifier(trimmed)) {
-            return false;
-        }
         // Padding operators pads commas too.
         if self.options.pad_commas
             || self.options.pad_operators
@@ -36,6 +26,22 @@ impl FormatEngine<'_> {
             || self.options.pad_parens_outside
             || self.options.pad_first_paren_outside
         {
+            return false;
+        }
+        // Collapsing commas never changes how the line ends.
+        if !last_visible_token(line_tokens)
+            .is_some_and(|token| token_text(token).trim_end().ends_with(')'))
+        {
+            return false;
+        }
+        let line = line_tokens
+            .iter()
+            .filter(|token| !matches!(token, Token::Newline))
+            .map(token_text)
+            .collect::<String>();
+        let line = collapse_empty_comma_arguments(&line);
+        let trimmed = line.trim();
+        if is_header(self.options, leading_identifier(trimmed)) {
             return false;
         }
         let has_role = line_tokens.iter().enumerate().any(|(offset, token)| {

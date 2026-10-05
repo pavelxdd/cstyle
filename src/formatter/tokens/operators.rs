@@ -14,8 +14,7 @@ use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start}
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, last_unmatched_open_delimiter, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    has_unclosed_delimiter_after, last_unmatched_open_delimiter, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -296,7 +295,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim();
+                    let code = self.output.code_of(line).trim();
                     !code.starts_with('#')
                         && !starts_with_chain_operator(code)
                         && last_unmatched_open_delimiter(code).is_none()
@@ -706,7 +705,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())
-                .is_some_and(|line| line[..trailing_comment_split_limit(line)].trim() == "}")
+                .is_some_and(|line| self.output.code_of(line).trim() == "}")
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces =
@@ -1402,9 +1401,9 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             // A comment line between leaves the sign to the code before it.
-            .find(|line| !line[..trailing_comment_split_limit(line)].trim().is_empty())
+            .find(|line| !self.output.code_of(line).trim().is_empty())
             .is_some_and(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                let code = self.output.code_of(previous).trim_end();
                 code.ends_with(['(', '[', '{', ',', '=', '?', ':'])
                     || head_ends_binary_operator(code)
                     || code.trim_start().starts_with("return ")
@@ -1438,7 +1437,7 @@ impl FormatEngine<'_> {
                     .rev()
                     .find(|line| !line.trim().is_empty())
                     .is_some_and(|line| {
-                        line[..trailing_comment_split_limit(line)]
+                        self.output.code_of(line)
                             .trim_end()
                             .ends_with('{')
                     })

@@ -13,7 +13,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
-use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
 impl FormatEngine<'_> {
     pub(crate) fn retab_output(&mut self) {
@@ -202,7 +201,7 @@ impl FormatEngine<'_> {
         let mut depth = open_on_directive.max(0);
         for row in directive + 1..index {
             let line = &self.output[row];
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let code = code.strip_suffix('\\').unwrap_or(code).trim_end();
             depth += code.matches('(').count() as isize - code.matches(')').count() as isize;
             // An initializer's brace opens rows that align.

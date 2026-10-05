@@ -111,7 +111,7 @@ impl FormatEngine<'_> {
         }) else {
             return false;
         };
-        let code = &line[..trailing_comment_split_limit(line)];
+        let code = &self.output.code_of(line);
         code_opens_class_base_clause(code.trim_end())
     }
 
@@ -242,7 +242,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let previous_trimmed = previous_code.trim_start();
         ((previous_trimmed.starts_with("struct ")
             || previous_trimmed.starts_with("class ")

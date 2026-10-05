@@ -14,8 +14,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    line_brace_imbalance, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    line_brace_imbalance, preprocessor_directive, unmatched_open_paren_column,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
@@ -61,7 +60,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trim().is_empty())
         {
-            let code = opening[..trailing_comment_split_limit(opening)].trim_end();
+            let code = self.output.code_of(opening).trim_end();
             let opens = code.chars().filter(|ch| *ch == '{').count();
             let closes = code.chars().filter(|ch| *ch == '}').count();
             if opens > closes + closed_blocks && !code.trim_start().starts_with('{') {
@@ -201,7 +200,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find(|line| !line.trim().is_empty())?;
-            let code = before_open[..trailing_comment_split_limit(before_open)].trim_end();
+            let code = self.output.code_of(before_open).trim_end();
             return (head_ends_binary_operator(code) || code.ends_with("->"))
                 .then(|| leading_visual_width(previous, self.options.tab_width));
         }
@@ -514,11 +513,7 @@ impl FormatEngine<'_> {
             let target_index = self
                 .output
                 .iter()
-                .rposition(|line| {
-                    line[..trailing_comment_split_limit(line)]
-                        .trim_end()
-                        .ends_with('{')
-                })
+                .rposition(|line| self.output.code_of(line).trim_end().ends_with('{'))
                 .and_then(|open_index| {
                     (open_index + 1..self.output.len())
                         .find(|index| !self.output[*index].trim().is_empty())
@@ -960,7 +955,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trim().is_empty())
         {
-            let code = opening[..trailing_comment_split_limit(opening)].trim_end();
+            let code = self.output.code_of(opening).trim_end();
             let trimmed = code.trim_start();
             if trimmed == "}" {
                 break;
@@ -1042,7 +1037,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trim().is_empty())
         {
-            let code = opening[..trailing_comment_split_limit(opening)].trim_end();
+            let code = self.output.code_of(opening).trim_end();
             let trimmed = code.trim_start();
             if trimmed == "}" {
                 return None;
@@ -1077,7 +1072,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         if !((previous_code.ends_with(';') && !previous_code.ends_with("};"))
             || previous_code.trim() == "}")
         {
@@ -1101,7 +1096,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let mut spaces = None;
         if previous_code.ends_with(';')
             && !previous_code.ends_with("};")
@@ -1113,9 +1108,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .find(|line| !line.trim().is_empty())
         {
-            let trimmed = braceless_else[..trailing_comment_split_limit(braceless_else)]
-                .trim_end()
-                .trim_start();
+            let trimmed = self.output.code_of(braceless_else).trim_end().trim_start();
             if trimmed == "else" || trimmed.ends_with("} else") {
                 let target = leading_visual_width(braceless_else, self.options.tab_width)
                     .saturating_sub(self.options.indent_width);
@@ -1157,7 +1150,7 @@ impl FormatEngine<'_> {
         let Some(before_branch) = before_branch else {
             return spaces;
         };
-        let code = before_branch[..trailing_comment_split_limit(before_branch)].trim_end();
+        let code = self.output.code_of(before_branch).trim_end();
         code.ends_with('{')
             .then(|| leading_visual_width(before_branch, self.options.tab_width))
             .or(spaces)
@@ -1189,7 +1182,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trim().is_empty())
             .find(|candidate| {
-                let code = candidate[..trailing_comment_split_limit(candidate)].trim_end();
+                let code = self.output.code_of(candidate).trim_end();
                 let (closes, opens) = line_brace_imbalance(code);
                 if isolated
                     && depth == 1
@@ -1206,7 +1199,7 @@ impl FormatEngine<'_> {
                 depth = depth.saturating_sub(opens);
                 false
             })?;
-        let matching_code = matching_open[..trailing_comment_split_limit(matching_open)].trim_end();
+        let matching_code = self.output.code_of(matching_open).trim_end();
         if isolated
             && matching_code.trim_start().starts_with(')')
             && matching_code.ends_with('{')
@@ -1218,7 +1211,7 @@ impl FormatEngine<'_> {
                 .skip_while(|line| line.as_str() != matching_open.as_str())
                 .skip(1)
                 .find_map(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    let code = self.output.code_of(line).trim_end();
                     let trimmed = code.trim_start();
                     (unmatched_open_paren_column(code).is_some()
                         && (starts_header_word(trimmed, "if")
@@ -1247,7 +1240,7 @@ impl FormatEngine<'_> {
             .output
             .current_closing_brace_open(self.options.tab_width)?;
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = if structural_split_else_chain {
             self.current_closing_multiline_header_indent()
@@ -1260,10 +1253,10 @@ impl FormatEngine<'_> {
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         let recent_adjacent_string_call =
             self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 code.ends_with(");") && starts_string_literal_token(code.trim_start())
             }) && self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 unmatched_open_paren_column(code).is_some()
                     && !starts_string_literal_token(code.trim_start())
                     && !code.ends_with(';')

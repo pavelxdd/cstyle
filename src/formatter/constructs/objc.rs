@@ -4,9 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, trailing_comment_split_limit,
-};
+use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
 use crate::source::lex::is_identifier_continue;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -505,7 +503,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
             .take(64)
         {
-            let code = &line[..trailing_comment_split_limit(line)];
+            let code = &self.output.code_of(line);
             if code.trim_end().ends_with([';', '{', '}']) {
                 return None;
             }

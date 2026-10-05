@@ -101,7 +101,7 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trim().is_empty())
             .is_some_and(|previous| {
-                let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                let code = self.output.code_of(previous).trim_end();
                 let trimmed = code.trim_start();
                 !code.is_empty()
                     && (head_ends_binary_operator(code)
@@ -143,7 +143,7 @@ impl FormatEngine<'_> {
             if self.output.comment_start_index(start + offset) != start + offset {
                 continue;
             }
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             // Neither does a directive, nor the lines it continues over.
             if self.output.is_directive_line(start + offset)
                 || code.ends_with(';')
@@ -185,13 +185,13 @@ impl FormatEngine<'_> {
             .output
             .iter()
             .rposition(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 code.ends_with([';', '{', '}'])
             })
             .map_or(0, |index| index + 1);
         let mut openers = Vec::new();
         for line in &self.output[start..] {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let (closes, opens) = line_paren_imbalance(code);
             for _ in 0..closes {
                 openers.pop();
@@ -284,8 +284,7 @@ impl FormatEngine<'_> {
         if self.template_continuation_closes_on_line(trimmed) {
             return false;
         }
-        let code_before_trailing_comment =
-            trimmed[..trailing_comment_split_limit(trimmed)].trim_end();
+        let code_before_trailing_comment = self.output.code_of(trimmed).trim_end();
         let line_comment_limit = line_comment_split_limit(trimmed);
         let code_before_line_comment = trimmed[..line_comment_limit].trim_end();
         if line_comment_limit < trimmed.len()
@@ -636,7 +635,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         if !previous_code.ends_with(':') || !previous_code.contains('?') {
             return None;
         }
@@ -735,7 +734,7 @@ impl FormatEngine<'_> {
             return self.current_line_indent_spaces() + self.options.indent_width;
         }
         for line in self.output.scoped().iter().rev() {
-            let code = &line[..trailing_comment_split_limit(line)];
+            let code = &self.output.code_of(line);
             let trimmed = code.trim();
             if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
                 continue;
@@ -1360,7 +1359,7 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            let code = trimmed[..trailing_comment_split_limit(trimmed)].trim_end();
+            let code = self.output.code_of(trimmed).trim_end();
             if code.starts_with("return ") && !code.ends_with(';') {
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
@@ -1450,7 +1449,7 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trim().is_empty())
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.ends_with(',')
                 && !previous_code.contains('=')
                 && previous_code.find('(').is_none_or(|paren| {
@@ -1617,7 +1616,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let content = line.trim_start();
-        let code = content[..trailing_comment_split_limit(content)].trim_end();
+        let code = self.output.code_of(content).trim_end();
         let open = unmatched_open_paren_column(code)?;
         let assignment = find_single_assignment_after(code, open + 1)?;
         let after_assignment = &code[assignment + 1..];
@@ -1641,7 +1640,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.current.trim_end();
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        let code = self.output.code_of(line).trim_end();
         if code.ends_with(',')
             || code.ends_with(';')
             || code.ends_with(':') && find_case_colon(code).is_some()
@@ -1669,7 +1668,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.current.trim_end();
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        let code = self.output.code_of(line).trim_end();
         if code.ends_with(':') && find_case_colon(code).is_some() {
             return None;
         }
@@ -1746,7 +1745,7 @@ impl FormatEngine<'_> {
         if line.ends_with("*/") && !line.contains("/*") {
             return None;
         }
-        let code = &line[..trailing_comment_split_limit(line)];
+        let code = &self.output.code_of(line);
         let trimmed_code = code.trim_start();
         if (trimmed_code.starts_with("<<") || trimmed_code.starts_with(">>"))
             && code.trim_end().ends_with('{')

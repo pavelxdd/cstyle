@@ -3,7 +3,6 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
-use crate::formatter::text::line_scan::trailing_comment_split_limit;
 
 impl FormatEngine<'_> {
     pub(crate) fn observe_blank_line_context(
@@ -59,7 +58,7 @@ impl FormatEngine<'_> {
         let Some(previous) = self.output.last() else {
             return false;
         };
-        let code = previous[..trailing_comment_split_limit(previous)].trim();
+        let code = self.output.code_of(previous).trim();
         if !code.ends_with(')') || code.starts_with('#') {
             return false;
         }

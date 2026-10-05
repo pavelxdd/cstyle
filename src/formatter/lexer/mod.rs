@@ -4,6 +4,7 @@ use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::source::lex::{is_digit_separator, is_identifier_continue, is_identifier_start};
+use std::borrow::Cow;
 
 pub(crate) mod raw_strings;
 
@@ -659,7 +660,27 @@ pub(crate) fn token_char_len(token: &Token) -> usize {
     }
 }
 
-pub(crate) fn token_text(token: &Token) -> String {
+/// The first token of `tokens` that holds more than whitespace: the one the
+/// trimmed text of a line of them starts with.
+pub(crate) fn first_visible_token(tokens: &[Token]) -> Option<&Token> {
+    tokens
+        .iter()
+        .find(|token| !token_text(token).chars().all(char::is_whitespace))
+}
+
+/// The last token of `tokens` that holds more than whitespace.
+pub(crate) fn last_visible_token(tokens: &[Token]) -> Option<&Token> {
+    tokens
+        .iter()
+        .rev()
+        .find(|token| !token_text(token).chars().all(char::is_whitespace))
+}
+
+pub(crate) fn token_text(token: &Token) -> Cow<'_, str> {
+    // Each ASCII character's own text, for symbols.
+    const ASCII: &str = "\0\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\
+        \x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f \
+        !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7f";
     match token {
         Token::Word(value)
         | Token::Number(value)
@@ -668,10 +689,14 @@ pub(crate) fn token_text(token: &Token) -> String {
         | Token::RawLine(value)
         | Token::Operator(value)
         | Token::Whitespace(value)
-        | Token::Comment(_, value) => value.clone(),
-        Token::Preprocessor(value) => value.text.clone(),
-        Token::Symbol(value) => value.to_string(),
-        Token::Newline => "\n".to_string(),
+        | Token::Comment(_, value) => Cow::Borrowed(value),
+        Token::Preprocessor(value) => Cow::Borrowed(&value.text),
+        Token::Symbol(value) if value.is_ascii() => {
+            let index = *value as usize;
+            Cow::Borrowed(&ASCII[index..=index])
+        }
+        Token::Symbol(value) => Cow::Owned(value.to_string()),
+        Token::Newline => Cow::Borrowed("\n"),
     }
 }
 

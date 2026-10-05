@@ -21,8 +21,8 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, is_comment_only_line, trailing_comment_split_limit,
-    trailing_matching_parens, unmatched_open_paren_column,
+    has_unclosed_delimiter_after, is_comment_only_line, trailing_matching_parens,
+    unmatched_open_paren_column,
 };
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -271,7 +271,7 @@ impl FormatEngine<'_> {
         else {
             return base;
         };
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         if previous_code.ends_with(',')
             && leading_visual_width(previous, self.options.tab_width)
                 == self.token_input.token_source_line_indent
@@ -430,7 +430,7 @@ impl FormatEngine<'_> {
             && self.token_input.token_begins_source_line
             && let Some(previous) = self.layout.previous_pre_adjust_line.as_ref()
         {
-            let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let code = self.output.code_of(previous).trim_end();
             if code.trim_start().starts_with("return new ") {
                 let spaces =
                     leading_visual_width(previous, self.options.tab_width) + "return ".len();
@@ -1717,7 +1717,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim();
+                let code = self.output.code_of(line).trim();
                 (!code.is_empty() && !code.starts_with(['#', '/', '*'])).then_some(code)
             })
             .is_some_and(|code| trailing_word(code) == "try")
@@ -1735,7 +1735,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find_map(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim();
+                    let code = self.output.code_of(line).trim();
                     (!code.is_empty() && code != "try" && !code.starts_with(['#', '/', '*']))
                         .then_some(code)
                 })
@@ -1781,7 +1781,7 @@ impl FormatEngine<'_> {
         }) else {
             return false;
         };
-        let code = &line[..trailing_comment_split_limit(line)];
+        let code = &self.output.code_of(line);
         self.code_is_class_initializer_signature(code.trim_end())
     }
 
@@ -1794,7 +1794,7 @@ impl FormatEngine<'_> {
             return TernaryOwnerRole::Assignment;
         }
         for raw in self.output.scoped().iter().rev().take(8) {
-            let code = raw[..trailing_comment_split_limit(raw)].trim_end();
+            let code = self.output.code_of(raw).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

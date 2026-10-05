@@ -9,7 +9,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    code_holds_word, line_paren_imbalance, preprocessor_directive, trailing_comment_split_limit,
+    code_holds_word, line_paren_imbalance, preprocessor_directive,
 };
 use crate::source::lex::leading_identifier;
 
@@ -34,7 +34,7 @@ impl FormatEngine<'_> {
                 self.output
                     .last_line_outside_comment()
                     .and_then(|previous| {
-                        let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                        let code = self.output.code_of(previous).trim_end();
                         code.ends_with('{')
                             .then(|| leading_visual_width(previous, self.options.tab_width))
                     });
@@ -190,7 +190,7 @@ impl FormatEngine<'_> {
             && line.trim_start().starts_with(']')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if ["for", "while", "switch"].iter().any(|header| {
                 let trimmed = previous_code.trim_start();
                 trimmed == *header
@@ -326,8 +326,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let previous_code =
-                        previous[..trailing_comment_split_limit(previous)].trim_end();
+                    let previous_code = self.output.code_of(previous).trim_end();
                     previous_code.ends_with(',')
                         && line_paren_imbalance(previous_code).0 > 0
                         && !(self.options.indent_after_parens
@@ -345,9 +344,7 @@ impl FormatEngine<'_> {
         }
         if self.options.indent_after_parens
             && let Some(previous) = self.output.last_line_outside_comment()
-            && previous[..trailing_comment_split_limit(previous)]
-                .trim_end()
-                .ends_with(',')
+            && self.output.code_of(previous).trim_end().ends_with(',')
             && code_holds_word(previous, "new")
         {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));

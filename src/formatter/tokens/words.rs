@@ -11,9 +11,7 @@ use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, trailing_comment_split_limit,
-};
+use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
 
@@ -167,11 +165,10 @@ impl FormatEngine<'_> {
     fn align_else_after_braceless_body(&mut self, word: &str) {
         if word == "else"
             && self.current_is_blank()
-            && self.output.last().is_some_and(|line| {
-                line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with(';')
-            })
+            && self
+                .output
+                .last()
+                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with(';'))
         {
             while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
@@ -195,7 +192,7 @@ impl FormatEngine<'_> {
             if !last_is_same_line_if {
                 while index > 0 {
                     let above = self.output[index - 1].trim_end();
-                    let above_code = above[..trailing_comment_split_limit(above)].trim_end();
+                    let above_code = self.output.code_of(above).trim_end();
                     if above_code.ends_with(';')
                         || above_code.ends_with('{')
                         || above_code.ends_with('}')
@@ -275,11 +272,10 @@ impl FormatEngine<'_> {
                     | BraceStyle::Pico
             )
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("if")
-            && self.output.last().is_some_and(|line| {
-                line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with('}')
-            })
+            && self
+                .output
+                .last()
+                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with('}'))
             && let Some((base, delta)) = self.layout.indentation.last_braceless_block()
             && self.layout.indentation.indent() == base + delta
         {
@@ -291,11 +287,11 @@ impl FormatEngine<'_> {
 
     fn align_while_after_do(&mut self, word: &str) {
         if word == "while" && self.current_is_blank() {
-            if self.output.last().is_some_and(|line| {
-                line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with(';')
-            }) {
+            if self
+                .output
+                .last()
+                .is_some_and(|line| self.output.code_of(line).trim_end().ends_with(';'))
+            {
                 self.match_closing_while_to_braceless_do();
             } else if matches!(
                 self.options.brace_style,
@@ -307,7 +303,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Pico
             ) && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
                 && let Some(previous) = self.output.last()
-                && previous[..trailing_comment_split_limit(previous)].trim() == "}"
+                && self.output.code_of(previous).trim() == "}"
             {
                 let closing_brace_indent = leading_visual_width(previous, self.options.tab_width)
                     / self.options.indent_width;

@@ -110,7 +110,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
             .take(32)
         {
-            let code = &previous[..trailing_comment_split_limit(previous)];
+            let code = &self.output.code_of(previous);
             if code.trim_end().ends_with([';', '{', '}']) {
                 return None;
             }
@@ -222,9 +222,7 @@ impl FormatEngine<'_> {
                 if !current.is_empty() && !is_comment_only_line(current) {
                     // A statement kept after the label owns no brace.
                     return case_label_token_offset(current, header).is_some()
-                        && !current[..trailing_comment_split_limit(current)]
-                            .trim_end()
-                            .ends_with(';');
+                        && !self.output.code_of(current).trim_end().ends_with(';');
                 }
                 self.has_pending_case_label_brace()
                     || self
@@ -431,7 +429,7 @@ impl FormatEngine<'_> {
                     !rest.starts_with(|ch: char| ch.is_alphanumeric() || ch == '_')
                 })
             };
-            let code = line[..trailing_comment_split_limit(line)].trim();
+            let code = self.output.code_of(line).trim();
             if code != "{"
                 && !starts_header(line)
                 && let Some(header_line) = self
@@ -441,7 +439,9 @@ impl FormatEngine<'_> {
                     .skip(1)
                     .take(8)
                     .take_while(|line| {
-                        !line[..trailing_comment_split_limit(line)]
+                        !self
+                            .output
+                            .code_of(line)
                             .trim_end()
                             .ends_with([';', '{', '}'])
                     })
@@ -450,7 +450,7 @@ impl FormatEngine<'_> {
                 line = header_line;
             }
         }
-        let code = line[..trailing_comment_split_limit(line)].trim();
+        let code = self.output.code_of(line).trim();
         if self
             .layout
             .frame_stack

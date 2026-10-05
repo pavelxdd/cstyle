@@ -176,81 +176,73 @@ fn continues_block_comment(line: &str) -> bool {
 }
 
 pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
-    if !line.contains(['(', ')', '[', ']']) {
-        return (0, Vec::new());
-    }
-    thread_local! {
-        static CACHE: std::cell::RefCell<LineCache<(usize, Vec<usize>)>> =
-            std::cell::RefCell::new(LineCache::default());
-    }
-    if let Some(imbalance) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
-        return imbalance;
-    }
-    let imbalance = scan_line_paren_imbalance(line);
-    CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() >= 4096 {
-            cache.clear();
-        }
-        cache.insert(line.to_owned(), imbalance.clone());
-    });
-    imbalance
+    scan_paren_imbalance(line)
 }
 
-fn scan_line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
-    let chars = line.chars().collect::<Vec<_>>();
+/// Unmatched `)` and `]` of `line`, and the byte columns of its unmatched
+/// `(` and `[`, outside literals and comments.
+fn scan_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
+    if !bytes
+        .iter()
+        .any(|&byte| matches!(byte, b'(' | b')' | b'[' | b']'))
+    {
+        return (0, Vec::new());
+    }
     let mut stack: Vec<usize> = Vec::new();
     let mut unmatched_closes = 0usize;
     let mut index = 0;
-    let mut column = 0;
-    let mut quote = None;
+    let mut quote: Option<u8> = None;
     let mut escaped = false;
     let mut in_block_comment = continues_block_comment(line);
 
-    while let Some(&ch) = chars.get(index) {
-        let next = chars.get(index + 1).copied();
+    while let Some(&byte) = bytes.get(index) {
+        let next = bytes.get(index + 1).copied();
         if in_block_comment {
-            if ch == '*' && next == Some('/') {
+            if byte == b'*' && next == Some(b'/') {
                 in_block_comment = false;
                 index += 2;
-                column += 2;
             } else {
                 index += 1;
-                column += ch.len_utf8();
             }
             continue;
         }
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == open {
+                quote = None;
+            }
             index += 1;
-            column += ch.len_utf8();
             continue;
         }
-        if ch == '/' && next == Some('/') {
-            break;
-        }
-        if ch == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            column += 2;
-            continue;
-        }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
-            index += 1;
-            column += ch.len_utf8();
-            continue;
-        }
-        match ch {
-            '(' | '[' => stack.push(column),
-            ')' | ']' if stack.pop().is_none() => unmatched_closes += 1,
-            ')' | ']' => {}
+        match byte {
+            b'/' if next == Some(b'/') => break,
+            b'/' if next == Some(b'*') => {
+                in_block_comment = true;
+                index += 2;
+                continue;
+            }
+            b'"' => quote = Some(byte),
+            b'\'' if !is_byte_digit_separator(bytes, index) => quote = Some(byte),
+            b'(' | b'[' => stack.push(index),
+            b')' | b']' if stack.pop().is_none() => unmatched_closes += 1,
             _ => {}
         }
         index += 1;
-        column += ch.len_utf8();
     }
     (unmatched_closes, stack)
+}
+
+/// Whether the `'` at byte `index` separates digits of a number.
+fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
+    index > 0
+        && bytes[index - 1].is_ascii_hexdigit()
+        && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit)
 }
 
 /// Returns the brace imbalance of a single line as `(unmatched_closes, unmatched_opens)`,
@@ -366,87 +358,7 @@ pub(crate) fn line_has_brace(line: &str) -> bool {
 }
 
 pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
-    if !line.contains(['(', '[']) {
-        return Vec::new();
-    }
-    thread_local! {
-        // Layout reads the same recent lines over and over.
-        static CACHE: std::cell::RefCell<LineCache<Vec<usize>>> =
-            std::cell::RefCell::new(LineCache::default());
-    }
-    if let Some(columns) = CACHE.with(|cache| cache.borrow().get(line).cloned()) {
-        return columns;
-    }
-    let columns = scan_unmatched_open_paren_columns(line);
-    CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() >= 4096 {
-            cache.clear();
-        }
-        cache.insert(line.to_owned(), columns.clone());
-    });
-    columns
-}
-
-fn scan_unmatched_open_paren_columns(line: &str) -> Vec<usize> {
-    let chars = line.chars().collect::<Vec<_>>();
-    let mut stack = Vec::new();
-    let mut index = 0;
-    let mut column = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    let mut in_block_comment = continues_block_comment(line);
-
-    while let Some(&ch) = chars.get(index) {
-        let next = chars.get(index + 1).copied();
-
-        if in_block_comment {
-            if ch == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-                column += 2;
-            } else {
-                index += 1;
-                column += ch.len_utf8();
-            }
-            continue;
-        }
-
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            index += 1;
-            column += ch.len_utf8();
-            continue;
-        }
-
-        if ch == '/' && next == Some('/') {
-            break;
-        }
-        if ch == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            column += 2;
-            continue;
-        }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
-            index += 1;
-            column += ch.len_utf8();
-            continue;
-        }
-
-        match ch {
-            '(' | '[' => stack.push(column),
-            ')' | ']' => {
-                stack.pop();
-            }
-            _ => {}
-        }
-        index += 1;
-        column += ch.len_utf8();
-    }
-
-    stack
+    scan_paren_imbalance(line).1
 }
 
 pub(crate) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)> {
@@ -652,7 +564,7 @@ fn trailing_comment_start_in_tokens(line: &str, inspect_preprocessor: bool) -> O
     let mut offset = 0usize;
     let mut trailing_start = None;
     for token in tokenize(line) {
-        let text = token_text(&token);
+        let length = token_text(&token).len();
         match token {
             Token::Comment(CommentKind::Line, _) => {
                 return Some(trailing_start.unwrap_or(offset));
@@ -668,7 +580,7 @@ fn trailing_comment_start_in_tokens(line: &str, inspect_preprocessor: bool) -> O
             }
             _ => trailing_start = None,
         }
-        offset += text.len();
+        offset += length;
     }
     trailing_start
 }

@@ -2,9 +2,7 @@ use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
-use crate::formatter::text::line_scan::{
-    advance_quoted_literal, trailing_comment_split_limit, unmatched_open_paren_columns,
-};
+use crate::formatter::text::line_scan::{advance_quoted_literal, unmatched_open_paren_columns};
 use crate::source::lex::{
     is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
 };
@@ -753,7 +751,7 @@ impl FormatEngine<'_> {
         if !line_start.starts_with("#define") {
             return;
         }
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        let code = self.output.code_of(line).trim_end();
         if code.ends_with('\\') {
             return;
         }

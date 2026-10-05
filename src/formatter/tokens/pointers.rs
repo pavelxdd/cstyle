@@ -16,9 +16,7 @@ use crate::formatter::syntax::{
     function_head_has_assignment, function_name_start, language, scoped_name_is_constructor,
 };
 use crate::formatter::text::columns::visual_width_from;
-use crate::formatter::text::line_scan::{
-    last_unmatched_open_delimiter, trailing_comment_split_limit, trailing_matching_parens,
-};
+use crate::formatter::text::line_scan::{last_unmatched_open_delimiter, trailing_matching_parens};
 use crate::formatter::tokens::operators::{
     head_ends_assignment_operator, head_ends_binary_operator,
 };
@@ -426,7 +424,7 @@ impl FormatEngine<'_> {
 
     fn continues_operator_expression(&self) -> bool {
         self.output.last_line_outside_comment().is_some_and(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             if head_ends_assignment_operator(code) {
                 return true;
             }

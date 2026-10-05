@@ -32,6 +32,8 @@ pub(crate) struct LineBraceMeta {
     /// End of the code before a trailing comment, as
     /// `trailing_comment_split_limit` finds it.
     comment_split_limit: usize,
+    /// Whether the line's text holds `new `.
+    mentions_new: bool,
 }
 
 fn is_raw_literal(token: &Token) -> bool {
@@ -94,6 +96,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         paren_open_count: paren_opens.len(),
         paren_last_open_column: paren_opens.last().copied(),
         comment_split_limit: trailing_comment_split_limit(line),
+        mentions_new: line.contains("new "),
     }
 }
 
@@ -115,6 +118,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         paren_open_count: paren_opens.len(),
         paren_last_open_column: None,
         comment_split_limit: trailing_comment_split_limit(line),
+        mentions_new: line.contains("new "),
     }
 }
 
@@ -188,6 +192,11 @@ pub(crate) struct OutputBuffer {
     /// The last look back for the open brace a closing brace would close:
     /// the line count and version it read, and the line it found.
     closing_brace_open_cache: Cell<Option<(usize, u64, Option<usize>)>>,
+    /// Largest first token of a line pushed so far.
+    largest_first_token: Option<usize>,
+    /// Whether a line ever recorded a first token before that of an earlier
+    /// line; until then lines can be searched by token.
+    first_tokens_unordered: bool,
 }
 
 impl OutputBuffer {
@@ -276,7 +285,17 @@ impl OutputBuffer {
             self.comments.push(LineComments::default());
             return;
         }
-        self.tokens.push(self.pending_tokens.take());
+        let tokens = self.pending_tokens.take();
+        if let Some(span) = tokens {
+            self.first_tokens_unordered |= self
+                .largest_first_token
+                .is_some_and(|largest| span.first < largest);
+            self.largest_first_token = Some(
+                self.largest_first_token
+                    .map_or(span.first, |largest| largest.max(span.first)),
+            );
+        }
+        self.tokens.push(tokens);
         let comments = self.pending_comments.take().unwrap_or(LineComments {
             lead: self.active_comment,
             last: self.active_comment,
@@ -354,6 +373,8 @@ impl OutputBuffer {
             }),
             (a, b) => a.or(b),
         };
+        self.first_tokens_unordered |=
+            span.map(|span| span.first) != self.tokens[into].map(|span| span.first);
         self.remove(from);
         let mut line = self.lines[into].trim_end().to_string();
         line.push_str(separator);
@@ -447,6 +468,7 @@ impl OutputBuffer {
                     paren_open_count: 0,
                     paren_last_open_column: None,
                     comment_split_limit: trailing_comment_split_limit(line),
+                    mentions_new: line.contains("new "),
                 }
             } else {
                 compute_line_brace_meta(line)
@@ -470,6 +492,20 @@ impl OutputBuffer {
         &self.lines[index][..self.brace_meta(index).comment_split_limit]
     }
 
+    /// `line` up to its trailing comment, as `trailing_comment_split_limit`
+    /// cuts it; one of the last lines is cut from its cached metadata.
+    pub(crate) fn code_of<'a>(&'a self, line: &'a str) -> &'a str {
+        let recent = self.lines.len().saturating_sub(8);
+        // The same bytes in memory are that line, borrowed unchanged.
+        if let Some(index) = (recent..self.lines.len()).rev().find(|&index| {
+            let held = &self.lines[index];
+            held.as_ptr() == line.as_ptr() && held.len() == line.len()
+        }) {
+            return self.code_before_comment(index);
+        }
+        &line[..trailing_comment_split_limit(line)]
+    }
+
     pub(crate) fn code_trimmed(&self, index: usize) -> &str {
         let meta = self.brace_meta(index);
         &self.lines[index][meta.trim_start_byte.min(meta.code_end_byte)..meta.code_end_byte]
@@ -482,10 +518,37 @@ impl OutputBuffer {
     /// Index of the output line that holds the source token `token`, among
     /// lines that recorded their tokens.
     pub(crate) fn line_with_token(&self, token: usize) -> Option<usize> {
-        self.tokens
-            .iter()
-            .rposition(|span| span.is_some_and(|span| span.first <= token))
-            .filter(|&index| self.tokens[index].is_some_and(|span| span.contains(token)))
+        let index = if self.first_tokens_unordered {
+            self.tokens
+                .iter()
+                .rposition(|span| span.is_some_and(|span| span.first <= token))
+        } else {
+            self.last_line_starting_by(token)
+        };
+        index.filter(|&index| self.tokens[index].is_some_and(|span| span.contains(token)))
+    }
+
+    /// The last line whose first token is at most `token`, by binary search
+    /// over lines recorded in token order.
+    fn last_line_starting_by(&self, token: usize) -> Option<usize> {
+        // The first token of the last line at or before `index` that
+        // recorded its tokens, with that line.
+        let first_at = |index: usize| {
+            self.tokens[..=index]
+                .iter()
+                .rposition(Option::is_some)
+                .map(|line| (self.tokens[line].map_or(0, |span| span.first), line))
+        };
+        let (mut low, mut high) = (0, self.tokens.len());
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if first_at(middle).is_none_or(|(first, _)| first <= token) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        low.checked_sub(1).and_then(first_at).map(|(_, line)| line)
     }
 
     pub(crate) fn current_closing_brace_open(
@@ -563,6 +626,19 @@ impl OutputBuffer {
     /// looking back never needs the inside of an earlier function.
     pub(crate) fn scoped(&self) -> &[String] {
         &self.lines[self.scope_start.min(self.lines.len())..]
+    }
+
+    /// Indices of the lines [`Self::scoped`] holds.
+    pub(crate) fn scoped_range(&self) -> std::ops::Range<usize> {
+        self.scope_start.min(self.lines.len())..self.lines.len()
+    }
+
+    /// Whether one of the last `count` lines in scope holds `new `.
+    pub(crate) fn recent_scoped_line_mentions_new(&self, count: usize) -> bool {
+        self.scoped_range()
+            .rev()
+            .take(count)
+            .any(|index| self.brace_meta(index).mentions_new)
     }
 
     pub(crate) fn clear_scope(&mut self) {

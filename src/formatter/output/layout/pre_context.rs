@@ -41,7 +41,7 @@ impl FormatEngine<'_> {
         if line.trim() == "("
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.contains(" : ")
                 && !previous_code.trim_start().starts_with(':')
                 && previous_code
@@ -80,9 +80,10 @@ impl FormatEngine<'_> {
             let split = trailing_comment_split_limit(previous);
             let previous_code = previous[..split].trim_end();
             if (split < previous.len()
-                || lexer::tokenize(previous_code)
-                    .iter()
-                    .any(|token| matches!(token, Token::Comment(CommentKind::Block, _))))
+                || previous_code.contains("/*")
+                    && lexer::tokenize(previous_code)
+                        .iter()
+                        .any(|token| matches!(token, Token::Comment(CommentKind::Block, _))))
                 && previous_code.ends_with(';')
                 && unmatched_open_paren_column(previous_code).is_none()
             {
@@ -141,7 +142,7 @@ impl FormatEngine<'_> {
             && self.output.pending_tokens().is_some()
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.ends_with('=')
                 && !previous_code.ends_with("==")
                 && !previous_code.ends_with("!=")
@@ -226,7 +227,7 @@ impl FormatEngine<'_> {
         {
             let previous_trimmed = previous.trim_start();
             let current_trimmed = line.trim_start();
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             let uses_outer_call_column = previous_code.ends_with(',')
                 && previous_code.contains(").")
                 && self
@@ -260,11 +261,10 @@ impl FormatEngine<'_> {
         if line.trim_start().starts_with("/*")
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.trim_start().starts_with("#if") {
                 for (index, candidate) in self.output.iter().enumerate().rev() {
-                    let candidate_code =
-                        candidate[..trailing_comment_split_limit(candidate)].trim_end();
+                    let candidate_code = self.output.code_of(candidate).trim_end();
                     if !(candidate_code.trim_start().starts_with('#')
                         && candidate_code.ends_with(']'))
                     {
@@ -284,7 +284,7 @@ impl FormatEngine<'_> {
         if line.trim() == "{"
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.trim() == "{" {
                 // Output lines already carry the case-block unindent.
                 layout.exact_indent_spaces = Some(
@@ -297,7 +297,7 @@ impl FormatEngine<'_> {
         if line.trim() == "{"
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             let mut paren_depth = 0isize;
             for ch in previous_code.chars() {
                 match ch {
@@ -318,7 +318,7 @@ impl FormatEngine<'_> {
         if line.trim() == "{"
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if trailing_word(previous_code) == "return"
                 && !previous_code.trim_start().starts_with("return")
                 && let Some(open) = self
@@ -347,7 +347,7 @@ impl FormatEngine<'_> {
                 .is_some_and(is_identifier_start)
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             let previous_trimmed = previous_code.trim_start();
             if previous_trimmed
                 .chars()
@@ -376,7 +376,7 @@ impl FormatEngine<'_> {
             ])
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             let previous_trimmed = previous_code.trim_start();
             if line.contains("#endif")
                 && previous_trimmed
@@ -434,7 +434,7 @@ impl FormatEngine<'_> {
             })
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             let previous_trimmed = previous_code.trim_start();
             let current_trimmed = line.trim_start();
             if current_trimmed.starts_with([';', '!', ','])
@@ -494,10 +494,7 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
             && let Some(previous) = self.output.last_line_outside_comment()
-            && previous[..trailing_comment_split_limit(previous)]
-                .trim_end()
-                .trim()
-                == "("
+            && self.output.code_of(previous).trim_end().trim() == "("
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
@@ -510,7 +507,7 @@ impl FormatEngine<'_> {
             && line.trim_start().starts_with(';')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.trim_start().starts_with("#if") && previous_code.contains("->") {
                 layout.exact_indent_spaces =
                     Some(self.layout.indentation.indent() * self.options.indent_width);
@@ -533,9 +530,10 @@ impl FormatEngine<'_> {
             }
         }
         if layout.line_kind == LineKind::Normal
-            && self.output.last_line_outside_comment().is_some_and(|line| {
-                line[..trailing_comment_split_limit(line)].trim_end().trim() == "catch"
-            })
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|line| self.output.code_of(line).trim_end().trim() == "catch")
         {
             layout.exact_indent_spaces = self
                 .output
@@ -545,7 +543,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && line.trim_start().starts_with(']')
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 code.trim_start().starts_with("#define") && !code.ends_with('\\')
             })
         {
@@ -568,7 +566,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    let code = self.output.code_of(previous).trim_end();
                     has_hash_outside_literals(code) && !code.trim_start().starts_with('#')
                 })
             && self.stream_chain_frame_indent_spaces(line).is_none()

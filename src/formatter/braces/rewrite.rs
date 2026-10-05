@@ -26,7 +26,7 @@ use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, templat
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_column,
 };
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 use std::collections::{HashMap, HashSet};
@@ -802,7 +802,7 @@ impl FormatEngine<'_> {
                         .previous_pre_adjust_line
                         .as_deref()
                         .is_some_and(|line| {
-                            let code = line[..trailing_comment_split_limit(line)].trim_end();
+                            let code = self.output.code_of(line).trim_end();
                             code.trim_start() == "else" && line_ends_with_comment(line)
                         }) =>
             {
@@ -833,7 +833,7 @@ impl FormatEngine<'_> {
         let preserves_return_continuation_column = self.options.brace_style
             == BraceStyle::Whitesmith
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 code.trim_start().starts_with("return ") && code.ends_with(':')
             });
         let semantic_header = self
@@ -1030,7 +1030,7 @@ impl FormatEngine<'_> {
 
     fn previous_output_code_ends_assignment(&self) -> bool {
         self.output.last().is_some_and(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             code.ends_with('=')
         })
     }
@@ -1121,11 +1121,10 @@ impl FormatEngine<'_> {
                     .then_some(BraceType::Initializer)
             })
             .or_else(|| {
-                let previous_code = self.output.last().map(|line| {
-                    line[..trailing_comment_split_limit(line)]
-                        .trim_end()
-                        .to_string()
-                });
+                let previous_code = self
+                    .output
+                    .last()
+                    .map(|line| self.output.code_of(line).trim_end().to_string());
                 (self.current_is_blank()
                     && previous_code
                         .as_deref()
@@ -1224,7 +1223,7 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && let Some(previous) = self.output.last()
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(

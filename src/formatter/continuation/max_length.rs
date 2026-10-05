@@ -19,8 +19,8 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, trailing_comment_split_limit,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, last_unmatched_open_delimiter, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, head_ends_assignment_operator,
@@ -325,7 +325,7 @@ impl FormatEngine<'_> {
     fn split_part_indent(&self, part: &str) -> Option<usize> {
         let first = self.output.pending_tokens()?.first;
         let token = self.tree.tokens.get(first)?;
-        if !part.trim_start().starts_with(token_text(token).as_str()) {
+        if !part.trim_start().starts_with(&*token_text(token)) {
             return None;
         }
         self.split_part_stack_indent(first)
@@ -350,7 +350,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let text = token_text(token);
-            let Some(offset) = line[cursor..].find(&text) else {
+            let Some(offset) = line[cursor..].find(&*text) else {
                 return;
             };
             if cursor + offset >= from {
@@ -378,7 +378,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| !line.trim().is_empty())?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let previous_trimmed = previous_code.trim_start();
         if !previous_trimmed.starts_with("using ") || !previous_code.ends_with('=') {
             return None;

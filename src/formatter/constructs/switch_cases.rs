@@ -2,7 +2,7 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{Token, raw_strings, token_text};
+use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_text};
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
@@ -44,11 +44,23 @@ pub(crate) fn case_label_with_trailing_comment(line: &str) -> bool {
     (find_case_colon(code).is_some() || code == "default:") && code.ends_with(':')
 }
 
+/// Whether the line of `tokens` may start with a `case` or `default`
+/// label, a cheap test before the line's text is formed.
+pub(crate) fn tokens_may_start_label(tokens: &[Token]) -> bool {
+    first_visible_token(tokens).is_some_and(|token| {
+        let text = token_text(token);
+        text.starts_with("case") || text.starts_with("default")
+    })
+}
+
 pub(crate) fn multiline_switch_label_colon(
     tokens: &[Token],
     line_start: usize,
     line_end: usize,
 ) -> Option<(usize, bool)> {
+    if !tokens_may_start_label(&tokens[line_start..line_end]) {
+        return None;
+    }
     let line = tokens[line_start..line_end]
         .iter()
         .filter(|token| !matches!(token, Token::Newline))
@@ -884,7 +896,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         if !previous_code.trim_start().starts_with("switch") || !previous_code.ends_with('{') {
             return None;
         }
@@ -912,7 +924,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let previous_trimmed = previous_code.trim_start();
         let adjusted_delta = self.adjusted_line_indent_delta(previous);
         let target = if previous_code.ends_with('{')
@@ -945,7 +957,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let switch_line = self.output.scoped().iter().rev().find(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             code.trim_start().starts_with("switch")
         })?;
         let body_indent = usize::from(
@@ -973,7 +985,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trim().is_empty())
         {
-            let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let code = self.output.code_of(previous).trim_end();
             let trimmed = code.trim_start();
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 let follows_comment = self
@@ -1044,7 +1056,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let nearest_case = self.output.scoped().iter().rev().find(|line| {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             trimmed.starts_with("case ") || trimmed.starts_with("default:")
         });
@@ -1056,20 +1068,13 @@ impl FormatEngine<'_> {
                 .is_some_and(|(_, _, trimmed)| starts_header_word(trimmed, "switch"));
         if closes_switch
             || self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-                && nearest_case.is_some_and(|line| {
-                    line[..trailing_comment_split_limit(line)]
-                        .trim_end()
-                        .ends_with('{')
-                })
+                && nearest_case
+                    .is_some_and(|line| self.output.code_of(line).trim_end().ends_with('{'))
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
         if self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-            && nearest_case.is_some_and(|line| {
-                !line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with('{')
-            })
+            && nearest_case.is_some_and(|line| !self.output.code_of(line).trim_end().ends_with('{'))
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             return current_spaces
@@ -1100,7 +1105,7 @@ impl FormatEngine<'_> {
         }
         let body_spaces = normal_indent * self.options.indent_width;
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let call_indent = self
             .output
             .scoped()
@@ -1109,7 +1114,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .take(8)
             .take_while(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 let trimmed = code.trim_start();
                 !trimmed.starts_with("case ")
                     && !trimmed.starts_with("default:")
@@ -1117,7 +1122,7 @@ impl FormatEngine<'_> {
                     && !trimmed.ends_with('{')
             })
             .find_map(|line| {
-                let code = line[..trailing_comment_split_limit(line)].trim_end();
+                let code = self.output.code_of(line).trim_end();
                 (unmatched_open_paren_column(code).is_some() && !code.ends_with(';'))
                     .then(|| leading_visual_width(line, self.options.tab_width))
             })?;
@@ -1146,9 +1151,7 @@ impl FormatEngine<'_> {
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         (case_unindent > 0
             && line.trim_start().starts_with(')')
-            && line[..trailing_comment_split_limit(line)]
-                .trim_end()
-                .ends_with('{'))
+            && self.output.code_of(line).trim_end().ends_with('{'))
         .then_some(current_spaces + case_unindent)
     }
 
@@ -1162,7 +1165,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         let trimmed = line.trim_start();
         let owns_case_floor = previous_code.ends_with(") {")
             || trimmed == "}"
@@ -1745,7 +1748,7 @@ impl FormatEngine<'_> {
             .output
             .current_closing_brace_open(self.options.tab_width)
             .is_some_and(|(_, _, opener)| opener == "{");
-        let code = line[..trailing_comment_split_limit(line)].trim();
+        let code = self.output.code_of(line).trim();
         if line.trim() == "}" || ((closes_switch || opened_alone) && code == "}") {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
@@ -1860,7 +1863,7 @@ impl FormatEngine<'_> {
     fn recent_same_line_else_open_indent_spaces(&self) -> Option<usize> {
         let tab_width = self.options.tab_width;
         for line in self.output.scoped().iter().rev().take(32) {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 break;
@@ -2152,7 +2155,7 @@ impl FormatEngine<'_> {
 
         if line_kind == LineKind::SwitchLabel {
             layout.case_block_closed_depth = None;
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             if code.ends_with('{') {
                 self.layout
                     .switch_case_layout
@@ -2249,7 +2252,7 @@ impl FormatEngine<'_> {
                 );
                 continue;
             }
-            let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let code = self.output.code_of(previous).trim_end();
             let trimmed = code.trim_start();
             if code.ends_with('{')
                 && (trimmed.starts_with("case ") || trimmed.starts_with("default:"))

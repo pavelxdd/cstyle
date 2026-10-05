@@ -260,7 +260,7 @@ impl FormatEngine<'_> {
             self.layout
                 .frame_stack
                 .mark_delimiter_line_output_indent(output_line_index, output_indent);
-            let output_code = output_line[..trailing_comment_split_limit(output_line)].trim_end();
+            let output_code = self.output.code_of(output_line).trim_end();
             let line_comment_limit = line_comment_split_limit(line);
             let code_before_line_comment = line[..line_comment_limit].trim_end();
             // A `#` in a literal is no directive.
@@ -348,11 +348,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .find(|line| !line.trim().is_empty())
-                    .is_none_or(|line| {
-                        !line[..trailing_comment_split_limit(line)]
-                            .trim_end()
-                            .ends_with('}')
-                    })
+                    .is_none_or(|line| !self.output.code_of(line).trim_end().ends_with('}'))
             {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
@@ -379,7 +375,7 @@ impl FormatEngine<'_> {
         for line_index in output_line_index..self.output.len() {
             self.observe_ternary_colon_output_line(line_index);
             let output_line = &self.output[line_index];
-            let output_code = output_line[..trailing_comment_split_limit(output_line)].trim_end();
+            let output_code = self.output.code_of(output_line).trim_end();
             if output_code.trim_start().starts_with("return ")
                 && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')

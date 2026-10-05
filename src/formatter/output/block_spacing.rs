@@ -4,7 +4,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::is_code_token;
-use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::source::lex::leading_identifier;
 
 #[derive(Default)]
@@ -49,7 +48,7 @@ impl FormatEngine<'_> {
                     .previous_pre_adjust_line
                     .as_deref()
                     .is_some_and(|line| {
-                        let code = &line[..trailing_comment_split_limit(line)];
+                        let code = &self.output.code_of(line);
                         !code.trim().is_empty() && line[code.len()..].trim_start().starts_with("/*")
                     })
             {
@@ -218,9 +217,7 @@ impl FormatEngine<'_> {
             })
             .is_some_and(|index| {
                 let line = &self.output[index];
-                line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with(':')
+                self.output.code_of(line).trim_end().ends_with(':')
             })
     }
 
@@ -237,9 +234,7 @@ impl FormatEngine<'_> {
             })
             .is_some_and(|index| {
                 let line = &self.output[index];
-                !line[..trailing_comment_split_limit(line)]
-                    .trim_end()
-                    .ends_with('{')
+                !self.output.code_of(line).trim_end().ends_with('{')
             })
     }
 
@@ -381,15 +376,11 @@ impl FormatEngine<'_> {
                     !self.tree.tokens[open + 1..close].iter().any(is_code_token)
                 });
             // So is one ending in an empty block of its own.
-            let ends_empty_block =
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_deref()
-                    .is_some_and(|previous| {
-                        previous[..trailing_comment_split_limit(previous)]
-                            .trim_end()
-                            .ends_with("{}")
-                    });
+            let ends_empty_block = self
+                .layout
+                .previous_pre_adjust_line
+                .as_deref()
+                .is_some_and(|previous| self.output.code_of(previous).trim_end().ends_with("{}"));
             self.block_spacing.closed_empty_block =
                 previous_opens || holds_no_code || ends_empty_block;
         }

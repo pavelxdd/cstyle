@@ -18,7 +18,7 @@ use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_to
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{preprocessor_directive, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::preprocessor_directive;
 
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
@@ -134,7 +134,7 @@ impl FormatEngine<'_> {
         // Tokens that the engine moved across lines map to no line of theirs.
         if !line
             .trim_start()
-            .starts_with(token_text(&self.tree.tokens[first]).as_str())
+            .starts_with(&*token_text(&self.tree.tokens[first]))
         {
             return layout;
         }
@@ -578,7 +578,7 @@ impl FormatEngine<'_> {
             .strip_prefix("/*")
             .and_then(|rest| rest.split_once("*/"))
             .map_or(text, |(_, rest)| rest.trim_start());
-        if !text.starts_with(token_text(&tokens[row]).as_str()) {
+        if !text.starts_with(&*token_text(&tokens[row])) {
             return None;
         }
         // A `}, {` row closes the row before it on the element's line.
@@ -1284,7 +1284,7 @@ impl FormatEngine<'_> {
         if !is_code_token(&tokens[code])
             || !trimmed[close + 2..]
                 .trim_start()
-                .starts_with(token_text(&tokens[code]).as_str())
+                .starts_with(&*token_text(&tokens[code]))
             || matches!(&tokens[code], Token::Word(word) if word == "case" || word == "default")
         {
             return None;
@@ -1961,7 +1961,7 @@ impl FormatEngine<'_> {
                 continue;
             }
             let piece = token_text(piece_token);
-            let offset = text.get(position..)?.find(piece.as_str())?;
+            let offset = text.get(position..)?.find(&*piece)?;
             if index == token {
                 return Some(visual_width_from(
                     &text[..position + offset],
@@ -2273,7 +2273,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim();
+                    let code = self.output.code_of(line).trim();
                     code.starts_with('{') && code.ends_with('}') && code.len() > 2
                 })
     }
@@ -3647,7 +3647,7 @@ impl FormatEngine<'_> {
             _ => return None,
         };
         let close = self.tree.groups.get(group).close?;
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        let code = self.output.code_of(line).trim_end();
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)
             || !code.ends_with('}')
             || self.tree.tokens[first..close]

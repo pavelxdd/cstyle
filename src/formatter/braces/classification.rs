@@ -204,7 +204,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| !line.trim().is_empty())
                 .is_some_and(|line| {
-                    let code = &line[..trailing_comment_split_limit(line)];
+                    let code = &self.output.code_of(line);
                     is_namespace_block_header(code) && !code.trim_end().ends_with('{')
                 });
         if header.is_some_and(is_defer_header) {
@@ -323,7 +323,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    let code = self.output.code_of(previous).trim_end();
                     code.is_empty()
                         || code.ends_with([';', '}'])
                         || code.trim_start().starts_with('#')
@@ -348,7 +348,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+                    let code = self.output.code_of(previous).trim_end();
                     code.ends_with([';', '{', '}']) || code.trim_start().starts_with('#')
                 })
         {
@@ -399,7 +399,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
             .take(16)
         {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             if code.ends_with([';', '{', '}']) {
                 break;
             }
@@ -450,7 +450,7 @@ impl FormatEngine<'_> {
                 let trimmed = line.trim_start();
                 !trimmed.is_empty() && !is_comment_only_line(trimmed)
             }) {
-                Some(line) => &line[..trailing_comment_split_limit(line)],
+                Some(line) => self.output.code_of(line),
                 None => return false,
             }
         } else {

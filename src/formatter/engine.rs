@@ -39,9 +39,7 @@ use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, template_angle_role,
 };
 use crate::formatter::text::columns;
-use crate::formatter::text::line_scan::{
-    line_ends_with_comment, trailing_comment_split_limit, unmatched_open_paren_column,
-};
+use crate::formatter::text::line_scan::{line_ends_with_comment, unmatched_open_paren_column};
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
@@ -747,6 +745,9 @@ impl<'a> FormatEngine<'a> {
         line_start: usize,
         line_end: usize,
     ) -> bool {
+        if !switch_cases::tokens_may_start_label(&tokens[line_start..line_end]) {
+            return false;
+        }
         let line = tokens[line_start..line_end]
             .iter()
             .filter(|token| !matches!(token, Token::Newline))
@@ -1358,7 +1359,7 @@ impl<'a> FormatEngine<'a> {
                 && !self.current.trim_start().starts_with('{')
             {
                 self.output.scoped().iter().rev().take(64).find_map(|line| {
-                    let code = line[..trailing_comment_split_limit(line)].trim_end();
+                    let code = self.output.code_of(line).trim_end();
                     let prefix = code.strip_suffix('{')?.trim_end();
                     let prefix = prefix.trim_start();
                     (!prefix.is_empty()

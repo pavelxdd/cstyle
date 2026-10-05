@@ -118,7 +118,7 @@ impl FormatEngine<'_> {
         if !line.trim_end().ends_with('>') {
             return false;
         }
-        let code = line[..trailing_comment_split_limit(line)].trim_end();
+        let code = self.output.code_of(line).trim_end();
         let trimmed = code.trim_start();
         is_template_declaration_head_line(trimmed)
             && template_declaration_line_complete(trimmed)
@@ -141,14 +141,14 @@ impl FormatEngine<'_> {
             .map(String::as_str)
             .collect();
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
+                        let code = self.output.code_of(line).trim_end();
                         angle_depth_delta(code)
                     })
                     .sum();
@@ -172,19 +172,19 @@ impl FormatEngine<'_> {
         let Some(previous) = lines.first() else {
             return false;
         };
-        let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+        let previous_code = self.output.code_of(previous).trim_end();
         if !previous_code.ends_with('>') {
             return false;
         }
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = line[..trailing_comment_split_limit(line)].trim_end();
+                        let code = self.output.code_of(line).trim_end();
                         angle_depth_delta(code)
                     })
                     .sum();
@@ -244,11 +244,12 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find(|line| {
-                line[..trailing_comment_split_limit(line)]
+                self.output
+                    .code_of(line)
                     .trim_start()
                     .starts_with("template <")
             })
-            .filter(|line| line[..trailing_comment_split_limit(line)].trim() == "template <")
+            .filter(|line| self.output.code_of(line).trim() == "template <")
             .map(|line| {
                 leading_visual_width(line, self.options.tab_width) + self.options.indent_width
             });

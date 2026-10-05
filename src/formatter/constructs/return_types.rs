@@ -9,7 +9,7 @@ use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     find_outside_quotes, line_ends_with_comment, line_paren_imbalance,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
+    reverse_scan_skips_block_comment, unmatched_open_paren_column,
 };
 use crate::source::lex::is_identifier_continue;
 
@@ -44,7 +44,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trim().is_empty())
             .take(16)
         {
-            let code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let code = self.output.code_of(previous).trim_end();
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
@@ -87,7 +87,7 @@ impl FormatEngine<'_> {
         }
         let mut closed_blocks = 0usize;
         for (index, line) in self.output.iter().enumerate().rev().take(24) {
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -125,7 +125,7 @@ impl FormatEngine<'_> {
         while index > 0 {
             index -= 1;
             let line = &self.output[index];
-            let code = line[..trailing_comment_split_limit(line)].trim_end();
+            let code = self.output.code_of(line).trim_end();
             let trimmed = code.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -161,7 +161,7 @@ impl FormatEngine<'_> {
             .filter(|(_, line)| !line.trim().is_empty())
             .take(8)
         {
-            let previous_code = previous[..trailing_comment_split_limit(previous)].trim_end();
+            let previous_code = self.output.code_of(previous).trim_end();
             if let Some(open) = unmatched_open_paren_column(previous_code) {
                 let before = previous_code[..open].trim_end();
                 let name_start = function_name_start(before)?;
