@@ -637,7 +637,8 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
 fn has_comment_opener(line: &str) -> bool {
     let bytes = line.as_bytes();
     let mut from = 0;
-    while let Some(offset) = bytes[from..].iter().position(|&byte| byte == b'/') {
+    // `str::find` with a char searches by memchr.
+    while let Some(offset) = line[from..].find('/') {
         let slash = from + offset;
         if matches!(bytes.get(slash + 1), Some(b'/' | b'*')) {
             return true;
