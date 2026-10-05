@@ -1332,7 +1332,7 @@ impl FormatEngine<'_> {
     fn current_ends_builtin_pointer_cast(&self) -> bool {
         let current = self.current.trimmed_end();
         self.current_ends_pointer_cast()
-            && crate::formatter::engine::matching_open_paren_offset(current).is_some_and(|open| {
+            && self.current.last_close_paren_match().is_some_and(|open| {
                 current[open + 1..]
                     .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
                     .find(|word| !word.is_empty() && *word != "const")

@@ -16,7 +16,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::max_length::MaxLengthLineState;
 use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::{
-    CommentKind, Token, TokenLine, TokenLineCursor, next_non_layout_token_index,
+    CommentKind, Token, TokenLine, TokenLineCursor, matching_closes, next_non_layout_token_index,
     next_non_whitespace, token_char_len, token_text,
 };
 use crate::formatter::output::block_spacing::BlockSpacingState;
@@ -143,6 +143,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// The `]` matching each `[` of the tree.
+    bracket_closes: std::cell::OnceCell<Vec<u32>>,
     /// The last statement start astyle's stack found: the address of the
     /// tokens, the token it looked back from, and the start.
     pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
@@ -218,6 +220,7 @@ impl<'a> FormatEngine<'a> {
             line_comment_cache: std::cell::Cell::new(None),
             stack_start_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
+            bracket_closes: std::cell::OnceCell::new(),
             open_switch_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
@@ -598,6 +601,15 @@ impl<'a> FormatEngine<'a> {
         );
     }
 
+    /// The `]` closing the `[` at `open` before `end`.
+    fn bracket_close_before(&self, open: usize, end: usize) -> Option<usize> {
+        self.bracket_closes
+            .get_or_init(|| matching_closes(&self.tree.tokens, '[', ']'))
+            .get(open)
+            .map(|&close| close as usize)
+            .filter(|&close| close < end)
+    }
+
     fn template_opener_at(&self, index: usize) -> bool {
         self.template_openers
             .get_or_init(|| template_openers(&self.tree.tokens))
@@ -732,8 +744,13 @@ impl<'a> FormatEngine<'a> {
                 && next_non_whitespace(tokens, comment_index + 1, line.end)
                     .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
         });
-        let starts_initializer_designator =
-            initializers::bracket_starts_initializer_designator(tokens, index, line.end);
+        let starts_initializer_designator = matches!(tokens[index], Token::Symbol('['))
+            && initializers::bracket_starts_initializer_designator_by(
+                tokens,
+                index,
+                line.end,
+                |open| self.bracket_close_before(open, line.end),
+            );
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
         let following_closer_width =
@@ -1206,7 +1223,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = matching_open_paren_offset(current) else {
+        let Some(open) = self.current.last_close_paren_match() else {
             return false;
         };
         current[open + 1..current.len() - 1]
@@ -1219,7 +1236,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = matching_open_paren_offset(current) else {
+        let Some(open) = self.current.last_close_paren_match() else {
             return false;
         };
         trailing_word(current[..open].trimmed_end()) == "sizeof"
@@ -1289,7 +1306,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return None;
         }
-        let open = matching_open_paren_offset(current)?;
+        let open = self.current.last_close_paren_match()?;
         if current[..open]
             .chars()
             .next_back()
@@ -1951,24 +1968,6 @@ fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSo
         first_non_ws_is_brace,
         leading_indent,
     }
-}
-
-/// Byte offset of the `(` matching the `)` that ends `text`.
-pub(crate) fn matching_open_paren_offset(text: &str) -> Option<usize> {
-    let mut depth = 0usize;
-    for (offset, byte) in text.bytes().enumerate().rev() {
-        match byte {
-            b')' => depth += 1,
-            b'(' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(offset);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
 
 /// `whitespace` without an allocation when it is a run of spaces, as it

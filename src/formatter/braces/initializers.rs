@@ -53,12 +53,25 @@ pub(crate) fn bracket_starts_initializer_designator(
     start: usize,
     end: usize,
 ) -> bool {
+    bracket_starts_initializer_designator_by(tokens, start, end, |open| {
+        matching_close_bracket_on_line(tokens, open, end)
+    })
+}
+
+/// [`bracket_starts_initializer_designator`] with the `]` closing each `[`
+/// before `end` found by `close_of`.
+pub(crate) fn bracket_starts_initializer_designator_by(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+    close_of: impl Fn(usize) -> Option<usize>,
+) -> bool {
     if !matches!(tokens.get(start), Some(Token::Symbol('['))) {
         return false;
     }
     let mut open = start;
     loop {
-        let Some(close) = matching_close_bracket_on_line(tokens, open, end) else {
+        let Some(close) = close_of(open) else {
             return false;
         };
         let Some(next) = next_non_whitespace(tokens, close + 1, end) else {

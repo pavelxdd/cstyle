@@ -16,6 +16,7 @@ pub(crate) struct CurrentLine {
     trailing_comment: Cell<Option<TrailingCommentScan>>,
     declaration_segment: RefCell<DeclarationSegmentScan>,
     marks: Cell<LineMarks>,
+    parens: RefCell<ParenScan>,
     /// Code tokens whose text is on the line so far.
     tokens: Option<TokenSpan>,
     /// Code token being pushed; text added meanwhile belongs to it.
@@ -342,6 +343,16 @@ impl CurrentLine {
         self.marks().statement_start
     }
 
+    /// The byte index of the `(` matching the last `)` of the line.
+    pub(crate) fn last_close_paren_match(&self) -> Option<usize> {
+        let mut scan = self.parens.borrow_mut();
+        if scan.scanned > self.text.len() {
+            *scan = ParenScan::default();
+        }
+        scan.advance(self.text.as_bytes());
+        scan.last_close_match
+    }
+
     /// Whether a `[` follows the last `]`.
     pub(crate) fn has_unclosed_bracket(&self) -> bool {
         let marks = self.marks();
@@ -390,6 +401,7 @@ impl CurrentLine {
         self.trailing_comment.set(None);
         self.declaration_segment.take();
         self.marks.take();
+        self.parens.take();
     }
 }
 
@@ -398,6 +410,28 @@ impl Deref for CurrentLine {
 
     fn deref(&self) -> &Self::Target {
         &self.text
+    }
+}
+
+/// The open parentheses of the line read so far, and the match of the
+/// last `)`.
+#[derive(Default)]
+struct ParenScan {
+    scanned: usize,
+    open: Vec<usize>,
+    last_close_match: Option<usize>,
+}
+
+impl ParenScan {
+    fn advance(&mut self, bytes: &[u8]) {
+        for (index, &byte) in bytes.iter().enumerate().skip(self.scanned) {
+            match byte {
+                b'(' => self.open.push(index),
+                b')' => self.last_close_match = self.open.pop(),
+                _ => {}
+            }
+        }
+        self.scanned = bytes.len();
     }
 }
 

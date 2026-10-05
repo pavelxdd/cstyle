@@ -190,6 +190,29 @@ impl Groups {
         })
     }
 
+    /// The tokens `group` holds itself, in order: a nested group is passed
+    /// over from its opening to its closing.
+    pub(crate) fn members(&self, group: GroupId) -> impl Iterator<Item = usize> + '_ {
+        let Group { open, close, .. } = self.groups[group.index()];
+        let end = close.unwrap_or(self.enclosing.len());
+        let mut next = open + 1;
+        std::iter::from_fn(move || {
+            while next < end {
+                let at = next;
+                next += 1;
+                if self.enclosing(at) != Some(group) {
+                    continue;
+                }
+                if let Some(opened) = self.opened_at(at) {
+                    // An unclosed group holds the rest.
+                    next = self.groups[opened.index()].close.unwrap_or(end);
+                }
+                return Some(at);
+            }
+            None
+        })
+    }
+
     /// `id` and its enclosing groups, innermost first.
     pub(crate) fn ancestors(&self, id: GroupId) -> impl Iterator<Item = GroupId> + '_ {
         std::iter::successors(Some(id), |&id| self.groups[id.index()].parent)

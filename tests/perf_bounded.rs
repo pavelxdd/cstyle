@@ -338,3 +338,24 @@ fn nested_ternary_colons_stay_bounded() {
         "nested ternary colons took {elapsed:?}, expected bounded runtime (< 5s)"
     );
 }
+
+#[test]
+fn nested_calls_and_subscripts_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 50_000;
+    for input in [
+        format!("x = {}{};\n", "f(".repeat(n), ")".repeat(n)),
+        format!("x = a{}{};\n", "[a".repeat(n), "]".repeat(n)),
+    ] {
+        let start = Instant::now();
+        format_ok(&input);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "nested calls or subscripts took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}

@@ -607,6 +607,31 @@ pub(crate) fn matching_close_paren_index(tokens: &[Token], open_paren: usize) ->
     None
 }
 
+/// The `)` matching each `(` of `tokens`, as `matching_close_paren_index`
+/// finds it, by token index; `u32::MAX` where none does.
+pub(crate) fn matching_close_parens(tokens: &[Token]) -> Vec<u32> {
+    matching_closes(tokens, '(', ')')
+}
+
+/// The `close` symbol matching each `open` symbol of `tokens`, counting
+/// those symbols alone, by token index; `u32::MAX` where none does.
+pub(crate) fn matching_closes(tokens: &[Token], open: char, close: char) -> Vec<u32> {
+    let mut closes = vec![u32::MAX; tokens.len()];
+    let mut opens = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Symbol(symbol) if *symbol == open => opens.push(index),
+            Token::Symbol(symbol) if *symbol == close => {
+                if let Some(opener) = opens.pop() {
+                    closes[opener] = u32::try_from(index).expect("a token index fits in u32");
+                }
+            }
+            _ => {}
+        }
+    }
+    closes
+}
+
 pub(crate) fn previous_non_layout_token_index(tokens: &[Token], before: usize) -> Option<usize> {
     (0..before)
         .rev()

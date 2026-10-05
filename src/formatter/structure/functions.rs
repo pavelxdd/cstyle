@@ -531,11 +531,8 @@ fn holds_declarations(tokens: &[Token], groups: &Groups, params: GroupId) -> boo
         return true;
     };
     let mut default_argument = false;
-    for (index, token) in tokens.iter().enumerate().take(close).skip(group.open + 1) {
-        if groups.enclosing(index) != Some(params) {
-            continue;
-        }
-        match token {
+    for index in groups.members(params).take_while(|&index| index < close) {
+        match &tokens[index] {
             Token::Symbol(',') => default_argument = false,
             _ if default_argument => {}
             Token::Operator(operator) if operator == "=" => default_argument = true,

@@ -2,8 +2,8 @@
 
 use crate::formatter::index_hash::IndexSet;
 use crate::formatter::lexer::{
-    Token, matching_close_paren_index, next_non_layout_token_index, next_non_whitespace,
-    previous_non_layout_token_index,
+    Token, matching_close_paren_index, matching_close_parens, next_non_layout_token_index,
+    next_non_whitespace, previous_non_layout_token_index,
 };
 use crate::formatter::structure::SourceTree;
 use crate::formatter::syntax::language::{
@@ -552,6 +552,7 @@ fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
 }
 
 fn classify_word_roles(tokens: &[Token], roles: &mut SyntaxRoles) {
+    let closes = matching_close_parens(tokens);
     for (index, token) in tokens.iter().enumerate() {
         let Token::Word(word) = token else {
             continue;
@@ -565,7 +566,11 @@ fn classify_word_roles(tokens: &[Token], roles: &mut SyntaxRoles) {
         if !matches!(tokens.get(open), Some(Token::Symbol('('))) {
             continue;
         }
-        let Some(close) = matching_close_paren_index(tokens, open) else {
+        let Some(close) = closes
+            .get(open)
+            .filter(|&&close| close != u32::MAX)
+            .map(|&close| close as usize)
+        else {
             continue;
         };
         let previous = previous_non_layout_token_index(tokens, index);
