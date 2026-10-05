@@ -676,10 +676,13 @@ impl FormatEngine<'_> {
                 || trimmed.ends_with(';')
                 || trimmed.starts_with("*/")
                 || trimmed.ends_with("*/")
-                || code.contains('{')
-                || code.contains('}')
+                || self.output.code_has(index, b'{')
+                || self.output.code_has(index, b'}')
             {
                 break;
+            }
+            if !self.output.code_has(index, b':') {
+                continue;
             }
             let colon_start = trimmed.starts_with(':') && !trimmed.starts_with("::");
             let inline_colon = has_inline_constructor_initializer_colon(code);

@@ -99,19 +99,27 @@ pub(crate) fn same_line_nested_header_extra(line: &str) -> usize {
 /// cheap bound before tokenizing.
 fn nested_header_word_candidates(code: &str) -> usize {
     let bytes = code.as_bytes();
-    ["if", "for", "while", "switch", "do"]
-        .iter()
-        .map(|word| {
-            code.match_indices(word)
-                .filter(|&(index, _)| {
-                    let before = index.checked_sub(1).map(|at| bytes[at]);
-                    let after = bytes.get(index + word.len()).copied();
-                    !before.is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
-                        && !after.is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-                })
-                .count()
-        })
-        .sum()
+    let mut count = 0;
+    for (index, &byte) in bytes.iter().enumerate() {
+        if !matches!(byte, b'i' | b'f' | b'w' | b's' | b'd')
+            || index
+                .checked_sub(1)
+                .is_some_and(|at| bytes[at].is_ascii_alphabetic() || bytes[at] == b'_')
+        {
+            continue;
+        }
+        let rest = &bytes[index..];
+        for word in ["if", "for", "while", "switch", "do"] {
+            if rest.starts_with(word.as_bytes())
+                && !rest
+                    .get(word.len())
+                    .is_some_and(|&after| after.is_ascii_alphanumeric() || after == b'_')
+            {
+                count += 1;
+            }
+        }
+    }
+    count
 }
 
 fn is_split_loop_header(line: &str) -> bool {
@@ -2026,11 +2034,11 @@ impl FormatEngine<'_> {
         let split_else_chain =
             structural_split_else_chain || self.output.recent_scoped_else_line(128);
         let recent_adjacent_string_call =
-            self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 code.ends_with(");") && starts_string_literal_token(code.trimmed_start())
-            }) && self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            }) && self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trimmed_start())
                     && !code.ends_with(';')
@@ -2262,4 +2270,51 @@ pub(crate) fn is_header(options: &FormatOptions, word: &str) -> bool {
 pub(crate) fn is_add_braces_header(options: &FormatOptions, word: &str) -> bool {
     is_standard_add_braces_header(word)
         || options.control_headers.iter().any(|header| header == word)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::nested_header_word_candidates;
+
+    fn candidates_by_search(code: &str) -> usize {
+        let bytes = code.as_bytes();
+        ["if", "for", "while", "switch", "do"]
+            .iter()
+            .map(|word| {
+                code.match_indices(word)
+                    .filter(|&(index, _)| {
+                        let before = index.checked_sub(1).map(|at| bytes[at]);
+                        let after = bytes.get(index + word.len()).copied();
+                        !before.is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+                            && !after
+                                .is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                    })
+                    .count()
+            })
+            .sum()
+    }
+
+    #[test]
+    fn counts_header_word_spots_as_a_search_for_each_word_does() {
+        let pieces = [
+            "if", "for", "while", "switch", "do", "i", "f", "o", "_", "1", " ", "(", "é", "w",
+            "hile", "s", "d", "{",
+        ];
+        let mut state = 0x9e37_79b9_u32;
+        for _ in 0..20_000 {
+            let mut code = String::new();
+            for _ in 0..(state % 9) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                code.push_str(pieces[state as usize % pieces.len()]);
+            }
+            state = state.wrapping_add(1);
+            assert_eq!(
+                nested_header_word_candidates(&code),
+                candidates_by_search(&code),
+                "{code:?}"
+            );
+        }
+    }
 }

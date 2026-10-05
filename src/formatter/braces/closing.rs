@@ -949,14 +949,13 @@ impl FormatEngine<'_> {
                 let extra = same_line_nested_header_extra(open);
                 (extra > 0).then_some(open_spaces + extra * self.options.indent_width)
             });
-        for opening in self
+        for index in self
             .output
-            .scoped()
-            .iter()
+            .scoped_range()
             .rev()
-            .filter(|line| !line.trimmed().is_empty())
+            .filter(|&index| !self.output.trimmed(index).is_empty())
         {
-            let code = self.output.code_of(opening).trimmed_end();
+            let code = self.output.code_before_comment_trimmed(index);
             let trimmed = code.trimmed_start();
             if trimmed == "}" {
                 break;
@@ -965,7 +964,7 @@ impl FormatEngine<'_> {
                 let extra = same_line_nested_header_extra(trimmed);
                 if extra > 0 {
                     spaces = Some(
-                        leading_visual_width(opening, self.options.tab_width)
+                        self.output.lead_width(index, self.options.tab_width)
                             + extra * self.options.indent_width,
                     );
                 }
@@ -1254,11 +1253,11 @@ impl FormatEngine<'_> {
         let case_unindent_spaces =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         let recent_adjacent_string_call =
-            self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 code.ends_with(");") && starts_string_literal_token(code.trimmed_start())
-            }) && self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            }) && self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trimmed_start())
                     && !code.ends_with(';')

@@ -236,6 +236,7 @@ impl FormatEngine<'_> {
                 .previous_pre_adjust_line
                 .as_ref()
                 .is_some_and(|previous| previous.trimmed_end().ends_with(','))
+            && self.output.may_have_at()
             && self
                 .output
                 .scoped()

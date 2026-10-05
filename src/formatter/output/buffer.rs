@@ -35,6 +35,8 @@ pub(crate) struct LineBraceMeta {
     comment_split_limit: u32,
     /// The same end with the blanks before it dropped.
     comment_code_end: u32,
+    /// The ASCII bytes the line's code holds, one bit each.
+    code_bytes: [u64; 2],
     /// Whether the line's text holds `new `.
     mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
@@ -194,6 +196,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         trim_start_byte: narrow(line.len() - line_start.len()),
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(code.len()),
+        code_bytes: ascii_bytes(&line.as_bytes()[..code.len()]),
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (paren_opens.last().copied()).map(narrow),
@@ -205,6 +208,17 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
             &line[(line.len() - line_start.len()).min(code.len())..code.len()],
         ),
     }
+}
+
+/// The set of ASCII bytes `text` holds.
+fn ascii_bytes(text: &[u8]) -> [u64; 2] {
+    let mut set = [0; 2];
+    for &byte in text {
+        if byte < 128 {
+            set[usize::from(byte >> 6)] |= 1 << (byte & 63);
+        }
+    }
+    set
 }
 
 /// Where `line`'s code before a trailing comment ends, before and after
@@ -230,6 +244,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         trim_start_byte: narrow(line.len() - line_start.len()),
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(line.len()),
+        code_bytes: ascii_bytes(line.as_bytes()),
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
         paren_last_open_column: (None).map(narrow),
@@ -338,6 +353,8 @@ pub(crate) struct OutputBuffer {
     recent_if_directive_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line led by `#`.
     recent_hash_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line whose code is led by `#`.
+    recent_code_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -647,6 +664,7 @@ impl OutputBuffer {
                     trim_start_byte: narrow(line.len() - line.trimmed_start().len()),
                     trim_end_byte: narrow(line.trimmed_end().len()),
                     code_end_byte: narrow(0),
+                    code_bytes: [0; 2],
                     paren_closes: narrow(0),
                     paren_open_count: narrow(0),
                     paren_last_open_column: (None).map(narrow),
@@ -738,6 +756,12 @@ impl OutputBuffer {
             return self.code_before_comment(index);
         }
         &line[..trailing_comment_split_limit(line)]
+    }
+
+    /// Whether `code(index)` holds the ASCII `byte`.
+    pub(crate) fn code_has(&self, index: usize, byte: u8) -> bool {
+        debug_assert!(byte.is_ascii());
+        self.brace_meta(index).code_bytes[usize::from(byte >> 6)] >> (byte & 63) & 1 == 1
     }
 
     pub(crate) fn code_trimmed(&self, index: usize) -> &str {
@@ -1025,6 +1049,13 @@ impl OutputBuffer {
     pub(crate) fn has_hash_led_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_hash_cache, start, |index| {
             self.trimmed(index).starts_with('#')
+        })
+    }
+
+    /// Whether the code of a line from `start` on is led by `#`.
+    pub(crate) fn has_hash_led_code_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_code_hash_cache, start, |index| {
+            self.code_trimmed(index).starts_with('#')
         })
     }
 

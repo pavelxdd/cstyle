@@ -1316,6 +1316,7 @@ impl FormatEngine<'_> {
             }
         }
         if self.token_input.token_source_line_indent > 0
+            && self.may_have_noexcept
             && !line_start.starts_with("//")
             && !line_start.starts_with('{')
             && (0..self.output.len()).rev().take(8).any(|index| {

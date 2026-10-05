@@ -50,6 +50,16 @@ pub(crate) fn source_to_spaces(source: &str, tab_width: usize) -> String {
     to_spaces_stateful(source, tab_width, false, None, false, None).0
 }
 
+/// Whether `byte` is an ASCII character one column wide that opens or
+/// closes no literal, comment, or raw string.
+fn is_plain_byte(byte: u8) -> bool {
+    matches!(byte, b' '..=b'~')
+        && !matches!(
+            byte,
+            b'"' | b'\'' | b'/' | b'*' | b'\\' | b'u' | b'L' | b'U' | b'R'
+        )
+}
+
 fn to_spaces_stateful(
     line: &str,
     tab_width: usize,
@@ -82,6 +92,21 @@ fn to_spaces_stateful(
 
     while index < bytes.len() {
         let byte = bytes[index];
+        // A run of bytes that start nothing and end nothing only moves the
+        // column.
+        if raw_delimiter.is_none() && is_plain_byte(byte) {
+            let run = bytes[index..]
+                .iter()
+                .take_while(|&&byte| is_plain_byte(byte))
+                .count();
+            if bytes[index..index + run].iter().any(|&byte| byte != b' ') {
+                at_indent = false;
+            }
+            index += run;
+            column += run;
+            previous = bytes[index - 1];
+            continue;
+        }
         if byte == b'\n' && raw_delimiter.is_none() {
             column = 0;
             in_line_comment = false;

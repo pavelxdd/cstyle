@@ -44,6 +44,7 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     let may_have_backslash_body = source.contains('\\');
     let may_have_swig = source.contains('%');
     let may_have_hash = source.contains('#');
+    let may_have_noexcept = source.contains("noexcept");
     let tokens = tokenize(source);
     drop(converted_source);
     drop(input);
@@ -71,6 +72,7 @@ pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     }
     engine.set_may_have_backslash_body(may_have_backslash_body);
     engine.set_may_have_swig(may_have_swig);
+    engine.may_have_noexcept = may_have_noexcept;
     engine.may_have_class_base_access = class_declarations::has_base_access_token(&tokens);
     engine.preprocessor.may_have_preprocessor = may_have_hash
         || tokens

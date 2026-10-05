@@ -345,6 +345,9 @@ impl FormatEngine<'_> {
                 .chars()
                 .next()
                 .is_some_and(is_identifier_start)
+                && self
+                    .output
+                    .has_hash_led_code_line_from(self.output.len().saturating_sub(5))
                 && (0..self.output.len()).rev().take(5).any(|index| {
                     let code = self.output.code(index);
                     self.output.code_trimmed(index).starts_with('#') && code.ends_with(']')
@@ -472,6 +475,7 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with(['#', '{', '}'])
+            && self.output.may_have_else()
             && (0..self.output.len())
                 .rev()
                 .take(4)

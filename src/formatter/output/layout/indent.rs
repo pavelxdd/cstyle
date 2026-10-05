@@ -1311,13 +1311,12 @@ impl FormatEngine<'_> {
             if !has_unmatched_open_brace(previous_code) {
                 let inside_member_brace =
                     self.output
-                        .scoped()
-                        .iter()
+                        .scoped_range()
                         .rev()
                         .skip(1)
                         .take(16)
-                        .any(|line| {
-                            let code = self.output.code_of(line).trimmed_end();
+                        .any(|index| {
+                            let code = self.output.code_before_comment_trimmed(index);
                             !code.ends_with(';') && has_unmatched_open_brace(code)
                         });
                 let target = if inside_member_brace {

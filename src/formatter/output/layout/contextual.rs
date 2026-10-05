@@ -3258,8 +3258,8 @@ impl FormatEngine<'_> {
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
-            && self.output.scoped().iter().rev().take(16).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            && self.output.scoped_range().rev().take(16).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 code.contains(" new ") || code.trimmed_start().starts_with("new ")
             })
             && let Some(spaces) = self.split_call_closing_paren_indent_spaces(line)

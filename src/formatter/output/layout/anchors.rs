@@ -2359,7 +2359,12 @@ impl FormatEngine<'_> {
         }
         let mut assign = None;
         let mut index = first;
+        let open = groups.get(group).open;
         while let Some(before) = self.tree.previous_code_token(index) {
+            // No token before the group's open brace is in the group.
+            if before < open {
+                break;
+            }
             if groups.enclosing(before) == Some(group) {
                 match &tokens[before] {
                     Token::Operator(operator) if operator == "=" => assign = Some(before),
@@ -2411,7 +2416,11 @@ impl FormatEngine<'_> {
         // The last `=` of a chained assignment holds the value.
         let mut assign = None;
         let mut index = previous;
+        let open = groups.get(group).open;
         while let Some(before) = self.tree.previous_code_token(index) {
+            if before < open {
+                break;
+            }
             if groups.enclosing(before) == Some(group) {
                 match &tokens[before] {
                     Token::Operator(operator) if operator == "=" => {
@@ -2845,9 +2854,8 @@ impl FormatEngine<'_> {
         }
         let body = groups.enclosing(first)?;
         let open = groups.get(body).open;
-        let earlier = (open + 1..first).rev().find(|&index| {
-            is_label(index)
-                && groups.enclosing(index) == Some(body)
+        let earlier = self.case_labels_between(open, first).find(|&index| {
+            groups.enclosing(index) == Some(body)
                 && self.tree.statements.starts_block_statement(index)
         });
         let Some(earlier) = earlier else {

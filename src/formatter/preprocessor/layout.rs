@@ -377,18 +377,19 @@ impl FormatEngine<'_> {
             open_spaces + self.options.indent_width
         };
         let recent_adjacent_string_call =
-            self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 code.ends_with(");") && starts_string_literal_token(code.trimmed_start())
-            }) && self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            }) && self.output.scoped_range().rev().take(8).any(|index| {
+                let code = self.output.code_before_comment_trimmed(index);
                 self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trimmed_start())
                     && !code.ends_with(';')
             });
         let recent_adjacent_string_call_body = recent_adjacent_string_call
-            && self.output.scoped().iter().rev().take(8).any(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+            && self.output.scoped_range().rev().take(8).any(|index| {
+                let line = &self.output[index];
+                let code = self.output.code_before_comment_trimmed(index);
                 self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trimmed_start())
                     && !code.ends_with(';')
@@ -763,10 +764,8 @@ impl FormatEngine<'_> {
     }
 
     fn recent_output_has_preprocessor(&self, limit: usize) -> bool {
-        (0..self.output.len())
-            .rev()
-            .take(limit)
-            .any(|index| self.output.code_trimmed(index).starts_with('#'))
+        self.output
+            .has_hash_led_code_line_from(self.output.len().saturating_sub(limit))
     }
 
     pub(crate) fn commented_split_else_preprocessor_region_active(&self) -> bool {
@@ -1189,12 +1188,13 @@ impl FormatEngine<'_> {
         &self,
         previous_spaces: usize,
     ) -> Option<usize> {
-        let inside_local_struct = self.output.scoped().iter().rev().take(8).any(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+        let inside_local_struct = self.output.scoped_range().rev().take(8).any(|index| {
+            let code = self.output.code_before_comment_trimmed(index);
             code.ends_with('{') && code.trimmed_start().contains("struct")
         });
-        let after_local_struct = self.output.scoped().iter().rev().take(8).any(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+        let after_local_struct = self.output.scoped_range().rev().take(8).any(|index| {
+            let line = &self.output[index];
+            let code = self.output.code_before_comment_trimmed(index);
             code.ends_with("};")
                 && leading_visual_width(line, self.options.tab_width) <= previous_spaces
         });

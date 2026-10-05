@@ -1850,6 +1850,10 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
             return None;
         }
+        let argument = self.layout.frame_stack.last_argument()?;
+        if argument.role != CommaRole::CallArgument {
+            return None;
+        }
         let code = self.output.code_of(line).trimmed_end();
         if code.ends_with('{')
             && (line_opens_lambda_block(line)
@@ -1861,10 +1865,6 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.open_paren_column_of(code).is_some() {
-            return None;
-        }
-        let argument = self.layout.frame_stack.last_argument()?;
-        if argument.role != CommaRole::CallArgument {
             return None;
         }
         let active_owner_matches = self

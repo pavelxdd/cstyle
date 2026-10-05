@@ -145,6 +145,8 @@ pub(crate) struct FormatEngine<'a> {
     template_openers: std::cell::OnceCell<Vec<bool>>,
     /// The `]` matching each `[` of the tree.
     bracket_closes: std::cell::OnceCell<Vec<u32>>,
+    /// Indices of the `case` and `default` words, in order.
+    case_labels: std::cell::OnceCell<Vec<u32>>,
     /// The last statement start astyle's stack found: the address of the
     /// tokens, the token it looked back from, and the start.
     pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
@@ -180,6 +182,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) backslash_body: BackslashBodyState,
     pub(crate) swig: SwigState,
     pub(crate) may_have_class_base_access: bool,
+    /// Whether the source may spell `noexcept`.
+    pub(crate) may_have_noexcept: bool,
     pub(crate) space_after_cast: bool,
     pub(crate) pad_close_paren_pending: bool,
     pub(crate) header_paren: headers::HeaderParenState,
@@ -221,6 +225,7 @@ impl<'a> FormatEngine<'a> {
             stack_start_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
+            case_labels: std::cell::OnceCell::new(),
             open_switch_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
@@ -273,6 +278,7 @@ impl<'a> FormatEngine<'a> {
             backslash_body: BackslashBodyState::default(),
             swig: SwigState::default(),
             may_have_class_base_access: true,
+            may_have_noexcept: true,
             space_after_cast: false,
             pad_close_paren_pending: false,
             header_paren: headers::HeaderParenState::default(),
@@ -608,6 +614,30 @@ impl<'a> FormatEngine<'a> {
             .get(open)
             .map(|&close| close as usize)
             .filter(|&close| close < end)
+    }
+
+    /// The `case` and `default` words after `start` and before `end`, last
+    /// first.
+    pub(crate) fn case_labels_between(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let labels = self.case_labels.get_or_init(|| {
+            self.tree
+                .tokens
+                .iter()
+                .enumerate()
+                .filter(|(_, token)| matches!(token, Token::Word(word) if matches!(word.as_str(), "case" | "default")))
+                .map(|(index, _)| index as u32)
+                .collect()
+        });
+        let from = labels.partition_point(|&index| (index as usize) <= start);
+        let to = labels.partition_point(|&index| (index as usize) < end);
+        labels[from..to.max(from)]
+            .iter()
+            .rev()
+            .map(|&index| index as usize)
     }
 
     fn template_opener_at(&self, index: usize) -> bool {
