@@ -2121,8 +2121,6 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',')
             || previous_code.contains(" new ")
             || previous_code.contains("(new ")
-            || self.constructor_initializer_base_indent_spaces().is_some()
-            || self.output_has_constructor_initializer_colon()
         {
             return None;
         }
@@ -2131,7 +2129,10 @@ impl FormatEngine<'_> {
         let statement_base = self.continuation_base_indent() * self.options.indent_width;
         let inner = *columns.last()?;
         let over_statement_max = inner >= statement_base + self.options.max_continuation_indent;
-        if inner < base + self.options.max_continuation_indent && !over_statement_max {
+        if inner < base + self.options.max_continuation_indent && !over_statement_max
+            || self.constructor_initializer_base_indent_spaces().is_some()
+            || self.output_has_constructor_initializer_colon()
+        {
             return None;
         }
         if over_statement_max

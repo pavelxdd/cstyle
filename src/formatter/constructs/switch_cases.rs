@@ -221,6 +221,18 @@ fn code_delimiters_stateful(
     let mut braces = Vec::new();
 
     while let Some(&byte) = bytes.get(index) {
+        // Code bytes that start nothing and delimit nothing pass unread.
+        if state.raw_delimiter.is_none()
+            && !state.in_block_comment
+            && state.quote.is_none()
+            && !matches!(
+                byte,
+                b'/' | b'u' | b'L' | b'U' | b'R' | b'"' | b'\'' | b'(' | b')' | b'{' | b'}'
+            )
+        {
+            index += 1;
+            continue;
+        }
         let next = bytes.get(index + 1).copied();
 
         if let Some(delimiter) = state.raw_delimiter.as_deref() {
