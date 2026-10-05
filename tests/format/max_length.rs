@@ -2946,3 +2946,21 @@ fn attached_closing_while_counts_in_the_line_a_run_in_statement_splits() {
         )
     );
 }
+
+#[test]
+fn a_function_pointer_declaration_split_before_its_attribute_registers_no_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=1tbs".to_owned(), "--max-code-length=50".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "int (*fffffffffffffffffffffff)(int rrrrrrrrrrrr) ATTRIBUTEXXXXXXX;\nint * (*fffffffffffffffffff)(int rrrrrrrrrrrr) ATTRIBUTEXXXXXXX;\n",
+            &options,
+        ),
+        "int (*fffffffffffffffffffffff)(int rrrrrrrrrrrr)\nATTRIBUTEXXXXXXX;\nint * (*fffffffffffffffffff)(int rrrrrrrrrrrr)\nATTRIBUTEXXXXXXX;\n",
+    );
+}

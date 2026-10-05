@@ -623,16 +623,19 @@ fn continuation_indent_for_split(
         && unmatched_open_paren_columns(head).is_empty()
         && split.tail.starts_with(is_identifier_continue)
         && head.match_indices('(').all(|(at, _)| {
-            head[..at]
-                .rsplit(|ch: char| !is_identifier_continue(ch))
-                .next()
-                .is_some_and(|word| {
-                    !word.is_empty()
-                        && !matches!(
-                            word,
-                            "if" | "while" | "for" | "switch" | "return" | "sizeof" | "catch"
-                        )
-                })
+            // A function pointer's `(*name)` and the parameters after it.
+            head[at + 1..].trim_start().starts_with('*')
+                || head[..at].trim_end().ends_with(')')
+                || head[..at]
+                    .rsplit(|ch: char| !is_identifier_continue(ch))
+                    .next()
+                    .is_some_and(|word| {
+                        !word.is_empty()
+                            && !matches!(
+                                word,
+                                "if" | "while" | "for" | "switch" | "return" | "sizeof" | "catch"
+                            )
+                    })
         });
     // Member access registers nothing.
     let unaccessed_head = head.replace("->", ".");
