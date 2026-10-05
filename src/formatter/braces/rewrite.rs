@@ -87,7 +87,7 @@ impl FormatEngine<'_> {
         let header = self.layout.command_state.current_header.as_deref()?;
         if !is_standard_add_braces_header(header)
             || is_defer_header(header)
-            || token_range_has_line_comment(tokens, line_start, start)
+            || self.line_comment_before(tokens, line_start, start)
         {
             return None;
         }
@@ -492,6 +492,28 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
+    /// Whether a line comment stands among the tokens of the line starting
+    /// at `line_start` before `start`.
+    fn line_comment_before(&self, tokens: &[Token], line_start: usize, start: usize) -> bool {
+        let key = (tokens.as_ptr() as usize, tokens.len(), line_start);
+        let first = match self.line_comment_cache.get() {
+            Some((address, len, cached_start, first)) if (address, len, cached_start) == key => {
+                first
+            }
+            _ => {
+                let first = tokens[line_start..]
+                    .iter()
+                    .take_while(|token| !matches!(token, Token::Newline))
+                    .position(|token| matches!(token, Token::Comment(CommentKind::Line, _)))
+                    .map(|offset| line_start + offset);
+                self.line_comment_cache
+                    .set(Some((key.0, key.1, key.2, first)));
+                first
+            }
+        };
+        first.is_some_and(|first| first < start)
+    }
+
     pub(crate) fn try_break_one_line_header(
         &mut self,
         tokens: &[Token],
@@ -502,7 +524,7 @@ impl FormatEngine<'_> {
         let split_else_after_preprocessor = self.is_after_preprocessor_split_else()
             && self.preprocessor.split_else.trigger_output_len != Some(self.output.len());
         if !split_else_after_preprocessor && !self.options.break_one_line_headers
-            || token_range_has_line_comment(tokens, line_start, start)
+            || self.line_comment_before(tokens, line_start, start)
         {
             return false;
         }
@@ -2086,12 +2108,6 @@ pub(crate) fn is_standard_add_braces_header(word: &str) -> bool {
         word,
         "if" | "else" | "for" | "foreach" | "Q_FOREACH" | "while" | "do"
     )
-}
-
-fn token_range_has_line_comment(tokens: &[Token], start: usize, end: usize) -> bool {
-    tokens[start..end]
-        .iter()
-        .any(|token| matches!(token, Token::Comment(CommentKind::Line, _)))
 }
 
 fn split_else_preprocessor_follows_closing_brace(output: &[String]) -> bool {

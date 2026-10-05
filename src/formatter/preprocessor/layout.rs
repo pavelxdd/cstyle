@@ -10,7 +10,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, preprocessor_directive, unmatched_open_paren_column,
+    is_comment_line, is_comment_only_line, preprocessor_directive,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
@@ -380,14 +380,14 @@ impl FormatEngine<'_> {
                 code.ends_with(");") && starts_string_literal_token(code.trim_ascii_start())
             }) && self.output.scoped().iter().rev().take(8).any(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                unmatched_open_paren_column(code).is_some()
+                self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trim_ascii_start())
                     && !code.ends_with(';')
             });
         let recent_adjacent_string_call_body = recent_adjacent_string_call
             && self.output.scoped().iter().rev().take(8).any(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                unmatched_open_paren_column(code).is_some()
+                self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trim_ascii_start())
                     && !code.ends_with(';')
                     && leading_visual_width(line, self.options.tab_width) == body_indent_spaces

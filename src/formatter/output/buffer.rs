@@ -176,6 +176,9 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
 pub(crate) struct OutputBuffer {
     lines: Vec<String>,
     meta: Vec<OnceCell<LineBraceMeta>>,
+    /// Unmatched `)`/`]` and the columns of unmatched `(`/`[` of each
+    /// line, read once a layout rule asks.
+    parens: Vec<OnceCell<(usize, Vec<usize>)>>,
     /// Source tokens of each line, when the line came from one current line.
     tokens: Vec<Option<TokenSpan>>,
     /// Tokens of the current line just taken, for the next pushed line.
@@ -257,6 +260,7 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::new());
+        self.parens.push(OnceCell::new());
         self.push_pending_sources(blank);
     }
 
@@ -274,6 +278,7 @@ impl OutputBuffer {
         }
         self.lines.push(line);
         self.meta.push(OnceCell::from(meta));
+        self.parens.push(OnceCell::new());
         self.push_pending_sources(blank);
         self.mark_last_verbatim();
     }
@@ -344,6 +349,7 @@ impl OutputBuffer {
 
     pub(crate) fn pop(&mut self) -> Option<String> {
         self.meta.pop();
+        self.parens.pop();
         self.tokens.pop();
         self.comments.pop();
         self.verbatim.pop();
@@ -359,6 +365,9 @@ impl OutputBuffer {
     pub(crate) fn last_mut(&mut self) -> Option<&mut String> {
         if let Some(slot) = self.meta.last_mut() {
             *slot = OnceCell::new();
+            if let Some(parens) = self.parens.last_mut() {
+                *parens = OnceCell::new();
+            }
             self.may_have_label_open = true;
             self.may_have_else = true;
             self.may_have_hash = true;
@@ -375,6 +384,7 @@ impl OutputBuffer {
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut String> {
         if let Some(slot) = self.meta.get_mut(index) {
             *slot = OnceCell::new();
+            self.parens[index] = OnceCell::new();
             self.may_have_label_open = true;
             self.may_have_else = true;
             self.may_have_hash = true;
@@ -390,6 +400,7 @@ impl OutputBuffer {
 
     pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
+        self.parens.remove(index);
         self.tokens.remove(index);
         self.comments.remove(index);
         self.verbatim.remove(index);
@@ -424,6 +435,7 @@ impl OutputBuffer {
         let hints = output_line_hints(&line);
         self.record_hints(&line, hints);
         self.meta[index] = OnceCell::new();
+        self.parens[index] = OnceCell::new();
         self.lines[index] = line;
         self.last_non_empty_dirty.set(true);
         self.version += 1;
@@ -476,6 +488,9 @@ impl OutputBuffer {
         for slot in &mut self.meta[range.clone()] {
             *slot = OnceCell::new();
         }
+        for slot in &mut self.parens[range.clone()] {
+            *slot = OnceCell::new();
+        }
         if !range.is_empty() {
             self.may_have_label_open = true;
             self.may_have_else = true;
@@ -515,6 +530,48 @@ impl OutputBuffer {
                 compute_line_brace_meta(line)
             }
         })
+    }
+
+    /// Unmatched `)`/`]` of line `index` and the columns of its unmatched
+    /// `(`/`[`, outside literals and comments.
+    pub(crate) fn paren_imbalance(&self, index: usize) -> (usize, &[usize]) {
+        let (closes, opens) = self.parens[index]
+            .get_or_init(|| line_paren_imbalance(self.lines[index].trim_ascii_end()));
+        (*closes, opens)
+    }
+
+    /// The recent line whose code `text` is, from at most its indent to its
+    /// code's end with or without trailing blanks, and the offset of `text`
+    /// in it.
+    pub(crate) fn code_line_of(&self, text: &str) -> Option<(usize, usize)> {
+        let address = text.as_ptr() as usize;
+        let recent = self.lines.len().saturating_sub(16);
+        let index = (recent..self.lines.len()).rev().find(|&index| {
+            let start = self.lines[index].as_ptr() as usize;
+            (start..=start + self.lines[index].len()).contains(&address)
+        })?;
+        let line = &self.lines[index];
+        let offset = address - line.as_ptr() as usize;
+        let code = self.code_before_comment(index);
+        let end = offset + text.len();
+        (line.as_bytes()[..offset]
+            .iter()
+            .all(u8::is_ascii_whitespace)
+            && (end == code.len() || end == code.trim_ascii_end().len()))
+        .then_some((index, offset))
+    }
+
+    /// The last unmatched `(`/`[` of line `index` with code after it, as
+    /// `unmatched_open_paren_column` finds it in the line's code.
+    pub(crate) fn unmatched_open_paren_column(&self, index: usize) -> Option<usize> {
+        let code = self.code_before_comment(index);
+        self.paren_imbalance(index)
+            .1
+            .iter()
+            .rev()
+            .copied()
+            .filter(|&column| column < code.len())
+            .find(|&column| code[column + 1..].chars().any(|ch| !ch.is_whitespace()))
     }
 
     pub(crate) fn trimmed(&self, index: usize) -> &str {

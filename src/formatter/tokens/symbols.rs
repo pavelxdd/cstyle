@@ -23,7 +23,6 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     has_unclosed_delimiter_after, is_comment_only_line, trailing_matching_parens,
-    unmatched_open_paren_column,
 };
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1656,7 +1655,7 @@ impl FormatEngine<'_> {
         if !trimmed.starts_with(':') {
             return None;
         }
-        if unmatched_open_paren_column(trimmed).is_some() {
+        if self.open_paren_column_of(trimmed).is_some() {
             return None;
         }
         Some(leading_visual_width(previous, self.options.tab_width))

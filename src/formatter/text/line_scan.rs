@@ -604,7 +604,8 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
 fn find_comment_close(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut from = 0;
-    while let Some(offset) = bytes[from..].iter().position(|&byte| byte == b'*') {
+    // `str::find` with a char searches by memchr.
+    while let Some(offset) = line[from..].find('*') {
         let star = from + offset;
         if bytes.get(star + 1) == Some(&b'/') {
             return Some(star);

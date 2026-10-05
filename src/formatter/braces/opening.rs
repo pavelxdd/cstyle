@@ -29,8 +29,8 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_only_line, line_comment_split_limit, line_paren_imbalance,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    is_comment_only_line, line_comment_split_limit, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit,
 };
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
@@ -608,7 +608,7 @@ impl FormatEngine<'_> {
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
-            let (closes, mut opens) = line_paren_imbalance(code);
+            let (closes, mut opens) = self.paren_imbalance_of(code);
             if close_pending > 0 {
                 for &column in opens.iter().rev().take(close_pending) {
                     let before = code[..column].trim_ascii_end();

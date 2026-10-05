@@ -13,9 +13,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{
-    line_brace_imbalance, preprocessor_directive, unmatched_open_paren_column,
-};
+use crate::formatter::text::line_scan::{line_brace_imbalance, preprocessor_directive};
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 
@@ -1223,7 +1221,7 @@ impl FormatEngine<'_> {
                 .find_map(|line| {
                     let code = self.output.code_of(line).trim_ascii_end();
                     let trimmed = code.trim_ascii_start();
-                    (unmatched_open_paren_column(code).is_some()
+                    (self.open_paren_column_of(code).is_some()
                         && (starts_header_word(trimmed, "if")
                             || starts_header_word(trimmed, "while")
                             || starts_header_word(trimmed, "for")
@@ -1267,7 +1265,7 @@ impl FormatEngine<'_> {
                 code.ends_with(");") && starts_string_literal_token(code.trim_ascii_start())
             }) && self.output.scoped().iter().rev().take(8).any(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                unmatched_open_paren_column(code).is_some()
+                self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trim_ascii_start())
                     && !code.ends_with(';')
             });

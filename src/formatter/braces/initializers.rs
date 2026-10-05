@@ -14,8 +14,8 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_brace_content_offset,
+    has_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_brace_content_offset,
 };
 
 pub(crate) struct CompoundLiteralOpeningLayout {
@@ -1232,7 +1232,7 @@ impl FormatEngine<'_> {
         // A member split over rows stands at the row that opens it.
         let mut pending_closes = 0usize;
         loop {
-            let (closes, opens) = line_paren_imbalance(self.output.code_of(row));
+            let (closes, opens) = self.paren_imbalance_of(self.output.code_of(row));
             pending_closes = (pending_closes + closes).saturating_sub(opens.len());
             if pending_closes == 0 {
                 break;

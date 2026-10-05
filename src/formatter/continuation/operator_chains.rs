@@ -15,8 +15,8 @@ use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    is_comment_line, last_unmatched_open_delimiter, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    is_comment_line, last_unmatched_open_delimiter, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{starts_string_literal_token, string_literal_token_end};
 use crate::formatter::tokens::operators::{
@@ -220,7 +220,7 @@ impl FormatEngine<'_> {
                 .assignment_rhs_first_line_indent(previous, true)
                 .is_none()
             && !previous_code.trim_ascii_start().starts_with("return ")
-            && unmatched_open_paren_column(previous_code).is_none()
+            && self.open_paren_column_of(previous_code).is_none()
         {
             spaces = Some(normal_indent * self.options.indent_width);
         }
@@ -243,7 +243,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let open = unmatched_open_paren_column(previous_code)?;
+        let open = self.open_paren_column_of(previous_code)?;
         let padding = previous_code
             .chars()
             .skip(open + 1)
@@ -326,7 +326,7 @@ impl FormatEngine<'_> {
         let previous_code = self.output.code_of(previous).trim_ascii_end();
         (previous_code.contains('?')
             && previous_code.contains("::")
-            && unmatched_open_paren_column(previous_code).is_none())
+            && self.open_paren_column_of(previous_code).is_none())
         .then(|| self.layout.indentation.indent() * self.options.indent_width)
     }
 
@@ -429,7 +429,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous.trim_ascii_end();
         if !previous_trimmed.ends_with('}')
             && !((previous_trimmed.contains(" << ") || previous_trimmed.contains(" >> "))
-                && unmatched_open_paren_column(previous_trimmed).is_none())
+                && self.open_paren_column_of(previous_trimmed).is_none())
         {
             return None;
         }
@@ -465,7 +465,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') || !self.previous_statement_is_braceless_ternary() {
             return None;
         }
-        let target = unmatched_open_paren_column(previous_code)?
+        let target = self.open_paren_column_of(previous_code)?
             + 1
             + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         (current_spaces.unwrap_or(0) < target).then_some(target)
@@ -476,8 +476,8 @@ impl FormatEngine<'_> {
         output_line_index: usize,
         code: &str,
     ) {
-        let paren_imbalance = line_paren_imbalance(code);
-        let unmatched_open_paren = unmatched_open_paren_column(code);
+        let paren_imbalance = self.paren_imbalance_of(code);
+        let unmatched_open_paren = self.open_paren_column_of(code);
         self.layout.frame_stack.mark_stream_line_context(
             output_line_index,
             code.ends_with("<<") || code.ends_with(">>"),
@@ -680,7 +680,7 @@ impl FormatEngine<'_> {
         let configured = (self.continuation_base_indent() + self.options.continuation_indent)
             * self.options.indent_width;
         (self.token_input.token_source_line_indent == configured
-            && unmatched_open_paren_column(previous_code).is_some()
+            && self.open_paren_column_of(previous_code).is_some()
             && ["if", "for", "while", "switch"]
                 .iter()
                 .any(|header| starts_header_word(previous_trimmed, header)))
@@ -1088,7 +1088,7 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trim_ascii().is_empty())?;
         let previous_code = self.output.code_of(previous).trim_ascii_end();
-        if !previous_code.ends_with(',') || unmatched_open_paren_column(previous_code).is_none() {
+        if !previous_code.ends_with(',') || self.open_paren_column_of(previous_code).is_none() {
             return None;
         }
         let in_preprocessor_else_context =
@@ -1123,7 +1123,7 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',')
             || current.starts_with(['#', '(', ')', '{', '}'])
             || opens_compound_literal
-            || unmatched_open_paren_column(previous_code).is_some()
+            || self.open_paren_column_of(previous_code).is_some()
         {
             return None;
         }
@@ -1153,7 +1153,7 @@ impl FormatEngine<'_> {
         if current.starts_with(['#', '(', ')', '{', '}'])
             || !previous_code.ends_with(',')
             || !current.ends_with(");")
-            || unmatched_open_paren_column(previous_code).is_some()
+            || self.open_paren_column_of(previous_code).is_some()
         {
             return None;
         }
@@ -1226,7 +1226,7 @@ impl FormatEngine<'_> {
         }
         if current.starts_with('?')
             && (previous_trimmed.starts_with('(') || previous_trimmed.starts_with("return ("))
-            && let Some(open) = unmatched_open_paren_column(previous_code)
+            && let Some(open) = self.open_paren_column_of(previous_code)
         {
             return Some(column_after(previous_code, open, tab_width));
         }
@@ -1260,7 +1260,7 @@ impl FormatEngine<'_> {
         if (current.starts_with(": ") || current == ":")
             && previous_code.contains('?')
             && !previous_code.trim_ascii_start().starts_with("return ")
-            && let Some(open) = unmatched_open_paren_column(previous_code)
+            && let Some(open) = self.open_paren_column_of(previous_code)
         {
             return Some(
                 column_after(previous_code, open, tab_width)
@@ -1289,7 +1289,7 @@ impl FormatEngine<'_> {
                     })
                     .any(|line| {
                         let code = self.output.code_of(line).trim_ascii_end();
-                        code.ends_with('(') || unmatched_open_paren_column(code).is_some()
+                        code.ends_with('(') || self.open_paren_column_of(code).is_some()
                     }))
         {
             return Some(
@@ -1338,7 +1338,7 @@ impl FormatEngine<'_> {
         if !current.starts_with([')', '}', '?', ':'])
             && previous_code.ends_with(':')
             && previous_code.contains('?')
-            && let Some(open) = unmatched_open_paren_column(previous_code)
+            && let Some(open) = self.open_paren_column_of(previous_code)
         {
             let column = column_after(previous_code, open, tab_width);
             let column = self
@@ -1371,7 +1371,7 @@ impl FormatEngine<'_> {
         }
         let case_unindent =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-        if let Some(open) = unmatched_open_paren_column(previous_code) {
+        if let Some(open) = self.open_paren_column_of(previous_code) {
             return Some(column_after(previous_code, open, self.options.tab_width) + case_unindent);
         }
         let after_return = &previous_trimmed["return".len()..];
@@ -1506,7 +1506,7 @@ impl FormatEngine<'_> {
             && (previous_trimmed.starts_with("&&") || previous_trimmed.starts_with("||"))
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            let (closes, opens) = line_paren_imbalance(previous_code);
+            let (closes, opens) = self.paren_imbalance_of(previous_code);
             if !opens.is_empty() {
                 return Some(previous_indent + self.options.indent_width);
             }
@@ -1536,7 +1536,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        unmatched_open_paren_column(previous_code).map(|open| {
+        self.open_paren_column_of(previous_code).map(|open| {
             let column = column_after(previous_code, open, self.options.tab_width) - 1;
             let base = leading_visual_width(previous, self.options.tab_width);
             let paren_indent = column
@@ -1557,7 +1557,7 @@ impl FormatEngine<'_> {
                     paren_indent
                 } else if starts_nested_group {
                     base + min_conditional_indent_spaces(self.options)
-                } else if line_paren_imbalance(previous_code).1.len() > 1 {
+                } else if self.paren_imbalance_of(previous_code).1.len() > 1 {
                     column + 1
                 } else {
                     column
@@ -1610,7 +1610,7 @@ impl FormatEngine<'_> {
             let standard = base + self.options.continuation_indent * self.options.indent_width;
             let conditional_floor = base + min_conditional_indent_spaces(self.options);
             if is_braceless_header_line(code.trim_ascii_start())
-                && !line_paren_imbalance(code).1.is_empty()
+                && !self.paren_imbalance_of(code).1.is_empty()
             {
                 return None;
             }
@@ -1756,7 +1756,8 @@ impl FormatEngine<'_> {
                     && previous_trimmed.starts_with(": ")
                     && head_ends_binary_operator(previous_code)
                 {
-                    unmatched_open_paren_column(previous_code).map(|open| open + 1)
+                    self.open_paren_column_of(previous_code)
+                        .map(|open| open + 1)
                 } else {
                     None
                 }
@@ -2047,7 +2048,7 @@ impl FormatEngine<'_> {
                             let trimmed = code.trim_ascii_start();
                             trimmed.starts_with("return ")
                                 && !trimmed.contains('?')
-                                && unmatched_open_paren_column(code).is_none()
+                                && self.open_paren_column_of(code).is_none()
                         })
                 {
                     return Some(
@@ -2127,7 +2128,7 @@ impl FormatEngine<'_> {
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
-            let (line_closes, opens) = line_paren_imbalance(code);
+            let (line_closes, opens) = self.paren_imbalance_of(code);
             if opens.len() >= closes {
                 let open = opens[opens.len() - closes];
                 return Some(column_after(code, open, self.options.tab_width) - 1);
@@ -2159,13 +2160,15 @@ impl FormatEngine<'_> {
             );
         }
         let condition = code[..code.len() - 1].trim_ascii_end();
-        let anchor = if let Some(open) = unmatched_open_paren_column(condition) {
+        let anchor = if let Some(open) = self.open_paren_column_of(condition) {
             // An assignment inside the open parentheses, as in a `for`
             // header, continues at its value.
             let inner = &condition[open + 1..];
             match find_assignment_operator(inner) {
                 Some((operator_index, operator))
-                    if unmatched_open_paren_column(&inner[..operator_index]).is_none() =>
+                    if self
+                        .open_paren_column_of(&inner[..operator_index])
+                        .is_none() =>
                 {
                     let value = open + 1 + operator_index + operator.len();
                     let after = &condition[value..];
@@ -2188,7 +2191,7 @@ impl FormatEngine<'_> {
             } else if let Some((operator_index, operator)) = find_assignment_operator(condition) {
                 let after = &condition[operator_index + operator.len()..];
                 operator_index + operator.len() + (after.len() - after.trim_ascii_start().len())
-            } else if let (closes @ 1.., _) = line_paren_imbalance(condition)
+            } else if let (closes @ 1.., _) = self.paren_imbalance_of(condition)
                 && let Some(column) = self.opener_column_above(previous_index, closes)
             {
                 // The condition closes a group opened on an earlier line; the
@@ -2236,7 +2239,7 @@ impl FormatEngine<'_> {
         let previous_code = self.output.code_of(previous).trim_ascii_end();
         if !previous_code.trim_ascii_start().starts_with(':')
             || !previous_code.ends_with(',')
-            || unmatched_open_paren_column(previous_code).is_some()
+            || self.open_paren_column_of(previous_code).is_some()
             || current.starts_with([':', ')', '}'])
         {
             return None;
@@ -2295,7 +2298,7 @@ impl FormatEngine<'_> {
                 '<', '>', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~',
             ])
             && is_conditional_header_line(previous_code)
-            && unmatched_open_paren_column(previous_code).is_some()
+            && self.open_paren_column_of(previous_code).is_some()
         {
             return Some(
                 leading_visual_width(previous, self.options.tab_width)
@@ -2313,7 +2316,7 @@ impl FormatEngine<'_> {
                             leading_visual_width(previous, self.options.tab_width)
                                 + min_conditional_indent_spaces(self.options)
                         } else {
-                            unmatched_open_paren_column(previous_code)
+                            self.open_paren_column_of(previous_code)
                                 .map(|column| column + 1)
                                 .unwrap_or_else(|| {
                                     leading_visual_width(previous, self.options.tab_width)
@@ -2387,7 +2390,7 @@ impl FormatEngine<'_> {
         }
         self.output.scoped().iter().rev().find_map(|line| {
             let code = self.output.code_of(line).trim_ascii_end();
-            (code.ends_with(',') && unmatched_open_paren_column(code).is_some())
+            (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                 .then_some(leading_visual_width(line, self.options.tab_width))
         })
     }
@@ -2462,7 +2465,7 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trim_ascii_end();
         (previous_code.trim_ascii_start().starts_with("&&")
-            && unmatched_open_paren_column(previous_code).is_some())
+            && self.open_paren_column_of(previous_code).is_some())
         .then(|| leading_visual_width(previous, self.options.tab_width) + self.options.indent_width)
     }
 

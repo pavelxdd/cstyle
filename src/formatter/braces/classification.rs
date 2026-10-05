@@ -28,6 +28,10 @@ pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
 }
 
 pub(crate) fn is_lambda_body_header(head: &str) -> bool {
+    // A lambda's capture list closes with `]`.
+    if !head.as_bytes().contains(&b']') {
+        return false;
+    }
     let mut head = head.trim_ascii_end();
     if let Some(arrow) = head.rfind("->") {
         let before = head[..arrow].trim_ascii_end();

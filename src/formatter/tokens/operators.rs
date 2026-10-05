@@ -14,7 +14,7 @@ use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start}
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, last_unmatched_open_delimiter, unmatched_open_paren_column,
+    has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -544,7 +544,7 @@ impl FormatEngine<'_> {
                                 .find(|line| !line.trim_ascii().is_empty())
                                 .and_then(|line| {
                                     let line = line.trim_ascii_end();
-                                    let column = unmatched_open_paren_column(line)?;
+                                    let column = self.open_paren_column_of(line)?;
                                     let after = line[column + 1..].len()
                                         - line[column + 1..].trim_ascii_start().len();
                                     Some(column + 1 + after)

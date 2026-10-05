@@ -26,7 +26,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     has_unmatched_open_brace, is_comment_line, is_comment_only_line, line_brace_imbalance,
     line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_brace_content_offset, unmatched_open_paren_column,
+    unmatched_open_brace_content_offset,
 };
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -1359,7 +1359,7 @@ impl FormatEngine<'_> {
                                         return None;
                                     }
                                     // A brace opened after the paren holds the comment.
-                                    unmatched_open_paren_column(code)
+                                    self.open_paren_column_of(code)
                                         .filter(|&column| {
                                             !has_unmatched_open_brace(&code[column + 1..])
                                         })
@@ -1422,7 +1422,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find(|line| !line.trim_ascii().is_empty())
-                .and_then(|line| unmatched_open_paren_column(line.trim_ascii_end()))
+                .and_then(|line| self.open_paren_column_of(line.trim_ascii_end()))
                 .is_some()
             {
                 self.layout
@@ -1701,7 +1701,7 @@ impl FormatEngine<'_> {
                 let previous = self.output.last_line_outside_comment()?;
                 let code = self.output.code_of(previous).trim_ascii_end();
                 (code.trim_ascii_start().starts_with('?')
-                    && unmatched_open_paren_column(code).is_none()
+                    && self.open_paren_column_of(code).is_none()
                     && self.layout.frame_stack.active_ternary().is_some())
                 .then(|| leading_visual_width(previous, self.options.tab_width))
             })
@@ -2092,7 +2092,7 @@ impl FormatEngine<'_> {
                 + self.case_body_indent_extra(LineKind::Normal))
                 * self.options.indent_width;
             (code.ends_with(';')
-                && unmatched_open_paren_column(code).is_none()
+                && self.open_paren_column_of(code).is_none()
                 && !after_braceless_header
                 && previous_indent <= body_indent)
                 .then_some(previous_indent)
@@ -2132,12 +2132,13 @@ impl FormatEngine<'_> {
             })
         });
         let previous_paren_indent = previous_line.and_then(|line| {
-            unmatched_open_paren_column(line.trim_ascii_end()).map(|column| {
-                self.layout
-                    .nesting
-                    .current_continuation_indent_spaces()
-                    .unwrap_or(column + 1)
-            })
+            self.open_paren_column_of(line.trim_ascii_end())
+                .map(|column| {
+                    self.layout
+                        .nesting
+                        .current_continuation_indent_spaces()
+                        .unwrap_or(column + 1)
+                })
         });
         previous_statement_indent
             .or(previous_operator_indent)

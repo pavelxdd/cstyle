@@ -262,7 +262,7 @@ impl FormatEngine<'_> {
             {
                 spaces = None;
             } else if previous_code.ends_with("},")
-                && let Some(open) = unmatched_open_paren_column(previous_code)
+                && let Some(open) = self.open_paren_column_of(previous_code)
             {
                 spaces = Some(open + 1);
             } else if self.layout.indentation.indent() == 0
@@ -344,7 +344,7 @@ impl FormatEngine<'_> {
             }
             if starts_string_literal_token(line.trim_ascii_start())
                 && previous_code.ends_with(',')
-                && let Some(open) = unmatched_open_paren_column(previous_code)
+                && let Some(open) = self.open_paren_column_of(previous_code)
             {
                 let target = column_after(previous_code, open, self.options.tab_width)
                     + self.adjusted_line_indent_delta(previous);
@@ -358,7 +358,7 @@ impl FormatEngine<'_> {
         {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             if previous_code.ends_with(',')
-                && let Some(open) = unmatched_open_paren_column(previous_code)
+                && let Some(open) = self.open_paren_column_of(previous_code)
             {
                 let target = column_after(previous_code, open, self.options.tab_width)
                     + self.adjusted_line_indent_delta(previous);
@@ -472,7 +472,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             let previous_full = previous.trim_ascii_end();
             if previous_full.ends_with("::")
-                && let Some(open) = unmatched_open_paren_column(previous_full)
+                && let Some(open) = self.open_paren_column_of(previous_full)
             {
                 layout.exact_indent_spaces = Some(open + 1);
             } else if previous_code.ends_with("::") {
@@ -1023,7 +1023,7 @@ impl FormatEngine<'_> {
             } else if previous_code.ends_with(',')
                 && (previous_code.trim_ascii_start().starts_with('}')
                     || (previous_code.contains("= new ")
-                        && unmatched_open_paren_column(previous_code).is_none()))
+                        && self.open_paren_column_of(previous_code).is_none()))
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
@@ -1031,7 +1031,7 @@ impl FormatEngine<'_> {
                 && previous_code.ends_with(',')
                 && find_assignment_operator(previous_code).is_some()
                 && !previous_code.contains("= new ")
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width) + 1);
@@ -1052,7 +1052,7 @@ impl FormatEngine<'_> {
             if previous_trimmed.starts_with(':')
                 && previous_trimmed.ends_with(',')
                 && !line.trim_ascii_start().starts_with([',', '{', '}'])
-                && unmatched_open_paren_column(previous_trimmed).is_none()
+                && self.open_paren_column_of(previous_trimmed).is_none()
                 && !has_unmatched_open_brace(previous_trimmed)
                 && self.current_inline_array_column().is_none()
             {
@@ -1240,7 +1240,8 @@ impl FormatEngine<'_> {
             && let Some(using_pos) = find_outside_quotes(previous, " using ")
         {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
-            layout.exact_indent_spaces = unmatched_open_paren_column(previous_code)
+            layout.exact_indent_spaces = self
+                .open_paren_column_of(previous_code)
                 .map(|open| open + 1)
                 .or(Some(using_pos + " using ".len()));
         }
@@ -1342,21 +1343,22 @@ impl FormatEngine<'_> {
             && !line.trim_ascii_start().starts_with("//")
             && !line.trim_ascii_start().starts_with('{')
             && (0..self.output.len()).rev().take(8).any(|index| {
-                let previous = &self.output[index];
                 let code = self.output.code(index);
-                let macro_before_previous = (0..index)
-                    .rev()
-                    .map(|before| self.output.trimmed(before))
-                    .find(|trimmed| !trimmed.is_empty())
-                    .is_some_and(|trimmed| {
-                        trimmed
-                            .chars()
-                            .all(|ch| ch == '_' || ch.is_ascii_uppercase())
-                    });
-                previous.contains("//")
+                let macro_before_previous = || {
+                    (0..index)
+                        .rev()
+                        .map(|before| self.output.trimmed(before))
+                        .find(|trimmed| !trimmed.is_empty())
+                        .is_some_and(|trimmed| {
+                            trimmed
+                                .chars()
+                                .all(|ch| ch == '_' || ch.is_ascii_uppercase())
+                        })
+                };
+                code.ends_with('(')
+                    && self.output[index].contains("//")
                     && (code.contains("noexcept (")
-                        || (macro_before_previous && code.contains("noexcept(")))
-                    && code.ends_with('(')
+                        || (code.contains("noexcept(") && macro_before_previous()))
             })
         {
             layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
@@ -1506,7 +1508,7 @@ impl FormatEngine<'_> {
                     .find(|line| !line.trim_ascii().is_empty())
                     .is_some_and(|previous| {
                         let code = self.output.code_of(previous).trim_ascii_end();
-                        code.ends_with(';') && unmatched_open_paren_column(code).is_none()
+                        code.ends_with(';') && self.open_paren_column_of(code).is_none()
                     });
             if (self.layout.indentation.statement_depth() > 0
                 || self.layout.nesting.paren_depth > 0)

@@ -10,8 +10,8 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line,
+    trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -178,7 +178,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous = self.output.code_of(previous).trim_ascii_start();
-        let open = unmatched_open_paren_column(previous)?;
+        let open = self.open_paren_column_of(previous)?;
         let target = leading_visual_width(previous, self.options.tab_width) + open + 1;
         (target == self.token_input.input_source_indent).then_some(target)
     }
@@ -190,7 +190,7 @@ impl FormatEngine<'_> {
             ConstructorInitializerLayout::SameLine
         };
         let colon_line_indent_spaces = if layout == ConstructorInitializerLayout::SameLine
-            && line_paren_imbalance(self.current.trim_ascii_end()).0 > 0
+            && self.paren_imbalance_of(self.current.trim_ascii_end()).0 > 0
         {
             self.layout
                 .frame_stack
@@ -449,7 +449,7 @@ impl FormatEngine<'_> {
         if pending_question > 0 {
             return None;
         }
-        let (closes, opens) = line_paren_imbalance(code);
+        let (closes, opens) = self.paren_imbalance_of(code);
         if !opens.is_empty() || closes != 0 {
             return None;
         }
@@ -479,7 +479,9 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') && previous_code.trim_ascii() != ":" {
             return None;
         }
-        if unmatched_open_paren_column(previous_code.trim_ascii_start()).is_some()
+        if self
+            .open_paren_column_of(previous_code.trim_ascii_start())
+            .is_some()
             || has_unmatched_open_brace(previous_code)
             || has_unmatched_open_brace(trimmed)
         {
@@ -488,7 +490,7 @@ impl FormatEngine<'_> {
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
         if self.layout.nesting.paren_depth > 0
             && previous_code.ends_with(',')
-            && line_paren_imbalance(previous_code).0 == 0
+            && self.paren_imbalance_of(previous_code).0 == 0
         {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
@@ -561,7 +563,7 @@ impl FormatEngine<'_> {
             let previous_trimmed = code.trim_ascii_start();
             if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
                 || (base_indent.is_some() && previous_trimmed.ends_with(',')))
-                && let Some(open) = unmatched_open_paren_column(code)
+                && let Some(open) = self.open_paren_column_of(code)
             {
                 let spaces_after_open =
                     code[open + 1..].len() - code[open + 1..].trim_ascii_start().len();
@@ -662,7 +664,7 @@ impl FormatEngine<'_> {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         if trimmed.starts_with('?')
-            && let Some(open) = unmatched_open_paren_column(previous_code)
+            && let Some(open) = self.open_paren_column_of(previous_code)
         {
             return Some(column_after(previous_code, open, self.options.tab_width));
         }
@@ -679,7 +681,6 @@ impl FormatEngine<'_> {
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
         }
-        let mut paren_depth = 0isize;
         let mut initializer = None;
         for (offset, index) in (0..self.output.len()).rev().take(32).enumerate() {
             let code = self.output.code(index);
@@ -694,7 +695,6 @@ impl FormatEngine<'_> {
             {
                 break;
             }
-            paren_depth += paren_depth_delta(code);
             let colon_start = trimmed.starts_with(':') && !trimmed.starts_with("::");
             let inline_colon = has_inline_constructor_initializer_colon(code);
             if !colon_start && !inline_colon {
@@ -733,11 +733,15 @@ impl FormatEngine<'_> {
                 } else {
                     None
                 };
-                initializer = Some((member_indent, arg_indent, paren_depth));
+                initializer = Some((member_indent, arg_indent, index));
                 break;
             }
         }
-        let (member_indent, arg_indent, open_depth) = initializer?;
+        let (member_indent, arg_indent, initializer_line) = initializer?;
+        // Parens the lines from the initializer's on leave open.
+        let open_depth: isize = (initializer_line..self.output.len())
+            .map(|index| paren_depth_delta(self.output.code(index)))
+            .sum();
         if let Some(arg_indent) = arg_indent
             && open_depth > 0
         {
@@ -844,7 +848,7 @@ impl FormatEngine<'_> {
             })
             .filter(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                code.ends_with(',') && unmatched_open_paren_column(code).is_none()
+                code.ends_with(',') && self.open_paren_column_of(code).is_none()
             })?;
         self.constructor_initializer_base_indent_spaces()
     }

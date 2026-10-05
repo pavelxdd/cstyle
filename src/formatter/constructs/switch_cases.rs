@@ -1140,14 +1140,14 @@ impl FormatEngine<'_> {
             })
             .find_map(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                (unmatched_open_paren_column(code).is_some() && !code.ends_with(';'))
+                (self.open_paren_column_of(code).is_some() && !code.ends_with(';'))
                     .then(|| leading_visual_width(line, self.options.tab_width))
             })?;
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         if !previous_code.ends_with(';')
             || previous_code.trim_ascii() == "};"
             || previous_code.trim_ascii_start().starts_with(");")
-            || unmatched_open_paren_column(previous_code).is_some()
+            || self.open_paren_column_of(previous_code).is_some()
             || !(previous_indent.saturating_sub(body_spaces)
                 <= self.options.max_continuation_indent
                 || previous_indent.saturating_sub(call_indent)

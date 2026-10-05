@@ -3,7 +3,6 @@ use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::frame::PointerRole;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::unmatched_open_paren_column;
 
 impl FormatEngine<'_> {
     pub(crate) fn typedef_template_context_indent_spaces(&self, current: &str) -> Option<usize> {
@@ -67,17 +66,18 @@ impl FormatEngine<'_> {
             && trimmed.contains("(*")
             && trimmed.contains(") (")
             && !trimmed.contains('\\')
-            && unmatched_open_paren_column(trimmed).is_some()
+            && self.open_paren_column_of(trimmed).is_some()
         {
             let target = if trimmed.trim_ascii_end().ends_with(',') {
-                unmatched_open_paren_column(trimmed.trim_ascii_end()).map_or(width, |open| {
-                    let column = visual_width_from(&trimmed[..open + 1], 0, tab_width);
-                    if column > self.options.max_continuation_indent {
-                        width * 2
-                    } else {
-                        column
-                    }
-                })
+                self.open_paren_column_of(trimmed.trim_ascii_end())
+                    .map_or(width, |open| {
+                        let column = visual_width_from(&trimmed[..open + 1], 0, tab_width);
+                        if column > self.options.max_continuation_indent {
+                            width * 2
+                        } else {
+                            column
+                        }
+                    })
             } else {
                 width
             };

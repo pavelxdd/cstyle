@@ -21,8 +21,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
-    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
@@ -107,7 +106,7 @@ impl FormatEngine<'_> {
                 !code.is_empty()
                     && (head_ends_binary_operator(code)
                         || code.ends_with(',')
-                        || unmatched_open_paren_column(code).is_some()
+                        || self.open_paren_column_of(code).is_some()
                         || starts_with_chain_operator(trimmed)
                         || trimmed.starts_with(['+', '-', '*', '/', '%']))
             })
@@ -156,7 +155,7 @@ impl FormatEngine<'_> {
             if is_comment_line(line.trim_ascii_start()) || code.trim_ascii().is_empty() {
                 continue;
             }
-            let (closes, mut opens) = line_paren_imbalance(code);
+            let (closes, mut opens) = self.paren_imbalance_of(code);
             let matched = later_closes.min(opens.len());
             opens.truncate(opens.len() - matched);
             later_closes = later_closes - matched + closes;
@@ -193,7 +192,7 @@ impl FormatEngine<'_> {
         let mut openers = Vec::new();
         for line in &self.output[start..] {
             let code = self.output.code_of(line).trim_ascii_end();
-            let (closes, opens) = line_paren_imbalance(code);
+            let (closes, opens) = self.paren_imbalance_of(code);
             for _ in 0..closes {
                 openers.pop();
             }
@@ -365,7 +364,7 @@ impl FormatEngine<'_> {
         if line.is_empty() || function_head_has_assignment(line) || is_header(self.options, line) {
             return false;
         }
-        if unmatched_open_paren_column(line).is_some() {
+        if self.open_paren_column_of(line).is_some() {
             return false;
         }
         let first_word = line
@@ -542,7 +541,11 @@ impl FormatEngine<'_> {
         if !has_next
             && self.current.trim_ascii_end().ends_with('(')
             && contains_word(&self.current, "new")
-            && line_paren_imbalance(self.current.trim_ascii_end()).1.len() == 1
+            && self
+                .paren_imbalance_of(self.current.trim_ascii_end())
+                .1
+                .len()
+                == 1
             && let Some(assignment_spaces) = self.assignment_continuation_indent_spaces()
         {
             spaces = assignment_spaces;
@@ -644,7 +647,8 @@ impl FormatEngine<'_> {
         }
         let unindent =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-        unmatched_open_paren_column(previous_code).map(|open| open + 1 + unindent)
+        self.open_paren_column_of(previous_code)
+            .map(|open| open + 1 + unindent)
     }
 
     fn ternary_colon_branch_frame_indent(&self) -> Option<usize> {
@@ -933,7 +937,7 @@ impl FormatEngine<'_> {
             let line = self.current.trim_ascii_end();
             if line.ends_with(':')
                 && line.contains('?')
-                && unmatched_open_paren_column(line).is_none()
+                && self.open_paren_column_of(line).is_none()
                 && !self.current_is_conditional_header_continuation()
             {
                 let spaces = self
@@ -968,7 +972,7 @@ impl FormatEngine<'_> {
             let line = self.current.trim_ascii_end();
             if line.trim_ascii_start().starts_with(": ")
                 && head_ends_binary_operator(line)
-                && let Some(open) = unmatched_open_paren_column(line)
+                && let Some(open) = self.open_paren_column_of(line)
             {
                 return ContinuationIndent::Spaces(self.current_line_indent_spaces() + open + 1);
             }
@@ -1005,7 +1009,7 @@ impl FormatEngine<'_> {
         // astyle counts brackets as parentheses.
         if !self.options.indent_after_parens
             && let line = self.current.trim_ascii_end()
-            && let Some(open) = unmatched_open_paren_column(line)
+            && let Some(open) = self.open_paren_column_of(line)
             && line[open..].starts_with('[')
             // An Objective-C message aligns its own way.
             && self.layout.frame_stack.bracket_depth() > 0
@@ -1281,7 +1285,7 @@ impl FormatEngine<'_> {
             .continuation_indent
             .next_line_indent_spaces
             .unwrap_or(base_spaces);
-        if let Some(column) = unmatched_open_paren_column(line) {
+        if let Some(column) = self.open_paren_column_of(line) {
             let paren_offset = if line.ends_with("||")
                 && line[..line.len().saturating_sub(2)]
                     .trim_ascii_end()
@@ -1391,7 +1395,7 @@ impl FormatEngine<'_> {
         if !head_starts_binary_operator(head) {
             return None;
         }
-        if self.layout.nesting.paren_depth > 0 || unmatched_open_paren_column(trimmed).is_some() {
+        if self.layout.nesting.paren_depth > 0 || self.open_paren_column_of(trimmed).is_some() {
             return None;
         }
         self.previous_return_continuation_indent_spaces()
@@ -1435,7 +1439,7 @@ impl FormatEngine<'_> {
                     .chars()
                     .all(is_identifier_continue)
                     && !is_header(self.options, before_paren.trim_ascii_start())
-                    && unmatched_open_paren_column(line).is_none()
+                    && self.open_paren_column_of(line).is_none()
                     && matches!(
                         self.layout.nesting.brace_type_stack.last(),
                         Some(BraceType::Command | BraceType::Definition)
@@ -1629,7 +1633,7 @@ impl FormatEngine<'_> {
         }
         let content = line.trim_ascii_start();
         let code = self.output.code_of(content).trim_ascii_end();
-        let open = unmatched_open_paren_column(code)?;
+        let open = self.open_paren_column_of(code)?;
         let assignment = find_single_assignment_after(code, open + 1)?;
         let after_assignment = &code[assignment + 1..];
         let value_offset = assignment

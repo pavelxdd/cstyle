@@ -11,8 +11,8 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_brace_imbalance, line_paren_imbalance,
-    preprocessor_directive, unmatched_open_paren_column, unmatched_open_paren_columns,
+    is_comment_line, is_comment_only_line, line_brace_imbalance, preprocessor_directive,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
@@ -228,7 +228,7 @@ impl FormatEngine<'_> {
                             });
                         starts_nested_group
                             && !guarded_header
-                            && line_paren_imbalance(code).1.len() > 1
+                            && self.paren_imbalance_of(code).1.len() > 1
                     });
             return Some(if nested_header_group {
                 header_indent
@@ -331,7 +331,7 @@ impl FormatEngine<'_> {
         }
         let mut depth = 0usize;
         for index in header_index..=open_index {
-            let (closes, opens) = line_paren_imbalance(self.output.code(index));
+            let (closes, opens) = self.paren_imbalance_of(self.output.code(index));
             depth = depth.saturating_sub(closes);
             depth += opens.len();
         }
@@ -373,7 +373,7 @@ impl FormatEngine<'_> {
         if !line.trim_ascii_start().starts_with(')') {
             return None;
         }
-        let mut close_line_pending = line_paren_imbalance(line.trim_ascii_end()).0;
+        let mut close_line_pending = self.paren_imbalance_of(line.trim_ascii_end()).0;
         let mut intervening_closes = 0usize;
         let mut candidate = None;
         for previous in self
@@ -392,7 +392,7 @@ impl FormatEngine<'_> {
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
-            let (closes, mut opens) = line_paren_imbalance(code);
+            let (closes, mut opens) = self.paren_imbalance_of(code);
             if opens.is_empty() {
                 intervening_closes += closes;
                 continue;
@@ -432,7 +432,7 @@ impl FormatEngine<'_> {
                     || trimmed.starts_with("}else if"))
             {
                 let header_indent = leading_visual_width(previous, self.options.tab_width);
-                let opens_all = line_paren_imbalance(code).1;
+                let opens_all = self.paren_imbalance_of(code).1;
                 let starts_nested_group = trimmed
                     .strip_prefix("else if")
                     .or_else(|| trimmed.strip_prefix("if"))
@@ -643,7 +643,8 @@ impl FormatEngine<'_> {
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trim_ascii_end();
         let mut spaces = if previous_code.trim_ascii_start().starts_with("else ") {
-            unmatched_open_paren_column(previous_code).map(|open| open + 1)
+            self.open_paren_column_of(previous_code)
+                .map(|open| open + 1)
         } else {
             None
         };
@@ -662,7 +663,7 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim_ascii().is_empty())
             && header.trim_ascii_start().starts_with("else ")
             && unmatched_open_paren_column(self.output.code_of(header)).is_some()
-            && line_paren_imbalance(previous_code).0 == 0
+            && self.paren_imbalance_of(previous_code).0 == 0
         {
             spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }
@@ -711,7 +712,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous.trim_ascii_start();
         if !previous_trimmed.starts_with("else while")
             || head_ends_binary_operator(previous_trimmed)
-            || unmatched_open_paren_column(previous_trimmed).is_some()
+            || self.open_paren_column_of(previous_trimmed).is_some()
         {
             return None;
         }
@@ -741,7 +742,7 @@ impl FormatEngine<'_> {
             .find_map(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
                 let trimmed = code.trim_ascii_start();
-                let is_plain_multiline_header = unmatched_open_paren_column(code).is_some()
+                let is_plain_multiline_header = self.open_paren_column_of(code).is_some()
                     && (starts_header_word(trimmed, "if")
                         || starts_header_word(trimmed, "for")
                         || starts_header_word(trimmed, "while")
@@ -925,7 +926,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous.trim_ascii_start();
         if !line_is_control_body_header(previous_trimmed)
             || head_ends_binary_operator(previous_trimmed)
-            || unmatched_open_paren_column(previous_trimmed).is_some()
+            || self.open_paren_column_of(previous_trimmed).is_some()
         {
             return None;
         }
@@ -1629,7 +1630,7 @@ impl FormatEngine<'_> {
         self.output.scoped().iter().rev().take(16).find_map(|line| {
             let code = self.output.code_of(line).trim_ascii_end();
             let trimmed = code.trim_ascii_start();
-            (unmatched_open_paren_column(code).is_some()
+            (self.open_paren_column_of(code).is_some()
                 && (starts_header_word(trimmed, "if")
                     || starts_header_word(trimmed, "while")
                     || starts_header_word(trimmed, "for")
@@ -1889,7 +1890,7 @@ impl FormatEngine<'_> {
                 .find_map(|line| {
                     let code = self.output.code_of(line).trim_ascii_end();
                     let trimmed = code.trim_ascii_start();
-                    (unmatched_open_paren_column(code).is_some()
+                    (self.open_paren_column_of(code).is_some()
                         && (starts_header_word(trimmed, "if")
                             || starts_header_word(trimmed, "while")
                             || starts_header_word(trimmed, "for")
@@ -1982,7 +1983,7 @@ impl FormatEngine<'_> {
                 .find(|line| !line.trim_ascii().is_empty())
                 .is_some_and(|line| {
                     let code = self.output.code_of(line).trim_ascii_end();
-                    code.ends_with(',') || unmatched_open_paren_column(code).is_some()
+                    code.ends_with(',') || self.open_paren_column_of(code).is_some()
                 })
         {
             result = Some(
@@ -2062,7 +2063,7 @@ impl FormatEngine<'_> {
                 code.ends_with(");") && starts_string_literal_token(code.trim_ascii_start())
             }) && self.output.scoped().iter().rev().take(8).any(|line| {
                 let code = self.output.code_of(line).trim_ascii_end();
-                unmatched_open_paren_column(code).is_some()
+                self.open_paren_column_of(code).is_some()
                     && !starts_string_literal_token(code.trim_ascii_start())
                     && !code.ends_with(';')
             });

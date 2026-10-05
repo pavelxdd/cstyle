@@ -28,9 +28,8 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    code_holds_word, has_unmatched_open_brace, is_comment_line, line_paren_imbalance,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    code_holds_word, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_columns,
 };
 use crate::formatter::tokens::literals::{first_string_literal_start, starts_string_literal_token};
 use crate::formatter::tokens::operators::{
@@ -74,7 +73,7 @@ impl FormatEngine<'_> {
                             .next()
                             .is_some_and(|first| first.contains('('))
                     })
-                    && unmatched_open_paren_column(previous_code).is_none()
+                    && self.open_paren_column_of(previous_code).is_none()
             }
             // An initializer list never continues inside parentheses.
             && !self.pending_line_in_parens()
@@ -168,7 +167,7 @@ impl FormatEngine<'_> {
             } else if *spaces > previous_indent
                 && previous_code.ends_with(',')
                 && previous_code.contains('(')
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
                 && self
                     .output
                     .scoped()
@@ -277,7 +276,9 @@ impl FormatEngine<'_> {
                     .chars()
                     .next()
                     .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_uppercase())
-                && unmatched_open_paren_column(previous_code.trim_ascii_start()).is_none()
+                && self
+                    .open_paren_column_of(previous_code.trim_ascii_start())
+                    .is_none()
                 && !has_unmatched_open_brace(previous_code)
                 && !has_unmatched_open_brace(current)
                 && leading_visual_width(previous, self.options.tab_width) <= base
@@ -317,7 +318,7 @@ impl FormatEngine<'_> {
                         );
                         break;
                     }
-                    if let Some(open) = unmatched_open_paren_column(code) {
+                    if let Some(open) = self.open_paren_column_of(code) {
                         layout.exact_indent_spaces = Some(open + 1);
                         break;
                     }
@@ -331,7 +332,7 @@ impl FormatEngine<'_> {
             if case_unindent > 0
                 && self.token_input.token_source_line_indent > 0
                 && previous_code.ends_with(',')
-                && line_paren_imbalance(previous_code).0 > 0
+                && self.paren_imbalance_of(previous_code).0 > 0
                 && !current.starts_with(['#', '(', ')', '{', '}'])
             {
                 let target = self.token_input.token_source_line_indent + case_unindent;
@@ -343,7 +344,7 @@ impl FormatEngine<'_> {
                 && self.token_input.token_source_line_indent
                     > layout.exact_indent_spaces.unwrap_or(0)
                 && previous_code.ends_with(',')
-                && !line_paren_imbalance(previous_code).1.is_empty()
+                && !self.paren_imbalance_of(previous_code).1.is_empty()
                 && !current.starts_with(['#', '(', ')', '{', '}'])
                 && let Some(spaces) = layout.exact_indent_spaces.as_mut()
             {
@@ -364,7 +365,7 @@ impl FormatEngine<'_> {
                     .code_of(previous)
                     .trim_ascii_end()
                     .ends_with(',')
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
                 && layout.exact_indent_spaces
                     != Some(leading_visual_width(previous, self.options.tab_width))
                 && !current.starts_with(['#', '(', ')', '{', '}'])
@@ -1114,7 +1115,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| {
                     let code = self.output.code_of(previous).trim_ascii_end();
                     (code.ends_with(';') || code.ends_with('{') || code.ends_with('}'))
-                        && unmatched_open_paren_column(code).is_none()
+                        && self.open_paren_column_of(code).is_none()
                 })
         {
             layout.indent = layout.normal_indent;
@@ -1603,7 +1604,7 @@ impl FormatEngine<'_> {
             if self.options.brace_style == BraceStyle::None
                 && !previous_code.contains(" new ")
                 && !previous_code.contains("(new ")
-                && let Some(open) = unmatched_open_paren_column(previous_code)
+                && let Some(open) = self.open_paren_column_of(previous_code)
                 && self.commented_split_else_preprocessor_region_active()
             {
                 let spaces = (open + 1).max(leading_visual_width(previous, self.options.tab_width));
@@ -1894,8 +1895,7 @@ impl FormatEngine<'_> {
                                 .take(8)
                                 .any(|line| {
                                     let code = self.output.code_of(line).trim_ascii_end();
-                                    code.ends_with(',')
-                                        && unmatched_open_paren_column(code).is_some()
+                                    code.ends_with(',') && self.open_paren_column_of(code).is_some()
                                 }))))
             {
                 let previous_spaces = leading_visual_width(previous, self.options.tab_width);
@@ -1915,7 +1915,7 @@ impl FormatEngine<'_> {
                         .find(|line| !line.trim_ascii().is_empty())
                         .is_some_and(|line| {
                             let code = self.output.code_of(line).trim_ascii_end();
-                            code.ends_with(',') || unmatched_open_paren_column(code).is_some()
+                            code.ends_with(',') || self.open_paren_column_of(code).is_some()
                         })
                 {
                     layout.exact_indent_spaces = Some(previous_spaces);
@@ -2040,7 +2040,7 @@ impl FormatEngine<'_> {
                         || trimmed.starts_with("else if")
                         || trimmed.starts_with("} else")))
                     || (!code.ends_with([';', '{', '}'])
-                        && unmatched_open_paren_column(code).is_none()
+                        && self.open_paren_column_of(code).is_none()
                         && line_is_control_body_header(trimmed)))
             {
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
@@ -2517,8 +2517,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
-            if previous_code.ends_with(',') && unmatched_open_paren_column(previous_code).is_none()
-            {
+            if previous_code.ends_with(',') && self.open_paren_column_of(previous_code).is_none() {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
@@ -2838,7 +2837,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             let previous_trimmed = previous_code.trim_ascii_start();
             if !previous_code.ends_with([';', '{', '}'])
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
                 && (is_braceless_header_line(previous_trimmed)
                     || starts_header_word(previous_trimmed, "foreach"))
             {
@@ -2868,7 +2867,7 @@ impl FormatEngine<'_> {
         {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             if previous_code.ends_with(',')
-                && let Some(open) = unmatched_open_paren_column(previous_code)
+                && let Some(open) = self.open_paren_column_of(previous_code)
             {
                 let open = visual_width_from(&previous_code[..open], 0, self.options.tab_width);
                 if open > self.options.max_continuation_indent {
@@ -2880,7 +2879,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
             && starts_string_literal_token(previous.trim_ascii_start())
             // A string row closing a paren ends the operand it continued.
-            && line_paren_imbalance(self.output.code_of(previous)).0 == 0
+            && self.paren_imbalance_of(self.output.code_of(previous)).0 == 0
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)
@@ -3101,7 +3100,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             if previous_code.ends_with(';')
                 && !previous_code.ends_with("};")
-                && line_paren_imbalance(previous_code).0 == 0
+                && self.paren_imbalance_of(previous_code).0 == 0
             {
                 let previous_indent = leading_visual_width(previous, self.options.tab_width);
                 let target = if line.trim_ascii() == "}" {
@@ -3208,7 +3207,7 @@ impl FormatEngine<'_> {
                 })
         {
             let code = self.output.code_of(before_comment).trim_ascii_end();
-            if code.ends_with(',') && unmatched_open_paren_column(code).is_some() {
+            if code.ends_with(',') && self.open_paren_column_of(code).is_some() {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(before_comment, self.options.tab_width));
             }
@@ -3224,7 +3223,7 @@ impl FormatEngine<'_> {
         {
             let previous_code = self.output.code_of(previous).trim_ascii_end();
             if previous_code.ends_with(',')
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
                 && has_unmatched_open_brace(previous_code)
                 && let Some(open) = previous_code.rfind('{')
                 && previous_code[..open]

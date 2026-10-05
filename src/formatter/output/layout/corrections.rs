@@ -8,9 +8,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{
-    code_holds_word, line_paren_imbalance, preprocessor_directive,
-};
+use crate::formatter::text::line_scan::{code_holds_word, preprocessor_directive};
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
@@ -240,7 +238,7 @@ impl FormatEngine<'_> {
         let class_scope_label = layout.class_scope_label;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
-        let (line_closing_parens, line_opening_parens) = line_paren_imbalance(line);
+        let (line_closing_parens, line_opening_parens) = self.paren_imbalance_of(line);
         let line_closes_outer_delimiter = line_closing_parens > line_opening_parens.len();
         let line_has_owned_continuation = self.layout.frame_stack.active_delimiter().is_some()
             || self.operator_chain_owns_continuation(line);
@@ -340,7 +338,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|previous| {
                     let previous_code = self.output.code_of(previous).trim_ascii_end();
                     previous_code.ends_with(',')
-                        && line_paren_imbalance(previous_code).0 > 0
+                        && self.paren_imbalance_of(previous_code).0 > 0
                         && !(self.options.indent_after_parens
                             && code_holds_word(previous_code, "new"))
                 })

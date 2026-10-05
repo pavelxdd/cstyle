@@ -7,10 +7,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
-use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_column,
-};
+use crate::formatter::text::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
 use crate::formatter::tokens::literals::starts_string_literal_token;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
@@ -84,7 +81,7 @@ impl FormatEngine<'_> {
                         .iter()
                         .any(|token| matches!(token, Token::Comment(CommentKind::Block, _))))
                 && previous_code.ends_with(';')
-                && unmatched_open_paren_column(previous_code).is_none()
+                && self.open_paren_column_of(previous_code).is_none()
             {
                 layout.indent = layout.normal_indent;
                 layout.exact_indent_spaces = None;
@@ -158,7 +155,7 @@ impl FormatEngine<'_> {
             && line.trim_ascii_start().starts_with('*')
             && let Some(previous) = self.output.last_line_outside_comment()
             && (previous.trim_ascii_end().ends_with(';') || previous.trim_ascii() == "*/")
-            && unmatched_open_paren_column(previous).is_none()
+            && self.open_paren_column_of(previous).is_none()
         {
             layout.exact_indent_spaces = None;
         }
@@ -228,8 +225,8 @@ impl FormatEngine<'_> {
             let closed_inner_logical_tail = starts_with_chain_operator(current_trimmed)
                 && starts_with_chain_operator(previous_trimmed)
                 && previous_trimmed.ends_with(')')
-                && line_paren_imbalance(previous_code).0 > 0;
-            let previous_closes_inner_call = line_paren_imbalance(previous_code).0 > 0;
+                && self.paren_imbalance_of(previous_code).0 > 0;
+            let previous_closes_inner_call = self.paren_imbalance_of(previous_code).0 > 0;
             let wanted = leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if !uses_outer_call_column

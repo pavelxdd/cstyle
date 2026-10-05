@@ -41,7 +41,9 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{line_ends_with_comment, unmatched_open_paren_column};
+use crate::formatter::text::line_scan::{
+    line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
+};
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::{literals, operators, pointers, symbols};
@@ -106,6 +108,10 @@ pub(crate) type OutputKey = (usize, u64);
 /// An output line leaving a paren open, and the column after that paren.
 pub(crate) type OpenParenLine = (usize, usize);
 
+/// The address and length of a token slice, the start of a line of it,
+/// and the index of that line's first line comment.
+pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
+
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
     /// Indent style of the finished output; the engine itself may lay out a
@@ -126,6 +132,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_colon_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// Whether the output last read stands inside a macro call's arguments.
     pub(crate) macro_call_context_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The first line comment of the last token line asked about: the
+    /// address and length of its tokens, its start, and the comment's index.
+    pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
     line_brace_match_start: usize,
@@ -193,6 +202,7 @@ impl<'a> FormatEngine<'a> {
             constructor_scan_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
+            line_comment_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -1128,6 +1138,30 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    /// `self.open_paren_column_of(text)`, read from the cache of the
+    /// output line whose code `text` is.
+    pub(crate) fn open_paren_column_of(&self, text: &str) -> Option<usize> {
+        match self.output.code_line_of(text) {
+            Some((index, offset)) => self
+                .output
+                .unmatched_open_paren_column(index)
+                .map(|column| column - offset),
+            None => unmatched_open_paren_column(text),
+        }
+    }
+
+    /// `self.paren_imbalance_of(text)`, read from the cache of the output line
+    /// whose code `text` is.
+    pub(crate) fn paren_imbalance_of(&self, text: &str) -> (usize, Vec<usize>) {
+        match self.output.code_line_of(text) {
+            Some((index, offset)) => {
+                let (closes, opens) = self.output.paren_imbalance(index);
+                (closes, opens.iter().map(|column| column - offset).collect())
+            }
+            None => line_paren_imbalance(text),
+        }
+    }
+
     pub(crate) fn current_ends_cast(&self) -> bool {
         self.current_cast_words()
             .is_some_and(|words| words.iter().any(|word| is_type_like_pointer_word(word)))
@@ -1685,7 +1719,7 @@ impl<'a> FormatEngine<'a> {
             && !trimmed.starts_with(['#', '{', '}'])
             && !code.ends_with([',', ';', '\\'])
             && !operators::head_ends_binary_operator(code)
-            && unmatched_open_paren_column(code).is_none()
+            && self.open_paren_column_of(code).is_none()
     }
 
     fn incomplete_control_header(&self) -> bool {

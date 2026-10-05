@@ -8,8 +8,7 @@ use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, line_ends_with_comment, line_paren_imbalance,
-    reverse_scan_skips_block_comment, unmatched_open_paren_column,
+    find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
 };
 use crate::source::lex::is_identifier_continue;
 
@@ -51,7 +50,7 @@ impl FormatEngine<'_> {
             if close_pending == 0 && !code.ends_with(')') {
                 return None;
             }
-            let (closes, mut opens) = line_paren_imbalance(code);
+            let (closes, mut opens) = self.paren_imbalance_of(code);
             if close_pending > 0
                 && let Some(&column) = opens.last()
                 && code[column..].starts_with('(')
@@ -164,7 +163,7 @@ impl FormatEngine<'_> {
                 .output
                 .code_before_comment(previous_index)
                 .trim_ascii_end();
-            if let Some(open) = unmatched_open_paren_column(previous_code) {
+            if let Some(open) = self.open_paren_column_of(previous_code) {
                 let before = previous_code[..open].trim_ascii_end();
                 let name_start = function_name_start(before)?;
                 let return_type = before[..name_start].trim_ascii_end();
