@@ -233,27 +233,29 @@ impl FormatEngine<'_> {
             if trimmed.starts_with(':') && !trimmed.starts_with("::") {
                 return true;
             }
-            if trimmed.match_indices(')').any(|(close, _)| {
-                let Some(tail) = trimmed[close + 1..].trimmed_start().strip_prefix(':') else {
-                    return false;
-                };
-                if tail.starts_with(':') {
-                    return false;
-                }
-                // The `:` of a ternary follows its `?` outside the just-closed
-                // paren, so a question mark at depth zero marks a ternary colon.
-                let mut depth = 1usize;
-                for ch in trimmed[..close].chars().rev() {
-                    match ch {
-                        ')' => depth += 1,
-                        '(' => depth = depth.saturating_sub(1),
-                        '?' if depth == 0 => return false,
-                        ';' | '{' | '}' => break,
-                        _ => {}
+            if trimmed.contains(':')
+                && trimmed.match_indices(')').any(|(close, _)| {
+                    let Some(tail) = trimmed[close + 1..].trimmed_start().strip_prefix(':') else {
+                        return false;
+                    };
+                    if tail.starts_with(':') {
+                        return false;
                     }
-                }
-                true
-            }) {
+                    // The `:` of a ternary follows its `?` outside the just-closed
+                    // paren, so a question mark at depth zero marks a ternary colon.
+                    let mut depth = 1usize;
+                    for ch in trimmed[..close].chars().rev() {
+                        match ch {
+                            ')' => depth += 1,
+                            '(' => depth = depth.saturating_sub(1),
+                            '?' if depth == 0 => return false,
+                            ';' | '{' | '}' => break,
+                            _ => {}
+                        }
+                    }
+                    true
+                })
+            {
                 return true;
             }
         }

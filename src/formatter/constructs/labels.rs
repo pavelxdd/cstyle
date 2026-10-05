@@ -559,6 +559,9 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
 }
 
 fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
+    if !line.contains(':') {
+        return false;
+    }
     let trimmed = line[..trailing_comment_split_limit(line)].trimmed();
     let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trimmed_end();
     trimmed.ends_with(':')

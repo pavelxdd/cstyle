@@ -37,6 +37,9 @@ pub(crate) fn split_switch_label_statement(line: &str) -> Option<(String, String
 }
 
 pub(crate) fn case_label_with_trailing_comment(line: &str) -> bool {
+    if !line.contains(':') {
+        return false;
+    }
     let comment = trailing_comment_split_limit(line);
     if comment == line.len() {
         return false;

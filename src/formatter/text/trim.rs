@@ -26,16 +26,20 @@ impl Trimmed for str {
 }
 
 /// The length of the ASCII whitespace `bytes` start with; an indent of
-/// spaces is passed over eight bytes at a time.
+/// spaces is measured eight bytes at a time.
 fn leading_whitespace(bytes: &[u8]) -> usize {
-    const SPACES: u64 = u64::from_ne_bytes([b' '; 8]);
+    const SPACES: u64 = u64::from_le_bytes([b' '; 8]);
     if !bytes.first().is_some_and(u8::is_ascii_whitespace) {
         return 0;
     }
     let mut index = 0;
-    while let Some(chunk) = bytes.get(index..index + 8)
-        && u64::from_ne_bytes(chunk.try_into().expect("eight bytes")) == SPACES
-    {
+    while let Some(chunk) = bytes.get(index..index + 8) {
+        // The first byte that is no space sets the lowest differing bits.
+        let differing = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ SPACES;
+        if differing != 0 {
+            index += differing.trailing_zeros() as usize / 8;
+            break;
+        }
         index += 8;
     }
     while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
@@ -60,6 +64,10 @@ mod tests {
             "                 \r\nab  \t",
             "        \u{a0}x",
             "  é ",
+            "    if (x)",
+            "            \tx",
+            "                x",
+            "       \t        x",
         ] {
             assert_eq!(text.trimmed_start(), text.trim_ascii_start(), "{text:?}");
             assert_eq!(text.trimmed(), text.trim_ascii(), "{text:?}");
