@@ -848,17 +848,11 @@ impl FormatEngine<'_> {
             Some(start) => start.min(self.output.len())..self.output.len(),
             None => self.output.scoped_range(),
         };
+        let window_start = recent.start.max(recent.end.saturating_sub(128));
         let chain_active = line_start_active
-            || (self.output.may_have_else()
-                && recent.clone().rev().take(128).any(|index| {
-                    let trimmed = self.output.trimmed(index);
-                    trimmed == "else" || trimmed.ends_with("} else")
-                }));
-        let has_preprocessor = self.output.may_have_hash()
-            && recent
-                .rev()
-                .take(128)
-                .any(|index| self.output.trimmed(index).starts_with('#'));
+            || (self.output.may_have_else() && self.output.has_else_line_from(window_start));
+        let has_preprocessor =
+            self.output.may_have_hash() && self.output.has_hash_led_line_from(window_start);
         let in_split_else_body = chain_active
             && self
                 .current_source_token()

@@ -225,11 +225,25 @@ pub(crate) struct OutputBuffer {
     /// The last line outside comments, with the line count and version it
     /// was found for.
     last_outside_comment_cache: Cell<Option<(usize, u64, Option<usize>)>>,
+    /// The last look back for a line that is `else` or ends with `} else`.
+    recent_else_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line led by `#`.
+    recent_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
     /// line; until then lines can be searched by token.
     first_tokens_unordered: bool,
+}
+
+/// The last line from `floor` on that a look back found, for a buffer of
+/// `len` lines at `version`.
+#[derive(Clone, Copy)]
+struct RecentMatch {
+    len: usize,
+    version: u64,
+    floor: usize,
+    found: Option<usize>,
 }
 
 impl OutputBuffer {
@@ -825,6 +839,55 @@ impl OutputBuffer {
         self.last_non_empty_index()
             .filter(|&index| index >= self.scope_start)
             .map(|index| &self.lines[index])
+    }
+
+    /// Whether a line from `start` on is `else` or ends with `} else`.
+    pub(crate) fn has_else_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_else_cache, start, |index| {
+            self.brace_meta(index).else_line
+        })
+    }
+
+    /// Whether a line from `start` on is led by `#`.
+    pub(crate) fn has_hash_led_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_hash_cache, start, |index| {
+            self.trimmed(index).starts_with('#')
+        })
+    }
+
+    /// Whether a line from `start` on `matches`; lines pushed since the
+    /// last look back are read first, and the lines it read are not read
+    /// again while none changed.
+    fn has_line_from(
+        &self,
+        cache: &Cell<Option<RecentMatch>>,
+        start: usize,
+        matches: impl Fn(usize) -> bool,
+    ) -> bool {
+        let len = self.lines.len();
+        let start = start.min(len);
+        let found = match cache
+            .get()
+            .filter(|cached| cached.version == self.version && cached.len <= len)
+        {
+            Some(cached) => (cached.len.max(start)..len)
+                .rev()
+                .find(|&index| matches(index))
+                .or(cached.found.filter(|&index| index >= start))
+                .or_else(|| {
+                    (start..cached.floor.min(len))
+                        .rev()
+                        .find(|&index| matches(index))
+                }),
+            None => (start..len).rev().find(|&index| matches(index)),
+        };
+        cache.set(Some(RecentMatch {
+            len,
+            version: self.version,
+            floor: start,
+            found,
+        }));
+        found.is_some()
     }
 
     /// The last non-empty line, unless it continues a block comment: the
