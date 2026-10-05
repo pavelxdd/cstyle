@@ -82,10 +82,11 @@ impl FormatEngine<'_> {
         base_indent_width: impl FnOnce() -> usize,
         width: usize,
     ) -> MaxLengthBraceRowLayout {
+        let line_start = line.trimmed_start();
         let attaches_lisp_closer = matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
-        ) && line.trimmed_start().starts_with('}')
+        ) && line_start.starts_with('}')
             && self.output.last().is_some_and(|previous| {
                 !previous.trimmed().is_empty()
                     && preprocessor_directive(previous.trimmed_start()).is_none()
@@ -104,8 +105,8 @@ impl FormatEngine<'_> {
             BraceStyle::Horstmann | BraceStyle::Pico
         ) && let Some(brace) = self.output.last()
             && brace.trimmed() == "{"
-            && !line.trimmed_start().starts_with(['#', '}'])
-            && !line.trimmed_start().starts_with("//")
+            && !line_start.starts_with(['#', '}'])
+            && !line_start.starts_with("//")
             && !line.contains("*INDENT-OFF*")
             && !labels::is_access_label(line, &self.options.access_labels)
             && !self.output[..self.output.len() - 1]
@@ -119,7 +120,7 @@ impl FormatEngine<'_> {
             let output_options = self.output_options();
             let prefix =
                 output_options.continuation_indent_prefix(structural_level, base_indent_width());
-            let next = format!("{prefix}{}", line.trimmed_start());
+            let next = format!("{prefix}{}", line_start);
             let brace_width = leading_visual_width(brace, self.options.tab_width);
             let brace_prefix = output_options.continuation_indent_prefix(
                 brace_width / self.options.indent_width.max(1),
@@ -166,10 +167,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &str) -> bool {
+        let line_trimmed = line.trimmed();
         if !(matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line.trimmed() == "};"
+        ) && line_trimmed == "};"
             && self
                 .output
                 .scoped()
@@ -189,7 +191,7 @@ impl FormatEngine<'_> {
         } else {
             base + 1
         };
-        self.push_output_line(line.trimmed(), indent);
+        self.push_output_line(line_trimmed, indent);
         true
     }
 

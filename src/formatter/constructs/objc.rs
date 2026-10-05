@@ -170,7 +170,11 @@ impl FormatEngine<'_> {
         line: &str,
         mut current: Option<usize>,
     ) -> Option<usize> {
-        if line.trimmed_start().starts_with("};")
+        let line_start = line.trimmed_start();
+        // Only a line holding `@` can open a dictionary literal.
+        let may_hold_dictionary = self.output.may_have_at();
+        if may_hold_dictionary
+            && line_start.starts_with("};")
             && self
                 .output
                 .scoped()
@@ -205,7 +209,8 @@ impl FormatEngine<'_> {
                     })
             };
         }
-        if !line.trimmed_start().starts_with('}')
+        if may_hold_dictionary
+            && !line_start.starts_with('}')
             && !line_is_label_style_dictionary_key(line)
             && self
                 .output
@@ -223,7 +228,8 @@ impl FormatEngine<'_> {
                 leading_visual_width(opener, self.options.tab_width) + self.options.indent_width,
             );
         }
-        if !line.trimmed_start().starts_with('}')
+        if may_hold_dictionary
+            && !line_start.starts_with('}')
             && !line_is_label_style_dictionary_key(line)
             && self
                 .layout
@@ -245,7 +251,7 @@ impl FormatEngine<'_> {
                 .as_ref()
                 .map(|previous| leading_visual_width(previous, self.options.tab_width));
         }
-        if line.trimmed_start().starts_with("@ {")
+        if line_start.starts_with("@ {")
             && self
                 .layout
                 .previous_pre_adjust_line
@@ -289,6 +295,7 @@ impl FormatEngine<'_> {
         mut indent_level: usize,
         mut exact_indent_spaces: Option<usize>,
     ) -> ObjCLineAlignment {
+        let line_start = line.trimmed_start();
         if self
             .layout
             .previous_pre_adjust_line
@@ -318,7 +325,7 @@ impl FormatEngine<'_> {
         let mut force_message_align = false;
         if let Some(previous) = &self.layout.previous_pre_adjust_line {
             let previous_text = previous.trimmed_start();
-            let line_text = line.trimmed_start();
+            let line_text = line_start;
             let simple_selector_line = line_text.split_once(':').is_some_and(|(key, rest)| {
                 !rest.contains('?')
                     && key
@@ -371,7 +378,7 @@ impl FormatEngine<'_> {
                 }
             }
         } else if let Some(align) = self.layout.objc.message_align
-            && !line.trimmed_start().starts_with(['{', '}'])
+            && !line_start.starts_with(['{', '}'])
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
@@ -400,7 +407,7 @@ impl FormatEngine<'_> {
                 self.layout.objc.colon_align = None;
             }
         }
-        if line.trimmed_start().starts_with('{')
+        if line_start.starts_with('{')
             && self.output.last_line_outside_comment().is_some_and(|line| {
                 line.trimmed_start()
                     .strip_prefix(['-', '+'])
@@ -428,15 +435,14 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn objc_line_indent_override(&self, line: &str) -> Option<usize> {
+        let line_start = line.trimmed_start();
         let mut spaces = None;
         if let Some(header) = ["@try", "@catch", "@finally"].into_iter().find(|header| {
-            line.trimmed_start()
-                .strip_prefix(header)
-                .is_some_and(|rest| {
-                    rest.is_empty()
-                        || rest.starts_with(char::is_whitespace)
-                        || rest.starts_with(['(', '{'])
-                })
+            line_start.strip_prefix(header).is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.starts_with(char::is_whitespace)
+                    || rest.starts_with(['(', '{'])
+            })
         }) {
             let active = self.layout.frame_stack.active_brace();
             let owner = if active.is_some_and(|frame| frame.header.as_deref() == Some(header)) {
@@ -447,7 +453,7 @@ impl FormatEngine<'_> {
             spaces = Some(owner.map_or(0, |frame| frame.body_indent_column));
         }
 
-        let trimmed = line.trimmed_start();
+        let trimmed = line_start;
         let interface_member = trimmed
             .strip_prefix(['+', '-'])
             .is_some_and(|rest| rest.trimmed_start().starts_with('('))

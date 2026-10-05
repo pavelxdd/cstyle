@@ -144,8 +144,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn range_designator_source_indent_spaces(&self, line: &str) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if self.options.min_conditional_indent != MinConditionalIndent::Zero
-            || !line.trimmed_start().starts_with('[')
+            || !line_start.starts_with('[')
         {
             return None;
         }
@@ -153,7 +154,7 @@ impl FormatEngine<'_> {
         if !previous.trimmed_start().starts_with('[') {
             return None;
         }
-        if self.token_input.input_source_indent == 0 && line.trimmed_start().contains("...") {
+        if self.token_input.input_source_indent == 0 && line_start.contains("...") {
             Some(leading_visual_width(previous, self.options.tab_width))
         } else {
             Some(self.token_input.input_source_indent)
@@ -909,10 +910,11 @@ impl FormatEngine<'_> {
         line: &str,
         closing: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         let starts_member_opener =
-            !closing && line.trimmed_start().starts_with(['.', '[']) && line.contains('{');
+            !closing && line_start.starts_with(['.', '[']) && line.contains('{');
         let frame = if closing {
-            let trimmed = line.trimmed_start();
+            let trimmed = line_start;
             let previous_closes_brace = self
                 .output
                 .last()

@@ -264,8 +264,9 @@ impl FormatEngine<'_> {
         line: &str,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
+        let line_trimmed = line.trimmed();
         let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
-        if line.trimmed() == "}" && self.current_closes_label_block() {
+        if line_trimmed == "}" && self.current_closes_label_block() {
             return Some(
                 self.layout
                     .frame_stack
@@ -277,7 +278,7 @@ impl FormatEngine<'_> {
                     ),
             );
         }
-        if line.trimmed() == "}" {
+        if line_trimmed == "}" {
             let (open_spaces, open_trimmed) = self
                 .output
                 .current_closing_brace_open(self.options.tab_width)
@@ -313,11 +314,12 @@ impl FormatEngine<'_> {
         closes_outer_delimiter: bool,
         has_owned_continuation: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if kind != LineKind::Normal
             || !uses_normal_indent
             || closes_outer_delimiter
             || has_owned_continuation
-            || line.trimmed_start().starts_with([')', ']', '}'])
+            || line_start.starts_with([')', ']', '}'])
         {
             return None;
         }
@@ -339,7 +341,7 @@ impl FormatEngine<'_> {
                     .and(frame_stack.enclosing_brace())
                     .filter(|frame| frame.label_block)
             })?;
-        let target = if line.trimmed_start().starts_with('{') {
+        let target = if line_start.starts_with('{') {
             frame.sibling_indent_column
         } else {
             frame.body_indent_column

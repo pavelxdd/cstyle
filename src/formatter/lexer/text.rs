@@ -83,13 +83,14 @@ impl Eq for TokenText {}
 
 impl PartialEq<str> for TokenText {
     fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
+        // Most comparisons fail on the length, before the text is sliced.
+        (self.end - self.start) as usize == other.len() && self.as_str() == other
     }
 }
 
 impl PartialEq<&str> for TokenText {
     fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
+        *self == **other
     }
 }
 
@@ -101,13 +102,13 @@ impl PartialEq<String> for TokenText {
 
 impl PartialEq<TokenText> for str {
     fn eq(&self, other: &TokenText) -> bool {
-        self == other.as_str()
+        *other == *self
     }
 }
 
 impl PartialEq<TokenText> for &str {
     fn eq(&self, other: &TokenText) -> bool {
-        *self == other.as_str()
+        *other == **self
     }
 }
 

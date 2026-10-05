@@ -76,6 +76,7 @@ fn structural_line(line: &str) -> Cow<'_, str> {
 }
 
 fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
+    let line_start = line.trimmed_start();
     let structural = structural_line(line);
     let code = structural.trimmed_end();
     let trimmed = code.trimmed_start();
@@ -98,7 +99,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         closes,
         opens,
         open_shape,
-        trim_start_byte: line.len() - line.trimmed_start().len(),
+        trim_start_byte: line.len() - line_start.len(),
         trim_end_byte: line.trimmed_end().len(),
         code_end_byte: code.len(),
         paren_closes,
@@ -108,12 +109,13 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(
-            &line[(line.len() - line.trimmed_start().len()).min(code.len())..code.len()],
+            &line[(line.len() - line_start.len()).min(code.len())..code.len()],
         ),
     }
 }
 
 fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBraceMeta {
+    let line_start = line.trimmed_start();
     let suffix = line.get(structural_start..).unwrap_or("");
     let structural = structural_line(suffix);
     let code = structural.trimmed_end();
@@ -124,7 +126,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         closes,
         opens,
         open_shape: OpenBraceShape::Other,
-        trim_start_byte: line.len() - line.trimmed_start().len(),
+        trim_start_byte: line.len() - line_start.len(),
         trim_end_byte: line.trimmed_end().len(),
         code_end_byte: line.len(),
         paren_closes,
@@ -133,7 +135,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         comment_split_limit: trailing_comment_split_limit(line),
         mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
-        code_else_line: is_else_line(line.trimmed_start()),
+        code_else_line: is_else_line(line_start),
     }
 }
 
@@ -230,6 +232,8 @@ pub(crate) struct OutputBuffer {
     /// The last look back for a line whose code is `else` or ends with
     /// `} else`.
     recent_code_else_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line whose code holds `#if`.
+    recent_if_directive_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line led by `#`.
     recent_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
@@ -849,6 +853,13 @@ impl OutputBuffer {
     pub(crate) fn has_else_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_else_cache, start, |index| {
             self.brace_meta(index).else_line
+        })
+    }
+
+    /// Whether the code of a line from `start` on holds `#if`.
+    pub(crate) fn has_if_directive_code_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_if_directive_cache, start, |index| {
+            self.code(index).contains("#if")
         })
     }
 

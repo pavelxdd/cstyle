@@ -193,6 +193,7 @@ impl FormatEngine<'_> {
         split_else_line_start: &SplitElseLineStart,
         facts: &InitialLineFacts,
     ) -> LineLayout {
+        let line_start = line.trimmed_start();
         let InitialLineFacts {
             line_kind,
             normal_indent,
@@ -215,8 +216,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|frame| frame.opener_output_line < self.output.len());
         let snapshot_level = match replay.input_continuation_indent {
             Some(ContinuationIndent::Level(level))
-                if delimiter_owns_snapshot
-                    && !line.trimmed_start().starts_with(['{', '}', ')']) =>
+                if delimiter_owns_snapshot && !line_start.starts_with(['{', '}', ')']) =>
             {
                 Some(level)
             }
@@ -225,8 +225,7 @@ impl FormatEngine<'_> {
         let next_line_indent = pending_level.or(snapshot_level);
         let snapshot_spaces = match replay.input_continuation_indent {
             Some(ContinuationIndent::Spaces(spaces))
-                if delimiter_owns_snapshot
-                    && !line.trimmed_start().starts_with(['{', '}', ')']) =>
+                if delimiter_owns_snapshot && !line_start.starts_with(['{', '}', ')']) =>
             {
                 Some(spaces)
             }
@@ -234,7 +233,7 @@ impl FormatEngine<'_> {
         };
         let level = next_line_indent
             .map(|level| {
-                let included_base_indent = if line.trimmed_start().starts_with("else") {
+                let included_base_indent = if line_start.starts_with("else") {
                     self.layout.indentation.indent()
                 } else {
                     self.layout.indentation.indent() + 1
@@ -253,7 +252,7 @@ impl FormatEngine<'_> {
                 && previous.len() != previous_code.len())
                 || (next_line_indent.is_some()
                     && is_braceless_header_line(previous_code.trimmed_start())
-                    && !line.trimmed_start().starts_with(['#', '{', '}'])
+                    && !line_start.starts_with(['#', '{', '}'])
                     && !operator_chains::starts_operator_chain_continuation(line))
             {
                 spaces = None;
@@ -281,14 +280,14 @@ impl FormatEngine<'_> {
         if opens_lambda_block {
             level = normal_indent;
         }
-        if line.trimmed_start().starts_with("else")
+        if line_start.starts_with("else")
             && let Some(else_level) = self.braceless_else_output_level()
         {
             level = else_level;
             spaces = None;
         }
         if self.options.no_indent_if_after_else
-            && starts_header_word(line.trimmed_start(), "if")
+            && starts_header_word(line_start, "if")
             && let Some(previous) = self.output.last_non_empty_scoped()
             && matches!(previous.trimmed(), "else" | "} else")
         {
@@ -1242,21 +1241,22 @@ impl FormatEngine<'_> {
         }
         if let Some(previous) = self.output.last_non_empty_scoped() {
             let previous_trimmed = previous.trimmed_start();
-            let macro_before_previous = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .skip_while(|line| line.as_str() != previous)
-                .skip(1)
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| {
-                    let trimmed = line.trimmed();
-                    !trimmed.is_empty()
-                        && trimmed
-                            .chars()
-                            .all(|ch| ch == '_' || ch.is_ascii_uppercase())
-                });
+            let macro_before_previous = || {
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip_while(|line| line.as_str() != previous)
+                    .skip(1)
+                    .find(|line| !line.trimmed().is_empty())
+                    .is_some_and(|line| {
+                        let trimmed = line.trimmed();
+                        !trimmed.is_empty()
+                            && trimmed
+                                .chars()
+                                .all(|ch| ch == '_' || ch.is_ascii_uppercase())
+                    })
+            };
             if self.token_input.token_source_line_indent
                 >= layout.normal_indent * self.options.indent_width
                 && self.token_input.token_source_line_indent > 0
@@ -1276,7 +1276,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_of(previous).trimmed_end();
             if previous.contains("//")
                 && (previous_code.contains("noexcept (")
-                    || (macro_before_previous && previous_code.contains("noexcept(")))
+                    || (previous_code.contains("noexcept(") && macro_before_previous()))
                 && previous_code.ends_with('(')
                 && self.token_input.token_source_line_indent > 0
                 && !line_start.starts_with("//")

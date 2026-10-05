@@ -151,15 +151,16 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<SplitElseCallLineLayout> {
+        let line_start = line.trimmed_start();
         if !split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}', ')'])
+            || is_comment_line(line_start)
         {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
-        if !(previous_code.ends_with(',') || line.trimmed_start().starts_with(','))
+        if !(previous_code.ends_with(',') || line_start.starts_with(','))
             || !starts_string_literal_token(previous_code.trimmed_start())
         {
             return None;
@@ -207,9 +208,10 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<SplitElseCallLineLayout> {
+        let line_start = line.trimmed_start();
         if !split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -234,10 +236,11 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
         split_else_state_active: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
             || !split_else_state_active
             || !self.commented_split_else_preprocessor_region_active()
         {
@@ -256,16 +259,17 @@ impl FormatEngine<'_> {
         line: &str,
         structural_split_else_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !structural_split_else_context
-            || starts_string_literal_token(line.trimmed_start())
-            || line.trimmed_start().starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line.trimmed_start())
+            || starts_string_literal_token(line_start)
+            || line_start.starts_with(['#', '{', '}', ')'])
+            || is_comment_line(line_start)
         {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
-        ((previous_code.ends_with(',') || line.trimmed_start().starts_with(','))
+        ((previous_code.ends_with(',') || line_start.starts_with(','))
             && starts_string_literal_token(previous_code.trimmed_start()))
         .then_some(leading_visual_width(previous, self.options.tab_width))
     }
@@ -358,10 +362,11 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<SplitElseCallLineLayout> {
-        if !split_else_context || !line.trimmed_start().starts_with(')') {
+        let line_start = line.trimmed_start();
+        if !split_else_context || !line_start.starts_with(')') {
             return None;
         }
-        let call = if line.trimmed_start().starts_with(");")
+        let call = if line_start.starts_with(");")
             && self
                 .output
                 .scoped()
@@ -420,9 +425,10 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}', ')'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -448,9 +454,10 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}', ')'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -543,9 +550,10 @@ impl FormatEngine<'_> {
         line: &str,
         structural_split_else_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !structural_split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}', ')'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -833,9 +841,10 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !self.split_else_body_indent_active()
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line_start.starts_with(['#', '{', '}'])
         {
             return None;
         }
@@ -863,8 +872,8 @@ impl FormatEngine<'_> {
             && starts_string_literal_token(previous_code.trimmed_start())
         {
             leading_visual_width(previous, self.options.tab_width) + case_unindent
-        } else if !starts_with_chain_operator(line.trimmed_start())
-            && first_string_literal_start(line.trimmed_start()).is_some()
+        } else if !starts_with_chain_operator(line_start)
+            && first_string_literal_start(line_start).is_some()
             && first_string_literal_start(previous_code.trimmed_start()).is_some()
             && let Some(open) = self
                 .output
@@ -883,13 +892,13 @@ impl FormatEngine<'_> {
                 })
         {
             open + 1 + case_unindent
-        } else if starts_string_literal_token(line.trimmed_start())
+        } else if starts_string_literal_token(line_start)
             && previous_code.trimmed_end().ends_with('(')
         {
             leading_visual_width(previous, self.options.tab_width)
                 + self.options.indent_width
                 + case_unindent
-        } else if starts_string_literal_token(line.trimmed_start())
+        } else if starts_string_literal_token(line_start)
             && let Some(open) = self.open_paren_column_of(previous_code)
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
@@ -899,8 +908,7 @@ impl FormatEngine<'_> {
             } else {
                 open_column
             }) + case_unindent
-        } else if (starts_string_literal_token(line.trimmed_start())
-            || line.trimmed_start().starts_with(','))
+        } else if (starts_string_literal_token(line_start) || line_start.starts_with(','))
             && starts_string_literal_token(previous_code.trimmed_start())
         {
             leading_visual_width(previous, self.options.tab_width) + case_unindent
@@ -1437,11 +1445,12 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if self.options.indent_after_parens {
             return None;
         }
         let base_indent = self.new_over_max_call_base_indent_spaces()?;
-        let comment_string_spaces = if starts_string_literal_token(line.trimmed_start()) {
+        let comment_string_spaces = if starts_string_literal_token(line_start) {
             self.output.last_non_empty_scoped().and_then(|previous| {
                 is_comment_line(previous.trimmed_start())
                     .then_some(leading_visual_width(previous, self.options.tab_width))
@@ -1449,7 +1458,7 @@ impl FormatEngine<'_> {
         } else {
             None
         };
-        let comma_after_string_spaces = if line.trimmed_start().starts_with(',') {
+        let comma_after_string_spaces = if line_start.starts_with(',') {
             self.output.last_non_empty_scoped().and_then(|previous| {
                 starts_string_literal_token(previous.trimmed_start())
                     .then_some(leading_visual_width(previous, self.options.tab_width))
@@ -1457,7 +1466,7 @@ impl FormatEngine<'_> {
         } else {
             None
         };
-        let adjacent_string_call_close = if line.trimmed_start().starts_with(");")
+        let adjacent_string_call_close = if line_start.starts_with(");")
             && self
                 .output
                 .scoped()
@@ -1486,7 +1495,7 @@ impl FormatEngine<'_> {
                 .or(comma_after_string_spaces)
                 .or(adjacent_string_call_close)
                 .unwrap_or_else(|| {
-                    if line.trimmed_start().starts_with(')') {
+                    if line_start.starts_with(')') {
                         base_indent
                     } else {
                         base_indent + self.options.indent_width * 2
@@ -1543,6 +1552,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn split_or_empty_new_call_indent_spaces(&self, line: &str) -> Option<usize> {
+        let line_start = line.trimmed_start();
         let mut spaces = None;
         if line.trimmed() == "("
             && let Some(previous) = self.output.last_line_outside_comment()
@@ -1555,14 +1565,14 @@ impl FormatEngine<'_> {
             );
         }
         if let Some(paren_indent) = self.split_new_call_paren_indent_spaces() {
-            spaces = Some(if line.trimmed_start().starts_with(')') {
+            spaces = Some(if line_start.starts_with(')') {
                 paren_indent
             } else {
                 paren_indent + self.options.indent_width
             });
         }
         if let Some(base_indent) = self.new_empty_call_base_indent_spaces() {
-            spaces = Some(if line.trimmed_start().starts_with(')') {
+            spaces = Some(if line_start.starts_with(')') {
                 base_indent
             } else {
                 base_indent + self.options.indent_width

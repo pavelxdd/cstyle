@@ -236,10 +236,11 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -278,10 +279,11 @@ impl FormatEngine<'_> {
         current_spaces: Option<usize>,
         output_spaces: usize,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
             || !self.commented_split_else_preprocessor_region_active()
         {
             return None;

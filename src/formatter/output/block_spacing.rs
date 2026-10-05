@@ -363,6 +363,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn take_block_spacing_blank(&mut self, line: &str) -> bool {
+        let line_start = line.trimmed_start();
         if !self.options.break_blocks {
             return false;
         }
@@ -371,7 +372,7 @@ impl FormatEngine<'_> {
             .previous_pre_adjust_line
             .as_deref()
             .is_some_and(|previous| previous.trimmed_end().ends_with('{'));
-        if line.trimmed_start().starts_with('}') {
+        if line_start.starts_with('}') {
             // A block of comments alone is as empty.
             let holds_no_code = self
                 .output
@@ -396,7 +397,7 @@ impl FormatEngine<'_> {
         let case_block_before_directive =
             std::mem::take(&mut self.block_spacing.case_block_before_directive);
         if case_block_before_directive
-            && line.trimmed_start().starts_with('#')
+            && line_start.starts_with('#')
             && self
                 .layout
                 .previous_pre_adjust_line
@@ -420,7 +421,7 @@ impl FormatEngine<'_> {
         if prepend {
             return true;
         }
-        let trimmed = line.trimmed_start();
+        let trimmed = line_start;
         // An empty block stays closed up to its closing header.
         let closed_empty_block = self.block_spacing.closed_empty_block;
         if let Some(after) = trimmed.strip_prefix('}') {

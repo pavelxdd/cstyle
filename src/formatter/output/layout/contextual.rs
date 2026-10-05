@@ -255,10 +255,11 @@ impl FormatEngine<'_> {
         line: &str,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
+        let line_start = line.trimmed_start();
         let layout = &mut contextual.layout;
         if let Some(previous) = self.output.last_non_empty_scoped() {
             let previous_trimmed = previous.trimmed_start();
-            let current = line.trimmed_start();
+            let current = line_start;
             if starts_with_chain_operator(current) && previous_trimmed.starts_with("//") {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
@@ -382,7 +383,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = layout.exact_indent_spaces.as_mut()
             && *spaces == self.token_input.token_source_line_indent
             && self.token_input.token_source_line_indent > 0
-            && !line.trimmed_start().starts_with(['#', '(', ')', '{', '}'])
+            && !line_start.starts_with(['#', '(', ')', '{', '}'])
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_of(previous).trimmed_end();
@@ -391,7 +392,7 @@ impl FormatEngine<'_> {
                 *spaces += case_unindent;
             }
         }
-        if line.trimmed_start().starts_with(',')
+        if line_start.starts_with(',')
             && self
                 .output
                 .scoped()
@@ -404,7 +405,7 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces =
                 Some(leading_visual_width(previous, self.options.tab_width));
         }
-        if line.trimmed_start().starts_with(':')
+        if line_start.starts_with(':')
             && self
                 .output
                 .scoped()
@@ -1736,11 +1737,12 @@ impl FormatEngine<'_> {
         line: &str,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
+        let line_start = line.trimmed_start();
         let output_spaces = contextual.output_spaces;
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
         let current_may_need_preprocessor_else_context = {
-            let trimmed = line.trimmed_start();
+            let trimmed = line_start;
             split_else_state_active
                 || starts_string_literal_token(trimmed)
                 || trimmed.starts_with([
@@ -1810,8 +1812,8 @@ impl FormatEngine<'_> {
             if in_preprocessor_else_context
                 && previous_code.ends_with(';')
                 && !starts_string_literal_token(previous_code.trimmed_start())
-                && !line.trimmed_start().starts_with(['#', '{', '}', ')'])
-                && !is_comment_line(line.trimmed_start())
+                && !line_start.starts_with(['#', '{', '}', ')'])
+                && !is_comment_line(line_start)
                 && !(previous_code.trimmed_start().starts_with(");")
                     && (self
                         .output
@@ -1870,7 +1872,7 @@ impl FormatEngine<'_> {
             if in_preprocessor_else_context
                 && previous_code.ends_with(',')
                 && previous_code.trimmed_start().starts_with('{')
-                && line.trimmed_start().starts_with('{')
+                && line_start.starts_with('{')
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
@@ -1883,8 +1885,8 @@ impl FormatEngine<'_> {
             }
             if in_preprocessor_else_context
                 && previous_code.trimmed() == "}"
-                && !line.trimmed_start().starts_with(['#', '{', '}'])
-                && !is_comment_line(line.trimmed_start())
+                && !line_start.starts_with(['#', '{', '}'])
+                && !is_comment_line(line_start)
             {
                 let spaces = leading_visual_width(previous, self.options.tab_width);
                 if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {

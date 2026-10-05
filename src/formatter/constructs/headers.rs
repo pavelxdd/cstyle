@@ -936,15 +936,16 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['{', '#'])
+            || line_start.starts_with(['{', '#'])
             || self.options.brace_style != BraceStyle::None
         {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
         let previous_code = self.output.code_of(previous).trimmed_end();
-        if (line.trimmed_start().starts_with("} else") || line.trimmed_start().starts_with("}else"))
+        if (line_start.starts_with("} else") || line_start.starts_with("}else"))
             && preprocessor_directive(previous_code.trimmed_start()).is_some()
             && let Some(header) = self
                 .output
@@ -1560,8 +1561,9 @@ impl FormatEngine<'_> {
         current_spaces: Option<usize>,
         interrupted_header_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         // A block given to a braceless header stands at that header.
-        let header_body_block = line.trimmed_start().starts_with('{')
+        let header_body_block = line_start.starts_with('{')
             && self
                 .output
                 .last_line_outside_comment()
@@ -1569,8 +1571,8 @@ impl FormatEngine<'_> {
         if !interrupted_header_context
             || header_body_block
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '}', ':', ')'])
-            || is_header(self.options, leading_identifier(line.trimmed_start()))
+            || line_start.starts_with(['#', '}', ':', ')'])
+            || is_header(self.options, leading_identifier(line_start))
             || self.pending_line_in_parens()
             || self.pending_line_continues_statement()
         {

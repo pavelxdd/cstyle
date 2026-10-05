@@ -98,8 +98,9 @@ impl FormatEngine<'_> {
         line: &str,
         delimiter_owner: Option<usize>,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if self.options.max_code_length.is_none()
-            || !(line.trimmed_start().starts_with("&&") || line.trimmed_start().starts_with("||"))
+            || !(line_start.starts_with("&&") || line_start.starts_with("||"))
             || !self
                 .output
                 .last_line_outside_comment()
@@ -440,7 +441,8 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trimmed_start().starts_with("//") || line.trimmed_start().starts_with('{') {
+        let line_start = line.trimmed_start();
+        if line_start.starts_with("//") || line_start.starts_with('{') {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -666,10 +668,11 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.max_code_length.is_none()
             || !self.options.indent_after_parens
-            || !(line.trimmed_start().starts_with("&&") || line.trimmed_start().starts_with("||"))
+            || !(line_start.starts_with("&&") || line_start.starts_with("||"))
         {
             return None;
         }
@@ -828,7 +831,8 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if !starts_string_literal_token(line.trimmed_start()) {
+        let line_start = line.trimmed_start();
+        if !starts_string_literal_token(line_start) {
             return None;
         }
         let frame = self
@@ -838,7 +842,7 @@ impl FormatEngine<'_> {
         if !frame.line_starts_with_chain_operator || !frame.has_opening_context {
             return None;
         }
-        let current = line.trimmed_start();
+        let current = line_start;
         let case_unindent =
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         if string_literal_token_end(current, 0).is_some_and(|end| {
@@ -2326,9 +2330,10 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !split_else_context
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
         {
             return None;
         }
@@ -2401,13 +2406,14 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
         split_else_state_active: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line.trimmed_start().starts_with(['#', '{', '}'])
-            || is_comment_line(line.trimmed_start())
+            || line_start.starts_with(['#', '{', '}'])
+            || is_comment_line(line_start)
             || !split_else_state_active
             || !self.commented_split_else_preprocessor_region_active()
-            || !line.trimmed_start().starts_with("||")
+            || !line_start.starts_with("||")
         {
             return None;
         }

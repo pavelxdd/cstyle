@@ -912,8 +912,9 @@ impl FormatEngine<'_> {
         line: &str,
         split_else_output_context: bool,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !split_else_output_context
-            || !(is_comment_line(line.trimmed_start()) || line.trimmed_start().starts_with("/*"))
+            || !(is_comment_line(line_start) || line_start.starts_with("/*"))
         {
             return None;
         }
@@ -938,9 +939,10 @@ impl FormatEngine<'_> {
         split_else_context: bool,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if !split_else_context
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with('#')
+            || line_start.starts_with('#')
             || self.layout.line_adjuster.total_case_unindent_depth() == 0
         {
             return None;
@@ -950,7 +952,7 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous_code.trimmed_start();
         let adjusted_delta = self.adjusted_line_indent_delta(previous);
         let target = if previous_code.ends_with('{')
-            && !line.trimmed_start().starts_with('}')
+            && !line_start.starts_with('}')
             && !previous_trimmed.starts_with("case ")
             && !previous_trimmed.starts_with("default:")
             && !previous_trimmed.starts_with("switch")
@@ -960,7 +962,7 @@ impl FormatEngine<'_> {
                 + self.options.indent_width
                 + adjusted_delta
         } else if previous_code.ends_with(',')
-            && !line.trimmed_start().starts_with(['#', '}', ')'])
+            && !line_start.starts_with(['#', '}', ')'])
             && adjusted_delta > 0
         {
             leading_visual_width(previous, self.options.tab_width) + adjusted_delta
@@ -1047,6 +1049,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
+        let line_trimmed = line.trimmed();
         if self.options.indent_cases {
             return None;
         }
@@ -1063,7 +1066,7 @@ impl FormatEngine<'_> {
                 * self.options.indent_width;
         if line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with(['#', '{', '}'])
-            && line.trimmed() != "break;"
+            && line_trimmed != "break;"
             && self
                 .layout
                 .nesting
@@ -1074,7 +1077,7 @@ impl FormatEngine<'_> {
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
-        if line.trimmed() != "break;" {
+        if line_trimmed != "break;" {
             return None;
         }
         let nearest_case = self.output.scoped().iter().rev().find(|line| {
@@ -2040,6 +2043,7 @@ impl FormatEngine<'_> {
         has_owned_continuation: bool,
         exact_indent_spaces: Option<usize>,
     ) -> Option<CaseBlockBodyLayout> {
+        let line_start = line.trimmed_start();
         let previous_line = self
             .output
             .iter()
@@ -2054,7 +2058,7 @@ impl FormatEngine<'_> {
             || closes_outer_delimiter
             || has_owned_continuation
             || follows_ternary_arm
-            || line.trimmed_start().starts_with([')', ']', '}'])
+            || line_start.starts_with([')', ']', '}'])
             || self.pending_line_continues_statement()
             || self.continues_aligned_brace_elements()
         {
@@ -2077,7 +2081,7 @@ impl FormatEngine<'_> {
                 line_is_control_body_header(header) || header.trimmed_end() == "do"
             })
             .map(|previous| leading_visual_width(previous, self.options.tab_width));
-        let target = if line.trimmed_start().starts_with('{')
+        let target = if line_start.starts_with('{')
             && let Some(header_column) = header_body_column
         {
             let brace_extra = usize::from(
@@ -2085,7 +2089,7 @@ impl FormatEngine<'_> {
                     || matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk),
             );
             header_column + brace_extra * self.options.indent_width
-        } else if line.trimmed_start().starts_with('{') {
+        } else if line_start.starts_with('{') {
             frame.sibling_indent_column
         } else if frame.nested_case_label {
             frame.header_indent_column + 2 * self.options.indent_width

@@ -452,9 +452,10 @@ impl FormatEngine<'_> {
 
     /// Splits a row led by a block comment with code after it.
     pub(crate) fn split_comment_led_line(&self, line: &str) -> Option<(String, String, usize)> {
+        let line_start = line.trimmed_start();
         let width = self.options.max_code_length?.max(1);
-        let lead = &line[..line.len() - line.trimmed_start().len()];
-        let code = line.trimmed_start();
+        let lead = &line[..line.len() - line_start.len()];
+        let code = line_start;
         if !code.starts_with("/*") || code.contains('\x0c') || self.initializer_row() {
             return None;
         }
@@ -919,8 +920,9 @@ fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Opt
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {
-    let leading = line.len() - line.trimmed_start().len();
-    let trimmed = line.trimmed_start();
+    let line_start = line.trimmed_start();
+    let leading = line.len() - line_start.len();
+    let trimmed = line_start;
     let tail = trimmed.strip_prefix("return")?;
     if tail.chars().next().is_some_and(is_identifier_continue) {
         return None;
@@ -1601,7 +1603,8 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             } else if !in_case
                 && matches!(previous_non_space, b' ' | b'{' | b':' | b';' | b'}')
                 && ["case", "default"].into_iter().any(|word| {
-                    line[index..].starts_with(word)
+                    word.as_bytes()[0] == byte
+                        && line[index..].starts_with(word)
                         && !index
                             .checked_sub(1)
                             .is_some_and(|before| name_char(bytes[before]))
@@ -1646,7 +1649,8 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                 previous_non_space = byte;
             }
         } else if let Some(word) = ["and", "or"].into_iter().find(|word| {
-            line[index..].starts_with(word)
+            word.as_bytes()[0] == byte
+                && line[index..].starts_with(word)
                 && !index
                     .checked_sub(1)
                     .is_some_and(|before| name_char(bytes[before]))
@@ -1666,10 +1670,13 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                 register((&mut fit, &mut pending), AND_OR, at, at <= width);
             }
             previous_non_space = bytes[end - 1];
-        } else if let Some(operator) = ASTYLE_OPERATORS
-            .iter()
-            .find(|operator| line[index..].starts_with(**operator))
-            .filter(|_| potential_operator(byte))
+        } else if let Some(operator) = potential_operator(byte)
+            .then(|| {
+                ASTYLE_OPERATORS
+                    .iter()
+                    .find(|operator| line[index..].starts_with(**operator))
+            })
+            .flatten()
         {
             end = index + operator.len();
             let next = peek(index + 1);

@@ -234,6 +234,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn template_continuation_line_indent_spaces(&self, line: &str) -> Option<usize> {
+        let line_trimmed = line.trimmed();
         if !self.layout.template_declaration.uses_source_indent {
             return None;
         }
@@ -252,8 +253,8 @@ impl FormatEngine<'_> {
             .map(|line| {
                 leading_visual_width(line, self.options.tab_width) + self.options.indent_width
             });
-        if self.template_continuation_closes_on_line(line.trimmed())
-            && line.trimmed() == ">"
+        if self.template_continuation_closes_on_line(line_trimmed)
+            && line_trimmed == ">"
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             spaces = Some(leading_visual_width(previous, self.options.tab_width));

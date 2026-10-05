@@ -278,11 +278,12 @@ impl FormatEngine<'_> {
         line: &str,
         line_kind: LineKind,
     ) -> Option<usize> {
+        let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['{', '}', '#'])
+            || line_start.starts_with(['{', '}', '#'])
             || ["do", "if", "for", "while", "switch"]
                 .iter()
-                .any(|word| starts_header_word(line.trimmed_start(), word))
+                .any(|word| starts_header_word(line_start, word))
             || self
                 .layout
                 .frame_stack
@@ -360,9 +361,10 @@ impl FormatEngine<'_> {
         &self,
         line: &str,
     ) -> Option<usize> {
-        if line.trimmed_start().starts_with(['{', '}'])
+        let line_start = line.trimmed_start();
+        if line_start.starts_with(['{', '}'])
             || line.trimmed_end().ends_with('{')
-            || is_lambda_body_header(line.trimmed_start())
+            || is_lambda_body_header(line_start)
             || !self
                 .output
                 .last_line_outside_comment()
