@@ -2906,6 +2906,24 @@ impl FormatEngine<'_> {
         Some(code as isize - source as isize)
     }
 
+    /// Whether the current line starts with a statement its source line
+    /// had another statement before, now on a line of its own.
+    fn current_line_broke_off_statement(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        self.tree
+            .previous_code_token(first)
+            .is_some_and(|previous| {
+                previous >= line_start && matches!(tokens[previous], Token::Symbol(';'))
+            })
+    }
+
     fn current_line_broke_off_header(&self) -> bool {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
@@ -3000,6 +3018,11 @@ impl FormatEngine<'_> {
                 if kind == CommentKind::Block && comment.contains("NOPAD") {
                     self.ensure_space();
                 }
+            } else if !gap.contains('\t') && self.current_line_broke_off_statement() {
+                // Padding the statement broken off takes from the gap.
+                let growth = self.current_segment_growth().unwrap_or(0);
+                let width = (gap.chars().count() as isize - growth).max(1) as usize;
+                self.current.push_str(&" ".repeat(width));
             } else {
                 self.current.push_str(&gap);
             }

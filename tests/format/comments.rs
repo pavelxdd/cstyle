@@ -4471,3 +4471,21 @@ fn gnu_brace_in_a_block_comment_leaves_the_function_close_alone() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn padding_a_statement_broken_off_its_line_takes_from_its_comment_gap() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--pad-paren-out".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n  a(L1); x(a,b);  /* d */\n  a(L1); x(a,b);    /* e */\n}\n",
+            &options,
+        ),
+        "void f (void)\n{\n    a (L1);\n    x (a,b); /* d */\n    a (L1);\n    x (a,b);   /* e */\n}\n",
+    );
+}
