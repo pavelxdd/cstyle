@@ -216,6 +216,11 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back for the line opening an initializer's rows: the
     /// output version and line count it read, and the line.
     pub(crate) row_opener_cache: std::cell::Cell<Option<(u64, usize, Option<usize>)>>,
+    /// The last look back from a leading operator for its statement's
+    /// assignment: the tokens' address, the operator, its group, and the
+    /// farthest `=` found, or `None` when the look gave up.
+    pub(crate) operand_assign_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::OperandAssignLook>>,
     /// The last look for an assignment stacked in a statement.
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
@@ -307,6 +312,7 @@ impl<'a> FormatEngine<'a> {
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
             row_opener_cache: std::cell::Cell::new(None),
+            operand_assign_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),

@@ -433,6 +433,21 @@ impl CurrentLine {
         self.marks().comment_opener
     }
 
+    /// The byte index of the last `->`.
+    pub(crate) fn last_arrow(&self) -> Option<usize> {
+        self.marks().last_arrow
+    }
+
+    /// `lambda_header_has_trailing_return` of the line.
+    pub(crate) fn has_arrow_after_paren(&self) -> bool {
+        self.marks().arrow_after_paren
+    }
+
+    /// The byte index of the last `[`.
+    pub(crate) fn last_open_bracket(&self) -> Option<usize> {
+        self.marks().last_open_bracket
+    }
+
     /// Whether the line holds `{`.
     pub(crate) fn holds_open_brace(&self) -> bool {
         self.marks().open_brace
@@ -644,6 +659,10 @@ struct LineMarks {
     open_brace: bool,
     close_brace: bool,
     comment_opener: bool,
+    /// Whether a `)` came right before the last `-`, blanks aside.
+    minus_after_paren: bool,
+    last_arrow: Option<usize>,
+    arrow_after_paren: bool,
     dictionary_opener: bool,
     asm_call: bool,
 }
@@ -669,6 +688,13 @@ impl LineMarks {
                 b')' => self.last_close_paren = Some(index),
                 b'/' | b'*' if index > 0 && bytes[index - 1] == b'/' => {
                     self.comment_opener = true;
+                }
+                b'-' => {
+                    self.minus_after_paren = bytes[..index].trim_ascii_end().last() == Some(&b')');
+                }
+                b'>' if index > 0 && bytes[index - 1] == b'-' => {
+                    self.last_arrow = Some(index - 1);
+                    self.arrow_after_paren |= self.minus_after_paren;
                 }
                 b';' => self.tail_start = index + 1,
                 b'{' => {
@@ -785,6 +811,7 @@ impl TrailingCommentScan {
 #[cfg(test)]
 mod tests {
     use super::CurrentLine;
+    use crate::formatter::text::trim::Trimmed;
 
     #[test]
     fn blank_cache_rechecks_after_trim_and_same_length_push() {
@@ -826,6 +853,8 @@ mod tests {
                     current.holds_close_brace(),
                     current.holds_comment_opener(),
                     current.has_unclosed_selector_call(),
+                    current.last_arrow(),
+                    current.has_arrow_after_paren(),
                 ),
                 (
                     current.last_close_paren_match(),
@@ -889,6 +918,15 @@ mod tests {
                 let mut fresh = CurrentLine::default();
                 fresh.replace(current.as_str().to_string());
                 assert_eq!(answers(&current), answers(&fresh), "{:?}", current.as_str());
+                let text = current.trimmed_end();
+                assert_eq!(current.last_arrow(), text.rfind("->"), "{text:?}");
+                assert_eq!(
+                    current.has_arrow_after_paren(),
+                    crate::formatter::braces::classification::lambda_header_has_trailing_return(
+                        text
+                    ),
+                    "{text:?}"
+                );
             }
             state = state.wrapping_add(1);
         }

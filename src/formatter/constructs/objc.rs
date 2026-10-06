@@ -46,15 +46,14 @@ fn objc_message_selector_indent_spaces(
         .opener_output_column
         .saturating_sub(frame.line_indent_spaces);
     let mut offset = 0usize;
+    // The width of `line[..offset]`, kept as the tokens go by.
+    let mut width = 0usize;
     let mut depth = 0usize;
     let mut in_message = false;
     for token in tokenize(line) {
         let text = token_text(&token);
         match token {
-            Token::Symbol('[')
-                if !in_message
-                    && visual_width_from(&line[..offset], 0, tab_width) == opener_column =>
-            {
+            Token::Symbol('[') if !in_message && width == opener_column => {
                 in_message = true;
                 depth = 1;
             }
@@ -83,6 +82,7 @@ fn objc_message_selector_indent_spaces(
             }
             _ => {}
         }
+        width += visual_width_from(&text, width, tab_width);
         offset += text.len();
     }
     None

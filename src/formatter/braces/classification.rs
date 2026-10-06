@@ -33,8 +33,13 @@ pub(crate) fn is_lambda_body_header(head: &str) -> bool {
     if !head.as_bytes().contains(&b']') {
         return false;
     }
+    is_lambda_body_header_with_arrow(head, head.rfind("->"))
+}
+
+/// `is_lambda_body_header` of `head`, whose last `->` is at `arrow`.
+fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
     let mut head = head.trimmed_end();
-    if let Some(arrow) = head.rfind("->") {
+    if let Some(arrow) = arrow {
         let before = head[..arrow].trimmed_end();
         if before.ends_with(')') {
             head = before;
@@ -198,7 +203,11 @@ impl FormatEngine<'_> {
                     })
         });
         let current_namespace_header = {
-            let split = trailing_comment_split_limit(&self.current);
+            let split = if self.current.holds_comment_opener() {
+                trailing_comment_split_limit(&self.current)
+            } else {
+                self.current.len()
+            };
             is_namespace_block_header(&self.current[..split])
         };
         let previous_namespace_header = self.current_is_blank()
@@ -390,11 +399,24 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_is_lambda_body_header(&self) -> bool {
+        // A lambda's capture list closes with `]`.
+        if !self.current.as_bytes().contains(&b']') {
+            return false;
+        }
         let head = self.current.trimmed_end();
-        is_lambda_body_header(head)
-            || head
-                .rfind('[')
-                .is_some_and(|index| is_lambda_body_header(head[index..].trimmed_start()))
+        let arrow = self.current.last_arrow();
+        is_lambda_body_header_with_arrow(head, arrow)
+            || self.current.last_open_bracket().is_some_and(|index| {
+                let tail = head[index..].trimmed_start();
+                let skipped = head.len() - index - tail.len();
+                tail.as_bytes().contains(&b']')
+                    && is_lambda_body_header_with_arrow(
+                        tail,
+                        arrow
+                            .filter(|&arrow| arrow >= index + skipped)
+                            .map(|arrow| arrow - index - skipped),
+                    )
+            })
     }
 
     pub(super) fn current_ends_trailing_return_definition(&self) -> bool {

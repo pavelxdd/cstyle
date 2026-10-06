@@ -1247,7 +1247,7 @@ impl FormatEngine<'_> {
             previous_lambda_header.as_ref().map(|(_, indent)| *indent)
         };
         let lambda_body_has_trailing_return = if line_opens_lambda_body {
-            lambda_header_has_trailing_return(self.current.trimmed_end())
+            self.current.has_arrow_after_paren()
         } else {
             previous_lambda_header
                 .as_ref()
@@ -3204,7 +3204,7 @@ impl FormatEngine<'_> {
         }
         if self.current.trimmed_start().starts_with('[')
             && self.current_is_lambda_body_header()
-            && lambda_header_has_trailing_return(self.current.trimmed_end())
+            && self.current.has_arrow_after_paren()
             && matches!(
                 self.options.brace_style,
                 BraceStyle::Attach

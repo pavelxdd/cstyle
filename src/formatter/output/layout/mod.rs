@@ -1,4 +1,4 @@
-mod anchors;
+pub(crate) mod anchors;
 pub(crate) mod astyle_stack;
 mod contextual;
 mod corrections;

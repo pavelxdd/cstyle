@@ -22,6 +22,11 @@ use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
+/// A look back from a leading operator for its statement's assignment: the
+/// tokens' address, the operator, its group, and the farthest `=` found, or
+/// `None` when the look gave up.
+pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>>);
+
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
     pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
@@ -2380,29 +2385,46 @@ impl FormatEngine<'_> {
         ) {
             return None;
         }
+        // The look back depends on nothing but where it stands, so it ends
+        // as the last one did once it reaches the token that one left from.
+        let address = tokens.as_ptr() as usize;
+        let cached = self
+            .operand_assign_cache
+            .get()
+            .filter(|cached| (cached.0, cached.2) == (address, group) && cached.1 < first);
         let mut assign = None;
         let mut index = first;
         let open = groups.get(group).open;
-        while let Some(before) = self.tree.previous_code_token(index) {
+        let found = loop {
+            if let Some((_, from, _, found)) = cached
+                && index == from
+            {
+                break found.map(|cached_assign| cached_assign.or(assign));
+            }
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break Some(assign);
+            };
             // No token before the group's open brace is in the group.
             if before < open {
-                break;
+                break Some(assign);
             }
             if groups.enclosing(before) == Some(group) {
                 match &tokens[before] {
                     Token::Operator(operator) if operator == "=" => assign = Some(before),
-                    Token::Symbol(';' | '{' | '}') => break,
+                    Token::Symbol(';' | '{' | '}') => break Some(assign),
                     Token::Symbol(':') if self.tree.statements.starts_block_statement(index) => {
-                        break;
+                        break Some(assign);
                     }
-                    Token::Symbol(',' | '?' | ':') | Token::Preprocessor(_) => return None,
-                    Token::Word(word) if word == "return" || is_header(word) => return None,
+                    Token::Symbol(',' | '?' | ':') | Token::Preprocessor(_) => break None,
+                    Token::Word(word) if word == "return" || is_header(word) => break None,
                     _ => {}
                 }
             }
             index = before;
-        }
-        let assign = assign?;
+        };
+        self.operand_assign_cache
+            .set(Some((address, first, group, found)));
+        let assign = found??;
         let value = next_code_token(tokens, assign + 1)?;
         if self.output.line_with_token(assign)? != self.output.line_with_token(value)?
             || matches!(tokens[value], Token::Symbol('{'))

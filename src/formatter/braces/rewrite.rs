@@ -1,7 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
-    lambda_header_has_trailing_return,
 };
 use crate::formatter::braces::closing::is_attached_closing_header_style;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
@@ -1203,7 +1202,7 @@ impl FormatEngine<'_> {
         }
         if (lambda_header || inferred_capture_lambda)
             && self.options.break_one_line_blocks
-            && !self.current.contains("->")
+            && self.current.last_arrow().is_none()
             && !line_ends_compound_literal_cast(self.current.trimmed_end())
             && !is_empty_one_line_block_tokens(&tokens[start..=close_index])
             && !is_comment_only_one_line_block_tokens(&tokens[start..=close_index])
@@ -1453,11 +1452,11 @@ impl FormatEngine<'_> {
             ),
         };
         let trailing_return_lambda_body = lambda_header
-            && (self.current.contains("->") || previous_line_trailing_return_lambda_header)
+            && (self.current.last_arrow().is_some() || previous_line_trailing_return_lambda_header)
             && !(in_declaration_scope && self.current_ends_trailing_return_definition());
         if (parameterized_lambda_header || inferred_capture_lambda)
             && break_one_line_blocks
-            && !self.current.contains("->")
+            && self.current.last_arrow().is_none()
             && !is_empty_block
             && !is_comment_only_block
             && !is_semicolon_only_block
@@ -1796,7 +1795,7 @@ impl FormatEngine<'_> {
                 }
             }
             None if self.current_is_lambda_body_header()
-                && lambda_header_has_trailing_return(self.current.trimmed_end()) =>
+                && self.current.has_arrow_after_paren() =>
             {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
@@ -1932,7 +1931,7 @@ impl FormatEngine<'_> {
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == '>')
                 && self.current_is_lambda_body_header()
-                && lambda_header_has_trailing_return(self.current.trimmed_end())
+                && self.current.has_arrow_after_paren()
             {
                 self.emit_source_space();
             } else {
