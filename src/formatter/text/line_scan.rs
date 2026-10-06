@@ -1,4 +1,4 @@
-use crate::formatter::lexer::{CommentKind, Token, token_text, tokenize};
+use crate::formatter::lexer::{CommentKind, Token, line_tokens_hold_comment, token_text, tokenize};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_digit_separator;
 
@@ -738,7 +738,10 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
     if let Some(start) = CACHE.with(|cache| cache.borrow().get(line).copied()) {
         return start;
     }
-    let start = trailing_comment_start_in_tokens(line, true);
+    let start = match line_tokens_hold_comment(line) {
+        Some(false) => None,
+        _ => trailing_comment_start_in_tokens(line, true),
+    };
     CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
         if cache.len() >= 4096 {
@@ -764,7 +767,7 @@ fn find_comment_close(line: &str) -> Option<usize> {
 }
 
 /// Whether `line` holds `//` or `/*`, in one pass.
-fn has_comment_opener(line: &str) -> bool {
+pub(crate) fn has_comment_opener(line: &str) -> bool {
     let bytes = line.as_bytes();
     let mut from = 0;
     while let Some(offset) = find_byte(&bytes[from..], b'/') {

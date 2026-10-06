@@ -2,7 +2,9 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::state::frame::StringContinuationFrame;
 use crate::formatter::syntax::language::is_type_like_pointer_word;
-use crate::formatter::text::line_scan::{ContainsAnyByte, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, has_comment_opener, trailing_comment_split_limit,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::starts_with_chain_operator;
 use crate::source::lex::{is_identifier_continue, trailing_word};
@@ -36,7 +38,18 @@ pub(crate) fn first_string_literal_start(line: &str) -> Option<usize> {
     if !line.contains('"') {
         return None;
     }
-    let code = &line[..trailing_comment_split_limit(line)];
+    let start = first_literal_start_in(line)?;
+    // A literal lies in the code unless a comment starts before it, which
+    // needs a `//` or `/*` ahead of it; it is no blank, so it is in the
+    // code exactly when it starts before the code ends.
+    if !has_comment_opener(&line[..start]) || start < trailing_comment_split_limit(line) {
+        return Some(start);
+    }
+    None
+}
+
+/// Where the first literal of `code` starts, comments read as code.
+fn first_literal_start_in(code: &str) -> Option<usize> {
     let prefixes = [
         "u8R\"", "u8\"", "uR\"", "UR\"", "LR\"", "R\"", "u\"", "U\"", "L\"",
     ];

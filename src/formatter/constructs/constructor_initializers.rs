@@ -767,7 +767,8 @@ impl FormatEngine<'_> {
                 continue;
             }
             let colon_start = trimmed.starts_with(':') && !trimmed.starts_with("::");
-            let inline_colon = has_inline_constructor_initializer_colon(code);
+            let inline_colon =
+                self.output.code_has(index, b')') && has_inline_constructor_initializer_colon(code);
             if !colon_start && !inline_colon {
                 continue;
             }
@@ -781,7 +782,7 @@ impl FormatEngine<'_> {
                 .any(|index| self.output[index].contains('?'));
             let starts_initializer = colon_start && !previous_statement_has_question;
             let inline_initializer = inline_colon && !previous_statement_has_question;
-            if (starts_initializer || inline_initializer) && code.contains('(') {
+            if (starts_initializer || inline_initializer) && self.output.code_has(index, b'(') {
                 let member_indent = if starts_initializer {
                     let leading = self.output.lead_width(index, tab_width);
                     if trimmed == ":" {

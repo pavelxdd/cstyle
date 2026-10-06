@@ -7,6 +7,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::index_hash::IndexSet;
 use crate::formatter::lexer::{Token, next_non_whitespace};
+use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
@@ -1352,58 +1353,52 @@ impl FormatEngine<'_> {
     /// back over rows no `;` or `}` ends; groups closed before the row hold
     /// no opener of it.
     fn row_initializer_opener_line(&self) -> Option<usize> {
-        let version = self.output.version();
         let len = self.output.len();
-        // A look back over the lines come since the last stops where that
-        // one started, at the same depth, to end as it did.
-        let cached = self
-            .row_opener_cache
-            .get()
-            .filter(|&(cached_version, cached_len, _)| {
-                cached_version == version && cached_len <= len
-            });
-        let stop = cached.map_or(0, |(_, cached_len, _)| cached_len);
+        let mut openers = self.row_openers.borrow_mut();
+        openers.keep_unchanged(&self.output);
+        let answers = &openers.answers;
+        let mut known = answers.len();
         let mut depth = 0usize;
-        let mut found = None;
-        let mut ended = false;
-        for index in (stop..len).rev() {
+        let mut index = len;
+        // The looks from the line counts this one passes at no depth before
+        // any group end as this one does.
+        let mut same_from = len;
+        let mut at_no_depth = true;
+        let mut statement_end = None;
+        let found = loop {
+            while known > 0 && answers[known - 1].0 as usize > index {
+                known -= 1;
+            }
+            if depth == 0
+                && let Some(&(from, to, found)) = known.checked_sub(1).map(|at| &answers[at])
+                && to as usize >= index
+            {
+                if at_no_depth {
+                    same_from = from as usize;
+                }
+                break found.map(|line| line as usize);
+            }
+            if at_no_depth {
+                same_from = index;
+            }
+            let Some(line) = index.checked_sub(1) else {
+                break None;
+            };
+            index = line;
             let code = self.output.code_before_comment(index).trimmed_end();
             if depth == 0 && code.ends_with('{') && self.output_line_opens_initializer(index, code)
             {
-                found = Some(index);
-                ended = true;
-                break;
+                break Some(index);
             }
             if code.ends_with(';') || code.ends_with('}') {
-                ended = true;
-                break;
+                statement_end = Some(index);
+                break None;
             }
             let meta = self.output.brace_meta(index);
             depth = (depth + meta.closes()).saturating_sub(meta.opens());
-        }
-        if !ended && let Some((_, cached_len, cached_found)) = cached {
-            if depth == 0 {
-                found = cached_found;
-            } else {
-                // Deeper than the last look started: look back again.
-                for index in (0..cached_len).rev() {
-                    let code = self.output.code_before_comment(index).trimmed_end();
-                    if depth == 0
-                        && code.ends_with('{')
-                        && self.output_line_opens_initializer(index, code)
-                    {
-                        found = Some(index);
-                        break;
-                    }
-                    if code.ends_with(';') || code.ends_with('}') {
-                        break;
-                    }
-                    let meta = self.output.brace_meta(index);
-                    depth = (depth + meta.closes()).saturating_sub(meta.opens());
-                }
-            }
-        }
-        self.row_opener_cache.set(Some((version, len, found)));
+            at_no_depth &= depth == 0;
+        };
+        openers.record(same_from..=len, found, statement_end);
         found
     }
 
@@ -1430,6 +1425,70 @@ impl FormatEngine<'_> {
                 previous.contains('=') && previous.ends_with(')')
             })
     }
+}
+
+/// The answers of the looks back for the line opening an initializer's
+/// rows, each for the line counts from its first to its second that a look
+/// starts from, in order; each holds while the lines before its start stay
+/// as the output `version` had them.
+#[derive(Debug, Default)]
+pub(crate) struct RowOpeners {
+    version: u64,
+    answers: Vec<(u32, u32, Option<u32>)>,
+}
+
+impl RowOpeners {
+    fn keep_unchanged(&mut self, output: &OutputBuffer) {
+        if self.version == output.version() {
+            return;
+        }
+        match output.lowest_change_since(self.version) {
+            Some(lowest) => self.keep_below(lowest.saturating_add(1)),
+            None => self.answers.clear(),
+        }
+        self.version = output.version();
+    }
+
+    /// Keeps the answers for the line counts below `end`.
+    fn keep_below(&mut self, end: usize) {
+        let kept = self
+            .answers
+            .partition_point(|&(from, _, _)| (from as usize) < end);
+        self.answers.truncate(kept);
+        if let Some(last) = self.answers.last_mut()
+            && last.1 as usize >= end
+        {
+            last.1 = line_count(end - 1);
+        }
+    }
+
+    fn record(
+        &mut self,
+        starts: std::ops::RangeInclusive<usize>,
+        found: Option<usize>,
+        statement_end: Option<usize>,
+    ) {
+        if let Some(end) = statement_end {
+            // Every look reaching the end of a statement stops there.
+            let reached = self
+                .answers
+                .partition_point(|&(_, to, _)| to as usize <= end);
+            self.answers.drain(..reached);
+            if let Some(first) = self.answers.first_mut() {
+                first.0 = first.0.max(line_count(end + 1));
+            }
+        }
+        self.keep_below(*starts.start());
+        self.answers.push((
+            line_count(*starts.start()),
+            line_count(*starts.end()),
+            found.map(line_count),
+        ));
+    }
+}
+
+fn line_count(count: usize) -> u32 {
+    u32::try_from(count).expect("the output holds under 4G lines")
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

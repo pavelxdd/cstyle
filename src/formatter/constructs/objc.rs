@@ -176,6 +176,7 @@ impl FormatEngine<'_> {
         let may_hold_dictionary = self.output.may_have_at();
         if may_hold_dictionary
             && line_start.starts_with("};")
+            && self.output.recent_scoped_at_brace_line(64)
             && self
                 .output
                 .scoped()
@@ -217,6 +218,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| line_is_label_style_dictionary_key(previous))
+            && self.output.recent_scoped_at_brace_line(64)
             && let Some(opener) = self
                 .output
                 .scoped()
@@ -237,7 +239,7 @@ impl FormatEngine<'_> {
                 .previous_pre_adjust_line
                 .as_ref()
                 .is_some_and(|previous| previous.trimmed_end().ends_with(','))
-            && self.output.may_have_at()
+            && self.output.recent_scoped_at_brace_line(64)
             && self
                 .output
                 .scoped()

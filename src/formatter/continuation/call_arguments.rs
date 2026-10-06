@@ -1174,20 +1174,24 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') {
             return None;
         }
-        let has_split_opener = self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .skip(1)
-            .take_while(|line| {
-                let code = line.trimmed_end();
-                !(code.ends_with(';') || code == "{" || code == "}")
-            })
-            .any(|line| {
-                let code = line.trimmed_end();
-                simple_trailing_open_paren_line(code) && self.leaves_paren_open(code)
-            });
+        // A split opener stands among the lines before the last since the
+        // last statement edge.
+        let range = self.output.scoped_range();
+        let end = range.end.saturating_sub(1).max(range.start);
+        let opener =
+            self.output
+                .last_line_looked(&self.split_opener_look, range.start, end, |index| {
+                    simple_trailing_open_paren_line(self.output[index].trimmed_end())
+                        && !self.output.paren_imbalance(index).1.is_empty()
+                });
+        let has_split_opener = opener.is_some_and(|opener| {
+            self.output
+                .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
+                    let code = self.output[index].trimmed_end();
+                    code.ends_with(';') || code == "{" || code == "}"
+                })
+                .is_none()
+        });
         has_split_opener.then(|| {
             leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
@@ -1385,46 +1389,52 @@ impl FormatEngine<'_> {
         if !self.output.recent_scoped_line_mentions_new(64) {
             return None;
         }
-        for line in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .take(64)
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(line);
-            if code.ends_with(',') && code.contains("new ") {
-                let base = leading_visual_width(line, self.options.tab_width);
-                let has_over_max_new_call =
-                    unmatched_open_paren_columns(code).into_iter().any(|open| {
-                        open.saturating_sub(base) >= self.options.max_continuation_indent
-                            && code[..open].match_indices("new ").any(|(index, _)| {
-                                code[..index]
-                                    .chars()
-                                    .next_back()
-                                    .is_none_or(|ch| !is_identifier_continue(ch))
-                                    && !code[index + "new ".len()..open].contains_any_byte(b"()")
-                            })
-                    });
-                if has_over_max_new_call {
-                    return Some(
-                        base + self.layout.line_adjuster.total_case_unindent_depth()
-                            * self.options.indent_width,
-                    );
-                }
-            }
-            let start = code.trimmed_start();
-            if !code.ends_with(',') && self.paren_closes_of(code) > 0
-                || start.starts_with(')')
-                || start.ends_with(';')
-                || start.ends_with('{')
-                || start.ends_with('}')
-            {
-                return None;
-            }
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last over-long `new` call line counts unless a line ending
+        // its statement or a group follows it.
+        let call = self.output.last_line_looked(
+            &self.over_max_new_call_look,
+            start,
+            range.end,
+            |index| self.holds_over_max_new_call(index),
+        )?;
+        self.output
+            .last_line_looked(&self.new_call_edge_look, call + 1, range.end, |index| {
+                let code = self.output.code_before_comment_trimmed(index);
+                let start = code.trimmed_start();
+                !code.ends_with(',') && self.paren_closes_of(code) > 0
+                    || start.starts_with(')')
+                    || start.ends_with(';')
+                    || start.ends_with('{')
+                    || start.ends_with('}')
+            })
+            .is_none()
+            .then(|| {
+                leading_visual_width(&self.output[call], self.options.tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
+            })
+    }
+
+    /// Whether output line `index` ends with `,` inside a `new` call whose
+    /// paren opens past the maximum continuation indent.
+    fn holds_over_max_new_call(&self, index: usize) -> bool {
+        let code = self.output.code_before_comment_trimmed(index);
+        if !code.ends_with(',') || !code.contains("new ") {
+            return false;
         }
-        None
+        let base = leading_visual_width(&self.output[index], self.options.tab_width);
+        unmatched_open_paren_columns(code).into_iter().any(|open| {
+            open.saturating_sub(base) >= self.options.max_continuation_indent
+                && code[..open].match_indices("new ").any(|(index, _)| {
+                    code[..index]
+                        .chars()
+                        .next_back()
+                        .is_none_or(|ch| !is_identifier_continue(ch))
+                        && !code[index + "new ".len()..open].contains_any_byte(b"()")
+                })
+        })
     }
 
     pub(crate) fn over_max_new_call_default_indent_spaces(

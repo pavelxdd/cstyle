@@ -1150,7 +1150,7 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Comma;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.output.may_have_at()
+        let in_objc_dictionary_literal = self.output.recent_scoped_at_brace_line(64)
             && self
                 .output
                 .scoped()
@@ -1393,14 +1393,15 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
         let in_objc_dictionary_literal = self.current.holds_dictionary_opener()
-            || self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.trimmed_end().ends_with(';'))
-                .any(|line| line.contains_from_first_byte("@ {"));
+            || self.output.recent_scoped_at_brace_line(64)
+                && self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .take(64)
+                    .take_while(|line| !line.trimmed_end().ends_with(';'))
+                    .any(|line| line.contains_from_first_byte("@ {"));
         if in_objc_dictionary_literal
             && !self.one_line_block_mode
             && !is_objc_colon

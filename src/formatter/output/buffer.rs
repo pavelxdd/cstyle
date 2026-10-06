@@ -1,4 +1,4 @@
-use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::lexer::{Token, line_tokens_hold_comment, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
@@ -37,7 +37,8 @@ pub(crate) struct LineBraceMeta {
     comment_code_end: u32,
     /// Unmatched `{` that `line_brace_imbalance` finds in `code`.
     code_opens: u32,
-    /// Which of `{`, `}`, and `:` the line's code holds, one bit each.
+    /// Which of `{`, `}`, `:`, `(`, and `)` the line's code holds, one bit
+    /// each.
     code_marks: u8,
     /// Whether the trimmed line is `else` or ends with `} else`.
     else_line: bool,
@@ -148,6 +149,7 @@ fn structural_line(line: &str) -> Cow<'_, str> {
     let bytes = line.as_bytes();
     if find_byte(bytes, b'/').is_none()
         && (find_byte(bytes, b'"').is_none() || !line.contains("R\""))
+        || line_tokens_hold_comment(line) == Some(false)
     {
         return Cow::Borrowed(line);
     }
@@ -231,23 +233,27 @@ fn compute_line_brace_meta(
     }
 }
 
-/// The bit `code_marks` gives `byte`, one of `{`, `}`, and `:`.
+/// The bit `code_marks` gives `byte`, one of `{`, `}`, `:`, `(`, and `)`.
 fn code_mark(byte: u8) -> u8 {
     match byte {
         b'{' => 1,
         b'}' => 1 << 1,
         b':' => 1 << 2,
-        _ => unreachable!("only braces and colons are marked"),
+        b'(' => 1 << 3,
+        b')' => 1 << 4,
+        _ => unreachable!("only braces, colons, and parens are marked"),
     }
 }
 
-/// Which of `{`, `}`, and `:` `text` holds.
+/// Which of `{`, `}`, `:`, `(`, and `)` `text` holds.
 fn code_marks(text: &[u8]) -> u8 {
     const MARKS: [u8; 256] = {
         let mut marks = [0; 256];
         marks[b'{' as usize] = 1;
         marks[b'}' as usize] = 1 << 1;
         marks[b':' as usize] = 1 << 2;
+        marks[b'(' as usize] = 1 << 3;
+        marks[b')' as usize] = 1 << 4;
         marks
     };
     text.iter()
@@ -451,6 +457,10 @@ pub(crate) struct OutputBuffer {
     recent_case_edge_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line that is `{` alone.
     recent_brace_alone_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that holds `@ {`.
+    recent_at_brace_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that is `else` or ends with `} else`.
+    recent_scoped_else_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -728,6 +738,10 @@ struct OpenBraceUndo {
 
 /// How many of the last changes to lines a look back can read past.
 const RECENT_CHANGES: usize = 16;
+
+/// A look back for the last line a test admits, kept to read on from.
+#[derive(Default)]
+pub(crate) struct LineLook(Cell<Option<RecentMatch>>);
 
 /// The last line from `floor` on that a look back found, for a buffer of
 /// `len` lines at `version`.
@@ -1195,7 +1209,8 @@ impl OutputBuffer {
         self.brace_meta(index).code_opens > 0
     }
 
-    /// Whether `code(index)` holds `byte`, one of `{`, `}`, and `:`.
+    /// Whether `code(index)` holds `byte`, one of `{`, `}`, `:`, `(`, and
+    /// `)`.
     pub(crate) fn code_has(&self, index: usize, byte: u8) -> bool {
         self.brace_meta(index).code_marks & code_mark(byte) != 0
     }
@@ -1358,10 +1373,11 @@ impl OutputBuffer {
     /// Whether one of the last `count` lines in scope is `else` or ends
     /// with `} else`.
     pub(crate) fn recent_scoped_else_line(&self, count: usize) -> bool {
-        self.scoped_range()
-            .rev()
-            .take(count)
-            .any(|index| self.brace_meta(index).else_line)
+        let range = self.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(count));
+        self.has_line_from(&self.recent_scoped_else_cache, start, |index| {
+            self.brace_meta(index).else_line
+        })
     }
 
     /// Whether one of the last `count` lines has the code `else` or code
@@ -1551,10 +1567,37 @@ impl OutputBuffer {
         start: usize,
         matches: impl Fn(usize) -> bool,
     ) -> Option<usize> {
-        let len = self.lines.len();
+        self.last_line_in(cache, start, self.lines.len(), matches)
+    }
+
+    /// The last line `look`'s test admits from `start` to before `end`;
+    /// each look holds to one test.
+    pub(crate) fn last_line_looked(
+        &self,
+        look: &LineLook,
+        start: usize,
+        end: usize,
+        matches: impl Fn(usize) -> bool,
+    ) -> Option<usize> {
+        self.last_line_in(&look.0, start, end, matches)
+    }
+
+    /// The last line from `start` to before `end` that `matches` admits,
+    /// read on from the answer `cache` holds.
+    fn last_line_in(
+        &self,
+        cache: &Cell<Option<RecentMatch>>,
+        start: usize,
+        end: usize,
+        matches: impl Fn(usize) -> bool,
+    ) -> Option<usize> {
+        let len = end.min(self.lines.len());
         let start = start.min(len);
         // The cache holds the last match among the lines from its floor on.
-        let (floor, found) = match cache.get().and_then(|cached| self.recent_match_now(cached)) {
+        let (floor, found) = match cache
+            .get()
+            .and_then(|cached| self.recent_match_now(cached, len))
+        {
             Some(cached) => {
                 let found = (cached.len..len)
                     .rev()
@@ -1577,6 +1620,18 @@ impl OutputBuffer {
             found,
         }));
         found.filter(|&index| index >= start)
+    }
+
+    /// Whether one of the last `count` lines in scope holds `@ {`.
+    pub(crate) fn recent_scoped_at_brace_line(&self, count: usize) -> bool {
+        if !self.may_have_at {
+            return false;
+        }
+        let range = self.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(count));
+        self.has_line_from(&self.recent_at_brace_cache, start, |index| {
+            self.lines[index].contains_from_first_byte("@ {")
+        })
     }
 
     /// The last line that is `{` alone.
@@ -2037,7 +2092,7 @@ impl OutputBuffer {
 
     /// The lowest line the changes since `version` changed, when all of
     /// them are recorded.
-    fn lowest_change_since(&self, version: u64) -> Option<usize> {
+    pub(crate) fn lowest_change_since(&self, version: u64) -> Option<usize> {
         if self.version - version > RECENT_CHANGES as u64 {
             return None;
         }
@@ -2047,10 +2102,9 @@ impl OutputBuffer {
         })
     }
 
-    /// What `cached` still holds of the lines now: the lines before the
-    /// lowest one changed since it was read.
-    fn recent_match_now(&self, cached: RecentMatch) -> Option<RecentMatch> {
-        let len = self.lines.len();
+    /// What `cached` still holds of the lines before `len` now: the lines
+    /// before the lowest one changed since it was read.
+    fn recent_match_now(&self, cached: RecentMatch, len: usize) -> Option<RecentMatch> {
         if cached.version == self.version {
             return (cached.len <= len).then_some(cached);
         }

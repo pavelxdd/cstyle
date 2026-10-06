@@ -1255,6 +1255,8 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{}")
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && previous.ends_with('{')
             && self.layout.frame_stack.active_brace().is_none_or(|frame| {
                 frame.header.as_deref().is_none_or(|header| {
                     starts_header_word(header, "if")
@@ -1263,14 +1265,12 @@ impl FormatEngine<'_> {
                         || header.starts_with("else if")
                 })
             })
-            && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_trimmed = previous.trimmed_start();
-            if previous_trimmed.ends_with('{')
-                && (starts_header_word(previous_trimmed, "if")
-                    || starts_header_word(previous_trimmed, "while")
-                    || starts_header_word(previous_trimmed, "for")
-                    || previous_trimmed.starts_with("else if"))
+            if (starts_header_word(previous_trimmed, "if")
+                || starts_header_word(previous_trimmed, "while")
+                || starts_header_word(previous_trimmed, "for")
+                || previous_trimmed.starts_with("else if"))
                 && let Some(branch) = self
                     .output
                     .scoped()

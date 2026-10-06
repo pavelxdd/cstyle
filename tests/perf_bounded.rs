@@ -469,6 +469,16 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             }),
             allman.clone(),
         ),
+        (
+            "rows of designated initializers",
+            format!(
+                "static const struct e t[] = {{\n{}}};\n",
+                (0..n / 2)
+                    .map(|i| format!("    {{\n        .a = {i},\n        .b = 2,\n    }},\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
     ] {
         let start = Instant::now();
         let output = format_bytes(input.as_bytes(), &options).expect("format bytes");

@@ -189,6 +189,17 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_colon_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// Whether the output last read stands inside a macro call's arguments.
     pub(crate) macro_call_context_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The look back for a line ending a macro call's split opener.
+    pub(crate) split_opener_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending with `;` or being `{` or `}`.
+    pub(crate) statement_edge_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending with `,` in an over-long `new` call.
+    pub(crate) over_max_new_call_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending a statement or a group before a
+    /// `new` call's next line.
+    pub(crate) new_call_edge_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending with the `{` of a named list.
+    pub(crate) named_list_open_look: crate::formatter::output::buffer::LineLook,
     /// The first line comment of the last token line asked about: the
     /// address and length of its tokens, its start, and the comment's index.
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
@@ -235,9 +246,8 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back for the line an assignment's value starts after.
     pub(crate) assignment_rhs_cache:
         std::cell::Cell<Option<crate::formatter::continuation::operator_chains::AssignmentRhsWalk>>,
-    /// The last look back for the line opening an initializer's rows: the
-    /// output version and line count it read, and the line.
-    pub(crate) row_opener_cache: std::cell::Cell<Option<(u64, usize, Option<usize>)>>,
+    /// The looks back for the line opening an initializer's rows.
+    pub(crate) row_openers: std::cell::RefCell<crate::formatter::braces::initializers::RowOpeners>,
     /// The last look back from a leading operator for its statement's
     /// assignment: the tokens' address, the operator, its group, and the
     /// farthest `=` found, or `None` when the look gave up.
@@ -326,6 +336,11 @@ impl<'a> FormatEngine<'a> {
             open_paren_arg_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
+            split_opener_look: Default::default(),
+            statement_edge_look: Default::default(),
+            over_max_new_call_look: Default::default(),
+            new_call_edge_look: Default::default(),
+            named_list_open_look: Default::default(),
             line_comment_cache: std::cell::Cell::new(None),
             line_columns: LineSourceColumns::default(),
             finished_line_buffer: String::new(),
@@ -338,7 +353,7 @@ impl<'a> FormatEngine<'a> {
             paren_braces_cache: std::cell::Cell::new(None),
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
-            row_opener_cache: std::cell::Cell::new(None),
+            row_openers: std::cell::RefCell::default(),
             operand_assign_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
@@ -1755,15 +1770,21 @@ impl<'a> FormatEngine<'a> {
             let direct_list_sibling_column = if self.current.trimmed_end().ends_with("},")
                 && !self.current.trimmed_start().starts_with('{')
             {
-                self.output.scoped().iter().rev().take(64).find_map(|line| {
-                    let code = self.output.code_trimmed_of(line);
-                    let prefix = code.strip_suffix('{')?.trimmed_end();
-                    let prefix = prefix.trimmed_start();
-                    (!prefix.is_empty()
-                        && !prefix.starts_with('{')
-                        && !prefix.contains_any_byte(b"=(@"))
-                    .then(|| columns::leading_visual_width(line, self.options.tab_width))
-                })
+                let range = self.output.scoped_range();
+                let start = range.start.max(range.end.saturating_sub(64));
+                self.output
+                    .last_line_looked(&self.named_list_open_look, start, range.end, |index| {
+                        let code = self.output.code_before_comment_trimmed(index);
+                        code.strip_suffix('{').is_some_and(|prefix| {
+                            let prefix = prefix.trimmed();
+                            !prefix.is_empty()
+                                && !prefix.starts_with('{')
+                                && !prefix.contains_any_byte(b"=(@")
+                        })
+                    })
+                    .map(|index| {
+                        columns::leading_visual_width(&self.output[index], self.options.tab_width)
+                    })
             } else {
                 None
             };

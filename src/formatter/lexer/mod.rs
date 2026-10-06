@@ -278,6 +278,45 @@ pub(crate) fn tokenize_owned(mut source: String) -> Vec<Token> {
     tokens
 }
 
+/// Whether the tokens of `line` alone hold a comment, read as `tokenize`
+/// reads them without making them; `None` when only the tokens tell: for a
+/// line with a `#` outside literals, a raw string literal, or that may be
+/// a raw line.
+pub(crate) fn line_tokens_hold_comment(line: &str) -> Option<bool> {
+    let bytes = line.as_bytes();
+    if line_may_be_raw(line, &AssemblyMacroLines::default()) {
+        return None;
+    }
+    let mut index = 0;
+    while let Some(&byte) = bytes.get(index) {
+        index = match byte {
+            b'\n' | b'#' => return None,
+            b'/' if matches!(bytes.get(index + 1), Some(b'/' | b'*')) => return Some(true),
+            b'"' | b'\'' => read_quoted(line, index, byte).0,
+            b'u' | b'U' | b'L' | b'R' if raw_string_prefix_len(line, index).is_some() => {
+                return None;
+            }
+            b'.' if bytes.get(index + 1).is_some_and(u8::is_ascii_digit) => {
+                read_number(line, index)
+            }
+            b'0'..=b'9' => read_number(line, index),
+            _ => {
+                // A prefixed literal reads as its prefix's word and then the
+                // literal, to the same end.
+                let ch = char_at(line, index)?;
+                if ch.is_whitespace() {
+                    index + ch.len_utf8()
+                } else if is_identifier_start(ch) {
+                    read_identifier(line, index)
+                } else {
+                    index + language::match_operator(line, index).map_or(ch.len_utf8(), str::len)
+                }
+            }
+        };
+    }
+    Some(false)
+}
+
 /// Whether the line starting `rest` may be a conflict marker or an
 /// assembly macro line, from its first character past leading whitespace.
 fn line_may_be_raw(rest: &str, assembly_macro_lines: &AssemblyMacroLines) -> bool {
@@ -754,7 +793,44 @@ pub(crate) fn token_text(token: &Token) -> Cow<'_, str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TokenLine, TokenLineCursor, tokenize};
+    use super::{Token, TokenLine, TokenLineCursor, line_tokens_hold_comment, tokenize};
+
+    #[test]
+    fn a_line_read_without_tokens_holds_a_comment_as_its_tokens_do() {
+        let lines = [
+            r#"    "https://example.com/a",  "#,
+            r#"x = a / b; // c"#,
+            r#"x = a /* c */ + b;"#,
+            r#"s = "a\\" // b";"#,
+            r#"s = "a\" // b";"#,
+            r#"c = '"'; // d"#,
+            r#"c = '\''; d = "//";"#,
+            r#"n = 1'000'000 / 2; // e"#,
+            r#"n = 0x1'F'; s = "/*";"#,
+            r#"don't // f"#,
+            r#"x = u8"//" L'/' U"/*";"#,
+            r#"x = FOOR"//";"#,
+            r#"x = R"(//)";"#,
+            r#"#define A "//" // g"#,
+            r#"|| a // h"#,
+            r#"x /= 2; y //= 3"#,
+            r#"x = .5 / 2; s = "unterminated //"#,
+            "x = \u{a0}a // i",
+            "s = \"caf\u{e9} //\"; t = '\u{e9}'",
+        ];
+        for line in lines {
+            let has_comment = tokenize(line)
+                .iter()
+                .any(|token| matches!(token, Token::Comment(_, _)));
+            if let Some(held) = line_tokens_hold_comment(line) {
+                assert_eq!(held, has_comment, "{line}");
+            }
+        }
+        assert_eq!(line_tokens_hold_comment(lines[0]), Some(false));
+        assert_eq!(line_tokens_hold_comment(lines[1]), Some(true));
+        assert_eq!(line_tokens_hold_comment(lines[12]), None);
+        assert_eq!(line_tokens_hold_comment(lines[13]), None);
+    }
 
     #[test]
     fn line_cursor_groups_physical_lines() {
