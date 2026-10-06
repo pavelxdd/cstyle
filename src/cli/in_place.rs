@@ -13,14 +13,42 @@ pub(super) struct InPlaceOptions {
     pub(super) preserve_date: bool,
 }
 
+/// A file's content as it was read ahead, and that content formatted.
+pub(super) struct Prepared {
+    pub(super) input: Vec<u8>,
+    pub(super) output: Vec<u8>,
+}
+
+/// Reads and formats `path` ahead of formatting it in place.
+pub(super) fn prepare_file(path: &Path, options: &FormatOptions) -> Option<Prepared> {
+    let input = fs::read(path).ok()?;
+    let output = api::format_bytes(&input, options).ok()?;
+    Some(Prepared { input, output })
+}
+
 /// Formats `path` in place and returns whether its content changed.
+#[cfg(test)]
 pub(super) fn format_file_in_place(
     path: &Path,
     options: &FormatOptions,
     in_place: &InPlaceOptions,
 ) -> io::Result<bool> {
+    format_prepared_file_in_place(path, options, in_place, None)
+}
+
+/// `format_file_in_place`, taking the output of `prepared` when the file
+/// still holds what it was read with.
+pub(super) fn format_prepared_file_in_place(
+    path: &Path,
+    options: &FormatOptions,
+    in_place: &InPlaceOptions,
+    prepared: Option<Prepared>,
+) -> io::Result<bool> {
     let input = fs::read(path)?;
-    let output = api::format_bytes(&input, options)?;
+    let output = match prepared {
+        Some(prepared) if prepared.input == input => prepared.output,
+        _ => api::format_bytes(&input, options)?,
+    };
     if output == input {
         return Ok(false);
     }
