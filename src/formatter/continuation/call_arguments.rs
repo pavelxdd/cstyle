@@ -1045,10 +1045,10 @@ impl FormatEngine<'_> {
         let code = self.output.code_of(previous).trimmed_end();
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         // The tail of a continued condition closes parens it never opened.
-        let closes_outer_paren = code.matches(')').count() > code.matches('(').count();
+        let closes_outer_paren = || code.matches(')').count() > code.matches('(').count();
         (code.ends_with('{')
             && line_starts_call_expression(code.trimmed_start())
-            && !closes_outer_paren
+            && !closes_outer_paren()
             && previous_indent < normal_indent * self.options.indent_width)
             .then_some(previous_indent + self.options.indent_width)
     }

@@ -439,7 +439,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if line_start.starts_with("//") || line_start.starts_with('{') {
+        if !self.may_have_noexcept || line_start.starts_with("//") || line_start.starts_with('{') {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;

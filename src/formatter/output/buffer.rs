@@ -353,9 +353,8 @@ pub(crate) struct OutputBuffer {
     may_have_question: bool,
     may_have_at: bool,
     may_have_new: bool,
-    /// The last answer of [`Self::recent_scoped_line_mentions_new`]: the
-    /// line count, version and line count looked at, and the answer.
-    mentions_new_cache: Cell<Option<(usize, u64, usize, bool)>>,
+    /// The last look back for a line that holds `new `.
+    mentions_new_cache: Cell<Option<RecentMatch>>,
     /// The last answer of [`Self::designator_since_closed_row`]: the scope
     /// start, version and line count it read, and the answer.
     designator_cache: Cell<Option<(usize, u64, usize, bool)>>,
@@ -1005,19 +1004,11 @@ impl OutputBuffer {
         if !self.may_have_new {
             return false;
         }
-        if let Some((len, version, cached_count, mentions)) = self.mentions_new_cache.get()
-            && (len, version, cached_count) == (self.lines.len(), self.version, count)
-        {
-            return mentions;
-        }
-        let mentions = self
-            .scoped_range()
-            .rev()
-            .take(count)
-            .any(|index| self.brace_meta(index).mentions_new);
-        self.mentions_new_cache
-            .set(Some((self.lines.len(), self.version, count, mentions)));
-        mentions
+        let range = self.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(count));
+        self.has_line_from(&self.mentions_new_cache, start, |index| {
+            self.brace_meta(index).mentions_new
+        })
     }
 
     /// Whether a line in scope led by `[` follows the last one led by `},`.

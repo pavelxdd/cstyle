@@ -334,16 +334,20 @@ impl FormatEngine<'_> {
                         .chars()
                         .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
             });
-            let follows_nested_type_argument = previous_text
-                .split_once(':')
-                .is_some_and(|(key, _)| key.trimmed() == "type")
-                && previous_text.ends_with(']')
-                && !previous_text.starts_with('[');
-            let follows_simple_selector = previous_text.split_once(':').is_some_and(|(key, _)| {
-                key.chars()
-                    .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-            }) && !previous_text.starts_with('[');
-            if simple_selector_line && follows_nested_type_argument {
+            let follows_nested_type_argument = || {
+                previous_text
+                    .split_once(':')
+                    .is_some_and(|(key, _)| key.trimmed() == "type")
+                    && previous_text.ends_with(']')
+                    && !previous_text.starts_with('[')
+            };
+            let follows_simple_selector = || {
+                previous_text.split_once(':').is_some_and(|(key, _)| {
+                    key.chars()
+                        .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+                }) && !previous_text.starts_with('[')
+            };
+            if simple_selector_line && follows_nested_type_argument() {
                 let spaces = self
                     .output
                     .last_line_outside_comment()
@@ -354,8 +358,8 @@ impl FormatEngine<'_> {
                 self.layout.objc.message_align = Some(spaces);
                 force_message_align = true;
             } else if simple_selector_line
-                && follows_simple_selector
                 && self.layout.objc.message_align.is_some()
+                && follows_simple_selector()
             {
                 force_message_align = true;
             }

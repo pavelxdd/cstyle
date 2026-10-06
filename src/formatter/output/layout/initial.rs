@@ -1275,7 +1275,8 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
             }
             let previous_code = self.output.code_of(previous).trimmed_end();
-            if previous.contains("//")
+            if self.may_have_noexcept
+                && previous.contains("//")
                 && (previous_code.contains("noexcept (")
                     || (previous_code.contains("noexcept(") && macro_before_previous()))
                 && previous_code.ends_with('(')
