@@ -37,6 +37,15 @@ just check         # full release gate
 
 The release gate treats Rust, clippy, and rustdoc warnings as errors.
 
+`just build-pgo` builds a profile-guided binary into `target/pgo/release/`.
+It fetches the C and C++ projects pinned in `scripts/pgo/corpus.txt` into a
+cache (`$CSTYLE_PGO_CACHE`, else `~/.cache/cstyle/pgo-corpus`), trains on
+them under several option sets, and builds with the profile; `just build-pgo
+DIR...` trains on local sources instead. It needs `rustup component add
+llvm-tools`, and the optimized build takes far longer than a plain release
+build. The profile only fits the code and compiler it was made with, so it
+is made afresh on each run rather than kept in the repository.
+
 Source layout:
 
 - `src/api.rs`: library entry points for text and encoded bytes.

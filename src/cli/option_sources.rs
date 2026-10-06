@@ -14,7 +14,7 @@ pub(super) fn load_selected_config(
     get_env: &impl Fn(&'static str) -> Option<OsString>,
 ) -> Result<ConfigFileOptions, config::ConfigError> {
     match selection {
-        ConfigSelection::Auto => load_auto_config(get_env),
+        ConfigSelection::Auto => load_auto_config(Path::new(""), get_env),
         ConfigSelection::File(path) => config::load_config_file(path),
         ConfigSelection::None => Ok(ConfigFileOptions::default()),
     }
@@ -58,13 +58,14 @@ pub(super) fn apply_selected_project_config(
 }
 
 fn load_auto_config(
+    current_dir: &Path,
     get_env: &impl Fn(&'static str) -> Option<OsString>,
 ) -> Result<ConfigFileOptions, config::ConfigError> {
     if let Some(path) = env_fallback(get_env, CSTYLE_OPTIONS_ENV, ASTYLE_OPTIONS_ENV) {
         return config::load_config_file(&PathBuf::from(path));
     }
     for name in [config::CONFIG_FILE_NAME, config::ASTYLE_CONFIG_FILE_NAME] {
-        if let Some(options) = config::load_optional_config_file(Path::new(name))? {
+        if let Some(options) = config::load_optional_config_file(&current_dir.join(name))? {
             return Ok(options);
         }
     }
@@ -115,7 +116,7 @@ mod tests {
             _ => None,
         };
 
-        let result = load_auto_config(&get_env);
+        let result = load_auto_config(&root, &get_env);
 
         fs::remove_dir_all(root).expect("remove root dir");
         assert!(result.is_err(), "inaccessible config lookup must fail");
@@ -124,7 +125,8 @@ mod tests {
     #[test]
     fn auto_config_falls_back_to_home_legacy_options() {
         let dir = temp_path("home-options");
-        fs::create_dir_all(&dir).expect("create home options dir");
+        let current_dir = dir.join("work");
+        fs::create_dir_all(&current_dir).expect("create home options dir");
         fs::write(
             dir.join(config::ASTYLE_CONFIG_FILE_NAME),
             "indent=spaces=6\n",
@@ -135,7 +137,7 @@ mod tests {
             _ => None,
         };
 
-        let options = load_auto_config(&get_env).expect("load home legacy rc");
+        let options = load_auto_config(&current_dir, &get_env).expect("load home legacy rc");
 
         assert_eq!(options.format.indent_width, 6);
         fs::remove_dir_all(dir).expect("remove home options dir");

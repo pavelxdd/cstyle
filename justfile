@@ -19,6 +19,11 @@ build:
 build-release:
     cargo build --release
 
+# Build a profile-guided release binary into target/pgo/ (slow); trains on a fetched corpus unless DIRs are given
+[group('build')]
+build-pgo *dirs:
+    scripts/pgo/build.sh {{dirs}}
+
 # Install cstyle from the working tree
 [group('build')]
 install:
