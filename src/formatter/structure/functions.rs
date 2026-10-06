@@ -51,8 +51,16 @@ pub(crate) struct Functions {
 impl Functions {
     pub(crate) fn build(tokens: &[Token], groups: &Groups, blocks: &Blocks) -> Self {
         let mut functions = Self::default();
+        let mut head_ends = HeadEndWalks::default();
         for params in groups.ids() {
-            match function_head(tokens, groups, blocks, &functions.by_params, params) {
+            match function_head(
+                tokens,
+                groups,
+                blocks,
+                &functions.by_params,
+                &mut head_ends,
+                params,
+            ) {
                 Some(HeadMatch::Head(head)) => {
                     if let Some((outer, returned)) =
                         function_pointer_declarator(tokens, groups, params)
@@ -208,6 +216,7 @@ fn function_head(
     groups: &Groups,
     blocks: &Blocks,
     head_params: &IndexMap<GroupId, usize>,
+    head_ends: &mut HeadEndWalks,
     params: GroupId,
 ) -> Option<HeadMatch> {
     let group = groups.get(params);
@@ -271,7 +280,7 @@ fn function_head(
         return None;
     }
     let last_params = declarator.map_or(params, |(_, returned)| returned);
-    let body = match head_end(tokens, groups, last_params, params)? {
+    let body = match head_end(tokens, groups, head_ends, last_params, params)? {
         HeadEnd::Found(body) => body,
         HeadEnd::Unterminated => return Some(HeadMatch::ParameterList),
     };
@@ -597,15 +606,68 @@ enum HeadEnd {
 /// How the head whose parameter list is `params` and whose declarator ends
 /// with the paren group `last_params` ends; `None` when the tokens after the
 /// declarator show that it is not a function head.
+/// Where walks past the parameter lists of heads reached the first token
+/// that ends a head or changes how the walk reads on: by the token a walk
+/// stood at, the level it walked and the token it reached. Heads follow
+/// each other as calls of a macro list do, so their walks share their
+/// tails.
+#[derive(Default)]
+struct HeadEndWalks {
+    reached: IndexMap<usize, (Option<GroupId>, usize)>,
+}
+
+/// Whether a walk past a parameter list at `level`, before any `;` or `:`,
+/// goes on past the token `next` it stands before at `index`: a word, an
+/// operator, or the call of an attribute or macro word.
+fn head_walk_passes(
+    tokens: &[Token],
+    groups: &Groups,
+    level: Option<GroupId>,
+    index: usize,
+    next: usize,
+) -> bool {
+    !tokens[index..next]
+        .iter()
+        .any(|token| matches!(token, Token::Preprocessor(_)))
+        && groups.enclosing(next) == level
+        && !matches!(tokens[next], Token::Symbol(':' | '{' | ';' | '}' | ','))
+        && (tokens[next] != Token::Symbol('(')
+            || previous_head_token(tokens, next).is_some_and(
+                |before| matches!(&tokens[before], Token::Word(word) if is_suffix_call_word(word)),
+            ))
+}
+
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
+    walks: &mut HeadEndWalks,
     last_params: GroupId,
     params: GroupId,
 ) -> Option<HeadEnd> {
     let group = groups.get(last_params);
     let level = group.parent;
     let mut index = group.close? + 1;
+    // The walk reads tokens that pass the same way from wherever it starts,
+    // until a `;` or `:` changes how it reads on.
+    if let Some(&(walked, reached)) = walks.reached.get(&index)
+        && walked == level
+    {
+        index = reached;
+    } else {
+        let mut passed = Vec::new();
+        while let Some(next) = next_code_token(tokens, index)
+            && head_walk_passes(tokens, groups, level, index, next)
+        {
+            passed.push(index);
+            index = match groups.opened_at(next) {
+                Some(id) => groups.get(id).close? + 1,
+                None => next + 1,
+            };
+        }
+        for start in passed {
+            walks.reached.insert(start, (level, index));
+        }
+    }
     let knr_parameters = is_identifier_list(tokens, groups, params);
     let mut constructor_initializers = false;
     // The first `;` after an identifier list may end a declaration or start

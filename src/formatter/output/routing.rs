@@ -1,6 +1,7 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
@@ -19,7 +20,7 @@ impl FormatEngine<'_> {
         if observed_line_kind == LineKind::Normal
             && line.trimmed_start() == "&else"
             && let Some(previous) = self.output.last_mut()
-            && previous.contains("#if")
+            && previous.contains_from_first_byte("#if")
             && !previous.trimmed_start().starts_with('#')
         {
             previous.push_str(" & else");

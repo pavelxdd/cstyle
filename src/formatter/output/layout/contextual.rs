@@ -582,19 +582,17 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
-            if previous_code.contains("#endif") && !previous_code.trimmed_start().starts_with('#') {
+            if previous_code.contains_from_first_byte("#endif")
+                && !previous_code.trimmed_start().starts_with('#')
+            {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
         }
         if line_start.starts_with("{ ~")
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(3)
-                .any(|line| line.contains("#else") || line.contains("#define"))
+            && self.output.scoped().iter().rev().take(3).any(|line| {
+                line.contains_from_first_byte("#else") || line.contains_from_first_byte("#define")
+            })
         {
             layout.exact_indent_spaces = Some(self.options.indent_width);
         }
@@ -624,7 +622,7 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
-            if previous.contains("\\ //")
+            if previous.contains_from_first_byte("\\ //")
                 && previous_code.contains('{')
                 && !previous_code.trimmed_start().starts_with('#')
                 && let Some(frame) = self.layout.frame_stack.active_brace()
@@ -927,7 +925,9 @@ impl FormatEngine<'_> {
                 let code = self.output.code(index);
                 let trimmed = self.output.code_trimmed(index);
                 if !trimmed.starts_with('#')
-                    && (code.contains("#if") || code.contains("#else") || code.contains("#elif"))
+                    && (code.contains_from_first_byte("#if")
+                        || code.contains_from_first_byte("#else")
+                        || code.contains_from_first_byte("#elif"))
                 {
                     anchor = Some(previous);
                     break;
@@ -2767,7 +2767,7 @@ impl FormatEngine<'_> {
                             + self.options.indent_width,
                     );
                 }
-            } else if previous_code.contains("#endif")
+            } else if previous_code.contains_from_first_byte("#endif")
                 && !previous_trimmed.starts_with('#')
                 && !previous_code.ends_with(';')
             {
@@ -2906,13 +2906,13 @@ impl FormatEngine<'_> {
         let line_trimmed = line.trimmed();
         let layout = &mut contextual.layout;
         if layout.line_kind == LineKind::Normal
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && previous.trimmed() == "}"
             && line
                 .trimmed_start()
                 .split_once('(')
                 .is_some_and(|(word, _)| is_macro_like_word(word.trimmed()))
             && !self.pending_line_at_file_scope()
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.trimmed() == "}"
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)

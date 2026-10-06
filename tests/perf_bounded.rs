@@ -359,3 +359,55 @@ fn nested_calls_and_subscripts_stay_bounded() {
         );
     }
 }
+
+#[test]
+fn long_bodies_that_look_back_to_their_opener_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 60_000;
+    let statements = |indent: &str| {
+        (0..n)
+            .map(|i| format!("{indent}a{i} = b{i} + c;\n"))
+            .collect::<String>()
+    };
+    let calls = (0..n / 2)
+        .map(|i| format!("    f{i}(\n        a);\n"))
+        .collect::<String>();
+    let entries = (0..n)
+        .map(|i| format!("    ON_COMMAND(ID_{i}, f{i})\n"))
+        .collect::<String>();
+    for (shape, input) in [
+        (
+            "a label block",
+            format!(
+                "void f(int x)\n{{\n    switch (x) {{\n    default: {{\n        break;\n    }}\n    }}\n{}}}\n",
+                statements("    ")
+            ),
+        ),
+        (
+            "a case body split by a directive",
+            format!(
+                "void f(int x)\n{{\n    switch (x) {{\n    case 1:\n#if A\n        if (x)\n#else\n        if (!x)\n#endif\n{}    }}\n}}\n",
+                statements("        ")
+            ),
+        ),
+        (
+            "calls split after their paren",
+            format!("void f(void)\n{{\n{calls}}}\n"),
+        ),
+        (
+            "a macro block of calls",
+            format!("BEGIN_MESSAGE_MAP(A, B)\n{entries}END_MESSAGE_MAP()\n"),
+        ),
+    ] {
+        let start = Instant::now();
+        format_ok(&input);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "{shape} took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}

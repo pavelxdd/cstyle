@@ -1547,7 +1547,7 @@ impl FormatEngine<'_> {
 /// attribute is still classified by its type, not rejected for the brackets.
 /// Single-bracket subscripts like `a[i]` are left intact.
 fn strip_balanced_attributes(segment: &str) -> String {
-    if !segment.contains("[[") {
+    if !segment.contains_from_first_byte("[[") {
         return segment.to_string();
     }
     let bytes = segment.as_bytes();

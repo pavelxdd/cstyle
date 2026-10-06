@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::{line_is_control_body_header, starts_
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_text};
+use crate::formatter::output::buffer::LookBack;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
@@ -928,7 +929,8 @@ pub(crate) struct CaseBlockBodyLayout {
     pub(crate) exact_indent_spaces: usize,
 }
 
-struct ActiveCaseLayout {
+#[derive(Clone, Copy)]
+pub(crate) struct ActiveCaseLayout {
     indent_spaces: usize,
     opens_block: bool,
     /// The label line ends in the open block of a statement kept on it.
@@ -1054,45 +1056,35 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        for previous in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(previous);
-            let trimmed = code.trimmed_start();
-            if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
-                let follows_comment = self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .skip_while(|line| line.as_str() != previous.as_str())
-                    .skip(1)
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|line| is_comment_line(line.trimmed_start()));
-                if code.ends_with('{') && !follows_comment {
-                    return None;
-                }
-                let case_unindent = usize::from(code.ends_with('{') && follows_comment)
-                    * self.layout.line_adjuster.next_line_case_unindent_depth()
-                    * self.options.indent_width;
-                return Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
-                        + case_unindent
-                        + usize::from(!code.ends_with('{'))
-                            * self.layout.line_adjuster.total_case_unindent_depth()
-                            * self.options.indent_width,
-                );
-            }
-            if trimmed.starts_with("switch") || code.ends_with('{') || trimmed.starts_with('}') {
-                break;
-            }
+        // The nearest case label decides unless a switch or a block edge
+        // comes first.
+        let scope_start = self.output.scoped_range().start;
+        let index = self.output.last_case_or_block_edge_line_from(scope_start)?;
+        let previous = &self.output[index];
+        let code = self.output.code_before_comment_trimmed(index);
+        let trimmed = code.trimmed_start();
+        if !(trimmed.starts_with("case ") || trimmed.starts_with("default:")) {
+            return None;
         }
-        None
+        let follows_comment = (scope_start..index)
+            .rev()
+            .map(|before| &self.output[before])
+            .find(|line| !line.trimmed().is_empty())
+            .is_some_and(|line| is_comment_line(line.trimmed_start()));
+        if code.ends_with('{') && !follows_comment {
+            return None;
+        }
+        let case_unindent = usize::from(code.ends_with('{') && follows_comment)
+            * self.layout.line_adjuster.next_line_case_unindent_depth()
+            * self.options.indent_width;
+        Some(
+            leading_visual_width(previous, self.options.tab_width)
+                + self.options.indent_width
+                + case_unindent
+                + usize::from(!code.ends_with('{'))
+                    * self.layout.line_adjuster.total_case_unindent_depth()
+                    * self.options.indent_width,
+        )
     }
 
     pub(crate) fn split_else_case_closed_block_indent_spaces(
@@ -1576,75 +1568,108 @@ impl FormatEngine<'_> {
     }
 
     fn active_emitted_case_layout(&self) -> Option<ActiveCaseLayout> {
-        let tab_width = self.options.tab_width;
+        let range = self.output.scoped_range();
+        let mut cache = self.active_case_cache.borrow_mut();
+        let answers = self
+            .output
+            .look_back_answers(LookBack::ActiveCase, range.start, &mut cache);
+        // A look back from a line with no closing brace pending reads only
+        // the lines up to it, so its answer holds for every later look back
+        // that gets there.
+        let mut reached = Vec::new();
         let mut closing_indents = Vec::new();
-        let scope_start = self.output.len() - self.output.scoped().len();
-        for index in (scope_start..self.output.len()).rev() {
-            let trimmed = self.output.code_trimmed(index);
-            if trimmed.is_empty() {
-                continue;
+        let mut found = None;
+        for index in range.clone().rev() {
+            if closing_indents.is_empty() {
+                if let Some(answer) = answers[index - range.start] {
+                    found = answer;
+                    break;
+                }
+                reached.push(index);
             }
-            let code = self.output.code(index);
-            // A label kept after the `}` closing the case block before it.
-            let label = trimmed.trim_start_matches('}').trimmed_start();
-            if (trimmed.starts_with('}')
-                && (label.starts_with("case ") || label.starts_with("default:")))
-                && closing_indents.is_empty()
+            if let Some(answer) = self.active_case_step(index, &mut closing_indents) {
+                found = answer;
+                break;
+            }
+        }
+        for index in reached {
+            answers[index - range.start] = Some(found);
+        }
+        found
+    }
+
+    /// One line of the look back for the active case label: the answer
+    /// when the line decides it, with the indents of the closing braces
+    /// read on.
+    fn active_case_step(
+        &self,
+        index: usize,
+        closing_indents: &mut Vec<usize>,
+    ) -> Option<Option<ActiveCaseLayout>> {
+        let tab_width = self.options.tab_width;
+        let trimmed = self.output.code_trimmed(index);
+        if trimmed.is_empty() {
+            return None;
+        }
+        let code = self.output.code(index);
+        // A label kept after the `}` closing the case block before it.
+        let label = trimmed.trim_start_matches('}').trimmed_start();
+        if (trimmed.starts_with('}')
+            && (label.starts_with("case ") || label.starts_with("default:")))
+            && closing_indents.is_empty()
+        {
+            // An indented brace stands a level past its label.
+            let brace_extra = usize::from(
+                self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
+            ) * self.options.indent_width;
+            return Some(Some(ActiveCaseLayout {
+                indent_spaces: self
+                    .output
+                    .lead_width(index, tab_width)
+                    .saturating_sub(brace_extra),
+                opens_block: false,
+                statement_block_open: false,
+            }));
+        }
+        if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
+            let indent_spaces = self.output.lead_width(index, tab_width);
+            if !closing_indents
+                .iter()
+                .any(|closing| *closing <= indent_spaces)
             {
-                // An indented brace stands a level past its label.
-                let brace_extra = usize::from(
-                    self.options.indent_braces
-                        || self.options.brace_style == BraceStyle::Whitesmith,
-                ) * self.options.indent_width;
-                return Some(ActiveCaseLayout {
-                    indent_spaces: self
-                        .output
-                        .lead_width(index, tab_width)
-                        .saturating_sub(brace_extra),
-                    opens_block: false,
-                    statement_block_open: false,
-                });
+                // A block after a statement kept on the label line
+                // is the statement's, not the label's.
+                let statement_block = code
+                    .strip_suffix('{')
+                    .is_some_and(|head| head.trimmed_end().ends_with(';'));
+                return Some(Some(ActiveCaseLayout {
+                    indent_spaces,
+                    opens_block: code.ends_with('{') && !statement_block,
+                    statement_block_open: statement_block && closing_indents.is_empty(),
+                }));
             }
-            if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
-                let indent_spaces = self.output.lead_width(index, tab_width);
-                if !closing_indents
-                    .iter()
-                    .any(|closing| *closing <= indent_spaces)
-                {
-                    // A block after a statement kept on the label line
-                    // is the statement's, not the label's.
-                    let statement_block = code
-                        .strip_suffix('{')
-                        .is_some_and(|head| head.trimmed_end().ends_with(';'));
-                    return Some(ActiveCaseLayout {
-                        indent_spaces,
-                        opens_block: code.ends_with('{') && !statement_block,
-                        statement_block_open: statement_block && closing_indents.is_empty(),
-                    });
-                }
-                return None;
+            return Some(None);
+        }
+        if trimmed.starts_with("switch") {
+            return Some(None);
+        }
+        if code.ends_with('{') {
+            let open_indent = self.output.lead_width(index, tab_width);
+            // The brace closes at the deepest closer not past it.
+            if let Some(index) = closing_indents
+                .iter()
+                .enumerate()
+                .filter(|(_, closing)| **closing <= open_indent)
+                .max_by_key(|(_, closing)| **closing)
+                .map(|(index, _)| index)
+            {
+                closing_indents.remove(index);
+            } else {
+                return Some(None);
             }
-            if trimmed.starts_with("switch") {
-                return None;
-            }
-            if code.ends_with('{') {
-                let open_indent = self.output.lead_width(index, tab_width);
-                // The brace closes at the deepest closer not past it.
-                if let Some(index) = closing_indents
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, closing)| **closing <= open_indent)
-                    .max_by_key(|(_, closing)| **closing)
-                    .map(|(index, _)| index)
-                {
-                    closing_indents.remove(index);
-                } else {
-                    return None;
-                }
-            }
-            if trimmed == "}" {
-                closing_indents.push(self.output.lead_width(index, tab_width));
-            }
+        }
+        if trimmed == "}" {
+            closing_indents.push(self.output.lead_width(index, tab_width));
         }
         None
     }

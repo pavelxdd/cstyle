@@ -381,7 +381,8 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
-            if previous_code.contains("#define") && !previous_code.trimmed_start().starts_with('#')
+            if previous_code.contains_from_first_byte("#define")
+                && !previous_code.trimmed_start().starts_with('#')
             {
                 layout.exact_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)
@@ -523,14 +524,16 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
-            if previous_code.contains("#endif") && !previous_code.trimmed_start().starts_with('#') {
+            if previous_code.contains_from_first_byte("#endif")
+                && !previous_code.trimmed_start().starts_with('#')
+            {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             } else if self
                 .output
                 .last()
                 .is_some_and(|line| line.trimmed().is_empty())
-                && previous_code.contains("#if")
+                && previous_code.contains_from_first_byte("#if")
                 && !previous_code.trimmed_start().starts_with('#')
             {
                 layout.exact_indent_spaces = Some(
@@ -822,7 +825,7 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width) + "return ".len());
             } else if self.token_input.token_source_line_indent > 0
                 && previous_code.trimmed_start().starts_with("#endif")
-                && line.contains("#define")
+                && line.contains_from_first_byte("#define")
             {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
             }
@@ -961,7 +964,7 @@ impl FormatEngine<'_> {
                     continue;
                 }
                 if trimmed.starts_with("//") {
-                    if trimmed.contains("{{{") {
+                    if trimmed.contains_from_first_byte("{{{") {
                         layout.exact_indent_spaces = Some(previous_indent);
                         break;
                     }
@@ -1173,7 +1176,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(4)
-                .any(|line| line.contains("@["))
+                .any(|line| line.contains_from_first_byte("@["))
         {
             layout.exact_indent_spaces =
                 Some(leading_visual_width(previous, self.options.tab_width));

@@ -285,6 +285,9 @@ pub(crate) struct FrameStack {
     open_ternary_line_ends_unordered: bool,
     logical_frames: Vec<LogicalFrame>,
     stream_frames: Vec<StreamFrame>,
+    /// Whether some stream frame stands on an output line before that of a
+    /// frame pushed earlier.
+    stream_frames_unordered: bool,
     constructor_initializer_frame: Option<ConstructorInitializerFrame>,
     header_frame: Option<HeaderFrame>,
     braceless_header_frames: Vec<BracelessHeaderFrame>,
@@ -296,6 +299,9 @@ pub(crate) struct FrameStack {
     string_continuations_unordered: bool,
     brace_frames: Vec<BraceFrame>,
     closed_delimiter_frames: Vec<ClosedDelimiterFrame>,
+    /// Whether some closed delimiter frame was opened on an output line
+    /// before that of a frame pushed earlier.
+    closed_delimiters_unordered: bool,
     line_closed_delimiter_continuation_indent: Option<usize>,
     line_closed_delimiter_line_indent_spaces: Option<usize>,
     line_closed_call_logical_operand_indent: Option<(usize, usize)>,
@@ -347,6 +353,10 @@ impl FrameStack {
         }
         self.line_closed_lambda_parameter_list |= entry.frame.lambda_parameter_list;
         if !self.stream_frames.is_empty() || !self.string_continuation_frames.is_empty() {
+            self.closed_delimiters_unordered |= self
+                .closed_delimiter_frames
+                .last()
+                .is_some_and(|last| entry.frame.opener_output_line < last.opener_output_line);
             self.closed_delimiter_frames.push(ClosedDelimiterFrame {
                 opener_output_column: entry.frame.opener_output_column,
                 opener_output_line: entry.frame.opener_output_line,
@@ -430,7 +440,21 @@ impl FrameStack {
         std::mem::take(&mut self.line_closed_lambda_parameter_list)
     }
 
-    fn delimiter_output_positions(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+    /// The range of the closed delimiter frames opened on output line
+    /// `line`, found by halving while the frames stand in line order; all
+    /// of them otherwise.
+    fn closed_delimiters_on(&self, line: usize) -> std::ops::Range<usize> {
+        let frames = &self.closed_delimiter_frames;
+        if self.closed_delimiters_unordered {
+            return 0..frames.len();
+        }
+        let start = frames.partition_point(|frame| frame.opener_output_line < line);
+        start..start + frames[start..].partition_point(|frame| frame.opener_output_line == line)
+    }
+
+    /// The output columns of the delimiters, open or closed, opened on
+    /// output line `line`.
+    fn delimiter_output_columns_on(&self, line: usize) -> impl Iterator<Item = usize> + '_ {
         self.delimiters
             .iter()
             .map(|entry| {
@@ -440,15 +464,17 @@ impl FrameStack {
                 )
             })
             .chain(
-                self.closed_delimiter_frames
+                self.closed_delimiter_frames[self.closed_delimiters_on(line)]
                     .iter()
                     .map(|frame| (frame.opener_output_line, frame.opener_output_column)),
             )
+            .filter(move |&(frame_line, _)| frame_line == line)
+            .map(|(_, frame_column)| frame_column)
     }
 
     pub(crate) fn delimiter_count_after_output_column(&self, line: usize, column: usize) -> usize {
-        self.delimiter_output_positions()
-            .filter(|&(frame_line, frame_column)| frame_line == line && frame_column > column)
+        self.delimiter_output_columns_on(line)
+            .filter(|&frame_column| frame_column > column)
             .count()
     }
 
@@ -457,9 +483,8 @@ impl FrameStack {
         line: usize,
         column: usize,
     ) -> Option<usize> {
-        self.delimiter_output_positions()
-            .filter(|&(frame_line, frame_column)| frame_line == line && frame_column > column)
-            .map(|(_, frame_column)| frame_column)
+        self.delimiter_output_columns_on(line)
+            .filter(|&frame_column| frame_column > column)
             .max()
     }
 
@@ -468,9 +493,8 @@ impl FrameStack {
         line: usize,
         column: usize,
     ) -> Option<usize> {
-        self.delimiter_output_positions()
-            .filter(|&(frame_line, frame_column)| frame_line == line && frame_column > column)
-            .map(|(_, frame_column)| frame_column)
+        self.delimiter_output_columns_on(line)
+            .filter(|&frame_column| frame_column > column)
             .min()
     }
 
@@ -648,7 +672,26 @@ impl FrameStack {
     }
 
     pub(crate) fn push_stream(&mut self, frame: StreamFrame) {
+        self.stream_frames_unordered |= self
+            .stream_frames
+            .last()
+            .is_some_and(|last| frame.operator_output_line < last.operator_output_line);
         self.stream_frames.push(frame);
+    }
+
+    /// The stream frames on output line `line`, found by halving while the
+    /// frames stand in line order.
+    fn stream_frames_on(&self, line: usize) -> Option<std::ops::Range<usize>> {
+        if self.stream_frames_unordered {
+            return None;
+        }
+        let start = self
+            .stream_frames
+            .partition_point(|frame| frame.operator_output_line < line);
+        let end = start
+            + self.stream_frames[start..]
+                .partition_point(|frame| frame.operator_output_line == line);
+        Some(start..end)
     }
 
     pub(crate) fn push_constructor_initializer(&mut self, frame: ConstructorInitializerFrame) {
@@ -780,6 +823,9 @@ impl FrameStack {
     }
 
     pub(crate) fn active_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
+        if let Some(range) = self.stream_frames_on(line_index) {
+            return self.stream_frames[range].last();
+        }
         self.stream_frames
             .iter()
             .rev()
@@ -787,6 +833,9 @@ impl FrameStack {
     }
 
     pub(crate) fn first_stream_on_output_line(&self, line_index: usize) -> Option<&StreamFrame> {
+        if let Some(range) = self.stream_frames_on(line_index) {
+            return self.stream_frames[range].first();
+        }
         self.stream_frames
             .iter()
             .find(|frame| frame.operator_output_line == line_index)
@@ -801,8 +850,10 @@ impl FrameStack {
         ends_with_close_paren: bool,
         has_positive_paren_delta: bool,
     ) {
-        for frame in self
-            .stream_frames
+        let range = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        for frame in self.stream_frames[range]
             .iter_mut()
             .filter(|frame| frame.operator_output_line == line)
         {
@@ -814,8 +865,17 @@ impl FrameStack {
         }
     }
 
+    /// The stream frames up to the last before output line `line`: all of
+    /// them unless the frames stand in line order.
+    fn stream_frames_before(&self, line: usize) -> &[StreamFrame] {
+        let end = self
+            .stream_frames_on(line)
+            .map_or(self.stream_frames.len(), |range| range.start);
+        &self.stream_frames[..end]
+    }
+
     pub(crate) fn stream_before_output_line(&self, line: usize) -> Option<&StreamFrame> {
-        self.stream_frames
+        self.stream_frames_before(line)
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line < line)
@@ -825,15 +885,17 @@ impl FrameStack {
         &self,
         line: usize,
     ) -> Option<&StreamFrame> {
-        self.stream_frames
+        self.stream_frames_before(line)
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line < line && frame.line_has_unmatched_open_paren)
     }
 
     pub(crate) fn mark_stream_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
-        for frame in self
-            .stream_frames
+        let range = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        for frame in self.stream_frames[range]
             .iter_mut()
             .filter(|frame| frame.operator_output_line == line)
         {
@@ -939,7 +1001,8 @@ impl FrameStack {
                 frame.line_indent_spaces = indent_spaces;
             }
         }
-        for frame in &mut self.closed_delimiter_frames {
+        let closed = self.closed_delimiters_on(line);
+        for frame in &mut self.closed_delimiter_frames[closed] {
             if frame.opener_output_line == line {
                 frame.opener_output_column = shift_column_for_indent(
                     frame.opener_output_column,
@@ -963,12 +1026,14 @@ impl FrameStack {
 
     pub(crate) fn clear_stream_frames(&mut self) {
         self.stream_frames.clear();
+        self.stream_frames_unordered = false;
         self.clear_closed_delimiters_if_unused();
     }
 
     fn clear_closed_delimiters_if_unused(&mut self) {
         if self.stream_frames.is_empty() && self.string_continuation_frames.is_empty() {
             self.closed_delimiter_frames.clear();
+            self.closed_delimiters_unordered = false;
         }
     }
 

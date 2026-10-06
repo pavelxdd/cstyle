@@ -1158,7 +1158,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .take(64)
                 .take_while(|line| !line.trimmed_end().ends_with(';'))
-                .any(|line| line.contains("@ {"));
+                .any(|line| line.contains_from_first_byte("@ {"));
         if in_objc_dictionary_literal {
             let spaces = self.current_line_indent_spaces();
             self.layout.continuation_indent.next_line_indent = None;
@@ -1401,7 +1401,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .take(64)
                 .take_while(|line| !line.trimmed_end().ends_with(';'))
-                .any(|line| line.contains("@ {"));
+                .any(|line| line.contains_from_first_byte("@ {"));
         if in_objc_dictionary_literal
             && !self.one_line_block_mode
             && !is_objc_colon

@@ -6,8 +6,8 @@ use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
@@ -375,13 +375,14 @@ impl FormatEngine<'_> {
         {
             let previous_code = self.output.code_trimmed_of(previous);
             let previous_trimmed = previous_code.trimmed_start();
-            if line.contains("#endif")
+            if line.contains_from_first_byte("#endif")
                 && previous_trimmed
                     .chars()
                     .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
                 && (0..self.output.len()).rev().take(4).any(|index| {
                     let code = self.output.code(index);
-                    code.contains("#endif") && !self.output.code_trimmed(index).starts_with('#')
+                    code.contains_from_first_byte("#endif")
+                        && !self.output.code_trimmed(index).starts_with('#')
                 })
             {
                 layout.exact_indent_spaces = Some(
@@ -467,7 +468,9 @@ impl FormatEngine<'_> {
                 let previous = &self.output[index];
                 let previous_code = self.output.code(index);
                 let previous_trimmed = self.output.code_trimmed(index);
-                if previous_code.contains("#define") || previous_trimmed.ends_with(';') {
+                if previous_code.contains_from_first_byte("#define")
+                    || previous_trimmed.ends_with(';')
+                {
                     break;
                 }
                 if previous_trimmed == "enum" {

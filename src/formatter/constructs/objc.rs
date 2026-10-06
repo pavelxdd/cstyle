@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
@@ -181,8 +182,8 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(64)
-                .take_while(|line| !line.contains("@interface"))
-                .any(|line| line.contains("@ {"))
+                .take_while(|line| !line.contains_from_first_byte("@interface"))
+                .any(|line| line.contains_from_first_byte("@ {"))
         {
             let label_style_dictionary = self
                 .output
@@ -190,7 +191,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(64)
-                .take_while(|line| !line.contains("@ {"))
+                .take_while(|line| !line.contains_from_first_byte("@ {"))
                 .any(|line| line_is_label_style_dictionary_key(line));
             current = if label_style_dictionary {
                 self.output
@@ -198,7 +199,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take(64)
-                    .find(|line| line.contains("@ {"))
+                    .find(|line| line.contains_from_first_byte("@ {"))
                     .map(|opener| leading_visual_width(opener, self.options.tab_width))
             } else {
                 self.layout
@@ -222,7 +223,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(64)
-                .find(|line| line.contains("@ {"))
+                .find(|line| line.contains_from_first_byte("@ {"))
         {
             current = Some(
                 leading_visual_width(opener, self.options.tab_width) + self.options.indent_width,
@@ -244,7 +245,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .take(64)
                 .take_while(|line| !line.trimmed_end().ends_with("};"))
-                .any(|line| line.contains("@ {"))
+                .any(|line| line.contains_from_first_byte("@ {"))
         {
             current = self
                 .layout
@@ -327,18 +328,20 @@ impl FormatEngine<'_> {
         if let Some(previous) = &self.layout.previous_pre_adjust_line {
             let previous_text = previous.trimmed_start();
             let line_text = line_start;
-            let simple_selector_line = line_text.split_once(':').is_some_and(|(key, rest)| {
-                !rest.contains('?')
-                    && key
-                        .chars()
-                        .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-            });
+            let simple_selector_line = || {
+                line_text.split_once(':').is_some_and(|(key, rest)| {
+                    !rest.contains('?')
+                        && key
+                            .chars()
+                            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+                })
+            };
             let follows_nested_type_argument = || {
-                previous_text
-                    .split_once(':')
-                    .is_some_and(|(key, _)| key.trimmed() == "type")
-                    && previous_text.ends_with(']')
+                previous_text.ends_with(']')
                     && !previous_text.starts_with('[')
+                    && previous_text
+                        .split_once(':')
+                        .is_some_and(|(key, _)| key.trimmed() == "type")
             };
             let follows_simple_selector = || {
                 previous_text.split_once(':').is_some_and(|(key, _)| {
@@ -346,7 +349,7 @@ impl FormatEngine<'_> {
                         .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
                 }) && !previous_text.starts_with('[')
             };
-            if simple_selector_line && follows_nested_type_argument() {
+            if follows_nested_type_argument() && simple_selector_line() {
                 let spaces = self
                     .output
                     .last_line_outside_comment()
@@ -356,9 +359,9 @@ impl FormatEngine<'_> {
                 exact_indent_spaces = Some(spaces);
                 self.layout.objc.message_align = Some(spaces);
                 force_message_align = true;
-            } else if simple_selector_line
-                && self.layout.objc.message_align.is_some()
+            } else if self.layout.objc.message_align.is_some()
                 && follows_simple_selector()
+                && simple_selector_line()
             {
                 force_message_align = true;
             }

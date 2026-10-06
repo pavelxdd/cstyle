@@ -30,94 +30,284 @@ pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
     pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
-        self.else_matching_if_indent(first)
-            .or_else(|| self.braceless_body_indent(first))
-            .or_else(|| self.do_while_indent(first))
-            .or_else(|| self.split_else_block_statement_indent(first))
-            .or_else(|| self.statement_after_split_else_indent(first))
-            .or_else(|| self.dangling_else_block_indent(first))
-            .or_else(|| self.split_else_if_indent(first))
-            .or_else(|| self.statement_expression_indent(first))
-            .or_else(|| self.return_value_indent(first))
-            .or_else(|| self.ternary_arm_in_parens_indent(first))
-            // An assignment registers a continuation level past its line
-            // when parens indent after them.
-            .or_else(|| {
-                self.options
-                    .indent_after_parens
-                    .then(|| self.stacked_assignment_indent(first))
-                    .flatten()
+        // Most rules read a token of one kind at the line's start or right
+        // before it; each runs only where that token is.
+        let tokens = &self.tree.tokens;
+        let token = &tokens[first];
+        let previous = self
+            .tree
+            .previous_code_token(first)
+            .map(|index| &tokens[index]);
+        let is_word =
+            |token: &Token, wanted: &str| matches!(token, Token::Word(word) if word == wanted);
+        let is_operator = |token: &Token, wanted: &str| matches!(token, Token::Operator(operator) if operator == wanted);
+        let is_logical = |token: &Token| is_operator(token, "&&") || is_operator(token, "||");
+        let opens_brace = matches!(token, Token::Symbol('{'));
+        let closes_brace = matches!(token, Token::Symbol('}'));
+        let brace = opens_brace || closes_brace;
+        let leads_operator = matches!(token, Token::Operator(_));
+        let string = matches!(token, Token::StringLiteral(_))
+            && matches!(previous, Some(Token::StringLiteral(_)));
+        let after_comma = matches!(previous, Some(Token::Symbol(',')));
+        let after_colon = matches!(previous, Some(Token::Symbol(':')));
+        let after_paren = matches!(previous, Some(Token::Symbol('(')));
+        let after_assign = previous.is_some_and(|previous| is_operator(previous, "="));
+        let after_logical = previous.is_some_and(is_logical);
+        let parens_align = !self.options.indent_after_parens;
+        let style = self.options.brace_style;
+        let whitesmith = style == BraceStyle::Whitesmith;
+        let vtk = style == BraceStyle::Vtk;
+        let ratliff = style == BraceStyle::Ratliff;
+        fn when(applies: bool, rule: impl FnOnce() -> Option<usize>) -> Option<usize> {
+            if applies { rule() } else { None }
+        }
+        when(closes_brace || is_word(token, "else"), || {
+            self.else_matching_if_indent(first)
+        })
+        .or_else(|| self.braceless_body_indent(first))
+        .or_else(|| when(is_word(token, "while"), || self.do_while_indent(first)))
+        .or_else(|| {
+            when(!closes_brace, || {
+                self.split_else_block_statement_indent(first)
             })
-            .or_else(|| self.assigned_string_continuation_indent(first))
-            .or_else(|| self.comment_interrupted_continuation_indent(first))
-            .or_else(|| self.argument_after_interruption_indent(first))
-            .or_else(|| self.string_concatenation_indent(first))
-            .or_else(|| self.stacked_argument_indent(first))
-            .or_else(|| self.stacked_bracket_row_indent(first))
-            .or_else(|| self.stacked_initializer_row_indent(first))
-            .or_else(|| self.stacked_return_indent(first))
-            .or_else(|| self.returned_operand_row_indent(first))
-            .or_else(|| self.stacked_closing_paren_indent(first))
-            .or_else(|| self.logical_operand_in_parens_indent(first))
-            .or_else(|| self.logical_chain_operand_indent(first))
-            .or_else(|| self.declarator_after_initializer_indent(first))
-            .or_else(|| self.later_declarator_brace_indent(first))
-            .or_else(|| self.declarator_after_comma_indent(first))
-            .or_else(|| self.leading_semicolon_indent(first))
-            .or_else(|| self.assignment_continuation_indent(first))
-            .or_else(|| self.assigned_operand_indent(first))
-            .or_else(|| self.leading_operator_assigned_value_indent(first))
-            .or_else(|| self.assignment_before_initializer_block_indent(first))
-            .or_else(|| self.leading_assignment_indent(first))
-            .or_else(|| self.stacked_assignment_indent(first))
-            .or_else(|| self.leading_ternary_in_condition_indent(first))
-            .or_else(|| self.leading_ternary_in_argument_indent(first))
-            .or_else(|| self.ternary_second_arm_indent(first))
-            .or_else(|| self.leading_logical_in_parens_indent(first))
-            .or_else(|| self.enum_value_after_split_member_indent(first))
-            .or_else(|| self.indented_assigned_brace_row_indent(first))
-            .or_else(|| self.member_after_directive_indent(first))
-            .or_else(|| self.member_declarator_after_comma_indent(first))
-            .or_else(|| self.run_in_nested_array_row_indent(first))
-            .or_else(|| self.vtk_array_element_indent(first))
-            .or_else(|| self.vtk_aggregate_array_row_indent(first))
-            .or_else(|| self.vtk_initializer_first_element_indent(first))
-            .or_else(|| self.whitesmith_brace_row_indent(first))
-            .or_else(|| self.ratliff_first_brace_row_indent(first))
-            .or_else(|| self.initializer_row_indent(first))
-            // Horstmann runs the first row into its brace only later.
-            .or_else(|| {
-                (self.options.brace_style == BraceStyle::Horstmann)
-                    .then(|| self.initializer_first_row_indent(first))
-                    .flatten()
+        })
+        .or_else(|| when(!brace, || self.statement_after_split_else_indent(first)))
+        .or_else(|| self.dangling_else_block_indent(first))
+        .or_else(|| when(is_word(token, "if"), || self.split_else_if_indent(first)))
+        .or_else(|| self.statement_expression_indent(first))
+        .or_else(|| {
+            when(
+                previous.is_some_and(|previous| is_word(previous, "return")),
+                || self.return_value_indent(first),
+            )
+        })
+        .or_else(|| when(after_colon, || self.ternary_arm_in_parens_indent(first)))
+        // An assignment registers a continuation level past its line
+        // when parens indent after them.
+        .or_else(|| when(!parens_align, || self.stacked_assignment_indent(first)))
+        .or_else(|| when(string, || self.assigned_string_continuation_indent(first)))
+        .or_else(|| self.comment_interrupted_continuation_indent(first))
+        .or_else(|| {
+            when(after_comma, || {
+                self.argument_after_interruption_indent(first)
             })
-            .or_else(|| self.initializer_element_continuation_indent(first))
-            .or_else(|| self.initializer_leading_comma_indent(first))
-            .or_else(|| self.initializer_closing_brace_indent(first))
-            .or_else(|| self.nested_initializer_closing_brace_indent(first))
-            .or_else(|| self.one_line_control_block_indent(first, line))
-            .or_else(|| self.indented_block_brace_indent(first))
-            .or_else(|| self.broken_control_brace_indent(first))
-            .or_else(|| self.gnu_else_brace_indent(first))
-            .or_else(|| self.whitesmith_bare_block_brace_indent(first))
-            .or_else(|| self.whitesmith_macro_block_brace_indent(first))
-            .or_else(|| self.one_line_block_after_macro_indent(first))
-            .or_else(|| self.whitesmith_function_brace_indent(first))
-            .or_else(|| self.vtk_knr_function_brace_indent(first))
-            .or_else(|| self.vtk_anonymous_member_aggregate_brace_indent(first))
-            .or_else(|| self.statement_after_case_block_indent(first))
-            .or_else(|| self.first_statement_after_case_label_indent(first))
-            .or_else(|| self.statement_after_labeled_statement_indent(first))
-            .or_else(|| self.case_block_statement_indent(first))
-            .or_else(|| self.broken_case_block_first_statement_indent(first))
-            .or_else(|| self.block_closing_brace_indent(first))
-            .or_else(|| self.case_block_closing_brace_indent(first))
-            .or_else(|| self.assigned_value_in_case_block_indent(first))
-            .or_else(|| self.argument_after_assigned_call_paren_indent(first))
-            .or_else(|| self.assigned_value_in_call_indent(first))
-            .or_else(|| self.condition_after_split_header_paren_indent(first))
-            .or_else(|| self.closing_paren_indent(first))
-            .or_else(|| self.parameter_line_indent(first))
+        })
+        .or_else(|| when(string, || self.string_concatenation_indent(first)))
+        .or_else(|| self.stacked_argument_indent(first))
+        .or_else(|| self.stacked_bracket_row_indent(first))
+        .or_else(|| self.stacked_initializer_row_indent(first))
+        .or_else(|| self.stacked_return_indent(first))
+        .or_else(|| {
+            when(
+                leads_operator && self.options.max_code_length.is_some(),
+                || self.returned_operand_row_indent(first),
+            )
+        })
+        .or_else(|| {
+            when(matches!(token, Token::Symbol(')')), || {
+                self.stacked_closing_paren_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(parens_align && after_logical, || {
+                self.logical_operand_in_parens_indent(first)
+            })
+        })
+        .or_else(|| when(after_logical, || self.logical_chain_operand_indent(first)))
+        .or_else(|| {
+            when(matches!(token, Token::Word(_)) && after_comma, || {
+                self.declarator_after_initializer_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(opens_brace && (whitesmith || vtk), || {
+                self.later_declarator_brace_indent(first)
+            })
+        })
+        .or_else(|| when(after_comma, || self.declarator_after_comma_indent(first)))
+        .or_else(|| {
+            when(matches!(token, Token::Symbol(';')), || {
+                self.leading_semicolon_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(
+                !brace
+                    && previous.is_some_and(|previous| {
+                        !matches!(previous, Token::Symbol(',' | ';' | '{' | '}'))
+                    }),
+                || self.assignment_continuation_indent(first),
+            )
+        })
+        .or_else(|| {
+            when(matches!(previous, Some(Token::Operator(_))), || {
+                self.assigned_operand_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(parens_align && leads_operator, || {
+                self.leading_operator_assigned_value_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(opens_brace || is_operator(token, "="), || {
+                self.assignment_before_initializer_block_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(is_operator(token, "="), || {
+                self.leading_assignment_indent(first)
+            })
+        })
+        .or_else(|| self.stacked_assignment_indent(first))
+        .or_else(|| {
+            when(matches!(token, Token::Symbol('?' | ':')), || {
+                self.leading_ternary_in_condition_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(matches!(token, Token::Symbol('?' | ':')), || {
+                self.leading_ternary_in_argument_indent(first)
+            })
+        })
+        .or_else(|| when(after_colon, || self.ternary_second_arm_indent(first)))
+        .or_else(|| {
+            when(parens_align && is_logical(token), || {
+                self.leading_logical_in_parens_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(is_operator(token, "="), || {
+                self.enum_value_after_split_member_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(opens_brace && (whitesmith || ratliff), || {
+                self.indented_assigned_brace_row_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(matches!(previous, Some(Token::Symbol(';'))), || {
+                self.member_after_directive_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(after_comma, || {
+                self.member_declarator_after_comma_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(whitesmith || ratliff || vtk, || {
+                self.run_in_nested_array_row_indent(first)
+            })
+        })
+        .or_else(|| when(vtk || whitesmith, || self.vtk_array_element_indent(first)))
+        .or_else(|| when(vtk, || self.vtk_aggregate_array_row_indent(first)))
+        .or_else(|| when(vtk, || self.vtk_initializer_first_element_indent(first)))
+        .or_else(|| {
+            when(opens_brace && (whitesmith || ratliff), || {
+                self.whitesmith_brace_row_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(opens_brace && ratliff, || {
+                self.ratliff_first_brace_row_indent(first)
+            })
+        })
+        .or_else(|| self.initializer_row_indent(first))
+        // Horstmann runs the first row into its brace only later.
+        .or_else(|| {
+            when(style == BraceStyle::Horstmann, || {
+                self.initializer_first_row_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(!brace, || {
+                self.initializer_element_continuation_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(matches!(token, Token::Symbol(',')), || {
+                self.initializer_leading_comma_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(closes_brace, || {
+                self.initializer_closing_brace_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(closes_brace, || {
+                self.nested_initializer_closing_brace_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(opens_brace, || {
+                self.one_line_control_block_indent(first, line)
+                    .or_else(|| self.indented_block_brace_indent(first))
+                    .or_else(|| self.broken_control_brace_indent(first))
+                    .or_else(|| self.gnu_else_brace_indent(first))
+                    .or_else(|| self.whitesmith_bare_block_brace_indent(first))
+                    .or_else(|| self.whitesmith_macro_block_brace_indent(first))
+                    .or_else(|| self.one_line_block_after_macro_indent(first))
+                    .or_else(|| self.whitesmith_function_brace_indent(first))
+            })
+        })
+        .or_else(|| when(vtk && brace, || self.vtk_knr_function_brace_indent(first)))
+        .or_else(|| {
+            when(vtk, || {
+                self.vtk_anonymous_member_aggregate_brace_indent(first)
+            })
+        })
+        .or_else(|| self.statement_after_case_block_indent(first))
+        .or_else(|| {
+            when(after_colon && !brace, || {
+                self.first_statement_after_case_label_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(!brace, || {
+                self.statement_after_labeled_statement_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(!self.options.indent_cases && !ratliff, || {
+                self.case_block_statement_indent(first)
+            })
+        })
+        .or_else(|| {
+            when((whitesmith || vtk) && !brace, || {
+                self.broken_case_block_first_statement_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(closes_brace, || {
+                self.block_closing_brace_indent(first)
+                    .or_else(|| self.case_block_closing_brace_indent(first))
+            })
+        })
+        .or_else(|| {
+            when(matches!(token, Token::Symbol(';')) || after_assign, || {
+                self.assigned_value_in_case_block_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(after_paren, || {
+                self.argument_after_assigned_call_paren_indent(first)
+            })
+        })
+        .or_else(|| when(after_assign, || self.assigned_value_in_call_indent(first)))
+        .or_else(|| {
+            when(after_paren, || {
+                self.condition_after_split_header_paren_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(matches!(token, Token::Symbol(')')), || {
+                self.closing_paren_indent(first)
+            })
+        })
+        .or_else(|| when(parens_align, || self.parameter_line_indent(first)))
     }
 
     pub(crate) fn apply_tree_anchor_layout(

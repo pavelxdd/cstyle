@@ -205,6 +205,17 @@ pub(crate) struct FormatEngine<'a> {
     line_columns: LineSourceColumns,
     /// The text of the line being finished, kept to reuse its buffer.
     pub(crate) finished_line_buffer: String,
+    /// The look backs for the active case label read so far.
+    pub(crate) active_case_cache: std::cell::RefCell<
+        buffer::LookBackAnswers<
+            Option<crate::formatter::constructs::switch_cases::ActiveCaseLayout>,
+        >,
+    >,
+    /// The look backs for an open lambda body read so far.
+    pub(crate) open_lambda_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
+    /// The look backs for the begin of the macro block a line lies in read
+    /// so far.
+    pub(crate) macro_block_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
     /// The tokens the last looks back for astyle's statement start passed.
     pub(crate) stack_start_cache:
         std::cell::RefCell<crate::formatter::output::layout::astyle_stack::StackStartPath>,
@@ -319,6 +330,9 @@ impl<'a> FormatEngine<'a> {
             line_comment_cache: std::cell::Cell::new(None),
             line_columns: LineSourceColumns::default(),
             finished_line_buffer: String::new(),
+            active_case_cache: std::cell::RefCell::default(),
+            open_lambda_cache: std::cell::RefCell::default(),
+            macro_block_cache: std::cell::RefCell::default(),
             stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
@@ -1019,7 +1033,10 @@ impl<'a> FormatEngine<'a> {
             .map(token_text)
             .collect::<String>();
         let trimmed = line.trimmed();
-        if !trimmed.starts_with("{{") || !trimmed.ends_with('}') || !trimmed.contains("}{") {
+        if !trimmed.starts_with("{{")
+            || !trimmed.ends_with('}')
+            || !trimmed.contains_from_first_byte("}{")
+        {
             return false;
         }
         let mut lines = self

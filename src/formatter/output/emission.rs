@@ -1,7 +1,6 @@
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::output::buffer;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::text::columns::leading_visual_width;
@@ -237,7 +236,7 @@ impl FormatEngine<'_> {
             };
         let output_line_index = self.output.len();
         let view = LineView::new(&line);
-        let output_line_hints = buffer::output_line_hints(view.trimmed_start());
+        let output_line_hints = self.output.line_hints(view.trimmed_start());
         self.finish_define_line(&view);
         let anchored_part = self.max_length_line.take_anchored_part();
         let spaces = if anchored_part {

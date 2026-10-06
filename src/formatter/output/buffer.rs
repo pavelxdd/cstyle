@@ -2,7 +2,7 @@ use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+    ContainsAnyByte, find_byte, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
@@ -39,8 +39,6 @@ pub(crate) struct LineBraceMeta {
     code_opens: u32,
     /// Which of `{`, `}`, and `:` the line's code holds, one bit each.
     code_marks: u8,
-    /// Whether the line's text holds `new `.
-    mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
     else_line: bool,
     /// The same for the line's code without comments.
@@ -147,7 +145,10 @@ fn is_raw_literal(token: &Token) -> bool {
 }
 
 fn structural_line(line: &str) -> Cow<'_, str> {
-    if !line.contains("R\"") && !line.contains('/') {
+    let bytes = line.as_bytes();
+    if find_byte(bytes, b'/').is_none()
+        && (find_byte(bytes, b'"').is_none() || !line.contains("R\""))
+    {
         return Cow::Borrowed(line);
     }
     let tokens = tokenize(line);
@@ -223,7 +224,6 @@ fn compute_line_brace_meta(
         paren_last_open_column: (paren_opens.last().copied()).map(narrow),
         comment_split_limit,
         comment_code_end,
-        mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(
             &line[(line.len() - line_start.len()).min(code.len())..code.len()],
@@ -243,9 +243,15 @@ fn code_mark(byte: u8) -> u8 {
 
 /// Which of `{`, `}`, and `:` `text` holds.
 fn code_marks(text: &[u8]) -> u8 {
+    const MARKS: [u8; 256] = {
+        let mut marks = [0; 256];
+        marks[b'{' as usize] = 1;
+        marks[b'}' as usize] = 1 << 1;
+        marks[b':' as usize] = 1 << 2;
+        marks
+    };
     text.iter()
-        .filter(|&&byte| matches!(byte, b'{' | b'}' | b':'))
-        .fold(0, |marks, &byte| marks | code_mark(byte))
+        .fold(0, |marks, &byte| marks | MARKS[usize::from(byte)])
 }
 
 /// Where `line`'s code before a trailing comment ends, before and after
@@ -278,7 +284,6 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         paren_last_open_column: (None).map(narrow),
         comment_split_limit,
         comment_code_end,
-        mentions_new: line.contains("new "),
         else_line: is_else_line(line.trimmed()),
         code_else_line: is_else_line(line_start),
     }
@@ -297,7 +302,12 @@ pub(super) struct OutputLineHints {
     starts_star: bool,
 }
 
-pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
+fn output_line_hints(
+    line: &str,
+    find_else: bool,
+    find_new: bool,
+    find_asm: bool,
+) -> OutputLineHints {
     const COLON: u8 = 1;
     const HASH: u8 = 1 << 1;
     const SLASH: u8 = 1 << 2;
@@ -324,13 +334,13 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
         .fold(0, |found, &byte| found | CLASSES[usize::from(byte)]);
     OutputLineHints {
         has_colon: found & COLON != 0,
-        has_else: found & E != 0 && line.contains("else"),
+        has_else: find_else && found & E != 0 && line.contains("else"),
         has_hash: found & HASH != 0,
         has_slash: found & SLASH != 0,
         has_question: found & QUESTION != 0,
         has_at: found & AT != 0,
-        has_new: found & N != 0 && line.contains("new "),
-        has_asm: found & A != 0 && line.contains("asm"),
+        has_new: find_new && found & N != 0 && line.contains("new "),
+        has_asm: find_asm && found & A != 0 && line.contains("asm"),
         starts_star: bytes.iter().find(|&&byte| byte != b' ' && byte != b'\t') == Some(&b'*'),
     }
 }
@@ -372,7 +382,7 @@ pub(crate) struct OutputBuffer {
     plain_open_brace_lines: RefCell<OpenBraceLines>,
     /// The first line changed in place since each [`OpenBraceLines`] read
     /// on.
-    lowest_change: [Cell<usize>; 2],
+    lowest_change: [Cell<usize>; 2 + LOOK_BACKS],
     /// The last [`Self::comment_run`], with the scope start, version, and
     /// line count it read.
     comment_run_cache: Cell<Option<(usize, u64, usize, CommentRun)>>,
@@ -427,6 +437,9 @@ pub(crate) struct OutputBuffer {
     /// The last look back for a line whose code is led by `#`.
     recent_code_hash_cache: Cell<Option<RecentMatch>>,
     recent_code_has_hash_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that leads with a case label, a
+    /// `switch` or a `}`, or ends with `{`.
+    recent_case_edge_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -500,6 +513,34 @@ enum OpenBraceEntry {
     Directive,
 }
 
+/// Look backs whose answers [`OutputBuffer::look_back_answers`] keeps by
+/// the line they start from.
+#[derive(Clone, Copy)]
+pub(crate) enum LookBack {
+    OpenLambda,
+    ActiveCase,
+    MacroBlock,
+}
+
+const LOOK_BACKS: usize = 3;
+
+/// The answers of a look back by the line it starts from, from line
+/// `start` on: an answer holds while the lines up to its line stay as they
+/// were.
+pub(crate) struct LookBackAnswers<T> {
+    start: usize,
+    answers: Vec<Option<T>>,
+}
+
+impl<T> Default for LookBackAnswers<T> {
+    fn default() -> Self {
+        Self {
+            start: 0,
+            answers: Vec::new(),
+        }
+    }
+}
+
 /// Lines read in order with a stack of what they leave open, as the look
 /// back from the last line for its innermost open brace finds it: each
 /// `}` closes the nearest `{` open, and a directive no brace closed past
@@ -537,8 +578,19 @@ struct RecentMatch {
 }
 
 impl OutputBuffer {
+    /// The hints of `line`, without the searches for words whose flags are
+    /// set: the flags only ever turn on.
+    pub(super) fn line_hints(&self, line: &str) -> OutputLineHints {
+        output_line_hints(
+            line,
+            !self.may_have_else,
+            !self.may_have_new,
+            !self.may_have_asm,
+        )
+    }
+
     fn record_hints(&mut self, line: &str, hints: OutputLineHints) {
-        if hints.has_colon && line.trimmed_end().ends_with('{') {
+        if !self.may_have_label_open && hints.has_colon && line.trimmed_end().ends_with('{') {
             let meta = compute_line_brace_meta(line, None);
             self.may_have_label_open |= meta.open_shape == OpenBraceShape::Label;
         }
@@ -552,7 +604,7 @@ impl OutputBuffer {
     }
 
     pub(crate) fn push(&mut self, line: String) {
-        let hints = output_line_hints(&line);
+        let hints = self.line_hints(&line);
         self.push_with_hints(line, hints);
     }
 
@@ -572,7 +624,7 @@ impl OutputBuffer {
 
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
         let suffix = line.get(structural_start..).unwrap_or("");
-        self.record_hints(suffix, output_line_hints(suffix));
+        self.record_hints(suffix, self.line_hints(suffix));
         self.may_have_at |= line.contains('@');
         self.may_have_new |= line.contains("new ");
         self.may_have_asm |= line.contains("asm");
@@ -762,7 +814,7 @@ impl OutputBuffer {
     }
 
     pub(crate) fn set(&mut self, index: usize, line: String) {
-        let hints = output_line_hints(&line);
+        let hints = self.line_hints(&line);
         self.record_hints(&line, hints);
         self.meta[index] = OnceCell::new();
         self.parens[index] = OnceCell::new();
@@ -859,7 +911,6 @@ impl OutputBuffer {
                     paren_last_open_column: (None).map(narrow),
                     comment_split_limit,
                     comment_code_end,
-                    mentions_new: line.contains("new "),
                     else_line: is_else_line(line.trimmed()),
                     code_else_line: false,
                 }
@@ -1179,7 +1230,7 @@ impl OutputBuffer {
         let range = self.scoped_range();
         let start = range.start.max(range.end.saturating_sub(count));
         self.has_line_from(&self.mentions_new_cache, start, |index| {
-            self.brace_meta(index).mentions_new
+            self.lines[index].contains("new ")
         })
     }
 
@@ -1262,7 +1313,7 @@ impl OutputBuffer {
     /// Whether the code of a line from `start` on holds `#if`.
     pub(crate) fn has_if_directive_code_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_if_directive_cache, start, |index| {
-            self.code(index).contains("#if")
+            self.code(index).contains_from_first_byte("#if")
         })
     }
 
@@ -1332,6 +1383,17 @@ impl OutputBuffer {
         start: usize,
         matches: impl Fn(usize) -> bool,
     ) -> bool {
+        self.last_line_from(cache, start, matches).is_some()
+    }
+
+    /// The last line from `start` on that `matches` admits, read on from the
+    /// answer `cache` holds.
+    fn last_line_from(
+        &self,
+        cache: &Cell<Option<RecentMatch>>,
+        start: usize,
+        matches: impl Fn(usize) -> bool,
+    ) -> Option<usize> {
         let len = self.lines.len();
         let start = start.min(len);
         // The cache holds the last match among the lines from its floor on.
@@ -1360,7 +1422,21 @@ impl OutputBuffer {
             floor,
             found,
         }));
-        found.is_some_and(|index| index >= start)
+        found.filter(|&index| index >= start)
+    }
+
+    /// The last line from `start` on whose code leads with `case `,
+    /// `default:`, `switch` or `}`, or ends with `{`.
+    pub(crate) fn last_case_or_block_edge_line_from(&self, start: usize) -> Option<usize> {
+        self.last_line_from(&self.recent_case_edge_cache, start, |index| {
+            let code = self.code_before_comment_trimmed(index);
+            let trimmed = code.trimmed_start();
+            trimmed.starts_with("case ")
+                || trimmed.starts_with("default:")
+                || trimmed.starts_with("switch")
+                || code.ends_with('{')
+                || trimmed.starts_with('}')
+        })
     }
 
     /// The last non-empty line, unless it continues a block comment: the
@@ -1507,6 +1583,27 @@ impl OutputBuffer {
     pub(crate) fn innermost_open_brace_line_plain(&self) -> Option<usize> {
         self.read_open_brace_lines(&self.plain_open_brace_lines, &self.lowest_change[1], true)
             .expect("no directive branches a plain read")
+    }
+
+    /// The innermost line from `floor` on whose `{`s the lines after it
+    /// leave open and that `wanted` admits, every line read as code.
+    pub(crate) fn innermost_open_brace_line_plain_where(
+        &self,
+        floor: usize,
+        mut wanted: impl FnMut(usize) -> bool,
+    ) -> Option<usize> {
+        self.innermost_open_brace_line_plain();
+        let lines = self.plain_open_brace_lines.borrow();
+        lines
+            .stack
+            .iter()
+            .rev()
+            .map_while(|entry| match *entry {
+                OpenBraceEntry::Line { index, .. } => Some(index as usize),
+                OpenBraceEntry::Directive => None,
+            })
+            .take_while(|&index| index >= floor)
+            .find(|&index| wanted(index))
     }
 
     fn read_open_brace_lines(
@@ -1736,6 +1833,26 @@ impl OutputBuffer {
         self.comment_run_cache
             .set(Some((key.0, key.1, range.end, run)));
         run
+    }
+
+    /// The answers `look_back` keeps for the lines from `start` on, each
+    /// at its line less `start`: those for changed lines are dropped.
+    pub(crate) fn look_back_answers<'a, T: Copy>(
+        &self,
+        look_back: LookBack,
+        start: usize,
+        answers: &'a mut LookBackAnswers<T>,
+    ) -> &'a mut [Option<T>] {
+        let changed = self.lowest_change[2 + look_back as usize].replace(usize::MAX);
+        if answers.start != start {
+            answers.start = start;
+            answers.answers.clear();
+        }
+        answers.answers.truncate(changed.saturating_sub(start));
+        answers
+            .answers
+            .resize(self.lines.len().saturating_sub(start), None);
+        &mut answers.answers
     }
 
     fn note_change(&self, index: usize) {

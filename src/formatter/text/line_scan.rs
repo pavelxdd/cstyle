@@ -2,13 +2,50 @@ use crate::formatter::lexer::{CommentKind, Token, token_text, tokenize};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_digit_separator;
 
+/// The index of the first `byte` in `bytes`, read eight bytes at a time.
+pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
+    const ONES: u64 = u64::from_le_bytes([0x01; 8]);
+    const HIGHS: u64 = u64::from_le_bytes([0x80; 8]);
+    let pattern = ONES * u64::from(byte);
+    let mut chunks = bytes.chunks_exact(8);
+    let mut index = 0;
+    for chunk in &mut chunks {
+        let word = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ pattern;
+        // The lowest high bit set marks the first zero byte: a borrow only
+        // runs past a zero.
+        let zeros = word.wrapping_sub(ONES) & !word & HIGHS;
+        if zeros != 0 {
+            return Some(index + zeros.trailing_zeros() as usize / 8);
+        }
+        index += 8;
+    }
+    chunks
+        .remainder()
+        .iter()
+        .position(|&found| found == byte)
+        .map(|offset| index + offset)
+}
+
 /// Byte-set membership for ASCII sets: one pass over the bytes, where a
 /// `char` array pattern decodes every character.
 pub(crate) trait ContainsAnyByte {
     fn contains_any_byte(&self, set: &[u8]) -> bool;
+
+    /// Whether the text holds `needle`, looked for from the first byte of
+    /// `needle` on; quick when that byte is rare.
+    fn contains_from_first_byte(&self, needle: &str) -> bool;
 }
 
 impl ContainsAnyByte for str {
+    fn contains_from_first_byte(&self, needle: &str) -> bool {
+        match needle.as_bytes().first() {
+            Some(&first) => {
+                find_byte(self.as_bytes(), first).is_some_and(|at| self[at..].contains(needle))
+            }
+            None => true,
+        }
+    }
+
     fn contains_any_byte(&self, set: &[u8]) -> bool {
         debug_assert!(set.is_ascii());
         let bytes = self.as_bytes();
@@ -680,8 +717,7 @@ pub(crate) fn trailing_comment_start(line: &str) -> Option<usize> {
 fn find_comment_close(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut from = 0;
-    // `str::find` with a char searches by memchr.
-    while let Some(offset) = line[from..].find('*') {
+    while let Some(offset) = find_byte(&bytes[from..], b'*') {
         let star = from + offset;
         if bytes.get(star + 1) == Some(&b'/') {
             return Some(star);
@@ -695,8 +731,7 @@ fn find_comment_close(line: &str) -> Option<usize> {
 fn has_comment_opener(line: &str) -> bool {
     let bytes = line.as_bytes();
     let mut from = 0;
-    // `str::find` with a char searches by memchr.
-    while let Some(offset) = line[from..].find('/') {
+    while let Some(offset) = find_byte(&bytes[from..], b'/') {
         let slash = from + offset;
         if matches!(bytes.get(slash + 1), Some(b'/' | b'*')) {
             return true;
@@ -813,6 +848,37 @@ pub(crate) fn code_holds_word(line: &str, word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn find_byte_finds_the_first_match() {
+        let texts = [
+            "",
+            "/",
+            "a/b//c",
+            "abcdefgh/",
+            "abcdefg/h/",
+            "\u{80}\u{ff}//",
+            "        x = y; // tail",
+            "0123456789abcdef0123456789abcdef/",
+            "é/ü/ß",
+            "\x01\u{80}\u{81}\x7f\x2e\x2f\x30",
+        ];
+        for text in texts {
+            for byte in [b'/', b'x', b'\x80', b'\x01', b'0', b'\xc3'] {
+                assert_eq!(
+                    super::find_byte(text.as_bytes(), byte),
+                    text.bytes().position(|found| found == byte),
+                    "{text:?} {byte}"
+                );
+            }
+            for needle in ["/", "//", "x =", "ü/", "0123", "abcdef0"] {
+                assert_eq!(
+                    super::ContainsAnyByte::contains_from_first_byte(text, needle),
+                    text.contains(needle),
+                    "{text:?} {needle:?}"
+                );
+            }
+        }
+    }
 
     fn last_unmatched_open_delimiter_by_chars(line: &str) -> Option<(char, usize)> {
         let indexed = line.char_indices().collect::<Vec<_>>();

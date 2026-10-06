@@ -16,7 +16,7 @@ use crate::formatter::continuation::operator_chains::inline_stream_opener_argume
 use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
-use crate::formatter::output::buffer::LineFilter;
+use crate::formatter::output::buffer::{LineFilter, LookBack};
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
@@ -439,25 +439,51 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn open_lambda_body_indent_spaces(&self) -> Option<usize> {
-        let mut closed_blocks = 0usize;
-        for raw in self
+        let index = self.open_lambda_body_line()?;
+        Some(
+            leading_visual_width(&self.output[index], self.options.tab_width)
+                + self.options.indent_width,
+        )
+    }
+
+    /// The nearest line in scope that opens a lambda or capture-only block
+    /// no `}` after it closes.
+    fn open_lambda_body_line(&self) -> Option<usize> {
+        let range = self.output.scoped_range();
+        let mut cache = self.open_lambda_cache.borrow_mut();
+        let answers = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(raw);
-            if line_opens_lambda_or_capture_only_block(code.trimmed_start()) && closed_blocks == 0 {
-                return Some(
-                    leading_visual_width(raw, self.options.tab_width) + self.options.indent_width,
-                );
+            .look_back_answers(LookBack::OpenLambda, range.start, &mut cache);
+        // A look back from a line where no `}` is pending reads only the
+        // lines up to it, so its answer holds for every later look back
+        // that gets there.
+        let mut reached = Vec::new();
+        let mut closed_blocks = 0usize;
+        let mut found = None;
+        for index in range.clone().rev() {
+            if closed_blocks == 0 {
+                if let Some(answer) = answers[index - range.start] {
+                    found = answer;
+                    break;
+                }
+                reached.push(index);
             }
-            closed_blocks += code.chars().filter(|ch| *ch == '}').count();
+            let code = self.output.code_before_comment_trimmed(index);
+            if code.trimmed().is_empty() {
+                continue;
+            }
+            if closed_blocks == 0 && line_opens_lambda_or_capture_only_block(code.trimmed_start()) {
+                found = Some(index);
+                break;
+            }
+            closed_blocks += code.bytes().filter(|&byte| byte == b'}').count();
             closed_blocks =
-                closed_blocks.saturating_sub(code.chars().filter(|ch| *ch == '{').count());
+                closed_blocks.saturating_sub(code.bytes().filter(|&byte| byte == b'{').count());
         }
-        None
+        for index in reached {
+            answers[index - range.start] = Some(found);
+        }
+        found
     }
 }
 
@@ -520,9 +546,33 @@ impl FormatEngine<'_> {
         if self.options.macro_blocks.is_empty() {
             return None;
         }
+        let index = self.current_macro_block_begin_line()?;
+        Some(leading_visual_width(
+            &self.output[index],
+            self.options.tab_width,
+        ))
+    }
+
+    /// The nearest line that begins a macro block no line after it ends.
+    fn current_macro_block_begin_line(&self) -> Option<usize> {
+        let mut cache = self.macro_block_cache.borrow_mut();
+        let answers = self
+            .output
+            .look_back_answers(LookBack::MacroBlock, 0, &mut cache);
+        // A look back from a line where no block end is pending reads only
+        // the lines up to it, so its answer holds for every later look back
+        // that gets there.
+        let mut reached = Vec::new();
         let mut closed_blocks = 0usize;
+        let mut found = None;
         for index in (0..self.output.len()).rev() {
-            let line = &self.output[index];
+            if closed_blocks == 0 {
+                if let Some(answer) = answers[index] {
+                    found = answer;
+                    break;
+                }
+                reached.push(index);
+            }
             let trimmed = self.output.trimmed(index);
             if self
                 .options
@@ -540,12 +590,16 @@ impl FormatEngine<'_> {
                 .any(|(begin, _)| macro_call_starts_with(trimmed, begin))
             {
                 if closed_blocks == 0 {
-                    return Some(leading_visual_width(line, self.options.tab_width));
+                    found = Some(index);
+                    break;
                 }
                 closed_blocks -= 1;
             }
         }
-        None
+        for index in reached {
+            answers[index] = Some(found);
+        }
+        found
     }
 
     pub(super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
@@ -1214,7 +1268,7 @@ impl FormatEngine<'_> {
                     continue;
                 }
                 if trimmed.starts_with("//") {
-                    if trimmed.contains("{{{") {
+                    if trimmed.contains_from_first_byte("{{{") {
                         return Some(previous_indent);
                     }
                     continue;

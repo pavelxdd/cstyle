@@ -10,7 +10,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, preprocessor_directive,
+    ContainsAnyByte, is_comment_line, is_comment_only_line, preprocessor_directive,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -107,7 +107,7 @@ fn embedded_branch_separator(code: &str) -> bool {
         return false;
     }
     let trimmed = code.trimmed_start();
-    if trimmed.starts_with('#') || code.contains("#if") {
+    if trimmed.starts_with('#') || code.contains_from_first_byte("#if") {
         return false;
     }
     ["#else", "#elif"].iter().any(|marker| {
@@ -128,7 +128,7 @@ impl FormatEngine<'_> {
             line
         };
         let line_start = line.trimmed_start();
-        if line_start.starts_with("#if") && line.contains("#else") {
+        if line_start.starts_with("#if") && line.contains_from_first_byte("#else") {
             line_start.to_string()
         } else {
             line

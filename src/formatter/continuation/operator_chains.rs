@@ -15,7 +15,7 @@ use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    is_comment_line, last_unmatched_open_delimiter, trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_line, last_unmatched_open_delimiter, trailing_comment_split_limit,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
@@ -398,7 +398,7 @@ impl FormatEngine<'_> {
         {
             let mut spaces = normal_indent * self.options.indent_width;
             if self.layout.indentation.indent() > 1
-                && previous_code.contains("#else")
+                && previous_code.contains_from_first_byte("#else")
                 && !current_starts_operator
             {
                 spaces = spaces.saturating_sub(self.options.indent_width);
@@ -478,7 +478,7 @@ impl FormatEngine<'_> {
         self.layout.frame_stack.mark_stream_line_context(
             output_line_index,
             code.ends_with("<<") || code.ends_with(">>"),
-            code.contains("{ {"),
+            code.contains_from_first_byte("{ {"),
             unmatched_open_paren.is_some(),
             code.ends_with(')'),
             paren_closes > 0,
@@ -1463,7 +1463,9 @@ impl FormatEngine<'_> {
         {
             return Some(self.continuation_base_indent() * width);
         }
-        if (current.starts_with("<<") || current.starts_with(">>")) && current.contains("{ {") {
+        if (current.starts_with("<<") || current.starts_with(">>"))
+            && current.contains_from_first_byte("{ {")
+        {
             return Some(self.continuation_base_indent() * width);
         }
         if (current.starts_with("<<") || current.starts_with(">>"))
@@ -1882,7 +1884,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !previous_code.ends_with('(')
             || current.starts_with(['#', '(', ')', '{', '}'])
-            || !current.contains("{ {")
+            || !current.contains_from_first_byte("{ {")
         {
             return None;
         }

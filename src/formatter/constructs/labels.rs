@@ -13,7 +13,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+    find_byte, is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -428,21 +428,15 @@ impl FormatEngine<'_> {
         if !self.output.may_have_label_open() {
             return None;
         }
-        let mut depth = 0usize;
         // A label's block lies within the current top-level construct.
-        let scope_start = self.output.len() - self.output.scoped().len();
-        for index in (scope_start..self.output.len()).rev() {
-            let meta = self.output.brace_meta(index);
-            depth += meta.closes();
-            if meta.opens() > depth && meta.open_shape == OpenBraceShape::Label {
-                let trimmed = self.output.code_trimmed(index);
-                if is_attached_user_label(trimmed) {
-                    return Some(self.label_block_body_indent_spaces(index));
-                }
-            }
-            depth = depth.saturating_sub(meta.opens());
-        }
-        None
+        let label = self.output.innermost_open_brace_line_plain_where(
+            self.output.scoped_range().start,
+            |index| {
+                self.output.brace_meta(index).open_shape == OpenBraceShape::Label
+                    && is_attached_user_label(self.output.code_trimmed(index))
+            },
+        )?;
+        Some(self.label_block_body_indent_spaces(label))
     }
 
     fn current_closes_label_block(&self) -> bool {
@@ -543,9 +537,10 @@ fn leads_with_goto_label(line: &str) -> bool {
 
 pub(crate) fn is_attached_user_label(line: &str) -> bool {
     let trimmed = line.trimmed_start();
-    let Some((label, rest)) = trimmed.split_once(':') else {
+    let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {
         return false;
     };
+    let (label, rest) = (&trimmed[..colon], &trimmed[colon + 1..]);
     if label.is_empty()
         || matches!(
             label,
@@ -560,7 +555,7 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
 }
 
 fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
-    if !line.contains(':') {
+    if find_byte(line.as_bytes(), b':').is_none() {
         return false;
     }
     let trimmed = line[..trailing_comment_split_limit(line)].trimmed();

@@ -29,8 +29,8 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_only_line, line_comment_split_limit, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_only_line, line_comment_split_limit,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -236,7 +236,7 @@ impl FormatEngine<'_> {
         }
         let is_header_condition_continuation =
             previous_code.ends_with(')') && self.layout.frame_stack.active_header().is_some();
-        if previous_code.contains("#define")
+        if previous_code.contains_from_first_byte("#define")
             || is_header_condition_continuation
             // A variadic `...` parameter leads with no operator.
             || previous_code.trimmed_start().starts_with("...")
@@ -1868,13 +1868,9 @@ impl FormatEngine<'_> {
             && self.options.brace_style == BraceStyle::Gnu
             && (matches!(next, Some(Token::Symbol('~')))
                 || matches!(next, Some(Token::Operator(operator)) if operator == "~"))
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(3)
-                .any(|line| line.contains("#else") || line.contains("#define"))
+            && self.output.scoped().iter().rev().take(3).any(|line| {
+                line.contains_from_first_byte("#else") || line.contains_from_first_byte("#define")
+            })
         {
             self.layout
                 .continuation_indent
@@ -2305,7 +2301,7 @@ impl FormatEngine<'_> {
                 .last_non_empty_scoped()
                 .filter(|line| {
                     let trimmed = line.trimmed_start();
-                    line.contains("#if") && !trimmed.starts_with('#')
+                    line.contains_from_first_byte("#if") && !trimmed.starts_with('#')
                 })
                 .map(|line| leading_visual_width(line, self.options.tab_width))
         })

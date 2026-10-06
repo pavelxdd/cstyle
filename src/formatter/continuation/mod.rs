@@ -1549,7 +1549,7 @@ impl FormatEngine<'_> {
         if previous_code.ends_with([',', ';', '{', '}'])
             || previous_code.contains("==")
             || previous_code.contains("!=")
-            || previous_code.contains("<=")
+            || previous_code.contains_from_first_byte("<=")
             || previous_code.contains(">=")
         {
             return None;

@@ -14,7 +14,8 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_brace_content_offset,
+    ContainsAnyByte, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -703,7 +704,8 @@ impl FormatEngine<'_> {
             column = base_indent + self.options.indent_width * 2;
         }
         let current_trimmed = self.current.trimmed_start();
-        let run_in_nested_brace = current_trimmed.starts_with("{{") || self.current.contains("{ {");
+        let run_in_nested_brace =
+            current_trimmed.starts_with("{{") || self.current.contains_from_first_byte("{ {");
         let stored_brace_column = if broken_enum_brace {
             brace_column
         } else if self.current.trimmed() == "{" {
@@ -776,7 +778,7 @@ impl FormatEngine<'_> {
         let objc_dictionary = self
             .output
             .get(open_output_len)
-            .is_some_and(|line| line.contains("@ {"));
+            .is_some_and(|line| line.contains_from_first_byte("@ {"));
         let return_initializer = self
             .output
             .get(open_output_len)
@@ -784,7 +786,7 @@ impl FormatEngine<'_> {
         let enclosed_run_in = self
             .output
             .get(open_output_len)
-            .is_some_and(|line| line.contains("{ {"));
+            .is_some_and(|line| line.contains_from_first_byte("{ {"));
         let range_for_initializer = self.output.get(open_output_len).is_some_and(|line| {
             let trimmed = line.trimmed_start();
             trimmed.starts_with("for ") && trimmed.trimmed_end().ends_with('{')
@@ -856,7 +858,7 @@ impl FormatEngine<'_> {
             && self.output.last().is_some_and(|line| line.trimmed() == "}")
             && self.output.get(open_output_len).is_some_and(|line| {
                 let code = self.output.code_trimmed_of(line);
-                code.contains("](") || code.contains("] (")
+                code.contains_from_first_byte("](") || code.contains_from_first_byte("] (")
             });
         if parameterized_lambda_initializer_close {
             if let Some((previous, tokens)) = self.output.pop_with_tokens() {
@@ -1029,7 +1031,7 @@ impl FormatEngine<'_> {
         }
         if !closing
             && let Some(previous) = self.output.last()
-            && (previous.contains("{{") || previous.contains("{ {"))
+            && (previous.contains_from_first_byte("{{") || previous.contains_from_first_byte("{ {"))
         {
             return Some(
                 leading_visual_width(previous, self.options.tab_width)
@@ -1201,7 +1203,9 @@ impl FormatEngine<'_> {
                 return false;
             }
             if self.output.code_has_unmatched_open_brace(index) {
-                return code.contains("({") || code.contains("= {") || code.contains("{{");
+                return code.contains("({")
+                    || code.contains("= {")
+                    || code.contains_from_first_byte("{{");
             }
         }
         false
@@ -1405,7 +1409,7 @@ impl FormatEngine<'_> {
 
     fn output_line_opens_initializer(&self, index: usize, code: &str) -> bool {
         let trimmed = code.trimmed();
-        if code.contains("= {") || code.contains("({") || code.contains("{{") {
+        if code.contains("= {") || code.contains("({") || code.contains_from_first_byte("{{") {
             return true;
         }
         if trimmed.ends_with('{') {
