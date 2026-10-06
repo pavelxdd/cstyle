@@ -195,6 +195,7 @@ impl FormatEngine<'_> {
                 | BraceStyle::Gnu
                 | BraceStyle::Horstmann
         );
+        let last_held = LastHeldBytes::of(line);
         let split_indent_inputs = SplitIndentInputs {
             base_indent_width,
             limit_base_indent_width: configured_indent_width,
@@ -208,6 +209,7 @@ impl FormatEngine<'_> {
             indent_after_parens: self.options.indent_after_parens,
             following_split: false,
             break_lambda_parameters,
+            held: last_held.from(0),
         };
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
             .unwrap_or(split_indent);
@@ -250,7 +252,7 @@ impl FormatEngine<'_> {
             self.options,
             line,
             &split.head,
-            &split.tail,
+            split.tail,
             base_indent_width,
             structural_level,
             next_indent,
@@ -269,26 +271,25 @@ impl FormatEngine<'_> {
         let mut tail = split.tail;
         loop {
             let tail_width = width;
-            let Some(split) = split_result(&tail, tail_width, SplitRules::new(self.options))
-                .or_else(|| {
-                    (suffix_width > 0).then(|| {
-                        split_result(
-                            &tail,
-                            tail_width.saturating_sub(suffix_width).max(1),
-                            SplitRules::new(self.options),
-                        )
-                    })?
-                })
-            else {
+            // Each tail ends the line.
+            debug_assert!(line.ends_with(tail));
+            let held = last_held.from(line.len() - tail.len());
+            let rules = SplitRules::new(self.options).holding(held);
+            let Some(split) = split_result(tail, tail_width, rules).or_else(|| {
+                (suffix_width > 0).then(|| {
+                    split_result(tail, tail_width.saturating_sub(suffix_width).max(1), rules)
+                })?
+            }) else {
                 break;
             };
             let mut following_indent = continuation_indent_for_split(
-                &tail,
+                tail,
                 &split,
                 &SplitIndentInputs {
                     current_indent_width: next_indent.columns(self.options.indent_width),
                     configured_indent: next_indent,
                     following_split: true,
+                    held,
                     ..split_indent_inputs
                 },
             )
@@ -309,8 +310,8 @@ impl FormatEngine<'_> {
             {
                 following_indent = ContinuationIndent::Spaces(floor);
             }
-            self.set_split_part_tokens(source_tokens, line, &tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(&tail) {
+            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
+            if let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
@@ -320,12 +321,12 @@ impl FormatEngine<'_> {
             next_indent = following_indent;
         }
         if !tail.trimmed().is_empty() {
-            self.set_split_part_tokens(source_tokens, line, &tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(&tail) {
+            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
+            if let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
-            self.push_output_line_with_indent(&tail, next_structural_level, next_indent);
+            self.push_output_line_with_indent(tail, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
         }
     }
@@ -368,10 +369,13 @@ impl FormatEngine<'_> {
             return;
         };
         let part = part.trimmed_start();
-        if !line.ends_with(part) {
+        let Some(from) = line.len().checked_sub(part.len()) else {
+            return;
+        };
+        // A part sliced off the end of the line ends it as it stands.
+        if line.as_bytes()[from..].as_ptr() != part.as_ptr() && !line.ends_with(part) {
             return;
         }
-        let from = line.len() - part.len();
         if from < scan.from {
             *scan = SplitPartScan::default();
         }
@@ -493,7 +497,11 @@ impl FormatEngine<'_> {
         } else {
             lead_width + self.options.continuation_indent * self.options.indent_width
         };
-        Some((format!("{lead}{}", split.head), split.tail, tail_spaces))
+        Some((
+            format!("{lead}{}", split.head),
+            split.tail.to_string(),
+            tail_spaces,
+        ))
     }
 }
 
@@ -627,6 +635,8 @@ struct SplitIndentInputs {
     indent_after_parens: bool,
     following_split: bool,
     break_lambda_parameters: bool,
+    /// What the line split holds.
+    held: HeldBytes,
 }
 
 fn splits_before_label(split: &SplitResult) -> bool {
@@ -652,8 +662,14 @@ fn continuation_indent_for_split(
         indent_after_parens,
         following_split,
         break_lambda_parameters,
+        held,
         ..
     } = *inputs;
+    let line_assignment_value_indent = || {
+        held.equals
+            .then(|| assignment_value_indent(line, base_indent_width))
+            .flatten()
+    };
     let head = split.head.as_str();
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
@@ -731,7 +747,7 @@ fn continuation_indent_for_split(
     }
     if indent_after_parens {
         if has_open_paren
-            && let Some(spaces) = assignment_value_indent(line, base_indent_width)
+            && let Some(spaces) = line_assignment_value_indent()
             && !head_ends_assignment_operator(head)
         {
             return Some(ContinuationIndent::Spaces(spaces + indent_width));
@@ -749,6 +765,7 @@ fn continuation_indent_for_split(
     }
 
     if split.kind == SplitKind::Whitespace
+        && held.less
         && let Some(spaces) = stream_chain_continuation_indent(line, base_indent_width)
     {
         return Some(ContinuationIndent::Spaces(
@@ -768,13 +785,14 @@ fn continuation_indent_for_split(
             | SplitKind::StringConcat
     ) && !head.trimmed_end().ends_with_any(b"([");
     // A paren opened after the assignment stacks past its value.
-    let paren_after_assignment = top_level_assignment_index(line).is_some_and(|assignment| {
-        unmatched_open_paren_columns(head)
-            .iter()
-            .any(|&open| open > assignment)
-    });
+    let paren_after_assignment = held.equals
+        && top_level_assignment_index(line).is_some_and(|assignment| {
+            unmatched_open_paren_columns(head)
+                .iter()
+                .any(|&open| open > assignment)
+        });
     if operator_split {
-        if let Some(spaces) = assignment_value_indent(line, base_indent_width)
+        if let Some(spaces) = line_assignment_value_indent()
             && !head_ends_assignment_operator(head)
             && !paren_after_assignment
         {
@@ -798,7 +816,7 @@ fn continuation_indent_for_split(
         && open_columns
             .iter()
             .all(|column| *column >= max_continuation_indent);
-    if all_openers_over_max && let Some(spaces) = assignment_value_indent(line, base_indent_width) {
+    if all_openers_over_max && let Some(spaces) = line_assignment_value_indent() {
         let call_body_extra =
             usize::from(head.trimmed_end().ends_with('(')) * configured_continuation_spaces;
         let target = spaces + call_body_extra;
@@ -855,7 +873,11 @@ fn continuation_indent_for_split(
         indent_width,
         max_continuation_indent,
     )
-    .or_else(|| assignment_continuation_indent(line, head, base_indent_width))
+    .or_else(|| {
+        held.equals
+            .then(|| assignment_continuation_indent(line, head, base_indent_width))
+            .flatten()
+    })
 }
 
 fn split_function_declaration_head(head: &str) -> bool {
@@ -1057,9 +1079,10 @@ enum SplitKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct SplitResult {
+struct SplitResult<'a> {
     head: String,
-    tail: String,
+    /// The rest of the line split, which ends it.
+    tail: &'a str,
     split_at: usize,
     kind: SplitKind,
     priority: usize,
@@ -1107,7 +1130,7 @@ fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
 
 const ASTYLE_MIN_CODE_LENGTH: usize = 10;
 
-fn split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult> {
+fn split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult<'_>> {
     if line.len() <= width {
         return None;
     }
@@ -1518,6 +1541,59 @@ fn operator_bounds_containing(line: &str, index: usize) -> Option<(usize, usize,
         .max_by_key(|(_, _, operator)| operator.len())
 }
 
+/// Which bytes that searches of a split line look for it may hold; one it
+/// is known not to hold spares the search.
+#[derive(Clone, Copy)]
+struct HeldBytes {
+    less: bool,
+    greater: bool,
+    close_brace: bool,
+    equals: bool,
+}
+
+impl Default for HeldBytes {
+    fn default() -> Self {
+        Self {
+            less: true,
+            greater: true,
+            close_brace: true,
+            equals: true,
+        }
+    }
+}
+
+/// Where the last of each byte [`HeldBytes`] tells of stands in a line, so
+/// that what each tail of the line holds is known at once.
+#[derive(Clone, Copy)]
+struct LastHeldBytes {
+    less: Option<usize>,
+    greater: Option<usize>,
+    close_brace: Option<usize>,
+    equals: Option<usize>,
+}
+
+impl LastHeldBytes {
+    fn of(line: &str) -> Self {
+        Self {
+            less: line.rfind('<'),
+            greater: line.rfind('>'),
+            close_brace: line.rfind('}'),
+            equals: line.rfind('='),
+        }
+    }
+
+    /// What the tail of the line from `start` on holds.
+    fn from(&self, start: usize) -> HeldBytes {
+        let holds = |last: Option<usize>| last.is_some_and(|at| at >= start);
+        HeldBytes {
+            less: holds(self.less),
+            greater: holds(self.greater),
+            close_brace: holds(self.close_brace),
+            equals: holds(self.equals),
+        }
+    }
+}
+
 /// The options that shape where astyle splits a line.
 #[derive(Clone, Copy, Default)]
 struct SplitRules {
@@ -1530,6 +1606,7 @@ struct SplitRules {
     /// The line's closing braces close blocks the statement before them
     /// sits in, not one-line blocks.
     closers_follow_statement: bool,
+    held: HeldBytes,
 }
 
 impl SplitRules {
@@ -1542,7 +1619,12 @@ impl SplitRules {
                 || options.reference_align == ReferenceAlign::SameAsPointer && pointer_to_type,
             offset: 0,
             closers_follow_statement: false,
+            held: HeldBytes::default(),
         }
+    }
+
+    fn holding(self, held: HeldBytes) -> Self {
+        Self { held, ..self }
     }
 
     fn with_offset(self, offset: usize) -> Self {
@@ -1576,7 +1658,11 @@ const ASTYLE_OPERATORS: [&str; 46] = [
 fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usize> {
     let break_after_logical = rules.break_after_logical;
     let bytes = line.as_bytes();
-    let templates = template_argument_ranges(line);
+    let templates = if rules.held.less && rules.held.greater {
+        template_argument_ranges(line)
+    } else {
+        Vec::new()
+    };
     let mut next_template = 0;
     let mut fit = [0usize; 5];
     let mut pending = [0usize; 5];
@@ -1607,7 +1693,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
     let mut quote: Option<u8> = None;
     let mut in_comment = false;
     // A line closing a block it did not open lies in a one-line block.
-    let mut unbroken_depth = if rules.closers_follow_statement {
+    let mut unbroken_depth = if rules.closers_follow_statement || !rules.held.close_brace {
         0
     } else {
         unopened_closing_braces(line)
@@ -1931,7 +2017,7 @@ fn in_exponent(line: &str, index: usize) -> bool {
             .is_some_and(|word| word.starts_with(|ch: char| ch.is_ascii_digit()))
 }
 
-fn astyle_split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult> {
+fn astyle_split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResult<'_>> {
     let split_at = astyle_split_point(line, width, rules)?;
     split_result_at(line, split_at, width, rules)
 }
@@ -1941,10 +2027,10 @@ fn split_result_at(
     split_at: usize,
     width: usize,
     rules: SplitRules,
-) -> Option<SplitResult> {
+) -> Option<SplitResult<'_>> {
     let break_after_logical = rules.break_after_logical;
     let head = line[..split_at].trimmed_end().to_string();
-    let tail = line[split_at..].trimmed_start().to_string();
+    let tail = line[split_at..].trimmed_start();
     if head.is_empty() || tail.is_empty() {
         return None;
     }

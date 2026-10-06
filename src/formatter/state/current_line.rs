@@ -19,6 +19,7 @@ pub(crate) struct CurrentLine {
     declaration_segment: RefCell<DeclarationSegmentScan>,
     segment_outside_parens: Cell<SegmentOutsideParens>,
     assignment_chain: Cell<Option<AssignmentChainScan>>,
+    first_assignment: Cell<Option<AssignmentChainScan>>,
     marks: Cell<LineMarks>,
     parens: RefCell<ParenScan>,
     delimiters: RefCell<DelimiterScan>,
@@ -428,6 +429,22 @@ impl CurrentLine {
         self.assignment_chain.set(Some(scan));
     }
 
+    /// `find_assignment_operator` of the line, read on from where the last
+    /// call stood while the line only grew.
+    pub(crate) fn first_assignment(&self) -> Option<(usize, &'static str)> {
+        let text = self.text.as_str();
+        // Decisions within the last bytes may change as the line grows.
+        let mut scan = self
+            .first_assignment
+            .get()
+            .filter(|scan| scan.last().is_some() || scan.index() + 3 <= text.len())
+            .unwrap_or_default();
+        scan.advance_to_first(text, text.len().saturating_sub(3));
+        self.first_assignment.set(Some(scan));
+        scan.advance_to_first(text, text.len());
+        scan.last()
+    }
+
     /// Whether the line holds `//` or `/*`, literals or not.
     pub(crate) fn holds_comment_opener(&self) -> bool {
         self.marks().comment_opener
@@ -519,6 +536,7 @@ impl CurrentLine {
         self.declaration_segment.take();
         self.segment_outside_parens.take();
         self.assignment_chain.take();
+        self.first_assignment.take();
         self.marks.take();
         self.parens.borrow_mut().reset();
         self.delimiters.borrow_mut().reset();
@@ -823,6 +841,30 @@ impl TrailingCommentScan {
 mod tests {
     use super::CurrentLine;
     use crate::formatter::text::trim::Trimmed;
+    use crate::formatter::tokens::operators::find_assignment_operator;
+
+    #[test]
+    fn first_assignment_read_on_as_the_line_grows_matches_a_full_search() {
+        for line in [
+            "x <<= a << b == c",
+            "f(a = b) >>= c",
+            "s = \"=\" + t /* = */ = u",
+            "a == b != c <= d >= e => f = g",
+            "operator=(a) = b",
+            "p->q = r // = s",
+        ] {
+            let mut current = CurrentLine::default();
+            for ch in line.chars() {
+                current.push(ch);
+                assert_eq!(
+                    current.first_assignment(),
+                    find_assignment_operator(current.as_str()),
+                    "{:?}",
+                    current.as_str()
+                );
+            }
+        }
+    }
 
     #[test]
     fn blank_cache_rechecks_after_trim_and_same_length_push() {

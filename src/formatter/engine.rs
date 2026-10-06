@@ -177,6 +177,10 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_scan_cache: std::cell::Cell<
         Option<crate::formatter::constructs::constructor_initializers::ConstructorScanCache>,
     >,
+    /// The last reads past blanks and newlines after a line and after the
+    /// token that follows it: the token each started at and the first
+    /// token after them.
+    layout_runs: [Option<(usize, Option<usize>)>; 2],
     /// The last look back for the open paren of a constructor initializer's
     /// argument.
     pub(crate) open_paren_arg_cache: std::cell::Cell<
@@ -324,6 +328,7 @@ impl<'a> FormatEngine<'a> {
             output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
             constructor_scan_cache: std::cell::Cell::new(None),
+            layout_runs: [None; 2],
             open_paren_arg_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
@@ -690,10 +695,10 @@ impl<'a> FormatEngine<'a> {
 
     /// Records how the next source line starts, before the newline token is pushed.
     fn observe_next_line_lead(&mut self, tokens: &[Token], index: usize, line_start: usize) {
-        let following_index = next_non_layout_token_index(tokens, index + 1);
+        let following_index = self.next_non_layout_token_index(0, tokens, index + 1);
         let following = following_index.map(|i| &tokens[i]);
         let after_following = following_index
-            .and_then(|i| next_non_layout_token_index(tokens, i + 1))
+            .and_then(|i| self.next_non_layout_token_index(1, tokens, i + 1))
             .map(|i| &tokens[i]);
         // Only a removed brace leaves a gap at a line end; astyle drops the
         // source's own trailing whitespace.
@@ -742,6 +747,24 @@ impl<'a> FormatEngine<'a> {
             (following, after_following),
             (Some(Token::Word(word)), Some(Token::Symbol('('))) if word == "noexcept"
         );
+    }
+
+    /// `next_non_layout_token_index`, answered from the last read in `run`
+    /// when it started inside the same run of blanks and newlines.
+    fn next_non_layout_token_index(
+        &mut self,
+        run: usize,
+        tokens: &[Token],
+        start: usize,
+    ) -> Option<usize> {
+        if let Some((from, found)) = self.layout_runs[run]
+            && (from..=found.unwrap_or(tokens.len())).contains(&start)
+        {
+            return found;
+        }
+        let found = next_non_layout_token_index(tokens, start);
+        self.layout_runs[run] = Some((start, found));
+        found
     }
 
     /// The `]` closing the `[` at `open` before `end`.

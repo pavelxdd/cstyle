@@ -284,6 +284,11 @@ pub(crate) struct FrameStack {
     /// marked earlier.
     open_ternary_line_ends_unordered: bool,
     logical_frames: Vec<LogicalFrame>,
+    /// Whether some logical frame stands on an output line before that of a
+    /// frame pushed earlier.
+    logical_frames_unordered: bool,
+    /// The logical frames with a return value column, by index.
+    logical_return_frames: Vec<usize>,
     stream_frames: Vec<StreamFrame>,
     /// Whether some stream frame stands on an output line before that of a
     /// frame pushed earlier.
@@ -599,11 +604,33 @@ impl FrameStack {
     }
 
     pub(crate) fn push_logical(&mut self, frame: LogicalFrame) {
+        self.logical_frames_unordered |= self
+            .logical_frames
+            .last()
+            .is_some_and(|last| frame.operator_output_line < last.operator_output_line);
+        if frame.return_value_column.is_some() {
+            self.logical_return_frames.push(self.logical_frames.len());
+        }
         self.logical_frames.push(frame);
     }
 
+    /// The range of logical frames that holds those on output line `line`:
+    /// just them while the frames stand in line order.
+    fn logical_frames_on(&self, line: usize) -> std::ops::Range<usize> {
+        if self.logical_frames_unordered {
+            return 0..self.logical_frames.len();
+        }
+        let start = self
+            .logical_frames
+            .partition_point(|frame| frame.operator_output_line < line);
+        start
+            ..start
+                + self.logical_frames[start..]
+                    .partition_point(|frame| frame.operator_output_line == line)
+    }
+
     pub(crate) fn active_logical_on_output_line(&self, line_index: usize) -> Option<&LogicalFrame> {
-        self.logical_frames
+        self.logical_frames[self.logical_frames_on(line_index)]
             .iter()
             .rev()
             .find(|frame| frame.operator_output_line == line_index)
@@ -613,10 +640,17 @@ impl FrameStack {
         &self,
         line: usize,
     ) -> Option<&LogicalFrame> {
-        self.logical_frames
+        let returns = &self.logical_return_frames;
+        let before = if self.logical_frames_unordered {
+            returns.len()
+        } else {
+            returns.partition_point(|&index| self.logical_frames[index].operator_output_line < line)
+        };
+        returns[..before]
             .iter()
             .rev()
-            .find(|frame| frame.operator_output_line < line && frame.return_value_column.is_some())
+            .map(|&index| &self.logical_frames[index])
+            .find(|frame| frame.operator_output_line < line)
     }
 
     pub(crate) fn mark_logical_line_context(
@@ -626,8 +660,8 @@ impl FrameStack {
         ends_with_close_paren: bool,
         has_positive_paren_delta: bool,
     ) {
-        for frame in self
-            .logical_frames
+        let on_line = self.logical_frames_on(line);
+        for frame in self.logical_frames[on_line]
             .iter_mut()
             .filter(|frame| frame.operator_output_line == line)
         {
@@ -638,8 +672,8 @@ impl FrameStack {
     }
 
     pub(crate) fn mark_logical_line_output_indent(&mut self, line: usize, indent_spaces: usize) {
-        for frame in self
-            .logical_frames
+        let on_line = self.logical_frames_on(line);
+        for frame in self.logical_frames[on_line]
             .iter_mut()
             .filter(|frame| frame.operator_output_line == line)
         {
@@ -669,6 +703,8 @@ impl FrameStack {
 
     pub(crate) fn clear_logical_frames(&mut self) {
         self.logical_frames.clear();
+        self.logical_frames_unordered = false;
+        self.logical_return_frames.clear();
     }
 
     pub(crate) fn push_stream(&mut self, frame: StreamFrame) {

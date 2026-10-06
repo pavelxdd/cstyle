@@ -409,6 +409,10 @@ pub(crate) struct OutputBuffer {
     last_non_empty_dirty: Cell<bool>,
     /// Counts changes to lines already pushed and to the scope.
     version: u64,
+    /// The version each of the last changes to lines made and the lowest
+    /// line it changed, at the version modulo their count; a version not
+    /// recorded here, as a change of scope, clears all a look back read.
+    recent_changes: [(u64, usize); RECENT_CHANGES],
     /// The last look back for the open brace a closing brace would close:
     /// the line count and version it read, and the line it found.
     closing_brace_open_cache: Cell<Option<(usize, u64, Option<usize>)>>,
@@ -566,6 +570,9 @@ struct OpenBraceUndo {
     len: usize,
     taken: Option<([OpenBraceEntry; 4], usize)>,
 }
+
+/// How many of the last changes to lines a look back can read past.
+const RECENT_CHANGES: usize = 16;
 
 /// The last line from `floor` on that a look back found, for a buffer of
 /// `len` lines at `version`.
@@ -728,8 +735,7 @@ impl OutputBuffer {
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
-            self.version += 1;
-            self.note_change(self.lines.len());
+            self.record_change(self.lines.len());
         }
         line
     }
@@ -749,8 +755,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
-            self.version += 1;
-            self.note_change(self.lines.len() - 1);
+            self.record_change(self.lines.len() - 1);
         }
         self.lines.last_mut()
     }
@@ -768,8 +773,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
-            self.version += 1;
-            self.note_change(index);
+            self.record_change(index);
         }
         self.lines.get_mut(index)
     }
@@ -782,8 +786,7 @@ impl OutputBuffer {
         self.verbatim.remove(index);
         self.indented_directive_continuation.remove(index);
         self.last_non_empty_dirty.set(true);
-        self.version += 1;
-        self.note_change(index);
+        self.record_change(index);
         self.lines.remove(index)
     }
 
@@ -820,8 +823,7 @@ impl OutputBuffer {
         self.parens[index] = OnceCell::new();
         self.lines[index] = line;
         self.last_non_empty_dirty.set(true);
-        self.version += 1;
-        self.note_change(index);
+        self.record_change(index);
     }
 
     /// Makes `tokens` the source tokens of the next pushed line.
@@ -884,8 +886,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
-            self.version += 1;
-            self.note_change(range.start);
+            self.record_change(range.start);
         }
         &mut self.lines[range]
     }
@@ -1369,7 +1370,12 @@ impl OutputBuffer {
 
     /// Whether the code of a line from `start` on is led by `#`.
     pub(crate) fn has_hash_led_code_line_from(&self, start: usize) -> bool {
-        self.has_line_from(&self.recent_code_hash_cache, start, |index| {
+        self.last_hash_led_code_line_from(start).is_some()
+    }
+
+    /// The last line from `start` on whose code is led by `#`.
+    pub(crate) fn last_hash_led_code_line_from(&self, start: usize) -> Option<usize> {
+        self.last_line_from(&self.recent_code_hash_cache, start, |index| {
             self.code_trimmed(index).starts_with('#')
         })
     }
@@ -1397,10 +1403,7 @@ impl OutputBuffer {
         let len = self.lines.len();
         let start = start.min(len);
         // The cache holds the last match among the lines from its floor on.
-        let (floor, found) = match cache
-            .get()
-            .filter(|cached| cached.version == self.version && cached.len <= len)
-        {
+        let (floor, found) = match cache.get().and_then(|cached| self.recent_match_now(cached)) {
             Some(cached) => {
                 let found = (cached.len..len)
                     .rev()
@@ -1855,6 +1858,54 @@ impl OutputBuffer {
             .answers
             .resize(self.lines.len().saturating_sub(start), None);
         &mut answers.answers
+    }
+
+    fn record_change(&mut self, index: usize) {
+        self.version += 1;
+        self.recent_changes[(self.version % RECENT_CHANGES as u64) as usize] =
+            (self.version, index);
+        self.note_change(index);
+    }
+
+    /// The lowest line the changes since `version` changed, when all of
+    /// them are recorded.
+    fn lowest_change_since(&self, version: u64) -> Option<usize> {
+        if self.version - version > RECENT_CHANGES as u64 {
+            return None;
+        }
+        (version + 1..=self.version).try_fold(usize::MAX, |lowest, changed| {
+            let (at, index) = self.recent_changes[(changed % RECENT_CHANGES as u64) as usize];
+            (at == changed).then_some(lowest.min(index))
+        })
+    }
+
+    /// What `cached` still holds of the lines now: the lines before the
+    /// lowest one changed since it was read.
+    fn recent_match_now(&self, cached: RecentMatch) -> Option<RecentMatch> {
+        let len = self.lines.len();
+        if cached.version == self.version {
+            return (cached.len <= len).then_some(cached);
+        }
+        let unchanged = self
+            .lowest_change_since(cached.version)?
+            .min(cached.len)
+            .min(len);
+        Some(
+            if cached.floor <= unchanged && cached.found.is_none_or(|found| found < unchanged) {
+                RecentMatch {
+                    len: unchanged,
+                    version: self.version,
+                    ..cached
+                }
+            } else {
+                RecentMatch {
+                    len: unchanged,
+                    version: self.version,
+                    floor: unchanged,
+                    found: None,
+                }
+            },
+        )
     }
 
     fn note_change(&self, index: usize) {

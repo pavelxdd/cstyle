@@ -918,7 +918,12 @@ impl FormatEngine<'_> {
     }
 
     fn recent_split_else_region_has_preprocessor(&self, limit: usize) -> bool {
-        self.recent_split_else_region_any(limit, |trimmed| trimmed.starts_with('#'))
+        let len = self.output.len();
+        // No line led by `#` ends the region, so it holds the last of them
+        // unless the region ends after it.
+        self.output
+            .last_hash_led_code_line_from(len.saturating_sub(limit))
+            .is_some_and(|hash| !(hash + 1..len).any(|index| self.ends_split_else_region(index)))
     }
 
     fn recent_split_else_region_has_block_comment(&self, limit: usize) -> bool {
@@ -933,22 +938,22 @@ impl FormatEngine<'_> {
         mut matches: impl FnMut(&str) -> bool,
     ) -> bool {
         for (checked, index) in (0..self.output.len()).rev().enumerate() {
-            let code = self.output.code(index);
-            let trimmed = self.output.code_trimmed(index);
-            if code.ends_with('{')
-                && !trimmed.starts_with('#')
-                && !self.output[index].starts_with_any(b" \t")
-            {
+            if self.ends_split_else_region(index) || checked >= limit {
                 break;
             }
-            if checked >= limit {
-                break;
-            }
-            if matches(trimmed) {
+            if matches(self.output.code_trimmed(index)) {
                 return true;
             }
         }
         false
+    }
+
+    /// Whether the region read back from the end of the output stops at the
+    /// line `index`: a `{` line at the margin that is no directive.
+    fn ends_split_else_region(&self, index: usize) -> bool {
+        self.output.code(index).ends_with('{')
+            && !self.output.code_trimmed(index).starts_with('#')
+            && !self.output[index].starts_with_any(b" \t")
     }
 
     pub(crate) fn split_else_preprocessor_branch_body_indent_spaces(&self) -> Option<usize> {

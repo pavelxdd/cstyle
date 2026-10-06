@@ -1351,8 +1351,7 @@ impl FormatEngine<'_> {
             self.record_constructor_initializer_frame(function_try_initializer);
         }
         if colon_role == ColonRole::Other
-            || (colon_role != ColonRole::Ternary
-                && find_assignment_operator(&self.current).is_some())
+            || (colon_role != ColonRole::Ternary && self.current.first_assignment().is_some())
         {
             self.layout.nesting.clear_continuation_indents();
         }
@@ -1522,7 +1521,7 @@ impl FormatEngine<'_> {
             && !is_bit_field
             && !is_range_for
             && !access_label_candidate
-            && (is_asm_operand_colon || find_assignment_operator(&self.current).is_none())
+            && (is_asm_operand_colon || self.current.first_assignment().is_none())
             // A comment line before a statement leaves its column pending,
             // which continues nothing.
             && (self

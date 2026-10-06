@@ -949,12 +949,12 @@ impl FormatEngine<'_> {
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
                 .skip(1)
-                .filter(|line| !line.trimmed().is_empty())
-                .collect::<Vec<_>>();
+                .filter(|line| !line.trimmed().is_empty());
             if comment.contains('(')
                 && comment.ends_with('.')
                 && before_comment
-                    .first()
+                    .clone()
+                    .next()
                     .is_some_and(|line| line.trimmed_end().ends_with('.'))
             {
                 layout.exact_indent_spaces = Some(previous_indent);

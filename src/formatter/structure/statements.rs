@@ -6,6 +6,7 @@ use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::text::line_scan::preprocessor_directive;
+use std::ops::Range;
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Statements {
@@ -26,8 +27,15 @@ pub(crate) struct Statements {
     block_openings: IndexMap<usize, usize>,
     /// First tokens of the statements and labels in blocks.
     block_statements: IndexSet<usize>,
-    /// Bodies of `else` keywords separated from them by a blank line.
-    split_else_bodies: Vec<ElseBody>,
+    /// Token spans of the bodies of `else` keywords that a directive or an
+    /// empty line separates from them, merged and in order.
+    split_else_spans: Vec<Range<usize>>,
+    /// The spans of the bodies among them that an empty line splits off.
+    blank_split_else_spans: Vec<Range<usize>>,
+    /// First tokens of the bodies that an empty line splits off, in order.
+    blank_split_else_starts: Vec<usize>,
+    /// The first `else` keyword split from its body.
+    first_split_else: Option<usize>,
 }
 
 /// The body of an `else`, as token indices.
@@ -60,6 +68,36 @@ impl Statements {
             depth: 0,
         };
         parser.file_items(tokens.len());
+        let split_else_bodies: Vec<ElseBody> = parser
+            .else_bodies
+            .into_iter()
+            .filter(|body| {
+                tokens[body.keyword..body.start]
+                    .iter()
+                    .filter(|token| matches!(token, Token::Newline))
+                    .count()
+                    > 1
+            })
+            .map(|body| ElseBody {
+                after_blank_line: tokens[body.keyword..body.start]
+                    .iter()
+                    .filter(|token| !matches!(token, Token::Whitespace(_)))
+                    .collect::<Vec<_>>()
+                    .windows(2)
+                    .any(|pair| {
+                        matches!(pair[0], Token::Newline) && matches!(pair[1], Token::Newline)
+                    }),
+                ..body
+            })
+            .collect();
+        let blank_split = || {
+            split_else_bodies
+                .iter()
+                .filter(|body| body.after_blank_line)
+        };
+        let mut blank_split_else_starts: Vec<usize> =
+            blank_split().map(|body| body.start).collect();
+        blank_split_else_starts.sort_unstable();
         Self {
             else_ifs: parser.else_ifs,
             braceless_headers: parser.braceless_headers,
@@ -67,28 +105,17 @@ impl Statements {
             previous_siblings: parser.previous_siblings,
             block_openings: parser.block_openings,
             block_statements: parser.block_statements,
-            split_else_bodies: parser
-                .else_bodies
-                .into_iter()
-                .filter(|body| {
-                    tokens[body.keyword..body.start]
-                        .iter()
-                        .filter(|token| matches!(token, Token::Newline))
-                        .count()
-                        > 1
-                })
-                .map(|body| ElseBody {
-                    after_blank_line: tokens[body.keyword..body.start]
-                        .iter()
-                        .filter(|token| !matches!(token, Token::Whitespace(_)))
-                        .collect::<Vec<_>>()
-                        .windows(2)
-                        .any(|pair| {
-                            matches!(pair[0], Token::Newline) && matches!(pair[1], Token::Newline)
-                        }),
-                    ..body
-                })
-                .collect(),
+            split_else_spans: merged_spans(
+                split_else_bodies
+                    .iter()
+                    .map(|body| body.start..body.end)
+                    .collect(),
+            ),
+            blank_split_else_spans: merged_spans(
+                blank_split().map(|body| body.start..body.end).collect(),
+            ),
+            blank_split_else_starts,
+            first_split_else: split_else_bodies.iter().map(|body| body.keyword).min(),
         }
     }
 
@@ -128,34 +155,45 @@ impl Statements {
     /// Whether the token `index` is in the body of an `else` that a blank
     /// line separates from its body.
     pub(crate) fn in_split_else_body(&self, index: usize) -> bool {
-        self.split_else_bodies
-            .iter()
-            .any(|body| (body.start..body.end).contains(&index))
+        spans_contain(&self.split_else_spans, index)
     }
 
     /// Whether an `else` before the token `index` is split from its body
     /// by a directive or an empty line.
     pub(crate) fn split_else_before(&self, index: usize) -> bool {
-        self.split_else_bodies
-            .iter()
-            .any(|body| body.keyword < index)
+        self.first_split_else.is_some_and(|keyword| keyword < index)
     }
 
     /// Whether the token `index` starts the body of an `else` that an
     /// empty line separates from it.
     pub(crate) fn starts_else_body_after_blank_line(&self, index: usize) -> bool {
-        self.split_else_bodies
-            .iter()
-            .any(|body| body.after_blank_line && body.start == index)
+        self.blank_split_else_starts.binary_search(&index).is_ok()
     }
 
     /// Whether the token `index` is in the body of an `else` that an empty
     /// line separates from its body; a directive line alone does not.
     pub(crate) fn in_else_body_after_blank_line(&self, index: usize) -> bool {
-        self.split_else_bodies
-            .iter()
-            .any(|body| body.after_blank_line && (body.start..body.end).contains(&index))
+        spans_contain(&self.blank_split_else_spans, index)
     }
+}
+
+/// Disjoint spans in order that cover the same indices as `spans`.
+fn merged_spans(mut spans: Vec<Range<usize>>) -> Vec<Range<usize>> {
+    spans.retain(|span| !span.is_empty());
+    spans.sort_unstable_by_key(|span| span.start);
+    let mut merged: Vec<Range<usize>> = Vec::with_capacity(spans.len());
+    for span in spans {
+        match merged.last_mut() {
+            Some(last) if span.start <= last.end => last.end = last.end.max(span.end),
+            _ => merged.push(span),
+        }
+    }
+    merged
+}
+
+fn spans_contain(spans: &[Range<usize>], index: usize) -> bool {
+    let after = spans.partition_point(|span| span.start <= index);
+    after > 0 && index < spans[after - 1].end
 }
 
 /// A conditional group open while parsing a block's statements.
@@ -715,7 +753,7 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::Statements;
+    use super::{Statements, merged_spans, spans_contain};
     use crate::formatter::lexer::{Token, tokenize};
     use crate::formatter::structure::blocks::Blocks;
     use crate::formatter::structure::groups::Groups;
@@ -736,6 +774,20 @@ mod tests {
             .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "else"))
             .map(|index| statements.if_of_else(index).map(line_of))
             .collect()
+    }
+
+    #[test]
+    fn merged_spans_hold_the_indices_of_any_span() {
+        let spans = [9..12, 2..5, 3..4, 7..7, 5..6, 11..14, 20..20];
+        let merged = merged_spans(spans.to_vec());
+        assert_eq!(merged, [2..6, 9..14]);
+        for index in 0..24 {
+            assert_eq!(
+                spans_contain(&merged, index),
+                spans.iter().any(|span| span.contains(&index)),
+                "index {index}"
+            );
+        }
     }
 
     #[test]

@@ -225,7 +225,8 @@ fn is_ndef_preprocessor_statement(line: &str, directive: &str) -> bool {
 }
 
 pub(crate) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<bool> {
-    let mut conditionals: Vec<(usize, bool)> = Vec::new();
+    // Each conditional, with the `#endif` that closes it.
+    let mut conditionals: Vec<(usize, Option<usize>)> = Vec::new();
     let mut open_stack: Vec<usize> = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
         let Token::Preprocessor(preprocessor) = token else {
@@ -234,22 +235,154 @@ pub(crate) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<boo
         match preprocessor_directive(&preprocessor.text) {
             Some("if" | "ifdef" | "ifndef") => {
                 open_stack.push(conditionals.len());
-                conditionals.push((index, false));
+                conditionals.push((index, None));
             }
             Some("endif") => {
                 if let Some(open) = open_stack.pop() {
-                    conditionals[open].1 = true;
+                    conditionals[open].1 = Some(index);
                 }
             }
             _ => {}
         }
     }
+    let breakers = (conditionals.len() > 1).then(|| BlockBreakers::new(tokens));
     let mut result = VecDeque::new();
-    for (position, (index, closed)) in conditionals.iter().enumerate() {
-        result
-            .push_back(*closed && is_indentable_preprocessor_block(tokens, *index, position == 0));
+    for (position, &(index, endif)) in conditionals.iter().enumerate() {
+        result.push_back(endif.is_some_and(|endif| match &breakers {
+            Some(breakers) if position > 0 => breakers.indentable(index, endif),
+            _ => is_indentable_preprocessor_block(tokens, index, position == 0),
+        }));
     }
     result
+}
+
+/// Where the tokens stand that keep a conditional block from indenting, so
+/// that a block after the file's first is judged without reading it the
+/// way [`is_indentable_preprocessor_block`] does.
+struct BlockBreakers {
+    /// `#if` and `#elif` lines whose continued lines leave a paren open.
+    unbalanced_conditions: Vec<usize>,
+    /// `{`, `}` and `:`.
+    braces_and_colons: Vec<usize>,
+    /// `#define`s continued past their line.
+    continued_defines: Vec<usize>,
+    /// `endif` words with a `#` after them on their line.
+    endif_words: Vec<usize>,
+    /// Parens, with the count of those open after each.
+    parens: Vec<(usize, isize)>,
+    /// Newlines, with the count of parens open at each and the next newline
+    /// at which the count differs.
+    newlines: Vec<(usize, isize, usize)>,
+}
+
+impl BlockBreakers {
+    fn new(tokens: &[Token]) -> Self {
+        let mut breakers = Self {
+            unbalanced_conditions: Vec::new(),
+            braces_and_colons: Vec::new(),
+            continued_defines: Vec::new(),
+            endif_words: Vec::new(),
+            parens: Vec::new(),
+            newlines: Vec::new(),
+        };
+        let mut open_parens = 0isize;
+        let mut line_endif_words = Vec::new();
+        for (index, token) in tokens.iter().enumerate() {
+            match token {
+                Token::Preprocessor(preprocessor) => {
+                    line_endif_words.clear();
+                    let line = &preprocessor.text;
+                    match preprocessor_directive(line) {
+                        Some("if" | "elif")
+                            if line.lines().nth(1).is_some()
+                                && line.lines().any(|part| {
+                                    part.matches('(').count() != part.matches(')').count()
+                                }) =>
+                        {
+                            breakers.unbalanced_conditions.push(index);
+                        }
+                        Some("define") if line.lines().count() > 1 => {
+                            breakers.continued_defines.push(index);
+                        }
+                        _ => {}
+                    }
+                }
+                Token::Word(word) if word == "endif" => line_endif_words.push(index),
+                Token::Symbol('#') => breakers.endif_words.append(&mut line_endif_words),
+                Token::Symbol('{' | '}' | ':') => breakers.braces_and_colons.push(index),
+                Token::Symbol(paren @ ('(' | ')')) => {
+                    open_parens += if *paren == '(' { 1 } else { -1 };
+                    breakers.parens.push((index, open_parens));
+                }
+                Token::Newline => {
+                    line_endif_words.clear();
+                    breakers.newlines.push((index, open_parens, 0));
+                }
+                _ => {}
+            }
+        }
+        let mut change = breakers.newlines.len();
+        for at in (0..breakers.newlines.len()).rev() {
+            if breakers
+                .newlines
+                .get(at + 1)
+                .is_some_and(|next| next.1 != breakers.newlines[at].1)
+            {
+                change = at + 1;
+            }
+            breakers.newlines[at].2 = change;
+        }
+        breakers
+    }
+
+    /// The first of `indices` after `start`.
+    fn first_after(indices: &[usize], start: usize) -> Option<usize> {
+        indices
+            .get(indices.partition_point(|&index| index <= start))
+            .copied()
+    }
+
+    /// The count of parens open before the token `index`.
+    fn open_parens_before(&self, index: usize) -> isize {
+        let before = self.parens.partition_point(|&(at, _)| at < index);
+        before.checked_sub(1).map_or(0, |last| self.parens[last].1)
+    }
+
+    /// `is_indentable_preprocessor_block` of the block from the
+    /// conditional at `start` to its `#endif` at `endif`, not the file's
+    /// first.
+    fn indentable(&self, start: usize, endif: usize) -> bool {
+        let inside = |index: Option<usize>| index.is_some_and(|index| index < endif);
+        if inside(
+            self.unbalanced_conditions
+                .get(
+                    self.unbalanced_conditions
+                        .partition_point(|&index| index < start),
+                )
+                .copied(),
+        ) || inside(Self::first_after(&self.braces_and_colons, start))
+        {
+            return false;
+        }
+        // A continued define breaks the block unless an `endif` word with a
+        // `#` after it comes first.
+        if let Some(define) = Self::first_after(&self.continued_defines, start)
+            && define < endif
+            && Self::first_after(&self.endif_words, start).is_none_or(|word| word > define)
+        {
+            return false;
+        }
+        // Every newline in the block, and its end, sees the parens open
+        // that were open at its start.
+        let open = self.open_parens_before(start);
+        let first = self.newlines.partition_point(|&(at, _, _)| at <= start);
+        let differing = match self.newlines.get(first) {
+            Some(&(_, count, change)) if count == open => change,
+            _ => first,
+        };
+        !inside(self.newlines.get(differing).map(|&(at, _, _)| at))
+            && self.open_parens_before(endif) == open
+    }
 }
 
 fn is_indentable_preprocessor_block(
@@ -1319,8 +1452,45 @@ fn track_open_paren_columns(
 
 #[cfg(test)]
 mod tests {
-    use super::{BraceType, FormatEngine, PreprocessorRegion};
+    use super::{BlockBreakers, BraceType, FormatEngine, PreprocessorRegion};
     use crate::config::FormatOptions;
+    use crate::formatter::lexer::{Token, tokenize};
+    use crate::formatter::text::line_scan::preprocessor_directive;
+
+    #[test]
+    fn block_breakers_judge_blocks_as_reading_them_does() {
+        let sources = [
+            "#if A\n#if B\nint a;\n#endif\n#endif\n",
+            "#if A\nint a;\n#endif\n#if B\nf(a,\n  b);\n#endif\n#ifdef C\nf(a, b);\n#endif\n",
+            "x\n#if A\n#if B\n{\n#endif\nint c;\n#endif\n#if D\nlabel:\n#endif\n",
+            "#if A\n#if (B && \\\n  C)\nint a;\n#endif\n#endif\n#if X\n#elif (Y || \\\n Z)\n#endif\n",
+            "#if A\n#if B\n#define M(x) \\\n  x\n#endif\n#endif\n#if C\nendif #\n#define N \\\n  1\n#endif\n",
+            "#if A\nf(\n#if B\na)\n#endif\n#endif\n#if C\n(\n#endif\n)\n#if D\nint d;\n#endif\n",
+            "#if A\n#if B\n(a)\n#endif\n)\n#if C\n((\n))\n#endif\n#if E\nint e;\n#endif\n#endif\n",
+        ];
+        for source in sources {
+            let tokens = tokenize(source);
+            let breakers = BlockBreakers::new(&tokens);
+            let mut open = Vec::new();
+            for (index, token) in tokens.iter().enumerate() {
+                let Token::Preprocessor(preprocessor) = token else {
+                    continue;
+                };
+                match preprocessor_directive(&preprocessor.text) {
+                    Some("if" | "ifdef" | "ifndef") => open.push(index),
+                    Some("endif") => {
+                        let start = open.pop().expect("open conditional");
+                        assert_eq!(
+                            breakers.indentable(start, index),
+                            super::is_indentable_preprocessor_block(&tokens, start, false),
+                            "block at {start} in {source:?}"
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
 
     #[test]
     fn classifies_regions_from_brace_ownership() {

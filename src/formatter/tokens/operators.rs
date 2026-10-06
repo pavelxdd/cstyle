@@ -175,6 +175,14 @@ impl AssignmentChainScan {
         }
     }
 
+    /// `advance`, stopping at the first operator found.
+    pub(crate) fn advance_to_first(&mut self, code: &str, limit: usize) {
+        let limit = limit.min(code.len());
+        while !self.ended && self.last.is_none() && self.index < limit {
+            self.step(code);
+        }
+    }
+
     fn step(&mut self, code: &str) {
         let line = &code[self.search_start..];
         let bytes = line.as_bytes();
@@ -1011,8 +1019,7 @@ impl FormatEngine<'_> {
                 // Inside parentheses astyle keeps the spacing of the source,
                 // as in brackets before any assignment.
                 if self.layout.nesting.paren_depth > 0
-                    || self.active_token_in_brackets()
-                        && find_assignment_operator(&self.current).is_none()
+                    || self.active_token_in_brackets() && self.current.first_assignment().is_none()
                 {
                     self.emit_source_space();
                     self.current.push_str(operator);
@@ -1670,7 +1677,9 @@ impl FormatEngine<'_> {
             .active_stream()
             .map(|frame| frame.chain_anchor_column)
             .unwrap_or(operator_output_column);
-        let assignment_value_start_column = find_assignment_operator(&self.current)
+        let assignment_value_start_column = self
+            .current
+            .first_assignment()
             .map(|(assignment, assignment_operator)| {
                 self.current[assignment + assignment_operator.len()..]
                     .char_indices()
