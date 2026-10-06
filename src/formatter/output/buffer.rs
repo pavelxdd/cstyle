@@ -413,9 +413,11 @@ pub(crate) struct OutputBuffer {
     /// line it changed, at the version modulo their count; a version not
     /// recorded here, as a change of scope, clears all a look back read.
     recent_changes: [(u64, usize); RECENT_CHANGES],
-    /// The last look back for the open brace a closing brace would close:
-    /// the line count and version it read, and the line it found.
-    closing_brace_open_cache: Cell<Option<(usize, u64, Option<usize>)>>,
+    /// The lines the walk for the open brace a closing brace would close
+    /// finds open.
+    closing_brace_blocks: RefCell<OpenBlockLines>,
+    /// The lines the walk for the switch the output stands in finds open.
+    switch_blocks: RefCell<OpenBlockLines>,
     /// The last line outside comments, with the line count and version it
     /// was found for.
     last_outside_comment_cache: Cell<Option<(usize, u64, Option<usize>)>>,
@@ -444,6 +446,8 @@ pub(crate) struct OutputBuffer {
     /// The last look back for a line that leads with a case label, a
     /// `switch` or a `}`, or ends with `{`.
     recent_case_edge_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that is `{` alone.
+    recent_brace_alone_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -517,16 +521,164 @@ enum OpenBraceEntry {
     Directive,
 }
 
-/// Look backs whose answers [`OutputBuffer::look_back_answers`] keeps by
-/// the line they start from.
+/// Look backs that keep what they read by the line, and so read again the
+/// lines changed since they last asked.
 #[derive(Clone, Copy)]
 pub(crate) enum LookBack {
     OpenLambda,
     ActiveCase,
     MacroBlock,
+    OpenSwitch,
+    ClosingBrace,
 }
 
-const LOOK_BACKS: usize = 3;
+const LOOK_BACKS: usize = 5;
+
+/// How a walk back from the last line for an open block counts a line's
+/// braces. Either walk closes the line's `{`s by its own `}`s before
+/// earlier ones.
+#[derive(Clone, Copy, Default)]
+enum BlockWalk {
+    /// The walk for the switch the output stands in: the line stays open
+    /// until later lines close as many `{`s as it has.
+    #[default]
+    Switch,
+    /// The walk for the brace a closing brace closes: the line is open
+    /// while its own `}`s leave a `{` that later lines do not close, or,
+    /// led by `} else`, until a later line closes a brace of it.
+    ClosingBrace,
+}
+
+/// The lines a [`BlockWalk`] back from the last line finds open, read on as
+/// lines come; the reads of the last lines are kept to read a changed line
+/// again.
+#[derive(Default)]
+struct OpenBlockLines {
+    /// Lines read.
+    read: usize,
+    blocks: Vec<OpenBlock>,
+    /// How reading each of the last lines changed `blocks`, oldest first,
+    /// each line's changes after its mark.
+    undo: std::collections::VecDeque<BlockUndo>,
+    /// The lines `undo` holds.
+    undo_lines: usize,
+}
+
+#[derive(Clone, Copy)]
+struct OpenBlock {
+    line: usize,
+    /// The line is open while fewer `}`s of later lines reach it.
+    open_below: usize,
+    /// The `}`s of later lines the line's `{`s take: those its own `}`s
+    /// leave.
+    takes: usize,
+    /// The `}`s of later lines that reached the line.
+    reached: usize,
+}
+
+#[derive(Clone, Copy)]
+enum BlockUndo {
+    /// Reading the line began.
+    Line(usize),
+    Pushed,
+    Changed(usize, OpenBlock),
+    Removed(usize, OpenBlock),
+}
+
+/// How many of the last lines an [`OpenBlockLines`] can read again.
+const UNDONE_LINES: usize = 8;
+
+impl OpenBlockLines {
+    /// Reads the lines of `output` on, again from line `changed` on.
+    fn read_on(&mut self, output: &OutputBuffer, walk: BlockWalk, changed: usize) {
+        if changed < self.read && !self.rewind(changed) {
+            *self = Self::default();
+        }
+        while self.read < output.len() {
+            self.read_line(output, walk, self.read);
+            self.read += 1;
+        }
+    }
+
+    fn read_line(&mut self, output: &OutputBuffer, walk: BlockWalk, index: usize) {
+        if self.undo_lines == UNDONE_LINES {
+            self.undo_lines -= 1;
+            self.undo.pop_front();
+            while self
+                .undo
+                .front()
+                .is_some_and(|undo| !matches!(undo, BlockUndo::Line(_)))
+            {
+                self.undo.pop_front();
+            }
+        }
+        self.undo.push_back(BlockUndo::Line(index));
+        self.undo_lines += 1;
+        // The body of a block comment holds no braces.
+        if matches!(walk, BlockWalk::ClosingBrace) && output.comment_start_index(index) != index {
+            return;
+        }
+        let meta = output.brace_meta(index);
+        let (opens, closes) = (meta.opens(), meta.closes());
+        let takes = opens.saturating_sub(closes);
+        let open_below = match walk {
+            BlockWalk::Switch => opens,
+            BlockWalk::ClosingBrace => {
+                let code = output.code_trimmed(index);
+                let else_line =
+                    opens > 0 && (code.starts_with("} else") || code.starts_with("}else"));
+                takes.max(usize::from(else_line))
+            }
+        };
+        let mut passing = closes.saturating_sub(opens);
+        let mut at = self.blocks.len();
+        while passing > 0 && at > 0 {
+            at -= 1;
+            let block = self.blocks[at];
+            let reached = block.reached + passing;
+            passing -= passing.min(block.takes.saturating_sub(block.reached));
+            if reached >= block.open_below {
+                self.blocks.remove(at);
+                self.undo.push_back(BlockUndo::Removed(at, block));
+            } else {
+                self.blocks[at].reached = reached;
+                self.undo.push_back(BlockUndo::Changed(at, block));
+            }
+        }
+        if open_below > 0 {
+            self.blocks.push(OpenBlock {
+                line: index,
+                open_below,
+                takes,
+                reached: 0,
+            });
+            self.undo.push_back(BlockUndo::Pushed);
+        }
+    }
+
+    /// Undoes the reads of the lines from `line` on; `false` when they are
+    /// no longer kept.
+    fn rewind(&mut self, line: usize) -> bool {
+        while self.read > line {
+            loop {
+                match self.undo.pop_back() {
+                    None => return false,
+                    Some(BlockUndo::Line(index)) => {
+                        self.undo_lines -= 1;
+                        self.read = index;
+                        break;
+                    }
+                    Some(BlockUndo::Pushed) => {
+                        self.blocks.pop();
+                    }
+                    Some(BlockUndo::Changed(at, block)) => self.blocks[at] = block,
+                    Some(BlockUndo::Removed(at, block)) => self.blocks.insert(at, block),
+                }
+            }
+        }
+        true
+    }
+}
 
 /// The answers of a look back by the line it starts from, from line
 /// `start` on: an answer holds while the lines up to its line stay as they
@@ -1126,42 +1278,13 @@ impl OutputBuffer {
         &self,
         tab_width: usize,
     ) -> Option<(usize, OpenBraceShape, &str)> {
-        // Lines pushed since the last look back are read first; with no
-        // brace left open among them, the walk ends where it did then.
-        let len = self.lines.len();
-        let cached = self
-            .closing_brace_open_cache
-            .get()
-            .filter(|&(cached_len, version, _)| version == self.version && cached_len <= len);
-        let stop = cached.map_or(0, |(cached_len, _, _)| cached_len);
-        let mut depth = 0usize;
-        let mut found = None;
-        let mut index = len;
-        while index > stop {
-            index -= 1;
-            if let Some(open) = self.closing_brace_open_step(index, &mut depth) {
-                found = Some(Some(open));
-                break;
-            }
-        }
-        let open = match (found, cached) {
-            (Some(open), _) => open,
-            (None, Some((_, _, open))) if depth == 0 => open,
-            _ => {
-                let mut open = None;
-                while index > 0 {
-                    index -= 1;
-                    if let Some(at) = self.closing_brace_open_step(index, &mut depth) {
-                        open = Some(at);
-                        break;
-                    }
-                }
-                open
-            }
-        };
-        self.closing_brace_open_cache
-            .set(Some((len, self.version, open)));
-        let index = open?;
+        let index = self.open_block_lines(
+            &self.closing_brace_blocks,
+            BlockWalk::ClosingBrace,
+            LookBack::ClosingBrace,
+            0,
+            Some,
+        )?;
         let meta = self.brace_meta(index);
         Some((
             self.lead_width(index, tab_width),
@@ -1170,27 +1293,40 @@ impl OutputBuffer {
         ))
     }
 
-    /// One step of the walk back for the open brace the next closing brace
-    /// closes: line `index`, if it holds that brace.
-    fn closing_brace_open_step(&self, index: usize, depth: &mut usize) -> Option<usize> {
-        // The body of a block comment holds no braces.
-        if self.comment_start_index(index) != index {
-            return None;
-        }
-        let meta = self.brace_meta(index);
-        let trimmed = self.code_trimmed(index);
-        if *depth == 0
-            && meta.opens > 0
-            && (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
-        {
-            return Some(index);
-        }
-        *depth += meta.closes();
-        if meta.opens() > *depth {
-            return Some(index);
-        }
-        *depth = depth.saturating_sub(meta.opens());
-        None
+    /// The first answer `wanted` gives for a line from `floor` on that the
+    /// walk for the switch the output stands in finds open, innermost
+    /// first.
+    pub(crate) fn open_switch_walk_line<T>(
+        &self,
+        floor: usize,
+        wanted: impl FnMut(usize) -> Option<T>,
+    ) -> Option<T> {
+        self.open_block_lines(
+            &self.switch_blocks,
+            BlockWalk::Switch,
+            LookBack::OpenSwitch,
+            floor,
+            wanted,
+        )
+    }
+
+    fn open_block_lines<T>(
+        &self,
+        lines: &RefCell<OpenBlockLines>,
+        walk: BlockWalk,
+        look_back: LookBack,
+        floor: usize,
+        wanted: impl FnMut(usize) -> Option<T>,
+    ) -> Option<T> {
+        let mut lines = lines.borrow_mut();
+        lines.read_on(self, walk, self.take_lowest_change(look_back));
+        lines
+            .blocks
+            .iter()
+            .rev()
+            .map(|block| block.line)
+            .take_while(|&line| line >= floor)
+            .find_map(wanted)
     }
 
     /// Lines from the start of the current top-level construct on: layout
@@ -1426,6 +1562,13 @@ impl OutputBuffer {
             found,
         }));
         found.filter(|&index| index >= start)
+    }
+
+    /// The last line that is `{` alone.
+    pub(crate) fn last_open_brace_alone_line(&self) -> Option<usize> {
+        self.last_line_from(&self.recent_brace_alone_cache, 0, |index| {
+            self.trimmed(index) == "{"
+        })
     }
 
     /// The last line from `start` on whose code leads with `case `,
@@ -1858,6 +2001,11 @@ impl OutputBuffer {
             .answers
             .resize(self.lines.len().saturating_sub(start), None);
         &mut answers.answers
+    }
+
+    /// The lowest line changed since `look_back` last asked.
+    fn take_lowest_change(&self, look_back: LookBack) -> usize {
+        self.lowest_change[2 + look_back as usize].replace(usize::MAX)
     }
 
     fn record_change(&mut self, index: usize) {

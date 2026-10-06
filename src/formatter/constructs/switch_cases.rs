@@ -1473,98 +1473,51 @@ impl FormatEngine<'_> {
     fn nearest_open_switch_indent_spaces(&self) -> Option<usize> {
         // A switch lies within the current top-level construct.
         let scope_start = self.output.len() - self.output.scoped().len();
-        let (len, version) = (self.output.len(), self.output.version());
-        // Lines pushed since the last look back are read first; when they
-        // leave no block open, the walk goes on as the last one did.
-        let cached = self.open_switch_cache.get().filter(
-            |&((cached_len, cached_version, cached_scope), _)| {
-                cached_version == version && cached_scope == scope_start && cached_len <= len
-            },
-        );
-        let indent = match cached {
-            Some(((cached_len, ..), cached_indent)) => {
-                match self.open_switch_indent_walk(scope_start, (cached_len..len).rev(), 0) {
-                    Ok(indent) => indent,
-                    Err(0) => cached_indent,
-                    Err(depth) => self
-                        .open_switch_indent_walk(
-                            scope_start,
-                            (scope_start..cached_len).rev(),
-                            depth,
-                        )
-                        .unwrap_or_default(),
-                }
-            }
-            None => self
-                .open_switch_indent_walk(scope_start, (scope_start..len).rev(), 0)
-                .unwrap_or_default(),
-        };
-        self.open_switch_cache
-            .set(Some(((len, version, scope_start), indent)));
-        indent
+        self.output.open_switch_walk_line(scope_start, |index| {
+            self.open_switch_line_indent_spaces(scope_start, index)
+        })
     }
 
-    /// The indent of the switch the `lines`, read back with `depth` blocks
-    /// closed after them, leave open; `Err` holds the depth they leave when
-    /// none does.
-    fn open_switch_indent_walk(
-        &self,
-        scope_start: usize,
-        lines: impl Iterator<Item = usize>,
-        mut depth: usize,
-    ) -> Result<Option<usize>, usize> {
+    /// The indent of the switch the open line `index` holds.
+    fn open_switch_line_indent_spaces(&self, scope_start: usize, index: usize) -> Option<usize> {
         let tab_width = self.options.tab_width;
-        for index in lines {
-            let meta = self.output.brace_meta(index);
-            // A `}` before the line's `{` closes an earlier block.
-            let opens_block = meta.opens() > depth;
-            depth += meta.closes();
-            if opens_block {
-                let trimmed = self.output.code_trimmed(index);
-                if trimmed.starts_with("switch ") || trimmed.starts_with("switch(") {
-                    return Ok(Some(self.output.lead_width(index, tab_width)));
-                }
-                // A switch an `else` holds on its line stands at its body.
-                let after_else = trimmed
-                    .strip_prefix('}')
-                    .unwrap_or(trimmed)
-                    .trimmed_start()
-                    .strip_prefix("else")
-                    .map(str::trim_start);
-                if after_else
-                    .is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
-                {
-                    return Ok(Some(
-                        self.output.lead_width(index, tab_width) + self.options.indent_width,
-                    ));
-                }
-                // A brace opening the line after one holds the switch at
-                // its own column.
-                if trimmed.starts_with('{')
-                    && let Some(header) = (scope_start..index)
-                        .rev()
-                        .find(|&line| !self.output.code_trimmed(line).is_empty())
-                    && self
-                        .output
-                        .code_trimmed(header)
-                        .strip_prefix("else")
-                        .map(str::trim_start)
-                        .is_some_and(|rest| {
-                            rest.starts_with("switch ") || rest.starts_with("switch(")
-                        })
-                {
-                    let lead = self.output.lead_width(index, tab_width);
-                    // VTK indents the brace a level, where the labels stand.
-                    let indented_brace =
-                        self.options.brace_style == BraceStyle::Vtk && self.options.indent_switches;
-                    return Ok(Some(lead.saturating_sub(
-                        usize::from(indented_brace) * self.options.indent_width,
-                    )));
-                }
-            }
-            depth = depth.saturating_sub(meta.opens());
+        let trimmed = self.output.code_trimmed(index);
+        if trimmed.starts_with("switch ") || trimmed.starts_with("switch(") {
+            return Some(self.output.lead_width(index, tab_width));
         }
-        Err(depth)
+        // A switch an `else` holds on its line stands at its body.
+        let after_else = trimmed
+            .strip_prefix('}')
+            .unwrap_or(trimmed)
+            .trimmed_start()
+            .strip_prefix("else")
+            .map(str::trim_start);
+        if after_else.is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
+        {
+            return Some(self.output.lead_width(index, tab_width) + self.options.indent_width);
+        }
+        // A brace opening the line after one holds the switch at its own
+        // column.
+        if trimmed.starts_with('{')
+            && let Some(header) = (scope_start..index)
+                .rev()
+                .find(|&line| !self.output.code_trimmed(line).is_empty())
+            && self
+                .output
+                .code_trimmed(header)
+                .strip_prefix("else")
+                .map(str::trim_start)
+                .is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
+        {
+            let lead = self.output.lead_width(index, tab_width);
+            // VTK indents the brace a level, where the labels stand.
+            let indented_brace =
+                self.options.brace_style == BraceStyle::Vtk && self.options.indent_switches;
+            return Some(
+                lead.saturating_sub(usize::from(indented_brace) * self.options.indent_width),
+            );
+        }
+        None
     }
 
     fn active_emitted_case_layout(&self) -> Option<ActiveCaseLayout> {

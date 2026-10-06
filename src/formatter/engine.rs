@@ -163,10 +163,6 @@ pub(crate) type OpenParenLine = (usize, usize);
 /// and the index of that line's first line comment.
 pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
 
-/// The line count, version and scope start of the output, and the indent of
-/// the switch it stands in.
-pub(crate) type OpenSwitchCache = ((usize, u64, usize), Option<usize>);
-
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
     /// Indent style of the finished output; the engine itself may lay out a
@@ -259,8 +255,6 @@ pub(crate) struct FormatEngine<'a> {
     /// statement.
     pub(crate) astyle_replay_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::ReplayCache>>,
-    /// The last look back for the switch the output stands in.
-    pub(crate) open_switch_cache: std::cell::Cell<Option<OpenSwitchCache>>,
     pub(crate) layout: LayoutState,
     pub(crate) current: CurrentLine,
     line_brace_match_start: usize,
@@ -354,7 +348,6 @@ impl<'a> FormatEngine<'a> {
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
-            open_switch_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),

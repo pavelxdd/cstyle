@@ -411,3 +411,72 @@ fn long_bodies_that_look_back_to_their_opener_stay_bounded() {
         );
     }
 }
+
+#[test]
+fn runs_that_each_line_looked_across_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 60_000;
+    let mut allman = FormatOptions::default();
+    allman.set_style(cstyle::config::StylePreset::Allman);
+    let blocks = |block: &dyn Fn(usize) -> String| {
+        format!(
+            "void f(void)\n{{\n{}}}\n",
+            (0..n / 5).map(block).collect::<String>()
+        )
+    };
+    for (shape, input, options) in [
+        (
+            "a run of blank lines",
+            format!("int a;\n{}int b;\n", "\n".repeat(n * 4)),
+            FormatOptions::default(),
+        ),
+        (
+            "a chain of shifts",
+            format!("void f() {{ std::cout{}; }}\n", " << a".repeat(n)),
+            FormatOptions::default(),
+        ),
+        (
+            "nested conditional blocks",
+            format!(
+                "{}int a;\n{}",
+                "#if A\n".repeat(n / 6),
+                "#endif\n".repeat(n / 6)
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a long logical condition",
+            format!(
+                "void f() {{\n    if (a\n{}       ) c();\n}}\n",
+                "        && b\n".repeat(n)
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "switch blocks with braces on their own lines",
+            blocks(&|i| {
+                format!("    switch (a{i}) {{\n    case 1:\n        x();\n        break;\n    }}\n")
+            }),
+            allman.clone(),
+        ),
+        (
+            "else bodies after comments",
+            blocks(&|i| {
+                format!("    if (a{i})\n        x();\n    else\n    // c\n        y{i}();\n")
+            }),
+            allman.clone(),
+        ),
+    ] {
+        let start = Instant::now();
+        let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+        let elapsed = start.elapsed();
+        assert!(!output.is_empty());
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "{shape} took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}
