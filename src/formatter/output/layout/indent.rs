@@ -696,6 +696,12 @@ impl FormatEngine<'_> {
         let previous_trimmed = self.output.trimmed(previous_index);
         let previous_full_code = previous.trimmed_end();
         let previous_code = self.output.code(previous_index);
+        // Rules for a line after an argument need the code line before to
+        // end with its comma.
+        let last_code_ends_with_comma = self
+            .output
+            .last_code_outside_comment()
+            .is_some_and(|(_, code)| code.ends_with(','));
         let previous_open_paren_cell = std::cell::OnceCell::new();
         let previous_open_paren =
             || *previous_open_paren_cell.get_or_init(|| self.open_paren_column_of(previous_code));
@@ -816,7 +822,9 @@ impl FormatEngine<'_> {
             }
             return Some(normal_spaces);
         }
-        if let Some(spaces) = self.completed_call_top_level_comma_sibling_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.completed_call_top_level_comma_sibling_indent_spaces(line)
+        {
             return Some(spaces);
         }
         if current.starts_with("{},")
@@ -1054,7 +1062,9 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.argument_after_lambda_call_argument_indent_spaces(line) {
             return Some(spaces);
         }
-        if let Some(spaces) = self.closed_call_sibling_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.closed_call_sibling_indent_spaces(line)
+        {
             return Some(spaces);
         }
         if let Some(spaces) = self.stream_after_closed_parenthesized_head_indent_spaces(current) {
@@ -1294,16 +1304,24 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.immediate_macro_call_opener_indent_spaces(line) {
             return Some(spaces);
         }
-        if let Some(spaces) = self.over_max_new_call_argument_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.over_max_new_call_argument_indent_spaces(line)
+        {
             return Some(spaces);
         }
-        if let Some(spaces) = self.closed_over_max_new_call_sibling_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.closed_over_max_new_call_sibling_indent_spaces(line)
+        {
             return Some(spaces);
         }
-        if let Some(spaces) = self.preprocessor_branch_new_call_fallback_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.preprocessor_branch_new_call_fallback_indent_spaces(line)
+        {
             return Some(spaces);
         }
-        if let Some(spaces) = self.split_new_call_owner_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.split_new_call_owner_indent_spaces(line)
+        {
             return Some(spaces);
         }
         if !current.starts_with(['#', '(', ')', '{', '}'])
@@ -1341,7 +1359,9 @@ impl FormatEngine<'_> {
             };
             return Some(target + self.layout.line_adjuster.total_case_unindent_depth() * width);
         }
-        if let Some(spaces) = self.split_new_call_sibling_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.split_new_call_sibling_indent_spaces(line)
+        {
             return Some(spaces);
         }
         if let Some(spaces) =
@@ -1349,7 +1369,9 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        if let Some(spaces) = self.macro_call_sibling_fallback_indent_spaces(line) {
+        if last_code_ends_with_comma
+            && let Some(spaces) = self.macro_call_sibling_fallback_indent_spaces(line)
+        {
             return Some(spaces);
         }
         if current.starts_with("==")

@@ -1099,13 +1099,14 @@ impl FormatEngine<'_> {
         current: &str,
         previous: &str,
     ) -> Option<usize> {
+        if current.starts_with(['#', '(', ')', '{', '}']) || !self.output.may_have_question() {
+            return None;
+        }
         let previous_code = self.output.code_of(previous).trimmed_end();
-        let opens_compound_literal = current
-            .rsplit_once('{')
-            .is_some_and(|(prefix, _)| line_ends_compound_literal_cast(prefix.trimmed_end()));
         if !previous_code.ends_with(',')
-            || current.starts_with(['#', '(', ')', '{', '}'])
-            || opens_compound_literal
+            || current
+                .rsplit_once('{')
+                .is_some_and(|(prefix, _)| line_ends_compound_literal_cast(prefix.trimmed_end()))
             || self.open_paren_column_of(previous_code).is_some()
         {
             return None;

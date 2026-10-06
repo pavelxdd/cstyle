@@ -457,7 +457,12 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
         }
-        if layout.line_kind == LineKind::Normal && !line_start.starts_with(['#', '{', '}']) {
+        if layout.line_kind == LineKind::Normal
+            && !line_start.starts_with(['#', '{', '}'])
+            && self
+                .output
+                .has_enum_code_line_from(self.output.len().saturating_sub(4))
+        {
             for index in (0..self.output.len()).rev().take(4) {
                 let previous = &self.output[index];
                 let previous_code = self.output.code(index);
@@ -476,11 +481,9 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with(['#', '{', '}'])
-            && self.output.may_have_else()
-            && (0..self.output.len())
-                .rev()
-                .take(4)
-                .any(|index| self.output.code_trimmed(index).starts_with("else,"))
+            && self
+                .output
+                .has_else_comma_code_line_from(self.output.len().saturating_sub(4))
         {
             layout.exact_indent_spaces = Some(0);
         }

@@ -378,6 +378,10 @@ pub(crate) struct OutputBuffer {
     recent_if_directive_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line led by `#`.
     recent_hash_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line whose code is `enum`.
+    recent_enum_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line whose code starts with `else,`.
+    recent_else_comma_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is led by `#`.
     recent_code_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
@@ -1091,6 +1095,20 @@ impl OutputBuffer {
     pub(crate) fn has_hash_led_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_hash_cache, start, |index| {
             self.trimmed(index).starts_with('#')
+        })
+    }
+
+    /// Whether the code of a line from `start` on is `enum`.
+    pub(crate) fn has_enum_code_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_enum_cache, start, |index| {
+            self.code_trimmed(index) == "enum"
+        })
+    }
+
+    /// Whether the code of a line from `start` on starts with `else,`.
+    pub(crate) fn has_else_comma_code_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_else_comma_cache, start, |index| {
+            self.code_trimmed(index).starts_with("else,")
         })
     }
 

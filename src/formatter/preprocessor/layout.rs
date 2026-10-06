@@ -27,9 +27,10 @@ pub(crate) struct SplitElseLineStart {
 pub(crate) struct StructuralSplitElseBodyContext {
     structural_chain: bool,
     body_indent_spaces: usize,
-    split_else_chain: bool,
-    recent_preprocessor: bool,
-    recent_adjacent_string_call_body: bool,
+    /// Read once a rule asks, as are the two after it.
+    split_else_chain: std::cell::OnceCell<bool>,
+    recent_preprocessor: std::cell::OnceCell<bool>,
+    recent_adjacent_string_call_body: std::cell::OnceCell<bool>,
     opening_is_else: bool,
     opening_is_control: bool,
     case_unindent_spaces: usize,
@@ -377,41 +378,12 @@ impl FormatEngine<'_> {
         } else {
             open_spaces + self.options.indent_width
         };
-        let recent_adjacent_string_call =
-            self.output.scoped_range().rev().take(8).any(|index| {
-                let code = self.output.code_before_comment_trimmed(index);
-                code.ends_with(");") && starts_string_literal_token(code.trimmed_start())
-            }) && self.output.scoped_range().rev().take(8).any(|index| {
-                let code = self.output.code_before_comment_trimmed(index);
-                self.open_paren_column_of(code).is_some()
-                    && !starts_string_literal_token(code.trimmed_start())
-                    && !code.ends_with(';')
-            });
-        let recent_adjacent_string_call_body = recent_adjacent_string_call
-            && self.output.scoped_range().rev().take(8).any(|index| {
-                let line = &self.output[index];
-                let code = self.output.code_before_comment_trimmed(index);
-                self.open_paren_column_of(code).is_some()
-                    && !starts_string_literal_token(code.trimmed_start())
-                    && !code.ends_with(';')
-                    && leading_visual_width(line, self.options.tab_width) == body_indent_spaces
-            });
-        let split_else_chain = structural_chain || self.output.recent_scoped_else_line(128);
-        let recent_preprocessor = split_else_chain
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take_while(|line| !line.trimmed().is_empty())
-                .take(32)
-                .any(|line| line.trimmed_start().starts_with('#'));
         Some(StructuralSplitElseBodyContext {
             structural_chain,
             body_indent_spaces,
-            split_else_chain,
-            recent_preprocessor,
-            recent_adjacent_string_call_body,
+            split_else_chain: std::cell::OnceCell::new(),
+            recent_preprocessor: std::cell::OnceCell::new(),
+            recent_adjacent_string_call_body: std::cell::OnceCell::new(),
             opening_is_else: open_trimmed.starts_with("} else")
                 || open_trimmed.starts_with("}else"),
             opening_is_control: starts_header_word(open_trimmed, "if")
@@ -420,6 +392,54 @@ impl FormatEngine<'_> {
                 || starts_header_word(open_trimmed, "switch"),
             case_unindent_spaces: self.layout.line_adjuster.total_case_unindent_depth()
                 * self.options.indent_width,
+        })
+    }
+
+    fn split_else_chain_of(&self, context: &StructuralSplitElseBodyContext) -> bool {
+        *context
+            .split_else_chain
+            .get_or_init(|| context.structural_chain || self.output.recent_scoped_else_line(128))
+    }
+
+    fn recent_preprocessor_of(&self, context: &StructuralSplitElseBodyContext) -> bool {
+        *context.recent_preprocessor.get_or_init(|| {
+            self.split_else_chain_of(context)
+                && self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .take_while(|line| !line.trimmed().is_empty())
+                    .take(32)
+                    .any(|line| line.trimmed_start().starts_with('#'))
+        })
+    }
+
+    fn recent_adjacent_string_call_body_of(
+        &self,
+        context: &StructuralSplitElseBodyContext,
+    ) -> bool {
+        *context.recent_adjacent_string_call_body.get_or_init(|| {
+            let recent_adjacent_string_call =
+                self.output.scoped_range().rev().take(8).any(|index| {
+                    let code = self.output.code_before_comment_trimmed(index);
+                    code.ends_with(");") && starts_string_literal_token(code.trimmed_start())
+                }) && self.output.scoped_range().rev().take(8).any(|index| {
+                    let code = self.output.code_before_comment_trimmed(index);
+                    self.open_paren_column_of(code).is_some()
+                        && !starts_string_literal_token(code.trimmed_start())
+                        && !code.ends_with(';')
+                });
+            recent_adjacent_string_call
+                && self.output.scoped_range().rev().take(8).any(|index| {
+                    let line = &self.output[index];
+                    let code = self.output.code_before_comment_trimmed(index);
+                    self.open_paren_column_of(code).is_some()
+                        && !starts_string_literal_token(code.trimmed_start())
+                        && !code.ends_with(';')
+                        && leading_visual_width(line, self.options.tab_width)
+                            == context.body_indent_spaces
+                })
         })
     }
 
@@ -436,13 +456,13 @@ impl FormatEngine<'_> {
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
         let body_spaces = context.body_indent_spaces;
-        if context.recent_preprocessor
+        if self.recent_preprocessor_of(context)
             && previous_code.ends_with('{')
             && current_spaces < body_spaces
         {
             return Some(body_spaces);
         }
-        if context.recent_preprocessor
+        if self.recent_preprocessor_of(context)
             && context.case_unindent_spaces == 0
             && previous_code.ends_with(';')
             && previous_spaces == body_spaces
@@ -480,8 +500,8 @@ impl FormatEngine<'_> {
         }
         if previous_spaces == body_spaces
             && (previous_code.ends_with(';') || previous_code.trimmed() == "}")
-            && (context.recent_adjacent_string_call_body
-                || context.split_else_chain
+            && (self.recent_adjacent_string_call_body_of(context)
+                || self.split_else_chain_of(context)
                     && (line_is_control_body_header(line_start)
                         || is_comment_line(line_start)
                         || context.opening_is_else
@@ -509,7 +529,7 @@ impl FormatEngine<'_> {
         context: &StructuralSplitElseBodyContext,
     ) -> Option<usize> {
         let (_, previous_code) = self.output.last_code_outside_comment()?;
-        (context.recent_adjacent_string_call_body
+        (self.recent_adjacent_string_call_body_of(context)
             && previous_code.ends_with(");")
             && starts_string_literal_token(previous_code.trimmed_start())
             && current_spaces < context.body_indent_spaces)
