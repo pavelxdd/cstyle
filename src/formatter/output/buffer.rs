@@ -278,6 +278,7 @@ pub(super) struct OutputLineHints {
     has_question: bool,
     has_at: bool,
     has_new: bool,
+    has_asm: bool,
     starts_star: bool,
 }
 
@@ -289,6 +290,7 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
     const AT: u8 = 1 << 4;
     const N: u8 = 1 << 5;
     const E: u8 = 1 << 6;
+    const A: u8 = 1 << 7;
     const CLASSES: [u8; 256] = {
         let mut classes = [0; 256];
         classes[b':' as usize] = COLON;
@@ -298,6 +300,7 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
         classes[b'@' as usize] = AT;
         classes[b'n' as usize] = N;
         classes[b'e' as usize] = E;
+        classes[b'a' as usize] = A;
         classes
     };
     let bytes = line.as_bytes();
@@ -312,6 +315,7 @@ pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
         has_question: found & QUESTION != 0,
         has_at: found & AT != 0,
         has_new: found & N != 0 && line.contains("new "),
+        has_asm: found & A != 0 && line.contains("asm"),
         starts_star: bytes.iter().find(|&&byte| byte != b' ' && byte != b'\t') == Some(&b'*'),
     }
 }
@@ -349,11 +353,17 @@ pub(crate) struct OutputBuffer {
     /// The lines whose `{`s the lines after them leave open, read on as
     /// lines come.
     open_brace_lines: RefCell<OpenBraceLines>,
-    /// The first line changed in place since [`OpenBraceLines`] read on.
-    lowest_change: Cell<usize>,
+    /// The same, reading every line as code.
+    plain_open_brace_lines: RefCell<OpenBraceLines>,
+    /// The first line changed in place since each [`OpenBraceLines`] read
+    /// on.
+    lowest_change: [Cell<usize>; 2],
     /// The last [`Self::comment_run`], with the scope start, version, and
     /// line count it read.
     comment_run_cache: Cell<Option<(usize, u64, usize, CommentRun)>>,
+    /// The last [`Self::last_line_with_tokens`], with the version and line
+    /// count it read.
+    token_line_cache: Cell<Option<(u64, usize, Option<usize>)>>,
     /// The last [`Self::last_lines_where`] of each kind, with the scope
     /// start, version, and line count it read.
     last_lines_cache: [Cell<Option<LastLinesRead>>; 2],
@@ -364,6 +374,7 @@ pub(crate) struct OutputBuffer {
     may_have_question: bool,
     may_have_at: bool,
     may_have_new: bool,
+    may_have_asm: bool,
     /// The last look back for a line that holds `new `.
     mentions_new_cache: Cell<Option<RecentMatch>>,
     /// The last answer of [`Self::designator_since_closed_row`]: the scope
@@ -481,12 +492,22 @@ enum OpenBraceEntry {
 struct OpenBraceLines {
     read: usize,
     stack: Vec<OpenBraceEntry>,
-    /// The stack before each of the last lines read, to read a changed
-    /// last line again.
-    before: std::collections::VecDeque<(usize, Vec<OpenBraceEntry>)>,
+    /// How each of the last lines read changed the stack, to read a changed
+    /// line again.
+    undo: std::collections::VecDeque<OpenBraceUndo>,
     /// A later branch of a conditional group was read: the look back then
     /// counts its braces apart.
     branched: bool,
+}
+
+/// What reading line `index` took off an [`OpenBraceLines`] stack that
+/// stood `len` entries high: its top entries as they were, when no more
+/// than four.
+#[derive(Clone, Copy)]
+struct OpenBraceUndo {
+    index: usize,
+    len: usize,
+    taken: Option<([OpenBraceEntry; 4], usize)>,
 }
 
 /// The last line from `floor` on that a look back found, for a buffer of
@@ -511,6 +532,7 @@ impl OutputBuffer {
         self.may_have_question |= hints.has_question;
         self.may_have_at |= hints.has_at;
         self.may_have_new |= hints.has_new;
+        self.may_have_asm |= hints.has_asm;
     }
 
     pub(crate) fn push(&mut self, line: String) {
@@ -537,6 +559,7 @@ impl OutputBuffer {
         self.record_hints(suffix, output_line_hints(suffix));
         self.may_have_at |= line.contains('@');
         self.may_have_new |= line.contains("new ");
+        self.may_have_asm |= line.contains("asm");
         let meta = compute_raw_literal_line_meta(&line, structural_start);
         let index = self.lines.len();
         let blank = line.trimmed().is_empty();
@@ -656,6 +679,7 @@ impl OutputBuffer {
             self.may_have_question = true;
             self.may_have_at = true;
             self.may_have_new = true;
+            self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
             self.note_change(self.lines.len() - 1);
@@ -674,6 +698,7 @@ impl OutputBuffer {
             self.may_have_question = true;
             self.may_have_at = true;
             self.may_have_new = true;
+            self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
             self.note_change(index);
@@ -784,6 +809,7 @@ impl OutputBuffer {
             self.may_have_question = true;
             self.may_have_at = true;
             self.may_have_new = true;
+            self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
             self.note_change(range.start);
@@ -1433,34 +1459,81 @@ impl OutputBuffer {
     /// directive outside braces; `None` when conditional branches leave
     /// that to a look back of its own.
     pub(crate) fn innermost_open_brace_line(&self) -> Option<Option<usize>> {
-        let mut lines = self.open_brace_lines.borrow_mut();
-        let changed = self.lowest_change.replace(usize::MAX).min(self.lines.len());
+        self.read_open_brace_lines(&self.open_brace_lines, &self.lowest_change[0], false)
+    }
+
+    /// The innermost line whose `{`s the lines after it leave open, every
+    /// line read as code.
+    pub(crate) fn innermost_open_brace_line_plain(&self) -> Option<usize> {
+        self.read_open_brace_lines(&self.plain_open_brace_lines, &self.lowest_change[1], true)
+            .expect("no directive branches a plain read")
+    }
+
+    fn read_open_brace_lines(
+        &self,
+        lines: &RefCell<OpenBraceLines>,
+        lowest_change: &Cell<usize>,
+        plain: bool,
+    ) -> Option<Option<usize>> {
+        let mut lines = lines.borrow_mut();
+        let changed = lowest_change.replace(usize::MAX).min(self.lines.len());
         if changed < lines.read {
-            match lines.before.iter().position(|&(index, _)| index == changed) {
-                Some(at) => {
-                    let (_, stack) = lines.before.remove(at).expect("kept stack");
-                    lines.before.truncate(at);
-                    lines.stack = stack;
-                    lines.read = changed;
-                    lines.branched = false;
-                }
-                None => *lines = OpenBraceLines::default(),
+            // Undo the lines read from the change on, newest first.
+            while let Some(undo) = lines.undo.back().copied()
+                && undo.index >= changed
+            {
+                lines.undo.pop_back();
+                let Some((taken, count)) = undo.taken else {
+                    break;
+                };
+                let keep = undo.len - count;
+                lines.stack.truncate(keep);
+                lines.stack.extend_from_slice(&taken[..count]);
+                lines.read = undo.index;
+            }
+            if lines.read == changed {
+                lines.branched = false;
+            } else {
+                *lines = OpenBraceLines::default();
             }
         }
         while !lines.branched && lines.read < self.lines.len() {
             let index = lines.read;
             lines.read += 1;
-            if lines.before.len() == 4 {
-                lines.before.pop_front();
+            if lines.undo.len() == 4 {
+                lines.undo.pop_front();
             }
-            let stack = lines.stack.clone();
-            lines.before.push_back((index, stack));
-            if self.comment_start_index(index) != index {
+            if !plain && self.comment_start_index(index) != index {
+                let len = lines.stack.len();
+                lines.undo.push_back(OpenBraceUndo {
+                    index,
+                    len,
+                    taken: Some(([OpenBraceEntry::Directive; 4], 0)),
+                });
                 continue;
             }
             let meta = self.brace_meta(index);
             let mut closes = meta.closes();
-            if meta.code_starts_with_hash
+            // A line's `}`s close its own `{`s first, as the look back
+            // counts them before the `{`s; the entries before the line they
+            // reach are kept to undo them.
+            let len = lines.stack.len();
+            let mut reach = 0;
+            let mut left = closes.saturating_sub(meta.opens());
+            while left > 0 && reach < len {
+                if let OpenBraceEntry::Line { open, .. } = lines.stack[len - 1 - reach] {
+                    left = left.saturating_sub(open as usize);
+                }
+                reach += 1;
+            }
+            let taken = (reach <= 4).then(|| {
+                let mut taken = [OpenBraceEntry::Directive; 4];
+                taken[..reach].copy_from_slice(&lines.stack[len - reach..]);
+                (taken, reach)
+            });
+            lines.undo.push_back(OpenBraceUndo { index, len, taken });
+            let directive = !plain && meta.code_starts_with_hash;
+            if directive
                 && matches!(
                     preprocessor_directive(self.trimmed(index)),
                     Some("else" | "elif" | "elifdef" | "elifndef")
@@ -1468,6 +1541,12 @@ impl OutputBuffer {
             {
                 lines.branched = true;
                 break;
+            }
+            if meta.opens() > 0 {
+                lines.stack.push(OpenBraceEntry::Line {
+                    index: index as u32,
+                    open: meta.opens() as u32,
+                });
             }
             while closes > 0 {
                 match lines.stack.last_mut() {
@@ -1485,14 +1564,8 @@ impl OutputBuffer {
                     None => break,
                 }
             }
-            if meta.opens() > 0 {
-                lines.stack.push(OpenBraceEntry::Line {
-                    index: index as u32,
-                    open: meta.opens() as u32,
-                });
-            }
             // The look back stops at a directive before its own braces.
-            if meta.code_starts_with_hash {
+            if directive {
                 lines.stack.push(OpenBraceEntry::Directive);
             }
         }
@@ -1551,6 +1624,28 @@ impl OutputBuffer {
         }
     }
 
+    /// The last line that holds source tokens.
+    pub(crate) fn last_line_with_tokens(&self) -> Option<usize> {
+        let len = self.lines.len();
+        if len > 0 && self.tokens[len - 1].get().is_some() {
+            return Some(len - 1);
+        }
+        let from = match self.token_line_cache.get() {
+            Some((version, read, found)) if version == self.version && read <= len => {
+                // Only lines come since can hold later tokens.
+                (read..len)
+                    .rev()
+                    .find(|&index| self.tokens[index].get().is_some())
+                    .or(found)
+            }
+            _ => (0..len)
+                .rev()
+                .find(|&index| self.tokens[index].get().is_some()),
+        };
+        self.token_line_cache.set(Some((self.version, len, from)));
+        from
+    }
+
     /// The comment rows that end the lines in scope; see [`CommentRun`].
     pub(crate) fn comment_run(&self) -> CommentRun {
         let range = self.scoped_range();
@@ -1604,7 +1699,9 @@ impl OutputBuffer {
     }
 
     fn note_change(&self, index: usize) {
-        self.lowest_change.set(self.lowest_change.get().min(index));
+        for lowest in &self.lowest_change {
+            lowest.set(lowest.get().min(index));
+        }
     }
 
     pub(crate) fn may_have_label_open(&self) -> bool {
@@ -1629,6 +1726,11 @@ impl OutputBuffer {
 
     /// Whether a line may hold `@`; false while no line ever did.
     /// Whether a line may hold `new `.
+    /// Whether some line may hold `asm`.
+    pub(crate) fn may_have_asm(&self) -> bool {
+        self.may_have_asm
+    }
+
     pub(crate) fn may_have_new(&self) -> bool {
         self.may_have_new
     }
@@ -1649,6 +1751,145 @@ impl Deref for OutputBuffer {
 #[cfg(test)]
 mod tests {
     use super::{OpenBraceShape, OutputBuffer};
+
+    /// The look back from the last line for the innermost line whose `{`s
+    /// the lines after it leave open.
+    fn innermost_open_brace_line_by_walk(output: &OutputBuffer) -> Option<usize> {
+        let mut depth = 0usize;
+        for index in (0..output.len()).rev() {
+            let meta = output.brace_meta(index);
+            depth += meta.closes();
+            if meta.opens() > depth {
+                return Some(index);
+            }
+            depth -= meta.opens();
+        }
+        None
+    }
+
+    /// The look back past block comment bodies that stops at a directive
+    /// outside braces, as the layout of a closing brace reads it.
+    fn innermost_open_brace_line_past_directives(output: &OutputBuffer) -> Option<Option<usize>> {
+        let mut depth = 0usize;
+        let mut group_depths = Vec::new();
+        for index in (0..output.len()).rev() {
+            if output.comment_start_index(index) != index {
+                continue;
+            }
+            let meta = output.brace_meta(index);
+            if depth == 0 && meta.code_starts_with_hash {
+                return Some(None);
+            }
+            if meta.code_starts_with_hash {
+                match super::preprocessor_directive(output.trimmed(index)) {
+                    Some("endif") => group_depths.push(depth),
+                    Some("else" | "elif" | "elifdef" | "elifndef") => return None,
+                    Some("if" | "ifdef" | "ifndef") => {
+                        group_depths.pop();
+                    }
+                    _ => {}
+                }
+            }
+            depth += meta.closes();
+            if meta.opens() > depth {
+                return Some(Some(index));
+            }
+            depth -= meta.opens();
+        }
+        Some(None)
+    }
+
+    #[test]
+    fn open_brace_lines_past_directives_match_a_look_back() {
+        let lines = [
+            "{",
+            "}",
+            "} else {",
+            "a;",
+            "{{",
+            "}}",
+            "f() {",
+            "#if A",
+            "#endif",
+            "#define B {",
+            "#define C }",
+            "/* c {",
+            " * }",
+            " */",
+            "#else",
+            "x; /* { */",
+        ];
+        let mut state = 0x5be0_cd19_u32;
+        for _ in 0..3000 {
+            let mut output = OutputBuffer::default();
+            for _ in 0..(state % 40) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                let line = lines[(state >> 4) as usize % lines.len()].to_string();
+                match state % 6 {
+                    0 if !output.is_empty() => {
+                        output.pop();
+                    }
+                    1 if !output.is_empty() => {
+                        *output.last_mut().expect("line") = line;
+                    }
+                    _ => output.push(line),
+                }
+                let expected = innermost_open_brace_line_past_directives(&output);
+                let found = output.innermost_open_brace_line();
+                if let Some(found) = found {
+                    assert_eq!(Some(found), expected, "{:?}", output.as_slice());
+                }
+            }
+            state = state.wrapping_add(1);
+        }
+    }
+
+    #[test]
+    fn open_brace_lines_read_on_and_undone_match_a_look_back() {
+        let lines = [
+            "{",
+            "}",
+            "} else {",
+            "a;",
+            "{{",
+            "}}",
+            "x = {1, {2}};",
+            "} }",
+            "f() {",
+        ];
+        let mut state = 0x3c6e_f372_u32;
+        for _ in 0..2000 {
+            let mut output = OutputBuffer::default();
+            for _ in 0..(state % 40) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                let line = lines[(state >> 4) as usize % lines.len()].to_string();
+                match state % 6 {
+                    0 if !output.is_empty() => {
+                        output.pop();
+                    }
+                    1 if !output.is_empty() => {
+                        *output.last_mut().expect("line") = line;
+                    }
+                    2 if output.len() > 2 => {
+                        let index = (state >> 9) as usize % output.len();
+                        output.set(index, line);
+                    }
+                    _ => output.push(line),
+                }
+                assert_eq!(
+                    output.innermost_open_brace_line_plain(),
+                    innermost_open_brace_line_by_walk(&output),
+                    "{:?}",
+                    output.as_slice()
+                );
+            }
+            state = state.wrapping_add(1);
+        }
+    }
 
     #[test]
     fn label_open_shape_accepts_extension_identifiers() {

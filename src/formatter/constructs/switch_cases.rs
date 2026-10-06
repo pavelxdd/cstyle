@@ -1439,26 +1439,19 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn isolated_opening_brace_is_switch_label(&self) -> bool {
-        let mut depth = 0usize;
-        for index in (0..self.output.len()).rev() {
-            let meta = self.output.brace_meta(index);
-            depth += meta.closes();
-            if meta.opens() > depth {
-                let mut trimmed = self.output.code_trimmed(index);
-                // Ratliff closes a case block at its body, past the label.
-                while self.options.brace_style != BraceStyle::Ratliff
-                    && let Some(rest) = trimmed
-                        .strip_prefix("/*")
-                        .and_then(|rest| rest.split_once("*/"))
-                {
-                    trimmed = rest.1.trimmed_start();
-                }
-                return trimmed.ends_with('{')
-                    && (trimmed.starts_with("case ") || trimmed.starts_with("default:"));
-            }
-            depth -= meta.opens();
+        let Some(index) = self.output.innermost_open_brace_line_plain() else {
+            return false;
+        };
+        let mut trimmed = self.output.code_trimmed(index);
+        // Ratliff closes a case block at its body, past the label.
+        while self.options.brace_style != BraceStyle::Ratliff
+            && let Some(rest) = trimmed
+                .strip_prefix("/*")
+                .and_then(|rest| rest.split_once("*/"))
+        {
+            trimmed = rest.1.trimmed_start();
         }
-        false
+        trimmed.ends_with('{') && (trimmed.starts_with("case ") || trimmed.starts_with("default:"))
     }
 
     fn nearest_open_switch_indent_spaces(&self) -> Option<usize> {

@@ -841,9 +841,9 @@ impl FormatEngine<'_> {
             .pending_tokens()
             .map(|span| span.first)
             .or_else(|| {
-                (0..self.output.len())
-                    .rev()
-                    .find_map(|index| self.output.line_tokens(index))
+                self.output
+                    .last_line_with_tokens()
+                    .and_then(|index| self.output.line_tokens(index))
                     .map(|span| span.first)
             })
     }

@@ -276,8 +276,13 @@ pub(crate) struct FrameStack {
     brackets: Vec<BracketFrame>,
     last_argument: Option<ArgumentFrame>,
     ternary_frames: Vec<TernaryFrame>,
+    /// How many of `ternary_frames` have no colon yet.
+    open_ternaries: usize,
     ternary_colon_output_lines: Vec<usize>,
     open_ternary_line_ends: Vec<usize>,
+    /// Whether some line of `open_ternary_line_ends` comes before one
+    /// marked earlier.
+    open_ternary_line_ends_unordered: bool,
     logical_frames: Vec<LogicalFrame>,
     stream_frames: Vec<StreamFrame>,
     constructor_initializer_frame: Option<ConstructorInitializerFrame>,
@@ -321,6 +326,11 @@ impl FrameStack {
         };
         self.ternary_frames
             .retain(|frame| frame.parent_delimiter != Some(entry.id));
+        self.open_ternaries = self
+            .ternary_frames
+            .iter()
+            .filter(|frame| frame.colon_role.is_none())
+            .count();
         if entry.frame.opener_output_line < current_output_line
             && self.line_closed_delimiter_continuation_indent.is_none()
         {
@@ -471,22 +481,35 @@ impl FrameStack {
     }
 
     pub(crate) fn push_ternary(&mut self, frame: TernaryFrame) {
+        self.open_ternaries += usize::from(frame.colon_role.is_none());
         self.ternary_frames.push(frame);
     }
 
     pub(crate) fn active_ternary(&self) -> Option<&TernaryFrame> {
+        if self.open_ternaries == 0 {
+            return self.ternary_frames.last();
+        }
         self.ternary_frames
             .iter()
             .rev()
             .find(|frame| frame.colon_role.is_none())
-            .or_else(|| self.ternary_frames.last())
     }
 
-    pub(crate) fn active_ternary_mut(&mut self) -> Option<&mut TernaryFrame> {
-        self.ternary_frames
+    /// Gives the innermost ternary still waiting for its `:` the colon.
+    pub(crate) fn close_active_ternary(&mut self, role: ColonRole, column: usize) {
+        if self.open_ternaries == 0 {
+            return;
+        }
+        if let Some(frame) = self
+            .ternary_frames
             .iter_mut()
             .rev()
             .find(|frame| frame.colon_role.is_none())
+        {
+            frame.colon_role = Some(role);
+            frame.colon_output_column = Some(column);
+            self.open_ternaries -= 1;
+        }
     }
 
     pub(crate) fn last_ternary_with_colon(&self) -> Option<&TernaryFrame> {
@@ -520,12 +543,20 @@ impl FrameStack {
             .last()
             .is_none_or(|last| *last != line)
         {
+            self.open_ternary_line_ends_unordered |= self
+                .open_ternary_line_ends
+                .last()
+                .is_some_and(|last| line < *last);
             self.open_ternary_line_ends.push(line);
         }
     }
 
     pub(crate) fn line_ended_open_ternary(&self, line: usize) -> bool {
-        self.open_ternary_line_ends.contains(&line)
+        if self.open_ternary_line_ends_unordered {
+            self.open_ternary_line_ends.contains(&line)
+        } else {
+            self.open_ternary_line_ends.binary_search(&line).is_ok()
+        }
     }
 
     pub(crate) fn pop_active_ternary(&mut self) {
@@ -535,12 +566,14 @@ impl FrameStack {
             .rposition(|frame| frame.colon_role.is_none())
         {
             self.ternary_frames.remove(index);
+            self.open_ternaries -= 1;
         }
     }
 
     pub(crate) fn pop_completed_ternaries(&mut self) {
         self.ternary_frames
             .retain(|frame| frame.colon_role.is_none());
+        self.open_ternaries = self.ternary_frames.len();
     }
 
     pub(crate) fn push_logical(&mut self, frame: LogicalFrame) {
@@ -1177,9 +1210,7 @@ mod tests {
             colon_role: None,
             colon_output_column: None,
         });
-        let frame = stack.active_ternary_mut().expect("ternary");
-        frame.colon_role = Some(ColonRole::Ternary);
-        frame.colon_output_column = Some(11);
+        stack.close_active_ternary(ColonRole::Ternary, 11);
 
         let frame = stack.active_ternary().expect("ternary");
         assert_eq!(frame.question_indent_spaces, 4);

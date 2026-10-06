@@ -1358,11 +1358,10 @@ impl FormatEngine<'_> {
         }
         self.current.push(':');
         self.layout.command_state.observe_char(':');
-        if colon_role == ColonRole::Ternary
-            && let Some(frame) = self.layout.frame_stack.active_ternary_mut()
-        {
-            frame.colon_role = Some(colon_role);
-            frame.colon_output_column = Some(colon_output_column);
+        if colon_role == ColonRole::Ternary {
+            self.layout
+                .frame_stack
+                .close_active_ternary(colon_role, colon_output_column);
         }
         self.layout.line_state.passed_colon = true;
         if is_ternary {
@@ -1627,7 +1626,8 @@ impl FormatEngine<'_> {
             || current.starts_with("__asm__ ")
             // The statement's lines back to its start, over any number of
             // template rows.
-            || self
+            || self.output.may_have_asm()
+                && self
                 .output
                 .scoped()
                 .iter()

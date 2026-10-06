@@ -586,6 +586,9 @@ impl FormatEngine<'_> {
         }
         let mut colon_spaces = None;
         let mut saw_asm = line.contains("asm") || line.contains("__asm__");
+        if !saw_asm && !self.output.may_have_asm() {
+            return None;
+        }
         for previous in self
             .output
             .scoped()
