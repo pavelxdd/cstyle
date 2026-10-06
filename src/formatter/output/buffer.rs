@@ -426,6 +426,7 @@ pub(crate) struct OutputBuffer {
     recent_else_comma_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is led by `#`.
     recent_code_hash_cache: Cell<Option<RecentMatch>>,
+    recent_code_has_hash_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
     largest_first_token: Option<usize>,
     /// Whether a line ever recorded a first token before that of an earlier
@@ -1300,6 +1301,13 @@ impl OutputBuffer {
     pub(crate) fn has_else_comma_code_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_else_comma_cache, start, |index| {
             self.code_trimmed(index).starts_with("else,")
+        })
+    }
+
+    /// Whether the code of a line from `start` on holds `#`.
+    pub(crate) fn has_hash_code_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_code_has_hash_cache, start, |index| {
+            self.code(index).contains('#')
         })
     }
 

@@ -410,6 +410,13 @@ impl FormatEngine<'_> {
         indent: usize,
         exact_indent_spaces: Option<usize>,
     ) -> bool {
+        let definition_option = self.options.break_return_type && !self.options.attach_return_type;
+        let declaration_option =
+            self.options.break_return_type_decl && !self.options.attach_return_type_decl;
+        // Neither option breaks a return type from any head.
+        if !definition_option && !declaration_option {
+            return false;
+        }
         let Some(span) = self.output.pending_tokens() else {
             return false;
         };
@@ -436,11 +443,8 @@ impl FormatEngine<'_> {
         else {
             return false;
         };
-        if !Self::return_type_option_applies(
-            &head,
-            self.options.break_return_type && !self.options.attach_return_type,
-            self.options.break_return_type_decl && !self.options.attach_return_type_decl,
-        ) || !self.has_movable_return_type(&head)
+        if !Self::return_type_option_applies(&head, definition_option, declaration_option)
+            || !self.has_movable_return_type(&head)
             || !span.contains(head.name_start)
             || !self.head_starts_statement(&head)
             // astyle reads a head led by `struct` or `union` as a type

@@ -1067,16 +1067,24 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        if let Some(spaces) = self.stream_after_closed_parenthesized_head_indent_spaces(current) {
-            return Some(spaces);
+        // Only a line leading with `<<` or `>>` continues a stream, or with
+        // `//` a parenthesized one.
+        let leads_stream = current.starts_with("<<") || current.starts_with(">>");
+        if leads_stream {
+            if let Some(spaces) = self.stream_after_closed_parenthesized_head_indent_spaces(current)
+            {
+                return Some(spaces);
+            }
+            if let Some(spaces) = self.stream_after_ternary_colon_frame_indent_spaces(current) {
+                return Some(spaces);
+            }
+            if let Some(spaces) = self.previous_line_parenthesized_stream_indent_spaces(current) {
+                return Some(spaces);
+            }
         }
-        if let Some(spaces) = self.stream_after_ternary_colon_frame_indent_spaces(current) {
-            return Some(spaces);
-        }
-        if let Some(spaces) = self.previous_line_parenthesized_stream_indent_spaces(current) {
-            return Some(spaces);
-        }
-        if let Some(spaces) = self.parenthesized_stream_chain_head_indent_spaces(current) {
+        if (leads_stream || current.starts_with("//"))
+            && let Some(spaces) = self.parenthesized_stream_chain_head_indent_spaces(current)
+        {
             return Some(spaces);
         }
         if previous_code.ends_with("},")
@@ -1275,17 +1283,19 @@ impl FormatEngine<'_> {
         {
             return Some(string_start);
         }
-        if let Some(spaces) = self.stream_after_string_frame_indent_spaces(current) {
-            return Some(spaces);
-        }
-        if let Some(spaces) = self.stream_after_closed_brace_frame_indent_spaces(current) {
-            return Some(spaces);
-        }
-        if let Some(spaces) = self.contextual_stream_brace_indent_spaces(current) {
-            return Some(spaces);
-        }
-        if let Some(spaces) = self.previous_leading_stream_frame_indent_spaces(current) {
-            return Some(spaces);
+        if leads_stream {
+            if let Some(spaces) = self.stream_after_string_frame_indent_spaces(current) {
+                return Some(spaces);
+            }
+            if let Some(spaces) = self.stream_after_closed_brace_frame_indent_spaces(current) {
+                return Some(spaces);
+            }
+            if let Some(spaces) = self.contextual_stream_brace_indent_spaces(current) {
+                return Some(spaces);
+            }
+            if let Some(spaces) = self.previous_leading_stream_frame_indent_spaces(current) {
+                return Some(spaces);
+            }
         }
         if previous_code.ends_with('=')
             && !previous_code.ends_with("==")

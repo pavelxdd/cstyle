@@ -570,7 +570,10 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}', ')']) {
             return None;
         }
-        let base_indent = self.constructor_initializer_base_indent_spaces();
+        let base_indent = std::cell::OnceCell::new();
+        let has_base_indent = || {
+            *base_indent.get_or_init(|| self.constructor_initializer_base_indent_spaces().is_some())
+        };
         let total = self.output.len();
         for index in (total - self.output.scoped().len()..total)
             .rev()
@@ -581,7 +584,7 @@ impl FormatEngine<'_> {
             let code = self.output.code_before_comment_trimmed(index);
             let previous_trimmed = self.output.code_body(index);
             if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
-                || (base_indent.is_some() && previous_trimmed.ends_with(',')))
+                || (previous_trimmed.ends_with(',') && has_base_indent()))
                 && let Some(open) = self.open_paren_column_of(code)
             {
                 let spaces_after_open =

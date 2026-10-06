@@ -600,6 +600,13 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn embedded_preprocessor_branch_body_base_spaces(&self) -> Option<usize> {
+        // A separator holds `#`.
+        if !self
+            .output
+            .has_hash_code_line_from(self.output.len().saturating_sub(8))
+        {
+            return None;
+        }
         for index in (0..self.output.len()).rev().take(8) {
             let line = &self.output[index];
             let code = self.output.code(index);
