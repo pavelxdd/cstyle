@@ -217,6 +217,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) class_head_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a conditional directive a backslash continues.
     pub(crate) continued_condition_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line whose code ends with `;`, `{`, or `}`.
+    pub(crate) statement_end_code_look: crate::formatter::output::buffer::LineLook,
     /// Whether the output last read leaves an initializer brace open.
     pub(crate) open_initializer_brace_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// The look back for a line that stops the look for a constructor
@@ -388,6 +390,7 @@ impl<'a> FormatEngine<'a> {
             brace_decision_look: Default::default(),
             class_head_look: Default::default(),
             continued_condition_look: Default::default(),
+            statement_end_code_look: Default::default(),
             open_before_comma_cache: std::cell::Cell::new(None),
             new_call_lines_end_look: Default::default(),
             over_max_new_call_look: Default::default(),

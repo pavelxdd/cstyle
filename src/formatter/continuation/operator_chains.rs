@@ -1590,20 +1590,26 @@ impl FormatEngine<'_> {
     }
 
     fn previous_statement_is_braceless_ternary(&self) -> bool {
-        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
-            let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = self.output.code_body(scan_index);
-            if trimmed.is_empty() {
-                continue;
-            }
-            if starts_ternary_arm(trimmed) && code.ends_with(';') {
-                return true;
-            }
-            if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
-                return false;
-            }
-        }
-        false
+        // The last of the 12 lines before the last one that ends a statement
+        // or block decides.
+        let range = self.output.scoped_range();
+        let end = range.end.saturating_sub(1).max(range.start);
+        let start = range.start.max(range.end.saturating_sub(13));
+        self.output
+            .last_line_looked(&self.statement_end_code_look, start, end, |index| {
+                !self.output.code_body(index).is_empty()
+                    && self
+                        .output
+                        .code_before_comment_trimmed(index)
+                        .ends_with_any(b";{}")
+            })
+            .is_some_and(|index| {
+                starts_ternary_arm(self.output.code_body(index))
+                    && self
+                        .output
+                        .code_before_comment_trimmed(index)
+                        .ends_with(';')
+            })
     }
 
     pub(crate) fn logical_condition_sibling_indent_spaces(
