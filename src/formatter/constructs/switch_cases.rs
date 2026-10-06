@@ -8,8 +8,8 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    ContainsAnyByte, advance_quoted_literal, is_comment_line, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -203,14 +203,23 @@ struct CodeDelimiterState {
 }
 
 fn code_delimiters(line: &str, start: usize) -> Vec<(usize, char)> {
-    code_delimiters_stateful(line, start, &mut CodeDelimiterState::default())
+    let mut braces = Vec::new();
+    for_each_code_delimiter(
+        line,
+        start,
+        &mut CodeDelimiterState::default(),
+        |index, delimiter| braces.push((index, delimiter)),
+    );
+    braces
 }
 
-fn code_delimiters_stateful(
+/// Visits each paren and brace of `line`'s code from byte `start` on.
+fn for_each_code_delimiter(
     line: &str,
     start: usize,
     state: &mut CodeDelimiterState,
-) -> Vec<(usize, char)> {
+    mut visit: impl FnMut(usize, char),
+) {
     // Every byte that matters is ASCII, and no byte of a wider character
     // equals one.
     let bytes = line.as_bytes();
@@ -218,7 +227,6 @@ fn code_delimiters_stateful(
     while index < bytes.len() && !line.is_char_boundary(index) {
         index += 1;
     }
-    let mut braces = Vec::new();
 
     while let Some(&byte) = bytes.get(index) {
         // Code bytes that start nothing and delimit nothing pass unread.
@@ -292,12 +300,10 @@ fn code_delimiters_stateful(
             continue;
         }
         if matches!(byte, b'(' | b')' | b'{' | b'}') {
-            braces.push((index, char::from(byte)));
+            visit(index, char::from(byte));
         }
         index += 1;
     }
-
-    braces
 }
 
 /// Whether the `'` at byte `index` separates digits of a number.
@@ -349,8 +355,12 @@ impl SwitchCaseObserver {
             self.pending_switch = true;
             self.pending_switch_paren_depth = 0;
         }
-        for (_, delimiter) in code_delimiters_stateful(trimmed, 0, &mut self.delimiter_state) {
-            match delimiter {
+        let mut delimiter_state = std::mem::take(&mut self.delimiter_state);
+        for_each_code_delimiter(
+            trimmed,
+            0,
+            &mut delimiter_state,
+            |_, delimiter| match delimiter {
                 '(' if self.pending_switch => self.pending_switch_paren_depth += 1,
                 ')' if self.pending_switch => {
                     self.pending_switch_paren_depth =
@@ -377,8 +387,9 @@ impl SwitchCaseObserver {
                     }
                 }
                 _ => {}
-            }
-        }
+            },
+        );
+        self.delimiter_state = delimiter_state;
 
         kind
     }
@@ -504,6 +515,21 @@ impl SwitchCaseLineTransformer {
     /// due to the line, in order.
     fn scan_line(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
         let mut unindents = Vec::new();
+        // Outside a switch's labels, a line that holds no switch and nothing
+        // that opens or closes a literal, a comment, or a brace changes
+        // nothing.
+        if self.raw_string_delimiter.is_none()
+            && !self.in_block_comment
+            && !self.in_quote
+            && self.marked_label_colon.is_none()
+            && (self.indent_cases
+                || self.switch_depth == 0
+                || (is_preprocessor && !self.indent_preproc_define))
+            && !scan.contains_any_byte(b"{}/\\\"'")
+            && !scan.contains("switch")
+        {
+            return unindents;
+        }
         let mut pos = 0;
 
         while let Some(ch) = char_at(scan, pos) {

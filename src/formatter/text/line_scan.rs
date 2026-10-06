@@ -477,6 +477,16 @@ pub(crate) struct DelimiterScan {
 }
 
 impl DelimiterScan {
+    /// Starts the scan afresh, keeping its buffer.
+    pub(crate) fn reset(&mut self) {
+        let mut open = std::mem::take(&mut self.open);
+        open.clear();
+        *self = Self {
+            open,
+            ..Self::default()
+        };
+    }
+
     pub(crate) fn scanned(&self) -> usize {
         self.scanned
     }

@@ -737,6 +737,11 @@ impl OutputBuffer {
 
     /// Appends the text of line `from` to line `into`, after `separator`,
     /// and removes line `from`; `into` then holds the tokens of both.
+    /// The lines, without the tables kept about them.
+    pub(crate) fn into_lines(self) -> Vec<String> {
+        self.lines
+    }
+
     pub(crate) fn join_into(&mut self, into: usize, from: usize, separator: &str) {
         let text = self.lines[from].trimmed().to_string();
         let span = match (self.tokens[into].get(), self.tokens[from].get()) {

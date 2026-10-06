@@ -86,19 +86,14 @@ impl FormatEngine<'_> {
     }
 
     fn record_braceless_header_frames(&mut self, word: &str, next: Option<&Token>) {
-        let mut previous_header = self.layout.command_state.current_header.clone();
-        if previous_header
-            .as_deref()
-            .is_some_and(|header| matches!(header, "for" | "while" | "switch" | "catch"))
-            && self
-                .current
-                .trimmed()
-                .eq(previous_header.as_deref().unwrap_or_default())
+        if let Some(header) = self.layout.command_state.current_header.as_deref()
+            && matches!(header, "for" | "while" | "switch" | "catch")
+            && self.current.trimmed() == header
             && !matches!(next, Some(Token::Symbol('(')))
         {
             self.layout.command_state.current_header = None;
-            previous_header = None;
         }
+        let previous_header = self.layout.command_state.current_header.as_deref();
         if is_header(self.options, word)
             && word != "else"
             && self.layout.nesting.paren_depth == 0
@@ -109,9 +104,7 @@ impl FormatEngine<'_> {
                     && brace.header_indent_column == frame.line_indent_spaces
             })
             && is_add_braces_header(self.options, &frame.header)
-            && previous_header
-                .as_deref()
-                .is_none_or(|header| header == frame.header)
+            && previous_header.is_none_or(|header| header == frame.header)
             && !(frame.header == "do" && word == "while")
             && !(frame.header == "else" && word == "if")
             && !is_defer_header(&frame.header)
@@ -125,11 +118,9 @@ impl FormatEngine<'_> {
                 });
         }
         if is_header(self.options, word)
-            && previous_header
-                .as_deref()
-                .is_some_and(|header| is_add_braces_header(self.options, header))
-            && !matches!(previous_header.as_deref(), Some("else") if word == "if")
-            && !previous_header.as_deref().is_some_and(is_defer_header)
+            && previous_header.is_some_and(|header| is_add_braces_header(self.options, header))
+            && !matches!(previous_header, Some("else") if word == "if")
+            && !previous_header.is_some_and(is_defer_header)
             && self.layout.nesting.paren_depth == 0
             && !self.current_is_blank()
         {
@@ -139,7 +130,7 @@ impl FormatEngine<'_> {
                     .continuation_indent
                     .next_line_indent
                     .unwrap_or_else(|| {
-                        if previous_header.as_deref() == Some("else")
+                        if previous_header == Some("else")
                             && let Some(previous) = self.output.last()
                             && previous.trimmed() == "else"
                         {
@@ -151,16 +142,16 @@ impl FormatEngine<'_> {
                         }
                     })
             });
-            if previous_header.as_deref() == Some("if") && nested_parent_indent.is_none() {
+            if previous_header == Some("if") && nested_parent_indent.is_none() {
                 header_indent = header_indent.min(self.layout.indentation.indent());
             }
             self.layout.inline_nested_header_braceless_bias = Some(header_indent + 1);
             self.layout
                 .frame_stack
                 .push_braceless_header(BracelessHeaderFrame {
-                    header: previous_header.clone().unwrap_or_default(),
+                    header: previous_header.unwrap_or_default().to_string(),
                     header_indent_spaces: header_indent * self.options.indent_width,
-                    can_match_else: previous_header.as_deref() == Some("if"),
+                    can_match_else: previous_header == Some("if"),
                 });
         }
     }

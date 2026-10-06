@@ -570,39 +570,95 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}', ')']) {
             return None;
         }
-        let base_indent = std::cell::OnceCell::new();
-        let has_base_indent = || {
-            *base_indent.get_or_init(|| self.constructor_initializer_base_indent_spaces().is_some())
-        };
-        let total = self.output.len();
-        for index in (total - self.output.scoped().len()..total)
-            .rev()
-            .take(64)
-            .filter(|&index| self.output.comment_start_index(index) == index)
-            .filter(|&index| !self.output.trimmed(index).is_empty())
-        {
-            let code = self.output.code_before_comment_trimmed(index);
-            let previous_trimmed = self.output.code_body(index);
-            if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
-                || (previous_trimmed.ends_with(',') && has_base_indent()))
-                && let Some(open) = self.open_paren_column_of(code)
+        // The look back reads at most 64 lines in scope, past blank lines
+        // and the bodies of block comments.
+        let range = self.output.scoped_range();
+        let floor = range.start.max(range.end.saturating_sub(64));
+        let lines = self.open_paren_arg_lines(floor);
+        let comma = lines.comma.filter(|&comma| comma >= floor);
+        let hard = lines.hard.filter(|&(hard, _)| hard >= floor);
+        // A comma line nearer than any other decides when the list has a
+        // base; one that also stops is the nearest hard line too.
+        let decided = match (comma, hard) {
+            (Some(comma), hard)
+                if hard.is_none_or(|(hard, _)| comma >= hard)
+                    && self.constructor_initializer_base_indent_spaces().is_some() =>
             {
-                let spaces_after_open =
-                    code[open + 1..].len() - code[open + 1..].trimmed_start().len();
-                return Some(
-                    visual_width_from(&code[..open + 1], 0, self.options.tab_width)
-                        + spaces_after_open,
-                );
+                Some(comma)
             }
-            if previous_trimmed.starts_with(')')
-                || previous_trimmed.ends_with(';')
-                || previous_trimmed.ends_with('{')
-                || previous_trimmed.ends_with('}')
-            {
-                return None;
+            (_, Some((hard, true))) => Some(hard),
+            _ => None,
+        }?;
+        let code = self.output.code_before_comment_trimmed(decided);
+        let open = self.open_paren_column_of(code)?;
+        let spaces_after_open = code[open + 1..].len() - code[open + 1..].trimmed_start().len();
+        Some(visual_width_from(&code[..open + 1], 0, self.options.tab_width) + spaces_after_open)
+    }
+
+    /// The nearest lines from `floor` on that decide the look back of
+    /// [`Self::constructor_initializer_open_paren_arg_indent_spaces`], read
+    /// on from the last answer as lines come.
+    fn open_paren_arg_lines(&self, floor: usize) -> OpenParenArgLines {
+        let (len, version) = (self.output.len(), self.output.version());
+        let cached = self.open_paren_arg_cache.get().filter(|cached| {
+            cached.version == version && cached.len <= len && cached.from <= floor
+        });
+        let (mut lines, read_from) = match cached {
+            Some(cached) => (cached, cached.len),
+            None => (
+                OpenParenArgLines {
+                    len,
+                    version,
+                    from: floor,
+                    hard: None,
+                    comma: None,
+                },
+                floor,
+            ),
+        };
+        for index in read_from..len {
+            match self.open_paren_arg_line(index) {
+                OpenParenArgLine::Pass => {}
+                OpenParenArgLine::Colon => lines.hard = Some((index, true)),
+                OpenParenArgLine::Comma { stops } => {
+                    lines.comma = Some(index);
+                    if stops {
+                        lines.hard = Some((index, false));
+                    }
+                }
+                OpenParenArgLine::Stop => lines.hard = Some((index, false)),
             }
         }
-        None
+        lines.len = len;
+        self.open_paren_arg_cache.set(Some(lines));
+        lines
+    }
+
+    /// How output line `index` reads to the look back of
+    /// [`Self::constructor_initializer_open_paren_arg_indent_spaces`].
+    fn open_paren_arg_line(&self, index: usize) -> OpenParenArgLine {
+        if self.output.comment_start_index(index) != index || self.output.trimmed(index).is_empty()
+        {
+            return OpenParenArgLine::Pass;
+        }
+        let code = self.output.code_before_comment_trimmed(index);
+        let body = self.output.code_body(index);
+        let colon = body.starts_with(':') && !body.starts_with("::");
+        let comma = body.ends_with(',');
+        let opens = (colon || comma) && self.open_paren_column_of(code).is_some();
+        let stops = body.starts_with(')')
+            || body.ends_with(';')
+            || body.ends_with('{')
+            || body.ends_with('}');
+        if colon && opens {
+            OpenParenArgLine::Colon
+        } else if comma && opens {
+            OpenParenArgLine::Comma { stops }
+        } else if stops {
+            OpenParenArgLine::Stop
+        } else {
+            OpenParenArgLine::Pass
+        }
     }
 
     pub(crate) fn constructor_initializer_argument_indent_spaces(
@@ -982,6 +1038,35 @@ pub(crate) fn constructor_initializer_name_indent_from_line(
 /// How many output lines the look back for a constructor initializer list
 /// reads.
 const CONSTRUCTOR_SCAN_REACH: usize = 64;
+
+/// How a line reads to the look back for the open paren of a constructor
+/// initializer's argument.
+#[derive(Clone, Copy)]
+enum OpenParenArgLine {
+    /// A line the look back passes.
+    Pass,
+    /// A line the list's `:` leads that leaves a paren open.
+    Colon,
+    /// A line ending with `,` that leaves a paren open; it decides when the
+    /// list has a base and otherwise passes, or stops the look back when
+    /// `stops`.
+    Comma { stops: bool },
+    /// A line that stops the look back.
+    Stop,
+}
+
+/// The nearest lines that decide the look back for the open paren of a
+/// constructor initializer's argument, read from line `from` up to `len`
+/// at output `version`: the nearest `Colon` or stopping line, with whether
+/// it is a `Colon`, and the nearest `Comma` line.
+#[derive(Clone, Copy)]
+pub(crate) struct OpenParenArgLines {
+    len: usize,
+    version: u64,
+    from: usize,
+    hard: Option<(usize, bool)>,
+    comma: Option<usize>,
+}
 
 /// The last look back for a constructor initializer list: the line count
 /// and version it read, its answer, and the line that decided it.

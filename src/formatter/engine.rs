@@ -112,6 +112,7 @@ pub(crate) struct TokenPushContext<'a> {
     pub(crate) following_closer_width: usize,
 }
 
+#[derive(Default)]
 struct LineSourceColumns {
     pub(crate) prefix: Vec<usize>,
     non_ws_prefix: Vec<usize>,
@@ -176,6 +177,11 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_scan_cache: std::cell::Cell<
         Option<crate::formatter::constructs::constructor_initializers::ConstructorScanCache>,
     >,
+    /// The last look back for the open paren of a constructor initializer's
+    /// argument.
+    pub(crate) open_paren_arg_cache: std::cell::Cell<
+        Option<crate::formatter::constructs::constructor_initializers::OpenParenArgLines>,
+    >,
     /// The last look back for a line leaving a paren open, keyed by the
     /// output it read.
     pub(crate) open_paren_scan_cache: std::cell::Cell<Option<(OutputKey, Option<OpenParenLine>)>>,
@@ -194,6 +200,11 @@ pub(crate) struct FormatEngine<'a> {
     bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
     case_labels: std::cell::OnceCell<Vec<u32>>,
+    /// The source columns of the line being formatted, kept to reuse their
+    /// buffers.
+    line_columns: LineSourceColumns,
+    /// The text of the line being finished, kept to reuse its buffer.
+    pub(crate) finished_line_buffer: String,
     /// The tokens the last looks back for astyle's statement start passed.
     pub(crate) stack_start_cache:
         std::cell::RefCell<crate::formatter::output::layout::astyle_stack::StackStartPath>,
@@ -302,9 +313,12 @@ impl<'a> FormatEngine<'a> {
             output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
             constructor_scan_cache: std::cell::Cell::new(None),
+            open_paren_arg_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
             line_comment_cache: std::cell::Cell::new(None),
+            line_columns: LineSourceColumns::default(),
+            finished_line_buffer: String::new(),
             stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
@@ -555,7 +569,12 @@ impl<'a> FormatEngine<'a> {
             return;
         }
         let mut index = line.start;
-        let line_columns = line_source_columns(self.options, &tokens[line.start..line.end]);
+        let mut line_columns = std::mem::take(&mut self.line_columns);
+        fill_line_source_columns(
+            &mut line_columns,
+            self.options,
+            &tokens[line.start..line.end],
+        );
         self.fill_line_brace_matches(tokens, line.start, line.end);
         let multiline_case_colon =
             switch_cases::multiline_switch_label_colon(tokens, line.start, line.end);
@@ -652,6 +671,7 @@ impl<'a> FormatEngine<'a> {
             }
             index += 1;
         }
+        self.line_columns = line_columns;
     }
 
     /// Records how the next source line starts, before the newline token is pushed.
@@ -1056,21 +1076,40 @@ impl<'a> FormatEngine<'a> {
                 _ => false,
             }
         };
-        self.layout.line_state.has_literal_quote = tokens
-            .iter()
-            .any(|token| matches!(token, Token::StringLiteral(_) | Token::CharLiteral(_)));
+        // The scans below find nothing on a line without the tokens they
+        // look for.
+        let (mut has_comment, mut has_literal, mut has_open_brace, mut has_semicolon) =
+            (false, false, false, false);
+        for token in tokens {
+            match token {
+                Token::Comment(..) => has_comment = true,
+                Token::StringLiteral(_) | Token::CharLiteral(_) => has_literal = true,
+                Token::Symbol('{') => has_open_brace = true,
+                Token::Symbol(';') => has_semicolon = true,
+                _ => {}
+            }
+        }
+        self.layout.line_state.has_literal_quote = has_literal;
         self.layout.line_state.indent_off_follows_code =
-            preprocessor::indent_off_follows_code(tokens);
-        self.layout.line_state.operator_padding_disabled = tokens.iter().any(
-            |token| matches!(token, Token::Comment(_, comment) if comment.contains("*NOPAD*")),
-        );
+            has_comment && preprocessor::indent_off_follows_code(tokens);
+        self.layout.line_state.operator_padding_disabled = has_comment
+            && tokens.iter().any(
+                |token| matches!(token, Token::Comment(_, comment) if comment.contains("*NOPAD*")),
+            );
         self.layout.line_state.in_class_initializer = false;
-        let trailing_comment_columns = trailing_comment_columns(tokens);
+        let trailing_comment_columns = if has_comment {
+            trailing_comment_columns(tokens)
+        } else {
+            Vec::new()
+        };
         self.token_input.input_source_indent = 0;
         let tab_width = self.options.tab_width.max(1);
         let mut source_indent = 0;
         for token in tokens {
             match token {
+                Token::Whitespace(value) if value.bytes().all(|byte| byte == b' ') => {
+                    source_indent += value.len();
+                }
                 Token::Whitespace(value) => {
                     for ch in value.chars() {
                         if ch == '\t' {
@@ -1089,22 +1128,27 @@ impl<'a> FormatEngine<'a> {
         }
         self.layout.line_state.trailing_comment_columns = trailing_comment_columns.into();
         self.layout.line_state.has_nested_designated_init_brace =
-            initializers::has_nested_designated_init_brace(tokens);
+            has_open_brace && initializers::has_nested_designated_init_brace(tokens);
 
-        let mut statement_count = 0usize;
-        let mut paren_depth = 0i32;
-        for token in tokens {
-            match token {
-                Token::Symbol('(') => paren_depth += 1,
-                Token::Symbol(')') => paren_depth -= 1,
-                Token::Symbol(';') if paren_depth <= 0 => statement_count += 1,
-                _ => {}
+        if has_semicolon {
+            let mut statement_count = 0usize;
+            let mut paren_depth = 0i32;
+            for token in tokens {
+                match token {
+                    Token::Symbol('(') => paren_depth += 1,
+                    Token::Symbol(')') => paren_depth -= 1,
+                    Token::Symbol(';') if paren_depth <= 0 => statement_count += 1,
+                    _ => {}
+                }
+            }
+            if statement_count > 1 {
+                self.layout.line_state.is_multi_statement_line = true;
             }
         }
-        if statement_count > 1 {
-            self.layout.line_state.is_multi_statement_line = true;
-        }
 
+        if !has_open_brace {
+            return;
+        }
         let mut depth = 0usize;
         let mut saw_open = false;
         for token in tokens {
@@ -2158,10 +2202,18 @@ pub(crate) fn closer_width_after_semicolon(
     (width, None)
 }
 
-fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSourceColumns {
+fn fill_line_source_columns(
+    columns: &mut LineSourceColumns,
+    options: &FormatOptions,
+    line_tokens: &[Token],
+) {
     let tab_width = options.tab_width.max(1);
-    let mut prefix = Vec::with_capacity(line_tokens.len() + 1);
-    let mut non_ws_prefix = Vec::with_capacity(line_tokens.len() + 1);
+    let mut prefix = std::mem::take(&mut columns.prefix);
+    let mut non_ws_prefix = std::mem::take(&mut columns.non_ws_prefix);
+    prefix.clear();
+    non_ws_prefix.clear();
+    prefix.reserve(line_tokens.len() + 1);
+    non_ws_prefix.reserve(line_tokens.len() + 1);
     let mut column = 0usize;
     let mut non_ws = 0usize;
     let mut first_non_ws = None;
@@ -2172,6 +2224,7 @@ fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSo
     for (offset, token) in line_tokens.iter().enumerate() {
         match token {
             Token::Newline => {}
+            Token::Whitespace(ws) if ws.bytes().all(|byte| byte == b' ') => column += ws.len(),
             Token::Whitespace(ws) => {
                 for ch in ws.chars() {
                     if ch == '\t' {
@@ -2194,13 +2247,13 @@ fn line_source_columns(options: &FormatOptions, line_tokens: &[Token]) -> LineSo
         prefix.push(column);
         non_ws_prefix.push(non_ws);
     }
-    LineSourceColumns {
+    *columns = LineSourceColumns {
         prefix,
         non_ws_prefix,
         first_non_ws,
         first_non_ws_is_brace,
         leading_indent,
-    }
+    };
 }
 
 /// `whitespace` without an allocation when it is a run of spaces, as it

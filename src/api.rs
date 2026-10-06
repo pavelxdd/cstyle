@@ -71,7 +71,7 @@ pub(crate) fn format_owned_bytes(input: Vec<u8>, options: &FormatOptions) -> io:
             output.truncate(output.len() - line_break.len());
         }
     }
-    Ok(source.encode(&output))
+    Ok(source.encode(output))
 }
 
 fn resolve_preserved_line_ending(

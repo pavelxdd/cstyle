@@ -1668,13 +1668,13 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                 previous_non_space = byte;
             }
         } else if in_comment {
-            if line[index..].starts_with("*/") {
+            if bytes[index..].starts_with(b"*/") {
                 end = index + 2;
                 in_comment = false;
             }
-        } else if line[index..].starts_with("//") {
+        } else if bytes[index..].starts_with(b"//") {
             end = bytes.len();
-        } else if line[index..].starts_with("/*") {
+        } else if bytes[index..].starts_with(b"/*") {
             end = index + 2;
             in_comment = true;
         } else if matches!(byte, b'"' | b'\'') {

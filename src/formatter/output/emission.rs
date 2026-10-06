@@ -93,8 +93,8 @@ impl FormatEngine<'_> {
         } else {
             line.trimmed_end()
         };
-        let mut output = self.options.indent_prefix(indent);
-        output.reserve(body.len());
+        let mut output = String::with_capacity(indent * self.options.indent_width + body.len());
+        self.options.push_indent_prefix(&mut output, indent);
         output.push_str(body);
         self.adjust_and_publish_line(output);
     }
@@ -130,10 +130,9 @@ impl FormatEngine<'_> {
             line.trimmed_end()
         };
         let structural_level = self.constructor_initializer_prefix_level(structural_level);
-        let mut output = self
-            .options
-            .continuation_indent_prefix(structural_level, spaces);
-        output.reserve(body.len());
+        let mut output = String::with_capacity(spaces + body.len());
+        self.options
+            .push_continuation_indent_prefix(&mut output, structural_level, spaces);
         output.push_str(body);
         self.adjust_and_publish_line(output);
     }
@@ -158,7 +157,11 @@ impl FormatEngine<'_> {
         };
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
-        self.layout.previous_pre_adjust_line = Some(line.clone());
+        // The line before keeps its buffer.
+        match &mut self.layout.previous_pre_adjust_line {
+            Some(previous) => previous.clone_from(&line),
+            previous => *previous = Some(line.clone()),
+        }
         self.adjuster_before_lone_brace =
             (line.trimmed() == "}").then(|| (self.output.len(), self.layout.line_adjuster.clone()));
         let line = self.layout.line_adjuster.adjust_line(line);

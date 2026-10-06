@@ -69,8 +69,11 @@ impl DecodedSource {
     }
 
     /// Encodes `text` with the byte encoding detected in the input.
-    pub(crate) fn encode(&self, text: &str) -> Vec<u8> {
-        encode_output(text, self.encoding)
+    pub(crate) fn encode(&self, text: String) -> Vec<u8> {
+        match self.encoding {
+            TextEncoding::Utf8 => text.into_bytes(),
+            encoding => encode_output(&text, encoding),
+        }
     }
 }
 

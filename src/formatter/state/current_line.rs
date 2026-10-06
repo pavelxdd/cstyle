@@ -370,7 +370,7 @@ impl CurrentLine {
         let bytes = self.text.as_bytes();
         let mut scan = self.delimiters.borrow_mut();
         if scan.scanned() > bytes.len() {
-            *scan = DelimiterScan::default();
+            scan.reset();
         }
         scan.advance(bytes, self.stable_len().saturating_sub(1));
         if scan.scanned() < bytes.len() {
@@ -385,7 +385,7 @@ impl CurrentLine {
     pub(crate) fn last_close_paren_match(&self) -> Option<usize> {
         let mut scan = self.parens.borrow_mut();
         if scan.scanned > self.text.len() {
-            *scan = ParenScan::default();
+            scan.reset();
         }
         scan.advance(&self.text.as_bytes()[..self.stable_len()]);
         scan.last_close_match
@@ -520,8 +520,8 @@ impl CurrentLine {
         self.segment_outside_parens.take();
         self.assignment_chain.take();
         self.marks.take();
-        self.parens.take();
-        self.delimiters.take();
+        self.parens.borrow_mut().reset();
+        self.delimiters.borrow_mut().reset();
     }
 }
 
@@ -543,6 +543,16 @@ struct ParenScan {
 }
 
 impl ParenScan {
+    /// Starts the scan afresh, keeping its buffer.
+    fn reset(&mut self) {
+        let mut open = std::mem::take(&mut self.open);
+        open.clear();
+        *self = Self {
+            open,
+            ..Self::default()
+        };
+    }
+
     fn advance(&mut self, bytes: &[u8]) {
         for (index, &byte) in bytes.iter().enumerate().skip(self.scanned) {
             match byte {

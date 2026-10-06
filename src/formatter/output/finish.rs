@@ -113,15 +113,20 @@ impl FormatEngine<'_> {
             return;
         }
 
-        let line = if preserve_line_comment_trailing_space
-            || preserve_raw_literal_line_end
-            || preserve_run_in_join_space
-        {
-            self.current.trimmed_start().to_string()
-        } else {
-            self.current.trimmed().to_string()
-        };
+        let mut line = std::mem::take(&mut self.finished_line_buffer);
+        line.clear();
+        line.push_str(
+            if preserve_line_comment_trailing_space
+                || preserve_raw_literal_line_end
+                || preserve_run_in_join_space
+            {
+                self.current.trimmed_start()
+            } else {
+                self.current.trimmed()
+            },
+        );
         self.finish_ordinary_line(&line);
+        self.finished_line_buffer = line;
     }
 
     fn finish_ordinary_line(&mut self, line: &str) {
@@ -577,11 +582,15 @@ impl FormatEngine<'_> {
         self.align_comments_before_case_labels();
         self.retab_output();
         let fill_sources = self.fill_empty_lines();
-        if self.output.is_empty() {
+        let line_break = self.options.line_break();
+        // The engine's tokens and tables go before the output text comes.
+        let lines = std::mem::take(&mut self.output).into_lines();
+        drop(self);
+        if lines.is_empty() {
             (String::new(), fill_sources)
         } else {
-            let mut output = self.output.join(self.options.line_break());
-            output.push_str(self.options.line_break());
+            let mut output = lines.join(line_break);
+            output.push_str(line_break);
             (output, fill_sources)
         }
     }

@@ -48,6 +48,8 @@ pub(crate) struct StackStartPath {
     address: usize,
     positions: Vec<u32>,
     start: usize,
+    /// The tokens one look back passes, kept to reuse its buffer.
+    passed: Vec<u32>,
 }
 
 /// The replay of a statement up to a line, kept so the next line of the
@@ -811,7 +813,8 @@ impl FormatEngine<'_> {
                 ..StackStartPath::default()
             };
         }
-        let mut passed = Vec::new();
+        let mut passed = std::mem::take(&mut path.passed);
+        passed.clear();
         let mut start = index;
         let joined = loop {
             if let Ok(at) = path.positions.binary_search(&(start as u32)) {
@@ -898,6 +901,7 @@ impl FormatEngine<'_> {
             }
         }
         path.positions.extend(passed.iter().rev());
+        path.passed = passed;
         (start != index).then_some(start)
     }
 

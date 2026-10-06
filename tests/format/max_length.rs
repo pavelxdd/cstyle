@@ -2997,3 +2997,24 @@ fn a_switch_whose_header_splits_closes_at_its_first_line() {
         )
     );
 }
+
+#[test]
+fn a_kept_one_line_block_with_a_wide_character_in_its_comment_does_not_split() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--keep-one-line-blocks".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    if (seq[0] == 98) { linenoiseEditMoveWordLeft(&l); }   /* ESC b → word left */",
+        "}",
+    );
+
+    assert_stable_max_length_format(source, &options, source);
+}

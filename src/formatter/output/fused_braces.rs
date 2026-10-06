@@ -20,14 +20,15 @@ impl FormatEngine<'_> {
             if fused_into_parent {
                 continue;
             }
-            let mut chain = vec![id];
+            let Some(child) = self.fused_child(id) else {
+                continue;
+            };
+            let mut chain = vec![id, child];
             while let Some(child) = self.fused_child(*chain.last().expect("chain starts non-empty"))
             {
                 chain.push(child);
             }
-            if chain.len() > 1 {
-                chains.push(chain);
-            }
+            chains.push(chain);
         }
         // Later chains first: lines before them keep their indices.
         for chain in chains.iter().rev() {
