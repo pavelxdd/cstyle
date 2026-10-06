@@ -1,6 +1,5 @@
 use crate::formatter::lexer::{CommentKind, Token, line_comments, token_text, tokenize};
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::is_digit_separator;
 
 /// The index of the first `byte` in `bytes`, read eight bytes at a time.
 pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
@@ -317,9 +316,10 @@ fn scan_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     }
     let mut opens = OpenColumns::default();
     let mut unmatched_closes = 0usize;
+    // An indent holds none of the bytes read.
     let mut index = match continues_block_comment(line) {
         true => find_comment_close(line).map_or(bytes.len(), |close| close + 2),
-        false => 0,
+        false => crate::formatter::text::trim::leading_spaces(bytes),
     };
     while let Some(offset) = bytes[index.min(bytes.len())..]
         .iter()
@@ -417,112 +417,66 @@ pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
     if !line.contains_any_byte(b"{}") {
         return (0, 0);
     }
-    // Every byte that matters is ASCII, and no byte of a wider character
-    // equals one.
-    let bytes = line.as_bytes();
-    let mut open_depth = 0usize;
-    let mut unmatched_closes = 0usize;
-    let mut index = 0;
-    let mut quote: Option<u8> = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
-
-    while let Some(&byte) = bytes.get(index) {
-        let next = bytes.get(index + 1).copied();
-        if in_block_comment {
-            if byte == b'*' && next == Some(b'/') {
-                in_block_comment = false;
-                index += 2;
-            } else {
-                index += 1;
-            }
-            continue;
-        }
-        if let Some(open) = quote {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == open {
-                quote = None;
-            }
-            index += 1;
-            continue;
-        }
-        if byte == b'/' && next == Some(b'/') {
-            break;
-        }
-        if byte == b'/' && next == Some(b'*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-        let digit_separator = byte == b'\''
-            && index > 0
-            && bytes[index - 1].is_ascii_hexdigit()
-            && next.is_some_and(|next| next.is_ascii_hexdigit());
-        if byte == b'"' || (byte == b'\'' && !digit_separator) {
-            quote = Some(byte);
-            index += 1;
-            continue;
-        }
-        match byte {
-            b'{' => open_depth += 1,
-            b'}' if open_depth > 0 => open_depth -= 1,
-            b'}' => unmatched_closes += 1,
-            _ => {}
-        }
-        index += 1;
-    }
-    (unmatched_closes, open_depth)
+    code_braces(line).fold((0, 0), |(closes, depth), brace| match brace {
+        b'{' => (closes, depth + 1),
+        _ if depth > 0 => (closes, depth - 1),
+        _ => (closes + 1, depth),
+    })
 }
 
 /// True when the line has a `{` or `}` outside strings and comments.
 pub(crate) fn line_has_brace(line: &str) -> bool {
-    if !line.bytes().any(|byte| matches!(byte, b'{' | b'}')) {
-        return false;
-    }
-    let chars = line.chars().collect::<Vec<_>>();
-    let mut index = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
+    line.contains_any_byte(b"{}") && code_braces(line).next().is_some()
+}
 
-    while let Some(&ch) = chars.get(index) {
-        let next = chars.get(index + 1).copied();
-        if in_block_comment {
-            if ch == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-            } else {
-                index += 1;
+/// The braces of `line` outside literals and comments, in order.
+fn code_braces(line: &str) -> impl Iterator<Item = u8> + '_ {
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    const SCANNED: [bool; 256] = {
+        let mut scanned = [false; 256];
+        let bytes = b"/\"'{}";
+        let mut index = 0;
+        while index < bytes.len() {
+            scanned[bytes[index] as usize] = true;
+            index += 1;
+        }
+        scanned
+    };
+    let bytes = line.as_bytes();
+    // An indent holds none of the bytes read.
+    let mut index = crate::formatter::text::trim::leading_spaces(bytes);
+    std::iter::from_fn(move || {
+        while let Some(offset) = bytes[index..]
+            .iter()
+            .position(|&byte| SCANNED[usize::from(byte)])
+        {
+            index += offset;
+            match bytes[index] {
+                b'/' if bytes.get(index + 1) == Some(&b'/') => break,
+                b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                    index = find_comment_close(&line[index + 2..])
+                        .map_or(bytes.len(), |close| index + 2 + close + 2);
+                    continue;
+                }
+                b'"' => {
+                    index = skip_quoted(bytes, index + 1, b'"');
+                    continue;
+                }
+                b'\'' if !is_byte_digit_separator(bytes, index) => {
+                    index = skip_quoted(bytes, index + 1, b'\'');
+                    continue;
+                }
+                brace @ (b'{' | b'}') => {
+                    index += 1;
+                    return Some(brace);
+                }
+                _ => index += 1,
             }
-            continue;
         }
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            index += 1;
-            continue;
-        }
-        if ch == '/' && next == Some('/') {
-            break;
-        }
-        if ch == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
-            index += 1;
-            continue;
-        }
-        if ch == '{' || ch == '}' {
-            return true;
-        }
-        index += 1;
-    }
-    false
+        index = bytes.len();
+        None
+    })
 }
 
 pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {

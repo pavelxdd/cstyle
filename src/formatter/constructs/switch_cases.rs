@@ -551,7 +551,15 @@ impl SwitchCaseLineTransformer {
             }
 
             if matches!(ch, ' ' | '\t') {
-                pos += 1;
+                let blanks = scan.as_bytes()[pos..]
+                    .iter()
+                    .take_while(|&&byte| matches!(byte, b' ' | b'\t'))
+                    .count();
+                // A run of blanks ends early at a marked colon.
+                pos = match self.marked_label_colon {
+                    Some(colon) if (pos..pos + blanks).contains(&colon) => colon,
+                    _ => pos + blanks,
+                };
                 continue;
             }
 
