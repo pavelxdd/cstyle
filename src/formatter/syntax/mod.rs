@@ -461,6 +461,8 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
+    // Every `*` of a run is declared or not as the run is.
+    let mut star_run = None;
     for (index, token) in tokens.iter().enumerate() {
         let role = match token {
             Token::Operator(operator)
@@ -469,7 +471,15 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
             {
                 OperatorRole::PointerDeclarator
             }
-            Token::Operator(operator) if operator == "*" && in_declared_star_run(tokens, index) => {
+            Token::Operator(operator)
+                if operator == "*" && {
+                    let run = star_run
+                        .filter(|&(first, last, _)| (first..=last).contains(&index))
+                        .unwrap_or_else(|| declared_star_run(tokens, index));
+                    star_run = Some(run);
+                    run.2
+                } =>
+            {
                 OperatorRole::PointerDeclarator
             }
             Token::Operator(operator)
@@ -689,7 +699,9 @@ fn is_qualified_function_pointer_star(tokens: &[Token], tree: &SourceTree, index
     words >= 2 || typedef || words == 1 && tree.groups.enclosing(open).is_none()
 }
 
-fn in_declared_star_run(tokens: &[Token], index: usize) -> bool {
+/// The run of `*`s holding the one at `index`, its first and last, and
+/// whether it declares a name of a type.
+fn declared_star_run(tokens: &[Token], index: usize) -> (usize, usize, bool) {
     let is_star =
         |index: usize| matches!(&tokens[index], Token::Operator(operator) if operator == "*");
     let mut first = index;
@@ -704,9 +716,14 @@ fn in_declared_star_run(tokens: &[Token], index: usize) -> bool {
     {
         last = next;
     }
-    if first == last {
-        return false;
-    }
+    (
+        first,
+        last,
+        first != last && star_run_declares(tokens, first, last),
+    )
+}
+
+fn star_run_declares(tokens: &[Token], first: usize, last: usize) -> bool {
     let declares_name = next_non_layout_token_index(tokens, last + 1)
         .filter(|&name| matches!(tokens[name], Token::Word(_)))
         .and_then(|name| next_non_layout_token_index(tokens, name + 1))

@@ -383,6 +383,9 @@ pub(crate) fn line_brace_imbalance(line: &str) -> (usize, usize) {
 
 /// True when the line has a `{` or `}` outside strings and comments.
 pub(crate) fn line_has_brace(line: &str) -> bool {
+    if !line.bytes().any(|byte| matches!(byte, b'{' | b'}')) {
+        return false;
+    }
     let chars = line.chars().collect::<Vec<_>>();
     let mut index = 0;
     let mut quote = None;

@@ -1023,10 +1023,12 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() {
                 continue;
             }
-            if line_has_brace(code) {
+            if (self.output.code_has(index, b'{') || self.output.code_has(index, b'}'))
+                && line_has_brace(code)
+            {
                 return true;
             }
-            if code.ends_with(';') || self.leaves_paren_open(code) {
+            if code.ends_with(';') || self.output_code_leaves_paren_open(index) {
                 return false;
             }
         }

@@ -20,6 +20,15 @@ use crate::formatter::text::trim::Trimmed;
 /// Statements longer than this are left to the engine.
 const MAX_REPLAYED_TOKENS: usize = 4000;
 
+/// The braces of parens: the tokens' address, the parens, and their first
+/// brace and last that is no compound literal's.
+#[derive(Clone, Copy)]
+pub(crate) struct ParenBraces {
+    address: usize,
+    group: GroupId,
+    braces: (Option<usize>, Option<usize>),
+}
+
 /// The replay of a statement up to a line, kept so the next line of the
 /// statement goes on from it: the tokens' address, the statement start, the
 /// output version, the token reached, and the state there.
@@ -61,27 +70,52 @@ impl FormatEngine<'_> {
                 .tree
                 .previous_code_token(groups.get(group).open)
                 .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
-            || tokens[groups.get(group).open..first]
-                .iter()
-                .any(|token| matches!(token, Token::Symbol('{' | '}')))
         {
             return None;
         }
         // Only a compound literal's braces may follow in the parens.
-        let close = groups.get(group).close.unwrap_or(tokens.len());
-        if (first..close).any(|index| {
-            let brace = match tokens[index] {
-                Token::Symbol('{') => groups.opened_at(index),
-                Token::Symbol('}') => groups.closed_at(index),
-                _ => return false,
-            };
-            brace.is_none_or(|brace| {
-                self.tree.blocks.kind(brace) != Some(BlockKind::CompoundLiteral)
-            })
-        }) {
+        let (first_brace, last_other_brace) = self.paren_braces(group);
+        if first_brace.is_some_and(|brace| brace < first)
+            || last_other_brace.is_some_and(|brace| brace >= first)
+        {
             return None;
         }
         self.astyle_stack_indent(first)
+    }
+
+    /// The first brace in the parens `group` and the last that is no
+    /// compound literal's.
+    fn paren_braces(&self, group: GroupId) -> (Option<usize>, Option<usize>) {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let address = tokens.as_ptr() as usize;
+        if let Some(cached) = self.paren_braces_cache.get()
+            && (cached.address, cached.group) == (address, group)
+        {
+            return cached.braces;
+        }
+        let open = groups.get(group).open;
+        let close = groups.get(group).close.unwrap_or(tokens.len());
+        let mut braces = (None, None);
+        for index in open..close {
+            let brace = match tokens[index] {
+                Token::Symbol('{') => groups.opened_at(index),
+                Token::Symbol('}') => groups.closed_at(index),
+                _ => continue,
+            };
+            braces.0.get_or_insert(index);
+            if brace.is_none_or(|brace| {
+                self.tree.blocks.kind(brace) != Some(BlockKind::CompoundLiteral)
+            }) {
+                braces.1 = Some(index);
+            }
+        }
+        self.paren_braces_cache.set(Some(ParenBraces {
+            address,
+            group,
+            braces,
+        }));
+        braces
     }
 
     /// The indent astyle's continuation stack gives a part of a line that

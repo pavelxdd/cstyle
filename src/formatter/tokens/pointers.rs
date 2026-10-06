@@ -38,6 +38,9 @@ pub(crate) struct PointerRunState {
     /// A `*` aligned off its name before a parenthesized declarator, as in
     /// `char* (*get)(void)`, keeps a space before the paren.
     pub(crate) spaces_declarator_group: bool,
+    /// The last run of one operator read: the tokens' address, the token
+    /// read from, and the run's last token.
+    pub(crate) run_end: Option<(usize, usize, usize)>,
 }
 
 pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {

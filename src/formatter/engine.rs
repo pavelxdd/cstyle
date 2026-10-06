@@ -200,6 +200,13 @@ pub(crate) struct FormatEngine<'a> {
     /// The last brace or newline token looked for: the tokens' address,
     /// where the look started, and the token found.
     pub(crate) brace_or_newline_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last `return` an operand row looked back to: the tokens'
+    /// address, the row's first token, and the `return`.
+    pub(crate) operand_return_cache: std::cell::Cell<Option<(usize, usize, Option<usize>)>>,
+    /// The braces of the last parens looked in: the tokens' address, the
+    /// parens, and their first brace and last that is no compound literal's.
+    pub(crate) paren_braces_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::ParenBraces>>,
     /// The last look for an assignment stacked in a statement.
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
@@ -286,6 +293,8 @@ impl<'a> FormatEngine<'a> {
             line_comment_cache: std::cell::Cell::new(None),
             stack_start_cache: std::cell::Cell::new(None),
             brace_or_newline_cache: std::cell::Cell::new(None),
+            operand_return_cache: std::cell::Cell::new(None),
+            paren_braces_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
@@ -1263,12 +1272,25 @@ impl<'a> FormatEngine<'a> {
         if let Some(Token::Operator(operator)) = tokens.get(index)
             && matches!(operator.as_str(), "*" | "&" | "&&" | "^")
         {
-            let mut last = index;
-            while let Some(Token::Operator(next_operator)) = tokens.get(last + 1)
-                && next_operator == operator
-            {
-                last += 1;
-            }
+            // Each operator of a run ends where the first did.
+            let address = tokens.as_ptr() as usize;
+            let last = match self.pointer_run.run_end {
+                Some((cached_address, from, last))
+                    if cached_address == address && (from..=last).contains(&index) =>
+                {
+                    last
+                }
+                _ => {
+                    let mut last = index;
+                    while let Some(Token::Operator(next_operator)) = tokens.get(last + 1)
+                        && next_operator == operator
+                    {
+                        last += 1;
+                    }
+                    self.pointer_run.run_end = Some((address, index, last));
+                    last
+                }
+            };
             self.pointer_run.star_count = (last - index + 1) * operator.chars().count();
             self.pointer_run.trailing_ws = match tokens.get(last + 1) {
                 Some(Token::Whitespace(ws)) => Some(ws.to_string()),
@@ -1356,6 +1378,15 @@ impl<'a> FormatEngine<'a> {
         match self.output.code_line_of(text) {
             Some((index, _)) => !self.output.paren_imbalance(index).1.is_empty(),
             None => !line_paren_imbalance(text).1.is_empty(),
+        }
+    }
+
+    /// `leaves_paren_open` of the code of output line `index`.
+    pub(crate) fn output_code_leaves_paren_open(&self, index: usize) -> bool {
+        if index + 16 >= self.output.len() {
+            !self.output.paren_imbalance(index).1.is_empty()
+        } else {
+            !line_paren_imbalance(self.output.code(index)).1.is_empty()
         }
     }
 

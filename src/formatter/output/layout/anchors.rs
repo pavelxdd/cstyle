@@ -2815,42 +2815,63 @@ impl FormatEngine<'_> {
     /// value.
     fn returned_operand_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
         self.options.max_code_length?;
         if !matches!(&tokens[first], Token::Operator(operator)
                 if matches!(operator.as_str(), "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "||" | "&&" | "<<" | ">>"))
         {
             return None;
         }
+        let keyword = self.operand_row_return(first)?;
+        let value = next_code_token(tokens, keyword + 1)?;
+        if self.output.line_with_token(value)? != self.output.line_with_token(keyword)? {
+            return None;
+        }
+        Some(self.token_column(value)? + self.case_unindent_spaces())
+    }
+
+    /// The `return` the operand row at `first` continues the value of.
+    fn operand_row_return(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        // The look back depends on nothing but where it stands, so it ends
+        // where the last one did once it reaches the token that one left.
+        let address = tokens.as_ptr() as usize;
+        let cached = self
+            .operand_return_cache
+            .get()
+            .filter(|&(cached_address, from, _)| cached_address == address && from <= first);
         let group = groups.enclosing(first);
         let mut index = first;
-        while let Some(before) = self.tree.previous_code_token(index) {
+        let found = loop {
+            if let Some((_, from, found)) = cached
+                && index == from
+            {
+                break found;
+            }
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break None;
+            };
             if let Some(closed) = groups.closed_at(before) {
                 index = groups.get(closed).open;
                 continue;
             }
             if groups.enclosing(before) != group {
-                return None;
+                break None;
             }
             match &tokens[before] {
-                Token::Word(word) if word == "return" => {
-                    let value = next_code_token(tokens, before + 1)?;
-                    if self.output.line_with_token(value)? != self.output.line_with_token(before)? {
-                        return None;
-                    }
-                    return Some(self.token_column(value)? + self.case_unindent_spaces());
-                }
-                Token::Symbol(';' | '{' | '}' | ',' | '?' | ':') => return None,
+                Token::Word(word) if word == "return" => break Some(before),
+                Token::Symbol(';' | '{' | '}' | ',' | '?' | ':') => break None,
                 Token::Operator(operator)
                     if operator.ends_with('=')
                         && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
                 {
-                    return None;
+                    break None;
                 }
                 _ => index = before,
             }
-        }
-        None
+        };
+        self.operand_return_cache.set(Some((address, first, found)));
+        found
     }
 
     fn return_value_indent(&self, first: usize) -> Option<usize> {
