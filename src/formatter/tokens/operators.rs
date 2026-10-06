@@ -14,7 +14,7 @@ use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start}
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unclosed_delimiter_after, last_unmatched_open_delimiter,
+    ContainsAnyByte, has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
@@ -750,7 +750,7 @@ impl FormatEngine<'_> {
             TemplateAngle::None => {}
         }
         if self.layout.line_state.operator_padding_disabled {
-            let keeps_non_operator_padding = self.current.ends_with([' ', '\t'])
+            let keeps_non_operator_padding = self.current.ends_with_any(b" \t")
                 && ((self.layout.previous == PreviousToken::OpenParen
                     && self.options.pad_parens_inside)
                     || (self.layout.previous == PreviousToken::Comma
@@ -862,7 +862,7 @@ impl FormatEngine<'_> {
                     self.trim_current_end_horizontal_space();
                 } else if !(self.layout.previous == PreviousToken::Comma
                     && (self.options.pad_commas || self.options.pad_operators)
-                    && self.current.ends_with([' ', '\t']))
+                    && self.current.ends_with_any(b" \t"))
                 {
                     self.emit_source_space();
                 }
@@ -1055,7 +1055,7 @@ impl FormatEngine<'_> {
                     // After a binary operator spaced off its left operand.
                     || self.layout.previous == PreviousToken::Operator
                         && self.current.ends_with(' ')
-                        && self.current.trimmed_end().ends_with(['&', '*'])
+                        && self.current.trimmed_end().ends_with_any(b"&*")
                     // No declarator puts a `*` right after a `&`.
                     || self.layout.previous == PreviousToken::Operator
                         && self.current.ends_with('&')
@@ -1290,13 +1290,13 @@ impl FormatEngine<'_> {
             }
             "&" if self.token_input.previous_input_was_adjacent
                 && self.options.pad_operators
-                && self.current.ends_with([' ', '\t'])
+                && self.current.ends_with_any(b" \t")
                 && self.current.trimmed_end().ends_with('*')
                 && self
                     .current
                     .trimmed_end()
                     .strip_suffix('*')
-                    .is_some_and(|before| !before.trimmed_end().ends_with(['*', '&', '^']))
+                    .is_some_and(|before| !before.trimmed_end().ends_with_any(b"*&^"))
                 && !self.looks_like_pointer_declaration_context() =>
             {
                 self.push_unary_prefix(operator);
@@ -1319,9 +1319,9 @@ impl FormatEngine<'_> {
                 self.push_unary_prefix(operator);
             }
             "<<" | ">>" => self.push_binary_operator(operator),
-            _ if language::ASSIGNMENT_OPERATORS.contains(&operator)
+            _ if language::is_assignment_operator(operator)
                 && (self.current.ends_with(' ') || self.current.ends_with('\t'))
-                && self.current.trimmed_end().ends_with(['*', '&', '^'])
+                && self.current.trimmed_end().ends_with_any(b"*&^")
                 && (self.options.pointer_align != PointerAlign::None
                     || !matches!(
                         self.options.reference_align,
@@ -1347,7 +1347,7 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        if language::ASSIGNMENT_OPERATORS.contains(&operator)
+        if language::is_assignment_operator(operator)
             && (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
             && !self.in_aggregate_declaration_brace()
         {
@@ -1497,7 +1497,7 @@ impl FormatEngine<'_> {
             .find(|line| !self.output.code_of(line).trimmed().is_empty())
             .is_some_and(|previous| {
                 let code = self.output.code_trimmed_of(previous);
-                code.ends_with(['(', '[', '{', ',', '=', '?', ':'])
+                code.ends_with_any(b"([{,=?:")
                     || head_ends_binary_operator(code)
                     || code.trimmed_start().starts_with("return ")
             })
@@ -1518,7 +1518,7 @@ impl FormatEngine<'_> {
                 | PreviousToken::OpenParen
                 | PreviousToken::OpenBracket
                 | PreviousToken::Comma
-        ) || self.current.trimmed_end().ends_with([':', '{'])
+        ) || self.current.trimmed_end().ends_with_any(b":{")
             || matches!(trailing_word(&self.current), "return" | "case")
             // A sign leading the line after an opening brace starts an
             // element or a statement.
@@ -1540,7 +1540,7 @@ impl FormatEngine<'_> {
         };
         let before = before.trimmed_end();
         before.is_empty()
-            || before.ends_with(['(', '[', '{', ',', '=', '?', ':'])
+            || before.ends_with_any(b"([{,=?:")
             || trailing_word(before) == "return"
             || head_ends_binary_operator(before)
     }
@@ -1744,7 +1744,7 @@ impl FormatEngine<'_> {
             && (!self.layout.nesting.brace_type_stack.is_empty()
                 || self.layout.nesting.paren_depth > 0)
             && self.layout.previous == PreviousToken::CloseParen
-            && !operator.starts_with(['+', '-', '.'])
+            && !operator.starts_with_any(b"+-.")
     }
 }
 

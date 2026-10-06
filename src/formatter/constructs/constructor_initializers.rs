@@ -229,7 +229,7 @@ impl FormatEngine<'_> {
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
-            if trimmed.ends_with(':') && !trimmed.starts_with(['?', ':']) {
+            if trimmed.ends_with(':') && !trimmed.starts_with_any(b"?:") {
                 return trimmed.contains('(');
             }
             if trimmed.starts_with(':') && !trimmed.starts_with("::") {
@@ -398,7 +398,7 @@ impl FormatEngine<'_> {
                 (trimmed != ":").then(|| trimmed[1..].len() - trimmed[1..].trimmed_start().len());
             return Some(ConstructorScan::Colon { index, after_colon });
         }
-        if trimmed.ends_with(':') && !trimmed.starts_with(['?', ':']) && trimmed.contains('(') {
+        if trimmed.ends_with(':') && !trimmed.starts_with_any(b"?:") && trimmed.contains('(') {
             if trimmed.contains('?') || self.colon_line_is_ternary_arm(index) {
                 return Some(ConstructorScan::Stop);
             }
@@ -494,7 +494,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#:,{}") {
             return None;
         }
         let previous = &self.output[self.output.last_lines_where(LineFilter::NoLineComment)[0]?];
@@ -567,7 +567,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}', ')']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#:,{})") {
             return None;
         }
         // The look back reads at most 64 lines in scope, past blank lines
@@ -666,7 +666,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#:,{}") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -721,7 +721,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if !trimmed.starts_with(['?', ':'])
+        if !trimmed.starts_with_any(b"?:")
             || self.constructor_initializer_base_indent_spaces().is_none()
         {
             return None;
@@ -746,7 +746,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let width = self.options.indent_width;
         let tab_width = self.options.tab_width;
-        if current.is_empty() || current.starts_with(['#', '{', '}']) {
+        if current.is_empty() || current.starts_with_any(b"#{}") {
             return None;
         }
         let mut initializer = None;

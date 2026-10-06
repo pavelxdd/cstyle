@@ -11,6 +11,7 @@ use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
@@ -344,7 +345,7 @@ impl FormatEngine<'_> {
                 Some(BraceType::Struct | BraceType::Union | BraceType::Enum | BraceType::Class)
             );
         let is_word_operator = matches!(word, "and" | "or");
-        let current_ends_pointer_operator = self.current.trimmed_end().ends_with(['*', '&', '^']);
+        let current_ends_pointer_operator = self.current.trimmed_end().ends_with_any(b"*&^");
         let attaches_after_pointer_array_const = word == "const"
             && self.layout.previous == PreviousToken::Operator
             && self.current.trimmed_end().ends_with('*')
@@ -356,7 +357,7 @@ impl FormatEngine<'_> {
             .trim_end_matches('&')
             .trimmed_end();
         let pointer_name_aligns_mixed_declarator = self.options.pointer_align == PointerAlign::Name
-            && current_without_references.ends_with(['*', '^']);
+            && current_without_references.ends_with_any(b"*^");
         let trailing_operator = if self.current.trimmed_end().ends_with('&') {
             "&"
         } else if self.current.trimmed_end().ends_with('^') {
@@ -391,7 +392,7 @@ impl FormatEngine<'_> {
                 .is_none_or(str::is_empty);
         if word == "noexcept"
             && self.layout.previous == PreviousToken::CloseParen
-            && !self.current.ends_with([' ', '\t'])
+            && !self.current.ends_with_any(b" \t")
         {
             self.emit_source_space();
         }
@@ -440,7 +441,7 @@ impl FormatEngine<'_> {
         }
         if self.layout.previous == PreviousToken::Comma
             && self.options.pad_commas
-            && !self.current.ends_with([' ', '\t'])
+            && !self.current.ends_with_any(b" \t")
         {
             self.ensure_space();
         }

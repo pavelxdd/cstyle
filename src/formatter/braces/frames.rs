@@ -10,7 +10,7 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
-    is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, leading_identifier};
@@ -112,7 +112,7 @@ impl FormatEngine<'_> {
             .take(32)
         {
             let code = &self.output.code_of(previous);
-            if code.trimmed_end().ends_with([';', '{', '}']) {
+            if code.trimmed_end().ends_with_any(b";{}") {
                 return None;
             }
             let (closes, opens) = line_scan::line_paren_imbalance(code);
@@ -445,9 +445,7 @@ impl FormatEngine<'_> {
                     .rev()
                     .skip(1)
                     .take(8)
-                    .take_while(|line| {
-                        !self.output.code_trimmed_of(line).ends_with([';', '{', '}'])
-                    })
+                    .take_while(|line| !self.output.code_trimmed_of(line).ends_with_any(b";{}"))
                     .find(|line| starts_header(line))
             {
                 line = header_line;

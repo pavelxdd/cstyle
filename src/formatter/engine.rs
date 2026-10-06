@@ -1520,7 +1520,7 @@ impl<'a> FormatEngine<'a> {
         };
         current[open + 1..current.len() - 1]
             .trimmed_end()
-            .ends_with(['*', '&', '^'])
+            .ends_with_any(b"*&^")
     }
 
     pub(crate) fn current_ends_sizeof_pointer_expr(&self) -> bool {
@@ -1534,7 +1534,7 @@ impl<'a> FormatEngine<'a> {
         trailing_word(current[..open].trimmed_end()) == "sizeof"
             && current[open + 1..current.len() - 1]
                 .trimmed_end()
-                .ends_with(['*', '&', '^'])
+                .ends_with_any(b"*&^")
     }
 
     pub(crate) fn current_ends_size_operator_call(&self) -> bool {
@@ -1882,9 +1882,10 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Pico
             )
             && (self.current.trimmed_start().starts_with('}')
-                || self.current.trimmed_start().starts_with([
-                    '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.', '~',
-                ]))
+                || self
+                    .current
+                    .trimmed_start()
+                    .starts_with_any(b"<>|&+-*/%=!?:,.~"))
         {
             self.finish_line();
             self.layout.continuation_indent.clear_next_line();
@@ -2044,8 +2045,8 @@ impl<'a> FormatEngine<'a> {
         let code = self.current[..self.current_trailing_comment_split_limit()].trimmed_end();
         let trimmed = code.trimmed_start();
         !trimmed.is_empty()
-            && !trimmed.starts_with(['#', '{', '}'])
-            && !code.ends_with([',', ';', '\\'])
+            && !trimmed.starts_with_any(b"#{}")
+            && !code.ends_with_any(b",;\\")
             && !operators::head_ends_binary_operator(code)
             && self.open_paren_column_of(code).is_none()
     }

@@ -411,7 +411,7 @@ impl FormatEngine<'_> {
         let current = line.trimmed_start();
         if self.options.max_code_length.is_none()
             || current.is_empty()
-            || current.starts_with(['#', '{', '}'])
+            || current.starts_with_any(b"#{}")
         {
             return None;
         }
@@ -441,7 +441,7 @@ fn ends_statement_before_comment(head: &str) -> bool {
         };
         code = code[..open].trimmed_end();
     }
-    code.is_empty() || code.ends_with([';', '{', '}'])
+    code.is_empty() || code.ends_with_any(b";{}")
 }
 
 impl FormatEngine<'_> {
@@ -766,7 +766,7 @@ fn continuation_indent_for_split(
             | SplitKind::AssignmentOrComparison
             | SplitKind::ArithmeticOperator
             | SplitKind::StringConcat
-    ) && !head.trimmed_end().ends_with(['(', '[']);
+    ) && !head.trimmed_end().ends_with_any(b"([");
     // A paren opened after the assignment stacks past its value.
     let paren_after_assignment = top_level_assignment_index(line).is_some_and(|assignment| {
         unmatched_open_paren_columns(head)
@@ -1117,7 +1117,7 @@ fn split_result(line: &str, width: usize, rules: SplitRules) -> Option<SplitResu
 fn split_result_kind(line: &str, split_at: usize, priority: usize) -> SplitKind {
     let head = line[..split_at].trimmed_end();
     let tail = line[split_at..].trimmed_start();
-    if head.ends_with(['(', '[']) {
+    if head.ends_with_any(b"([") {
         return SplitKind::Delimiter;
     }
     if matches!(priority, 79 | 80) {
@@ -1250,7 +1250,7 @@ fn split_point_at(
             }
         } else if operator == "=" {
             Some((end, 54))
-        } else if language::ASSIGNMENT_OPERATORS.contains(&operator)
+        } else if language::is_assignment_operator(operator)
             || matches!(operator, "==" | "!=" | "<=>" | "<=" | ">=" | "<" | ">")
         {
             if line[..end].trimmed_end().len() > width && ends_single_string_call(&line[..start]) {
@@ -1294,12 +1294,7 @@ fn split_point_at(
         ';' if line[end..].trimmed_start().starts_with('}') => None,
         ';' => Some((end, 75)),
         // astyle splits after no paren that a literal or paren follows.
-        '(' if line[end..]
-            .trimmed_start()
-            .starts_with([')', '(', '"', '\'']) =>
-        {
-            None
-        }
+        '(' if line[end..].trimmed_start().starts_with_any(b")(\"'") => None,
         '(' if is_single_string_call_at(line, index) => None,
         '(' if is_lambda_capture_header(line[..index].trimmed_end()) => Some((end, 75)),
         '(' if is_function_call_split(line, index) => Some((end, 55)),
@@ -1457,7 +1452,7 @@ fn is_declaration_head(head: &str) -> bool {
 fn is_declarator_pointer(line: &str, start: usize, end: usize) -> bool {
     let before = &line[..start];
     matches!(&line[start..end], "*" | "&")
-        && before.ends_with([' ', '\t'])
+        && before.ends_with_any(b" \t")
         && line[end..]
             .chars()
             .next()
@@ -1929,7 +1924,7 @@ fn astyle_find_split_point(
 
 fn in_exponent(line: &str, index: usize) -> bool {
     let head = &line[..index];
-    head.ends_with(['e', 'E'])
+    head.ends_with_any(b"eE")
         && head
             .rsplit(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.' || ch == '_'))
             .next()

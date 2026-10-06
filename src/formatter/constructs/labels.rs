@@ -109,7 +109,7 @@ pub(crate) fn class_scope_indent(
 /// Whether `line` ends its code with an operator the next line continues.
 pub(crate) fn ends_with_binary_operator(line: &str) -> bool {
     let code = line[..trailing_comment_split_limit(line)].trimmed_end();
-    code.ends_with(['|', '&', '+', '-', '*', '/', '^', '<', '>', '=']) && !code.ends_with("->")
+    code.ends_with_any(b"|&+-*/^<>=") && !code.ends_with("->")
 }
 
 pub(crate) fn candidate_line_indent_spaces(
@@ -164,15 +164,13 @@ pub(crate) fn access_label_body_indent_spaces(
     options: &FormatOptions,
 ) -> Option<usize> {
     // An access label ends with its colon.
-    if !previous.contains(':') {
-        return None;
-    }
+    find_byte(previous.as_bytes(), b':')?;
     let current = line.trimmed_start();
     let previous_trimmed = previous[..trailing_comment_split_limit(previous)]
         .trimmed_end()
         .trimmed_start();
     if !is_access_label(previous_trimmed.trimmed(), &options.access_labels)
-        || current.starts_with(['#', '}', ')', ';'])
+        || current.starts_with_any(b"#});")
         || current.ends_with(':')
     {
         return None;
@@ -206,7 +204,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        if line.trimmed_start().starts_with(['{', '}', '#']) {
+        if line.trimmed_start().starts_with_any(b"{}#") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -301,7 +299,7 @@ impl FormatEngine<'_> {
                     * self.options.indent_width,
             );
         }
-        (!line.trimmed_start().starts_with(['#', '{']))
+        (!line.trimmed_start().starts_with_any(b"#{"))
             .then(|| current_indent_spaces.unwrap_or(0).max(body_spaces))
     }
 
@@ -318,7 +316,7 @@ impl FormatEngine<'_> {
             || !uses_normal_indent
             || closes_outer_delimiter
             || has_owned_continuation
-            || line_start.starts_with([')', ']', '}'])
+            || line_start.starts_with_any(b")]}")
         {
             return None;
         }
@@ -513,15 +511,15 @@ fn leads_with_goto_label(line: &str) -> bool {
             "case" | "default" | "public" | "protected" | "private" | "signals" | "slots"
         )
         && !label.starts_with(|ch: char| ch.is_ascii_digit())
-        && rest.starts_with([' ', '\t', ';'])
-        && !rest.trimmed_start().starts_with(['{', ':', '/'])
+        && rest.starts_with_any(b" \t;")
+        && !rest.trimmed_start().starts_with_any(b"{:/")
         // A statement follows; message arguments and base lists do not.
         && !rest.contains_any_byte(b"][")
         && !matches!(
             leading_identifier(rest.trimmed_start()),
             "public" | "protected" | "private" | "virtual"
         )
-        && strip_trailing_comment(rest).trimmed_end().ends_with([';', '}'])
+        && strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}")
         // A bit-field width is a constant; a statement calls, assigns or
         // jumps.
         && {
@@ -562,7 +560,7 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
     let before_colon = trimmed.strip_suffix(':').unwrap_or(trimmed).trimmed_end();
     trimmed.ends_with(':')
         && !is_scope_resolution_prefix(trimmed)
-        && !trimmed.starts_with([':', '}'])
+        && !trimmed.starts_with_any(b":}")
         && !trimmed.contains('?')
         && !is_operator_expression(before_colon)
         && unmatched_open_paren_column(before_colon).is_none()

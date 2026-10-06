@@ -10,7 +10,8 @@ use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    is_comment_line, line_comment_split_limit, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_line, line_comment_split_limit, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
@@ -190,10 +191,10 @@ impl FormatEngine<'_> {
                         .unwrap_or(0);
                     let extra = if self.unmatched_closing_brace_recovery {
                         0
-                    } else if statement.trimmed_start().starts_with([
-                        '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-                        '~',
-                    ]) {
+                    } else if statement
+                        .trimmed_start()
+                        .starts_with_any(b"<>|&+-*/%=!?:,.~")
+                    {
                         self.options.indent_width * 2
                     } else {
                         self.options.indent_width

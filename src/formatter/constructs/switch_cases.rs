@@ -1016,7 +1016,7 @@ impl FormatEngine<'_> {
                 + self.options.indent_width
                 + adjusted_delta
         } else if previous_code.ends_with(',')
-            && !line_start.starts_with(['#', '}', ')'])
+            && !line_start.starts_with_any(b"#})")
             && adjusted_delta > 0
         {
             leading_visual_width(previous, self.options.tab_width) + adjusted_delta
@@ -1052,7 +1052,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !split_else_context
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
         {
             return None;
         }
@@ -1109,7 +1109,7 @@ impl FormatEngine<'_> {
                 .max(self.layout.line_adjuster.next_line_case_unindent_depth())
                 * self.options.indent_width;
         if line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['#', '{', '}'])
+            && !line.trimmed_start().starts_with_any(b"#{}")
             && line_trimmed != "break;"
             && self
                 .layout
@@ -1161,7 +1161,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !self.preprocessor.split_else.extra_indent
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
         {
             return None;
         }
@@ -1253,7 +1253,7 @@ impl FormatEngine<'_> {
         current_spaces: Option<usize>,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}', '/'])
+            || line.trimmed_start().starts_with_any(b"#{}/")
             || self.layout.line_adjuster.total_case_unindent_depth() == 0
             || self
                 .layout
@@ -2061,9 +2061,7 @@ impl FormatEngine<'_> {
             || closes_outer_delimiter
             || has_owned_continuation
             || is_closing_header
-            || line
-                .trimmed_start()
-                .starts_with(['#', '{', '}', '/', ')', ']'])
+            || line.trimmed_start().starts_with_any(b"#{}/)]")
             || self
                 .output
                 .last_line_outside_comment()
@@ -2127,7 +2125,7 @@ impl FormatEngine<'_> {
             || closes_outer_delimiter
             || has_owned_continuation
             || follows_ternary_arm
-            || line_start.starts_with([')', ']', '}'])
+            || line_start.starts_with_any(b")]}")
             || self.pending_line_continues_statement()
             || self.continues_aligned_brace_elements()
         {
@@ -2249,7 +2247,7 @@ impl FormatEngine<'_> {
     pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind, line: &str) {
         // A statement before the first label stands in the case body too.
         let statement_in_switch_body = line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with(['{', '}', '#', '/'])
+            && !line.trimmed_start().starts_with_any(b"{}#/")
             && self.directly_in_switch_body();
         if line_kind == LineKind::SwitchLabel || statement_in_switch_body {
             let current = self.layout.nesting.brace_header_stack.len();
@@ -2341,7 +2339,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
-        if line.trimmed_start().starts_with(['#', '{', '}', '/'])
+        if line.trimmed_start().starts_with_any(b"#{}/")
             || find_case_colon(line).is_some()
             || self.pending_line_is_label(line)
             || self

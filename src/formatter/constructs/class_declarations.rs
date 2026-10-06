@@ -4,7 +4,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::signature_ends_with_parameter_list;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::line_scan::{ContainsAnyByte, trailing_comment_split_limit};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
@@ -106,7 +106,7 @@ impl FormatEngine<'_> {
         }
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
-            !trimmed.is_empty() && !trimmed.starts_with(['#', ':', ','])
+            !trimmed.is_empty() && !trimmed.starts_with_any(b"#:,")
         }) else {
             return false;
         };

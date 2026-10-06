@@ -13,7 +13,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{line_brace_imbalance, preprocessor_directive};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, line_brace_imbalance, preprocessor_directive,
+};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
@@ -337,10 +339,7 @@ impl FormatEngine<'_> {
             && !self.current_is_blank()
             && next_is_adjacent
             && matches!(next, Some(Token::Word(_) | Token::Number(_)))
-            && self
-                .current
-                .trimmed_end()
-                .ends_with(['+', '-', '*', '/', '%', '&', '|', '!', '~'])
+            && self.current.trimmed_end().ends_with_any(b"+-*/%&|!~")
         {
             self.current.push('}');
             self.layout.command_state.observe_char('}');

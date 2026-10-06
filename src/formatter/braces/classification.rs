@@ -10,7 +10,7 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::line_scan::{
-    is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
+    ContainsAnyByte, is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
     unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
@@ -342,7 +342,7 @@ impl FormatEngine<'_> {
                 .is_none_or(|previous| {
                     let code = self.output.code_trimmed_of(previous);
                     code.is_empty()
-                        || code.ends_with([';', '}'])
+                        || code.ends_with_any(b";}")
                         || code.trimmed_start().starts_with('#')
                 })
             && (self.token_input.token_begins_source_line
@@ -366,7 +366,7 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
                     let code = self.output.code_trimmed_of(previous);
-                    code.ends_with([';', '{', '}']) || code.trimmed_start().starts_with('#')
+                    code.ends_with_any(b";{}") || code.trimmed_start().starts_with('#')
                 })
         {
             // A macro word heading a block in code, as `SEH_TRY`.
@@ -430,7 +430,7 @@ impl FormatEngine<'_> {
             .take(16)
         {
             let code = self.output.code_trimmed_of(line);
-            if code.ends_with([';', '{', '}']) {
+            if code.ends_with_any(b";{}") {
                 break;
             }
             lines.push(code);

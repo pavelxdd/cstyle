@@ -417,7 +417,7 @@ fn define_body_is_expression_continuation(parts: &[&str]) -> bool {
             // A control header starts statements, not an expression.
             && !["if", "for", "while", "switch", "do", "else"].iter().any(|header| {
                 trimmed.strip_prefix(header).is_some_and(|rest| {
-                    rest.is_empty() || rest.starts_with([' ', '\t', '('])
+                    rest.is_empty() || rest.starts_with_any(b" \t(")
                 })
             })
     })
@@ -450,7 +450,7 @@ fn define_complete_designated_initializer_row(line: &str) -> bool {
     let trimmed = line.trimmed();
     (trimmed.starts_with('.') || trimmed.starts_with('['))
         && (trimmed.ends_with(',')
-            || !(trimmed.ends_with(['=', '(', '[', '{'])
+            || !(trimmed.ends_with_any(b"=([{")
                 || crate::formatter::tokens::operators::head_ends_binary_operator(trimmed)))
 }
 

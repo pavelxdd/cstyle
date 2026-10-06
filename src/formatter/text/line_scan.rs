@@ -34,15 +34,44 @@ pub(crate) trait ContainsAnyByte {
     /// Whether the text holds `needle`, looked for from the first byte of
     /// `needle` on; quick when that byte is rare.
     fn contains_from_first_byte(&self, needle: &str) -> bool;
+
+    /// `str::find` of `needle`, looked for from the first byte of `needle`
+    /// on; quick when that byte is rare.
+    fn find_from_first_byte(&self, needle: &str) -> Option<usize>;
+
+    /// Whether the text starts with one of the ASCII bytes of `set`.
+    fn starts_with_any(&self, set: &[u8]) -> bool;
+
+    /// Whether the text ends with one of the ASCII bytes of `set`.
+    fn ends_with_any(&self, set: &[u8]) -> bool;
 }
 
 impl ContainsAnyByte for str {
+    fn starts_with_any(&self, set: &[u8]) -> bool {
+        debug_assert!(set.is_ascii());
+        self.as_bytes()
+            .first()
+            .is_some_and(|byte| set.contains(byte))
+    }
+
+    fn ends_with_any(&self, set: &[u8]) -> bool {
+        debug_assert!(set.is_ascii());
+        self.as_bytes()
+            .last()
+            .is_some_and(|byte| set.contains(byte))
+    }
+
     fn contains_from_first_byte(&self, needle: &str) -> bool {
+        self.find_from_first_byte(needle).is_some()
+    }
+
+    fn find_from_first_byte(&self, needle: &str) -> Option<usize> {
         match needle.as_bytes().first() {
             Some(&first) => {
-                find_byte(self.as_bytes(), first).is_some_and(|at| self[at..].contains(needle))
+                let at = find_byte(self.as_bytes(), first)?;
+                self[at..].find(needle).map(|offset| at + offset)
             }
-            None => true,
+            None => Some(0),
         }
     }
 
@@ -87,7 +116,7 @@ pub(crate) fn is_comment_line(line: &str) -> bool {
         || trimmed.starts_with("/*")
         || trimmed
             .strip_prefix('*')
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t', '*', '/']))
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with_any(b" \t*/"))
 }
 
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
@@ -870,10 +899,15 @@ mod tests {
                     "{text:?} {byte}"
                 );
             }
-            for needle in ["/", "//", "x =", "ü/", "0123", "abcdef0"] {
+            for needle in ["", "/", "//", "x =", "ü/", "0123", "abcdef0"] {
                 assert_eq!(
                     super::ContainsAnyByte::contains_from_first_byte(text, needle),
                     text.contains(needle),
+                    "{text:?} {needle:?}"
+                );
+                assert_eq!(
+                    super::ContainsAnyByte::find_from_first_byte(text, needle),
+                    text.find(needle),
                     "{text:?} {needle:?}"
                 );
             }

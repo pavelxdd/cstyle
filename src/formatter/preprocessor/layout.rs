@@ -230,7 +230,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
             || is_comment_line(line_start)
         {
             return None;
@@ -284,7 +284,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
             || is_comment_line(line_start)
             || !split_else_state_active
             || !self.commented_split_else_preprocessor_region_active()
@@ -449,7 +449,7 @@ impl FormatEngine<'_> {
         context: &StructuralSplitElseBodyContext,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if line_start.starts_with(['{', '}']) {
+        if line_start.starts_with_any(b"{}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -619,7 +619,7 @@ impl FormatEngine<'_> {
                     leading_visual_width(line, self.options.tab_width) + self.options.indent_width,
                 );
             }
-            if trimmed.starts_with('#') || trimmed.starts_with(['{', '}']) {
+            if trimmed.starts_with('#') || trimmed.starts_with_any(b"{}") {
                 break;
             }
         }
@@ -742,7 +742,7 @@ impl FormatEngine<'_> {
         if self.preprocessor.split_else.extra_indent
             && self.layout.indentation.indent() < self.preprocessor.split_else.brace_indent
             && !trimmed.is_empty()
-            && !trimmed.starts_with(['#', '}'])
+            && !trimmed.starts_with_any(b"#}")
         {
             self.clear_preprocessor_split_else_indent();
         }
@@ -937,7 +937,7 @@ impl FormatEngine<'_> {
             let trimmed = self.output.code_trimmed(index);
             if code.ends_with('{')
                 && !trimmed.starts_with('#')
-                && !self.output[index].starts_with([' ', '\t'])
+                && !self.output[index].starts_with_any(b" \t")
             {
                 break;
             }
@@ -1083,7 +1083,7 @@ impl FormatEngine<'_> {
                 || branch_trimmed.ends_with(" else")
                 || (is_braceless_header_line(branch_trimmed)
                     || starts_header_word(branch_trimmed, "if"))
-                    && !branch_code.ends_with([';', '}'])
+                    && !branch_code.ends_with_any(b";}")
             {
                 return Some(
                     leading_visual_width(branch, self.options.tab_width)
@@ -1198,7 +1198,7 @@ impl FormatEngine<'_> {
             && (trimmed.contains("struct")
                 || previous_code.trimmed_start().contains("struct")
                 || previous_code.trimmed_start().starts_with('}'))
-            && !trimmed.starts_with(['#', '}'])
+            && !trimmed.starts_with_any(b"#}")
             && !is_comment_line(trimmed)
         {
             return Some(
@@ -1206,7 +1206,7 @@ impl FormatEngine<'_> {
             );
         }
         if previous_code.ends_with("};")
-            && !trimmed.starts_with(['#', '{', '}'])
+            && !trimmed.starts_with_any(b"#{}")
             && !is_comment_line(trimmed)
         {
             return Some(leading_visual_width(previous, self.options.tab_width));
@@ -1285,7 +1285,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !self.preprocessor.split_else.extra_indent
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
         {
             return None;
         }

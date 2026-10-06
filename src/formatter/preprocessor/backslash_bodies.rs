@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
@@ -67,7 +68,7 @@ impl FormatEngine<'_> {
             self.backslash_body.parts = Some((parts, indent));
             return true;
         }
-        let Some(split) = line.find("\\{") else {
+        let Some(split) = line.find_from_first_byte("\\{") else {
             return false;
         };
         let raw_prefix = &line[..split];

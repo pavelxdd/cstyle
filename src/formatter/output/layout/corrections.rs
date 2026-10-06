@@ -8,7 +8,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::{code_holds_word, preprocessor_directive};
+use crate::formatter::text::line_scan::{ContainsAnyByte, code_holds_word, preprocessor_directive};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
@@ -29,7 +29,7 @@ impl FormatEngine<'_> {
                 BraceStyle::None | BraceStyle::Allman
             )
             && line_kind == LineKind::Normal
-            && !line_start.starts_with(['#', '{', '}'])
+            && !line_start.starts_with_any(b"#{}")
         {
             let previous_brace_indent =
                 self.output
@@ -65,7 +65,7 @@ impl FormatEngine<'_> {
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line_start.starts_with(['.', '['])
+        ) && line_start.starts_with_any(b".[")
             && self.current_inline_array_column().is_none()
             && let Some(frame) = self
                 .layout
@@ -77,7 +77,7 @@ impl FormatEngine<'_> {
         }
         if self.options.brace_style == BraceStyle::Whitesmith
             && line_kind == LineKind::Normal
-            && !line_start.starts_with(['#', '{', '}', '/'])
+            && !line_start.starts_with_any(b"#{}/")
             && self
                 .output
                 .last_line_outside_comment()
@@ -104,7 +104,7 @@ impl FormatEngine<'_> {
             active_brace
         };
         if line_kind == LineKind::Normal
-            && !line_start.starts_with(['#', '{', '}'])
+            && !line_start.starts_with_any(b"#{}")
             && self
                 .output
                 .last_line_outside_comment()
@@ -132,7 +132,7 @@ impl FormatEngine<'_> {
         {
             exact_indent_spaces = Some(spaces);
         } else if line_kind == LineKind::Normal
-            && !line_start.starts_with(['#', '{', '}', '/'])
+            && !line_start.starts_with_any(b"#{}/")
             && !is_header(self.options, leading_identifier(line))
             && self
                 .output
@@ -201,7 +201,7 @@ impl FormatEngine<'_> {
                 trimmed == *header
                     || trimmed
                         .strip_prefix(header)
-                        .is_some_and(|rest| rest.starts_with([' ', '\t']))
+                        .is_some_and(|rest| rest.starts_with_any(b" \t"))
             }) && !previous_code.contains('(')
             {
                 exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
@@ -323,7 +323,7 @@ impl FormatEngine<'_> {
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
         if line_kind == LineKind::Normal
-            && !line_start.starts_with(['#', '(', ')', '{', '}'])
+            && !line_start.starts_with_any(b"#(){}")
             && self
                 .argument_after_lambda_call_argument_indent_spaces(line)
                 .is_none()
@@ -395,7 +395,7 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(spaces);
         }
         if line_kind == LineKind::Normal
-            && !line_start.starts_with(['{', '}'])
+            && !line_start.starts_with_any(b"{}")
             && !starts_header_word(line_start, "switch")
             && let Some(spaces) = self.direct_switch_body_indent_spaces()
         {

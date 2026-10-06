@@ -13,6 +13,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -208,9 +209,9 @@ impl FormatEngine<'_> {
             let opens_block = code.strip_suffix('{').is_some_and(|head| {
                 head.trimmed_end()
                     .strip_suffix('=')
-                    .is_none_or(|before| before.ends_with(['=', '!', '<', '>']))
+                    .is_none_or(|before| before.ends_with_any(b"=!<>"))
             });
-            if depth <= 0 && (code.is_empty() || code.ends_with([';', '}']) || opens_block) {
+            if depth <= 0 && (code.is_empty() || code.ends_with_any(b";}") || opens_block) {
                 statement = row + 1;
             }
         }
@@ -460,7 +461,7 @@ impl FormatEngine<'_> {
             let code = code.strip_suffix('\\').unwrap_or(code).trimmed_end();
             code.is_empty()
                 || code.starts_with('#')
-                || code.ends_with([';', '{', '}'])
+                || code.ends_with_any(b";{}")
                 || ends_label(code)
         };
         let mut start = index;

@@ -231,7 +231,7 @@ impl FormatEngine<'_> {
             .output
             .code_before_comment(previous_index)
             .trimmed_end();
-        if previous_code.trimmed_start().starts_with([':', ',']) {
+        if previous_code.trimmed_start().starts_with_any(b":,") {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
         }
         let is_header_condition_continuation =
@@ -265,9 +265,7 @@ impl FormatEngine<'_> {
             })
             || !(head_ends_binary_operator(previous_code)
                 || previous_code.ends_with("->")
-                || previous_code.trimmed_start().starts_with([
-                    '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', '.', '~',
-                ]))
+                || previous_code.trimmed_start().starts_with_any(b"<>|&+-*/%=!?.~"))
         {
             return None;
         }
@@ -281,7 +279,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
-            || line_start.starts_with(['{', '}', '#'])
+            || line_start.starts_with_any(b"{}#")
             || ["do", "if", "for", "while", "switch"]
                 .iter()
                 .any(|word| starts_header_word(line_start, word))
@@ -363,7 +361,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if line_start.starts_with(['{', '}'])
+        if line_start.starts_with_any(b"{}")
             || line.trimmed_end().ends_with('{')
             || is_lambda_body_header(line_start)
             || !self
@@ -463,9 +461,7 @@ impl FormatEngine<'_> {
         self.output
             .code_of(previous)
             .trimmed_start()
-            .starts_with([
-                '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-            ])
+            .starts_with_any(b"<>|&+-*/%=!?:,.")
             .then_some(0)
     }
 
@@ -606,7 +602,7 @@ impl FormatEngine<'_> {
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
-            if code.ends_with([';', '{', '}']) {
+            if code.ends_with_any(b";{}") {
                 return None;
             }
             let (closes, mut opens) = self.paren_imbalance_of(code);
@@ -980,7 +976,7 @@ impl FormatEngine<'_> {
             self.current.replace(line);
             self.current.restore_tokens(tokens);
         }
-        if !self.current.ends_with([' ', '\t']) {
+        if !self.current.ends_with_any(b" \t") {
             self.current.push_str("   ");
         }
         self.current.push('{');
@@ -1656,9 +1652,10 @@ impl FormatEngine<'_> {
                 | BraceStyle::Gnu
                 | BraceStyle::Horstmann
                 | BraceStyle::Pico
-        ) && self.current.trimmed_start().starts_with([
-            '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-        ]);
+        ) && self
+            .current
+            .trimmed_start()
+            .starts_with_any(b"<>|&+-*/%=!?:,.");
         // An enum brace that starts its source line stays broken.
         let source_broken_enum =
             brace_type == BraceType::Enum && self.token_input.token_begins_source_line;
@@ -2102,9 +2099,10 @@ impl FormatEngine<'_> {
         let gnu_macro_open_brace =
             self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
-            && self.current.trimmed_start().starts_with([
-                '<', '>', '|', '&', '+', '-', '*', '/', '%', '=', '!', '?', ':', ',', '.',
-            ]);
+            && self
+                .current
+                .trimmed_start()
+                .starts_with_any(b"<>|&+-*/%=!?:,.");
         let source_attached_malformed_open_brace = !self.options.remove_braces
             && brace.header.is_none()
             && !self.current_is_blank()
@@ -2136,7 +2134,7 @@ impl FormatEngine<'_> {
                     // The line publishes as it stands, so it takes its
                     // indent here.
                     let lead = self.current_line_indent_spaces();
-                    if !self.current.starts_with([' ', '\t']) {
+                    if !self.current.starts_with_any(b" \t") {
                         for _ in 0..lead {
                             self.current.insert(0, ' ');
                         }
@@ -2983,7 +2981,7 @@ impl FormatEngine<'_> {
                 comment_start < last.len()
                     && !code.is_empty()
                     && !code.starts_with('#')
-                    && !code.ends_with([';', '{', '}', ','])
+                    && !code.ends_with_any(b";{},")
             })
         {
             return self.style_attaches_opening_brace(brace_type, None);

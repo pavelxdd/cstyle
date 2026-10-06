@@ -181,7 +181,7 @@ impl FormatEngine<'_> {
                 self.previous_was_newline = false;
             }
             '\\' => {
-                if !self.current.ends_with([' ', '\t']) {
+                if !self.current.ends_with_any(b" \t") {
                     self.emit_source_space();
                 }
                 self.current.push('\\');
@@ -362,7 +362,7 @@ impl FormatEngine<'_> {
         } else if !outside_pad
             && self.layout.previous == PreviousToken::Operator
             && self.options.pointer_align == PointerAlign::Name
-            && self.current.trimmed_end().ends_with(['*', '^'])
+            && self.current.trimmed_end().ends_with_any(b"*^")
             && self.looks_like_pointer_declaration_context()
             && !self.active_token_in_brackets()
         {
@@ -372,7 +372,7 @@ impl FormatEngine<'_> {
         } else if outside_pad {
             self.pad_before_open_paren_space();
         } else if self.options.unpad_parens
-            && self.current.ends_with([' ', '\t'])
+            && self.current.ends_with_any(b" \t")
             && self.current.trimmed_end().ends_with('[')
         {
             // Unpadding takes the space out from after a bracket.
@@ -382,16 +382,16 @@ impl FormatEngine<'_> {
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma
             )
-            && self.current.ends_with([' ', '\t'])
+            && self.current.ends_with_any(b" \t")
             && !self.current_is_blank()
         {
             // Unpadding leaves at most one space before the paren, none
             // after a negation.
             self.trim_current_end();
-            if !self.current.ends_with(['!', '~']) {
+            if !self.current.ends_with_any(b"!~") {
                 self.current.push(' ');
             }
-        } else if self.pointer_run.spaces_declarator_group && self.current.ends_with([' ', '\t']) {
+        } else if self.pointer_run.spaces_declarator_group && self.current.ends_with_any(b" \t") {
             // The gap moved past a type's star stays before its group.
         } else if !handled_objc_return_paren
             && !handled_objc_param_paren
@@ -470,7 +470,7 @@ impl FormatEngine<'_> {
         let opener_line_indent = self.open_paren_line_indent_spaces(&current_word);
         let opener_output_column = opener_line_indent + self.current_char_len();
         if std::mem::take(&mut self.pointer_run.spaces_declarator_group)
-            && !self.current.ends_with([' ', '\t'])
+            && !self.current.ends_with_any(b" \t")
         {
             self.current.push(' ');
         }
@@ -584,7 +584,7 @@ impl FormatEngine<'_> {
                 .as_deref()
                 .is_some_and(|gap| gap.contains('\t'))
             && self.current.ends_with(' ')
-            && self.current.trimmed_end().ends_with(['*', '&', '^']);
+            && self.current.trimmed_end().ends_with_any(b"*&^");
         if self.options.pad_parens_inside && !self.current.ends_with('(') {
             self.pad_inside_paren_space();
         } else if close_paren_out {
@@ -726,7 +726,7 @@ impl FormatEngine<'_> {
                 declarator_alignment,
                 Some(PointerAlign::Type | PointerAlign::Middle)
             )
-            && self.current.ends_with([' ', '\t']);
+            && self.current.ends_with_any(b" \t");
         let keeps_padded_comma_gap = self.layout.previous == PreviousToken::Comma
             && (self.options.pad_commas || self.options.pad_operators)
             && self.token_input.previous_input_whitespace.is_none()
@@ -1633,7 +1633,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(256)
-                .take_while(|line| !line.trimmed_end().ends_with([';', '{', '}']))
+                .take_while(|line| !line.trimmed_end().ends_with_any(b";{}"))
                 .any(|line| line.contains("asm"))
     }
 
@@ -1717,7 +1717,7 @@ impl FormatEngine<'_> {
             .rev()
             .find_map(|line| {
                 let code = self.output.code_of(line).trimmed();
-                (!code.is_empty() && !code.starts_with(['#', '/', '*'])).then_some(code)
+                (!code.is_empty() && !code.starts_with_any(b"#/*")).then_some(code)
             })
             .is_some_and(|code| trailing_word(code) == "try")
     }
@@ -1735,7 +1735,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .find_map(|line| {
                     let code = self.output.code_of(line).trimmed();
-                    (!code.is_empty() && code != "try" && !code.starts_with(['#', '/', '*']))
+                    (!code.is_empty() && code != "try" && !code.starts_with_any(b"#/*"))
                         .then_some(code)
                 })
                 .is_some_and(|code| self.code_is_class_initializer_signature(code));

@@ -262,11 +262,11 @@ impl FormatEngine<'_> {
         if matches!(operator, "*" | "&")
             && self.layout.previous == PreviousToken::Operator
             && self.is_unary_pointer_operator()
-            && !self.current.trimmed_end().ends_with(['*', '&', '^', ':'])
+            && !self.current.trimmed_end().ends_with_any(b"*&^:")
         {
             return false;
         }
-        if self.current.trimmed_end().ends_with(['*', '&', '^']) {
+        if self.current.trimmed_end().ends_with_any(b"*&^") {
             return true;
         }
         if self.current.trimmed_end().ends_with('}')
@@ -702,7 +702,7 @@ impl FormatEngine<'_> {
             && close + 1 == before.len()
         {
             let declarator = before[open + 1..close].trimmed_start();
-            if declarator.starts_with(['*', '&', '^'])
+            if declarator.starts_with_any(b"*&^")
                 || declarator.contains("::*")
                 || declarator.contains(":: *")
             {
@@ -1370,7 +1370,7 @@ impl FormatEngine<'_> {
 
     fn function_pointer_parameter_type_words(&self) -> Option<Vec<&str>> {
         let current = self.current.trimmed_end();
-        if !current.ends_with(['*', '&', '^']) {
+        if !current.ends_with_any(b"*&^") {
             return None;
         }
         let segment = current

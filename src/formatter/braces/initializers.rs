@@ -222,7 +222,7 @@ impl FormatEngine<'_> {
             .take(4)
             .find(|previous| previous.trimmed_end().ends_with("{{"))?;
         let opening_indent = leading_visual_width(opening, self.options.tab_width);
-        if !line.trimmed_start().starts_with(['{', '}']) {
+        if !line.trimmed_start().starts_with_any(b"{}") {
             Some(opening_indent + self.options.indent_width * 2)
         } else if line.trimmed() == "}" {
             Some(opening_indent + self.options.indent_width)
@@ -611,7 +611,7 @@ impl FormatEngine<'_> {
             .active_constructor_initializer()
             .map(|frame| frame.colon_line_indent_spaces);
         let base_indent = if constructor_indent.is_some() && self.layout.nesting.paren_depth == 0 {
-            if self.current.trimmed_start().starts_with([':', ',']) {
+            if self.current.trimmed_start().starts_with_any(b":,") {
                 constructor_indent.unwrap_or_else(|| self.current_line_indent_spaces())
             } else {
                 self.constructor_initializer_base_indent_spaces()
@@ -636,7 +636,7 @@ impl FormatEngine<'_> {
                     self.pad_inside_paren_space();
                 }
                 Some('(') => self.emit_source_space(),
-                Some('{') if self.current.ends_with([' ', '\t']) => {}
+                Some('{') if self.current.ends_with_any(b" \t") => {}
                 Some('@') => self.emit_source_space_or_ensure(),
                 _ if brace_type == BraceType::Initializer
                     && self.current.trimmed_end().ends_with('>') =>
@@ -683,7 +683,7 @@ impl FormatEngine<'_> {
             // Padding parens outside parts a first `(` from the brace.
             let padded_paren = (self.options.pad_parens_outside
                 || self.options.pad_first_paren_outside)
-                && !self.current.ends_with([' ', '\t'])
+                && !self.current.ends_with_any(b" \t")
                 && matches!(
                     self.tree.tokens.get(token_index + 1),
                     Some(Token::Symbol('('))
@@ -946,7 +946,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         let starts_member_opener =
-            !closing && line_start.starts_with(['.', '[']) && line.contains('{');
+            !closing && line_start.starts_with_any(b".[") && line.contains('{');
         let frame = if closing {
             let trimmed = line_start;
             let previous_closes_brace = self
@@ -1092,7 +1092,7 @@ impl FormatEngine<'_> {
         {
             if designator
                 && let Some(previous) = self.output.last()
-                && previous.trimmed_start().starts_with(['.', '['])
+                && previous.trimmed_start().starts_with_any(b".[")
             {
                 spaces = leading_visual_width(previous, self.options.tab_width);
             }
@@ -1157,7 +1157,7 @@ impl FormatEngine<'_> {
                             || self.layout.nesting.last_closed_brace_type
                                 == Some(BraceType::CompoundLiteral)
                                 && self.should_indent_brace_line(BraceType::Array))
-                            && !previous.trimmed_start().starts_with(['{', '}']);
+                            && !previous.trimmed_start().starts_with_any(b"{}");
                         let inner_levels = levels - usize::from(closing && !closes_at_rows);
                         return Some(prefix_len + inner_levels * self.options.indent_width);
                     }
@@ -1291,7 +1291,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !split_else_extra_indent
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
             || case_unindent_spaces == 0
             || !self.in_aggregate_declaration_brace()
         {

@@ -25,7 +25,7 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
+    ContainsAnyByte, has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
     unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
@@ -1740,7 +1740,7 @@ impl FormatEngine<'_> {
                 || self.current.trimmed_end().ends_with('>')))
             || self.is_nested_designated_init_field();
         let after_comma = self.layout.command_state.previous_command_char == Some(',');
-        let run_in_array_gap_after_brace = self.current.ends_with([' ', '\t'])
+        let run_in_array_gap_after_brace = self.current.ends_with_any(b" \t")
             && matches!(
                 self.current.trimmed_end().chars().next_back(),
                 Some('{' | '[')

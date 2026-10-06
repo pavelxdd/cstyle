@@ -157,7 +157,7 @@ impl FormatEngine<'_> {
                     );
                 }
             }
-            if trimmed_code.ends_with([';', '{', '}']) {
+            if trimmed_code.ends_with_any(b";{}") {
                 return None;
             }
             if trimmed_code.ends_with("},") && self.open_paren_column_of(code).is_some() {
@@ -251,7 +251,7 @@ impl FormatEngine<'_> {
                         }
                     }
                     let string_start = visual_width_from(before_string, 0, self.options.tab_width);
-                    if (previous_trimmed.starts_with(['+', '-'])
+                    if (previous_trimmed.starts_with_any(b"+-")
                         || starts_with_chain_operator(previous_trimmed))
                         && before_string.contains('(')
                         && string_start.saturating_sub(leading)
@@ -338,7 +338,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let trimmed_line = line.trimmed_start();
         if trimmed_line.is_empty()
-            || trimmed_line.starts_with(['#', '{', '}'])
+            || trimmed_line.starts_with_any(b"#{}")
             || starts_with_chain_operator(trimmed_line)
         {
             return None;
@@ -490,7 +490,7 @@ impl FormatEngine<'_> {
 impl FormatEngine<'_> {
     pub(crate) fn using_alias_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
-        if current.is_empty() || current.starts_with(['#', '{', '}']) {
+        if current.is_empty() || current.starts_with_any(b"#{}") {
             return None;
         }
         self.output.last_non_empty_scoped().and_then(|previous| {
@@ -511,7 +511,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
-        if current.is_empty() || current.starts_with(['#', '{', '}']) {
+        if current.is_empty() || current.starts_with_any(b"#{}") {
             return None;
         }
         self.output
@@ -649,7 +649,7 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .take(256)
-            .take_while(|line| !line.trimmed_end().ends_with([';', '{', '}']))
+            .take_while(|line| !line.trimmed_end().ends_with_any(b";{}"))
         {
             if colon_spaces.is_none() && previous.trimmed_start().starts_with(':') {
                 colon_spaces = Some(leading_visual_width(previous, self.options.tab_width));
@@ -811,11 +811,11 @@ impl FormatEngine<'_> {
         {
             return Some(normal_indent * width);
         }
-        if self.constructor_initializer_base_indent_spaces().is_some()
-            && previous_code.ends_with(',')
+        if previous_code.ends_with(',')
+            && self.constructor_initializer_base_indent_spaces().is_some()
             && has_unmatched_open_brace(previous_code)
             && current.contains('{')
-            && !current.starts_with(['#', ':', ',', '{', '}'])
+            && !current.starts_with_any(b"#:,{}")
             && let Some(open) = previous_code.find('{')
         {
             return Some(
@@ -826,9 +826,9 @@ impl FormatEngine<'_> {
                 )),
             );
         }
-        if let Some(base) = self.constructor_initializer_base_indent_spaces()
-            && previous_code.ends_with(',')
-            && !current.starts_with(['#', ':', ',', '{', '}'])
+        if previous_code.ends_with(',')
+            && let Some(base) = self.constructor_initializer_base_indent_spaces()
+            && !current.starts_with_any(b"#:,{}")
             && current
                 .chars()
                 .next()
@@ -854,7 +854,7 @@ impl FormatEngine<'_> {
         if self.has_case_body_indent()
             && exact_indent_spaces.is_none_or(|spaces| spaces <= normal_indent * width)
             && previous_code.ends_with(';')
-            && !current.starts_with(['#', '{', '}', ')'])
+            && !current.starts_with_any(b"#{})")
             && current
                 .chars()
                 .next()
@@ -897,7 +897,7 @@ impl FormatEngine<'_> {
         }
         if previous_code.ends_with(',')
             && previous_code.contains('[')
-            && !current.starts_with(['#', '(', ')', '{', '}'])
+            && !current.starts_with_any(b"#(){}")
             && let Some(spaces) = objc_message_following_keyword_column(previous_code)
         {
             return Some(spaces);
@@ -920,7 +920,7 @@ impl FormatEngine<'_> {
         }
         if previous_code.ends_with(',')
             && previous_trimmed.starts_with('(')
-            && !current.starts_with(['#', '(', ')', '{', '}'])
+            && !current.starts_with_any(b"#(){}")
             && let Some(open) = previous_open_paren()
         {
             return Some(
@@ -935,7 +935,7 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         let previous_indent = leading_visual_width(previous, tab_width);
-        if !current.starts_with(['#', '{', '}', ')'])
+        if !current.starts_with_any(b"#{})")
             && previous_indent > natural
             && (0..self.output.len()).rev().take(16).any(|index| {
                 let trimmed = self.output.code(index);
@@ -989,7 +989,7 @@ impl FormatEngine<'_> {
         {
             return Some(leading_visual_width(previous, tab_width) + width);
         }
-        if current.starts_with("else") && previous_code.ends_with([';', '}']) {
+        if current.starts_with("else") && previous_code.ends_with_any(b";}") {
             let previous_indent = leading_visual_width(previous, tab_width);
             if previous_trimmed.starts_with("if") {
                 return Some(
@@ -1083,7 +1083,7 @@ impl FormatEngine<'_> {
         if previous_code.ends_with("},")
             && previous_code.contains(") }")
             && current.ends_with('{')
-            && !current.starts_with(['{', '}', '.', '['])
+            && !current.starts_with_any(b"{}.[")
             && find_assignment_operator(current).is_none()
             && previous_open_paren().is_none()
         {
@@ -1091,7 +1091,7 @@ impl FormatEngine<'_> {
         }
         if previous_code.ends_with("},")
             && current.contains('{')
-            && !current.starts_with(['{', '}', '.', '['])
+            && !current.starts_with_any(b"{}.[")
             && find_assignment_operator(current).is_none()
             && previous_open_paren().is_none()
         {
@@ -1212,7 +1212,7 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        if !current.starts_with(['#', '(', ')', '{', '}'])
+        if !current.starts_with_any(b"#(){}")
             && previous_code.ends_with('(')
             && self.open_lambda_body_indent_spaces().is_some()
         {
@@ -1231,7 +1231,7 @@ impl FormatEngine<'_> {
         if let Some(spaces) = inline_stream_opener_argument_indent_spaces(current, previous_code) {
             return Some(spaces);
         }
-        if !current.starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
+        if !current.starts_with_any(b"#(){}.?:")
             && previous_trimmed.starts_with("qDebug(")
             && previous_code.ends_with(',')
             && let Some(open) = previous_open_paren()
@@ -1253,7 +1253,7 @@ impl FormatEngine<'_> {
                 break;
             }
         }
-        if !current.starts_with(['/', '#', '{', '}']) && previous_trimmed.starts_with("//") {
+        if !current.starts_with_any(b"/#{}") && previous_trimmed.starts_with("//") {
             let previous_indent = leading_visual_width(previous, tab_width);
             for line in self
                 .output
@@ -1276,7 +1276,7 @@ impl FormatEngine<'_> {
                 break;
             }
         }
-        if !current.starts_with(['#', '(', ')', '{', '}'])
+        if !current.starts_with_any(b"#(){}")
             && previous_code.ends_with(',')
             && let Some(capture_end) = previous_code.find("](")
             && previous_code[..capture_end].contains('=')
@@ -1300,7 +1300,7 @@ impl FormatEngine<'_> {
         if previous_trimmed.starts_with(':')
             && previous_code.ends_with(',')
             && self.constructor_initializer_base_indent_spaces().is_none()
-            && !current.starts_with(['#', '(', ')', '{', '}'])
+            && !current.starts_with_any(b"#(){}")
         {
             for scan_index in self.output.scoped_range().rev().skip(1).take(16) {
                 let raw = &self.output[scan_index];
@@ -1358,7 +1358,7 @@ impl FormatEngine<'_> {
             && !previous_code.ends_with(">=")
             && !previous_code.contains('(')
             && self.pending_line_in_parens()
-            && !current.starts_with(['#', '{'])
+            && !current.starts_with_any(b"#{")
         {
             return Some(leading_visual_width(previous, tab_width) + width);
         }
@@ -1388,7 +1388,7 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        if !current.starts_with(['#', '(', ')', '{', '}'])
+        if !current.starts_with_any(b"#(){}")
             && previous_code.ends_with(',')
             && previous_code.contains('{')
             && current.contains('{')
@@ -1475,7 +1475,7 @@ impl FormatEngine<'_> {
         {
             return Some(open + 1);
         }
-        if !current.starts_with([')', '}'])
+        if !current.starts_with_any(b")}")
             && previous_code.ends_with(',')
             && previous_trimmed.starts_with(':')
             && let Some(open) = previous_open_paren()
@@ -1483,7 +1483,7 @@ impl FormatEngine<'_> {
         {
             return Some(leading_visual_width(previous, tab_width) + width * 2);
         }
-        if !current.starts_with([')', '}'])
+        if !current.starts_with_any(b")}")
             && previous_code.ends_with(',')
             && (self.in_initializer_brace()
                 || self.innermost_init_block_brace()
@@ -1494,7 +1494,7 @@ impl FormatEngine<'_> {
         {
             return Some(leading_visual_width(previous, tab_width) + width * 2);
         }
-        if !current.starts_with([')', '}'])
+        if !current.starts_with_any(b")}")
             && let Some(open) = previous_open_paren()
             && open.saturating_sub(leading_visual_width(previous, tab_width))
                 > self.options.max_continuation_indent
@@ -1567,7 +1567,7 @@ impl FormatEngine<'_> {
             && previous_code.contains('=')
             && current.contains('=')
             && !previous_code.trimmed_start().starts_with('.')
-            && !current.starts_with(['.', '[', '*', '&'])
+            && !current.starts_with_any(b".[*&")
             && current.starts_with("m_")
             && !current.contains(')')
             && let Some(eq) = previous_code.find('=')
@@ -1583,7 +1583,7 @@ impl FormatEngine<'_> {
             ));
         }
         if previous_code.ends_with(',')
-            && !current.starts_with(['.', '[', '*', '&'])
+            && !current.starts_with_any(b".[*&")
             && let Some(previous_eq) = previous_code.find('=')
             && let Some(current_eq) = current.find('=')
             && let Some(arrow) = previous_code[..previous_eq].find("->")
@@ -1626,7 +1626,7 @@ impl FormatEngine<'_> {
             let current_code = self.output.code_trimmed_of(current);
             if current_code.contains(':')
                 && !current_code.contains('?')
-                && !current_code.starts_with(['"', '\''])
+                && !current_code.starts_with_any(b"\"'")
                 && !current_code.contains("::")
                 && (current_code.ends_with(',') || current_code.ends_with(';'))
             {
@@ -1667,16 +1667,16 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','));
             if after_comma_comment
                 && previous_indent > natural
-                && !current.starts_with([')', '}', ';'])
+                && !current.starts_with_any(b")};")
                 && !current.starts_with("//")
                 && !is_lambda_body_header(current)
             {
                 return Some(previous_indent);
             }
             if natural < previous_indent
-                && !current.starts_with(['(', ')', '{', '}', ';'])
+                && !current.starts_with_any(b"(){};")
                 && !is_lambda_body_header(current)
-                && (current.starts_with(['*', '&', '+', '-'])
+                && (current.starts_with_any(b"*&+-")
                     || starts_with_chain_operator(current)
                     || self.layout.nesting.paren_depth > 0
                     || after_initializer_comment)
@@ -1705,7 +1705,7 @@ impl FormatEngine<'_> {
         }
         if !self.options.indent_after_parens
             && previous_code.ends_with(',')
-            && !current.starts_with(['.', '{', '}', ')', '#', '?', ':'])
+            && !current.starts_with_any(b".{})#?:")
         {
             // Lines pushed since the last look back are read first; the
             // walk then goes on into lines it already read.
@@ -1803,5 +1803,5 @@ fn is_comment_text_line(line: &str) -> bool {
         || trimmed.starts_with("//")
         || trimmed
             .strip_prefix('*')
-            .is_some_and(|rest| rest.trim_start_matches('*').starts_with([' ', '\t']))
+            .is_some_and(|rest| rest.trim_start_matches('*').starts_with_any(b" \t"))
 }

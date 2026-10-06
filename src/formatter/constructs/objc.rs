@@ -386,7 +386,7 @@ impl FormatEngine<'_> {
                 }
             }
         } else if let Some(align) = self.layout.objc.message_align
-            && !line_start.starts_with(['{', '}'])
+            && !line_start.starts_with_any(b"{}")
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
@@ -449,7 +449,7 @@ impl FormatEngine<'_> {
             line_start.strip_prefix(header).is_some_and(|rest| {
                 rest.is_empty()
                     || rest.starts_with(char::is_whitespace)
-                    || rest.starts_with(['(', '{'])
+                    || rest.starts_with_any(b"({")
             })
         }) {
             let active = self.layout.frame_stack.active_brace();
@@ -521,7 +521,7 @@ impl FormatEngine<'_> {
             .take(64)
         {
             let code = &self.output.code_of(line);
-            if code.trimmed_end().ends_with([';', '{', '}']) {
+            if code.trimmed_end().ends_with_any(b";{}") {
                 return None;
             }
             if code
@@ -669,7 +669,7 @@ fn objc_method_first_colon_output_column(
         .take_while(|token| !matches!(token, Token::Newline))
         .map(token_text)
         .collect::<String>();
-    if !source.starts_with(['-', '+']) {
+    if !source.starts_with_any(b"-+") {
         return None;
     }
     let open = source.find('(')?;

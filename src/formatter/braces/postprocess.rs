@@ -8,7 +8,7 @@ use crate::formatter::lexer::{self, Token};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -106,7 +106,7 @@ impl FormatEngine<'_> {
             BraceStyle::Horstmann | BraceStyle::Pico
         ) && let Some(brace) = self.output.last()
             && brace.trimmed() == "{"
-            && !line_start.starts_with(['#', '}'])
+            && !line_start.starts_with_any(b"#}")
             && !line_start.starts_with("//")
             && !line.contains("*INDENT-OFF*")
             && !labels::is_access_label(line, &self.options.access_labels)
@@ -388,7 +388,7 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
         if let Some(comment) = line
             .trimmed_start()
             .strip_prefix('{')
-            .filter(|rest| rest.starts_with([' ', '\t']))
+            .filter(|rest| rest.starts_with_any(b" \t"))
             .map(str::trim_start)
             .filter(|rest| {
                 rest.starts_with("/*")

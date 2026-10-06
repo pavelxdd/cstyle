@@ -83,7 +83,7 @@ fn simple_trailing_open_paren_line(line: &str) -> bool {
         return false;
     };
     let before = before.trimmed_end();
-    if before.is_empty() || before.contains('=') || before.ends_with([')', ']']) {
+    if before.is_empty() || before.contains('=') || before.ends_with_any(b")]") {
         return false;
     }
     let name = before
@@ -153,9 +153,7 @@ impl FormatEngine<'_> {
         split_else_context: bool,
     ) -> Option<SplitElseCallLineLayout> {
         let line_start = line.trimmed_start();
-        if !split_else_context
-            || line_start.starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line_start)
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
         {
             return None;
         }
@@ -209,9 +207,7 @@ impl FormatEngine<'_> {
         split_else_context: bool,
     ) -> Option<SplitElseCallLineLayout> {
         let line_start = line.trimmed_start();
-        if !split_else_context
-            || line_start.starts_with(['#', '{', '}'])
-            || is_comment_line(line_start)
+        if !split_else_context || line_start.starts_with_any(b"#{}") || is_comment_line(line_start)
         {
             return None;
         }
@@ -238,7 +234,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
             || is_comment_line(line_start)
             || !split_else_state_active
             || !self.commented_split_else_preprocessor_region_active()
@@ -260,7 +256,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if !structural_split_else_context
             || starts_string_literal_token(line_start)
-            || line_start.starts_with(['#', '{', '}', ')'])
+            || line_start.starts_with_any(b"#{})")
             || is_comment_line(line_start)
         {
             return None;
@@ -276,7 +272,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
-        if !split_else_context || line.trimmed_start().starts_with(['{', '}', '#']) {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"{}#") {
             return None;
         }
         let case_unindent =
@@ -296,7 +292,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
-        if !split_else_context || line.trimmed_start().starts_with(['{', '}', '#']) {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"{}#") {
             return None;
         }
         if let Some(spaces) =
@@ -330,7 +326,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         split_else_context: bool,
     ) -> Option<usize> {
-        if !split_else_context || line.trimmed_start().starts_with(['#', '{', '}', ')']) {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"#{})") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -420,9 +416,7 @@ impl FormatEngine<'_> {
         split_else_context: bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if !split_else_context
-            || line_start.starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line_start)
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
         {
             return None;
         }
@@ -448,9 +442,7 @@ impl FormatEngine<'_> {
         split_else_context: bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if !split_else_context
-            || line_start.starts_with(['#', '{', '}', ')'])
-            || is_comment_line(line_start)
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
         {
             return None;
         }
@@ -543,7 +535,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if !structural_split_else_context
-            || line_start.starts_with(['#', '{', '}', ')'])
+            || line_start.starts_with_any(b"#{})")
             || is_comment_line(line_start)
         {
             return None;
@@ -678,7 +670,7 @@ impl FormatEngine<'_> {
         }
         if previous_code.trimmed_start().starts_with(',')
             && previous_code.ends_with(");")
-            && !current.starts_with(['#', '{', '}', ')'])
+            && !current.starts_with_any(b"#{})")
             && !starts_string_literal_token(current)
             && !is_comment_line(current)
         {
@@ -808,7 +800,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if !self.split_else_body_indent_active()
             || line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '(', ')', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#(){}")
         {
             return None;
         }
@@ -831,7 +823,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if !self.split_else_body_indent_active()
             || line_kind != LineKind::Normal
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
         {
             return None;
         }
@@ -994,7 +986,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed = line.trimmed_start();
-        if trimmed.starts_with(['}', ')', '.', '['])
+        if trimmed.starts_with_any(b"}).[")
             || starts_with_chain_operator(trimmed)
             || starts_ternary_arm(trimmed)
             || trimmed_end.ends_with('{')
@@ -1040,7 +1032,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         normal_indent: usize,
     ) -> Option<usize> {
-        if line.trimmed_start().starts_with(['{', '}', '#']) {
+        if line.trimmed_start().starts_with_any(b"{}#") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -1061,7 +1053,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let trimmed_line = line.trimmed_start();
         if trimmed_line.is_empty()
-            || trimmed_line.starts_with(['#', '{', '}', ')'])
+            || trimmed_line.starts_with_any(b"#{})")
             || trimmed_line.starts_with("&&")
             || trimmed_line.starts_with("||")
         {
@@ -1159,9 +1151,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}'])
-            || !self.enclosing_macro_call_output_context()
-        {
+        if current.starts_with_any(b"#(){}") || !self.enclosing_macro_call_output_context() {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -1177,9 +1167,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}'])
-            || !self.enclosing_macro_call_output_context()
-        {
+        if current.starts_with_any(b"#(){}") || !self.enclosing_macro_call_output_context() {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -1325,7 +1313,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
             || !self.preprocessor_split_else_active()
             || self.output.last_line_outside_comment().is_none()
         {
@@ -1603,7 +1591,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -1676,7 +1664,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -1717,7 +1705,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -1762,7 +1750,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -1799,7 +1787,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (_, previous_code) = self.output.last_code_outside_comment()?;
@@ -1842,7 +1830,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -1909,7 +1897,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
         let argument = self.layout.frame_stack.last_argument()?;
@@ -1959,7 +1947,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -2057,7 +2045,7 @@ impl FormatEngine<'_> {
             || previous_trimmed.starts_with(':')
             || previous_code.contains('<')
             || current.contains('>')
-            || current.starts_with(['#', '{', '}', ')'])
+            || current.starts_with_any(b"#{})")
             || self.open_paren_column_of(previous_code).is_some()
             || !previous_code
                 .strip_suffix(',')
@@ -2075,7 +2063,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn closed_call_sibling_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
-        if current.starts_with(['#', '(', ')', '{', '}']) {
+        if current.starts_with_any(b"#(){}") {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
@@ -2096,7 +2084,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -2254,7 +2242,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -2318,7 +2306,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with(['#', '(', ')', '{', '}']) {
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;

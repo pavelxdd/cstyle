@@ -8,7 +8,7 @@ use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
+    ContainsAnyByte, find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -185,7 +185,7 @@ impl FormatEngine<'_> {
                 }
                 return None;
             }
-            if previous_code.ends_with([';', '{', '}']) {
+            if previous_code.ends_with_any(b";{}") {
                 return None;
             }
         }
@@ -363,7 +363,7 @@ impl FormatEngine<'_> {
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
-        let separator = if previous_trimmed.ends_with(['*', '&', '^']) {
+        let separator = if previous_trimmed.ends_with_any(b"*&^") {
             ""
         } else {
             " "

@@ -18,7 +18,7 @@ use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_to
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::preprocessor_directive;
+use crate::formatter::text::line_scan::{ContainsAnyByte, preprocessor_directive};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
@@ -587,7 +587,7 @@ impl FormatEngine<'_> {
                 let code = self.output.code(start - 1).trimmed_end();
                 if code.is_empty()
                     || self.output.line_tokens(start - 1).is_none()
-                    || code.ends_with([';', '{', '}', ','])
+                    || code.ends_with_any(b";{},")
                     || code.trimmed_start().starts_with('#')
                 {
                     break;

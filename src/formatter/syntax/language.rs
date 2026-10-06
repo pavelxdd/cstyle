@@ -1,36 +1,5 @@
 use crate::source::lex;
 
-pub const HEADERS: &[&str] = &[
-    "_Defer",
-    "__except",
-    "__finally",
-    "__try",
-    "case",
-    "catch",
-    "default",
-    "defer",
-    "do",
-    "else",
-    "for",
-    "foreach",
-    "if",
-    "switch",
-    "try",
-    "while",
-    "Q_FOREACH",
-];
-pub const NON_PAREN_HEADERS: &[&str] = &[
-    "_Defer",
-    "__finally",
-    "__try",
-    "case",
-    "catch",
-    "default",
-    "defer",
-    "do",
-    "else",
-    "try",
-];
 pub const PRE_BLOCK_WORDS: &[&str] = &[
     "class",
     "interface",
@@ -77,11 +46,49 @@ const TOKEN_OPERATORS: &[&str] = &[
 ];
 
 pub fn is_header(word: &str) -> bool {
-    HEADERS.contains(&word)
+    matches!(
+        word,
+        "_Defer"
+            | "__except"
+            | "__finally"
+            | "__try"
+            | "case"
+            | "catch"
+            | "default"
+            | "defer"
+            | "do"
+            | "else"
+            | "for"
+            | "foreach"
+            | "if"
+            | "switch"
+            | "try"
+            | "while"
+            | "Q_FOREACH"
+    )
 }
 
 pub fn is_non_paren_header(word: &str) -> bool {
-    NON_PAREN_HEADERS.contains(&word)
+    matches!(
+        word,
+        "_Defer"
+            | "__finally"
+            | "__try"
+            | "case"
+            | "catch"
+            | "default"
+            | "defer"
+            | "do"
+            | "else"
+            | "try"
+    )
+}
+
+pub fn is_assignment_operator(operator: &str) -> bool {
+    matches!(
+        operator,
+        "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+    )
 }
 
 pub fn is_non_type_keyword(word: &str) -> bool {
@@ -364,6 +371,17 @@ pub fn match_operator(source: &str, index: usize) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assignment_operator_match_agrees_with_its_list() {
+        for operator in OPERATORS.iter().copied().chain(["", "=>", "<<=="]) {
+            assert_eq!(
+                is_assignment_operator(operator),
+                ASSIGNMENT_OPERATORS.contains(&operator),
+                "{operator:?}"
+            );
+        }
+    }
 
     #[test]
     fn matches_the_first_listed_operator() {

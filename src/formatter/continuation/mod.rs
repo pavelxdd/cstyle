@@ -104,7 +104,7 @@ impl FormatEngine<'_> {
                     || code.ends_with(',')
                     || self.open_paren_column_of(code).is_some()
                     || starts_with_chain_operator(trimmed)
-                    || trimmed.starts_with(['+', '-', '*', '/', '%']))
+                    || trimmed.starts_with_any(b"+-*/%"))
         }) || self
             .layout
             .nesting
@@ -181,7 +181,7 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|line| {
                 let code = self.output.code_trimmed_of(line);
-                code.ends_with([';', '{', '}'])
+                code.ends_with_any(b";{}")
             })
             .map_or(0, |index| index + 1);
         let mut openers = Vec::new();
@@ -264,7 +264,7 @@ impl FormatEngine<'_> {
             return false;
         }
         self.layout.nesting.paren_depth == 0
-            && trimmed.ends_with(['*', '&', '^'])
+            && trimmed.ends_with_any(b"*&^")
             && self.looks_like_pointer_declaration_context()
     }
 
@@ -622,7 +622,7 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         let current = self.current.trimmed_start();
-        if current.starts_with([')', '}', '?', ':']) {
+        if current.starts_with_any(b")}?:") {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -638,7 +638,7 @@ impl FormatEngine<'_> {
 
     fn ternary_colon_branch_frame_indent(&self) -> Option<usize> {
         let current = self.current.trimmed_start();
-        if current.starts_with([')', '}', '?', ':']) {
+        if current.starts_with_any(b")}?:") {
             return None;
         }
         let frame = self.layout.frame_stack.active_ternary()?;
@@ -725,7 +725,7 @@ impl FormatEngine<'_> {
             let line = &self.output[scan_index];
             let code = &self.output.code_before_comment(scan_index);
             let trimmed = code.trimmed();
-            if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',']) {
+            if trimmed.is_empty() || trimmed.starts_with_any(b"#:,") {
                 continue;
             }
             if code_opens_class_base_clause(code.trimmed_end()) {
@@ -882,7 +882,7 @@ impl FormatEngine<'_> {
                 + self.options.continuation_indent * self.options.indent_width;
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 if line.ends_with("||")
-                    && line.trimmed_start().starts_with(['!', '('])
+                    && line.trimmed_start().starts_with_any(b"!(")
                     && self.current_return_logical_tail_indent_spaces().is_some()
                     && line[..line.len().saturating_sub(2)]
                         .trimmed_end()
@@ -1221,7 +1221,7 @@ impl FormatEngine<'_> {
         let previous_prefix_len = previous.len() - previous.trimmed_start().len();
         let current_prefix_len = self.current.len() - self.current.trimmed_start().len();
         let current_indent_spaces = current_indent_spaces.max(current_prefix_len);
-        let separator_len = usize::from(!previous_trimmed.ends_with(['*', '&', '^']));
+        let separator_len = usize::from(!previous_trimmed.ends_with_any(b"*&^"));
         Some(
             (previous_prefix_len + previous_trimmed.len() + separator_len)
                 .saturating_sub(current_indent_spaces),
@@ -1485,11 +1485,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.current.trimmed_end();
-        if line.trimmed_start().starts_with(['/', '*'])
+        if line.trimmed_start().starts_with_any(b"/*")
             || ["//", "/*", "*/"]
                 .iter()
                 .any(|marker| line.contains(marker))
-            || line.ends_with([';', '{', '}', '='])
+            || line.ends_with_any(b";{}=")
             || line.contains_any_byte(b"([)],")
             || self.next_line.leads_with_class_base
         {
@@ -1546,7 +1546,7 @@ impl FormatEngine<'_> {
         }
         let previous_code = previous_content[..comment_limit].trimmed_end();
         let assignment = previous_code.rfind('=')?;
-        if previous_code.ends_with([',', ';', '{', '}'])
+        if previous_code.ends_with_any(b",;{}")
             || previous_code.contains("==")
             || previous_code.contains("!=")
             || previous_code.contains_from_first_byte("<=")
@@ -1978,11 +1978,7 @@ pub(crate) fn split_declaration_assignment_indent_spaces(
     previous: &str,
     previous_code: &str,
 ) -> Option<usize> {
-    if !previous_code.ends_with('=')
-        || current
-            .trimmed_start()
-            .starts_with(['#', '(', ')', '{', '}', '.', '?', ':'])
-    {
+    if !previous_code.ends_with('=') || current.trimmed_start().starts_with_any(b"#(){}.?:") {
         return None;
     }
     let (assignment, operator) = find_assignment_operator(previous_code)?;

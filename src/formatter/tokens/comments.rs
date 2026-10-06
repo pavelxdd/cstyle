@@ -25,9 +25,9 @@ use crate::formatter::text::columns::{
 };
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, is_comment_line, is_comment_only_line, line_brace_imbalance,
-    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_brace_content_offset,
+    ContainsAnyByte, has_unmatched_open_brace, is_comment_line, is_comment_only_line,
+    line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -244,7 +244,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
             || is_comment_line(line_start)
         {
             return None;
@@ -287,7 +287,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
             || self.options.brace_style != BraceStyle::None
-            || line_start.starts_with(['#', '{', '}'])
+            || line_start.starts_with_any(b"#{}")
             || is_comment_line(line_start)
             || !self.commented_split_else_preprocessor_region_active()
         {
@@ -324,7 +324,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['#', '{', '}']) {
+        if line_kind != LineKind::Normal || line.trimmed_start().starts_with_any(b"#{}") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -1756,8 +1756,8 @@ impl FormatEngine<'_> {
                     .unwrap_or_default();
                 (trimmed.contains('(')
                     && trimmed.contains(')')
-                    && !trimmed.starts_with(['}', '#'])
-                    && !trimmed.ends_with([';', '{'])
+                    && !trimmed.starts_with_any(b"}#")
+                    && !trimmed.ends_with_any(b";{")
                     && !trimmed.contains('=')
                     && !language::is_header(header))
                 .then(|| leading_visual_width(line, self.options.tab_width))
@@ -1943,7 +1943,7 @@ impl FormatEngine<'_> {
                         .split(|ch: char| ch != '_' && !ch.is_ascii_alphanumeric())
                         .next()
                         .unwrap_or_default();
-                    !trimmed.ends_with(['{', ';'])
+                    !trimmed.ends_with_any(b"{;")
                         && (matches!(header, "if" | "for" | "while")
                             || trimmed == "else"
                             || trimmed.starts_with("else if"))
@@ -3035,7 +3035,7 @@ impl FormatEngine<'_> {
             && target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
-            && !self.current.trimmed_end().ends_with(['*', '&', '^'])
+            && !self.current.trimmed_end().ends_with_any(b"*&^")
         {
             self.current.push_str(&gap);
             return;

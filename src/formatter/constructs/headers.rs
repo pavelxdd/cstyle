@@ -11,8 +11,8 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    is_comment_line, is_comment_only_line, line_brace_imbalance, preprocessor_directive,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    ContainsAnyByte, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    preprocessor_directive, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -171,7 +171,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
             || !self.preprocessor_split_else_active()
         {
             return None;
@@ -195,7 +195,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
             || !self.preprocessor_split_else_active()
-            || line.trimmed_start().starts_with(['{', '}', '#'])
+            || line.trimmed_start().starts_with_any(b"{}#")
         {
             return None;
         }
@@ -255,7 +255,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['#', '{', '}']) {
+        if line_kind != LineKind::Normal || line.trimmed_start().starts_with_any(b"#{}") {
             return None;
         }
         let previous_index = self
@@ -301,7 +301,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}'])
+            || line.trimmed_start().starts_with_any(b"#{}")
             || !self.preprocessor_split_else_active()
         {
             return None;
@@ -351,7 +351,7 @@ impl FormatEngine<'_> {
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['#', '{', '}', '/'])
+            || line.trimmed_start().starts_with_any(b"#{}/")
             || is_header(self.options, leading_identifier(line))
             || self.layout.pending_braceless_block_bias.is_none()
             || !(self.split_else_braceless_body_active()
@@ -394,7 +394,7 @@ impl FormatEngine<'_> {
             if trimmed.starts_with('#') {
                 continue;
             }
-            if code.ends_with([';', '{', '}']) {
+            if code.ends_with_any(b";{}") {
                 return None;
             }
             let (closes, mut opens) = self.output_code_paren_imbalance(index);
@@ -522,7 +522,7 @@ impl FormatEngine<'_> {
                         {
                             return Some(leading_visual_width(line, self.options.tab_width));
                         }
-                        if code.ends_with([';', '{', '}']) || trimmed == "else" {
+                        if code.ends_with_any(b";{}") || trimmed == "else" {
                             return None;
                         }
                     }
@@ -695,7 +695,7 @@ impl FormatEngine<'_> {
                 indent_spaces: previous_indent,
             });
         }
-        if !self.output.may_have_else() || line.trimmed_start().starts_with(['{', '#']) {
+        if !self.output.may_have_else() || line.trimmed_start().starts_with_any(b"{#") {
             return None;
         }
         Some(ElseBodyLayout {
@@ -711,7 +711,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['{', '#']) {
+        if line_kind != LineKind::Normal || line.trimmed_start().starts_with_any(b"{#") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
@@ -730,7 +730,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
     ) -> Option<usize> {
-        if line_kind != LineKind::Normal || line.trimmed_start().starts_with(['{', '}', '#']) {
+        if line_kind != LineKind::Normal || line.trimmed_start().starts_with_any(b"{}#") {
             return None;
         }
         let (_, previous_code) = self.output.last_code_outside_comment()?;
@@ -767,7 +767,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['{', '#'])
+            || line.trimmed_start().starts_with_any(b"{#")
             || !(self.output.may_have_else()
                 || self.output.may_have_hash()
                 || self.output.may_have_comment())
@@ -822,7 +822,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['{', '#'])
+            || line.trimmed_start().starts_with_any(b"{#")
             || !self.output.may_have_comment()
         {
             return None;
@@ -877,7 +877,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || line.trimmed_start().starts_with(['{', '#'])
+            || line.trimmed_start().starts_with_any(b"{#")
             || !self.output.may_have_comment()
         {
             return None;
@@ -928,7 +928,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if line_kind != LineKind::Normal
-            || line_start.starts_with(['{', '#'])
+            || line_start.starts_with_any(b"{#")
             || self.options.brace_style != BraceStyle::None
         {
             return None;
@@ -1526,7 +1526,7 @@ impl FormatEngine<'_> {
                     .next()
                     .unwrap_or_default()
                     .trimmed_end();
-                if line.ends_with([';', '{', '}'])
+                if line.ends_with_any(b";{}")
                     || !line
                         .split(|ch: char| !is_word_char(ch))
                         .any(|word| word == header)
@@ -1562,7 +1562,7 @@ impl FormatEngine<'_> {
         if !interrupted_header_context
             || header_body_block
             || line_kind != LineKind::Normal
-            || line_start.starts_with(['#', '}', ':', ')'])
+            || line_start.starts_with_any(b"#}:)")
             || is_header(self.options, leading_identifier(line_start))
             || self.pending_line_in_parens()
             || self.pending_line_continues_statement()
@@ -1969,7 +1969,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         split_else_output_context: bool,
     ) -> Option<usize> {
-        if !split_else_output_context || line.trimmed_start().starts_with(['#', '{', '}']) {
+        if !split_else_output_context || line.trimmed_start().starts_with_any(b"#{}") {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;

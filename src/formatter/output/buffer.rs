@@ -1441,6 +1441,7 @@ impl OutputBuffer {
 
     /// The last non-empty line, unless it continues a block comment: the
     /// tail of a comment is no code, whatever its words.
+    #[inline(never)]
     pub(crate) fn last_line_outside_comment(&self) -> Option<&String> {
         self.last_line_outside_comment_index()
             .map(|index| &self.lines[index])
@@ -1448,6 +1449,7 @@ impl OutputBuffer {
 
     /// `last_line_outside_comment` with its code before a trailing comment,
     /// trimmed at the end.
+    #[inline(never)]
     pub(crate) fn last_code_outside_comment(&self) -> Option<(&String, &str)> {
         self.last_line_outside_comment_index()
             .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))

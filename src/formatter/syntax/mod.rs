@@ -535,7 +535,7 @@ fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
     let mut assignments_before = Vec::with_capacity(tokens.len() + 1);
     assignments_before.push(0u32);
     for token in tokens {
-        let assigns = matches!(token, Token::Operator(operator) if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()));
+        let assigns = matches!(token, Token::Operator(operator) if language::is_assignment_operator(operator));
         assignments_before
             .push(assignments_before.last().copied().unwrap_or(0) + u32::from(assigns));
     }
@@ -1024,9 +1024,7 @@ fn token_follows_expression_intro(tokens: &[Token], index: usize) -> bool {
         match token {
             Token::Whitespace(_) => {}
             Token::Newline | Token::Symbol(';' | '{' | '}') => return false,
-            Token::Operator(operator)
-                if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()) =>
-            {
+            Token::Operator(operator) if language::is_assignment_operator(operator) => {
                 return true;
             }
             Token::Word(word) if matches!(word.as_str(), "return" | "case" | "throw") => {
@@ -1086,14 +1084,14 @@ fn following_token_is_call_open(tokens: &[Token], index: usize) -> bool {
 fn following_token_is_assignment(tokens: &[Token], index: usize) -> bool {
     next_non_layout_token_index(tokens, index + 1)
         .and_then(|next| tokens.get(next))
-        .is_some_and(|token| matches!(token, Token::Operator(operator) if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str())))
+        .is_some_and(|token| matches!(token, Token::Operator(operator) if language::is_assignment_operator(operator)))
 }
 
 fn following_token_is_non_assignment_operator(tokens: &[Token], index: usize) -> bool {
     next_non_layout_token_index(tokens, index + 1)
         .and_then(|next| tokens.get(next))
         .is_some_and(|token| {
-            matches!(token, Token::Operator(operator) if !language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()))
+            matches!(token, Token::Operator(operator) if !language::is_assignment_operator(operator))
         })
 }
 

@@ -2,6 +2,7 @@ use crate::config::LineBetweenMembers;
 use crate::formatter::constructs::labels::is_standard_access_label;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
@@ -114,7 +115,7 @@ impl FormatEngine<'_> {
     ) -> Option<MemberSpacingBoundary> {
         let trimmed = line.trimmed();
         if trimmed.is_empty()
-            || trimmed.starts_with(['#', '{', '}'])
+            || trimmed.starts_with_any(b"#{}")
             || is_standard_access_label(trimmed)
             || nested_type_start(trimmed)
         {
@@ -155,7 +156,7 @@ impl FormatEngine<'_> {
 fn line_clears_pending_member_spacing(line: &str) -> bool {
     let trimmed = line.trimmed();
     trimmed.is_empty()
-        || trimmed.starts_with(['#', '}'])
+        || trimmed.starts_with_any(b"#}")
         || is_standard_access_label(trimmed)
         || nested_type_start(trimmed)
 }
