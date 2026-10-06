@@ -482,6 +482,11 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             FormatOptions::default(),
         ),
         (
+            "a line of nested parens",
+            format!("int x = {}a{};\n", "(".repeat(n / 6), " + b)".repeat(n / 6)),
+            capped.clone(),
+        ),
+        (
             "rows of new calls",
             format!(
                 "void f() {{\n    T *t[] = {{\n{}    }};\n}}\n",

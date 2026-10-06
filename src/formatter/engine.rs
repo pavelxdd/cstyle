@@ -277,6 +277,9 @@ pub(crate) struct FormatEngine<'a> {
     /// The last statement start a declarator's `,` looked back to: the
     /// tokens' address, the `,`, and the start.
     pub(crate) declarator_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last walk to a token's column on its output line.
+    pub(crate) token_column_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::TokenColumnWalk>>,
     /// The last look back from a member declarator's `,`.
     pub(crate) member_declarator_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::MemberDeclaratorLook>>,
@@ -386,6 +389,7 @@ impl<'a> FormatEngine<'a> {
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
+            token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),

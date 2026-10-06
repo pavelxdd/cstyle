@@ -27,6 +27,27 @@ use crate::formatter::text::trim::Trimmed;
 /// `None` when the look gave up.
 pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>>);
 
+/// The output line a token column walk read: the tokens' address, the
+/// line, the output version, and the line text's address and length.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct TokenColumnKey {
+    tokens: usize,
+    line: usize,
+    version: u64,
+    text: (usize, usize),
+}
+
+/// The last token column walk: its line, the token it reached, the bytes
+/// the token spans, and its visual column.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TokenColumnWalk {
+    key: TokenColumnKey,
+    token: usize,
+    start: usize,
+    end: usize,
+    column: usize,
+}
+
 /// The last look back from a member declarator's `,`: the tokens'
 /// address, the `,`, the start of its declaration, and whether a `:` of the
 /// body stands between them.
@@ -2205,8 +2226,28 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(token)?;
         let span = self.output.line_tokens(line)?;
         let text = &self.output.as_slice()[line];
-        let mut position = 0;
-        for (index, piece_token) in tokens.iter().enumerate().take(token + 1).skip(span.first) {
+        let key = TokenColumnKey {
+            tokens: tokens.as_ptr() as usize,
+            line,
+            version: self.output.version(),
+            text: (text.as_ptr() as usize, text.len()),
+        };
+        // A walk to a later token of the same line goes on from the last
+        // one's token and column.
+        let walked = self
+            .token_column_cache
+            .get()
+            .filter(|walk| walk.key == key && (span.first..=token).contains(&walk.token));
+        if let Some(walk) = walked
+            && walk.token == token
+        {
+            return Some(walk.column);
+        }
+        let (mut position, from, (mut base, mut base_column)) = match walked {
+            Some(walk) => (walk.end, walk.token + 1, (walk.start, walk.column)),
+            None => (0, span.first, (0, 0)),
+        };
+        for (index, piece_token) in tokens.iter().enumerate().take(token + 1).skip(from) {
             if !is_code_token(piece_token) {
                 continue;
             }
@@ -2221,11 +2262,18 @@ impl FormatEngine<'_> {
                 rest.find(&*piece)?
             };
             if index == token {
-                return Some(visual_width_from(
-                    &text[..position + offset],
-                    0,
-                    self.options.tab_width,
-                ));
+                let start = position + offset;
+                base_column +=
+                    visual_width_from(&text[base..start], base_column, self.options.tab_width);
+                base = start;
+                self.token_column_cache.set(Some(TokenColumnWalk {
+                    key,
+                    token,
+                    start: base,
+                    end: start + piece.len(),
+                    column: base_column,
+                }));
+                return Some(base_column);
             }
             position += offset + piece.len();
         }
