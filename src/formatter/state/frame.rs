@@ -276,8 +276,8 @@ pub(crate) struct FrameStack {
     brackets: Vec<BracketFrame>,
     last_argument: Option<ArgumentFrame>,
     ternary_frames: Vec<TernaryFrame>,
-    /// How many of `ternary_frames` have no colon yet.
-    open_ternaries: usize,
+    /// Indices of the `ternary_frames` with no colon yet, in order.
+    open_ternaries: Vec<usize>,
     ternary_colon_output_lines: Vec<usize>,
     open_ternary_line_ends: Vec<usize>,
     /// Whether some line of `open_ternary_line_ends` comes before one
@@ -329,8 +329,10 @@ impl FrameStack {
         self.open_ternaries = self
             .ternary_frames
             .iter()
-            .filter(|frame| frame.colon_role.is_none())
-            .count();
+            .enumerate()
+            .filter(|(_, frame)| frame.colon_role.is_none())
+            .map(|(index, _)| index)
+            .collect();
         if entry.frame.opener_output_line < current_output_line
             && self.line_closed_delimiter_continuation_indent.is_none()
         {
@@ -481,35 +483,33 @@ impl FrameStack {
     }
 
     pub(crate) fn push_ternary(&mut self, frame: TernaryFrame) {
-        self.open_ternaries += usize::from(frame.colon_role.is_none());
+        if frame.colon_role.is_none() {
+            self.open_ternaries.push(self.ternary_frames.len());
+        }
         self.ternary_frames.push(frame);
     }
 
+    /// Index of the innermost ternary still waiting for its `:`.
+    fn active_open_ternary(&self) -> Option<usize> {
+        self.open_ternaries.last().copied()
+    }
+
     pub(crate) fn active_ternary(&self) -> Option<&TernaryFrame> {
-        if self.open_ternaries == 0 {
-            return self.ternary_frames.last();
+        match self.active_open_ternary() {
+            Some(index) => self.ternary_frames.get(index),
+            None => self.ternary_frames.last(),
         }
-        self.ternary_frames
-            .iter()
-            .rev()
-            .find(|frame| frame.colon_role.is_none())
     }
 
     /// Gives the innermost ternary still waiting for its `:` the colon.
     pub(crate) fn close_active_ternary(&mut self, role: ColonRole, column: usize) {
-        if self.open_ternaries == 0 {
+        let Some(index) = self.active_open_ternary() else {
             return;
-        }
-        if let Some(frame) = self
-            .ternary_frames
-            .iter_mut()
-            .rev()
-            .find(|frame| frame.colon_role.is_none())
-        {
-            frame.colon_role = Some(role);
-            frame.colon_output_column = Some(column);
-            self.open_ternaries -= 1;
-        }
+        };
+        let frame = &mut self.ternary_frames[index];
+        frame.colon_role = Some(role);
+        frame.colon_output_column = Some(column);
+        self.open_ternaries.pop();
     }
 
     pub(crate) fn last_ternary_with_colon(&self) -> Option<&TernaryFrame> {
@@ -560,20 +560,18 @@ impl FrameStack {
     }
 
     pub(crate) fn pop_active_ternary(&mut self) {
-        if let Some(index) = self
-            .ternary_frames
-            .iter()
-            .rposition(|frame| frame.colon_role.is_none())
-        {
+        if let Some(index) = self.active_open_ternary() {
+            // No frame without a colon follows it.
             self.ternary_frames.remove(index);
-            self.open_ternaries -= 1;
+            self.open_ternaries.pop();
         }
     }
 
     pub(crate) fn pop_completed_ternaries(&mut self) {
         self.ternary_frames
             .retain(|frame| frame.colon_role.is_none());
-        self.open_ternaries = self.ternary_frames.len();
+        self.open_ternaries.clear();
+        self.open_ternaries.extend(0..self.ternary_frames.len());
     }
 
     pub(crate) fn push_logical(&mut self, frame: LogicalFrame) {
@@ -1197,6 +1195,63 @@ mod tests {
         let argument = stack.last_argument().expect("argument");
         assert_eq!(argument.role, CommaRole::Declaration);
         assert_eq!(argument.sibling_anchor_column, Some(4));
+    }
+
+    #[test]
+    fn active_ternary_is_the_innermost_without_a_colon() {
+        let mut state = 0x9e37_79b9_u32;
+        for _ in 0..2000 {
+            let mut stack = FrameStack::default();
+            // Each frame's id and whether it has its colon.
+            let mut model: Vec<(usize, bool)> = Vec::new();
+            for step in 0..(state % 40) as usize {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                match state % 5 {
+                    0 | 1 => {
+                        stack.push_ternary(TernaryFrame {
+                            owner_role: TernaryOwnerRole::Assignment,
+                            parent_delimiter: None,
+                            question_indent_spaces: step,
+                            branch_anchor_column: None,
+                            colon_role: None,
+                            colon_output_column: None,
+                        });
+                        model.push((step, false));
+                    }
+                    2 => {
+                        stack.close_active_ternary(ColonRole::Ternary, 0);
+                        if let Some(frame) = model.iter_mut().rev().find(|frame| !frame.1) {
+                            frame.1 = true;
+                        }
+                    }
+                    3 => {
+                        stack.pop_active_ternary();
+                        if let Some(index) = model.iter().rposition(|frame| !frame.1) {
+                            model.remove(index);
+                        }
+                    }
+                    _ => {
+                        stack.pop_completed_ternaries();
+                        model.retain(|frame| !frame.1);
+                    }
+                }
+                let expected = model
+                    .iter()
+                    .rev()
+                    .find(|frame| !frame.1)
+                    .or(model.last())
+                    .map(|frame| frame.0);
+                assert_eq!(
+                    stack
+                        .active_ternary()
+                        .map(|frame| frame.question_indent_spaces),
+                    expected
+                );
+            }
+            state = state.wrapping_add(1);
+        }
     }
 
     #[test]

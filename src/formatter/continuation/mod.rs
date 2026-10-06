@@ -1625,8 +1625,11 @@ impl FormatEngine<'_> {
         if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
             return None;
         }
-        let line = self.current.trimmed_end();
-        let code = self.output.code_of(line).trimmed_end();
+        // Every assignment operator holds `=`.
+        if !self.current.holds_equals() {
+            return None;
+        }
+        let code = self.current_code_before_trailing_comment();
         if code.ends_with(',')
             || code.ends_with(';')
             || code.ends_with(':') && find_case_colon(code).is_some()
