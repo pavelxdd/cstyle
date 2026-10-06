@@ -616,9 +616,7 @@ impl FormatEngine<'_> {
         }
         let width = self.options.indent_width;
         let natural = exact_indent_spaces.unwrap_or(indent * width);
-        let previous_index = (0..self.output.len())
-            .rev()
-            .find(|&index| !self.output.trimmed(index).is_empty());
+        let previous_index = self.output.last_non_empty_index();
         let previous_is_preprocessor =
             previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
         if let Some(spaces) =

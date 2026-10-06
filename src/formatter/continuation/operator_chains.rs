@@ -1584,10 +1584,11 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', '{', '}']) {
             return None;
         }
-        if !self.output.scoped().iter().rev().take(8).any(|line| {
-            let trimmed = line.trimmed_start();
-            trimmed.starts_with("if ") || trimmed.starts_with("while ")
-        }) {
+        let scope = self.output.scoped_range();
+        if !self
+            .output
+            .has_if_or_while_line_from(scope.start.max(scope.end.saturating_sub(8)))
+        {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;

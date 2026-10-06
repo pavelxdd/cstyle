@@ -377,6 +377,12 @@ pub(crate) struct OutputBuffer {
     recent_if_directive_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line led by `#`.
     recent_hash_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that starts with `if ` or `while `.
+    recent_if_while_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that starts with `typedef `.
+    recent_typedef_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line that is `(` alone.
+    recent_open_paren_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is `enum`.
     recent_enum_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code starts with `else,`.
@@ -1086,6 +1092,28 @@ impl OutputBuffer {
     pub(crate) fn has_hash_led_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_hash_cache, start, |index| {
             self.trimmed(index).starts_with('#')
+        })
+    }
+
+    /// Whether a line from `start` on starts with `if ` or `while `.
+    pub(crate) fn has_if_or_while_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_if_while_cache, start, |index| {
+            let trimmed = self.lines[index].trimmed_start();
+            trimmed.starts_with("if ") || trimmed.starts_with("while ")
+        })
+    }
+
+    /// Whether a line from `start` on starts with `typedef `.
+    pub(crate) fn has_typedef_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_typedef_cache, start, |index| {
+            self.trimmed(index).starts_with("typedef ")
+        })
+    }
+
+    /// Whether a line from `start` on is `(` alone.
+    pub(crate) fn has_open_paren_line_from(&self, start: usize) -> bool {
+        self.has_line_from(&self.recent_open_paren_cache, start, |index| {
+            self.trimmed(index) == "("
         })
     }
 

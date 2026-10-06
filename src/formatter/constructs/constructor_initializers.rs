@@ -582,7 +582,7 @@ impl FormatEngine<'_> {
             .filter(|&index| self.output.comment_start_index(index) == index)
             .filter(|&index| !self.output.trimmed(index).is_empty())
         {
-            let code = self.output.code_before_comment(index).trimmed_end();
+            let code = self.output.code_before_comment_trimmed(index);
             let previous_trimmed = code.trimmed_start();
             if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
                 || (base_indent.is_some() && previous_trimmed.ends_with(',')))
@@ -777,6 +777,11 @@ impl FormatEngine<'_> {
             || current == "{"
             || current == "}"
             || current.starts_with("};")
+            // A member's call splits at a `(` alone on its line.
+            || current != "("
+                && !self
+                    .output
+                    .has_open_paren_line_from(self.output.len().saturating_sub(32))
         {
             return None;
         }

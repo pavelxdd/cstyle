@@ -8,7 +8,12 @@ use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
     pub(crate) fn typedef_template_context_indent_spaces(&self, current: &str) -> Option<usize> {
-        if current.is_empty() || current.starts_with('#') {
+        if current.is_empty()
+            || current.starts_with('#')
+            || !self
+                .output
+                .has_typedef_line_from(self.output.len().saturating_sub(32))
+        {
             return None;
         }
         let width = self.options.indent_width;
