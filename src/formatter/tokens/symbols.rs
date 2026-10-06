@@ -264,7 +264,7 @@ impl FormatEngine<'_> {
         let Some(previous) = self.output.last_non_empty_scoped() else {
             return base;
         };
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if previous_code.ends_with(',')
             && leading_visual_width(previous, self.options.tab_width)
                 == self.token_input.token_source_line_indent
@@ -423,7 +423,7 @@ impl FormatEngine<'_> {
             && self.token_input.token_begins_source_line
             && let Some(previous) = self.layout.previous_pre_adjust_line.as_ref()
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             if code.trimmed_start().starts_with("return new ") {
                 let spaces =
                     leading_visual_width(previous, self.options.tab_width) + "return ".len();

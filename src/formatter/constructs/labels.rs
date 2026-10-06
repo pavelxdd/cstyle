@@ -189,7 +189,7 @@ pub(crate) fn access_label_body_indent_spaces(
 
 impl FormatEngine<'_> {
     pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
             && self.layout.pending_braceless_block_bias.is_none()
@@ -224,7 +224,7 @@ impl FormatEngine<'_> {
             .skip_while(|line| line.as_str() != previous.as_str())
             .skip(1)
             .find(|line| !line.trimmed().is_empty())?;
-        let before_code = self.output.code_of(before).trimmed_end();
+        let before_code = self.output.code_trimmed_of(before);
         let before_trimmed = before_code.trimmed_start();
         let split_else_chain = is_attached_user_label(previous_trimmed)
             || self.recent_split_else_output_chain_active();
@@ -396,7 +396,7 @@ impl FormatEngine<'_> {
         }
         if kind == LineKind::Label
             && self.output.scoped().iter().rev().take(128).any(|line| {
-                let trimmed = self.output.code_of(line).trimmed_end().trimmed_start();
+                let trimmed = self.output.code_trimmed_of(line).trimmed_start();
                 trimmed == "else" || trimmed.ends_with("} else")
             })
             && let Some(previous) = self

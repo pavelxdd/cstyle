@@ -340,7 +340,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = self.output.code_of(previous).trimmed_end();
+                    let code = self.output.code_trimmed_of(previous);
                     code.is_empty()
                         || code.ends_with([';', '}'])
                         || code.trimmed_start().starts_with('#')
@@ -365,7 +365,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
-                    let code = self.output.code_of(previous).trimmed_end();
+                    let code = self.output.code_trimmed_of(previous);
                     code.ends_with([';', '{', '}']) || code.trimmed_start().starts_with('#')
                 })
         {
@@ -429,7 +429,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trimmed().is_empty())
             .take(16)
         {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             if code.ends_with([';', '{', '}']) {
                 break;
             }

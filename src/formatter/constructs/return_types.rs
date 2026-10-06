@@ -46,7 +46,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trimmed().is_empty())
             .take(16)
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
@@ -148,7 +148,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn trailing_return_function_parameter_tail_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
         if !current.contains("= {}") || !current.contains(") ->") || !current.ends_with('{') {

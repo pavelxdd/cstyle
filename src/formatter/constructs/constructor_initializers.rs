@@ -451,7 +451,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let code = self.output.code_of(previous).trimmed_end();
+        let code = self.output.code_trimmed_of(previous);
         if !constructor_signature_ends_with_parameter_list(code) || code.ends_with(';') {
             return None;
         }
@@ -498,7 +498,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = &self.output[self.output.last_lines_where(LineFilter::NoLineComment)[0]?];
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
             return None;
         }
@@ -611,7 +611,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with('(') {
             return None;
         }
@@ -668,7 +668,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if trimmed.starts_with(':') && previous_code.trimmed_start().starts_with('?') {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
@@ -864,7 +864,7 @@ impl FormatEngine<'_> {
                 !trimmed.is_empty() && !is_comment_only_line(trimmed)
             })
             .filter(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.ends_with(',') && self.open_paren_column_of(code).is_none()
             })?;
         self.constructor_initializer_base_indent_spaces()

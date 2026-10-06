@@ -63,7 +63,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(opening).trimmed_end();
+            let code = self.output.code_trimmed_of(opening);
             let opens = code.chars().filter(|ch| *ch == '{').count();
             let closes = code.chars().filter(|ch| *ch == '}').count();
             if opens > closes + closed_blocks && !code.trimmed_start().starts_with('{') {
@@ -217,7 +217,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .find(|line| !line.trimmed().is_empty())?;
-            let code = self.output.code_of(before_open).trimmed_end();
+            let code = self.output.code_trimmed_of(before_open);
             return (head_ends_binary_operator(code) || code.ends_with("->"))
                 .then(|| leading_visual_width(previous, self.options.tab_width));
         }
@@ -538,7 +538,7 @@ impl FormatEngine<'_> {
             let target_index = self
                 .output
                 .iter()
-                .rposition(|line| self.output.code_of(line).trimmed_end().ends_with('{'))
+                .rposition(|line| self.output.code_trimmed_of(line).ends_with('{'))
                 .and_then(|open_index| {
                     (open_index + 1..self.output.len())
                         .find(|index| !self.output[*index].trimmed().is_empty())
@@ -1064,7 +1064,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(opening).trimmed_end();
+            let code = self.output.code_trimmed_of(opening);
             let trimmed = code.trimmed_start();
             if trimmed == "}" {
                 return None;
@@ -1133,11 +1133,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .find(|line| !line.trimmed().is_empty())
         {
-            let trimmed = self
-                .output
-                .code_of(braceless_else)
-                .trimmed_end()
-                .trimmed_start();
+            let trimmed = self.output.code_trimmed_of(braceless_else).trimmed_start();
             if trimmed == "else" || trimmed.ends_with("} else") {
                 let target = leading_visual_width(braceless_else, self.options.tab_width)
                     .saturating_sub(self.options.indent_width);
@@ -1179,7 +1175,7 @@ impl FormatEngine<'_> {
         let Some(before_branch) = before_branch else {
             return spaces;
         };
-        let code = self.output.code_of(before_branch).trimmed_end();
+        let code = self.output.code_trimmed_of(before_branch);
         code.ends_with('{')
             .then(|| leading_visual_width(before_branch, self.options.tab_width))
             .or(spaces)
@@ -1211,7 +1207,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
             .find(|candidate| {
-                let code = self.output.code_of(candidate).trimmed_end();
+                let code = self.output.code_trimmed_of(candidate);
                 let (closes, opens) = line_brace_imbalance(code);
                 if isolated
                     && depth == 1
@@ -1228,7 +1224,7 @@ impl FormatEngine<'_> {
                 depth = depth.saturating_sub(opens);
                 false
             })?;
-        let matching_code = self.output.code_of(matching_open).trimmed_end();
+        let matching_code = self.output.code_trimmed_of(matching_open);
         if isolated
             && matching_code.trimmed_start().starts_with(')')
             && matching_code.ends_with('{')
@@ -1240,7 +1236,7 @@ impl FormatEngine<'_> {
                 .skip_while(|line| line.as_str() != matching_open.as_str())
                 .skip(1)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     let trimmed = code.trimmed_start();
                     (self.open_paren_column_of(code).is_some()
                         && (starts_header_word(trimmed, "if")

@@ -97,7 +97,7 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
 impl FormatEngine<'_> {
     pub(crate) fn reset_continuation_after_empty_line(&mut self) {
         let in_continuation = self.output.last_non_empty_scoped().is_some_and(|previous| {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             let trimmed = code.trimmed_start();
             !code.is_empty()
                 && (head_ends_binary_operator(code)
@@ -138,7 +138,7 @@ impl FormatEngine<'_> {
             if self.output.comment_start_index(start + offset) != start + offset {
                 continue;
             }
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             // Neither does a directive, nor the lines it continues over.
             if self.output.is_directive_line(start + offset)
                 || code.ends_with(';')
@@ -180,13 +180,13 @@ impl FormatEngine<'_> {
             .output
             .iter()
             .rposition(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.ends_with([';', '{', '}'])
             })
             .map_or(0, |index| index + 1);
         let mut openers = Vec::new();
         for line in &self.output[start..] {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let (closes, opens) = self.paren_imbalance_of(code);
             for _ in 0..closes {
                 openers.pop();
@@ -626,7 +626,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(':') || !previous_code.contains('?') {
             return None;
         }
@@ -1348,7 +1348,7 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            let code = self.output.code_of(trimmed).trimmed_end();
+            let code = self.output.code_trimmed_of(trimmed);
             if code.starts_with("return ") && !code.ends_with(';') {
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
@@ -1432,7 +1432,7 @@ impl FormatEngine<'_> {
             current_prefix_len
         };
         if let Some(previous) = self.output.last_non_empty_scoped() {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with(',')
                 && !previous_code.contains('=')
                 && previous_code.find('(').is_none_or(|paren| {
@@ -1602,7 +1602,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let content = line.trimmed_start();
-        let code = self.output.code_of(content).trimmed_end();
+        let code = self.output.code_trimmed_of(content);
         let open = self.open_paren_column_of(code)?;
         let assignment = find_single_assignment_after(code, open + 1)?;
         let after_assignment = &code[assignment + 1..];

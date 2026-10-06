@@ -48,7 +48,7 @@ impl CurrentLine {
     pub(crate) fn push_str(&mut self, text: &str) {
         let leads = self.leads_comment();
         self.text.push_str(text);
-        if !text.trimmed().is_empty() {
+        if text.bytes().any(|byte| !byte.is_ascii_whitespace()) {
             self.record_active_token(leads);
         }
     }
@@ -669,22 +669,22 @@ struct LineMarks {
 
 impl LineMarks {
     fn advance(&mut self, bytes: &[u8]) {
-        // A text sought may start before the bytes read last.
-        let base = self.scanned.saturating_sub(9);
-        let tail = &bytes[base..];
-        if let Some(offset) = tail.windows(10).rposition(|window| window == b"@selector(") {
-            self.last_selector_call = Some(base + offset);
-        }
-        self.dictionary_opener |= tail.windows(3).any(|window| window == b"@ {");
-        self.asm_call |= tail.windows(4).any(|window| window == b"asm(")
-            || tail.windows(8).any(|window| window == b"__asm__(");
         for (index, &byte) in bytes.iter().enumerate().skip(self.scanned) {
             match byte {
                 b'[' => self.last_open_bracket = Some(index),
                 b']' => self.last_close_bracket = Some(index),
                 b'?' => self.last_question = Some(index),
                 b'=' => self.equals = true,
-                b'(' => self.last_open_paren = Some(index),
+                b'(' => {
+                    self.last_open_paren = Some(index);
+                    // The texts sought that end with the `(`, which may
+                    // start before the bytes read last.
+                    let head = &bytes[..=index];
+                    if head.ends_with(b"@selector(") {
+                        self.last_selector_call = Some(index + 1 - b"@selector(".len());
+                    }
+                    self.asm_call |= head.ends_with(b"asm(") || head.ends_with(b"__asm__(");
+                }
                 b')' => self.last_close_paren = Some(index),
                 b'/' | b'*' if index > 0 && bytes[index - 1] == b'/' => {
                     self.comment_opener = true;
@@ -700,6 +700,7 @@ impl LineMarks {
                 b'{' => {
                     self.open_brace = true;
                     self.tail_start = index + 1;
+                    self.dictionary_opener |= bytes[..=index].ends_with(b"@ {");
                 }
                 b'}' => {
                     self.close_brace = true;

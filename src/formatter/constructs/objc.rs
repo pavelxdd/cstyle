@@ -487,7 +487,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn ready_objc_method_closing_brace_indent_spaces(
         &self,
-        line: &str,
+        line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         if line_start != "}" {

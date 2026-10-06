@@ -369,7 +369,7 @@ impl FormatEngine<'_> {
             || !self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with('{'))
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with('{'))
         {
             return None;
         }
@@ -500,7 +500,7 @@ impl FormatEngine<'_> {
                 leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
             );
         }
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if is_namespace_or_module_block_header(previous_code) && !self.options.indent_namespaces {
             return None;
         }
@@ -512,7 +512,7 @@ impl FormatEngine<'_> {
                     let trimmed = line.trimmed_start();
                     !trimmed.is_empty() && !is_comment_only_line(trimmed)
                 })?;
-                let code = self.output.code_of(owner).trimmed_end();
+                let code = self.output.code_trimmed_of(owner);
                 if code.trimmed_start().starts_with('#') {
                     return None;
                 }
@@ -602,7 +602,7 @@ impl FormatEngine<'_> {
             .filter(|line| !line.trimmed().is_empty())
             .take(32)
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             if reverse_scan_skips_block_comment(code, &mut in_block_comment) {
                 continue;
             }
@@ -1382,7 +1382,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(','))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))
         {
             let level = self
                 .layout

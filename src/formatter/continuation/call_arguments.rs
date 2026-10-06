@@ -173,7 +173,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     assignment_call_value_column(code, self.options.tab_width)
                 })
         {
@@ -190,7 +190,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                         .then_some(leading_visual_width(line, self.options.tab_width))
                 })
@@ -318,7 +318,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                         .then(|| leading_visual_width(line, self.options.tab_width) + case_unindent)
                 })
@@ -376,7 +376,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     if starts_string_literal_token(code.trimmed_start()) {
                         return None;
                     }
@@ -399,7 +399,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     assignment_call_value_column(code, self.options.tab_width).map(|value_column| {
                         (
                             leading_visual_width(line, self.options.tab_width),
@@ -435,7 +435,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     assignment_call_value_column(code, self.options.tab_width)
                         .map(|_| leading_visual_width(line, self.options.tab_width))
                 })
@@ -467,7 +467,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                         .then_some(leading_visual_width(line, self.options.tab_width))
                 });
@@ -479,7 +479,7 @@ impl FormatEngine<'_> {
             .rev()
             .skip(1)
             .find(|line| !line.trimmed().is_empty())?;
-        let call_start_code = self.output.code_of(call_start).trimmed_end();
+        let call_start_code = self.output.code_trimmed_of(call_start);
         if call_start_code.ends_with(',') && self.open_paren_column_of(call_start_code).is_some() {
             return Some(leading_visual_width(call_start, self.options.tab_width));
         }
@@ -499,7 +499,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(8)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                         .then_some(leading_visual_width(line, self.options.tab_width))
                 })
@@ -526,11 +526,11 @@ impl FormatEngine<'_> {
             .skip(1)
             .take(16)
             .find(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 !unmatched_open_paren_columns(code).is_empty()
                     && !starts_string_literal_token(code.trimmed_start())
             })?;
-        let call_code = self.output.code_of(call_start).trimmed_end();
+        let call_code = self.output.code_trimmed_of(call_start);
         assignment_call_value_column(call_code, self.options.tab_width)
             .is_none()
             .then(|| leading_visual_width(previous, self.options.tab_width).saturating_sub(1))
@@ -561,7 +561,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .take(16)
             .find_map(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 (!unmatched_open_paren_columns(code).is_empty()
                     && !starts_string_literal_token(code.trimmed_start()))
                 .then_some(leading_visual_width(line, self.options.tab_width))
@@ -664,7 +664,7 @@ impl FormatEngine<'_> {
                     .skip(1)
                     .take(128)
                     .find_map(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         (!starts_string_literal_token(code.trimmed_start())
                             && !unmatched_open_paren_columns(code).is_empty())
                         .then_some(leading_visual_width(line, self.options.tab_width))
@@ -690,7 +690,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .take(128)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (!starts_string_literal_token(code.trimmed_start())
                         && !unmatched_open_paren_columns(code).is_empty())
                     .then_some(leading_visual_width(line, self.options.tab_width))
@@ -735,7 +735,7 @@ impl FormatEngine<'_> {
                 .any(|line| starts_string_literal_token(line.trimmed_start()))
             && let Some((call_line, open)) =
                 self.output.scoped().iter().rev().take(16).find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     if starts_string_literal_token(code.trimmed_start()) {
                         return None;
                     }
@@ -745,7 +745,7 @@ impl FormatEngine<'_> {
                         .map(|open| (line, open))
                 })
         {
-            let call_code = self.output.code_of(call_line).trimmed_end();
+            let call_code = self.output.code_trimmed_of(call_line);
             let target = if call_code.ends_with('(') {
                 leading_visual_width(call_line, self.options.tab_width) + case_unindent
             } else {
@@ -774,7 +774,7 @@ impl FormatEngine<'_> {
                 .take(4)
                 .any(|line| line.trimmed_start().starts_with(',')))
             && let Some(call_line) = self.output.scoped().iter().rev().take(16).find(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.ends_with('(')
                     && !starts_string_literal_token(code.trimmed_start())
                     && assignment_call_value_column(code, self.options.tab_width).is_none()
@@ -868,12 +868,12 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take_while(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     !(code.ends_with(';') || code.ends_with('{') || code.ends_with('}'))
                 })
                 .take(16)
                 .find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     (first_string_literal_start(code.trimmed_start()).is_some())
                         .then(|| self.open_paren_column_of(code))?
                 })
@@ -920,7 +920,7 @@ impl FormatEngine<'_> {
         }
         if structural_context {
             return self.output.scoped().iter().rev().take(16).find_map(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 (!starts_string_literal_token(code.trimmed_start())).then(|| {
                     assignment_call_value_column(code, self.options.tab_width)
                         .map(|column| column + self.options.indent_width)
@@ -956,7 +956,7 @@ impl FormatEngine<'_> {
                     .skip(1)
                     .take(16)
                     .find_map(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         (!starts_string_literal_token(code.trimmed_start()))
                             .then(|| unmatched_open_paren_columns(code).last().copied())?
                     })
@@ -973,7 +973,7 @@ impl FormatEngine<'_> {
                         .skip(1)
                         .take(8)
                         .find_map(|line| {
-                            let code = self.output.code_of(line).trimmed_end();
+                            let code = self.output.code_trimmed_of(line);
                             assignment_call_value_column(code, self.options.tab_width)
                         })
                 })?
@@ -1006,7 +1006,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') || self.leaves_paren_open(previous_code) {
             return None;
         }
@@ -1044,7 +1044,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        let code = self.output.code_of(previous).trimmed_end();
+        let code = self.output.code_trimmed_of(previous);
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         // The tail of a continued condition closes parens it never opened.
         let closes_outer_paren = || code.matches(')').count() > code.matches('(').count();
@@ -1074,7 +1074,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(','))
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with(','))
         {
             return None;
         }
@@ -1222,7 +1222,7 @@ impl FormatEngine<'_> {
             .as_ref()
             .filter(|line| !line.trimmed().is_empty())
             .or_else(|| self.output.last_non_empty_scoped())?;
-        let code = self.output.code_of(previous).trimmed_end();
+        let code = self.output.code_trimmed_of(previous);
         if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
             return None;
         }
@@ -1295,7 +1295,7 @@ impl FormatEngine<'_> {
             if opens.len() != 1 {
                 return None;
             }
-            let code = self.output.code_of(trimmed).trimmed_end();
+            let code = self.output.code_trimmed_of(trimmed);
             if !code.ends_with('(') {
                 return None;
             }
@@ -1353,7 +1353,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .find(|line| !line.trimmed().is_empty())
             .and_then(|previous| {
-                let code = self.output.code_of(previous).trimmed_end();
+                let code = self.output.code_trimmed_of(previous);
                 (code.ends_with(',') && self.open_paren_column_of(code).is_some())
                     .then_some(leading_visual_width(previous, self.options.tab_width))
             })
@@ -1368,7 +1368,7 @@ impl FormatEngine<'_> {
         let indent_width = self.options.indent_width;
         let tab_width = self.options.tab_width;
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') {
             return None;
         }
@@ -1405,7 +1405,7 @@ impl FormatEngine<'_> {
             .take(64)
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             if code.ends_with(',') && code.contains("new ") {
                 let base = leading_visual_width(line, self.options.tab_width);
                 let has_over_max_new_call =
@@ -1486,7 +1486,7 @@ impl FormatEngine<'_> {
                 .any(|line| starts_string_literal_token(line.trimmed_start()))
         {
             self.output.scoped().iter().rev().take(8).find_map(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 if starts_string_literal_token(code.trimmed_start()) {
                     return None;
                 }
@@ -1639,7 +1639,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !self.output.code_of(previous).trimmed_end().ends_with(',')
+        if !self.output.code_trimmed_of(previous).ends_with(',')
             || !code_holds_word(previous, "new")
         {
             return None;
@@ -1864,7 +1864,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if let Some(previous) = self.output.last_non_empty_scoped() {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             if code.trimmed() != "(" && self.open_paren_column_of(code).is_some() {
                 return None;
             }
@@ -1921,7 +1921,7 @@ impl FormatEngine<'_> {
         if self.token_input.token_source_line_indent != anchor {
             return None;
         }
-        let code = self.output.code_of(line).trimmed_end();
+        let code = self.output.code_trimmed_of(line);
         if code.ends_with('{')
             && (line_opens_lambda_block(line)
                 || line
@@ -1963,7 +1963,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if previous_code.ends_with("),") {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
@@ -2101,7 +2101,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_scoped()?;
         // The indent never changes how the line ends.
-        if !self.output.code_of(previous).trimmed_end().ends_with(',') {
+        if !self.output.code_trimmed_of(previous).ends_with(',') {
             return None;
         }
         // Byte offsets in the line are its columns once its indent's tabs
@@ -2121,7 +2121,7 @@ impl FormatEngine<'_> {
             );
             expanded.as_str()
         };
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',')
             || previous_code.contains(" new ")
             || previous_code.contains("(new ")
@@ -2258,7 +2258,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous.trimmed_end().ends_with('(') {
             return None;
         }
@@ -2295,7 +2295,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') || self.leaves_paren_open(previous_code) {
             return None;
         }
@@ -2322,7 +2322,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if previous_code.ends_with(',') && self.previous_output_line_closes_lambda_body() {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
@@ -2338,7 +2338,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(raw).trimmed_end();
+            let code = self.output.code_trimmed_of(raw);
             if depth == 0 && !code.trimmed_start().starts_with('}') {
                 return false;
             }

@@ -171,7 +171,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(';'))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(';'))
         {
             while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
@@ -195,7 +195,7 @@ impl FormatEngine<'_> {
             if !last_is_same_line_if {
                 while index > 0 {
                     let above = self.output[index - 1].trimmed_end();
-                    let above_code = self.output.code_of(above).trimmed_end();
+                    let above_code = self.output.code_trimmed_of(above);
                     if above_code.ends_with(';')
                         || above_code.ends_with('{')
                         || above_code.ends_with('}')
@@ -278,7 +278,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with('}'))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('}'))
             && let Some((base, delta)) = self.layout.indentation.last_braceless_block()
             && self.layout.indentation.indent() == base + delta
         {
@@ -293,7 +293,7 @@ impl FormatEngine<'_> {
             if self
                 .output
                 .last()
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(';'))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(';'))
             {
                 self.match_closing_while_to_braceless_do();
             } else if matches!(

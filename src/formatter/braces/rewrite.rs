@@ -825,7 +825,7 @@ impl FormatEngine<'_> {
                         .previous_pre_adjust_line
                         .as_deref()
                         .is_some_and(|line| {
-                            let code = self.output.code_of(line).trimmed_end();
+                            let code = self.output.code_trimmed_of(line);
                             code.trimmed_start() == "else" && line_ends_with_comment(line)
                         }) =>
             {
@@ -856,7 +856,7 @@ impl FormatEngine<'_> {
         let preserves_return_continuation_column = self.options.brace_style
             == BraceStyle::Whitesmith
             && self.output.last_line_outside_comment().is_some_and(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.trimmed_start().starts_with("return ") && code.ends_with(':')
             });
         let semantic_header = self
@@ -1053,7 +1053,7 @@ impl FormatEngine<'_> {
 
     fn previous_output_code_ends_assignment(&self) -> bool {
         self.output.last().is_some_and(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             code.ends_with('=')
         })
     }
@@ -1144,7 +1144,7 @@ impl FormatEngine<'_> {
                 let previous_code = self
                     .output
                     .last()
-                    .map(|line| self.output.code_of(line).trimmed_end().to_string());
+                    .map(|line| self.output.code_trimmed_of(line).to_string());
                 (self.current_is_blank()
                     && previous_code
                         .as_deref()
@@ -1241,7 +1241,7 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && let Some(previous) = self.output.last()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(

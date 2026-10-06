@@ -1679,7 +1679,7 @@ impl<'a> FormatEngine<'a> {
                 && !self.current.trimmed_start().starts_with('{')
             {
                 self.output.scoped().iter().rev().take(64).find_map(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     let prefix = code.strip_suffix('{')?.trimmed_end();
                     let prefix = prefix.trimmed_start();
                     (!prefix.is_empty()

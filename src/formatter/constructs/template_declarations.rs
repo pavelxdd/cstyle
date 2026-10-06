@@ -145,14 +145,14 @@ impl FormatEngine<'_> {
             .map(String::as_str)
             .collect();
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         angle_depth_delta(code)
                     })
                     .sum();
@@ -176,19 +176,19 @@ impl FormatEngine<'_> {
         let Some(previous) = lines.first() else {
             return false;
         };
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with('>') {
             return false;
         }
         for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             if is_template_declaration_head_line(trimmed) {
                 let depth: isize = lines[..=index]
                     .iter()
                     .rev()
                     .map(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         angle_depth_delta(code)
                     })
                     .sum();

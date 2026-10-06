@@ -66,7 +66,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let code = self.output.code_of(previous).trimmed_end();
+                    let code = self.output.code_trimmed_of(previous);
                     code.trimmed_start().starts_with('}') && code.ends_with(',')
                 })
         {

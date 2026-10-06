@@ -425,7 +425,7 @@ impl FormatEngine<'_> {
 
     fn continues_operator_expression(&self) -> bool {
         self.output.last_line_outside_comment().is_some_and(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             if head_ends_assignment_operator(code) {
                 return true;
             }

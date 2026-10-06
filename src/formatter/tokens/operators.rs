@@ -1496,7 +1496,7 @@ impl FormatEngine<'_> {
             // A comment line between leaves the sign to the code before it.
             .find(|line| !self.output.code_of(line).trimmed().is_empty())
             .is_some_and(|previous| {
-                let code = self.output.code_of(previous).trimmed_end();
+                let code = self.output.code_trimmed_of(previous);
                 code.ends_with(['(', '[', '{', ',', '=', '?', ':'])
                     || head_ends_binary_operator(code)
                     || code.trimmed_start().starts_with("return ")
@@ -1525,8 +1525,7 @@ impl FormatEngine<'_> {
             || self.current.trimmed().is_empty()
                 && self.output.last_non_empty_scoped()
                     .is_some_and(|line| {
-                        self.output.code_of(line)
-                            .trimmed_end()
+                        self.output.code_trimmed_of(line)
                             .ends_with('{')
                     })
     }

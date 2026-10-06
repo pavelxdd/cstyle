@@ -261,7 +261,7 @@ impl FormatEngine<'_> {
             self.layout
                 .frame_stack
                 .mark_delimiter_line_output_indent(output_line_index, output_indent);
-            let output_code = self.output.code_of(output_line).trimmed_end();
+            let output_code = self.output.code_trimmed_of(output_line);
             let line_comment_limit = line_comment_split_limit(line);
             let code_before_line_comment = line[..line_comment_limit].trimmed_end();
             // A `#` in a literal is no directive.
@@ -349,7 +349,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .find(|line| !line.trimmed().is_empty())
-                    .is_none_or(|line| !self.output.code_of(line).trimmed_end().ends_with('}'))
+                    .is_none_or(|line| !self.output.code_trimmed_of(line).ends_with('}'))
             {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);

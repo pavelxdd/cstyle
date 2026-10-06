@@ -24,6 +24,7 @@ use crate::formatter::text::line_scan::{
     advance_quoted_literal, last_unmatched_open_delimiter, unmatched_open_bracket_column,
     unmatched_open_paren_column, unmatched_open_paren_columns,
 };
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, head_ends_assignment_operator,
@@ -403,7 +404,10 @@ impl FormatEngine<'_> {
         scan.ended = true;
     }
 
-    pub(crate) fn maximum_length_using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn maximum_length_using_alias_rhs_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
         let current = line.trimmed_start();
         if self.options.max_code_length.is_none()
             || current.is_empty()
@@ -412,7 +416,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         let previous_trimmed = previous_code.trimmed_start();
         if !previous_trimmed.starts_with("using ") || !previous_code.ends_with('=') {
             return None;

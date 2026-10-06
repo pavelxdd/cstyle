@@ -145,6 +145,10 @@ pub(crate) fn line_ends_with_comment(line: &str) -> bool {
     if trimmed.ends_with("*/") {
         return true;
     }
+    // Only a `//` starts a comment that ends the line.
+    if !trimmed.as_bytes().contains(&b'/') {
+        return false;
+    }
     let bytes = trimmed.as_bytes();
     let mut index = 0;
     let mut in_string = false;

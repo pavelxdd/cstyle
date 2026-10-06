@@ -170,13 +170,28 @@ fn structural_line(line: &str) -> Cow<'_, str> {
     Cow::Owned(structural)
 }
 
-fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
+/// The metadata of `line`; `parens` holds the line's paren imbalance, read
+/// once for both when its code is all of it.
+fn compute_line_brace_meta(
+    line: &str,
+    parens: Option<&OnceCell<(usize, Vec<usize>)>>,
+) -> LineBraceMeta {
     let line_start = line.trimmed_start();
     let structural = structural_line(line);
     let code = structural.trimmed_end();
     let trimmed = code.trimmed_start();
     let (closes, opens) = line_brace_imbalance(code);
-    let (paren_closes, paren_opens) = line_paren_imbalance(code);
+    let scanned;
+    let (paren_closes, paren_opens) = match (&structural, parens) {
+        (Cow::Borrowed(_), Some(parens)) => {
+            let (closes, opens) = parens.get_or_init(|| line_paren_imbalance(code));
+            (*closes, opens.as_slice())
+        }
+        _ => {
+            scanned = line_paren_imbalance(code);
+            (scanned.0, scanned.1.as_slice())
+        }
+    };
     let open_shape = if trimmed == "{" {
         OpenBraceShape::Isolated
     } else if code.ends_with('{')
@@ -523,7 +538,7 @@ struct RecentMatch {
 impl OutputBuffer {
     fn record_hints(&mut self, line: &str, hints: OutputLineHints) {
         if hints.has_colon && line.trimmed_end().ends_with('{') {
-            let meta = compute_line_brace_meta(line);
+            let meta = compute_line_brace_meta(line, None);
             self.may_have_label_open |= meta.open_shape == OpenBraceShape::Label;
         }
         self.may_have_else |= hints.has_else;
@@ -843,7 +858,7 @@ impl OutputBuffer {
                     code_else_line: false,
                 }
             } else {
-                compute_line_brace_meta(line)
+                compute_line_brace_meta(line, Some(&self.parens[index]))
             }
         })
     }
@@ -935,6 +950,18 @@ impl OutputBuffer {
             return self.code_before_comment(index);
         }
         &line[..trailing_comment_split_limit(line)]
+    }
+
+    /// `code_of(line)` without its trailing blanks.
+    pub(crate) fn code_trimmed_of<'a>(&'a self, line: &'a str) -> &'a str {
+        let recent = self.lines.len().saturating_sub(8);
+        if let Some(index) = (recent..self.lines.len()).rev().find(|&index| {
+            let held = &self.lines[index];
+            held.as_ptr() == line.as_ptr() && held.len() == line.len()
+        }) {
+            return self.code_before_comment_trimmed(index);
+        }
+        line[..trailing_comment_split_limit(line)].trimmed_end()
     }
 
     /// Whether `code(index)` leaves a `{` open, as `has_unmatched_open_brace`

@@ -213,43 +213,44 @@ impl FormatEngine<'_> {
 
     pub(crate) fn publish_ready_line(&mut self, line: String) {
         let line = self.normalize_ready_preprocessor_line(line);
-        let line = if let Some(spaces) = self.ready_objc_method_closing_brace_indent_spaces(&line) {
-            format!("{}{}", " ".repeat(spaces), line.trimmed_start())
+        let view = LineView::new(&line);
+        let line = if let Some(spaces) = self.ready_objc_method_closing_brace_indent_spaces(&view) {
+            format!("{}{}", " ".repeat(spaces), view.trimmed_start())
         } else {
             self.align_isolated_closing_brace_line(line)
         };
-        let line = if let Some(spaces) = self.ready_non_paren_header_indent_spaces(&line) {
-            format!("{}{}", " ".repeat(spaces), line.trimmed_start())
+        let view = LineView::new(&line);
+        let line = if let Some(spaces) = self.ready_non_paren_header_indent_spaces(&view) {
+            format!("{}{}", " ".repeat(spaces), view.trimmed_start())
         } else {
             line
         };
+        let view = LineView::new(&line);
         let line =
-            if let Some(spaces) = self.ready_embedded_preprocessor_return_indent_spaces(&line) {
-                format!("{}{}", " ".repeat(spaces), line.trimmed_start())
+            if let Some(spaces) = self.ready_embedded_preprocessor_return_indent_spaces(&view) {
+                format!("{}{}", " ".repeat(spaces), view.trimmed_start())
             } else {
                 line
             };
         let output_line_index = self.output.len();
-        let line_start = line.trimmed_start();
-        let output_line_hints = buffer::output_line_hints(line_start);
-        self.finish_define_line(&line);
+        let view = LineView::new(&line);
+        let output_line_hints = buffer::output_line_hints(view.trimmed_start());
+        self.finish_define_line(&view);
         let anchored_part = self.max_length_line.take_anchored_part();
-        let line = if anchored_part {
-            line
-        } else if let Some(spaces) = self
-            .ternary_operator_tail_indent_spaces(&line)
-            .or_else(|| self.maximum_length_using_alias_rhs_indent_spaces(&line))
-            .or_else(|| self.using_alias_rhs_indent_spaces(&line))
-            .or_else(|| self.split_assignment_rhs_indent_spaces(&line))
-            .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&line))
-        {
-            if leading_visual_width(&line, self.options.tab_width) != spaces {
-                format!("{}{}", " ".repeat(spaces), line.trimmed_start())
-            } else {
-                line
-            }
+        let spaces = if anchored_part {
+            None
         } else {
-            line
+            self.ternary_operator_tail_indent_spaces(&view)
+                .or_else(|| self.maximum_length_using_alias_rhs_indent_spaces(&view))
+                .or_else(|| self.using_alias_rhs_indent_spaces(&view))
+                .or_else(|| self.split_assignment_rhs_indent_spaces(&view))
+                .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&view))
+        };
+        let line = match spaces {
+            Some(spaces) if leading_visual_width(&line, self.options.tab_width) != spaces => {
+                format!("{}{}", " ".repeat(spaces), view.trimmed_start())
+            }
+            _ => line,
         };
         match self.postprocess_ready_operator_chain_line(output_line_index, line) {
             ReadyOperatorChainLine::Single(line) => {

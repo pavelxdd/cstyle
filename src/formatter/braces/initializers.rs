@@ -249,7 +249,7 @@ impl FormatEngine<'_> {
             || !self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(')'))
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with(')'))
         {
             return None;
         }
@@ -335,7 +335,7 @@ impl FormatEngine<'_> {
         let previous_ends_comma = self
             .output
             .last_non_empty_scoped()
-            .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(','));
+            .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with(','));
         Some(open_spaces + usize::from(previous_ends_comma) * self.options.indent_width)
     }
 
@@ -383,7 +383,7 @@ impl FormatEngine<'_> {
                     self.output
                         .last_non_empty_scoped()
                         .and_then(|previous| {
-                            let code = self.output.code_of(previous).trimmed_end();
+                            let code = self.output.code_trimmed_of(previous);
                             code.ends_with('{').then(|| {
                                 leading_visual_width(previous, self.options.tab_width)
                                     + self.options.indent_width
@@ -395,7 +395,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let code = self.output.code_of(previous).trimmed_end();
+                    let code = self.output.code_trimmed_of(previous);
                     is_braceless_header_line(code.trimmed_start())
                 })
             {
@@ -794,7 +794,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .get(open_output_len)
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with('{'));
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{'));
         let call_argument_array_column = self.output.get(open_output_len).and_then(|line| {
             line.rfind(", {")
                 .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
@@ -855,7 +855,7 @@ impl FormatEngine<'_> {
         let parameterized_lambda_initializer_close = self.current_is_blank()
             && self.output.last().is_some_and(|line| line.trimmed() == "}")
             && self.output.get(open_output_len).is_some_and(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.contains("](") || code.contains("] (")
             });
         if parameterized_lambda_initializer_close {
@@ -932,7 +932,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let code = self.output.code_of(previous).trimmed_end();
+                    let code = self.output.code_trimmed_of(previous);
                     code.ends_with(',') && unmatched_open_brace_content_offset(code).is_some()
                 })
     }
@@ -1236,7 +1236,7 @@ impl FormatEngine<'_> {
                 !trimmed.is_empty() && !trimmed.starts_with('#')
             });
         let mut row = rows.next()?;
-        if !self.output.code_of(row).trimmed_end().ends_with(',') {
+        if !self.output.code_trimmed_of(row).ends_with(',') {
             return None;
         }
         // A member split over rows stands at the row that opens it.
@@ -1422,7 +1422,7 @@ impl FormatEngine<'_> {
             .rev()
             .find(|line| !line.trimmed().is_empty())
             .is_some_and(|previous| {
-                let previous = self.output.code_of(previous).trimmed_end();
+                let previous = self.output.code_trimmed_of(previous);
                 previous.contains('=') && previous.ends_with(')')
             })
     }

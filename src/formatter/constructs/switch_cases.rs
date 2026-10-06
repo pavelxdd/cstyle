@@ -1007,7 +1007,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let switch_line = self.output.scoped().iter().rev().find(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             code.trimmed_start().starts_with("switch")
         })?;
         let body_indent = usize::from(
@@ -1035,7 +1035,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             let trimmed = code.trimmed_start();
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 let follows_comment = self
@@ -1107,7 +1107,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let nearest_case = self.output.scoped().iter().rev().find(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             trimmed.starts_with("case ") || trimmed.starts_with("default:")
         });
@@ -1119,14 +1119,12 @@ impl FormatEngine<'_> {
                 .is_some_and(|(_, _, trimmed)| starts_header_word(trimmed, "switch"));
         if closes_switch
             || self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-                && nearest_case
-                    .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with('{'))
+                && nearest_case.is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{'))
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
         if self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-            && nearest_case
-                .is_some_and(|line| !self.output.code_of(line).trimmed_end().ends_with('{'))
+            && nearest_case.is_some_and(|line| !self.output.code_trimmed_of(line).ends_with('{'))
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             return current_spaces
@@ -1165,7 +1163,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .take(8)
             .take_while(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 let trimmed = code.trimmed_start();
                 !trimmed.starts_with("case ")
                     && !trimmed.starts_with("default:")
@@ -1173,7 +1171,7 @@ impl FormatEngine<'_> {
                     && !trimmed.ends_with('{')
             })
             .find_map(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 (self.open_paren_column_of(code).is_some() && !code.ends_with(';'))
                     .then(|| leading_visual_width(line, self.options.tab_width))
             })?;
@@ -1202,7 +1200,7 @@ impl FormatEngine<'_> {
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
         (case_unindent > 0
             && line.trimmed_start().starts_with(')')
-            && self.output.code_of(line).trimmed_end().ends_with('{'))
+            && self.output.code_trimmed_of(line).ends_with('{'))
         .then_some(current_spaces + case_unindent)
     }
 
@@ -2246,7 +2244,7 @@ impl FormatEngine<'_> {
 
         if line_kind == LineKind::SwitchLabel {
             layout.case_block_closed_depth = None;
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             if code.ends_with('{') {
                 self.layout
                     .switch_case_layout
@@ -2336,7 +2334,7 @@ impl FormatEngine<'_> {
                 );
                 continue;
             }
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             let trimmed = code.trimmed_start();
             if code.ends_with('{')
                 && (trimmed.starts_with("case ") || trimmed.starts_with("default:"))

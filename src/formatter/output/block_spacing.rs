@@ -384,13 +384,11 @@ impl FormatEngine<'_> {
                     !self.tree.tokens[open + 1..close].iter().any(is_code_token)
                 });
             // So is one ending in an empty block of its own.
-            let ends_empty_block =
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_deref()
-                    .is_some_and(|previous| {
-                        self.output.code_of(previous).trimmed_end().ends_with("{}")
-                    });
+            let ends_empty_block = self
+                .layout
+                .previous_pre_adjust_line
+                .as_deref()
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with("{}"));
             self.block_spacing.closed_empty_block =
                 previous_opens || holds_no_code || ends_empty_block;
         }

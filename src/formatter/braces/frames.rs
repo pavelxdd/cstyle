@@ -446,11 +446,7 @@ impl FormatEngine<'_> {
                     .skip(1)
                     .take(8)
                     .take_while(|line| {
-                        !self
-                            .output
-                            .code_of(line)
-                            .trimmed_end()
-                            .ends_with([';', '{', '}'])
+                        !self.output.code_trimmed_of(line).ends_with([';', '{', '}'])
                     })
                     .find(|line| starts_header(line))
             {

@@ -134,7 +134,7 @@ impl FormatEngine<'_> {
                 skipped_comment_indent = Some(leading_visual_width(raw, self.options.tab_width));
                 continue;
             }
-            let code = self.output.code_of(raw).trimmed_end();
+            let code = self.output.code_trimmed_of(raw);
             let trimmed_code = code.trimmed_start();
             if trimmed_code.ends_with(',') {
                 if single_string_literal_comma_line(code) {
@@ -370,7 +370,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| self.output.code_of(previous).trimmed_end().ends_with(','))
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with(','))
         {
             return None;
         }
@@ -447,7 +447,7 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            let code = self.output.code_of(raw).trimmed_end();
+            let code = self.output.code_trimmed_of(raw);
             if line_opens_lambda_or_capture_only_block(code.trimmed_start()) && closed_blocks == 0 {
                 return Some(
                     leading_visual_width(raw, self.options.tab_width) + self.options.indent_width,
@@ -462,13 +462,13 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn using_alias_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
         }
         self.output.last_non_empty_scoped().and_then(|previous| {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             let previous_trimmed = previous_code.trimmed_start();
             if previous_trimmed.starts_with("using ") && previous_code.ends_with('=') {
                 let previous_indent = leading_visual_width(previous, self.options.tab_width);
@@ -483,7 +483,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
+    pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
         if current.is_empty() || current.starts_with(['#', '{', '}']) {
             return None;
@@ -492,7 +492,7 @@ impl FormatEngine<'_> {
             .last_non_empty_scoped()
             .filter(|previous| !is_comment_text_line(previous))
             .and_then(|previous| {
-                let previous_code = self.output.code_of(previous).trimmed_end();
+                let previous_code = self.output.code_trimmed_of(previous);
                 let (operator_start, operator) = find_assignment_operator(previous_code)?;
                 // A logical `&&` declares no reference.
                 let before = previous_code[..operator_start]
@@ -550,7 +550,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn after_lambda_condition_indent_spaces(&self) -> Option<usize> {
         let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.trimmed_start().starts_with("})") {
             return None;
         }
@@ -721,7 +721,7 @@ impl FormatEngine<'_> {
                     let trimmed = line.trimmed_start();
                     !trimmed.is_empty() && !is_comment_only_line(trimmed)
                 })
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(','))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))
             && let Some(base) = self.constructor_initializer_base_indent_spaces()
         {
             return Some(base);
@@ -1559,7 +1559,7 @@ impl FormatEngine<'_> {
             && !previous_code.contains('?')
             && !previous_previous_ends_question()
         {
-            let current_code = self.output.code_of(current).trimmed_end();
+            let current_code = self.output.code_trimmed_of(current);
             if current_code.contains(':')
                 && !current_code.contains('?')
                 && !current_code.starts_with(['"', '\''])
@@ -1576,7 +1576,7 @@ impl FormatEngine<'_> {
                 !trimmed.is_empty() && !trimmed.starts_with("//")
             })
         {
-            let signature_code = self.output.code_of(signature).trimmed_end();
+            let signature_code = self.output.code_trimmed_of(signature);
             if signature_code.ends_with(')')
                 && signature_code.contains('(')
                 && !signature_code.trimmed_start().starts_with('?')
@@ -1600,7 +1600,7 @@ impl FormatEngine<'_> {
             let after_initializer_comment = current.contains('(')
                 && before_previous.is_some_and(|line| line.trimmed_end().ends_with(':'));
             let after_comma_comment = before_previous
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(','));
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','));
             if after_comma_comment
                 && previous_indent > natural
                 && !current.starts_with([')', '}', ';'])

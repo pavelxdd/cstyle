@@ -41,8 +41,9 @@ fn leading_whitespace(bytes: &[u8]) -> usize {
 /// The number of spaces `bytes` start with, read eight bytes at a time.
 pub(crate) fn leading_spaces(bytes: &[u8]) -> usize {
     const SPACES: u64 = u64::from_le_bytes([b' '; 8]);
+    let mut chunks = bytes.chunks_exact(8);
     let mut index = 0;
-    while let Some(chunk) = bytes.get(index..index + 8) {
+    for chunk in &mut chunks {
         // The first byte that is no space sets the lowest differing bits.
         let differing = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ SPACES;
         if differing != 0 {
@@ -50,10 +51,12 @@ pub(crate) fn leading_spaces(bytes: &[u8]) -> usize {
         }
         index += 8;
     }
-    while bytes.get(index) == Some(&b' ') {
-        index += 1;
-    }
     index
+        + chunks
+            .remainder()
+            .iter()
+            .take_while(|&&byte| byte == b' ')
+            .count()
 }
 
 #[cfg(test)]

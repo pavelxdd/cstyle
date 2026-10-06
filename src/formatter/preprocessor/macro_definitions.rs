@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{advance_quoted_literal, unmatched_open_paren_columns};
+use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{
     is_digit_separator, is_identifier_continue, is_identifier_start, leading_identifier,
@@ -748,12 +749,12 @@ fn update_define_expression_paren_anchors(
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn finish_define_line(&mut self, line: &str) {
+    pub(crate) fn finish_define_line(&mut self, line: &LineView<'_>) {
         let line_start = line.trimmed_start();
         if !line_start.starts_with("#define") {
             return;
         }
-        let code = self.output.code_of(line).trimmed_end();
+        let code = self.output.code_trimmed_of(line);
         if code.ends_with('\\') {
             return;
         }

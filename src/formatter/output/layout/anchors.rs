@@ -3730,7 +3730,7 @@ impl FormatEngine<'_> {
             _ => return None,
         };
         let close = self.tree.groups.get(group).close?;
-        let code = self.output.code_of(line).trimmed_end();
+        let code = self.output.code_trimmed_of(line);
         if self.tree.blocks.kind(group) != Some(BlockKind::Control)
             || !code.ends_with('}')
             || self.tree.tokens[first..close]

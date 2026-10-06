@@ -224,7 +224,7 @@ impl FormatEngine<'_> {
         }
         let mut result = self.split_else_preprocessor_branch_body_indent_spaces();
         if let Some(previous) = self.output.last_line_outside_comment() {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             let previous_trimmed = previous_code.trimmed_start();
             if previous_trimmed == "else" || previous_trimmed.ends_with("} else") {
                 result = Some(
@@ -372,7 +372,7 @@ impl FormatEngine<'_> {
         let mut trimmed = line.trimmed_end().to_string();
         if trimmed.trimmed_start().starts_with("/*") {
             let follows_switch = self.output.last_non_empty_scoped().is_some_and(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             });
             if !follows_switch {
@@ -594,7 +594,7 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::SwitchLabel
             && let Some(switch_line) = self.output[..start].iter().rev().find(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             })
         {
@@ -678,7 +678,7 @@ impl FormatEngine<'_> {
 
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
         let line = self.output.last_non_empty_scoped()?;
-        let code = self.output.code_of(line).trimmed_end();
+        let code = self.output.code_trimmed_of(line);
         let candidate = code
             .trimmed_start()
             .strip_prefix('{')
@@ -831,7 +831,7 @@ impl FormatEngine<'_> {
             .last_lines_where(LineFilter::NoDirectiveOrLineComment)[0]
             .map(|index| &self.output[index])
             .is_some_and(|line| {
-                let head = self.output.code_of(line).trimmed_end();
+                let head = self.output.code_trimmed_of(line);
                 head_ends_binary_operator(head) || head_ends_assignment_operator(head)
             });
         let line_comment_can_carry_continuation = !standalone_line_comment
@@ -930,7 +930,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(';'))
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(';'))
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
@@ -941,7 +941,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.trimmed_start() == "else"
                 || previous_code.trimmed_start().ends_with("} else")
             {
@@ -960,7 +960,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with('{') && previous_code.trimmed_start().starts_with("} else") {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width;
@@ -977,7 +977,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             let previous_trimmed = previous_code.trimmed_start();
             if previous_code.ends_with('{')
                 && (comment_starts_header_word(previous_trimmed, "if")
@@ -986,7 +986,7 @@ impl FormatEngine<'_> {
                     || previous_trimmed.starts_with("else if")
                     || previous_trimmed.starts_with("} else"))
                 && self.output.scoped().iter().rev().take(64).any(|line| {
-                    let trimmed = self.output.code_of(line).trimmed_end().trimmed_start();
+                    let trimmed = self.output.code_trimmed_of(line).trimmed_start();
                     trimmed == "else" || trimmed.ends_with("} else")
                 })
                 && self
@@ -995,7 +995,7 @@ impl FormatEngine<'_> {
                     .iter()
                     .rev()
                     .take_while(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         !(leading_visual_width(line, self.options.tab_width) == 0
                             && code.ends_with('{')
                             && !code.trimmed_start().starts_with('#'))
@@ -1016,7 +1016,7 @@ impl FormatEngine<'_> {
             && self.preprocessor.split_else.extra_indent
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.trimmed_start() == "}" {
                 let spaces = leading_visual_width(previous, self.options.tab_width);
                 self.clear_current();
@@ -1029,7 +1029,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if preprocessor_directive(previous_code.trimmed_start())
                 .is_some_and(|directive| directive == "else" || directive.starts_with("elif"))
             {
@@ -1068,7 +1068,7 @@ impl FormatEngine<'_> {
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
         {
-            let trimmed = self.output.code_of(header).trimmed_end().trimmed_start();
+            let trimmed = self.output.code_trimmed_of(header).trimmed_start();
             if trimmed == "else" || trimmed.ends_with("} else") {
                 let spaces = leading_visual_width(header, self.options.tab_width)
                     + self.options.indent_width;
@@ -1105,7 +1105,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.trimmed_start().starts_with("switch") && previous_code.ends_with('{') {
                 let spaces = leading_visual_width(previous, self.options.tab_width)
                     + self.options.indent_width * 2;
@@ -1138,7 +1138,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             // A directive continues no statement into the comment.
             let after_directive = self
                 .output
@@ -1170,7 +1170,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let after_directive = self
                 .output
@@ -1195,7 +1195,7 @@ impl FormatEngine<'_> {
             && (self.preprocessor.split_else.extra_indent || self.preprocessor_split_else_active())
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             if code.ends_with(';')
                 && previous_indent > self.current_line_indent_spaces() + self.options.indent_width
@@ -1252,7 +1252,7 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| {
                     self.output.last_non_empty_scoped().and_then(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         let previous_indent = leading_visual_width(line, self.options.tab_width);
                         self.block_comment_call_opener_indent_spaces(code, previous_indent)
                             .or_else(|| {
@@ -1283,14 +1283,14 @@ impl FormatEngine<'_> {
                 .or(block_comment_continuation_indent)
                 .or_else(|| {
                     self.output.last_non_empty_scoped().and_then(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         code.ends_with(',')
                             .then(|| leading_visual_width(line, self.options.tab_width))
                     })
                 })
                 .or_else(|| {
                     self.output.last_non_empty_scoped().and_then(|line| {
-                        let code = self.output.code_of(line).trimmed_end();
+                        let code = self.output.code_trimmed_of(line);
                         let trimmed = code.trimmed_start();
                         (trimmed == "else" || trimmed.ends_with("} else")).then(|| {
                             leading_visual_width(line, self.options.tab_width)
@@ -1586,7 +1586,7 @@ impl FormatEngine<'_> {
         (kind == CommentKind::Line && standalone_line_comment)
             .then(|| {
                 let previous = self.output.last_line_outside_comment()?;
-                let code = self.output.code_of(previous).trimmed_end();
+                let code = self.output.code_trimmed_of(previous);
                 (code.trimmed_start().starts_with('?')
                     && self.open_paren_column_of(code).is_none()
                     && self.layout.frame_stack.active_ternary().is_some())
@@ -1748,7 +1748,7 @@ impl FormatEngine<'_> {
                 return None;
             }
             self.output.last_non_empty_scoped().and_then(|line| {
-                let code = self.output.code_of(line).trimmed_end();
+                let code = self.output.code_trimmed_of(line);
                 let trimmed = code.trimmed_start();
                 let header = trimmed
                     .split(|ch: char| ch == '(' || ch.is_whitespace())
@@ -1852,7 +1852,7 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.last_non_empty_scoped();
         if let Some(line) = previous_line {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             let raw_trimmed = line.trimmed();
             if raw_trimmed.starts_with("/*") && raw_trimmed.ends_with("*/") {
@@ -1879,7 +1879,7 @@ impl FormatEngine<'_> {
                     !trimmed.is_empty() && !trimmed.starts_with('#')
                 })
             {
-                let code = self.output.code_of(header).trimmed_end();
+                let code = self.output.code_trimmed_of(header);
                 let trimmed = code.trimmed_start();
                 if trimmed == "else" || trimmed.ends_with("} else") {
                     return Some(
@@ -1927,7 +1927,7 @@ impl FormatEngine<'_> {
             }
         }
         let previous_statement_indent = previous_line.and_then(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             let after_braceless_header = self
                 .output
                 .scoped()
@@ -1937,7 +1937,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .find(|candidate| !candidate.trimmed().is_empty())
                 .is_some_and(|candidate| {
-                    let code = self.output.code_of(candidate).trimmed_end();
+                    let code = self.output.code_trimmed_of(candidate);
                     let trimmed = code.trimmed_start();
                     let header = trimmed
                         .split(|ch: char| ch != '_' && !ch.is_ascii_alphanumeric())
@@ -1968,7 +1968,7 @@ impl FormatEngine<'_> {
                 .flatten()
         });
         let previous_opening_body_indent = previous_line.and_then(|line| {
-            let code = self.output.code_of(line).trimmed_end();
+            let code = self.output.code_trimmed_of(line);
             code.ends_with('{').then(|| {
                 let body_indent = (self
                     .layout
@@ -2016,7 +2016,7 @@ impl FormatEngine<'_> {
             })
             .or_else(|| {
                 previous_line.and_then(|line| {
-                    let code = self.output.code_of(line).trimmed_end();
+                    let code = self.output.code_trimmed_of(line);
                     code.ends_with('{').then(|| {
                         let leading = leading_visual_width(line, self.options.tab_width);
                         if !self.options.indent_namespaces
@@ -2105,7 +2105,7 @@ impl FormatEngine<'_> {
     fn previous_stream_chain_line_comment_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
         let previous = self.output.get(previous_line)?;
-        let previous_code = self.output.code_of(previous).trimmed_end();
+        let previous_code = self.output.code_trimmed_of(previous);
         if !starts_with_chain_operator(previous_code.trimmed_start())
             || self.layout.frame_stack.active_delimiter().is_none()
             || self
@@ -2174,7 +2174,7 @@ impl FormatEngine<'_> {
                 .skip(1)
                 .find(|line| !line.trimmed().is_empty())
                 .and_then(|line| {
-                    let previous = self.output.code_of(line).trimmed_end();
+                    let previous = self.output.code_trimmed_of(line);
                     find_assignment_operator(previous)
                         .map(|(assignment, _)| previous[..assignment].trimmed())
                 })
@@ -2324,7 +2324,7 @@ impl FormatEngine<'_> {
             self.options.continuation_indent_prefix(0, spaces)
         } else if let Some(previous) = self.output.last_non_empty_scoped()
             && {
-                let code = self.output.code_of(previous).trimmed_end();
+                let code = self.output.code_trimmed_of(previous);
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             }
         {
@@ -2343,7 +2343,7 @@ impl FormatEngine<'_> {
             )
         } else if let Some(previous) = self.output.last_non_empty_scoped()
             && {
-                let code = self.output.code_of(previous).trimmed_end();
+                let code = self.output.code_trimmed_of(previous);
                 code.ends_with('{')
                     && (code.trimmed_start().starts_with("case ")
                         || code.trimmed_start().starts_with("default:"))
@@ -2381,7 +2381,7 @@ impl FormatEngine<'_> {
             }
         };
         if let Some(previous) = self.output.last_non_empty_scoped() {
-            let code = self.output.code_of(previous).trimmed_end();
+            let code = self.output.code_trimmed_of(previous);
             if code.ends_with('{')
                 && (code.trimmed_start().starts_with("case ")
                     || code.trimmed_start().starts_with("default:"))

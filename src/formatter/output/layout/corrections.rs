@@ -35,7 +35,7 @@ impl FormatEngine<'_> {
                 self.output
                     .last_line_outside_comment()
                     .and_then(|previous| {
-                        let code = self.output.code_of(previous).trimmed_end();
+                        let code = self.output.code_trimmed_of(previous);
                         code.ends_with('{')
                             .then(|| leading_visual_width(previous, self.options.tab_width))
                     });
@@ -195,7 +195,7 @@ impl FormatEngine<'_> {
             && line_start.starts_with(']')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
-            let previous_code = self.output.code_of(previous).trimmed_end();
+            let previous_code = self.output.code_trimmed_of(previous);
             if ["for", "while", "switch"].iter().any(|header| {
                 let trimmed = previous_code.trimmed_start();
                 trimmed == *header
@@ -333,7 +333,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
-                    let previous_code = self.output.code_of(previous).trimmed_end();
+                    let previous_code = self.output.code_trimmed_of(previous);
                     previous_code.ends_with(',')
                         && self.paren_closes_of(previous_code) > 0
                         && !(self.options.indent_after_parens
@@ -351,7 +351,7 @@ impl FormatEngine<'_> {
         }
         if self.options.indent_after_parens
             && let Some(previous) = self.output.last_line_outside_comment()
-            && self.output.code_of(previous).trimmed_end().ends_with(',')
+            && self.output.code_trimmed_of(previous).ends_with(',')
             && code_holds_word(previous, "new")
         {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
