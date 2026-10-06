@@ -421,6 +421,9 @@ pub(crate) struct OutputBuffer {
     /// The last line outside comments, with the line count and version it
     /// was found for.
     last_outside_comment_cache: Cell<Option<(usize, u64, Option<usize>)>>,
+    /// The last line [`Self::code_trimmed_of`] found among the lines, by
+    /// address and length at a version, and the length of its code.
+    code_trimmed_cache: Cell<Option<(usize, usize, u64, usize)>>,
     /// The last look back for a line that is `else` or ends with `} else`.
     recent_else_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is `else` or ends with
@@ -1164,12 +1167,24 @@ impl OutputBuffer {
 
     /// `code_of(line)` without its trailing blanks.
     pub(crate) fn code_trimmed_of<'a>(&'a self, line: &'a str) -> &'a str {
+        let address = line.as_ptr() as usize;
+        // A held line changes only with the version.
+        if let Some((held, len, version, code)) = self.code_trimmed_cache.get()
+            && held == address
+            && len == line.len()
+            && version == self.version
+        {
+            return &line[..code];
+        }
         let recent = self.lines.len().saturating_sub(8);
         if let Some(index) = (recent..self.lines.len()).rev().find(|&index| {
             let held = &self.lines[index];
-            held.as_ptr() == line.as_ptr() && held.len() == line.len()
+            held.as_ptr() as usize == address && held.len() == line.len()
         }) {
-            return self.code_before_comment_trimmed(index);
+            let code = self.code_before_comment_trimmed(index);
+            self.code_trimmed_cache
+                .set(Some((address, line.len(), self.version, code.len())));
+            return code;
         }
         line[..trailing_comment_split_limit(line)].trimmed_end()
     }
