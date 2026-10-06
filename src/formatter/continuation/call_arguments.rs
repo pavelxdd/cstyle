@@ -16,8 +16,8 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1009,22 +1009,40 @@ impl FormatEngine<'_> {
     }
 
     fn call_arguments_contain_brace_block(&self) -> bool {
-        for index in (0..self.output.len()).rev().take(64) {
-            let code = self.output.code(index);
-            let trimmed = self.output.code_trimmed(index);
-            if trimmed.is_empty() {
+        let len = self.output.len();
+        let older = len.saturating_sub(16);
+        for index in (older..len).rev() {
+            if self.output.code_trimmed(index).is_empty() {
                 continue;
             }
-            if (self.output.code_has(index, b'{') || self.output.code_has(index, b'}'))
-                && line_has_brace(code)
-            {
+            if self.code_holds_brace(index) {
                 return true;
             }
-            if code.ends_with(';') || self.output_code_leaves_paren_open(index) {
+            if self.output.code(index).ends_with(';') || self.output_code_leaves_paren_open(index) {
                 return false;
             }
         }
-        false
+        // Past the last lines a line's parens are read from its code alone,
+        // so the looks back over them keep their answers.
+        let start = len.saturating_sub(64);
+        self.output
+            .last_line_looked(&self.brace_code_look, start, older, |index| {
+                self.code_holds_brace(index)
+            })
+            .is_some_and(|brace| {
+                self.output
+                    .last_line_looked(&self.argument_end_look, brace + 1, older, |index| {
+                        let code = self.output.code(index);
+                        code.ends_with(';') || !line_paren_imbalance(code).1.is_empty()
+                    })
+                    .is_none()
+            })
+    }
+
+    /// Whether the code of output line `index` holds a brace.
+    fn code_holds_brace(&self, index: usize) -> bool {
+        (self.output.code_has(index, b'{') || self.output.code_has(index, b'}'))
+            && line_has_brace(self.output.code(index))
     }
 
     pub(crate) fn call_shaped_brace_body_indent_floor(
@@ -1521,42 +1539,54 @@ impl FormatEngine<'_> {
         if !self.output.recent_scoped_line_mentions_new(64) {
             return None;
         }
-        for line in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .take(64)
-            .filter(|line| !line.trimmed().is_empty())
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last empty `new` call line counts unless a line ending the
+        // call's lines follows it.
+        let call =
+            self.output
+                .last_line_looked(&self.empty_new_call_look, start, range.end, |index| {
+                    self.opens_empty_new_call(index)
+                })?;
+        self.output
+            .last_line_looked(
+                &self.new_call_lines_end_look,
+                call + 1,
+                range.end,
+                |index| self.ends_new_call_lines(index),
+            )
+            .is_none()
+            .then(|| {
+                leading_visual_width(&self.output[call], self.options.tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
+            })
+    }
+
+    /// Whether output line `index` ends with the `(` of a `new` call no
+    /// paren comes before.
+    fn opens_empty_new_call(&self, index: usize) -> bool {
+        let trimmed = self.output[index].trimmed_end();
+        if !trimmed.ends_with('(')
+            || !trimmed.contains(" new ")
+            || trimmed.trimmed_start().starts_with("return ")
         {
-            let trimmed = line.trimmed_end();
-            if trimmed.contains(" new ")
-                && trimmed.ends_with('(')
-                && !trimmed.trimmed_start().starts_with("return ")
-            {
-                let new_index = trimmed.rfind(" new ")?;
-                let open_index = trimmed.rfind('(')?;
-                if new_index < open_index
-                    && !trimmed[new_index + "new ".len()..open_index].contains_any_byte(b"()")
-                {
-                    return Some(
-                        leading_visual_width(line, self.options.tab_width)
-                            + self.layout.line_adjuster.total_case_unindent_depth()
-                                * self.options.indent_width,
-                    );
-                }
-            }
-            let start = trimmed.trimmed_start();
-            if self.paren_closes_of(trimmed) > 0
-                || start.starts_with(')')
-                || start.ends_with(';')
-                || start.ends_with('{')
-                || start.ends_with('}')
-            {
-                return None;
-            }
+            return false;
         }
-        None
+        let open_index = trimmed.len() - 1;
+        trimmed.rfind(" new ").is_some_and(|new_index| {
+            new_index < open_index
+                && !trimmed[new_index + "new ".len()..open_index].contains_any_byte(b"()")
+        })
+    }
+
+    /// Whether output line `index` starts with `)`, ends with `;`, `{`, or
+    /// `}`, or closes a paren it did not open.
+    fn ends_new_call_lines(&self, index: usize) -> bool {
+        let trimmed = self.output.trimmed(index);
+        trimmed.starts_with(')')
+            || trimmed.ends_with_any(b";{}")
+            || self.output.paren_imbalance(index).0 > 0
     }
 
     pub(crate) fn split_or_empty_new_call_indent_spaces(
@@ -1867,36 +1897,35 @@ impl FormatEngine<'_> {
                 return None;
             }
         }
-        let mut nonempty = self
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last `(` alone counts unless a line ending the call's lines
+        // follows it.
+        let paren =
+            self.output
+                .last_line_looked(&self.paren_alone_look, start, range.end, |index| {
+                    self.output.trimmed(index) == "("
+                })?;
+        if self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .take(64)
-            .filter(|line| !line.trimmed().is_empty());
-        while let Some(line) = nonempty.next() {
-            let trimmed = line.trimmed();
-            if trimmed == "(" {
-                let before_paren = nonempty.next()?;
-                if before_paren.contains(" new ") || before_paren.contains("(new ") {
-                    return Some(
-                        leading_visual_width(line, self.options.tab_width)
-                            + self.layout.line_adjuster.total_case_unindent_depth()
-                                * self.options.indent_width,
-                    );
-                }
-                return None;
-            }
-            if trimmed.starts_with(')')
-                || trimmed.ends_with(';')
-                || trimmed.ends_with('{')
-                || trimmed.ends_with('}')
-                || self.paren_closes_of(trimmed) > 0
-            {
-                return None;
-            }
+            .last_line_looked(
+                &self.new_call_lines_end_look,
+                paren + 1,
+                range.end,
+                |index| self.ends_new_call_lines(index),
+            )
+            .is_some()
+        {
+            return None;
         }
-        None
+        let before_paren = (start..paren)
+            .rev()
+            .find(|&index| !self.output.trimmed(index).is_empty())?;
+        let before_paren = &self.output[before_paren];
+        (before_paren.contains(" new ") || before_paren.contains("(new ")).then(|| {
+            leading_visual_width(&self.output[paren], self.options.tab_width)
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+        })
     }
 
     pub(crate) fn call_argument_sibling_frame_indent_spaces(

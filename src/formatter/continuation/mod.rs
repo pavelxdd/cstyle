@@ -11,6 +11,7 @@ use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
+use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
@@ -92,6 +93,67 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
         return 0;
     }
     column
+}
+
+/// The parens the lines of the statement under way leave open, read on
+/// from the last look: each open paren is a node over the one below it.
+#[derive(Debug, Default)]
+pub(crate) struct OpenParenWalk {
+    version: u64,
+    start: usize,
+    /// The top node after each line from `start` on, and the count of
+    /// nodes made up to it; node 0 is no paren.
+    tops: Vec<(u32, u32)>,
+    /// An open paren's column, its line's indent, and the node below it.
+    nodes: Vec<(usize, usize, u32)>,
+}
+
+impl OpenParenWalk {
+    /// Keeps the lines from `start` that stay as the output had them.
+    fn keep_unchanged(&mut self, output: &OutputBuffer, start: usize) {
+        let unchanged = if self.version == output.version() {
+            usize::MAX
+        } else {
+            output.lowest_change_since(self.version).unwrap_or(0)
+        };
+        let kept = unchanged.min(output.len()).saturating_sub(start);
+        if start != self.start || kept == 0 {
+            self.start = start;
+            self.tops.clear();
+            self.nodes.clear();
+        } else if kept < self.tops.len() {
+            self.tops.truncate(kept);
+            self.nodes
+                .truncate(self.tops.last().map_or(0, |&(_, made)| made as usize));
+        }
+        self.version = output.version();
+    }
+
+    fn top(&self) -> u32 {
+        self.tops.last().map_or(0, |&(top, _)| top)
+    }
+
+    fn node(&self, node: u32) -> Option<&(usize, usize, u32)> {
+        node.checked_sub(1).map(|at| &self.nodes[at as usize])
+    }
+
+    fn below(&self, node: u32) -> u32 {
+        self.node(node).map_or(0, |&(_, _, below)| below)
+    }
+
+    fn push(&mut self, column: usize, line_indent: usize, below: u32) -> u32 {
+        self.nodes.push((column, line_indent, below));
+        node_count(self.nodes.len())
+    }
+
+    fn close_line(&mut self, top: u32) {
+        let made = node_count(self.nodes.len());
+        self.tops.push((top, made));
+    }
+}
+
+fn node_count(count: usize) -> u32 {
+    u32::try_from(count).expect("a statement opens under 4G parens")
 }
 
 impl FormatEngine<'_> {
@@ -176,30 +238,33 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn active_output_paren_continuation_indent_spaces(&self) -> Option<usize> {
+        let len = self.output.len();
         let start = self
             .output
-            .iter()
-            .rposition(|line| {
-                let code = self.output.code_trimmed_of(line);
-                code.ends_with_any(b";{}")
+            .last_line_looked(&self.statement_end_look, 0, len, |index| {
+                self.output
+                    .code_before_comment_trimmed(index)
+                    .ends_with_any(b";{}")
             })
             .map_or(0, |index| index + 1);
-        let mut openers = Vec::new();
-        for line in &self.output[start..] {
-            let code = self.output.code_trimmed_of(line);
-            let (closes, opens) = self.paren_imbalance_of(code);
+        let mut walk = self.open_paren_walk.borrow_mut();
+        walk.keep_unchanged(&self.output, start);
+        for index in start + walk.tops.len()..len {
+            let code = self.output.code_before_comment_trimmed(index);
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let mut top = walk.top();
             for _ in 0..closes {
-                openers.pop();
+                top = walk.below(top);
             }
-            let line_indent = leading_visual_width(line, self.options.tab_width);
-            for open in opens {
-                openers.push((
-                    visual_width_from(&code[..open], 0, self.options.tab_width),
-                    line_indent,
-                ));
+            let line_indent = leading_visual_width(&self.output[index], self.options.tab_width);
+            for &open in opens {
+                let column = visual_width_from(&code[..open], 0, self.options.tab_width);
+                top = walk.push(column, line_indent, top);
             }
+            walk.close_line(top);
         }
-        let &(column, line_indent) = openers.last()?;
+        let top = walk.top();
+        let &(column, line_indent, _) = walk.node(top)?;
         let opener_indent = column + 1;
         let base = self.continuation_base_indent() * self.options.indent_width;
         if opener_indent < self.options.max_continuation_indent {
@@ -208,10 +273,9 @@ impl FormatEngine<'_> {
         if line_indent > base {
             return Some(line_indent + self.options.indent_width * 2);
         }
-        openers[..openers.len() - 1]
-            .iter()
-            .rev()
-            .map(|(column, _)| column + 1)
+        std::iter::successors(Some(walk.below(top)), |&node| Some(walk.below(node)))
+            .map_while(|node| walk.node(node))
+            .map(|(column, _, _)| column + 1)
             .find(|spaces| *spaces < self.options.max_continuation_indent)
             .or(Some(base + self.options.indent_width * 2))
     }

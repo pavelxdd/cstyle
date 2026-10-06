@@ -27,6 +27,17 @@ use crate::formatter::text::trim::Trimmed;
 /// `None` when the look gave up.
 pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>>);
 
+/// The last look back from a member declarator's `,`: the tokens'
+/// address, the `,`, the start of its declaration, and whether a `:` of the
+/// body stands between them.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MemberDeclaratorLook {
+    address: usize,
+    comma: usize,
+    start: usize,
+    colon: bool,
+}
+
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
     pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
@@ -1648,8 +1659,21 @@ impl FormatEngine<'_> {
             }
             head = before;
         }
+        // The look back depends on nothing but where it stands, so it ends
+        // where the last one did once it reaches the `,` that one left.
+        let address = tokens.as_ptr() as usize;
+        let cached = self
+            .member_declarator_cache
+            .get()
+            .filter(|look| look.address == address && look.comma <= comma);
         let mut start = comma;
         while let Some(before) = self.tree.previous_code_token(start) {
+            if let Some(look) = cached
+                && start == look.comma
+            {
+                start = look.start;
+                break;
+            }
             if before == open
                 || matches!(tokens[before], Token::Symbol(';'))
                     && groups.enclosing(before) == Some(body)
@@ -1660,6 +1684,23 @@ impl FormatEngine<'_> {
                 .closed_at(before)
                 .map_or(before, |group| groups.get(group).open);
         }
+        // Whether a `:` of the body stands before the `,`, read on from the
+        // last look that started where this one does.
+        let body_colon = |from: usize, to: usize| {
+            (from..to).any(|index| {
+                matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == Some(body)
+            })
+        };
+        let colon = match cached.filter(|look| look.start == start) {
+            Some(look) => look.colon || body_colon(look.comma, comma),
+            None => body_colon(start, comma),
+        };
+        self.member_declarator_cache.set(Some(MemberDeclaratorLook {
+            address,
+            comma,
+            start,
+            colon,
+        }));
         // A declarator row after a row that continues the declaration
         // stands at that row.
         if let Some(comma_line) = self.output.line_with_token(comma)
@@ -1678,9 +1719,7 @@ impl FormatEngine<'_> {
                         matches!(tokens[before], Token::Symbol(','))
                             && groups.enclosing(before) == Some(body)
                     }))
-            && !(start..comma).any(|index| {
-                matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == Some(body)
-            })
+            && !colon
         {
             return Some(
                 self.output.lead_width(comma_line, self.options.tab_width)

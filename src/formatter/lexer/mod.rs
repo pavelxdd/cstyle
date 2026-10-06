@@ -278,20 +278,47 @@ pub(crate) fn tokenize_owned(mut source: String) -> Vec<Token> {
     tokens
 }
 
-/// Whether the tokens of `line` alone hold a comment, read as `tokenize`
-/// reads them without making them; `None` when only the tokens tell: for a
-/// line with a `#` outside literals, a raw string literal, or that may be
-/// a raw line.
-pub(crate) fn line_tokens_hold_comment(line: &str) -> Option<bool> {
+/// The comments of a line alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LineComments {
+    /// Whether the line holds a comment.
+    pub(crate) held: bool,
+    /// Where the comments that end the line start, blanks between them
+    /// aside, or the block comments right before a line comment.
+    pub(crate) trailing_start: Option<usize>,
+    /// Whether a comment stands before code.
+    pub(crate) inner: bool,
+}
+
+/// The comments of `line` alone, read as `tokenize` reads them without
+/// making tokens; `None` when only the tokens tell: for a line with a `#`
+/// outside literals, a raw string literal, or that may be a raw line.
+pub(crate) fn line_comments(line: &str) -> Option<LineComments> {
     let bytes = line.as_bytes();
     if line_may_be_raw(line, &AssemblyMacroLines::default()) {
         return None;
     }
+    let mut held = false;
+    let mut inner = false;
+    let mut trailing_start = None;
     let mut index = 0;
     while let Some(&byte) = bytes.get(index) {
+        let start = index;
         index = match byte {
             b'\n' | b'#' => return None,
-            b'/' if matches!(bytes.get(index + 1), Some(b'/' | b'*')) => return Some(true),
+            b'/' if bytes.get(index + 1) == Some(&b'/') => {
+                return Some(LineComments {
+                    held: true,
+                    trailing_start: Some(trailing_start.unwrap_or(index)),
+                    inner,
+                });
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                held = true;
+                trailing_start.get_or_insert(index);
+                index = read_block_comment(line, index);
+                continue;
+            }
             b'"' | b'\'' => read_quoted(line, index, byte).0,
             b'u' | b'U' | b'L' | b'R' if raw_string_prefix_len(line, index).is_some() => {
                 return None;
@@ -305,7 +332,8 @@ pub(crate) fn line_tokens_hold_comment(line: &str) -> Option<bool> {
                 // literal, to the same end.
                 let ch = char_at(line, index)?;
                 if ch.is_whitespace() {
-                    index + ch.len_utf8()
+                    index += ch.len_utf8();
+                    continue;
                 } else if is_identifier_start(ch) {
                     read_identifier(line, index)
                 } else {
@@ -313,8 +341,14 @@ pub(crate) fn line_tokens_hold_comment(line: &str) -> Option<bool> {
                 }
             }
         };
+        debug_assert!(index > start);
+        inner |= trailing_start.take().is_some();
     }
-    Some(false)
+    Some(LineComments {
+        held,
+        trailing_start,
+        inner,
+    })
 }
 
 /// Whether the line starting `rest` may be a conflict marker or an
@@ -793,7 +827,9 @@ pub(crate) fn token_text(token: &Token) -> Cow<'_, str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, TokenLine, TokenLineCursor, line_tokens_hold_comment, tokenize};
+    use super::{
+        CommentKind, Token, TokenLine, TokenLineCursor, line_comments, token_text, tokenize,
+    };
 
     #[test]
     fn a_line_read_without_tokens_holds_a_comment_as_its_tokens_do() {
@@ -817,19 +853,51 @@ mod tests {
             r#"x = .5 / 2; s = "unterminated //"#,
             "x = \u{a0}a // i",
             "s = \"caf\u{e9} //\"; t = '\u{e9}'",
+            "x = 1; /* a */ /* b */ // c",
+            "x = 1; /* a */ y = 2; // c",
+            "x = 1; /* a */  /* b */",
+            "/* a */ x = 1;",
+            "x = 1; /* unterminated",
+            "x = a */ b; // c",
         ];
         for line in lines {
-            let has_comment = tokenize(line)
+            let tokens = tokenize(line);
+            let has_comment = tokens
                 .iter()
                 .any(|token| matches!(token, Token::Comment(_, _)));
-            if let Some(held) = line_tokens_hold_comment(line) {
-                assert_eq!(held, has_comment, "{line}");
+            let mut offset = 0;
+            let mut trailing_start = None;
+            for token in &tokens {
+                match token {
+                    Token::Comment(CommentKind::Line, _) => {
+                        trailing_start = Some(trailing_start.unwrap_or(offset));
+                        break;
+                    }
+                    Token::Comment(CommentKind::Block, _) => {
+                        trailing_start.get_or_insert(offset);
+                    }
+                    Token::Whitespace(_) => {}
+                    _ => trailing_start = None,
+                }
+                offset += token_text(token).len();
+            }
+            if let Some(comments) = line_comments(line) {
+                assert_eq!(comments.held, has_comment, "{line}");
+                assert_eq!(comments.trailing_start, trailing_start, "{line}");
+                let comment_before_code = tokens.iter().enumerate().any(|(at, token)| {
+                    matches!(token, Token::Comment(_, _))
+                        && tokens[at + 1..].iter().any(|token| {
+                            !matches!(token, Token::Comment(_, _) | Token::Whitespace(_))
+                        })
+                });
+                assert_eq!(comments.inner, comment_before_code, "{line}");
             }
         }
-        assert_eq!(line_tokens_hold_comment(lines[0]), Some(false));
-        assert_eq!(line_tokens_hold_comment(lines[1]), Some(true));
-        assert_eq!(line_tokens_hold_comment(lines[12]), None);
-        assert_eq!(line_tokens_hold_comment(lines[13]), None);
+        let held = |line| line_comments(line).map(|comments| comments.held);
+        assert_eq!(held(lines[0]), Some(false));
+        assert_eq!(held(lines[1]), Some(true));
+        assert_eq!(held(lines[12]), None);
+        assert_eq!(held(lines[13]), None);
     }
 
     #[test]

@@ -1194,6 +1194,18 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn output_has_open_initializer_brace(&self) -> bool {
+        let key = (self.output.len(), self.output.version());
+        if let Some((cached, open)) = self.open_initializer_brace_cache.get()
+            && cached == key
+        {
+            return open;
+        }
+        let open = self.scan_open_initializer_brace();
+        self.open_initializer_brace_cache.set(Some((key, open)));
+        open
+    }
+
+    fn scan_open_initializer_brace(&self) -> bool {
         for index in (0..self.output.len()).rev().take(16) {
             let code = self.output.code(index);
             let trimmed = code.trimmed();

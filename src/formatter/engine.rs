@@ -193,6 +193,22 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) split_opener_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending with `;` or being `{` or `}`.
     pub(crate) statement_edge_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line whose code ends with `;`, `{`, or `}`.
+    pub(crate) statement_end_look: crate::formatter::output::buffer::LineLook,
+    /// The parens the lines of the statement under way leave open.
+    pub(crate) open_paren_walk: std::cell::RefCell<crate::formatter::continuation::OpenParenWalk>,
+    /// The look back for a line ending with the `(` of an empty `new` call.
+    pub(crate) empty_new_call_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line whose code holds a brace.
+    pub(crate) brace_code_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending a call's arguments.
+    pub(crate) argument_end_look: crate::formatter::output::buffer::LineLook,
+    /// Whether the output last read leaves an initializer brace open.
+    pub(crate) open_initializer_brace_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The look back for a line that is `(` alone.
+    pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line ending the lines of a `new` call.
+    pub(crate) new_call_lines_end_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending with `,` in an over-long `new` call.
     pub(crate) over_max_new_call_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending a statement or a group before a
@@ -261,6 +277,9 @@ pub(crate) struct FormatEngine<'a> {
     /// The last statement start a declarator's `,` looked back to: the
     /// tokens' address, the `,`, and the start.
     pub(crate) declarator_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last look back from a member declarator's `,`.
+    pub(crate) member_declarator_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::MemberDeclaratorLook>>,
     /// The last replay of astyle's stack, for the next line of its
     /// statement.
     pub(crate) astyle_replay_cache:
@@ -338,6 +357,14 @@ impl<'a> FormatEngine<'a> {
             macro_call_context_cache: std::cell::Cell::new(None),
             split_opener_look: Default::default(),
             statement_edge_look: Default::default(),
+            statement_end_look: Default::default(),
+            open_paren_walk: Default::default(),
+            empty_new_call_look: Default::default(),
+            paren_alone_look: Default::default(),
+            brace_code_look: Default::default(),
+            argument_end_look: Default::default(),
+            open_initializer_brace_cache: std::cell::Cell::new(None),
+            new_call_lines_end_look: Default::default(),
             over_max_new_call_look: Default::default(),
             new_call_edge_look: Default::default(),
             named_list_open_look: Default::default(),
@@ -358,6 +385,7 @@ impl<'a> FormatEngine<'a> {
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
+            member_declarator_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),

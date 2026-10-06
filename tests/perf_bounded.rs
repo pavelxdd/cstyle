@@ -421,6 +421,8 @@ fn runs_that_each_line_looked_across_stay_bounded() {
     let n = 60_000;
     let mut allman = FormatOptions::default();
     allman.set_style(cstyle::config::StylePreset::Allman);
+    let mut capped = FormatOptions::default();
+    capped.max_code_length = Some(100);
     let blocks = |block: &dyn Fn(usize) -> String| {
         format!(
             "void f(void)\n{{\n{}}}\n",
@@ -478,6 +480,26 @@ fn runs_that_each_line_looked_across_stay_bounded() {
                     .collect::<String>()
             ),
             FormatOptions::default(),
+        ),
+        (
+            "rows of new calls",
+            format!(
+                "void f() {{\n    T *t[] = {{\n{}    }};\n}}\n",
+                (0..n / 2)
+                    .map(|i| format!("        new T({i}),\n"))
+                    .collect::<String>()
+            ),
+            capped.clone(),
+        ),
+        (
+            "a long constructor initializer list",
+            format!(
+                "class A : public B {{\npublic:\n    A() :\n{}        z(0) {{}}\n}};\n",
+                (0..n / 2)
+                    .map(|i| format!("        m{i}({i}),\n"))
+                    .collect::<String>()
+            ),
+            capped.clone(),
         ),
     ] {
         let start = Instant::now();

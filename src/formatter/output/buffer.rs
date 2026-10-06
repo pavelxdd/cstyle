@@ -1,4 +1,4 @@
-use crate::formatter::lexer::{Token, line_tokens_hold_comment, token_text, tokenize};
+use crate::formatter::lexer::{Token, line_comments, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
@@ -149,9 +149,21 @@ fn structural_line(line: &str) -> Cow<'_, str> {
     let bytes = line.as_bytes();
     if find_byte(bytes, b'/').is_none()
         && (find_byte(bytes, b'"').is_none() || !line.contains("R\""))
-        || line_tokens_hold_comment(line) == Some(false)
     {
         return Cow::Borrowed(line);
+    }
+    match line_comments(line) {
+        Some(comments) if !comments.held => return Cow::Borrowed(line),
+        // Comments that only end the line leave its code and blanks.
+        Some(comments) if !comments.inner => {
+            if let Some(start) = comments.trailing_start {
+                let mut structural = String::with_capacity(line.len());
+                structural.push_str(&line[..start]);
+                structural.extend(std::iter::repeat_n(' ', line.len() - start));
+                return Cow::Owned(structural);
+            }
+        }
+        _ => {}
     }
     let tokens = tokenize(line);
     if !tokens
