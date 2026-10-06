@@ -268,8 +268,7 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|line| !line.trimmed().is_empty())?;
         let before = &self.output[before_index];
-        let before_code = self.output.code_before_comment(before_index).trimmed_end();
-        let before_trimmed = before_code.trimmed_start();
+        let before_trimmed = self.output.code_body(before_index);
         if before_trimmed == "else"
             || before_trimmed.ends_with("} else")
             || before_trimmed.ends_with("}else")
@@ -382,30 +381,29 @@ impl FormatEngine<'_> {
         let mut close_line_pending = line.paren_imbalance().0;
         let mut intervening_closes = 0usize;
         let mut candidate = None;
-        for previous in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .take(64)
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_of(previous).trimmed_end();
-            let trimmed = code.trimmed_start();
+        for index in self.output.scoped_range().rev().take(64) {
+            let previous = &self.output.as_slice()[index];
+            if self.output.trimmed(index).is_empty() {
+                continue;
+            }
+            let code = self.output.code_before_comment(index).trimmed_end();
+            let trimmed = &code[self.output.lead_bytes(index).min(code.len())..];
             if trimmed.starts_with('#') {
                 continue;
             }
             if code.ends_with([';', '{', '}']) {
                 return None;
             }
-            let (closes, mut opens) = self.paren_imbalance_of(code);
+            let (closes, mut opens) = self.output_code_paren_imbalance(index);
             if opens.is_empty() {
                 intervening_closes += closes;
                 continue;
             }
             let opens_total = opens.len();
-            let code_chars = code.chars().collect::<Vec<_>>();
-            let open_column = visual_column_at(&code_chars, opens[0], self.options.tab_width);
+            let code_chars = || code.chars().collect::<Vec<_>>();
+            let first_open = opens[0];
+            let open_column =
+                || visual_column_at(&code_chars(), first_open, self.options.tab_width);
             let is_header = starts_header_word(trimmed, "if")
                 || starts_header_word(trimmed, "while")
                 || starts_header_word(trimmed, "for")
@@ -460,7 +458,7 @@ impl FormatEngine<'_> {
                         header_indent
                     } else {
                         opens_all.first().map_or(header_indent, |&column| {
-                            visual_column_at(&code_chars, column, self.options.tab_width)
+                            visual_column_at(&code_chars(), column, self.options.tab_width)
                         })
                     },
                 );
@@ -472,12 +470,12 @@ impl FormatEngine<'_> {
                 return None;
             }
             if opens_total > 1 {
-                return Some(open_column + 1);
+                return Some(open_column() + 1);
             }
             if code.ends_with('(') {
                 return Some(leading_visual_width(previous, self.options.tab_width));
             }
-            return Some(open_column);
+            return Some(open_column());
         }
         None
     }
@@ -881,39 +879,18 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let mut comment_indent = None;
-        for previous in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
+        let run = self.output.comment_run();
+        let previous = &self.output[run.before?];
+        if (previous.trimmed() == "else" || previous.trimmed().ends_with("} else"))
+            && let Some(index) = run.indent_line()
         {
-            let trimmed = previous.trimmed_start();
-            if trimmed.starts_with("//")
-                || trimmed.starts_with("/*")
-                || trimmed.starts_with("*/")
-                || trimmed == "*"
-                || trimmed.starts_with("* ")
-                || trimmed.starts_with("*\t")
-                || trimmed.starts_with("**")
-            {
-                if !trimmed.starts_with("//") || comment_indent.is_none() {
-                    comment_indent = Some(leading_visual_width(previous, self.options.tab_width));
-                }
-                continue;
-            }
-            if (previous.trimmed() == "else" || previous.trimmed().ends_with("} else"))
-                && let Some(spaces) = comment_indent
-            {
-                let else_indent = leading_visual_width(previous, self.options.tab_width);
-                return Some(if spaces > else_indent {
-                    spaces
-                } else {
-                    else_indent + self.options.indent_width
-                });
-            }
-            return None;
+            let spaces = leading_visual_width(&self.output[index], self.options.tab_width);
+            let else_indent = leading_visual_width(previous, self.options.tab_width);
+            return Some(if spaces > else_indent {
+                spaces
+            } else {
+                else_indent + self.options.indent_width
+            });
         }
         None
     }
@@ -1789,8 +1766,7 @@ impl FormatEngine<'_> {
         let mut open_indent: Option<usize> = None;
         for scan_index in self.output.scoped_range().rev().skip(1) {
             let previous = &self.output[scan_index];
-            let previous_code = self.output.code_before_comment(scan_index).trimmed_end();
-            let previous_trimmed = previous_code.trimmed_start();
+            let previous_trimmed = self.output.code_body(scan_index);
             if previous_trimmed.is_empty() {
                 continue;
             }

@@ -16,6 +16,7 @@ use crate::formatter::continuation::operator_chains::inline_stream_opener_argume
 use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
+use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
@@ -557,7 +558,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().take(32) {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() {
                 continue;
             }
@@ -894,7 +895,7 @@ impl FormatEngine<'_> {
             for scan_index in self.output.scoped_range().rev().skip(1).take(16) {
                 let raw = &self.output[scan_index];
                 let code = self.output.code_before_comment(scan_index).trimmed_end();
-                let trimmed = code.trimmed_start();
+                let trimmed = self.output.code_body(scan_index);
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     continue;
                 }
@@ -975,8 +976,7 @@ impl FormatEngine<'_> {
         if current.starts_with('=') && previous_trimmed.starts_with("#if") {
             for scan_index in self.output.scoped_range().rev().skip(1) {
                 let raw = &self.output[scan_index];
-                let code = self.output.code_before_comment(scan_index).trimmed_end();
-                let trimmed = code.trimmed_start();
+                let trimmed = self.output.code_body(scan_index);
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     continue;
                 }
@@ -988,8 +988,7 @@ impl FormatEngine<'_> {
         {
             for scan_index in self.output.scoped_range().rev().skip(1) {
                 let raw = &self.output[scan_index];
-                let code = self.output.code_before_comment(scan_index).trimmed_end();
-                let trimmed = code.trimmed_start();
+                let trimmed = self.output.code_body(scan_index);
                 if trimmed.is_empty() {
                     continue;
                 }
@@ -1585,28 +1584,19 @@ impl FormatEngine<'_> {
         }
         if previous_trimmed.starts_with("//") {
             let previous_indent = leading_visual_width(previous, tab_width);
-            let after_initializer_comment = current.contains('(')
-                && self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .skip(1)
-                    .find(|line| {
-                        let trimmed = line.trimmed_start();
-                        !trimmed.is_empty() && !trimmed.starts_with("//")
-                    })
-                    .is_some_and(|line| line.trimmed_end().ends_with(':'));
-            let after_comma_comment = self
+            let before_previous = self
                 .output
-                .scoped()
-                .iter()
-                .rev()
-                .skip(1)
-                .find(|line| {
-                    let trimmed = line.trimmed_start();
-                    !trimmed.is_empty() && !trimmed.starts_with("//")
+                .len()
+                .checked_sub(1)
+                .filter(|&last| last >= self.output.scoped_range().start)
+                .and_then(|last| {
+                    self.output
+                        .last_line_before_where(last, LineFilter::NoLineComment)
                 })
+                .map(|index| &self.output[index]);
+            let after_initializer_comment = current.contains('(')
+                && before_previous.is_some_and(|line| line.trimmed_end().ends_with(':'));
+            let after_comma_comment = before_previous
                 .is_some_and(|line| self.output.code_of(line).trimmed_end().ends_with(','));
             if after_comma_comment
                 && previous_indent > natural

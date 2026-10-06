@@ -979,7 +979,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -1014,7 +1014,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -1044,7 +1044,7 @@ impl FormatEngine<'_> {
         }
         for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -1166,12 +1166,43 @@ impl FormatEngine<'_> {
         require_question: bool,
     ) -> Option<usize> {
         let tab_width = self.options.tab_width;
-        let mut candidate_indent = leading_visual_width(previous, tab_width);
-        let mut saw_question = previous.contains('?');
-        for scan_index in self.output.scoped_range().rev().skip(1) {
-            let line = &self.output[scan_index];
+        let range = self.output.scoped_range();
+        let last = range
+            .end
+            .checked_sub(2)
+            .filter(|&last| last >= range.start)?;
+        let walk = self.assignment_rhs_walk(range.start, last);
+        walk.assigned?;
+        let saw_question = previous.contains('?') || walk.question;
+        let candidate_indent = walk.first.map_or_else(
+            || leading_visual_width(previous, tab_width),
+            |first| leading_visual_width(&self.output[first], tab_width),
+        );
+        (!require_question || saw_question).then_some(candidate_indent)
+    }
+
+    /// The look back from line `last` down to `floor` for the line whose
+    /// code ends with an assignment, read on from the last look as lines
+    /// come.
+    fn assignment_rhs_walk(&self, floor: usize, last: usize) -> AssignmentRhsWalk {
+        let version = self.output.version();
+        let cached = self
+            .assignment_rhs_cache
+            .get()
+            .filter(|walk| (walk.version, walk.floor) == (version, floor) && walk.last <= last);
+        let mut walk = AssignmentRhsWalk {
+            version,
+            floor,
+            last,
+            assigned: None,
+            question: false,
+            first: None,
+        };
+        let stop = cached.map_or(floor, |cached| cached.last + 1);
+        let mut ended = false;
+        for scan_index in (stop..=last).rev() {
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() {
                 continue;
             }
@@ -1181,17 +1212,26 @@ impl FormatEngine<'_> {
                 && !code.ends_with("<=")
                 && !code.ends_with(">=")
             {
-                return (!require_question || saw_question).then_some(candidate_indent);
+                walk.assigned = Some(scan_index);
+                ended = true;
+                break;
             }
             if code.ends_with(';') || code == "{" || code == "}" || trimmed.ends_with(':') {
-                return None;
+                ended = true;
+                break;
             }
             if trimmed.starts_with('?') {
-                saw_question = true;
+                walk.question = true;
             }
-            candidate_indent = leading_visual_width(line, tab_width);
+            walk.first = Some(scan_index);
         }
-        None
+        if !ended && let Some(cached) = cached {
+            walk.assigned = cached.assigned;
+            walk.question |= cached.question;
+            walk.first = cached.first.or(walk.first);
+        }
+        self.assignment_rhs_cache.set(Some(walk));
+        walk
     }
 
     pub(crate) fn contextual_ternary_arm_indent_spaces(
@@ -1562,7 +1602,7 @@ impl FormatEngine<'_> {
     fn previous_statement_is_braceless_ternary(&self) -> bool {
         for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() {
                 continue;
             }
@@ -1677,7 +1717,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
             let previous = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -2582,4 +2622,18 @@ pub(crate) fn inline_stream_opener_argument_indent_spaces(
         .find(" << ")
         .or_else(|| previous_code.find(" >> "))
         .map(|operator_start| operator_start + 5)
+}
+
+/// A look back for the line whose code ends with an assignment: the output
+/// version and floor it read at, the last line it read from, the line it
+/// found, whether a line after that one leads with `?`, and the first
+/// nonblank line after it.
+#[derive(Clone, Copy)]
+pub(crate) struct AssignmentRhsWalk {
+    version: u64,
+    floor: usize,
+    last: usize,
+    assigned: Option<usize>,
+    question: bool,
+    first: Option<usize>,
 }

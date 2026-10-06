@@ -91,6 +91,17 @@ impl FormatEngine<'_> {
             return None;
         }
         let tab_width = self.options.tab_width;
+        if let Some(found) = self.output.innermost_open_brace_line() {
+            let index = found?;
+            let meta = self.output.brace_meta(index);
+            return match meta.open_shape {
+                OpenBraceShape::Isolated => Some(self.output.lead_width(index, tab_width)),
+                OpenBraceShape::Label => {
+                    Some(self.layout.indentation.indent() * self.options.indent_width)
+                }
+                OpenBraceShape::Other => None,
+            };
+        }
         let mut depth = 0usize;
         // Depths at each enclosing `#endif`: a later branch of a group
         // repeats the braces of the first one.
@@ -972,7 +983,7 @@ impl FormatEngine<'_> {
             .filter(|&index| !self.output.trimmed(index).is_empty())
         {
             let code = self.output.code_before_comment_trimmed(index);
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(index);
             if trimmed == "}" {
                 break;
             }

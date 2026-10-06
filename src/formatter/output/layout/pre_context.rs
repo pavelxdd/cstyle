@@ -7,7 +7,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
-use crate::formatter::text::line_scan::{has_unmatched_open_brace, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
@@ -578,8 +578,8 @@ impl FormatEngine<'_> {
                 .token_source_line_indent
                 .max(leading_visual_width(line, self.options.tab_width));
             let stream_indent = (0..self.output.len()).rev().take(8).find_map(|index| {
-                let code = self.output.code(index);
-                if has_unmatched_open_brace(code) {
+                if self.output.code_has_unmatched_open_brace(index) {
+                    let code = self.output.code(index);
                     code.find(" << ")
                         .or_else(|| code.find(" >> "))
                         .map(|index| index + 1)

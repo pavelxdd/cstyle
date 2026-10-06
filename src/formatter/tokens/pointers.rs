@@ -530,20 +530,29 @@ impl FormatEngine<'_> {
         if current.is_empty() {
             return false;
         }
-        if self.current.declaration_segment_plainly_rejected() {
-            return false;
-        }
         let segment_start = self.current.declaration_segment_start();
-        let segment_text = strip_balanced_parens(current[segment_start..].trimmed());
-        let segment = segment_text.trimmed();
-        if segment.is_empty() || !is_pointer_declaration_segment(segment) {
-            return false;
-        }
+        let segment_text = match self.current.declaration_segment_verdict() {
+            Some(false) => return false,
+            Some(true) => None,
+            None => {
+                let text = strip_balanced_parens(current[segment_start..].trimmed());
+                let segment = text.trimmed();
+                if segment.is_empty() || !is_pointer_declaration_segment(segment) {
+                    return false;
+                }
+                Some(text)
+            }
+        };
         if self.layout.nesting.paren_depth == 0 {
             return true;
         }
-        self.current_paren_context_is_declaration()
-            || self.current_paren_context_is_constructor_declaration(segment)
+        if self.current_paren_context_is_declaration() {
+            return true;
+        }
+        let segment_text = segment_text
+            .unwrap_or_else(|| strip_balanced_parens(current[segment_start..].trimmed()));
+        let segment = segment_text.trimmed();
+        self.current_paren_context_is_constructor_declaration(segment)
             || self.is_function_declaration_parameter_continuation()
             || (self.is_function_pointer_parameter_continuation()
                 && segment
@@ -1679,5 +1688,40 @@ pub(super) fn resolved_pointer_align(options: &FormatOptions, operator: &str) ->
         }
     } else {
         options.pointer_align
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_pointer_declaration_segment, strip_balanced_parens};
+    use crate::formatter::state::current_line::CurrentLine;
+    use crate::formatter::text::trim::Trimmed;
+
+    #[test]
+    fn segment_verdict_read_as_the_line_grows_matches_the_segment_test() {
+        let pieces = [
+            "int", " ", "*", "&", "a", "1", "(", ")", ",", ";", "{", "}", ":", "::", "=", "<", ">",
+            "[", "]", "return", "case", "if", "é", "_x", "\t", "-",
+        ];
+        let mut state = 0x7f4a_7c15_u32;
+        for _ in 0..3000 {
+            let mut current = CurrentLine::default();
+            for _ in 0..(state % 20) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                current.push_str(pieces[state as usize % pieces.len()]);
+                let Some(verdict) = current.declaration_segment_verdict() else {
+                    continue;
+                };
+                let text = current.trimmed_end();
+                let stripped =
+                    strip_balanced_parens(text[current.declaration_segment_start()..].trimmed());
+                let segment = stripped.trimmed();
+                let expected = !segment.is_empty() && is_pointer_declaration_segment(segment);
+                assert_eq!(verdict, expected, "{text:?}");
+            }
+            state = state.wrapping_add(1);
+        }
     }
 }

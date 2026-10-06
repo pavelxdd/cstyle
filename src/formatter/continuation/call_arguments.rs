@@ -579,7 +579,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().take(16) {
             let previous = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.is_empty() {
                 continue;
             }
@@ -1267,7 +1267,8 @@ impl FormatEngine<'_> {
         let mut close_pending = 0usize;
         let mut brace_depth = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.scoped().iter().rev().take(32) {
+        for index in self.output.scoped_range().rev().take(32) {
+            let previous = &self.output.as_slice()[index];
             let trimmed = previous.trimmed_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -1281,7 +1282,8 @@ impl FormatEngine<'_> {
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
-            let (closes, mut opens) = self.paren_imbalance_of(trimmed);
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let mut opens = opens.to_vec();
             let cancel = close_pending.min(opens.len());
             for _ in 0..cancel {
                 opens.pop();
@@ -1372,7 +1374,7 @@ impl FormatEngine<'_> {
         }
         for scan_index in self.output.scoped_range().rev().take(16) {
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if code.ends_with(';') || code.ends_with('{') || trimmed == "}" {
                 break;
             }

@@ -3,6 +3,7 @@ use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
+use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
@@ -291,8 +292,7 @@ impl FormatEngine<'_> {
             ConstructorInitializerLayout::Split => {
                 for scan_index in self.output.scoped_range().rev().take(64) {
                     let raw = &self.output[scan_index];
-                    let code = self.output.code_before_comment(scan_index).trimmed_end();
-                    let trimmed = code.trimmed_start();
+                    let trimmed = self.output.code_body(scan_index);
                     if trimmed.starts_with(':') && !trimmed.starts_with("::") {
                         if trimmed == ":" {
                             return Some(
@@ -386,7 +386,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let code = self.output.code_before_comment(index).trimmed_end();
-        let trimmed = code.trimmed_start();
+        let trimmed = self.output.code_body(index);
         if trimmed.starts_with(':') && !trimmed.starts_with("::") {
             if code.ends_with('{') || code.ends_with('}') {
                 return Some(ConstructorScan::Stop);
@@ -428,7 +428,7 @@ impl FormatEngine<'_> {
         }
         for index in (0..colon_index).rev() {
             let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -497,10 +497,7 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with(['#', ':', ',', '{', '}']) {
             return None;
         }
-        let previous = self.output.scoped().iter().rev().find(|line| {
-            let trimmed = line.trimmed_start();
-            !trimmed.is_empty() && !trimmed.starts_with("//")
-        })?;
+        let previous = &self.output[self.output.last_lines_where(LineFilter::NoLineComment)[0]?];
         let previous_code = self.output.code_of(previous).trimmed_end();
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
             return None;
@@ -542,8 +539,7 @@ impl FormatEngine<'_> {
         let mut saw_member = false;
         for scan_index in self.output.scoped_range().rev().skip(1).take(64) {
             let raw = &self.output[scan_index];
-            let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let previous = code.trimmed_start();
+            let previous = self.output.code_body(scan_index);
             if previous.is_empty() || previous.starts_with('#') {
                 continue;
             }
@@ -583,7 +579,7 @@ impl FormatEngine<'_> {
             .filter(|&index| !self.output.trimmed(index).is_empty())
         {
             let code = self.output.code_before_comment_trimmed(index);
-            let previous_trimmed = code.trimmed_start();
+            let previous_trimmed = self.output.code_body(index);
             if ((previous_trimmed.starts_with(':') && !previous_trimmed.starts_with("::"))
                 || (base_indent.is_some() && previous_trimmed.ends_with(',')))
                 && let Some(open) = self.open_paren_column_of(code)

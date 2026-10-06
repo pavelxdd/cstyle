@@ -12,8 +12,13 @@ pub(crate) fn visual_width_from(text: &str, start_column: usize, tab_width: usiz
 }
 
 pub(crate) fn leading_visual_width(line: &str, tab_width: usize) -> usize {
-    let mut column = 0;
-    for ch in line.chars() {
+    // Most indents are spaces only.
+    let spaces = crate::formatter::text::trim::leading_spaces(line.as_bytes());
+    if line.as_bytes().get(spaces) != Some(&b'\t') {
+        return spaces;
+    }
+    let mut column = spaces;
+    for ch in line[spaces..].chars() {
         match ch {
             '\t' => column += tab_width - (column % tab_width),
             ' ' => column += 1,

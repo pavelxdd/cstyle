@@ -1051,7 +1051,7 @@ impl FormatEngine<'_> {
             .skip(1)
         {
             let branch_code = self.output.code_before_comment(branch_index).trimmed_end();
-            let branch_trimmed = branch_code.trimmed_start();
+            let branch_trimmed = self.output.code_body(branch_index);
             let branch_raw_trimmed = branch.trimmed_start();
             if branch_trimmed.is_empty()
                 && !(is_comment_line(branch_raw_trimmed) || branch_raw_trimmed.starts_with("/*"))
@@ -1126,8 +1126,7 @@ impl FormatEngine<'_> {
             .skip(1)
             .find_map(|index| {
                 let line = &self.output[index];
-                let code = self.output.code_before_comment(index).trimmed_end();
-                let trimmed = code.trimmed_start();
+                let trimmed = self.output.code_body(index);
                 if trimmed.is_empty() || self.output.is_directive_line(index) {
                     return None;
                 }

@@ -28,21 +28,29 @@ impl Trimmed for str {
 /// The length of the ASCII whitespace `bytes` start with; an indent of
 /// spaces is measured eight bytes at a time.
 fn leading_whitespace(bytes: &[u8]) -> usize {
-    const SPACES: u64 = u64::from_le_bytes([b' '; 8]);
     if !bytes.first().is_some_and(u8::is_ascii_whitespace) {
         return 0;
     }
+    let mut index = leading_spaces(bytes);
+    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+        index += 1;
+    }
+    index
+}
+
+/// The number of spaces `bytes` start with, read eight bytes at a time.
+pub(crate) fn leading_spaces(bytes: &[u8]) -> usize {
+    const SPACES: u64 = u64::from_le_bytes([b' '; 8]);
     let mut index = 0;
     while let Some(chunk) = bytes.get(index..index + 8) {
         // The first byte that is no space sets the lowest differing bits.
         let differing = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ SPACES;
         if differing != 0 {
-            index += differing.trailing_zeros() as usize / 8;
-            break;
+            return index + differing.trailing_zeros() as usize / 8;
         }
         index += 8;
     }
-    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+    while bytes.get(index) == Some(&b' ') {
         index += 1;
     }
     index

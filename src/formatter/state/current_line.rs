@@ -199,33 +199,27 @@ impl CurrentLine {
         if !matches(last) {
             return;
         }
-        let before_chars = self.char_len();
-        let mut popped = 0;
+        let before_len = self.text.len();
         while self.text.chars().next_back().is_some_and(&matches) {
             self.text.pop();
-            popped += 1;
         }
-        self.invalidate();
-        self.char_len
-            .set(Some((self.text.len(), before_chars - popped)));
+        self.cut_whitespace(before_len);
     }
 
     pub(crate) fn char_len(&self) -> usize {
+        // Trailing blanks are a byte each; the count kept stops short of
+        // them.
         let len = self.text.len();
-        if let Some((cached_bytes, cached_chars)) = self.char_len.get() {
-            if cached_bytes == len {
-                return cached_chars;
+        let stable = self.stable_len();
+        let chars = match self.char_len.get() {
+            Some((bytes, chars)) if bytes == stable => chars,
+            Some((bytes, chars)) if bytes < stable && self.text.is_char_boundary(bytes) => {
+                chars + self.text[bytes..stable].chars().count()
             }
-            if cached_bytes < len && self.text.is_char_boundary(cached_bytes) {
-                let total = cached_chars + self.text[cached_bytes..].chars().count();
-                debug_assert_eq!(total, self.text.chars().count());
-                self.char_len.set(Some((len, total)));
-                return total;
-            }
-        }
-        let total = self.text.chars().count();
-        self.char_len.set(Some((len, total)));
-        total
+            _ => self.text[..stable].chars().count(),
+        };
+        self.char_len.set(Some((stable, chars)));
+        chars + (len - stable)
     }
 
     pub(crate) fn is_blank(&self) -> bool {
@@ -241,64 +235,48 @@ impl CurrentLine {
     }
 
     pub(crate) fn visual_width(&self, tab_width: usize) -> usize {
-        let len = self.text.len();
-        if let Some((cached_bytes, cached_width)) = self.visual_width.get() {
-            if cached_bytes == len {
-                return cached_width;
+        let stable = self.stable_len();
+        let width = match self.visual_width.get() {
+            Some((bytes, width)) if bytes == stable => width,
+            Some((bytes, width)) if bytes < stable && self.text.is_char_boundary(bytes) => {
+                width + visual_width_from(&self.text[bytes..stable], width, tab_width)
             }
-            if cached_bytes < len && self.text.is_char_boundary(cached_bytes) {
-                let width = cached_width
-                    + visual_width_from(&self.text[cached_bytes..], cached_width, tab_width);
-                self.visual_width.set(Some((len, width)));
-                return width;
-            }
-        }
-        let width = visual_width_from(&self.text, 0, tab_width);
-        self.visual_width.set(Some((len, width)));
-        width
+            _ => visual_width_from(&self.text[..stable], 0, tab_width),
+        };
+        self.visual_width.set(Some((stable, width)));
+        width + visual_width_from(&self.text[stable..], width, tab_width)
     }
 
     pub(crate) fn visual_width_from(&self, start_column: usize, tab_width: usize) -> usize {
-        let len = self.text.len();
-        if let Some((cached_bytes, cached_start, cached_width)) = self.visual_width_from.get()
-            && cached_start == start_column
-        {
-            if cached_bytes == len {
-                return cached_width;
+        let stable = self.stable_len();
+        let width = match self.visual_width_from.get() {
+            Some((bytes, start, width)) if start == start_column && bytes == stable => width,
+            Some((bytes, start, width))
+                if start == start_column && bytes < stable && self.text.is_char_boundary(bytes) =>
+            {
+                width
+                    + visual_width_from(&self.text[bytes..stable], start_column + width, tab_width)
             }
-            if cached_bytes < len && self.text.is_char_boundary(cached_bytes) {
-                let width = cached_width
-                    + visual_width_from(
-                        &self.text[cached_bytes..],
-                        start_column + cached_width,
-                        tab_width,
-                    );
-                self.visual_width_from.set(Some((len, start_column, width)));
-                return width;
-            }
-        }
-        let width = visual_width_from(&self.text, start_column, tab_width);
-        self.visual_width_from.set(Some((len, start_column, width)));
-        width
+            _ => visual_width_from(&self.text[..stable], start_column, tab_width),
+        };
+        self.visual_width_from
+            .set(Some((stable, start_column, width)));
+        width + visual_width_from(&self.text[stable..], start_column + width, tab_width)
     }
 
     pub(crate) fn last_open_brace(&self) -> Option<usize> {
-        let len = self.text.len();
-        if let Some((cached_bytes, cached_index)) = self.last_open_brace.get() {
-            if cached_bytes == len {
-                return cached_index;
-            }
-            if cached_bytes < len && self.text.is_char_boundary(cached_bytes) {
-                let index = self.text[cached_bytes..]
-                    .rfind('{')
-                    .map(|index| cached_bytes + index)
-                    .or(cached_index);
-                self.last_open_brace.set(Some((len, index)));
-                return index;
-            }
-        }
-        let index = self.text.rfind('{');
-        self.last_open_brace.set(Some((len, index)));
+        // No `{` is a trailing blank.
+        let stable = self.stable_len();
+        let index = match self.last_open_brace.get() {
+            Some((bytes, index)) if bytes == stable => index,
+            Some((bytes, index)) if bytes < stable && self.text.is_char_boundary(bytes) => self
+                .text[bytes..stable]
+                .rfind('{')
+                .map(|found| bytes + found)
+                .or(index),
+            _ => self.text[..stable].rfind('{'),
+        };
+        self.last_open_brace.set(Some((stable, index)));
         index
     }
 
@@ -309,7 +287,9 @@ impl CurrentLine {
             _ => TrailingCommentScan::default(),
         };
         if scan.comment_start.is_none() {
-            scan.advance(self.text.as_bytes());
+            // Trailing blanks open no comment; a scan kept short of them
+            // holds when they are cut.
+            scan.advance(&self.text.as_bytes()[..self.stable_len()]);
             self.trailing_comment.set(Some(scan));
         }
         match scan.comment_start {
@@ -326,15 +306,18 @@ impl CurrentLine {
         if scan.scanned > self.text.len() {
             *scan = DeclarationSegmentScan::default();
         }
-        scan.advance(self.text.as_bytes());
+        scan.advance(&self.text.as_bytes()[..self.stable_len()]);
         scan.start
     }
 
-    /// Whether the text of `declaration_segment_start` on, its balanced
-    /// parentheses dropped, holds no `<` or `[` but holds a byte no pointer
-    /// declaration segment holds: `=`, `+`, `-`, `/`, `%`, `?`, `!`, `~`,
-    /// `|`, `^`, `>`, `]`, or `)`.
-    pub(crate) fn declaration_segment_plainly_rejected(&self) -> bool {
+    /// `is_pointer_declaration_segment` of the text of
+    /// `declaration_segment_start` on, its balanced parentheses dropped,
+    /// when that text holds no `<`, `[`, or byte past ASCII.
+    pub(crate) fn declaration_segment_verdict(&self) -> Option<bool> {
+        self.declaration_segment_scan().verdict()
+    }
+
+    fn declaration_segment_scan(&self) -> SegmentOutsideParens {
         let start = self.declaration_segment_start();
         let mut scan = self.segment_outside_parens.get();
         if scan.start != start || scan.scanned > self.text.len() || scan.scanned < start {
@@ -344,21 +327,27 @@ impl CurrentLine {
                 ..SegmentOutsideParens::default()
             };
         }
-        if scan.scanned < self.text.len() {
-            scan.advance(self.text.as_bytes());
+        let stable = self.stable_len();
+        if scan.scanned < stable {
+            scan.advance(&self.text.as_bytes()[..stable]);
             self.segment_outside_parens.set(scan);
         }
-        scan.rejecting && !scan.angle_or_bracket
+        scan
     }
 
     fn marks(&self) -> LineMarks {
+        let bytes = self.text.as_bytes();
+        let stable = self.stable_len();
         let mut marks = self.marks.get();
-        if marks.scanned > self.text.len() {
+        if marks.scanned > stable {
             marks = LineMarks::default();
         }
-        if marks.scanned < self.text.len() {
-            marks.advance(self.text.as_bytes());
+        if marks.scanned < stable {
+            marks.advance(&bytes[..stable]);
             self.marks.set(marks);
+        }
+        if stable < bytes.len() {
+            marks.advance(bytes);
         }
         marks
     }
@@ -383,7 +372,7 @@ impl CurrentLine {
         if scan.scanned() > bytes.len() {
             *scan = DelimiterScan::default();
         }
-        scan.advance(bytes, bytes.len().saturating_sub(1));
+        scan.advance(bytes, self.stable_len().saturating_sub(1));
         if scan.scanned() < bytes.len() {
             let mut last = scan.clone();
             last.advance(bytes, bytes.len());
@@ -398,7 +387,7 @@ impl CurrentLine {
         if scan.scanned > self.text.len() {
             *scan = ParenScan::default();
         }
-        scan.advance(self.text.as_bytes());
+        scan.advance(&self.text.as_bytes()[..self.stable_len()]);
         scan.last_close_match
     }
 
@@ -484,6 +473,26 @@ impl CurrentLine {
         self.open_brace_run_len.set(Some(self.text.len()));
     }
 
+    /// Keeps what the caches read before the whitespace the line lost
+    /// from its end, which was `before_len` bytes long: the scans read no
+    /// trailing blanks.
+    fn cut_whitespace(&self, before_len: usize) {
+        let at = self.text.len();
+        self.open_brace_run_len.set(None);
+        self.blank.set(
+            self.blank
+                .get()
+                .filter(|&(bytes, _)| bytes == before_len)
+                .map(|(_, blank)| (at, blank)),
+        );
+    }
+
+    /// The length of the line without its trailing whitespace, past which
+    /// the scans do not read for keeps.
+    fn stable_len(&self) -> usize {
+        self.text.trim_ascii_end().len()
+    }
+
     fn invalidate(&self) {
         self.char_len.set(None);
         self.open_brace_run_len.set(None);
@@ -540,22 +549,79 @@ struct SegmentOutsideParens {
     depth: u32,
     angle_or_bracket: bool,
     rejecting: bool,
+    /// A byte past ASCII was read.
+    wide: bool,
+    /// The `:`s read last in a row, and whether a row of an odd count ended.
+    colons: u32,
+    odd_colons: bool,
+    /// The first word, up to as many bytes as the array holds, and whether
+    /// it was read to its end.
+    word: [u8; 16],
+    word_len: usize,
+    word_ended: bool,
 }
 
 impl SegmentOutsideParens {
     fn advance(&mut self, bytes: &[u8]) {
         for &byte in &bytes[self.scanned..] {
             match byte {
-                b'(' => self.depth += 1,
-                b')' if self.depth > 0 => self.depth -= 1,
-                _ if self.depth > 0 => {}
+                b'(' => {
+                    self.depth += 1;
+                    continue;
+                }
+                b')' if self.depth > 0 => {
+                    self.depth -= 1;
+                    continue;
+                }
+                _ if self.depth > 0 => continue,
                 b'<' | b'[' => self.angle_or_bracket = true,
                 b'=' | b'+' | b'-' | b'/' | b'%' | b'?' | b'!' | b'~' | b'|' | b'^' | b'>'
                 | b']' | b')' => self.rejecting = true,
                 _ => {}
             }
+            self.wide |= !byte.is_ascii();
+            if byte == b':' {
+                self.colons += 1;
+            } else {
+                self.odd_colons |= self.colons % 2 == 1;
+                self.colons = 0;
+            }
+            if !self.word_ended {
+                if byte == b'_' || byte == b'$' || byte.is_ascii_alphanumeric() {
+                    if self.word_len < self.word.len() {
+                        self.word[self.word_len] = byte;
+                    }
+                    self.word_len += 1;
+                } else if self.word_len > 0 {
+                    self.word_ended = true;
+                }
+            }
         }
         self.scanned = bytes.len();
+    }
+
+    /// `is_pointer_declaration_segment` of the text read, its balanced
+    /// parentheses dropped, when it holds no `<`, `[`, or byte past ASCII.
+    fn verdict(&self) -> Option<bool> {
+        if self.angle_or_bracket || self.wide {
+            return None;
+        }
+        if self.rejecting || self.odd_colons || self.colons % 2 == 1 || self.word_len == 0 {
+            return Some(false);
+        }
+        if self.word_len > self.word.len() {
+            // No keyword is that long, and a digit leads no longer word.
+            return Some(!self.word[0].is_ascii_digit());
+        }
+        let first = std::str::from_utf8(&self.word[..self.word_len]).expect("ASCII word");
+        Some(
+            !first.starts_with(|ch: char| ch.is_ascii_digit())
+                && !matches!(
+                    first,
+                    "return" | "case" | "sizeof" | "delete" | "new" | "throw" | "else"
+                )
+                && !crate::formatter::syntax::language::is_header(first),
+        )
     }
 }
 
@@ -742,5 +808,89 @@ mod tests {
         current.push('x');
 
         assert!(!current.is_blank());
+    }
+
+    /// Every answer the caches give, as a tuple to compare.
+    fn answers(current: &CurrentLine) -> String {
+        format!(
+            "{:?}",
+            (
+                (
+                    current.statement_start(),
+                    current.statement_tail(),
+                    current.last_question(),
+                    current.holds_equals(),
+                    current.last_open_paren(),
+                    current.has_unclosed_bracket(),
+                    current.holds_open_brace(),
+                    current.holds_close_brace(),
+                    current.holds_comment_opener(),
+                    current.has_unclosed_selector_call(),
+                ),
+                (
+                    current.last_close_paren_match(),
+                    current.declaration_segment_start(),
+                    current.declaration_segment_verdict(),
+                    current.last_unmatched_open_delimiter(),
+                    current.trailing_comment_split_limit(),
+                    current.visual_width(4),
+                    current.visual_width_from(3, 4),
+                    current.last_open_brace(),
+                    current.char_len(),
+                    current.is_blank(),
+                ),
+            )
+        )
+    }
+
+    #[test]
+    fn caches_kept_across_cut_whitespace_answer_as_fresh_ones_do() {
+        let pieces = [
+            "(",
+            ")",
+            "[",
+            "]",
+            "{",
+            "}",
+            "\"",
+            "'",
+            "/",
+            "*",
+            "\\",
+            "a",
+            "=",
+            ",",
+            ";",
+            "?",
+            "<",
+            ">",
+            " ",
+            "  ",
+            "\t",
+            " \t ",
+            "é",
+            "@selector(",
+            "//",
+            "/*",
+            "*/",
+        ];
+        let mut state = 0x1b87_3593_u32;
+        for _ in 0..3000 {
+            let mut current = CurrentLine::default();
+            for _ in 0..(state % 32) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                match state % 7 {
+                    0 => current.trim_end_spaces(),
+                    1 => current.trim_end_horizontal_space(),
+                    _ => current.push_str(pieces[(state >> 3) as usize % pieces.len()]),
+                }
+                let mut fresh = CurrentLine::default();
+                fresh.replace(current.as_str().to_string());
+                assert_eq!(answers(&current), answers(&fresh), "{:?}", current.as_str());
+            }
+            state = state.wrapping_add(1);
+        }
     }
 }

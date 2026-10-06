@@ -90,7 +90,7 @@ impl FormatEngine<'_> {
         let mut closed_blocks = 0usize;
         for index in (0..self.output.len()).rev().take(24) {
             let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
@@ -127,7 +127,7 @@ impl FormatEngine<'_> {
         while index > 0 {
             index -= 1;
             let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(index);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }

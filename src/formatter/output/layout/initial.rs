@@ -593,31 +593,12 @@ impl FormatEngine<'_> {
             && !line.trimmed_start().starts_with(['{', '#'])
             && self.output.may_have_comment()
         {
-            let mut comment_indent = None;
-            for previous in self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .filter(|line| !line.trimmed().is_empty())
-            {
-                if matches!(
-                    previous.trimmed_start(),
-                    text if text.starts_with("//")
-                        || text.starts_with("/*")
-                        || text.starts_with("*/")
-                        || text == "*"
-                        || text.starts_with("* ")
-                        || text.starts_with("*\t")
-                        || text.starts_with("**")
-                ) {
-                    let trimmed = previous.trimmed_start();
-                    if !trimmed.starts_with("//") || comment_indent.is_none() {
-                        comment_indent =
-                            Some(leading_visual_width(previous, self.options.tab_width));
-                    }
-                    continue;
-                }
+            let run = self.output.comment_run();
+            let comment_indent = run
+                .indent_line()
+                .map(|index| leading_visual_width(&self.output[index], self.options.tab_width));
+            if let Some(stop) = run.before {
+                let previous = &self.output[stop];
                 let previous_code = self.output.code_of(previous).trimmed_end();
                 let previous_code_trimmed = previous_code.trimmed_start();
                 if previous_code.ends_with('{')
@@ -654,7 +635,6 @@ impl FormatEngine<'_> {
                                 * self.options.indent_width,
                     );
                 }
-                break;
             }
         }
         if let Some(spaces) = self.else_body_after_comments_indent_spaces(line, layout.line_kind) {
@@ -680,7 +660,7 @@ impl FormatEngine<'_> {
                     .any(|index| {
                         let line = &self.output[index];
                         let code = self.output.code_before_comment(index).trimmed_end();
-                        let trimmed = code.trimmed_start();
+                        let trimmed = self.output.code_body(index);
                         if !seen_header {
                             seen_header = code.ends_with('{')
                                 && (starts_header_word(trimmed, "if")

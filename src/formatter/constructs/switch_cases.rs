@@ -1952,7 +1952,7 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().take(32) {
             let line = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
-            let trimmed = code.trimmed_start();
+            let trimmed = self.output.code_body(scan_index);
             if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
                 break;
             }

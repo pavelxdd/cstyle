@@ -10,6 +10,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
+use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::preprocessor::PreprocessorRegion;
 use crate::formatter::state::frame::{
     BraceSemanticKind, CommentFrame, CommentFrameKind, ParenRole,
@@ -827,13 +828,8 @@ impl FormatEngine<'_> {
             .flatten();
         let previous_line_ends_operator = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .find(|line| {
-                let head = line.trimmed_start();
-                !head.starts_with('#') && !head.starts_with("//")
-            })
+            .last_lines_where(LineFilter::NoDirectiveOrLineComment)[0]
+            .map(|index| &self.output[index])
             .is_some_and(|line| {
                 let head = self.output.code_of(line).trimmed_end();
                 head_ends_binary_operator(head) || head_ends_assignment_operator(head)

@@ -8,7 +8,7 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::ops::Deref;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -346,6 +346,17 @@ pub(crate) struct OutputBuffer {
     /// Line that starts the next construct once a later line is pushed, so
     /// the closing line's own layout still sees its function.
     pending_scope_start: Option<usize>,
+    /// The lines whose `{`s the lines after them leave open, read on as
+    /// lines come.
+    open_brace_lines: RefCell<OpenBraceLines>,
+    /// The first line changed in place since [`OpenBraceLines`] read on.
+    lowest_change: Cell<usize>,
+    /// The last [`Self::comment_run`], with the scope start, version, and
+    /// line count it read.
+    comment_run_cache: Cell<Option<(usize, u64, usize, CommentRun)>>,
+    /// The last [`Self::last_lines_where`] of each kind, with the scope
+    /// start, version, and line count it read.
+    last_lines_cache: [Cell<Option<LastLinesRead>>; 2],
     may_have_label_open: bool,
     may_have_else: bool,
     may_have_hash: bool,
@@ -397,6 +408,85 @@ pub(crate) struct OutputBuffer {
     /// The line [`Self::line_with_token`] found last; lookups of nearby
     /// tokens start from it.
     token_line_hint: Cell<usize>,
+}
+
+/// The comment lines that end the lines in scope, blank lines aside: the
+/// line before them, the farthest that is no `//` comment, and the nearest
+/// `//` comment.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct CommentRun {
+    pub(crate) before: Option<usize>,
+    farthest_block: Option<usize>,
+    nearest_line: Option<usize>,
+}
+
+impl CommentRun {
+    /// The line whose indent the comments take: the farthest that is no
+    /// `//` comment, or else the nearest.
+    pub(crate) fn indent_line(&self) -> Option<usize> {
+        self.farthest_block.or(self.nearest_line)
+    }
+}
+
+/// A [`OutputBuffer::last_lines_where`] answer with the scope start,
+/// version, and line count it read.
+type LastLinesRead = (usize, u64, usize, [Option<usize>; 2]);
+
+/// Which lines [`OutputBuffer::last_lines_where`] looks for.
+#[derive(Clone, Copy)]
+pub(crate) enum LineFilter {
+    /// Lines with text that is no `//` comment.
+    NoLineComment = 0,
+    /// Lines that are neither a directive nor a `//` comment, blank lines
+    /// among them.
+    NoDirectiveOrLineComment = 1,
+}
+
+impl LineFilter {
+    fn admits(self, line: &str) -> bool {
+        let head = line.trimmed_start();
+        match self {
+            LineFilter::NoLineComment => !head.is_empty() && !head.starts_with("//"),
+            LineFilter::NoDirectiveOrLineComment => {
+                !head.starts_with('#') && !head.starts_with("//")
+            }
+        }
+    }
+}
+
+/// Whether trimmed `text` is a comment line or a block comment row.
+fn is_comment_row(text: &str) -> bool {
+    text.starts_with("//")
+        || text.starts_with("/*")
+        || text.starts_with("*/")
+        || text == "*"
+        || text.starts_with("* ")
+        || text.starts_with("*\t")
+        || text.starts_with("**")
+}
+
+/// An entry of [`OpenBraceLines`]: a line with `{`s still open, and how
+/// many, or a directive line no brace after it closed past.
+#[derive(Clone, Copy)]
+enum OpenBraceEntry {
+    Line { index: u32, open: u32 },
+    Directive,
+}
+
+/// Lines read in order with a stack of what they leave open, as the look
+/// back from the last line for its innermost open brace finds it: each
+/// `}` closes the nearest `{` open, and a directive no brace closed past
+/// ends that look.
+#[derive(Default)]
+struct OpenBraceLines {
+    read: usize,
+    stack: Vec<OpenBraceEntry>,
+    /// The stack before each of the last lines read, to read a changed
+    /// last line again.
+    before: std::collections::VecDeque<(usize, Vec<OpenBraceEntry>)>,
+    /// A later branch of a conditional group was read: the look back then
+    /// counts its braces apart.
+    branched: bool,
 }
 
 /// The last line from `floor` on that a look back found, for a buffer of
@@ -548,6 +638,7 @@ impl OutputBuffer {
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
             self.version += 1;
+            self.note_change(self.lines.len());
         }
         line
     }
@@ -567,6 +658,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
+            self.note_change(self.lines.len() - 1);
         }
         self.lines.last_mut()
     }
@@ -584,6 +676,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
+            self.note_change(index);
         }
         self.lines.get_mut(index)
     }
@@ -597,6 +690,7 @@ impl OutputBuffer {
         self.indented_directive_continuation.remove(index);
         self.last_non_empty_dirty.set(true);
         self.version += 1;
+        self.note_change(index);
         self.lines.remove(index)
     }
 
@@ -629,6 +723,7 @@ impl OutputBuffer {
         self.lines[index] = line;
         self.last_non_empty_dirty.set(true);
         self.version += 1;
+        self.note_change(index);
     }
 
     /// Makes `tokens` the source tokens of the next pushed line.
@@ -691,6 +786,7 @@ impl OutputBuffer {
             self.may_have_new = true;
             self.last_non_empty_dirty.set(true);
             self.version += 1;
+            self.note_change(range.start);
         }
         &mut self.lines[range]
     }
@@ -766,6 +862,17 @@ impl OutputBuffer {
             .copied()
             .filter(|&column| column < code.len())
             .find(|&column| code[column + 1..].chars().any(|ch| !ch.is_whitespace()))
+    }
+
+    /// `code_before_comment_trimmed(index)` without its leading whitespace.
+    pub(crate) fn code_body(&self, index: usize) -> &str {
+        let code = self.code_before_comment_trimmed(index);
+        &code[self.lead_bytes(index).min(code.len())..]
+    }
+
+    /// The length of line `index`'s leading whitespace.
+    pub(crate) fn lead_bytes(&self, index: usize) -> usize {
+        self.brace_meta(index).trim_start_byte as usize
     }
 
     pub(crate) fn trimmed(&self, index: usize) -> &str {
@@ -1021,17 +1128,29 @@ impl OutputBuffer {
     pub(crate) fn designator_since_closed_row(&self) -> bool {
         let range = self.scoped_range();
         let key = (range.start, self.version, range.end);
-        if let Some((start, version, len, designator)) = self.designator_cache.get()
-            && (start, version, len) == key
-        {
-            return designator;
-        }
-        let designator = self.lines[range]
-            .iter()
-            .rev()
-            .map(|line| line.trimmed_start())
-            .take_while(|trimmed| !trimmed.starts_with("},"))
-            .any(|trimmed| trimmed.starts_with('['));
+        let designator = match self.designator_cache.get() {
+            Some((start, version, len, designator))
+                if (start, version) == (key.0, key.1) && len <= range.end =>
+            {
+                // The lines come since read on from the last answer.
+                self.lines[len..range.end]
+                    .iter()
+                    .fold(designator, |designator, line| {
+                        let trimmed = line.trimmed_start();
+                        if trimmed.starts_with("},") {
+                            false
+                        } else {
+                            designator || trimmed.starts_with('[')
+                        }
+                    })
+            }
+            _ => self.lines[range]
+                .iter()
+                .rev()
+                .map(|line| line.trimmed_start())
+                .take_while(|trimmed| !trimmed.starts_with("},"))
+                .any(|trimmed| trimmed.starts_with('[')),
+        };
         self.designator_cache
             .set(Some((key.0, key.1, key.2, designator)));
         designator
@@ -1307,6 +1426,185 @@ impl OutputBuffer {
     /// that opens it.
     pub(crate) fn comment_indent_width(&self, index: usize, tab_width: usize) -> usize {
         leading_visual_width(&self.lines[self.comment_start_index(index)], tab_width)
+    }
+
+    /// The innermost line whose `{`s the lines after it leave open, looking
+    /// back from the last line past block comment bodies and stopping at a
+    /// directive outside braces; `None` when conditional branches leave
+    /// that to a look back of its own.
+    pub(crate) fn innermost_open_brace_line(&self) -> Option<Option<usize>> {
+        let mut lines = self.open_brace_lines.borrow_mut();
+        let changed = self.lowest_change.replace(usize::MAX).min(self.lines.len());
+        if changed < lines.read {
+            match lines.before.iter().position(|&(index, _)| index == changed) {
+                Some(at) => {
+                    let (_, stack) = lines.before.remove(at).expect("kept stack");
+                    lines.before.truncate(at);
+                    lines.stack = stack;
+                    lines.read = changed;
+                    lines.branched = false;
+                }
+                None => *lines = OpenBraceLines::default(),
+            }
+        }
+        while !lines.branched && lines.read < self.lines.len() {
+            let index = lines.read;
+            lines.read += 1;
+            if lines.before.len() == 4 {
+                lines.before.pop_front();
+            }
+            let stack = lines.stack.clone();
+            lines.before.push_back((index, stack));
+            if self.comment_start_index(index) != index {
+                continue;
+            }
+            let meta = self.brace_meta(index);
+            let mut closes = meta.closes();
+            if meta.code_starts_with_hash
+                && matches!(
+                    preprocessor_directive(self.trimmed(index)),
+                    Some("else" | "elif" | "elifdef" | "elifndef")
+                )
+            {
+                lines.branched = true;
+                break;
+            }
+            while closes > 0 {
+                match lines.stack.last_mut() {
+                    Some(OpenBraceEntry::Directive) => {
+                        lines.stack.pop();
+                    }
+                    Some(OpenBraceEntry::Line { open, .. }) => {
+                        let closed = (*open as usize).min(closes);
+                        *open -= closed as u32;
+                        closes -= closed;
+                        if *open == 0 {
+                            lines.stack.pop();
+                        }
+                    }
+                    None => break,
+                }
+            }
+            if meta.opens() > 0 {
+                lines.stack.push(OpenBraceEntry::Line {
+                    index: index as u32,
+                    open: meta.opens() as u32,
+                });
+            }
+            // The look back stops at a directive before its own braces.
+            if meta.code_starts_with_hash {
+                lines.stack.push(OpenBraceEntry::Directive);
+            }
+        }
+        if lines.branched {
+            return None;
+        }
+        Some(match lines.stack.last() {
+            Some(OpenBraceEntry::Line { index, .. }) => Some(*index as usize),
+            _ => None,
+        })
+    }
+
+    /// The last two lines in scope that `filter` admits, the last first.
+    pub(crate) fn last_lines_where(&self, filter: LineFilter) -> [Option<usize>; 2] {
+        let range = self.scoped_range();
+        let key = (range.start, self.version);
+        let cache = &self.last_lines_cache[filter as usize];
+        let found = match cache.get() {
+            Some((start, version, len, found)) if (start, version) == key && len <= range.end => {
+                let mut found = found;
+                for index in len..range.end {
+                    if filter.admits(&self.lines[index]) {
+                        found = [Some(index), found[0]];
+                    }
+                }
+                found
+            }
+            _ => {
+                let mut found = [None; 2];
+                let mut matches = range
+                    .clone()
+                    .rev()
+                    .filter(|&index| filter.admits(&self.lines[index]));
+                found[0] = matches.next();
+                found[1] = matches.next();
+                found
+            }
+        };
+        cache.set(Some((key.0, key.1, range.end, found)));
+        found
+    }
+
+    /// The last line in scope before `end` that `filter` admits.
+    pub(crate) fn last_line_before_where(&self, end: usize, filter: LineFilter) -> Option<usize> {
+        let [last, before] = self.last_lines_where(filter);
+        match (last?, before) {
+            (last, _) if last < end => Some(last),
+            (_, None) => None,
+            (_, Some(before)) if before < end => Some(before),
+            _ => {
+                let range = self.scoped_range();
+                (range.start..end.min(range.end))
+                    .rev()
+                    .find(|&index| filter.admits(&self.lines[index]))
+            }
+        }
+    }
+
+    /// The comment rows that end the lines in scope; see [`CommentRun`].
+    pub(crate) fn comment_run(&self) -> CommentRun {
+        let range = self.scoped_range();
+        let key = (range.start, self.version);
+        let run = match self.comment_run_cache.get() {
+            Some((start, version, len, run)) if (start, version) == key && len <= range.end => {
+                // Lines come after the run read last: each comment row
+                // extends it and any other line starts it afresh.
+                let mut run = run;
+                for index in len..range.end {
+                    let trimmed = self.lines[index].trimmed_start();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if !is_comment_row(trimmed) {
+                        run = CommentRun {
+                            before: Some(index),
+                            ..CommentRun::default()
+                        };
+                    } else if trimmed.starts_with("//") {
+                        run.nearest_line = Some(index);
+                    } else {
+                        run.farthest_block = run.farthest_block.or(Some(index));
+                    }
+                }
+                run
+            }
+            _ => {
+                let mut run = CommentRun::default();
+                for index in range.clone().rev() {
+                    let trimmed = self.lines[index].trimmed_start();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if !is_comment_row(trimmed) {
+                        run.before = Some(index);
+                        break;
+                    }
+                    if trimmed.starts_with("//") {
+                        run.nearest_line = run.nearest_line.or(Some(index));
+                    } else {
+                        run.farthest_block = Some(index);
+                    }
+                }
+                run
+            }
+        };
+        self.comment_run_cache
+            .set(Some((key.0, key.1, range.end, run)));
+        run
+    }
+
+    fn note_change(&self, index: usize) {
+        self.lowest_change.set(self.lowest_change.get().min(index));
     }
 
     pub(crate) fn may_have_label_open(&self) -> bool {

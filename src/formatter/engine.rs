@@ -210,6 +210,12 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back from a `:` for a `case`.
     pub(crate) case_label_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::CaseLabelLook>>,
+    /// The last look back for the line an assignment's value starts after.
+    pub(crate) assignment_rhs_cache:
+        std::cell::Cell<Option<crate::formatter::continuation::operator_chains::AssignmentRhsWalk>>,
+    /// The last look back for the line opening an initializer's rows: the
+    /// output version and line count it read, and the line.
+    pub(crate) row_opener_cache: std::cell::Cell<Option<(u64, usize, Option<usize>)>>,
     /// The last look for an assignment stacked in a statement.
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
@@ -299,6 +305,8 @@ impl<'a> FormatEngine<'a> {
             operand_return_cache: std::cell::Cell::new(None),
             paren_braces_cache: std::cell::Cell::new(None),
             case_label_cache: std::cell::Cell::new(None),
+            assignment_rhs_cache: std::cell::Cell::new(None),
+            row_opener_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
@@ -1394,6 +1402,21 @@ impl<'a> FormatEngine<'a> {
             current
         }
         .trimmed_end()
+    }
+
+    /// `paren_imbalance_of` the code of output line `index` before its
+    /// trailing comment, trimmed: the line's cached imbalance when the code
+    /// is all of it or the line is recent.
+    pub(crate) fn output_code_paren_imbalance(&self, index: usize) -> (usize, Vec<usize>) {
+        let code = self.output.code_before_comment(index).trimmed_end();
+        if index + 16 >= self.output.len()
+            || code.len() == self.output.as_slice()[index].trimmed_end().len()
+        {
+            let (closes, opens) = self.output.paren_imbalance(index);
+            (closes, opens.to_vec())
+        } else {
+            line_paren_imbalance(code)
+        }
     }
 
     /// `leaves_paren_open` of the code of output line `index`.

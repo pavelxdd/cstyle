@@ -1099,13 +1099,9 @@ impl FormatEngine<'_> {
                     spaces =
                         spaces.max(self.layout.indentation.indent() * self.options.indent_width);
                 }
-                // Nested groups closed before the row hold no opener of it.
-                let mut depth = 0usize;
-                for (index, previous) in self.output.iter().enumerate().rev() {
+                if let Some(index) = self.row_initializer_opener_line() {
+                    let previous = &self.output[index];
                     let code = self.output.code_before_comment(index).trimmed_end();
-                    if depth == 0
-                        && code.ends_with('{')
-                        && self.output_line_opens_initializer(index, code)
                     {
                         // An indented brace on its own line stands at its rows.
                         let brace_indent = if code.trimmed_start() == "{"
@@ -1121,13 +1117,7 @@ impl FormatEngine<'_> {
                                 + brace_indent
                                 + self.case_unindent_spaces(),
                         );
-                        break;
                     }
-                    if code.ends_with(';') || code.ends_with('}') {
-                        break;
-                    }
-                    let meta = self.output.brace_meta(index);
-                    depth = (depth + meta.closes()).saturating_sub(meta.opens());
                 }
             }
             return Some(spaces);
@@ -1352,6 +1342,65 @@ impl FormatEngine<'_> {
                 code.trimmed_start().starts_with("static const struct") && code.ends_with('{')
             });
         aggregate_member.then_some(current_spaces + case_unindent_spaces)
+    }
+
+    /// The line opening the initializer the next row stands in, looking
+    /// back over rows no `;` or `}` ends; groups closed before the row hold
+    /// no opener of it.
+    fn row_initializer_opener_line(&self) -> Option<usize> {
+        let version = self.output.version();
+        let len = self.output.len();
+        // A look back over the lines come since the last stops where that
+        // one started, at the same depth, to end as it did.
+        let cached = self
+            .row_opener_cache
+            .get()
+            .filter(|&(cached_version, cached_len, _)| {
+                cached_version == version && cached_len <= len
+            });
+        let stop = cached.map_or(0, |(_, cached_len, _)| cached_len);
+        let mut depth = 0usize;
+        let mut found = None;
+        let mut ended = false;
+        for index in (stop..len).rev() {
+            let code = self.output.code_before_comment(index).trimmed_end();
+            if depth == 0 && code.ends_with('{') && self.output_line_opens_initializer(index, code)
+            {
+                found = Some(index);
+                ended = true;
+                break;
+            }
+            if code.ends_with(';') || code.ends_with('}') {
+                ended = true;
+                break;
+            }
+            let meta = self.output.brace_meta(index);
+            depth = (depth + meta.closes()).saturating_sub(meta.opens());
+        }
+        if !ended && let Some((_, cached_len, cached_found)) = cached {
+            if depth == 0 {
+                found = cached_found;
+            } else {
+                // Deeper than the last look started: look back again.
+                for index in (0..cached_len).rev() {
+                    let code = self.output.code_before_comment(index).trimmed_end();
+                    if depth == 0
+                        && code.ends_with('{')
+                        && self.output_line_opens_initializer(index, code)
+                    {
+                        found = Some(index);
+                        break;
+                    }
+                    if code.ends_with(';') || code.ends_with('}') {
+                        break;
+                    }
+                    let meta = self.output.brace_meta(index);
+                    depth = (depth + meta.closes()).saturating_sub(meta.opens());
+                }
+            }
+        }
+        self.row_opener_cache.set(Some((version, len, found)));
+        found
     }
 
     fn output_line_opens_initializer(&self, index: usize, code: &str) -> bool {

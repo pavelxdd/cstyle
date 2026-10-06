@@ -11,8 +11,27 @@ pub(crate) trait ContainsAnyByte {
 impl ContainsAnyByte for str {
     fn contains_any_byte(&self, set: &[u8]) -> bool {
         debug_assert!(set.is_ascii());
+        let bytes = self.as_bytes();
+        if let [first, ..] = *set
+            && set.len() <= 4
+        {
+            // Plain compares over whole chunks let the compiler use vector
+            // instructions.
+            let mut wanted = [first; 4];
+            wanted[..set.len()].copy_from_slice(set);
+            let hit = |byte: u8| wanted.iter().fold(false, |hit, &want| hit | (byte == want));
+            let mut chunks = bytes.chunks_exact(32);
+            for chunk in &mut chunks {
+                if chunk.iter().fold(false, |found, &byte| found | hit(byte)) {
+                    return true;
+                }
+            }
+            return chunks.remainder().iter().any(|&byte| hit(byte));
+        }
         let mask = set.iter().fold(0u128, |mask, &byte| mask | 1 << byte);
-        self.bytes().any(|byte| byte < 128 && mask >> byte & 1 != 0)
+        bytes
+            .iter()
+            .any(|&byte| byte < 128 && mask >> byte & 1 != 0)
     }
 }
 
