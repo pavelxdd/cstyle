@@ -187,18 +187,27 @@ impl FormatEngine<'_> {
         if current == "{" || current == ";" || current.starts_with("};") {
             return None;
         }
-        for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trimmed();
-            if trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';') {
-                break;
-            }
-            if matches!(trimmed, "class" | "struct" | "union") || is_split_export_head(trimmed) {
-                return Some(
-                    leading_visual_width(line, self.options.tab_width) + self.options.indent_width,
-                );
-            }
-        }
-        None
+        let stops = |trimmed: &str| {
+            trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';')
+        };
+        let range = self.output.scoped_range();
+        // The last of the last 8 lines that stops the look or is a class
+        // head decides.
+        let index = self.output.last_line_looked(
+            &self.class_head_look,
+            range.start.max(range.end.saturating_sub(8)),
+            range.end,
+            |index| {
+                let trimmed = self.output.trimmed(index);
+                stops(trimmed)
+                    || matches!(trimmed, "class" | "struct" | "union")
+                    || is_split_export_head(trimmed)
+            },
+        )?;
+        (!stops(self.output.trimmed(index))).then(|| {
+            leading_visual_width(&self.output[index], self.options.tab_width)
+                + self.options.indent_width
+        })
     }
 
     pub(crate) fn simple_template_base_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {

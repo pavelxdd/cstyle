@@ -209,6 +209,12 @@ pub(crate) struct FormatEngine<'a> {
     /// ends with `,` and leaves a paren open: the line count, version, and
     /// scope start it read.
     pub(crate) open_before_comma_cache: std::cell::Cell<Option<(ScopedOutputKey, bool)>>,
+    /// The look back for a line that ends a statement or leaves a brace
+    /// open.
+    pub(crate) brace_decision_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line that stops the look for a split class head
+    /// or is one.
+    pub(crate) class_head_look: crate::formatter::output::buffer::LineLook,
     /// Whether the output last read leaves an initializer brace open.
     pub(crate) open_initializer_brace_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// The look back for a line that stops the look for a constructor
@@ -377,6 +383,8 @@ impl<'a> FormatEngine<'a> {
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),
             open_initializer_brace_cache: std::cell::Cell::new(None),
+            brace_decision_look: Default::default(),
+            class_head_look: Default::default(),
             open_before_comma_cache: std::cell::Cell::new(None),
             new_call_lines_end_look: Default::default(),
             over_max_new_call_look: Default::default(),

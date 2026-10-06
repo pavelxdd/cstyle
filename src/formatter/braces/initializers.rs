@@ -1208,22 +1208,32 @@ impl FormatEngine<'_> {
     }
 
     fn scan_open_initializer_brace(&self) -> bool {
-        for index in (0..self.output.len()).rev().take(16) {
-            let code = self.output.code(index);
-            let trimmed = code.trimmed();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            if code.ends_with(';') || trimmed == "{" || trimmed == "}" {
-                return false;
-            }
-            if self.output.code_has_unmatched_open_brace(index) {
-                return code.contains("({")
-                    || code.contains("= {")
-                    || code.contains_from_first_byte("{{");
-            }
-        }
-        false
+        let len = self.output.len();
+        // The last of the last 16 lines that ends a statement or leaves a
+        // brace open decides.
+        self.output
+            .last_line_looked(
+                &self.brace_decision_look,
+                len.saturating_sub(16),
+                len,
+                |index| {
+                    let code = self.output.code(index);
+                    let trimmed = code.trimmed();
+                    !(trimmed.is_empty() || trimmed.starts_with('#'))
+                        && (code.ends_with(';')
+                            || trimmed == "{"
+                            || trimmed == "}"
+                            || self.output.code_has_unmatched_open_brace(index))
+                },
+            )
+            .is_some_and(|index| {
+                let code = self.output.code(index);
+                let trimmed = code.trimmed();
+                !(code.ends_with(';') || trimmed == "{" || trimmed == "}")
+                    && (code.contains("({")
+                        || code.contains("= {")
+                        || code.contains_from_first_byte("{{"))
+            })
     }
 
     pub(crate) fn preprocessor_branch_initializer_member_indent_spaces(
