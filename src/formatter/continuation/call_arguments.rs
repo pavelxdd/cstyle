@@ -2013,6 +2013,13 @@ impl FormatEngine<'_> {
         }
         if previous_code.ends_with(',') {
             let previous_imbalance = self.paren_imbalance_of(previous_code);
+            let case_unindent =
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            // Outside a case block only a line closing a paren it did not
+            // open takes the outer call's indent.
+            if case_unindent == 0 && previous_imbalance.0 == 0 {
+                return None;
+            }
             let spaces = self.outer_call_indent_after_closed_previous_line()?;
             let spaces =
                 if self.current_inline_array_column().is_some() || self.in_initializer_brace() {
@@ -2020,8 +2027,6 @@ impl FormatEngine<'_> {
                 } else {
                     spaces
                 };
-            let case_unindent =
-                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
             if case_unindent > 0 {
                 let spaces = if previous_imbalance.1.is_empty() {
                     spaces + case_unindent
@@ -2124,6 +2129,27 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        // Most lines follow none that leaves a paren open before a `,`;
+        // several layouts ask of the same output.
+        let key = (
+            self.output.len(),
+            self.output.version(),
+            self.output.scoped_range().start,
+        );
+        let open_before_comma = match self.open_before_comma_cache.get() {
+            Some((cached, open)) if cached == key => open,
+            _ => {
+                let open = self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    let code = self.output.code_trimmed_of(previous);
+                    code.ends_with(',') && !unmatched_open_paren_columns(code).is_empty()
+                });
+                self.open_before_comma_cache.set(Some((key, open)));
+                open
+            }
+        };
+        if !open_before_comma {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;

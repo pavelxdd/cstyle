@@ -155,6 +155,8 @@ pub(crate) struct LayoutState {
 /// The output's line count and edit version, which identify what a look
 /// back over it read.
 pub(crate) type OutputKey = (usize, u64);
+/// An [`OutputKey`] with the start of the lines in scope.
+pub(crate) type ScopedOutputKey = (usize, u64, usize);
 
 /// An output line leaving a paren open, and the column after that paren.
 pub(crate) type OpenParenLine = (usize, usize);
@@ -203,6 +205,10 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) brace_code_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending a call's arguments.
     pub(crate) argument_end_look: crate::formatter::output::buffer::LineLook,
+    /// Whether the last non-empty line in scope of the output last read
+    /// ends with `,` and leaves a paren open: the line count, version, and
+    /// scope start it read.
+    pub(crate) open_before_comma_cache: std::cell::Cell<Option<(ScopedOutputKey, bool)>>,
     /// Whether the output last read leaves an initializer brace open.
     pub(crate) open_initializer_brace_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// The look back for a line that stops the look for a constructor
@@ -371,6 +377,7 @@ impl<'a> FormatEngine<'a> {
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),
             open_initializer_brace_cache: std::cell::Cell::new(None),
+            open_before_comma_cache: std::cell::Cell::new(None),
             new_call_lines_end_look: Default::default(),
             over_max_new_call_look: Default::default(),
             new_call_edge_look: Default::default(),

@@ -376,7 +376,8 @@ impl FormatEngine<'_> {
         }
         let mut close_pending = 0usize;
         let mut in_block_comment = false;
-        for previous in self.output.scoped().iter().rev().take(8) {
+        for index in self.output.scoped_range().rev().take(8) {
+            let previous = &self.output[index];
             let trimmed = previous.trimmed_end();
             if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
                 continue;
@@ -384,11 +385,9 @@ impl FormatEngine<'_> {
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
-            let (closes, mut opens) = self.paren_imbalance_of(trimmed);
+            let (closes, opens) = self.output.paren_imbalance(index);
             let cancel = close_pending.min(opens.len());
-            for _ in 0..cancel {
-                opens.pop();
-            }
+            let opens = &opens[..opens.len() - cancel];
             close_pending = close_pending - cancel + closes;
             if opens.is_empty() {
                 continue;
