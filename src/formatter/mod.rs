@@ -48,7 +48,9 @@ pub(crate) fn format_owned(source: String, options: &FormatOptions) -> String {
     };
     let source = normalized.unwrap_or(source);
     let source = if options.convert_tabs && source.contains('\t') {
-        tabs::source_to_spaces(&source, options.tab_width)
+        let converted = tabs::source_to_spaces(&source, options.tab_width);
+        drop(source);
+        converted
     } else {
         source
     };

@@ -414,6 +414,9 @@ impl<'a> FormatEngine<'a> {
             tokens
         };
         let tokens = std::rc::Rc::new(tokens);
+        self.tree = SourceTree::build_shared(std::rc::Rc::clone(&tokens));
+        let tokens = tokens.as_slice();
+        self.syntax_roles = classify_syntax(tokens, &self.tree);
         // Most output lines are source lines.
         self.output.reserve(
             tokens
@@ -422,9 +425,6 @@ impl<'a> FormatEngine<'a> {
                 .count()
                 + 1,
         );
-        self.tree = SourceTree::build_shared(std::rc::Rc::clone(&tokens));
-        let tokens = tokens.as_slice();
-        self.syntax_roles = classify_syntax(tokens, &self.tree);
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
         self.inline_array.nested_brace_arrays = syntax::nested_brace_array_indices(tokens);

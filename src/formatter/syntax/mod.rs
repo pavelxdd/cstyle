@@ -519,14 +519,15 @@ fn is_tree_declarator_operator(tokens: &[Token], tree: &SourceTree, index: usize
 
 fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
     let mut stack = Vec::new();
-    let mut depth_changes = vec![0isize; tokens.len()];
+    // Token counts fit in 32 bits, which keeps these tables small.
+    let mut depth_changes = vec![0i32; tokens.len()];
     // Assignments before each token, so a range counts its own at once.
     let mut assignments_before = Vec::with_capacity(tokens.len() + 1);
-    assignments_before.push(0usize);
+    assignments_before.push(0u32);
     for token in tokens {
         let assigns = matches!(token, Token::Operator(operator) if language::ASSIGNMENT_OPERATORS.contains(&operator.as_str()));
         assignments_before
-            .push(assignments_before.last().copied().unwrap_or(0) + usize::from(assigns));
+            .push(assignments_before.last().copied().unwrap_or(0) + u32::from(assigns));
     }
     for (index, token) in tokens.iter().enumerate() {
         match token {
@@ -544,7 +545,7 @@ fn classify_paren_ranges(tokens: &[Token], roles: &mut SyntaxRoles) {
             _ => {}
         }
     }
-    let mut depth = 0isize;
+    let mut depth = 0i32;
     for (index, change) in depth_changes.into_iter().enumerate() {
         depth += change;
         roles.inside_parenthesized_expression[index] = depth > 0;
