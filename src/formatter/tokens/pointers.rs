@@ -17,7 +17,7 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{last_unmatched_open_delimiter, trailing_matching_parens};
+use crate::formatter::text::line_scan::trailing_matching_parens;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     head_ends_assignment_operator, head_ends_binary_operator,
@@ -113,7 +113,7 @@ impl FormatEngine<'_> {
             return true;
         }
         let is_trailing_return_reference = matches!(next, Some(Token::Symbol(';' | '{')))
-            && crate::formatter::text::line_scan::statement_tail(&self.current).contains("->");
+            && self.current.statement_tail().contains("->");
         if self.pointer_in_template_type_context(next)
             || matches!(next, Some(Token::Symbol(')')))
                 && (self.current_in_cast_type_group()
@@ -647,7 +647,7 @@ impl FormatEngine<'_> {
         if let Some(declaration) = self.tree_declaration_context() {
             return declaration;
         }
-        match last_unmatched_open_delimiter(&self.current) {
+        match self.current.last_unmatched_open_delimiter() {
             Some(('(', open)) => {
                 let before = self.current[..open].trimmed_end();
                 if !before.is_empty() {

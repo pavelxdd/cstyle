@@ -66,11 +66,24 @@ pub(crate) fn bracket_starts_initializer_designator_by(
     end: usize,
     close_of: impl Fn(usize) -> Option<usize>,
 ) -> bool {
+    bracket_chain_starts_initializer_designator(tokens, start, end, close_of, |_| {})
+}
+
+/// [`bracket_starts_initializer_designator_by`], telling `visit` each `[` of
+/// the chain read: every one of them has the same answer.
+pub(crate) fn bracket_chain_starts_initializer_designator(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+    close_of: impl Fn(usize) -> Option<usize>,
+    mut visit: impl FnMut(usize),
+) -> bool {
     if !matches!(tokens.get(start), Some(Token::Symbol('['))) {
         return false;
     }
     let mut open = start;
     loop {
+        visit(open);
         let Some(close) = close_of(open) else {
             return false;
         };

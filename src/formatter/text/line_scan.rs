@@ -431,58 +431,84 @@ pub(crate) fn unmatched_open_paren_columns(line: &str) -> Vec<usize> {
 }
 
 pub(crate) fn last_unmatched_open_delimiter(line: &str) -> Option<(char, usize)> {
-    let indexed = line.char_indices().collect::<Vec<_>>();
-    let chars = indexed.iter().map(|&(_, ch)| ch).collect::<Vec<_>>();
-    let mut stack: Vec<(char, usize)> = Vec::new();
-    let mut index = 0;
-    let mut quote = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
+    let mut scan = DelimiterScan::default();
+    scan.advance(line.as_bytes(), line.len());
+    scan.last_open()
+}
 
-    while let Some(&ch) = chars.get(index) {
-        let next = chars.get(index + 1).copied();
+/// A scan for the `(` and `[` a line leaves open, outside literals and
+/// comments, that goes on as the line grows. Every byte that matters is
+/// ASCII, and no byte of a wider character equals one.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DelimiterScan {
+    scanned: usize,
+    open: Vec<(char, usize)>,
+    quote: Option<char>,
+    escaped: bool,
+    in_block_comment: bool,
+    /// A line comment ends the code.
+    ended: bool,
+}
 
-        if in_block_comment {
-            if ch == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-            } else {
-                index += 1;
-            }
-            continue;
-        }
-
-        if quote.is_some() {
-            advance_quoted_literal(ch, &mut quote, &mut escaped);
-            index += 1;
-            continue;
-        }
-
-        if ch == '/' && next == Some('/') {
-            break;
-        }
-        if ch == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-        if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
-            quote = Some(ch);
-            index += 1;
-            continue;
-        }
-
-        match ch {
-            '(' | '[' => stack.push((ch, indexed[index].0)),
-            ')' | ']' => {
-                stack.pop();
-            }
-            _ => {}
-        }
-        index += 1;
+impl DelimiterScan {
+    pub(crate) fn scanned(&self) -> usize {
+        self.scanned
     }
 
-    stack.pop()
+    /// Reads `bytes` on from where the scan stands, through the byte before
+    /// `end` and any byte that byte pairs with.
+    pub(crate) fn advance(&mut self, bytes: &[u8], end: usize) {
+        while !self.ended && self.scanned < end {
+            let index = self.scanned;
+            let byte = bytes[index];
+            let next = bytes.get(index + 1).copied();
+            if self.in_block_comment {
+                if byte == b'*' && next == Some(b'/') {
+                    self.in_block_comment = false;
+                    self.scanned += 2;
+                } else {
+                    self.scanned += 1;
+                }
+                continue;
+            }
+            if self.quote.is_some() {
+                advance_quoted_literal(char::from(byte), &mut self.quote, &mut self.escaped);
+                self.scanned += 1;
+                continue;
+            }
+            if byte == b'/' && next == Some(b'/') {
+                self.ended = true;
+                break;
+            }
+            if byte == b'/' && next == Some(b'*') {
+                self.in_block_comment = true;
+                self.scanned += 2;
+                continue;
+            }
+            let digit_separator = byte == b'\''
+                && index > 0
+                && bytes[index - 1].is_ascii_hexdigit()
+                && next.is_some_and(|next| next.is_ascii_hexdigit());
+            if byte == b'"' || (byte == b'\'' && !digit_separator) {
+                self.quote = Some(char::from(byte));
+                self.scanned += 1;
+                continue;
+            }
+            match byte {
+                b'(' | b'[' => self.open.push((char::from(byte), index)),
+                b')' | b']' => {
+                    self.open.pop();
+                }
+                _ => {}
+            }
+            self.scanned += 1;
+        }
+    }
+
+    /// The last `(` or `[` left open, with its byte offset.
+    pub(crate) fn last_open(&self) -> Option<(char, usize)> {
+        self.open.last().copied()
+    }
 }
 
 /// Byte offset of the first element after the last unmatched `{` when the
@@ -751,6 +777,89 @@ pub(crate) fn code_holds_word(line: &str, word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    fn last_unmatched_open_delimiter_by_chars(line: &str) -> Option<(char, usize)> {
+        let indexed = line.char_indices().collect::<Vec<_>>();
+        let chars = indexed.iter().map(|&(_, ch)| ch).collect::<Vec<_>>();
+        let mut stack: Vec<(char, usize)> = Vec::new();
+        let mut index = 0;
+        let mut quote = None;
+        let mut escaped = false;
+        let mut in_block_comment = false;
+        while let Some(&ch) = chars.get(index) {
+            let next = chars.get(index + 1).copied();
+            if in_block_comment {
+                if ch == '*' && next == Some('/') {
+                    in_block_comment = false;
+                    index += 2;
+                } else {
+                    index += 1;
+                }
+                continue;
+            }
+            if quote.is_some() {
+                advance_quoted_literal(ch, &mut quote, &mut escaped);
+                index += 1;
+                continue;
+            }
+            if ch == '/' && next == Some('/') {
+                break;
+            }
+            if ch == '/' && next == Some('*') {
+                in_block_comment = true;
+                index += 2;
+                continue;
+            }
+            if ch == '"' || (ch == '\'' && !crate::source::lex::is_digit_separator(&chars, index)) {
+                quote = Some(ch);
+                index += 1;
+                continue;
+            }
+            match ch {
+                '(' | '[' => stack.push((ch, indexed[index].0)),
+                ')' | ']' => {
+                    stack.pop();
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        stack.pop()
+    }
+
+    #[test]
+    fn delimiter_scan_read_as_its_line_grows_matches_a_scan_of_each_prefix() {
+        let pieces = [
+            "(", ")", "[", "]", "\"", "'", "/", "*", "\\", "a", "1", " ", "é", "//", "/*", "*/",
+        ];
+        let mut state = 0x6c07_8965_u32;
+        for _ in 0..3000 {
+            let mut line = String::new();
+            let mut scan = DelimiterScan::default();
+            for _ in 0..(state % 24) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                line.push_str(pieces[state as usize % pieces.len()]);
+                let bytes = line.as_bytes();
+                scan.advance(bytes, bytes.len() - 1);
+                let mut last = scan.clone();
+                last.advance(bytes, bytes.len());
+                assert_eq!(
+                    last.last_open(),
+                    last_unmatched_open_delimiter(&line),
+                    "{line:?}"
+                );
+                assert_eq!(
+                    last.last_open(),
+                    last_unmatched_open_delimiter_by_chars(&line),
+                    "{line:?}"
+                );
+            }
+            state = state.wrapping_add(1);
+        }
+    }
+
     use super::*;
 
     #[test]

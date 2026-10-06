@@ -52,6 +52,15 @@ use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{continuation, preprocessor, syntax};
 use crate::source::lex::{is_identifier_continue, trailing_word};
 
+/// A chain of subscripts read for an initializer designator: the tokens'
+/// address and length and the end it was read to, its `[`s in order, and its
+/// answer.
+struct DesignatorChain {
+    key: (usize, usize, usize),
+    opens: Vec<usize>,
+    answer: bool,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct TokenPushContext<'a> {
     pub(crate) next: Option<&'a Token>,
@@ -140,6 +149,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// The last chain of subscripts read for an initializer designator.
+    designator_chain_cache: std::cell::RefCell<Option<DesignatorChain>>,
     /// Each matched `[` of the tree with its `]`, in token order.
     bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
@@ -227,6 +238,7 @@ impl<'a> FormatEngine<'a> {
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
+            designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
             open_switch_cache: std::cell::Cell::new(None),
             constructor_colon_cache: std::cell::Cell::new(None),
@@ -652,6 +664,29 @@ impl<'a> FormatEngine<'a> {
             .map(|&index| index as usize)
     }
 
+    /// Whether the `[` at `open` starts an initializer designator. Each `[`
+    /// of a chain of subscripts has the chain's answer, kept for the next.
+    fn bracket_chain_designator(&self, tokens: &[Token], open: usize, end: usize) -> bool {
+        let key = (tokens.as_ptr() as usize, tokens.len(), end);
+        let mut cache = self.designator_chain_cache.borrow_mut();
+        if let Some(chain) = cache.as_ref()
+            && chain.key == key
+            && chain.opens.binary_search(&open).is_ok()
+        {
+            return chain.answer;
+        }
+        let mut opens = Vec::new();
+        let answer = initializers::bracket_chain_starts_initializer_designator(
+            tokens,
+            open,
+            end,
+            |open| self.bracket_close_before(open, end),
+            |open| opens.push(open),
+        );
+        *cache = Some(DesignatorChain { key, opens, answer });
+        answer
+    }
+
     fn template_opener_at(&self, index: usize) -> bool {
         self.template_openers
             .get_or_init(|| template_openers(&self.tree.tokens))
@@ -787,12 +822,7 @@ impl<'a> FormatEngine<'a> {
                     .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
         });
         let starts_initializer_designator = matches!(tokens[index], Token::Symbol('['))
-            && initializers::bracket_starts_initializer_designator_by(
-                tokens,
-                index,
-                line.end,
-                |open| self.bracket_close_before(open, line.end),
-            );
+            && self.bracket_chain_designator(tokens, index, line.end);
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
         let following_closer_width =
@@ -1281,7 +1311,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_statement_contains_assignment(&self) -> bool {
-        crate::formatter::text::line_scan::statement_tail(&self.current).contains('=')
+        self.current.statement_tail().contains('=')
     }
 
     pub(crate) fn current_ends_numeric_cast(&self) -> bool {

@@ -1,5 +1,6 @@
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
+use crate::formatter::text::line_scan::DelimiterScan;
 use crate::formatter::text::trim::Trimmed;
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
@@ -17,6 +18,7 @@ pub(crate) struct CurrentLine {
     declaration_segment: RefCell<DeclarationSegmentScan>,
     marks: Cell<LineMarks>,
     parens: RefCell<ParenScan>,
+    delimiters: RefCell<DelimiterScan>,
     /// Code tokens whose text is on the line so far.
     tokens: Option<TokenSpan>,
     /// Code token being pushed; text added meanwhile belongs to it.
@@ -343,6 +345,29 @@ impl CurrentLine {
         self.marks().statement_start
     }
 
+    /// `statement_tail` of the line.
+    pub(crate) fn statement_tail(&self) -> &str {
+        &self.text[self.marks().tail_start..]
+    }
+
+    /// `last_unmatched_open_delimiter` of the line, read on from where the
+    /// last call stopped; the last byte is read apart, as the byte after it
+    /// may change what it means.
+    pub(crate) fn last_unmatched_open_delimiter(&self) -> Option<(char, usize)> {
+        let bytes = self.text.as_bytes();
+        let mut scan = self.delimiters.borrow_mut();
+        if scan.scanned() > bytes.len() {
+            *scan = DelimiterScan::default();
+        }
+        scan.advance(bytes, bytes.len().saturating_sub(1));
+        if scan.scanned() < bytes.len() {
+            let mut last = scan.clone();
+            last.advance(bytes, bytes.len());
+            return last.last_open();
+        }
+        scan.last_open()
+    }
+
     /// The byte index of the `(` matching the last `)` of the line.
     pub(crate) fn last_close_paren_match(&self) -> Option<usize> {
         let mut scan = self.parens.borrow_mut();
@@ -402,6 +427,7 @@ impl CurrentLine {
         self.declaration_segment.take();
         self.marks.take();
         self.parens.take();
+        self.delimiters.take();
     }
 }
 
@@ -442,6 +468,8 @@ struct LineMarks {
     quote: Option<u8>,
     escaped: bool,
     statement_start: usize,
+    /// Past the last `;`, `{`, or `}`, literals or not.
+    tail_start: usize,
     last_open_bracket: Option<usize>,
     last_close_bracket: Option<usize>,
     last_question: Option<usize>,
@@ -461,6 +489,7 @@ impl LineMarks {
                 b'[' => self.last_open_bracket = Some(index),
                 b']' => self.last_close_bracket = Some(index),
                 b'?' => self.last_question = Some(index),
+                b';' | b'{' | b'}' => self.tail_start = index + 1,
                 _ => {}
             }
             if let Some(open) = self.quote {
