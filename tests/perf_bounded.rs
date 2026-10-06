@@ -482,6 +482,15 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             FormatOptions::default(),
         ),
         (
+            "initializer braces nested a line each",
+            format!(
+                "int a =\n{}1\n{};\n",
+                "{\n".repeat(n / 60),
+                "},\n".repeat(n / 60)
+            ),
+            FormatOptions::default(),
+        ),
+        (
             "a line of nested parens",
             format!("int x = {}a{};\n", "(".repeat(n / 6), " + b)".repeat(n / 6)),
             capped.clone(),

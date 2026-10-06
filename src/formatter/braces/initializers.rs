@@ -1134,9 +1134,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut depth = 0usize;
-        for previous in self.output.scoped().iter().rev() {
-            let trimmed_previous = previous.trimmed_end();
-            let mut chars = trimmed_previous.chars().rev();
+        for index in self.output.scoped_range().rev() {
+            let previous = &self.output[index];
+            // An indent holds no brace, and the braces a `{` follows end at
+            // the line's start as at its indent.
+            let mut chars = self.output.trimmed(index).chars().rev();
             while let Some(ch) = chars.next() {
                 match ch {
                     '}' => depth += 1,
