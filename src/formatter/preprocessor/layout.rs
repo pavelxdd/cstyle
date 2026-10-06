@@ -983,19 +983,27 @@ impl FormatEngine<'_> {
             if let Some(directive) = preprocessor_directive(previous_code.trimmed_start()) {
                 (previous, previous_code, directive)
             } else {
-                self.output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .skip_while(|line| line.as_str() != previous.as_str())
-                    .skip(1)
-                    .take(8)
-                    .find_map(|line| {
-                        let code = self.output.code_trimmed_of(line);
-                        let directive = preprocessor_directive(code.trimmed_start())?;
-                        (is_conditional_preprocessor(directive) && code.ends_with('\\'))
-                            .then_some((line, code, directive))
-                    })?
+                // The last 8 lines before the last one, which no blank one
+                // follows.
+                let last = self.output.last_non_empty_index()?;
+                let start = self.output.scoped_range().start.max(last.saturating_sub(8));
+                let index = self.output.last_line_looked(
+                    &self.continued_condition_look,
+                    start,
+                    last,
+                    |index| {
+                        let code = self.output.code_before_comment_trimmed(index);
+                        preprocessor_directive(code.trimmed_start())
+                            .is_some_and(is_conditional_preprocessor)
+                            && code.ends_with('\\')
+                    },
+                )?;
+                let code = self.output.code_before_comment_trimmed(index);
+                (
+                    &self.output[index],
+                    code,
+                    preprocessor_directive(code.trimmed_start())?,
+                )
             };
         if (previous_directive == "else" || previous_directive.starts_with("elif"))
             && let Some(spaces) = self
