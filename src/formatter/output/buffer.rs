@@ -37,8 +37,8 @@ pub(crate) struct LineBraceMeta {
     comment_code_end: u32,
     /// Unmatched `{` that `line_brace_imbalance` finds in `code`.
     code_opens: u32,
-    /// The ASCII bytes the line's code holds, one bit each.
-    code_bytes: [u64; 2],
+    /// Which of `{`, `}`, and `:` the line's code holds, one bit each.
+    code_marks: u8,
     /// Whether the line's text holds `new `.
     mentions_new: bool,
     /// Whether the trimmed line is `else` or ends with `} else`.
@@ -198,7 +198,7 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
         trim_start_byte: narrow(line.len() - line_start.len()),
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(code.len()),
-        code_bytes: ascii_bytes(&line.as_bytes()[..code.len()]),
+        code_marks: code_marks(&line.as_bytes()[..code.len()]),
         code_opens: match structural {
             Cow::Borrowed(_) => narrow(opens),
             Cow::Owned(_) => narrow(line_brace_imbalance(&line[..code.len()]).1),
@@ -216,15 +216,21 @@ fn compute_line_brace_meta(line: &str) -> LineBraceMeta {
     }
 }
 
-/// The set of ASCII bytes `text` holds.
-fn ascii_bytes(text: &[u8]) -> [u64; 2] {
-    let mut set = [0; 2];
-    for &byte in text {
-        if byte < 128 {
-            set[usize::from(byte >> 6)] |= 1 << (byte & 63);
-        }
+/// The bit `code_marks` gives `byte`, one of `{`, `}`, and `:`.
+fn code_mark(byte: u8) -> u8 {
+    match byte {
+        b'{' => 1,
+        b'}' => 1 << 1,
+        b':' => 1 << 2,
+        _ => unreachable!("only braces and colons are marked"),
     }
-    set
+}
+
+/// Which of `{`, `}`, and `:` `text` holds.
+fn code_marks(text: &[u8]) -> u8 {
+    text.iter()
+        .filter(|&&byte| matches!(byte, b'{' | b'}' | b':'))
+        .fold(0, |marks, &byte| marks | code_mark(byte))
 }
 
 /// Where `line`'s code before a trailing comment ends, before and after
@@ -250,7 +256,7 @@ fn compute_raw_literal_line_meta(line: &str, structural_start: usize) -> LineBra
         trim_start_byte: narrow(line.len() - line_start.len()),
         trim_end_byte: narrow(line.trimmed_end().len()),
         code_end_byte: narrow(line.len()),
-        code_bytes: ascii_bytes(line.as_bytes()),
+        code_marks: code_marks(line.as_bytes()),
         code_opens: narrow(line_brace_imbalance(line).1),
         paren_closes: narrow(paren_closes),
         paren_open_count: narrow(paren_opens.len()),
@@ -694,7 +700,7 @@ impl OutputBuffer {
                     trim_start_byte: narrow(line.len() - line.trimmed_start().len()),
                     trim_end_byte: narrow(line.trimmed_end().len()),
                     code_end_byte: narrow(0),
-                    code_bytes: [0; 2],
+                    code_marks: 0,
                     code_opens: narrow(0),
                     paren_closes: narrow(0),
                     paren_open_count: narrow(0),
@@ -795,10 +801,9 @@ impl OutputBuffer {
         self.brace_meta(index).code_opens > 0
     }
 
-    /// Whether `code(index)` holds the ASCII `byte`.
+    /// Whether `code(index)` holds `byte`, one of `{`, `}`, and `:`.
     pub(crate) fn code_has(&self, index: usize, byte: u8) -> bool {
-        debug_assert!(byte.is_ascii());
-        self.brace_meta(index).code_bytes[usize::from(byte >> 6)] >> (byte & 63) & 1 == 1
+        self.brace_meta(index).code_marks & code_mark(byte) != 0
     }
 
     pub(crate) fn code_trimmed(&self, index: usize) -> &str {

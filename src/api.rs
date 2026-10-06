@@ -51,15 +51,20 @@ pub fn format(source: &str, options: &FormatOptions) -> String {
 /// line endings when `options.line_ending` is `Preserve`, and a missing final
 /// line break.
 pub fn format_bytes(input: &[u8], options: &FormatOptions) -> io::Result<Vec<u8>> {
+    format_owned_bytes(input.to_vec(), options)
+}
+
+/// `format_bytes` of input it takes, so the source is not copied.
+pub(crate) fn format_owned_bytes(input: Vec<u8>, options: &FormatOptions) -> io::Result<Vec<u8>> {
     if u32::try_from(input.len()).is_err() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "input is larger than 4 GiB",
         ));
     }
-    let source = DecodedSource::from_bytes(input)?;
+    let mut source = DecodedSource::from_vec(input)?;
     let options = resolve_preserved_line_ending(options, source.observed_line_ending());
-    let mut output = formatter::format(source.text(), &options);
+    let mut output = formatter::format_owned(source.take_text(), &options);
     if !source.had_final_line_break() {
         let line_break = options.line_break();
         if output.ends_with(line_break) {

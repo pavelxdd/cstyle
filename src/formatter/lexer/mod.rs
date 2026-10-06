@@ -147,7 +147,14 @@ fn is_known_hash_directive(directive: &str) -> bool {
 }
 
 pub(crate) fn tokenize(source: &str) -> Vec<Token> {
-    let shared = std::rc::Rc::new(source.to_owned());
+    tokenize_owned(source.to_owned())
+}
+
+/// `tokenize` of a source it takes, which the tokens' texts share.
+pub(crate) fn tokenize_owned(mut source: String) -> Vec<Token> {
+    source.shrink_to_fit();
+    let shared = std::rc::Rc::new(source);
+    let source: &str = &shared;
     let text = |start: usize, end: usize| TokenText::slice(&shared, start, end);
     let bytes = source.as_bytes();
     // A token takes some four bytes of source on average.
@@ -651,6 +658,28 @@ pub(crate) fn matching_closes(tokens: &[Token], open: char, close: char) -> Vec<
         }
     }
     closes
+}
+
+/// The matched `open`s of `tokens` with the `close` matching each, in token
+/// order.
+pub(crate) fn matching_close_pairs(tokens: &[Token], open: char, close: char) -> Vec<(u32, u32)> {
+    let mut pairs = Vec::new();
+    let mut opens = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Symbol(symbol) if *symbol == open => opens.push(index),
+            Token::Symbol(symbol) if *symbol == close => {
+                if let Some(opener) = opens.pop() {
+                    let narrow =
+                        |index: usize| u32::try_from(index).expect("a token index fits in u32");
+                    pairs.push((narrow(opener), narrow(index)));
+                }
+            }
+            _ => {}
+        }
+    }
+    pairs.sort_unstable();
+    pairs
 }
 
 pub(crate) fn previous_non_layout_token_index(tokens: &[Token], before: usize) -> Option<usize> {

@@ -16,8 +16,8 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::continuation::max_length::MaxLengthLineState;
 use crate::formatter::index_hash::{IndexMap, IndexSet};
 use crate::formatter::lexer::{
-    CommentKind, Token, TokenLine, TokenLineCursor, matching_closes, next_non_layout_token_index,
-    next_non_whitespace, token_char_len, token_text,
+    CommentKind, Token, TokenLine, TokenLineCursor, matching_close_pairs,
+    next_non_layout_token_index, next_non_whitespace, token_char_len, token_text,
 };
 use crate::formatter::output::block_spacing::BlockSpacingState;
 use crate::formatter::output::member_spacing::MemberSpacingBoundary;
@@ -140,8 +140,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
-    /// The `]` matching each `[` of the tree.
-    bracket_closes: std::cell::OnceCell<Vec<u32>>,
+    /// Each matched `[` of the tree with its `]`, in token order.
+    bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
     case_labels: std::cell::OnceCell<Vec<u32>>,
     /// The last statement start astyle's stack found: the address of the
@@ -619,11 +619,13 @@ impl<'a> FormatEngine<'a> {
 
     /// The `]` closing the `[` at `open` before `end`.
     fn bracket_close_before(&self, open: usize, end: usize) -> Option<usize> {
-        self.bracket_closes
-            .get_or_init(|| matching_closes(&self.tree.tokens, '[', ']'))
-            .get(open)
-            .map(|&close| close as usize)
-            .filter(|&close| close < end)
+        let pairs = self
+            .bracket_closes
+            .get_or_init(|| matching_close_pairs(&self.tree.tokens, '[', ']'));
+        let at = pairs
+            .binary_search_by_key(&open, |&(opener, _)| opener as usize)
+            .ok()?;
+        Some(pairs[at].1 as usize).filter(|&close| close < end)
     }
 
     /// The `case` and `default` words after `start` and before `end`, last

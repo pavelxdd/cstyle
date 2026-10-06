@@ -2259,50 +2259,61 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         };
     }
     let token_count = tokens.len();
-    let mut output = Vec::with_capacity(token_count + added);
-    let mut added_closers = IndexSet::default();
-    let mut overruns = IndexMap::default();
-    let mut append_inserted =
-        |output: &mut Vec<Token>, inserted: &mut Vec<Token>, overrun: Option<usize>| {
-            for token in inserted.drain(..) {
-                match token {
-                    Token::Symbol('}') => {
-                        added_closers.insert(output.len());
+    // The tokens move back to make room in place, the last first, so the
+    // source tokens are never held twice.
+    let mut tokens = owned_tokens;
+    for (index, replacement) in replace {
+        tokens[index] = replacement;
+    }
+    // Nothing goes in past the end of the tokens.
+    insert_before.split_off(&(token_count + 1));
+    let added = insert_before.values().map(Vec::len).sum::<usize>();
+    tokens.reserve_exact(added);
+    tokens.resize_with(token_count + added, || Token::Newline);
+    let mut write = tokens.len();
+    let mut closers = Vec::new();
+    let mut overruns = Vec::new();
+    let mut place_inserted = |tokens: &mut Vec<Token>,
+                              write: &mut usize,
+                              inserted: Vec<Token>,
+                              overrun: Option<usize>| {
+        for token in inserted.into_iter().rev() {
+            *write -= 1;
+            match token {
+                Token::Symbol('}') => closers.push(*write),
+                Token::Symbol('{') => {
+                    if let Some(overrun) = overrun {
+                        overruns.push((*write, overrun));
                     }
-                    Token::Symbol('{') => {
-                        if let Some(overrun) = overrun {
-                            overruns.insert(output.len(), overrun);
-                        }
-                    }
-                    _ => {}
                 }
-                output.push(token);
+                _ => {}
             }
-        };
-    for (index, token) in owned_tokens.into_iter().enumerate() {
-        if let Some(mut inserted) = insert_before
-            .first_entry()
+            tokens[*write] = token;
+        }
+    };
+    if let Some(inserted) = insert_before.remove(&token_count) {
+        place_inserted(&mut tokens, &mut write, inserted, None);
+    }
+    for index in (0..token_count).rev() {
+        write -= 1;
+        tokens.swap(index, write);
+        if let Some(inserted) = insert_before
+            .last_entry()
             .filter(|entry| *entry.key() == index)
         {
-            append_inserted(
-                &mut output,
-                inserted.get_mut(),
+            place_inserted(
+                &mut tokens,
+                &mut write,
+                inserted.remove(),
                 opener_overruns.get(&index).copied(),
             );
-            inserted.remove();
-        }
-        match replace.first_entry().filter(|entry| *entry.key() == index) {
-            Some(replacement) => output.push(replacement.remove()),
-            None => output.push(token),
         }
     }
-    if let Some(mut inserted) = insert_before.remove(&token_count) {
-        append_inserted(&mut output, &mut inserted, None);
-    }
+    debug_assert_eq!(write, 0);
     AddedBraces {
-        tokens: output,
-        closers: added_closers,
-        opener_overruns: overruns,
+        tokens,
+        closers: closers.into_iter().rev().collect(),
+        opener_overruns: overruns.into_iter().rev().collect(),
     }
 }
 

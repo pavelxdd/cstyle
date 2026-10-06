@@ -40,7 +40,7 @@ fn format_stream(
 ) -> io::Result<()> {
     let mut input = Vec::new();
     reader.read_to_end(&mut input)?;
-    writer.write_all(&api::format_bytes(&input, options)?)
+    writer.write_all(&api::format_owned_bytes(input, options)?)
 }
 
 fn format_stream_to_path(

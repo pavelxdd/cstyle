@@ -19,7 +19,8 @@ pub(crate) struct DecodedSource {
 }
 
 impl DecodedSource {
-    pub(crate) fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
+    /// Decodes `bytes`; UTF-8 input becomes the text as it is.
+    pub(crate) fn from_vec(bytes: Vec<u8>) -> io::Result<Self> {
         if bytes.starts_with(&[0x00, 0x00, 0xFE, 0xFF])
             || bytes.starts_with(&[0xFF, 0xFE, 0x00, 0x00])
         {
@@ -39,9 +40,9 @@ impl DecodedSource {
                 TextEncoding::Utf16Be,
             )
         } else {
-            match std::str::from_utf8(bytes) {
-                Ok(text) => (text.to_string(), TextEncoding::Utf8),
-                Err(_) => (decode_latin1(bytes), TextEncoding::Latin1),
+            match String::from_utf8(bytes) {
+                Ok(text) => (text, TextEncoding::Utf8),
+                Err(error) => (decode_latin1(error.as_bytes()), TextEncoding::Latin1),
             }
         };
         let had_final_line_break = text.ends_with('\n') || text.ends_with('\r');
@@ -54,8 +55,9 @@ impl DecodedSource {
         })
     }
 
-    pub(crate) fn text(&self) -> &str {
-        &self.text
+    /// Takes the text out, leaving none.
+    pub(crate) fn take_text(&mut self) -> String {
+        std::mem::take(&mut self.text)
     }
 
     pub(crate) fn had_final_line_break(&self) -> bool {

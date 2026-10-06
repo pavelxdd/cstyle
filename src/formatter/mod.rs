@@ -12,7 +12,7 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{Token, tokenize};
+use crate::formatter::lexer::{Token, tokenize_owned};
 use crate::formatter::output::finish::EmptyFillSource;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::tabs;
@@ -37,17 +37,26 @@ mod tokens;
 mod tests;
 
 pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
-    let input = line_endings::normalize(source);
-    let converted_source = (options.convert_tabs && input.contains('\t'))
-        .then(|| tabs::source_to_spaces(&input, options.tab_width));
-    let source = converted_source.as_deref().unwrap_or(&input);
+    format_owned(source.to_owned(), options)
+}
+
+/// `format` of a source it takes, which becomes the text its tokens share.
+pub(crate) fn format_owned(source: String, options: &FormatOptions) -> String {
+    let normalized = match line_endings::normalize(&source) {
+        std::borrow::Cow::Owned(normalized) => Some(normalized),
+        std::borrow::Cow::Borrowed(_) => None,
+    };
+    let source = normalized.unwrap_or(source);
+    let source = if options.convert_tabs && source.contains('\t') {
+        tabs::source_to_spaces(&source, options.tab_width)
+    } else {
+        source
+    };
     let may_have_backslash_body = source.contains('\\');
     let may_have_swig = source.contains('%');
     let may_have_hash = source.contains('#');
     let may_have_noexcept = source.contains("noexcept");
-    let tokens = tokenize(source);
-    drop(converted_source);
-    drop(input);
+    let tokens = tokenize_owned(source);
     // Tab-indented styles are laid out in spaces and get their tabs once the
     // output is finished.
     let spaced_options = (options.indent_style != IndentStyle::Spaces).then(|| {
