@@ -494,23 +494,13 @@ impl FormatEngine<'_> {
             .any(|line| is_lambda_body_header(line.trimmed_end()));
         if should_indent_closing_brace || self.layout.nesting.last_closed_brace_extra_indent > 0 {
             if closing_brace_is_lambda && matches!(next, Some(Token::Symbol(';' | ','))) {
-                self.layout.continuation_indent.next_line_indent =
-                    Some(self.layout.indentation.indent());
+                self.layout.continuation_indent.next_line_indent = Some(self.statement_level());
             } else {
-                self.layout.continuation_indent.next_line_indent = Some(
-                    self.layout.indentation.indent()
-                        + 1
-                        + self.case_body_indent_extra(LineKind::Normal),
-                );
+                self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             }
             self.layout.continuation_indent.next_line_indent_spaces = None;
-        } else if matches!(next, Some(Token::Symbol(';'))) {
-            self.layout.continuation_indent.next_line_indent = Some(
-                self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal),
-            );
-        } else if matches!(next, Some(Token::Symbol(','))) {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent());
+        } else if matches!(next, Some(Token::Symbol(';' | ','))) {
+            self.layout.continuation_indent.next_line_indent = Some(self.statement_level());
         } else {
             self.layout.continuation_indent.next_line_indent = None;
         }

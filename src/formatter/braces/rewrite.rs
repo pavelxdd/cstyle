@@ -428,7 +428,7 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent() + 1);
+                .set_next_line_level(self.statement_level() + 1);
             self.layout.command_state.current_header = None;
         }
         let following_index = next_statement_token(tokens, close_index + 1, line_end, false);
@@ -624,7 +624,7 @@ impl FormatEngine<'_> {
                     self.finish_line();
                     self.layout
                         .continuation_indent
-                        .set_next_line_level(self.layout.indentation.indent() + 1);
+                        .set_next_line_level(self.statement_level() + 1);
                     self.preprocessor.split_else.extra_indent = true;
                     self.preprocessor.split_else.extra_levels += 1;
                     self.preprocessor.split_else.pending_body = false;
@@ -640,7 +640,7 @@ impl FormatEngine<'_> {
                     self.finish_line();
                     self.layout
                         .continuation_indent
-                        .set_next_line_level(self.layout.indentation.indent() + 1);
+                        .set_next_line_level(self.statement_level() + 1);
                     self.preprocessor.split_else.pending_body = false;
                     self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
                     self.layout.command_state.preprocessor_after_header = false;
@@ -1235,7 +1235,7 @@ impl FormatEngine<'_> {
         {
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent());
+                .set_next_line_level(self.statement_level());
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
@@ -1264,7 +1264,7 @@ impl FormatEngine<'_> {
         {
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent() + 1);
+                .set_next_line_level(self.statement_level() + 1);
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
@@ -1281,7 +1281,7 @@ impl FormatEngine<'_> {
         {
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent());
+                .set_next_line_level(self.statement_level());
         }
         // A one-line enum body on its own line stays there.
         if brace_type == BraceType::Enum
@@ -1534,7 +1534,7 @@ impl FormatEngine<'_> {
             );
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent() + brace_indent);
+                .set_next_line_level(self.statement_level() + brace_indent);
         }
         let source_gap = match tokens.get(start.wrapping_sub(1)) {
             Some(Token::Whitespace(gap)) => Some(gap.as_str()),

@@ -168,7 +168,7 @@ impl FormatEngine<'_> {
         }
         self.layout
             .continuation_indent
-            .set_next_line_level(self.layout.indentation.indent() + 1);
+            .set_next_line_level(self.statement_level() + 1);
         self.layout.split_class_export_pending_base = true;
     }
 

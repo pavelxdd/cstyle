@@ -4489,3 +4489,28 @@ fn padding_a_statement_broken_off_its_line_takes_from_its_comment_gap() {
         "void f (void)\n{\n    a (L1);\n    x (a,b); /* d */\n    a (L1);\n    x (a,b);   /* e */\n}\n",
     );
 }
+
+#[test]
+fn run_in_brace_line_keeps_trailing_comment_column_past_inner_braces() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f()\n{   Error err = {0};               /* Error code and message */\n    return 0; }\n";
+    let expected = "void f()\n{   Error err = {0 };              /* Error code and message */\n    return 0; }\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn nested_run_in_braces_keep_trailing_comment_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let input = "static const struct t list[] =\n{   {   2,                            /* iVersion */\n        \"x\"                           /* zName */\n    }\n};\n";
+    let expected = "static const struct t list[] =\n{   {   2,                            /* iVersion */\n        \"x\"                           /* zName */\n    }\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

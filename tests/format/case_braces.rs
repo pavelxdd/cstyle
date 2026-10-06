@@ -1458,3 +1458,59 @@ fn kr_broken_case_block_with_indent_cases_is_idempotent() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn indented_case_block_keeps_one_line_block_after_header_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--indent-switches".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (x)\n    {\n    case 0:\n    {\n        x = 1;\n        if (rc)\n        { return 0; }\n        y = 2;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x)\n    {\n        case 0:\n        {\n            x = 1;\n            if (rc)\n            { return 0; }\n            y = 2;\n            break;\n        }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn indented_case_block_keeps_initializer_on_next_line_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--indent-switches".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (x)\n    {\n    case 1:\n    {\n        z = 0;\n        struct s g =\n        { .a = 2, };\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x)\n    {\n        case 1:\n        {\n            z = 0;\n            struct s g =\n            { .a = 2, };\n            break;\n        }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn indented_case_block_attaches_array_brace_without_losing_the_line_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (x)\n    {\n    case 1:\n    {\n        z = 0;\n        int a[] =\n        {\n            1, 2,\n            3\n        };\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n        case 1: {\n            z = 0;\n            int a[] = {\n                1, 2,\n                3\n            };\n            break;\n        }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

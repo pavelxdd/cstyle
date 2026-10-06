@@ -1852,13 +1852,17 @@ impl FormatEngine<'_> {
         Some(stream.operator_output_column)
     }
 
+    /// The level of a statement line here, with a case body's extra level
+    /// under indented switches.
+    pub(crate) fn statement_level(&self) -> usize {
+        self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal)
+    }
+
     pub(crate) fn continuation_base_indent(&self) -> usize {
         let braceless_extra = self.layout.pending_braceless_block_bias.map_or(0, |level| {
             level.saturating_sub(self.layout.indentation.indent())
         });
-        self.layout.indentation.indent()
-            + braceless_extra
-            + self.case_body_indent_extra(LineKind::Normal)
+        self.statement_level() + braceless_extra
     }
 
     pub(crate) fn apply_min_conditional_indent(&self, base_spaces: usize, spaces: usize) -> usize {

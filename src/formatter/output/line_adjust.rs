@@ -19,6 +19,7 @@ pub struct LineAdjuster {
     empty_line_fill: bool,
     case_processing_enabled: bool,
     line_observe_enabled: bool,
+    last_line_case_unindent: usize,
 }
 
 impl LineAdjuster {
@@ -35,6 +36,7 @@ impl LineAdjuster {
             empty_line_fill: options.empty_line_fill,
             case_processing_enabled: true,
             line_observe_enabled: true,
+            last_line_case_unindent: 0,
         }
     }
 
@@ -77,11 +79,22 @@ impl LineAdjuster {
         } else {
             line
         };
+        self.last_line_case_unindent = if self.case_processing_enabled {
+            self.switch_case_transformer.line_unindent()
+        } else {
+            0
+        };
         self.convert_line_tabs(line)
+    }
+
+    /// The columns the last adjusted line lost to case unindents.
+    pub fn last_line_case_unindent(&self) -> usize {
+        self.last_line_case_unindent
     }
 
     pub fn adjust_raw_literal_line(&mut self, line: String) -> String {
         self.switch_case_transformer.begin_line();
+        self.last_line_case_unindent = 0;
         let observed_suffix = self
             .switch_case_transformer
             .raw_literal_suffix_start(&line)

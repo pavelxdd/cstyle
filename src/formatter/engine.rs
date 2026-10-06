@@ -1743,7 +1743,7 @@ impl<'a> FormatEngine<'a> {
                 self.layout.nesting.clear_continuation_indents();
                 self.layout
                     .continuation_indent
-                    .set_next_line_level(self.layout.indentation.indent() + 1);
+                    .set_next_line_level(self.statement_level() + 1);
                 if self.next_line.leads_with_class_base {
                     self.layout.in_class_base_clause = true;
                 }
@@ -1883,7 +1883,7 @@ impl<'a> FormatEngine<'a> {
             if self.newline_breaks_statement {
                 self.layout
                     .continuation_indent
-                    .set_next_line_level(self.layout.indentation.indent() + 1);
+                    .set_next_line_level(self.statement_level() + 1);
                 self.layout.objc.method_continuation = true;
             } else {
                 self.layout.objc.method_continuation = self.next_line.leads_with_open_brace;
@@ -1908,7 +1908,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.layout.indentation.indent() + 1);
+                .set_next_line_level(self.statement_level() + 1);
             self.previous_was_newline = true;
         } else if self.current[..self.current_trailing_comment_split_limit()]
             .trimmed_end()

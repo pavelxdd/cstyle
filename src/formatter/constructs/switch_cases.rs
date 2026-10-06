@@ -423,6 +423,7 @@ pub(crate) struct SwitchCaseLineTransformer {
     quote_char: char,
     raw_string_delimiter: Option<String>,
     marked_label_colon: Option<usize>,
+    line_unindent: usize,
     line_number: usize,
     tab_width: usize,
     indent_width: usize,
@@ -449,6 +450,7 @@ impl SwitchCaseLineTransformer {
             quote_char: '\'',
             raw_string_delimiter: None,
             marked_label_colon: None,
+            line_unindent: 0,
             line_number: 0,
             tab_width: options.tab_width,
             indent_width: options.indent_width,
@@ -481,6 +483,7 @@ impl SwitchCaseLineTransformer {
     pub(crate) fn transform_line(&mut self, mut line: String) -> String {
         self.should_unindent_line = true;
         self.should_unindent_comment = false;
+        self.line_unindent = 0;
 
         if line.is_empty() && !self.empty_line_fill {
             return line;
@@ -499,16 +502,21 @@ impl SwitchCaseLineTransformer {
 
         let unindent_depth = self.total_unindent_depth();
         if self.should_unindent_comment && unindent_depth > 0 {
-            self.unindent_line(&mut line, unindent_depth - 1);
+            self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
         } else if self.should_unindent_line && unindent_depth > 0 {
-            self.unindent_line(&mut line, unindent_depth);
+            self.line_unindent += self.unindent_line(&mut line, unindent_depth);
         }
         line
     }
 
+    /// The columns the last transformed line lost to case unindents.
+    pub(crate) fn line_unindent(&self) -> usize {
+        self.line_unindent
+    }
+
     fn parse_line(&mut self, line: &mut String, is_preprocessor: bool) {
         for levels in self.scan_line(line, is_preprocessor) {
-            self.unindent_line(line, levels);
+            self.line_unindent += self.unindent_line(line, levels);
         }
     }
 

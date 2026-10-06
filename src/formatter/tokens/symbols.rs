@@ -1436,8 +1436,7 @@ impl FormatEngine<'_> {
             && !matches!(next, Some(Token::Newline | Token::Comment(_, _)) | None)
         {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
+            self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         } else if break_after_ternary_colon {

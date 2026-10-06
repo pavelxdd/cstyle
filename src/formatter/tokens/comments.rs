@@ -728,8 +728,7 @@ impl FormatEngine<'_> {
 
         if self.should_break_header_before_comment() {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
+            self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.layout.command_state.header_broken_before_comment = true;
         }
@@ -1571,8 +1570,7 @@ impl FormatEngine<'_> {
             }
         }
         if function_try_initializer_comment {
-            self.layout.continuation_indent.next_line_indent =
-                Some(self.layout.indentation.indent() + 1);
+            self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             self.layout.continuation_indent.next_line_indent_spaces = None;
             self.previous_was_newline = true;
         }
@@ -3134,6 +3132,7 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
     let mut first_code_is_open_brace = false;
     let mut last_code_is_open_brace = false;
     for token in tokens {
+        let code_before_token = code_after_open_brace;
         if !seen_code
             && !matches!(
                 token,
@@ -3201,8 +3200,11 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
                 seen_code = true;
                 seen_token = true;
                 open_brace_depth += 1;
-                code_after_open_brace = false;
-                pending_segment_start = true;
+                // Braces within the block's code leave its segment as it is.
+                if open_brace_depth == 1 || !code_before_token {
+                    code_after_open_brace = false;
+                    pending_segment_start = true;
+                }
                 column += 1;
             }
             Token::Symbol('}') => {
