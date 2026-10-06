@@ -279,7 +279,7 @@ impl FormatEngine<'_> {
         if self.template_continuation_closes_on_line(trimmed) {
             return false;
         }
-        let code_before_trailing_comment = self.output.code_of(trimmed).trimmed_end();
+        let code_before_trailing_comment = self.current_code_before_trailing_comment();
         let line_comment_limit = line_comment_split_limit(trimmed);
         let code_before_line_comment = trimmed[..line_comment_limit].trimmed_end();
         if line_comment_limit < trimmed.len()
@@ -1653,20 +1653,23 @@ impl FormatEngine<'_> {
         if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
             return None;
         }
-        let line = self.current.trimmed_end();
-        let code = self.output.code_of(line).trimmed_end();
+        if !self.current.holds_equals() {
+            return None;
+        }
+        let code = self.current_code_before_trailing_comment();
         if code.ends_with(':') && find_case_colon(code).is_some() {
             return None;
         }
-        let mut search_start = 0;
-        let mut last_operator = None;
-        while let Some((relative_start, operator)) = find_assignment_operator(&code[search_start..])
-        {
-            let operator_start = search_start + relative_start;
-            last_operator = Some((operator_start, operator));
-            search_start = operator_start + operator.len();
-        }
-        let (operator_start, operator) = last_operator?;
+        // Decisions within the last bytes may change as the line grows.
+        let mut scan = self
+            .current
+            .assignment_chain()
+            .filter(|scan| scan.index() + 3 <= code.len())
+            .unwrap_or_default();
+        scan.advance(code, code.len().saturating_sub(3));
+        self.current.set_assignment_chain(scan);
+        scan.advance(code, code.len());
+        let (operator_start, operator) = scan.last()?;
         let after_operator = operator_start + operator.len();
         let rest = &code[after_operator..];
         let value = rest.trimmed_start();

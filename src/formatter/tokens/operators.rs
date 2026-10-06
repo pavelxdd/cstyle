@@ -139,6 +139,116 @@ pub(crate) fn find_assignment_operator(line: &str) -> Option<(usize, &'static st
     None
 }
 
+/// The last assignment operator of `code` found search after search, each
+/// starting past the operator the last found, read on as the code grows.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct AssignmentChainScan {
+    search_start: usize,
+    last: Option<(usize, &'static str)>,
+    /// Where the search stands in `code`, and its state there.
+    index: usize,
+    quote: Option<u8>,
+    escaped: bool,
+    in_block_comment: bool,
+    paren_depth: usize,
+    bracket_depth: usize,
+    /// A line comment ended the search.
+    ended: bool,
+}
+
+impl AssignmentChainScan {
+    /// Where the scan stands; what it read before reaches two bytes on.
+    pub(crate) fn index(&self) -> usize {
+        self.index
+    }
+
+    /// The last operator found, as `find_assignment_operator` finds each.
+    pub(crate) fn last(&self) -> Option<(usize, &'static str)> {
+        self.last
+    }
+
+    /// Reads `code` on until the scan stands at `limit` or past it.
+    pub(crate) fn advance(&mut self, code: &str, limit: usize) {
+        let limit = limit.min(code.len());
+        while !self.ended && self.index < limit {
+            self.step(code);
+        }
+    }
+
+    fn step(&mut self, code: &str) {
+        let line = &code[self.search_start..];
+        let bytes = line.as_bytes();
+        let index = self.index - self.search_start;
+        let ch = bytes[index];
+        let next = bytes.get(index + 1).copied();
+        if self.in_block_comment {
+            if ch == b'*' && next == Some(b'/') {
+                self.in_block_comment = false;
+                self.index += 2;
+            } else {
+                self.index += 1;
+            }
+            return;
+        }
+        if let Some(quote_char) = self.quote {
+            if self.escaped {
+                self.escaped = false;
+            } else if ch == b'\\' {
+                self.escaped = true;
+            } else if ch == quote_char {
+                self.quote = None;
+            }
+            self.index += 1;
+            return;
+        }
+        if ch == b'/' && next == Some(b'/') {
+            self.ended = true;
+            return;
+        }
+        if ch == b'/' && next == Some(b'*') {
+            self.in_block_comment = true;
+            self.index += 2;
+            return;
+        }
+        if ch == b'"' || ch == b'\'' {
+            self.quote = Some(ch);
+            self.index += 1;
+            return;
+        }
+        match ch {
+            b'(' => self.paren_depth += 1,
+            b')' => self.paren_depth = self.paren_depth.saturating_sub(1),
+            b'[' => self.bracket_depth += 1,
+            b']' => self.bracket_depth = self.bracket_depth.saturating_sub(1),
+            _ => {}
+        }
+        if self.paren_depth == 0
+            && self.bracket_depth == 0
+            && matches!(
+                ch,
+                b'=' | b'+' | b'-' | b'*' | b'/' | b'%' | b'&' | b'|' | b'^' | b'<' | b'>'
+            )
+        {
+            for &operator in language::ASSIGNMENT_OPERATORS {
+                if line[index..].starts_with(operator)
+                    && is_assignment_operator_boundary(line, index, operator)
+                    && !operator_overload_token_precedes(line, index)
+                {
+                    self.last = Some((self.index, operator));
+                    *self = AssignmentChainScan {
+                        search_start: self.index + operator.len(),
+                        last: self.last,
+                        index: self.index + operator.len(),
+                        ..AssignmentChainScan::default()
+                    };
+                    return;
+                }
+            }
+        }
+        self.index += 1;
+    }
+}
+
 fn operator_overload_token_precedes(line: &str, index: usize) -> bool {
     let before = line[..index].trimmed_end();
     before.ends_with("operator")
@@ -1641,7 +1751,45 @@ impl FormatEngine<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::find_assignment_operator;
+    use super::{AssignmentChainScan, find_assignment_operator};
+
+    /// The last of the assignment operators found search after search.
+    fn last_chained_assignment(code: &str) -> Option<(usize, &'static str)> {
+        let mut search_start = 0;
+        let mut last = None;
+        while let Some((start, operator)) = find_assignment_operator(&code[search_start..]) {
+            last = Some((search_start + start, operator));
+            search_start += start + operator.len();
+        }
+        last
+    }
+
+    #[test]
+    fn assignment_chain_scan_read_as_its_code_grows_matches_a_search_of_each_prefix() {
+        let pieces = [
+            "=", "+", "<", ">", "!", "(", ")", "[", "]", "\"", "'", "/", "*", "\\", "a", " ", "é",
+            "//", "/*", "*/", "operator", "<<=", ">>=",
+        ];
+        let mut state = 0x2545_f491_u32;
+        for _ in 0..3000 {
+            let mut code = String::new();
+            let mut scan = AssignmentChainScan::default();
+            for _ in 0..(state % 24) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                code.push_str(pieces[state as usize % pieces.len()]);
+                if scan.index() + 3 > code.len() {
+                    scan = AssignmentChainScan::default();
+                }
+                scan.advance(&code, code.len().saturating_sub(3));
+                let mut whole = scan;
+                whole.advance(&code, code.len());
+                assert_eq!(whole.last(), last_chained_assignment(&code), "{code:?}");
+            }
+            state = state.wrapping_add(1);
+        }
+    }
 
     #[test]
     fn finds_top_level_assignment_operators() {

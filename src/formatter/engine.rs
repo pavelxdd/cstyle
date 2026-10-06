@@ -194,9 +194,9 @@ pub(crate) struct FormatEngine<'a> {
     bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
     case_labels: std::cell::OnceCell<Vec<u32>>,
-    /// The last statement start astyle's stack found: the address of the
-    /// tokens, the token it looked back from, and the start.
-    pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The tokens the last looks back for astyle's statement start passed.
+    pub(crate) stack_start_cache:
+        std::cell::RefCell<crate::formatter::output::layout::astyle_stack::StackStartPath>,
     /// The last brace or newline token looked for: the tokens' address,
     /// where the look started, and the token found.
     pub(crate) brace_or_newline_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
@@ -207,6 +207,9 @@ pub(crate) struct FormatEngine<'a> {
     /// parens, and their first brace and last that is no compound literal's.
     pub(crate) paren_braces_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::ParenBraces>>,
+    /// The last look back from a `:` for a `case`.
+    pub(crate) case_label_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::CaseLabelLook>>,
     /// The last look for an assignment stacked in a statement.
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
@@ -291,10 +294,11 @@ impl<'a> FormatEngine<'a> {
             open_paren_scan_cache: std::cell::Cell::new(None),
             macro_call_context_cache: std::cell::Cell::new(None),
             line_comment_cache: std::cell::Cell::new(None),
-            stack_start_cache: std::cell::Cell::new(None),
+            stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
             paren_braces_cache: std::cell::Cell::new(None),
+            case_label_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
@@ -1069,7 +1073,7 @@ impl<'a> FormatEngine<'a> {
                 }
             }
         }
-        self.layout.line_state.trailing_comment_columns = trailing_comment_columns;
+        self.layout.line_state.trailing_comment_columns = trailing_comment_columns.into();
         self.layout.line_state.has_nested_designated_init_brace =
             initializers::has_nested_designated_init_brace(tokens);
 
@@ -1381,6 +1385,17 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    /// The current line's code before its trailing comment, trimmed.
+    pub(crate) fn current_code_before_trailing_comment(&self) -> &str {
+        let current = self.current.trimmed_end();
+        if self.current.holds_comment_opener() {
+            &current[..crate::formatter::text::line_scan::trailing_comment_split_limit(current)]
+        } else {
+            current
+        }
+        .trimmed_end()
+    }
+
     /// `leaves_paren_open` of the code of output line `index`.
     pub(crate) fn output_code_leaves_paren_open(&self, index: usize) -> bool {
         if index + 16 >= self.output.len() {
@@ -1447,9 +1462,11 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_paren_started_by_expression_keyword(&self) -> bool {
-        let mut before = self.current.trimmed_end();
-        while let Some(open) = before.rfind('(') {
-            let prefix = before[..open].trimmed_end();
+        let Some(mut open) = self.current.last_open_paren() else {
+            return false;
+        };
+        loop {
+            let prefix = self.current[..open].trimmed_end();
             if !prefix.ends_with('(') {
                 let word = trailing_word(prefix);
                 return matches!(
@@ -1457,21 +1474,21 @@ impl<'a> FormatEngine<'a> {
                     "if" | "while" | "for" | "switch" | "return" | "sizeof"
                 );
             }
-            before = prefix;
+            open = prefix.len() - 1;
         }
-        false
     }
 
     pub(crate) fn current_paren_started_by_catch(&self) -> bool {
-        let mut before = self.current.trimmed_end();
-        while let Some(open) = before.rfind('(') {
-            let prefix = before[..open].trimmed_end();
+        let Some(mut open) = self.current.last_open_paren() else {
+            return false;
+        };
+        loop {
+            let prefix = self.current[..open].trimmed_end();
             if !prefix.ends_with('(') {
                 return trailing_word(prefix) == "catch";
             }
-            before = prefix;
+            open = prefix.len() - 1;
         }
-        false
     }
 
     pub(crate) fn current_paren_is_expression_context(&self) -> bool {
@@ -1646,7 +1663,7 @@ impl<'a> FormatEngine<'a> {
             };
             let inline_column = self.current_inline_array_column();
             let clear_enum_continuation = self.in_enum_declaration_brace()
-                && !self.current.contains('{')
+                && !self.current.holds_open_brace()
                 && unmatched_open_paren_column(self.current.trimmed_end()).is_none();
             self.finish_line();
             if clear_enum_continuation {
@@ -1730,7 +1747,7 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.in_enum_declaration_brace()
             && self.current.trimmed_end().ends_with(",")
-            && !self.current.contains('{')
+            && !self.current.holds_open_brace()
             && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             self.finish_line();

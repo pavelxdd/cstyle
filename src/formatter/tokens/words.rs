@@ -48,7 +48,7 @@ impl FormatEngine<'_> {
             && !self.current.has_unclosed_bracket()
             && self.current.trimmed_end().ends_with(':')
             && !self.current.trimmed_end().ends_with("::")
-            && !self.current.contains('?')
+            && self.current.last_question().is_none()
             && switch_cases::find_case_colon(self.current.trimmed_end()).is_none()
             && !self.current.trimmed_start().starts_with('#')
             && self

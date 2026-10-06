@@ -530,6 +530,9 @@ impl FormatEngine<'_> {
         if current.is_empty() {
             return false;
         }
+        if self.current.declaration_segment_plainly_rejected() {
+            return false;
+        }
         let segment_start = self.current.declaration_segment_start();
         let segment_text = strip_balanced_parens(current[segment_start..].trimmed());
         let segment = segment_text.trimmed();

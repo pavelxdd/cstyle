@@ -283,7 +283,7 @@ pub(crate) struct LineState {
     pub(crate) indent_off_follows_code: bool,
     pub(crate) operator_padding_disabled: bool,
     pub(crate) in_class_initializer: bool,
-    pub(crate) trailing_comment_columns: Vec<usize>,
+    pub(crate) trailing_comment_columns: std::collections::VecDeque<usize>,
     pub(crate) has_nested_designated_init_brace: bool,
     pub(crate) ternary_colon: bool,
     pub(crate) template_angle_depth: usize,

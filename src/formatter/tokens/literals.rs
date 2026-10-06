@@ -251,8 +251,8 @@ impl FormatEngine<'_> {
                 line_starts_with_chain_operator: starts_with_chain_operator(
                     self.current.trimmed_start(),
                 ),
-                has_opening_context: self.current.contains('('),
-                has_open_brace_before_literal: self.current.contains('{'),
+                has_opening_context: self.current.last_open_paren().is_some(),
+                has_open_brace_before_literal: self.current.holds_open_brace(),
                 has_stream_context,
                 inside_delimiter_context: self.layout.frame_stack.active_delimiter().is_some(),
             }

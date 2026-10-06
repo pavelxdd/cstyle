@@ -29,6 +29,27 @@ pub(crate) struct ParenBraces {
     braces: (Option<usize>, Option<usize>),
 }
 
+/// A look back from a `:` for the `case` it may end: the tokens' address,
+/// the `:`'s group, the tokens of that level it passed, and its answer.
+#[derive(Clone, Copy)]
+pub(crate) struct CaseLabelLook {
+    address: usize,
+    group: Option<GroupId>,
+    low: usize,
+    high: usize,
+    answer: bool,
+}
+
+/// The tokens the last looks back for a statement start passed, all of
+/// which look back to the same start: the tokens' address, the tokens in
+/// order, and the start.
+#[derive(Default)]
+pub(crate) struct StackStartPath {
+    address: usize,
+    positions: Vec<u32>,
+    start: usize,
+}
+
 /// The replay of a statement up to a line, kept so the next line of the
 /// statement goes on from it: the tokens' address, the statement start, the
 /// output version, the token reached, and the state there.
@@ -782,19 +803,24 @@ impl FormatEngine<'_> {
         };
         let tokens_address = self.tree.tokens.as_ptr() as usize;
         // The look back depends on nothing but where it stands, so it ends
-        // where the last one did once it reaches the token that one left.
-        let cached = self
-            .stack_start_cache
-            .get()
-            .filter(|&(address, from, _)| address == tokens_address && from <= index);
+        // where the last one did once it reaches a token that one passed.
+        let mut path = self.stack_start_cache.borrow_mut();
+        if path.address != tokens_address {
+            *path = StackStartPath {
+                address: tokens_address,
+                ..StackStartPath::default()
+            };
+        }
+        let mut passed = Vec::new();
         let mut start = index;
-        while let Some(before) = self.tree.previous_code_token(start) {
-            if let Some((_, from, cached_start)) = cached
-                && start == from
-            {
-                start = cached_start;
-                break;
+        let joined = loop {
+            if let Ok(at) = path.positions.binary_search(&(start as u32)) {
+                break Some(at);
             }
+            passed.push(start as u32);
+            let Some(before) = self.tree.previous_code_token(start) else {
+                break None;
+            };
             // A directive outside parentheses ends what astyle stacks when
             // the lines before it carry the indent of their block.
             if self.options.indent_preproc_block
@@ -808,7 +834,7 @@ impl FormatEngine<'_> {
                                 .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                     })
             {
-                break;
+                break None;
             }
             if let Some(closed) = groups.closed_at(before) {
                 let header = self
@@ -816,7 +842,7 @@ impl FormatEngine<'_> {
                     .previous_code_token(groups.get(closed).open)
                     .is_some_and(|keyword| is_control_keyword(&tokens[keyword]));
                 if is_block(closed) || header {
-                    break;
+                    break None;
                 }
                 start = groups.get(closed).open;
                 continue;
@@ -857,12 +883,21 @@ impl FormatEngine<'_> {
                 || self.ends_case_label(before)
                 || self.ends_user_label(before)
             {
-                break;
+                break None;
             }
             start = before;
+        };
+        match joined {
+            Some(at) => {
+                start = path.start;
+                path.positions.truncate(at + 1);
+            }
+            None => {
+                path.positions.clear();
+                path.start = start;
+            }
         }
-        self.stack_start_cache
-            .set(Some((tokens_address, index, start)));
+        path.positions.extend(passed.iter().rev());
         (start != index).then_some(start)
     }
 
@@ -893,19 +928,34 @@ impl FormatEngine<'_> {
             return false;
         }
         let group = groups.enclosing(colon);
+        // A look back reads the same from each token of its level it
+        // passes, so a later one ends as an earlier one did there.
+        let address = tokens.as_ptr() as usize;
+        let cached = self
+            .case_label_cache
+            .get()
+            .filter(|cached| (cached.address, cached.group) == (address, group));
         let mut index = colon;
-        while let Some(before) = self.tree.previous_code_token(index) {
+        let answer = loop {
+            if let Some(cached) = cached
+                && (cached.low..=cached.high).contains(&index)
+            {
+                break cached.answer;
+            }
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break false;
+            };
             if groups.enclosing(before) != group {
                 let Some(closed) = groups.closed_at(before) else {
-                    return false;
+                    break false;
                 };
                 index = groups.get(closed).open;
                 continue;
             }
             match &tokens[before] {
-                Token::Symbol(';' | '{' | '}' | '?') => return false,
+                Token::Symbol(';' | '{' | '}' | '?') => break false,
                 Token::Word(word) if word == "case" || word == "default" => {
-                    return self
+                    break self
                         .tree
                         .previous_code_token(before)
                         .is_none_or(|previous| {
@@ -914,8 +964,21 @@ impl FormatEngine<'_> {
                 }
                 _ => index = before,
             }
-        }
-        false
+        };
+        let (low, high) = match cached {
+            Some(cached) if (cached.low..=cached.high).contains(&index) => {
+                (cached.low, cached.high.max(colon))
+            }
+            _ => (index, colon),
+        };
+        self.case_label_cache.set(Some(CaseLabelLook {
+            address,
+            group,
+            low,
+            high,
+            answer,
+        }));
+        answer
     }
 }
 

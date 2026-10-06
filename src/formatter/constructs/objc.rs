@@ -4,7 +4,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
@@ -534,12 +533,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn is_objc_selector_or_message_colon(&self) -> bool {
-        let current = self.current.trimmed_end();
         self.layout.frame_stack.bracket_depth() > 0
             || self.layout.objc.method_continuation
             || self.is_objc_method_line()
-            || has_unclosed_delimiter_after(current, "[", "]")
-            || has_unclosed_delimiter_after(current, "@selector(", ")")
+            || self.current.has_unclosed_bracket()
+            || self.current.has_unclosed_selector_call()
     }
 
     pub(crate) fn is_objc_method_line(&self) -> bool {

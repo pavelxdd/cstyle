@@ -2,6 +2,7 @@ use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::DelimiterScan;
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::operators::AssignmentChainScan;
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
@@ -16,6 +17,8 @@ pub(crate) struct CurrentLine {
     last_open_brace: Cell<Option<(usize, Option<usize>)>>,
     trailing_comment: Cell<Option<TrailingCommentScan>>,
     declaration_segment: RefCell<DeclarationSegmentScan>,
+    segment_outside_parens: Cell<SegmentOutsideParens>,
+    assignment_chain: Cell<Option<AssignmentChainScan>>,
     marks: Cell<LineMarks>,
     parens: RefCell<ParenScan>,
     delimiters: RefCell<DelimiterScan>,
@@ -327,6 +330,27 @@ impl CurrentLine {
         scan.start
     }
 
+    /// Whether the text of `declaration_segment_start` on, its balanced
+    /// parentheses dropped, holds no `<` or `[` but holds a byte no pointer
+    /// declaration segment holds: `=`, `+`, `-`, `/`, `%`, `?`, `!`, `~`,
+    /// `|`, `^`, `>`, `]`, or `)`.
+    pub(crate) fn declaration_segment_plainly_rejected(&self) -> bool {
+        let start = self.declaration_segment_start();
+        let mut scan = self.segment_outside_parens.get();
+        if scan.start != start || scan.scanned > self.text.len() || scan.scanned < start {
+            scan = SegmentOutsideParens {
+                start,
+                scanned: start,
+                ..SegmentOutsideParens::default()
+            };
+        }
+        if scan.scanned < self.text.len() {
+            scan.advance(self.text.as_bytes());
+            self.segment_outside_parens.set(scan);
+        }
+        scan.rejecting && !scan.angle_or_bracket
+    }
+
     fn marks(&self) -> LineMarks {
         let mut marks = self.marks.get();
         if marks.scanned > self.text.len() {
@@ -396,6 +420,40 @@ impl CurrentLine {
         self.marks().last_open_paren
     }
 
+    /// Whether no `)` follows the last `@selector(`, as
+    /// `has_unclosed_delimiter_after` finds.
+    pub(crate) fn has_unclosed_selector_call(&self) -> bool {
+        let marks = self.marks();
+        marks
+            .last_selector_call
+            .is_some_and(|open| marks.last_close_paren.is_none_or(|close| close < open))
+    }
+
+    /// The scan for the last chained assignment of the line's code, as far
+    /// as it was read.
+    pub(crate) fn assignment_chain(&self) -> Option<AssignmentChainScan> {
+        self.assignment_chain.get()
+    }
+
+    pub(crate) fn set_assignment_chain(&self, scan: AssignmentChainScan) {
+        self.assignment_chain.set(Some(scan));
+    }
+
+    /// Whether the line holds `//` or `/*`, literals or not.
+    pub(crate) fn holds_comment_opener(&self) -> bool {
+        self.marks().comment_opener
+    }
+
+    /// Whether the line holds `{`.
+    pub(crate) fn holds_open_brace(&self) -> bool {
+        self.marks().open_brace
+    }
+
+    /// Whether the line holds `}`.
+    pub(crate) fn holds_close_brace(&self) -> bool {
+        self.marks().close_brace
+    }
+
     /// Whether the line holds `=`.
     pub(crate) fn holds_equals(&self) -> bool {
         self.marks().equals
@@ -435,6 +493,8 @@ impl CurrentLine {
         self.last_open_brace.set(None);
         self.trailing_comment.set(None);
         self.declaration_segment.take();
+        self.segment_outside_parens.take();
+        self.assignment_chain.take();
         self.marks.take();
         self.parens.take();
         self.delimiters.take();
@@ -471,6 +531,34 @@ impl ParenScan {
     }
 }
 
+/// The bytes from a start outside balanced parentheses, read once as the
+/// line grows.
+#[derive(Clone, Copy, Default)]
+struct SegmentOutsideParens {
+    start: usize,
+    scanned: usize,
+    depth: u32,
+    angle_or_bracket: bool,
+    rejecting: bool,
+}
+
+impl SegmentOutsideParens {
+    fn advance(&mut self, bytes: &[u8]) {
+        for &byte in &bytes[self.scanned..] {
+            match byte {
+                b'(' => self.depth += 1,
+                b')' if self.depth > 0 => self.depth -= 1,
+                _ if self.depth > 0 => {}
+                b'<' | b'[' => self.angle_or_bracket = true,
+                b'=' | b'+' | b'-' | b'/' | b'%' | b'?' | b'!' | b'~' | b'|' | b'^' | b'>'
+                | b']' | b')' => self.rejecting = true,
+                _ => {}
+            }
+        }
+        self.scanned = bytes.len();
+    }
+}
+
 /// Marks of the line read once as it grows.
 #[derive(Clone, Copy, Default)]
 struct LineMarks {
@@ -484,7 +572,12 @@ struct LineMarks {
     last_close_bracket: Option<usize>,
     last_question: Option<usize>,
     last_open_paren: Option<usize>,
+    last_close_paren: Option<usize>,
+    last_selector_call: Option<usize>,
     equals: bool,
+    open_brace: bool,
+    close_brace: bool,
+    comment_opener: bool,
     dictionary_opener: bool,
     asm_call: bool,
 }
@@ -492,7 +585,11 @@ struct LineMarks {
 impl LineMarks {
     fn advance(&mut self, bytes: &[u8]) {
         // A text sought may start before the bytes read last.
-        let tail = &bytes[self.scanned.saturating_sub(7)..];
+        let base = self.scanned.saturating_sub(9);
+        let tail = &bytes[base..];
+        if let Some(offset) = tail.windows(10).rposition(|window| window == b"@selector(") {
+            self.last_selector_call = Some(base + offset);
+        }
         self.dictionary_opener |= tail.windows(3).any(|window| window == b"@ {");
         self.asm_call |= tail.windows(4).any(|window| window == b"asm(")
             || tail.windows(8).any(|window| window == b"__asm__(");
@@ -503,7 +600,19 @@ impl LineMarks {
                 b'?' => self.last_question = Some(index),
                 b'=' => self.equals = true,
                 b'(' => self.last_open_paren = Some(index),
-                b';' | b'{' | b'}' => self.tail_start = index + 1,
+                b')' => self.last_close_paren = Some(index),
+                b'/' | b'*' if index > 0 && bytes[index - 1] == b'/' => {
+                    self.comment_opener = true;
+                }
+                b';' => self.tail_start = index + 1,
+                b'{' => {
+                    self.open_brace = true;
+                    self.tail_start = index + 1;
+                }
+                b'}' => {
+                    self.close_brace = true;
+                    self.tail_start = index + 1;
+                }
                 _ => {}
             }
             if let Some(open) = self.quote {

@@ -223,7 +223,13 @@ impl FormatEngine<'_> {
                 if !current.is_empty() && !is_comment_only_line(current) {
                     // A statement kept after the label owns no brace.
                     return case_label_token_offset(current, header).is_some()
-                        && !self.output.code_of(current).trimmed_end().ends_with(';');
+                        && !if self.current.holds_comment_opener() {
+                            self.output.code_of(current)
+                        } else {
+                            current
+                        }
+                        .trimmed_end()
+                        .ends_with(';');
                 }
                 self.has_pending_case_label_brace()
                     || self

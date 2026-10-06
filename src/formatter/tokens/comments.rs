@@ -2877,7 +2877,12 @@ impl FormatEngine<'_> {
                 )
                 && !self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| {
-                let target = self.layout.line_state.trailing_comment_columns.remove(0);
+                let target = self
+                    .layout
+                    .line_state
+                    .trailing_comment_columns
+                    .pop_front()
+                    .unwrap_or_default();
                 let out_indent = self
                     .current
                     .chars()
@@ -2937,7 +2942,7 @@ impl FormatEngine<'_> {
             && (self.token_input.token_followed_by_line_comment_on_line
                 || self.token_input.next_token_is_line_comment
                 || self.layout.line_state.trailing_comment_columns.len() > 1)
-            && self.current.contains('}')
+            && self.current.holds_close_brace()
         {
             if gap.is_empty() {
                 self.ensure_space();
@@ -2977,7 +2982,8 @@ impl FormatEngine<'_> {
             return;
         }
         let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty())
-            .then(|| self.layout.line_state.trailing_comment_columns.remove(0));
+            .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
+            .flatten();
         let trimmed_code = self.current.trimmed();
         if trimmed_code.starts_with("case ") || trimmed_code.starts_with("default:") {
             self.current.push_str(&gap);

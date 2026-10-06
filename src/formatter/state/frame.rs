@@ -286,6 +286,9 @@ pub(crate) struct FrameStack {
     comment_frame: Option<CommentFrame>,
     declaration_frames: Vec<DeclarationFrame>,
     string_continuation_frames: Vec<StringContinuationFrame>,
+    /// Whether some string continuation frame stands on an earlier output
+    /// line than one pushed before it.
+    string_continuations_unordered: bool,
     brace_frames: Vec<BraceFrame>,
     closed_delimiter_frames: Vec<ClosedDelimiterFrame>,
     line_closed_delimiter_continuation_indent: Option<usize>,
@@ -676,6 +679,10 @@ impl FrameStack {
     }
 
     pub(crate) fn set_string_continuation(&mut self, frame: StringContinuationFrame) {
+        self.string_continuations_unordered |= self
+            .string_continuation_frames
+            .last()
+            .is_some_and(|last| frame.output_line < last.output_line);
         self.string_continuation_frames.push(frame);
     }
 
@@ -683,24 +690,29 @@ impl FrameStack {
         &self,
         line: usize,
     ) -> Option<&StringContinuationFrame> {
-        self.string_continuation_frames
-            .iter()
-            .rev()
-            .find(|frame| frame.output_line < line)
+        let frames = &self.string_continuation_frames;
+        if self.string_continuations_unordered {
+            return frames.iter().rev().find(|frame| frame.output_line < line);
+        }
+        frames[..frames.partition_point(|frame| frame.output_line < line)].last()
     }
 
     pub(crate) fn string_continuation_on_output_line(
         &self,
         line: usize,
     ) -> Option<&StringContinuationFrame> {
-        self.string_continuation_frames
-            .iter()
-            .rev()
-            .find(|frame| frame.output_line == line)
+        let frames = &self.string_continuation_frames;
+        if self.string_continuations_unordered {
+            return frames.iter().rev().find(|frame| frame.output_line == line);
+        }
+        frames[..frames.partition_point(|frame| frame.output_line <= line)]
+            .last()
+            .filter(|frame| frame.output_line == line)
     }
 
     pub(crate) fn clear_string_continuations(&mut self) {
         self.string_continuation_frames.clear();
+        self.string_continuations_unordered = false;
         self.clear_closed_delimiters_if_unused();
     }
 

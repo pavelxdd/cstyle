@@ -872,7 +872,7 @@ impl FormatEngine<'_> {
                     .layout
                     .line_state
                     .trailing_comment_columns
-                    .first()
+                    .front()
                     .map(|target| target.saturating_sub(overrun + prefix))
                     .filter(|_| ws.chars().all(|ch| ch == ' '));
                 // Code joined or padded before the brace moves the comment no
@@ -2527,7 +2527,7 @@ impl FormatEngine<'_> {
             .clone()
             .unwrap_or_default();
         self.trim_current_end();
-        if let Some(&target) = self.layout.line_state.trailing_comment_columns.first()
+        if let Some(&target) = self.layout.line_state.trailing_comment_columns.front()
             && !before_gap.contains('\t')
             && !after_gap.contains('\t')
         {
@@ -3080,7 +3080,7 @@ impl FormatEngine<'_> {
             && brace_type != BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
             && self.current.trimmed_end().ends_with(')')
-            && self.current.contains('(')
+            && self.current.last_open_paren().is_some()
             && !matches!(
                 self.current
                     .trimmed_start()

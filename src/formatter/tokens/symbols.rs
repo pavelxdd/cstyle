@@ -1338,12 +1338,12 @@ impl FormatEngine<'_> {
                 next,
                 Some(Token::Newline) | Some(Token::Comment(_, _)) | None
             )
-            && (self
-                .current
-                .last_question()
-                .is_some_and(|index| self.current[index + 1..].contains('{'))
-                || (self.current.trimmed_end().ends_with('}')
-                    && self.layout.nesting.last_closed_brace_type.is_some()));
+            && (self.current.last_question().is_some_and(|index| {
+                self.current
+                    .last_open_brace()
+                    .is_some_and(|brace| brace > index)
+            }) || (self.current.trimmed_end().ends_with('}')
+                && self.layout.nesting.last_closed_brace_type.is_some()));
         let colon_output_column = self
             .current_visual_width()
             .max(self.token_input.token_source_line_indent);

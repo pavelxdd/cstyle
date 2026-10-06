@@ -1064,7 +1064,8 @@ struct SplitResult {
 }
 
 fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
-    if !line.contains('<') {
+    // Only a `>` closes a `<` into a template.
+    if !line.contains('<') || !line.contains('>') {
         return Vec::new();
     }
     let tokens = tokenize(line);
@@ -1577,6 +1578,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
     let break_after_logical = rules.break_after_logical;
     let bytes = line.as_bytes();
     let templates = template_argument_ranges(line);
+    let mut next_template = 0;
     let mut fit = [0usize; 5];
     let mut pending = [0usize; 5];
     fn register(points: (&mut [usize; 5], &mut [usize; 5]), kind: usize, at: usize, fits: bool) {
@@ -1618,6 +1620,16 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
         let byte = bytes[index];
         let mut end = index + 1;
         let case_points = (fit, pending);
+        // The ranges come in order, and the scan only moves on.
+        while templates
+            .get(next_template)
+            .is_some_and(|&(_, stop)| stop <= index)
+        {
+            next_template += 1;
+        }
+        let in_template = templates
+            .get(next_template)
+            .is_some_and(|&(start, _)| start <= index);
         let mut in_label = in_case;
         if quote.is_none() && !in_comment {
             if in_case && byte == b':' && peek(index + 1) != b':' {
@@ -1663,10 +1675,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             in_comment = true;
         } else if matches!(byte, b'"' | b'\'') {
             quote = Some(byte);
-        } else if templates
-            .iter()
-            .any(|&(start, stop)| start <= index && index < stop)
-        {
+        } else if in_template {
             if !matches!(byte, b' ' | b'\t') {
                 previous_non_space = byte;
             }
