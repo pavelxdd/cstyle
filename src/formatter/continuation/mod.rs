@@ -1198,7 +1198,7 @@ impl FormatEngine<'_> {
         if !self.options.attach_return_type && !self.options.attach_return_type_decl {
             return None;
         }
-        let open = self.current.rfind('(')?;
+        let open = self.current.last_open_paren()?;
         let before = self.current[..open].trimmed();
         if before.is_empty()
             || before.contains('=')

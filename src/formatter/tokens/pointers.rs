@@ -740,7 +740,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn current_paren_is_lambda_parameter_list(&self) -> bool {
-        let Some(open) = self.current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         let mut before = self.current[..open].trimmed_end();
@@ -795,7 +795,7 @@ impl FormatEngine<'_> {
         if !is_pointer_declaration_segment(segment) {
             return false;
         }
-        let Some(open) = self.current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         let before = self.current[..open].trimmed_end();
@@ -1485,7 +1485,7 @@ impl FormatEngine<'_> {
             return false;
         }
         let current = self.current.trimmed_end();
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         current[open + 1..].find(')').is_none()
@@ -1494,7 +1494,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn current_in_parenthesized_type_operand(&self) -> bool {
         let current = self.current.trimmed_end();
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         if current[open + 1..].contains(')')
@@ -1510,7 +1510,7 @@ impl FormatEngine<'_> {
 
     pub(super) fn current_in_cast_type_group(&self) -> bool {
         let current = self.current.trimmed_end();
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         if current[open + 1..].contains(')') {

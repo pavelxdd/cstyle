@@ -1363,7 +1363,7 @@ impl FormatEngine<'_> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         if trailing_word(current[..open].trimmed_end()) != "sizeof" {

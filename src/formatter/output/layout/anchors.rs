@@ -9,7 +9,7 @@
 use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
 use crate::formatter::continuation::min_conditional_indent_spaces;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
@@ -1846,8 +1846,21 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // The look back depends on nothing but where it stands, so it ends
+        // where the last one did once it reaches the `,` that one left.
+        let address = tokens.as_ptr() as usize;
+        let cached = self
+            .declarator_start_cache
+            .get()
+            .filter(|&(cached_address, from, _)| cached_address == address && from <= comma);
         let mut start = comma;
         while let Some(mut before) = self.tree.previous_code_token(start) {
+            if let Some((_, from, cached_start)) = cached
+                && start == from
+            {
+                start = cached_start;
+                break;
+            }
             if let Some(closed) = groups.closed_at(before)
                 && (groups.get(closed).delimiter != Delimiter::Brace
                     || self.tree.blocks.kind(closed) == Some(BlockKind::Initializer))
@@ -1861,6 +1874,8 @@ impl FormatEngine<'_> {
             }
             start = before;
         }
+        self.declarator_start_cache
+            .set(Some((address, comma, start)));
         if matches!(&tokens[start], Token::Word(word) if word == "return" || is_header(word))
             || self.tree.has_directive_in(start..first)
         {
@@ -1880,11 +1895,18 @@ impl FormatEngine<'_> {
         if !matches!(tokens[line_end], Token::Symbol(',')) || groups.enclosing(line_end) != group {
             // A statement that registers nothing continues its lines one
             // level past its first.
-            let registers = tokens[start..comma].iter().any(|token| {
-                matches!(token, Token::Symbol('(' | '[' | '{' | '?'))
-                    || matches!(token, Token::Operator(operator)
-                        if operator.ends_with('=') || operator == "?" || operator == "<<" || operator == ">>")
-            });
+            let registers = ForwardFind::first_in(
+                &self.declarator_registers_cache,
+                tokens,
+                start,
+                comma,
+                |index| {
+                    matches!(tokens[index], Token::Symbol('(' | '[' | '{' | '?'))
+                        || matches!(&tokens[index], Token::Operator(operator)
+                            if operator.ends_with('=') || operator == "?" || operator == "<<" || operator == ">>")
+                },
+            )
+            .is_some();
             return (!registers
                 && matches!(tokens[line_end], Token::Word(_))
                 && matches!(&tokens[start], Token::Word(word) if !is_header(word) && word != "return"))

@@ -10,7 +10,7 @@
 //! level past the indent before.
 
 use crate::formatter::continuation::min_conditional_indent_spaces;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
@@ -188,7 +188,6 @@ impl FormatEngine<'_> {
     /// A line continuing an assignment outside its parentheses stands at
     /// the top of astyle's continuation stack.
     pub(super) fn stacked_assignment_indent(&self, first: usize) -> Option<usize> {
-        let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let start = self.stack_statement_start(first)?;
         let group = groups.enclosing(first);
@@ -200,18 +199,86 @@ impl FormatEngine<'_> {
                 )
             })
             || !self.options.indent_after_parens && self.tree.has_directive_in(start..first)
-            || !(start..first).any(|index| {
-                groups.enclosing(index) == group
-                    && matches!(&tokens[index], Token::Operator(operator)
-                        if operator.ends_with('=')
-                                && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=")
-                            || self.options.indent_after_parens
-                                && matches!(operator.as_str(), "<<" | ">>"))
-            })
+            || !self.stacks_assignment_before(start, first, group)
         {
             return None;
         }
         self.astyle_stack_indent(first)
+    }
+
+    /// Whether an assignment, or a shift when parens indent, stands at the
+    /// level of `group` from `start` to `first`, `group` enclosing `start`.
+    fn stacks_assignment_before(&self, start: usize, first: usize, group: Option<GroupId>) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        ForwardFind::first_in(
+            &self.stacked_assignment_cache,
+            tokens,
+            start,
+            first,
+            |index| {
+                groups.enclosing(index) == group
+                    && matches!(&tokens[index], Token::Operator(operator)
+                    if operator.ends_with('=')
+                            && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=")
+                        || self.options.indent_after_parens
+                            && matches!(operator.as_str(), "<<" | ">>"))
+            },
+        )
+        .is_some()
+    }
+
+    /// Whether a brace stands from `first` to the end of its line or of the
+    /// group enclosing it, a brace at `first` aside when it closes a stacked
+    /// initializer.
+    fn line_brace_after(&self, first: usize, closes_stacked_brace: bool) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let limit = groups
+            .enclosing(first)
+            .and_then(|group| groups.get(group).close)
+            .unwrap_or(usize::MAX);
+        let mut from = first;
+        loop {
+            let at = self.next_brace_or_newline(from);
+            if at >= limit
+                || tokens
+                    .get(at)
+                    .is_none_or(|token| matches!(token, Token::Newline))
+            {
+                return false;
+            }
+            // The block brace after a closing paren opens no group of the
+            // line.
+            if !(at == first && closes_stacked_brace)
+                && !(next_code_token(tokens, first + 1) == Some(at)
+                    && (self.paren_ends_its_line(first)
+                        || self.options.indent_after_parens
+                            && matches!(tokens[first], Token::Symbol(')'))))
+            {
+                return true;
+            }
+            from = at + 1;
+        }
+    }
+
+    /// The first brace or newline token from `from` on, or the end of the
+    /// tokens.
+    fn next_brace_or_newline(&self, from: usize) -> usize {
+        let tokens = &self.tree.tokens;
+        let address = tokens.as_ptr() as usize;
+        if let Some((cached_address, cached_from, stop)) = self.brace_or_newline_cache.get()
+            && cached_address == address
+            && (cached_from..=stop).contains(&from)
+        {
+            return stop;
+        }
+        let stop = tokens[from.min(tokens.len())..]
+            .iter()
+            .position(|token| matches!(token, Token::Symbol('{' | '}') | Token::Newline))
+            .map_or(tokens.len(), |offset| from + offset);
+        self.brace_or_newline_cache.set(Some((address, from, stop)));
+        stop
     }
 
     /// The indent astyle's continuation stack gives the line starting at
@@ -221,29 +288,7 @@ impl FormatEngine<'_> {
         let closes_stacked_brace = self.closes_stacked_initializer(first);
         if matches!(tokens[first], Token::Symbol(']' | '{' | ','))
             || matches!(tokens[first], Token::Symbol('}')) && !closes_stacked_brace
-            || tokens[first..]
-                .iter()
-                .enumerate()
-                .take_while(|&(offset, token)| {
-                    !matches!(token, Token::Newline)
-                        && self.tree.groups.enclosing(first).is_none_or(|group| {
-                            self.tree
-                                .groups
-                                .get(group)
-                                .close
-                                .is_none_or(|close| first + offset < close)
-                        })
-                })
-                // The block brace after a closing paren opens no group of
-                // the line.
-                .any(|(offset, token)| {
-                    matches!(token, Token::Symbol('{' | '}'))
-                        && !(offset == 0 && closes_stacked_brace)
-                        && !(next_code_token(tokens, first + 1) == Some(first + offset)
-                            && (self.paren_ends_its_line(first)
-                                || self.options.indent_after_parens
-                                    && matches!(tokens[first], Token::Symbol(')'))))
-                })
+            || self.line_brace_after(first, closes_stacked_brace)
         {
             return None;
         }

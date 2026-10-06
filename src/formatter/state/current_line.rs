@@ -391,6 +391,16 @@ impl CurrentLine {
         self.marks().last_question
     }
 
+    /// The byte index of the last `(`, literals or not.
+    pub(crate) fn last_open_paren(&self) -> Option<usize> {
+        self.marks().last_open_paren
+    }
+
+    /// Whether the line holds `=`.
+    pub(crate) fn holds_equals(&self) -> bool {
+        self.marks().equals
+    }
+
     /// Whether the line holds `@ {`, which opens a dictionary literal.
     pub(crate) fn holds_dictionary_opener(&self) -> bool {
         self.marks().dictionary_opener
@@ -473,6 +483,8 @@ struct LineMarks {
     last_open_bracket: Option<usize>,
     last_close_bracket: Option<usize>,
     last_question: Option<usize>,
+    last_open_paren: Option<usize>,
+    equals: bool,
     dictionary_opener: bool,
     asm_call: bool,
 }
@@ -489,6 +501,8 @@ impl LineMarks {
                 b'[' => self.last_open_bracket = Some(index),
                 b']' => self.last_close_bracket = Some(index),
                 b'?' => self.last_question = Some(index),
+                b'=' => self.equals = true,
+                b'(' => self.last_open_paren = Some(index),
                 b';' | b'{' | b'}' => self.tail_start = index + 1,
                 _ => {}
             }

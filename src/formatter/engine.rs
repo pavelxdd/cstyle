@@ -52,6 +52,45 @@ use crate::formatter::tokens::{literals, operators, pointers, symbols};
 use crate::formatter::{continuation, preprocessor, syntax};
 use crate::source::lex::{is_identifier_continue, trailing_word};
 
+/// The first token from `start` passing a test, read on as later ends ask:
+/// the tokens' address, the start, the token read to, and the match.
+#[derive(Clone, Copy)]
+pub(crate) struct ForwardFind {
+    address: usize,
+    start: usize,
+    scanned: usize,
+    found: Option<usize>,
+}
+
+impl ForwardFind {
+    /// The first token in `start..end` passing `test`, the last look kept
+    /// in `cache`, which holds looks with this one test only.
+    pub(crate) fn first_in(
+        cache: &std::cell::Cell<Option<ForwardFind>>,
+        tokens: &[Token],
+        start: usize,
+        end: usize,
+        mut test: impl FnMut(usize) -> bool,
+    ) -> Option<usize> {
+        let address = tokens.as_ptr() as usize;
+        let mut scan = cache
+            .get()
+            .filter(|scan| (scan.address, scan.start) == (address, start))
+            .unwrap_or(ForwardFind {
+                address,
+                start,
+                scanned: start,
+                found: None,
+            });
+        if scan.found.is_none() && scan.scanned < end {
+            scan.found = (scan.scanned..end).find(|&index| test(index));
+            scan.scanned = end;
+            cache.set(Some(scan));
+        }
+        scan.found.filter(|&found| found < end)
+    }
+}
+
 /// A chain of subscripts read for an initializer designator: the tokens'
 /// address and length and the end it was read to, its `[`s in order, and its
 /// answer.
@@ -158,6 +197,17 @@ pub(crate) struct FormatEngine<'a> {
     /// The last statement start astyle's stack found: the address of the
     /// tokens, the token it looked back from, and the start.
     pub(crate) stack_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last brace or newline token looked for: the tokens' address,
+    /// where the look started, and the token found.
+    pub(crate) brace_or_newline_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// The last look for an assignment stacked in a statement.
+    pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
+    /// The last look for a token registering an indent before a
+    /// declarator's `,`.
+    pub(crate) declarator_registers_cache: std::cell::Cell<Option<ForwardFind>>,
+    /// The last statement start a declarator's `,` looked back to: the
+    /// tokens' address, the `,`, and the start.
+    pub(crate) declarator_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
     /// The last replay of astyle's stack, for the next line of its
     /// statement.
     pub(crate) astyle_replay_cache:
@@ -235,6 +285,10 @@ impl<'a> FormatEngine<'a> {
             macro_call_context_cache: std::cell::Cell::new(None),
             line_comment_cache: std::cell::Cell::new(None),
             stack_start_cache: std::cell::Cell::new(None),
+            brace_or_newline_cache: std::cell::Cell::new(None),
+            stacked_assignment_cache: std::cell::Cell::new(None),
+            declarator_registers_cache: std::cell::Cell::new(None),
+            declarator_start_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
@@ -1352,7 +1406,7 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return false;
         }
-        let Some(open) = current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         matches!(
@@ -1390,7 +1444,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_paren_is_expression_context(&self) -> bool {
-        let Some(open) = self.current.rfind('(') else {
+        let Some(open) = self.current.last_open_paren() else {
             return false;
         };
         let prefix = self.current[..open].trimmed_end();

@@ -1118,7 +1118,7 @@ impl FormatEngine<'_> {
         } else if self.innermost_brace_is_compound_literal() {
             self.layout.nesting.clear_continuation_indents();
         } else if !self.in_initializer_brace() && !self.in_aggregate_declaration_brace() {
-            if self.multi_declarator_indent_spaces.is_none() {
+            if self.multi_declarator_indent_spaces.is_none() && self.current.holds_equals() {
                 let line = self.current.trimmed_end();
                 let prefix = line.len() - line.trimmed_start().len();
                 if let Some(offset) = assignment_declarator_offset(line.trimmed_start()) {
@@ -1133,7 +1133,7 @@ impl FormatEngine<'_> {
                     self.multi_declarator_indent_spaces = Some(self.current_line_indent_spaces());
                     self.layout.nesting.clear_continuation_indents();
                 }
-            } else {
+            } else if self.multi_declarator_indent_spaces.is_some() {
                 self.layout.nesting.clear_continuation_indents();
             }
         }
@@ -1195,11 +1195,11 @@ impl FormatEngine<'_> {
         {
             return CommaRole::InitializerSibling;
         }
-        let line = self.current.trimmed_end();
-        let body = line.trimmed_start();
         if self.multi_declarator_indent_spaces.is_some()
-            || assignment_declarator_offset(body).is_some()
-            || is_single_lvalue_assignment(body)
+            || self.current.holds_equals() && {
+                let body = self.current.trimmed();
+                assignment_declarator_offset(body).is_some() || is_single_lvalue_assignment(body)
+            }
         {
             return CommaRole::Declaration;
         }

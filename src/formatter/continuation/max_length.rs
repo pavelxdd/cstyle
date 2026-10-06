@@ -263,6 +263,7 @@ impl FormatEngine<'_> {
             structural_level
         };
         let source_tokens = self.output.pending_tokens();
+        let mut part_scan = SplitPartScan::default();
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
@@ -307,7 +308,7 @@ impl FormatEngine<'_> {
             {
                 following_indent = ContinuationIndent::Spaces(floor);
             }
-            self.set_split_part_tokens(source_tokens, line, &tail);
+            self.set_split_part_tokens(source_tokens, line, &tail, &mut part_scan);
             if let Some(spaces) = self.split_part_indent(&tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
@@ -318,7 +319,7 @@ impl FormatEngine<'_> {
             next_indent = following_indent;
         }
         if !tail.trimmed().is_empty() {
-            self.set_split_part_tokens(source_tokens, line, &tail);
+            self.set_split_part_tokens(source_tokens, line, &tail, &mut part_scan);
             if let Some(spaces) = self.split_part_indent(&tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
@@ -353,8 +354,15 @@ impl FormatEngine<'_> {
     }
 
     /// Gives the part of the split `line` that starts with `part` the source
-    /// tokens from its first one on.
-    fn set_split_part_tokens(&mut self, source: Option<TokenSpan>, line: &str, part: &str) {
+    /// tokens from its first one on. The parts come in order along the line,
+    /// so `scan` resumes the walk where the last part's first token was found.
+    fn set_split_part_tokens(
+        &mut self,
+        source: Option<TokenSpan>,
+        line: &str,
+        part: &str,
+        scan: &mut SplitPartScan,
+    ) {
         let Some(source) = source else {
             return;
         };
@@ -363,17 +371,27 @@ impl FormatEngine<'_> {
             return;
         }
         let from = line.len() - part.len();
-        let mut cursor = 0;
-        for index in source.first..=source.last {
+        if from < scan.from {
+            *scan = SplitPartScan::default();
+        }
+        scan.from = from;
+        if scan.ended {
+            return;
+        }
+        let mut cursor = scan.cursor;
+        for index in (source.first + scan.skipped)..=source.last {
             let token = &self.tree.tokens[index];
             if !is_code_token(token) {
                 continue;
             }
             let text = token_text(token);
             let Some(offset) = line[cursor..].find(&*text) else {
+                scan.ended = true;
                 return;
             };
             if cursor + offset >= from {
+                scan.skipped = index - source.first;
+                scan.cursor = cursor;
                 self.output.set_pending_tokens(Some(TokenSpan {
                     first: index,
                     last: source.last,
@@ -382,6 +400,7 @@ impl FormatEngine<'_> {
             }
             cursor += offset + text.len();
         }
+        scan.ended = true;
     }
 
     pub(crate) fn maximum_length_using_alias_rhs_indent_spaces(&self, line: &str) -> Option<usize> {
@@ -985,6 +1004,9 @@ fn assignment_continuation_indent(
 }
 
 fn top_level_assignment_index(line: &str) -> Option<usize> {
+    if !line.contains('=') {
+        return None;
+    }
     let mut paren_depth = 0usize;
     let mut bracket_depth = 0usize;
     let mut angle_depth = 0usize;
@@ -1956,6 +1978,18 @@ fn split_result_at(
             .map(|column| ContinuationIndent::Spaces(column + 1))
             .unwrap_or(ContinuationIndent::Level(1)),
     })
+}
+
+/// How far `set_split_part_tokens` has walked the split line's tokens.
+#[derive(Default)]
+struct SplitPartScan {
+    /// Tokens past the source's first that all start before `from`.
+    skipped: usize,
+    /// Where in the line the walk stands after them.
+    cursor: usize,
+    from: usize,
+    /// The walk ran out of tokens or lost them in the line.
+    ended: bool,
 }
 
 #[cfg(test)]
