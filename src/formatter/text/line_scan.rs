@@ -301,11 +301,18 @@ pub(crate) fn line_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
 fn scan_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     // Every byte that matters is ASCII, and no byte of a wider character
     // equals one.
+    const SCANNED: [bool; 256] = {
+        let mut scanned = [false; 256];
+        let bytes = b"/\"'()[]";
+        let mut index = 0;
+        while index < bytes.len() {
+            scanned[bytes[index] as usize] = true;
+            index += 1;
+        }
+        scanned
+    };
     let bytes = line.as_bytes();
-    if !bytes
-        .iter()
-        .any(|&byte| matches!(byte, b'(' | b')' | b'[' | b']'))
-    {
+    if !line.contains_any_byte(b"()[]") {
         return (0, Vec::new());
     }
     let mut opens = OpenColumns::default();
@@ -316,7 +323,7 @@ fn scan_paren_imbalance(line: &str) -> (usize, Vec<usize>) {
     };
     while let Some(offset) = bytes[index.min(bytes.len())..]
         .iter()
-        .position(|&byte| matches!(byte, b'/' | b'"' | b'\'' | b'(' | b')' | b'[' | b']'))
+        .position(|&byte| SCANNED[usize::from(byte)])
     {
         index += offset;
         match bytes[index] {

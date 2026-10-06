@@ -1398,9 +1398,9 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         indent: usize,
         current_spaces: Option<usize>,
-        recent_split_else_chain: bool,
+        recent_split_else_chain: impl FnOnce() -> bool,
     ) -> Option<usize> {
-        if !recent_split_else_chain || line.trimmed() != "}" {
+        if line.trimmed() != "}" || !recent_split_else_chain() {
             return None;
         }
         let frame = self.layout.frame_stack.active_brace()?;

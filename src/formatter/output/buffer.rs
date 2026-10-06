@@ -1601,17 +1601,22 @@ impl OutputBuffer {
             .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))
     }
 
+    #[inline]
     fn last_line_outside_comment_index(&self) -> Option<usize> {
-        let key = (self.lines.len(), self.version);
         match self.last_outside_comment_cache.get() {
-            Some((len, version, index)) if (len, version) == key => index,
-            _ => {
-                let index = self.find_last_line_outside_comment();
-                self.last_outside_comment_cache
-                    .set(Some((key.0, key.1, index)));
+            Some((len, version, index)) if len == self.lines.len() && version == self.version => {
                 index
             }
+            _ => self.read_last_line_outside_comment(),
         }
+    }
+
+    #[inline(never)]
+    fn read_last_line_outside_comment(&self) -> Option<usize> {
+        let index = self.find_last_line_outside_comment();
+        self.last_outside_comment_cache
+            .set(Some((self.lines.len(), self.version, index)));
+        index
     }
 
     fn find_last_line_outside_comment(&self) -> Option<usize> {

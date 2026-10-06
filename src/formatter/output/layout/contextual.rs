@@ -3290,13 +3290,17 @@ impl FormatEngine<'_> {
     ) -> ContextualLineLayout {
         let split_else_state_active = contextual.split_else_state_active;
         let layout = &mut contextual.layout;
-        let recent_split_else_context =
-            self.recent_split_else_chain_context(split_else_state_active);
+        // Read only by the rules whose own tests pass.
+        let recent_split_else = std::cell::OnceCell::new();
+        let recent_split_else_context = || {
+            *recent_split_else
+                .get_or_init(|| self.recent_split_else_chain_context(split_else_state_active))
+        };
         if let Some(spaces) = self.recent_split_else_command_closing_indent_spaces(
             line,
             layout.indent,
             layout.exact_indent_spaces,
-            recent_split_else_context.chain_active(),
+            || recent_split_else_context().chain_active(),
         ) {
             layout.exact_indent_spaces = Some(spaces);
         }
@@ -3346,7 +3350,7 @@ impl FormatEngine<'_> {
             layout.line_kind,
             layout.indent,
             layout.exact_indent_spaces,
-            recent_split_else_context.interrupted_header_active(),
+            || recent_split_else_context().interrupted_header_active(),
         ) {
             layout.exact_indent_spaces = Some(spaces);
         }
@@ -3354,7 +3358,7 @@ impl FormatEngine<'_> {
             line,
             layout.line_kind,
             layout.exact_indent_spaces,
-            recent_split_else_context.chain_active(),
+            || recent_split_else_context().chain_active(),
         ) {
             layout.exact_indent_spaces = Some(spaces);
         }

@@ -36,6 +36,7 @@ pub(crate) struct StructuralSplitElseBodyContext {
     case_unindent_spaces: usize,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct RecentSplitElseChainContext {
     chain_active: bool,
     interrupted_header_active: bool,
@@ -869,51 +870,58 @@ impl FormatEngine<'_> {
         &self,
         line_start_active: bool,
     ) -> RecentSplitElseChainContext {
-        // An else chain never reaches past the function it is in.
-        let recent = match self.current_function_body_start() {
-            Some(start) => start.min(self.output.len())..self.output.len(),
-            None => self.output.scoped_range(),
+        let window = std::cell::OnceCell::new();
+        let window_start = || {
+            *window.get_or_init(|| {
+                // An else chain never reaches past the function it is in.
+                let recent = match self.current_function_body_start() {
+                    Some(start) => start.min(self.output.len())..self.output.len(),
+                    None => self.output.scoped_range(),
+                };
+                recent.start.max(recent.end.saturating_sub(128))
+            })
         };
-        let window_start = recent.start.max(recent.end.saturating_sub(128));
         let chain_active = line_start_active
-            || (self.output.may_have_else() && self.output.has_else_line_from(window_start));
+            || (self.output.may_have_else() && self.output.has_else_line_from(window_start()));
         let has_preprocessor =
-            self.output.may_have_hash() && self.output.has_hash_led_line_from(window_start);
+            || self.output.may_have_hash() && self.output.has_hash_led_line_from(window_start());
         let in_split_else_body = chain_active
             && self
                 .current_source_token()
                 .is_some_and(|token| self.tree.statements.in_split_else_body(token));
-        let follows_preprocessor_boundary = self.output.may_have_hash()
-            && self
-                .output
-                .iter()
-                .enumerate()
-                .rev()
-                .find(|(_, line)| !line.trimmed().is_empty())
-                .is_some_and(|(previous_index, previous)| {
-                    preprocessor_directive(previous.trimmed_start()).is_some_and(|directive| {
-                        matches!(directive, "endif" | "else" | "if" | "ifdef" | "ifndef")
-                            && (matches!(directive, "endif" | "else")
-                                || self.output[..previous_index]
-                                    .iter()
-                                    .rev()
-                                    .find(|line| !line.trimmed().is_empty())
-                                    .is_some_and(|line| {
-                                        let trimmed =
-                                            self.output.code_trimmed_of(line).trimmed_start();
-                                        preprocessor_directive(trimmed).is_some()
-                                            || trimmed == "else"
-                                            || trimmed.ends_with("} else")
-                                            || trimmed.ends_with("}else")
-                                            || is_comment_line(line.trimmed_start())
-                                    }))
+        let follows_preprocessor_boundary = || {
+            self.output.may_have_hash()
+                && self
+                    .output
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find(|(_, line)| !line.trimmed().is_empty())
+                    .is_some_and(|(previous_index, previous)| {
+                        preprocessor_directive(previous.trimmed_start()).is_some_and(|directive| {
+                            matches!(directive, "endif" | "else" | "if" | "ifdef" | "ifndef")
+                                && (matches!(directive, "endif" | "else")
+                                    || self.output[..previous_index]
+                                        .iter()
+                                        .rev()
+                                        .find(|line| !line.trimmed().is_empty())
+                                        .is_some_and(|line| {
+                                            let trimmed =
+                                                self.output.code_trimmed_of(line).trimmed_start();
+                                            preprocessor_directive(trimmed).is_some()
+                                                || trimmed == "else"
+                                                || trimmed.ends_with("} else")
+                                                || trimmed.ends_with("}else")
+                                                || is_comment_line(line.trimmed_start())
+                                        }))
+                        })
                     })
-                });
+        };
         RecentSplitElseChainContext {
             chain_active,
             interrupted_header_active: chain_active
-                && (line_start_active || has_preprocessor || in_split_else_body)
-                && !follows_preprocessor_boundary,
+                && (line_start_active || has_preprocessor() || in_split_else_body)
+                && !follows_preprocessor_boundary(),
         }
     }
 

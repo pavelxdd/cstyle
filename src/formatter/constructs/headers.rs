@@ -1550,7 +1550,7 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
         indent: usize,
         current_spaces: Option<usize>,
-        interrupted_header_context: bool,
+        interrupted_header_context: impl FnOnce() -> bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
         // A block given to a braceless header stands at that header.
@@ -1559,13 +1559,13 @@ impl FormatEngine<'_> {
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| line_is_control_body_header(previous.trimmed_start()));
-        if !interrupted_header_context
-            || header_body_block
+        if header_body_block
             || line_kind != LineKind::Normal
             || line_start.starts_with_any(b"#}:)")
             || is_header(self.options, leading_identifier(line_start))
             || self.pending_line_in_parens()
             || self.pending_line_continues_statement()
+            || !interrupted_header_context()
         {
             return None;
         }
@@ -2140,11 +2140,11 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
         current_spaces: Option<usize>,
-        recent_split_else_chain: bool,
+        recent_split_else_chain: impl FnOnce() -> bool,
     ) -> Option<usize> {
-        if !recent_split_else_chain
-            || line_kind != LineKind::Normal
+        if line_kind != LineKind::Normal
             || !line.trimmed_start().starts_with("else if")
+            || !recent_split_else_chain()
         {
             return None;
         }
