@@ -750,28 +750,48 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut initializer = None;
-        for (offset, index) in (0..self.output.len()).rev().take(32).enumerate() {
-            let code = self.output.code(index);
+        let len = self.output.len();
+        let floor = len.saturating_sub(32);
+        let stops = |index: usize| {
             let trimmed = self.output.code_trimmed(index);
-            if trimmed == "{"
+            trimmed == "{"
                 || trimmed == "}"
                 || trimmed.ends_with(';')
                 || trimmed.starts_with("*/")
                 || trimmed.ends_with("*/")
                 || self.output.code_has(index, b'{')
                 || self.output.code_has(index, b'}')
-            {
+        };
+        let colon_line = |index: usize| {
+            let trimmed = self.output.code_trimmed(index);
+            self.output.code_has(index, b':')
+                && (trimmed.starts_with(':') && !trimmed.starts_with("::")
+                    || self.output.code_has(index, b')')
+                        && has_inline_constructor_initializer_colon(self.output.code(index)))
+        };
+        // The look back passes the lines that neither stop it nor hold a
+        // colon that may start an initializer.
+        let mut end = len;
+        while let Some(index) = if end == len {
+            self.output
+                .last_line_looked(&self.constructor_context_look, floor, len, |index| {
+                    stops(index) || colon_line(index)
+                })
+        } else {
+            (floor..end)
+                .rev()
+                .find(|&index| stops(index) || colon_line(index))
+        } {
+            end = index;
+            if stops(index) {
                 break;
             }
-            if !self.output.code_has(index, b':') {
-                continue;
-            }
+            let code = self.output.code(index);
+            let trimmed = self.output.code_trimmed(index);
             let colon_start = trimmed.starts_with(':') && !trimmed.starts_with("::");
             let inline_colon =
                 self.output.code_has(index, b')') && has_inline_constructor_initializer_colon(code);
-            if !colon_start && !inline_colon {
-                continue;
-            }
+            let offset = len - 1 - index;
             let previous_statement_has_question = (0..self.output.len())
                 .rev()
                 .skip(offset + 1)

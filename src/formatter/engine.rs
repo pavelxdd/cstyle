@@ -205,6 +205,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) argument_end_look: crate::formatter::output::buffer::LineLook,
     /// Whether the output last read leaves an initializer brace open.
     pub(crate) open_initializer_brace_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The look back for a line that stops the look for a constructor
+    /// initializer's context or holds a colon that may start one.
+    pub(crate) constructor_context_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line that is `(` alone.
     pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
@@ -364,6 +367,7 @@ impl<'a> FormatEngine<'a> {
             open_paren_walk: Default::default(),
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
+            constructor_context_look: Default::default(),
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),
             open_initializer_brace_cache: std::cell::Cell::new(None),
