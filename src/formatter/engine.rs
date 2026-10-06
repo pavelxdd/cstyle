@@ -414,6 +414,14 @@ impl<'a> FormatEngine<'a> {
             tokens
         };
         let tokens = std::rc::Rc::new(tokens);
+        // Most output lines are source lines.
+        self.output.reserve(
+            tokens
+                .iter()
+                .filter(|token| matches!(token, Token::Newline))
+                .count()
+                + 1,
+        );
         self.tree = SourceTree::build_shared(std::rc::Rc::clone(&tokens));
         let tokens = tokens.as_slice();
         self.syntax_roles = classify_syntax(tokens, &self.tree);

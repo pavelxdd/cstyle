@@ -276,26 +276,38 @@ pub(super) struct OutputLineHints {
 }
 
 pub(super) fn output_line_hints(line: &str) -> OutputLineHints {
+    const COLON: u8 = 1;
+    const HASH: u8 = 1 << 1;
+    const SLASH: u8 = 1 << 2;
+    const QUESTION: u8 = 1 << 3;
+    const AT: u8 = 1 << 4;
+    const N: u8 = 1 << 5;
+    const E: u8 = 1 << 6;
+    const CLASSES: [u8; 256] = {
+        let mut classes = [0; 256];
+        classes[b':' as usize] = COLON;
+        classes[b'#' as usize] = HASH;
+        classes[b'/' as usize] = SLASH;
+        classes[b'?' as usize] = QUESTION;
+        classes[b'@' as usize] = AT;
+        classes[b'n' as usize] = N;
+        classes[b'e' as usize] = E;
+        classes
+    };
     let bytes = line.as_bytes();
-    let mut hints = OutputLineHints::default();
-    let mut first_non_space = None;
-    for (index, byte) in bytes.iter().copied().enumerate() {
-        if first_non_space.is_none() && byte != b' ' && byte != b'\t' {
-            first_non_space = Some(byte);
-        }
-        match byte {
-            b':' => hints.has_colon = true,
-            b'#' => hints.has_hash = true,
-            b'/' => hints.has_slash = true,
-            b'?' => hints.has_question = true,
-            b'@' => hints.has_at = true,
-            b'n' if bytes[index..].starts_with(b"new ") => hints.has_new = true,
-            b'e' if bytes[index..].starts_with(b"else") => hints.has_else = true,
-            _ => {}
-        }
+    let found = bytes
+        .iter()
+        .fold(0, |found, &byte| found | CLASSES[usize::from(byte)]);
+    OutputLineHints {
+        has_colon: found & COLON != 0,
+        has_else: found & E != 0 && line.contains("else"),
+        has_hash: found & HASH != 0,
+        has_slash: found & SLASH != 0,
+        has_question: found & QUESTION != 0,
+        has_at: found & AT != 0,
+        has_new: found & N != 0 && line.contains("new "),
+        starts_star: bytes.iter().find(|&&byte| byte != b' ' && byte != b'\t') == Some(&b'*'),
     }
-    hints.starts_star = first_non_space == Some(b'*');
-    hints
 }
 
 // Reads go through `Deref`; mutations stay on this type so cached line metadata cannot go stale.
@@ -460,6 +472,17 @@ impl OutputBuffer {
 
     /// Gives the pending sources to the line just pushed; a blank line, such
     /// as one inserted before the line they belong to, holds none.
+    /// Makes room for `lines` more lines.
+    pub(crate) fn reserve(&mut self, lines: usize) {
+        self.lines.reserve(lines);
+        self.meta.reserve(lines);
+        self.parens.reserve(lines);
+        self.tokens.reserve(lines);
+        self.comments.reserve(lines);
+        self.verbatim.reserve(lines);
+        self.indented_directive_continuation.reserve(lines);
+    }
+
     fn push_pending_sources(&mut self, blank: bool) {
         if let Some(start) = self.pending_scope_start
             && self.lines.len() > start + 1
