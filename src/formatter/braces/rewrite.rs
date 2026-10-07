@@ -1525,13 +1525,24 @@ impl FormatEngine<'_> {
         };
         if token_begins_line(tokens, start) && self.current_is_blank() {
             // Styles that indent braces indent a block kept after a macro,
-            // unless it is empty.
+            // unless it is empty, and Whitesmith and Ratliff a type's body
+            // as they do a one-line enum body.
             let brace_indent = usize::from(
                 source_separate_macro_block
                     && !is_empty_block
                     && matches!(
                         self.options.brace_style,
                         BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+                    )
+                    || matches!(
+                        brace_type,
+                        BraceType::Struct
+                            | BraceType::Union
+                            | BraceType::Class
+                            | BraceType::Interface
+                    ) && matches!(
+                        self.options.brace_style,
+                        BraceStyle::Whitesmith | BraceStyle::Ratliff
                     ),
             );
             self.layout

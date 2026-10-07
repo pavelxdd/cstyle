@@ -184,7 +184,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn split_class_head_indent_spaces(&self, current: &str) -> Option<usize> {
-        if current == "{" || current == ";" || current.starts_with("};") {
+        // A `{` opens the body, also as a one-line block.
+        if current.starts_with('{') || current == ";" || current.starts_with("};") {
             return None;
         }
         let stops = |trimmed: &str| {

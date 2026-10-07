@@ -1689,3 +1689,48 @@ fn added_one_line_block_after_broken_else_if_stays_at_its_header() {
         "void f()\n{\n    if (a) {\n        x();\n    } else\n        if (b) {\n            y();\n        } else\n        { z(); }\n    if (indent)\n    { a(); }\n    else\n        if (b)\n            c(sb,\n              d);\n        else {\n            if (x)\n            { d(); }\n        }\n    while (x) {\n        if (a)\n            ;\n        else\n            if (b)\n                ;\n            else\n            { return 0; } /* c */\n\n        if (u)\n        { u++; }\n    }\n}\n",
     );
 }
+
+#[test]
+fn one_line_anonymous_struct_body_stands_at_its_head() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned(), "-O".to_owned()])
+        .expect("valid options");
+    let input = "void f()\n{\n    z = 0;\n    struct\n    { int a; } v;\n    union U\n    { int b; float c; } u;\n    y = 1;\n}\n";
+    let expected = "void f()\n{\n    z = 0;\n    struct\n    { int a; } v;\n    union U\n    { int b; float c; } u;\n    y = 1;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn whitesmith_one_line_struct_body_takes_the_brace_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=whitesmith".to_owned(), "-O".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    z = 0;\n    struct\n    { int a; } v;\n    union U\n    { int b; float c; } u;\n    y = 1;\n}\n";
+    let expected = "void f()\n    {\n    z = 0;\n    struct\n        { int a; } v;\n    union U\n        { int b; float c; } u;\n    y = 1;\n    }\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn ratliff_one_line_struct_body_takes_the_brace_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "-O".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    z = 0;\n    struct\n    { int a; } v;\n    union U\n    { int b; float c; } u;\n    y = 1;\n}\n";
+    let expected = "void f() {\n    z = 0;\n    struct\n        { int a; } v;\n    union U\n        { int b; float c; } u;\n    y = 1;\n    }\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
