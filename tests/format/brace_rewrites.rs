@@ -2051,3 +2051,12 @@ fn closer_of_a_header_run_in_after_else_for_stands_a_level_past_them() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn kept_else_block_ends_the_braceless_loop_body_it_closes() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{   while (s)\n        if (u)\n        {   r(s);\n            s = h; }\n        else\n        {   s = n; } }\n\n/* Helpers */\nint g;\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

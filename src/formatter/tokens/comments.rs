@@ -1760,8 +1760,8 @@ impl FormatEngine<'_> {
                     .unwrap_or_default();
                 (trimmed.contains('(')
                     && trimmed.contains(')')
-                    && !trimmed.starts_with_any(b"}#")
-                    && !trimmed.ends_with_any(b";{")
+                    && !trimmed.starts_with_any(b"{}#")
+                    && !trimmed.ends_with_any(b";{}")
                     && !trimmed.contains('=')
                     && !language::is_header(header))
                 .then(|| leading_visual_width(line, self.options.tab_width))
@@ -2544,6 +2544,12 @@ impl FormatEngine<'_> {
             unindented_namespace_run_in_comment,
         } = *layout;
         let tab_width = self.options.tab_width.max(1);
+        // The columns past the `/*` column that a tab ending the dropped
+        // indent of a row took.
+        let tab_overshoot = |line: &str, kept: &str| {
+            leading_visual_width(&line[..line.len() - kept.len()], tab_width)
+                .saturating_sub(trim_amount)
+        };
         // A source run-in brace takes the opener back onto its line later.
         let opener_on_own_line = !run_in_opener
             && !self
@@ -2578,7 +2584,12 @@ impl FormatEngine<'_> {
                     let is_last_line = lines.peek().is_none();
                     let decorative_closer = is_decorative_block_comment_closer(trimmed_kept);
                     let source_closer_leading = leading_visual_width(line, tab_width);
-                    let closer_prefix = if decorative_closer && is_last_line {
+                    // The closer of a comment opened on a brace line keeps its
+                    // source offset as the rows do.
+                    let closer_prefix = if decorative_closer
+                        && is_last_line
+                        && !self.token_input.token_line_opens_with_brace
+                    {
                         self.output
                             .last()
                             .or(self.layout.previous_pre_adjust_line.as_ref())
@@ -2586,17 +2597,12 @@ impl FormatEngine<'_> {
                                 let leading =
                                     leading_visual_width(previous, self.options.tab_width);
                                 (previous.trimmed_start().starts_with('*')
-                                    && if self.token_input.token_line_opens_with_brace {
-                                        leading >= opener_output_column
-                                            && source_closer_leading > trim_amount
-                                    } else {
-                                        source_closer_leading < trim_amount
-                                            && leading == source_closer_leading
+                                    && source_closer_leading < trim_amount
+                                    && leading == source_closer_leading)
+                                    .then(|| {
+                                        previous[..previous.len() - previous.trimmed_start().len()]
+                                            .to_string()
                                     })
-                                .then(|| {
-                                    previous[..previous.len() - previous.trimmed_start().len()]
-                                        .to_string()
-                                })
                             })
                             .or_else(|| {
                                 kept.starts_with(" */").then(|| format!("{opener_prefix} "))
@@ -2616,30 +2622,14 @@ impl FormatEngine<'_> {
                         format!("{opener_prefix}{}", kept.trimmed_end())
                     } else if self.token_input.token_line_opens_with_brace && opener_on_own_line {
                         // The opener stands on its own line, which the rows
-                        // follow wherever the line moves.
-                        let source_line_column = leading_visual_width(line, tab_width);
-                        let body_offset = if decorative_closer && is_last_line {
-                            0
-                        } else if trimmed_kept.starts_with('*') {
-                            source_line_column.saturating_sub(trim_amount).min(1)
-                        } else {
-                            source_line_column.saturating_sub(trim_amount)
-                        };
+                        // follow wherever the line moves, each keeping what
+                        // stands past the `/*` column.
                         format!(
                             "{}{}",
-                            " ".repeat(opener_output_column + body_offset),
-                            trimmed_kept.trimmed_end()
+                            " ".repeat(opener_output_column + tab_overshoot(line, kept)),
+                            kept.trimmed_end()
                         )
                     } else if self.token_input.token_line_opens_with_brace {
-                        let source_line_column = leading_visual_width(line, tab_width);
-                        let body_offset = if decorative_closer && is_last_line {
-                            0
-                        } else if trimmed_kept.starts_with('*') {
-                            // A star keeps its source offset from the `/*`.
-                            source_line_column.saturating_sub(trim_amount).min(1)
-                        } else {
-                            source_line_column.saturating_sub(trim_amount)
-                        };
                         let indent = if self.options.indent_classes
                             && matches!(
                                 self.layout.nesting.brace_type_stack.last(),
@@ -2657,14 +2647,15 @@ impl FormatEngine<'_> {
                                 },
                                 |frame| frame.body_indent_column.max(opener_output_column),
                             );
-                        let target = merged_comment_column + body_offset;
+                        // Each row keeps what stands past the `/*` column.
                         format!(
-                            "{}{}",
+                            "{}{}{}",
                             self.options.continuation_indent_prefix(
                                 merged_comment_column / self.options.indent_width.max(1),
-                                target,
+                                merged_comment_column,
                             ),
-                            trimmed_kept.trimmed_end()
+                            " ".repeat(tab_overshoot(line, kept)),
+                            kept.trimmed_end()
                         )
                     } else if star_shift {
                         format!("{opener_prefix} {}", kept.trimmed_end())

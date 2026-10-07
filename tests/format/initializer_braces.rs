@@ -4389,3 +4389,15 @@ fn broken_row_brace_among_aligned_rows_keeps_their_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn nested_run_in_brace_runs_into_its_block_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "struct spec {\n  const char * const pem;\n  bool ok;\n};\n\nstatic const struct spec certs[] = {\n  { /* a valid certificate */\n    \"MIIB\",\n    TRUE },\n};\n";
+    let expected = "struct spec\n{   const char * const pem;\n    bool ok; };\n\nstatic const struct spec certs[] =\n{   {   /* a valid certificate */\n        \"MIIB\",\n        TRUE }, };\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

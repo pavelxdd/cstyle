@@ -385,25 +385,14 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
                 })
         };
         // A brace leading a row runs into the block comment after it.
-        if let Some(comment) = line
-            .trimmed_start()
-            .strip_prefix('{')
-            .filter(|rest| rest.starts_with_any(b" \t"))
-            .map(str::trim_start)
-            .filter(|rest| {
-                rest.starts_with("/*")
-                    && (rest.ends_with("*/") && rest.matches("*/").count() == 1
-                        || !rest.contains("*/"))
-            })
+        if let Some(comment) = brace_led_block_comment(line)
             && !raw_lines[index]
         {
             let brace = &line[..line.len() - line.trimmed_start().len() + 1];
-            let body = format!(
-                "{}{comment}",
-                " ".repeat(leading_visual_width(brace, options.tab_width) + options.indent_width)
-            );
-            let fill = horstmann_run_in_fill(brace, &body, options);
-            lines.push(format!("{brace}{fill}{comment}"));
+            lines.push(format!(
+                "{brace}{}{comment}",
+                brace_comment_fill(brace, comment, options)
+            ));
             index += 1;
             continue;
         }
@@ -424,6 +413,18 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
                     next.to_string()
                 };
                 joined.push_str(&fill);
+                // A nested brace runs into its block comment as a brace
+                // leading the row does.
+                if let Some(comment) = brace_led_block_comment(&next)
+                    && !raw_lines[at]
+                {
+                    let column = visual_width_from(&joined, 0, options.tab_width.max(1));
+                    let brace = format!("{}{{", " ".repeat(column));
+                    let fill = brace_comment_fill(&brace, comment, options);
+                    joined.push_str(&format!("{{{fill}{comment}"));
+                    at += 1;
+                    break;
+                }
                 joined.push_str(&next);
                 at += 1;
                 if next != "{" {
@@ -444,6 +445,29 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
         }
     }
     finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
+}
+
+/// The block comment after the `{` that leads `line`, when the comment is
+/// all that follows the brace or runs past the line.
+fn brace_led_block_comment(line: &str) -> Option<&str> {
+    line.trimmed_start()
+        .strip_prefix('{')
+        .filter(|rest| rest.starts_with_any(b" \t"))
+        .map(str::trim_start)
+        .filter(|rest| {
+            rest.starts_with("/*")
+                && (rest.ends_with("*/") && rest.matches("*/").count() == 1 || !rest.contains("*/"))
+        })
+}
+
+/// The fill between the `{` ending `brace` and the block comment it runs
+/// into.
+fn brace_comment_fill(brace: &str, comment: &str, options: &FormatOptions) -> String {
+    let body = format!(
+        "{}{comment}",
+        " ".repeat(leading_visual_width(brace, options.tab_width) + options.indent_width)
+    );
+    horstmann_run_in_fill(brace, &body, options)
 }
 
 fn run_in_next_line_is_access_label(

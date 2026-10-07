@@ -1647,6 +1647,11 @@ impl FormatEngine<'_> {
                     self.layout.pending_braceless_block_bias = None;
                 }
                 self.unwind_else_if_break_depths();
+                if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+                    && self.layout.indentation.indent() == base + delta
+                {
+                    self.layout.indentation.exit_braceless_block();
+                }
             }
         }
         Some(close_index + 1)

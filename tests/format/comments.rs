@@ -4537,3 +4537,21 @@ fn line_comment_after_a_trailing_commented_closer_leaves_the_block_column() {
     assert!(first.contains("\n    // private macro"), "{first}");
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn line_comment_after_a_run_in_block_and_an_empty_line_keeps_the_statement_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "int f(void)\n{   if (a)\n    {   b(); }\n\n    // Free it\n    return 0; }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn rows_and_closer_of_a_comment_on_a_brace_line_keep_their_offsets() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "int f(void)\n{   /*\n      * Set the limits.\n     */\n    return 0; }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
