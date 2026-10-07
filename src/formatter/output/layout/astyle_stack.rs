@@ -12,6 +12,7 @@
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::Token;
+use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
@@ -450,13 +451,28 @@ impl FormatEngine<'_> {
         if shift_stacked && first_is_shift {
             return None;
         }
+        // The line found last and the tokens it settles the line of.
+        let mut reach: Option<(usize, TokenSpan, usize)> = None;
+        let mut line_of = |index: usize| -> Option<usize> {
+            if let Some((line, span, next)) = reach
+                && (span.first..next).contains(&index)
+            {
+                return (index <= span.last).then_some(line);
+            }
+            let line = self.output.line_with_token(index)?;
+            reach = self
+                .output
+                .ordered_line_reach(line)
+                .map(|(span, next)| (line, span, next));
+            Some(line)
+        };
         while index < first {
             let token = &tokens[index];
             if !is_code_token(token) {
                 index += 1;
                 continue;
             }
-            let token_line = self.output.line_with_token(index)?;
+            let token_line = line_of(index)?;
             let starts_line = line != Some(token_line);
             if starts_line {
                 line = Some(token_line);
@@ -468,7 +484,7 @@ impl FormatEngine<'_> {
             };
             let next_on_line = self
                 .next_code_token_before(index, first)
-                .filter(|&next| self.output.line_with_token(next) == Some(token_line));
+                .filter(|&next| line_of(next) == Some(token_line));
             match token {
                 Token::Symbol('(' | '[') => {
                     if replay.depth == 0 {
@@ -665,7 +681,12 @@ impl FormatEngine<'_> {
     }
 
     /// The row of an initializer that indenting after parens stacks.
+    #[inline(never)]
     pub(super) fn stacked_initializer_row_indent(&self, first: usize) -> Option<usize> {
+        // Only indenting after parens stacks an initializer.
+        if !self.options.indent_after_parens {
+            return None;
+        }
         if self.closes_stacked_initializer(first) {
             return self.astyle_stack_indent(first);
         }
@@ -703,19 +724,29 @@ impl FormatEngine<'_> {
     /// array state for the body.
     fn header_holds_braces(&self, open: usize) -> bool {
         let tokens = &self.tree.tokens;
+        let key = (tokens.as_ptr() as usize, open);
+        if let Some((address, cached_open, holds)) = self.header_braces_cache.get()
+            && (address, cached_open) == key
+        {
+            return holds;
+        }
         let mut index = open;
-        while let Some(before) = self.tree.previous_code_token(index) {
+        let holds = loop {
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break false;
+            };
             if self.tree.groups.enclosing(before).is_none()
                 && matches!(tokens[before], Token::Symbol(';' | '}'))
             {
-                break;
+                break false;
             }
             if matches!(tokens[before], Token::Symbol('{')) {
-                return true;
+                break true;
             }
             index = before;
-        }
-        false
+        };
+        self.header_braces_cache.set(Some((key.0, key.1, holds)));
+        holds
     }
 
     /// Pushes the indent astyle registers at `index`: the column of the
@@ -791,18 +822,58 @@ impl FormatEngine<'_> {
         depth <= 0 && last.is_some_and(|last| matches!(tokens[last], Token::Symbol(',')))
     }
 
+    /// Whether `group` is a brace group other than an initializer's, which
+    /// a statement does not continue past.
+    fn is_stack_block(&self, group: GroupId) -> bool {
+        self.tree.groups.get(group).delimiter == Delimiter::Brace
+            && !matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+    }
+
+    /// Whether the parens `closed` hold a control header's condition.
+    fn closes_control_header(&self, closed: GroupId) -> bool {
+        self.tree
+            .previous_code_token(self.tree.groups.get(closed).open)
+            .is_some_and(|keyword| is_control_keyword(&self.tree.tokens[keyword]))
+    }
+
+    /// Whether the code token `before` ends what a statement after it
+    /// continues: a `;` or a brace of a block, a control header, or `else`
+    /// and `do`.
+    pub(super) fn ends_stack_statement(&self, before: usize) -> bool {
+        let groups = &self.tree.groups;
+        match &self.tree.tokens[before] {
+            Token::Symbol(';') => groups
+                .enclosing(before)
+                .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace),
+            Token::Symbol('{') => groups
+                .opened_at(before)
+                .is_some_and(|group| self.is_stack_block(group)),
+            Token::Symbol(')' | ']' | '}') => groups.closed_at(before).is_some_and(|closed| {
+                self.is_stack_block(closed) || self.closes_control_header(closed)
+            }),
+            Token::Word(word) => word == "else" || word == "do",
+            _ => false,
+        }
+    }
+
     /// The first token of the statement holding `index`, past parens,
     /// brackets, and initializer braces around it.
     fn stack_statement_start(&self, index: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
-        let is_block = |group: GroupId| {
-            groups.get(group).delimiter == Delimiter::Brace
-                && !matches!(
-                    self.tree.blocks.kind(group),
-                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                )
-        };
+        let is_block = |group: GroupId| self.is_stack_block(group);
+        // Most lines start a statement, where the look back below stops at
+        // once.
+        if self
+            .tree
+            .previous_code_token(index)
+            .is_none_or(|before| self.ends_stack_statement(before))
+        {
+            return None;
+        }
         let tokens_address = self.tree.tokens.as_ptr() as usize;
         // The look back depends on nothing but where it stands, so it ends
         // where the last one did once it reaches a token that one passed.
@@ -817,7 +888,12 @@ impl FormatEngine<'_> {
         passed.clear();
         let mut start = index;
         let joined = loop {
-            if let Ok(at) = path.positions.binary_search(&(start as u32)) {
+            if path
+                .positions
+                .last()
+                .is_some_and(|&last| start as u32 <= last)
+                && let Ok(at) = path.positions.binary_search(&(start as u32))
+            {
                 break Some(at);
             }
             passed.push(start as u32);
@@ -840,11 +916,7 @@ impl FormatEngine<'_> {
                 break None;
             }
             if let Some(closed) = groups.closed_at(before) {
-                let header = self
-                    .tree
-                    .previous_code_token(groups.get(closed).open)
-                    .is_some_and(|keyword| is_control_keyword(&tokens[keyword]));
-                if is_block(closed) || header {
+                if is_block(closed) || self.closes_control_header(closed) {
                     break None;
                 }
                 start = groups.get(closed).open;
@@ -883,8 +955,8 @@ impl FormatEngine<'_> {
                         .enclosing(before)
                         .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
-                || self.ends_case_label(before)
-                || self.ends_user_label(before)
+                || matches!(tokens[before], Token::Symbol(':'))
+                    && (self.ends_case_label(before) || self.ends_user_label(before))
             {
                 break None;
             }

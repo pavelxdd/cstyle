@@ -302,6 +302,13 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back from a member declarator's `,`.
     pub(crate) member_declarator_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::MemberDeclaratorLook>>,
+    /// The last function body asked whether its declaration holds braces:
+    /// the tokens' address, the body's `{`, and the answer.
+    pub(crate) header_braces_cache: std::cell::Cell<Option<(usize, usize, bool)>>,
+    /// The output lines the bodies of the blocks asked about lately take
+    /// their columns from, most recent first.
+    pub(crate) block_body_anchor_cache:
+        std::cell::RefCell<[Option<crate::formatter::output::layout::anchors::BlockBodyAnchor>; 4]>,
     /// The last replay of astyle's stack, for the next line of its
     /// statement.
     pub(crate) astyle_replay_cache:
@@ -414,6 +421,8 @@ impl<'a> FormatEngine<'a> {
             declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
+            header_braces_cache: std::cell::Cell::new(None),
+            block_body_anchor_cache: std::cell::RefCell::new([None; 4]),
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
@@ -855,7 +864,7 @@ impl<'a> FormatEngine<'a> {
                 .tokens
                 .iter()
                 .enumerate()
-                .filter(|(_, token)| matches!(token, Token::Word(word) if matches!(word.as_str(), "case" | "default")))
+                .filter(|(_, token)| matches!(token, Token::Word(word) if word == "case" || word == "default"))
                 .map(|(index, _)| index as u32)
                 .collect()
         });

@@ -478,9 +478,9 @@ pub(crate) struct OutputBuffer {
     /// Whether a line ever recorded a first token before that of an earlier
     /// line; until then lines can be searched by token.
     first_tokens_unordered: bool,
-    /// The line [`Self::line_with_token`] found last; lookups of nearby
-    /// tokens start from it.
-    token_line_hint: Cell<usize>,
+    /// The lines [`Self::line_with_token`] found lately, most recent first;
+    /// lookups of nearby tokens start from the nearest.
+    token_line_hints: Cell<[usize; TOKEN_LINE_HINTS]>,
 }
 
 /// The comment lines that end the lines in scope, blank lines aside: the
@@ -750,6 +750,10 @@ struct OpenBraceUndo {
 
 /// How many of the last changes to lines a look back can read past.
 const RECENT_CHANGES: usize = 16;
+
+/// How many lines found lately a token's line lookup starts from: a line's
+/// layout looks up its own tokens, its statement's, and its block's.
+const TOKEN_LINE_HINTS: usize = 4;
 
 /// A look back for the last line a test admits, kept to read on from.
 #[derive(Default)]
@@ -1250,6 +1254,35 @@ impl OutputBuffer {
         leading_visual_width(&self.lines[index], tab_width)
     }
 
+    /// Whether lines record their tokens in order and the lines after `line`
+    /// start past `token`, so that none of them holds `token` or a token
+    /// before it.
+    pub(crate) fn lines_after_start_past(&self, line: usize, token: usize) -> bool {
+        !self.first_tokens_unordered
+            && self.tokens.get(line + 1..).is_some_and(|after| {
+                after
+                    .iter()
+                    .find_map(|span| span.get())
+                    .is_none_or(|span| span.first > token)
+            })
+    }
+
+    /// The tokens of line `index` and the first token of the next line
+    /// that records tokens, when lines record their tokens in order:
+    /// [`Self::line_with_token`] finds this line for a token from the
+    /// span's first up to before that next one, if the span holds it.
+    pub(crate) fn ordered_line_reach(&self, index: usize) -> Option<(TokenSpan, usize)> {
+        if self.first_tokens_unordered {
+            return None;
+        }
+        let span = self.tokens.get(index)?.get()?;
+        let next = self.tokens[index + 1..]
+            .iter()
+            .find_map(|span| span.get())
+            .map_or(usize::MAX, |span| span.first);
+        Some((span, next))
+    }
+
     /// Index of the output line that holds the source token `token`, among
     /// lines that recorded their tokens.
     pub(crate) fn line_with_token(&self, token: usize) -> Option<usize> {
@@ -1266,7 +1299,7 @@ impl OutputBuffer {
             self.last_line_starting_by(token)
         };
         if let Some(index) = index {
-            self.token_line_hint.set(index);
+            self.keep_token_line_hint(TOKEN_LINE_HINTS - 1, index);
         }
         index.filter(|&index| {
             self.tokens[index]
@@ -1275,14 +1308,33 @@ impl OutputBuffer {
         })
     }
 
-    /// `line_with_token` read on from the line found last, when that line
-    /// starts by `token` and a later line soon starts past it; `None` when
-    /// the hint does not settle the answer.
-    fn line_with_token_near_hint(&self, token: usize) -> Option<Option<usize>> {
-        let hint = self.token_line_hint.get();
-        if self.tokens.get(hint)?.get()?.first > token {
-            return None;
+    /// Makes `line` the most recent hint in place of the one in `slot`.
+    fn keep_token_line_hint(&self, slot: usize, line: usize) {
+        let mut hints = self.token_line_hints.get();
+        let mut carried = line;
+        for hint in &mut hints[..=slot] {
+            carried = std::mem::replace(hint, carried);
         }
+        self.token_line_hints.set(hints);
+    }
+
+    /// `line_with_token` read on from the nearest line found lately that
+    /// starts by `token`, when a later line soon starts past it; `None`
+    /// when the hints do not settle the answer.
+    fn line_with_token_near_hint(&self, token: usize) -> Option<Option<usize>> {
+        let mut nearest: Option<(usize, usize)> = None;
+        for (slot, &hint) in self.token_line_hints.get().iter().enumerate() {
+            if nearest.is_none_or(|(_, nearest)| hint > nearest)
+                && self
+                    .tokens
+                    .get(hint)
+                    .and_then(|span| span.get())
+                    .is_some_and(|span| span.first <= token)
+            {
+                nearest = Some((slot, hint));
+            }
+        }
+        let (slot, hint) = nearest?;
         let mut found = hint;
         let mut lines_read = 0;
         for (index, span) in self.tokens.iter().enumerate().skip(hint + 1) {
@@ -1297,7 +1349,7 @@ impl OutputBuffer {
                 return None;
             }
         }
-        self.token_line_hint.set(found);
+        self.keep_token_line_hint(slot, found);
         Some(
             self.tokens[found]
                 .get()
