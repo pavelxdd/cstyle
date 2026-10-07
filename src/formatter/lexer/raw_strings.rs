@@ -9,8 +9,15 @@ pub(crate) struct RawStringStart {
 
 pub(crate) fn start(line: &str, start: usize) -> Option<RawStringStart> {
     let rest = line.get(start..)?;
-    // Every prefix starts with one of these.
-    if !matches!(rest.as_bytes().first(), Some(b'u' | b'L' | b'U' | b'R')) {
+    // Every prefix ends in `R"`, after `u8`, one of `u L U`, or nothing.
+    let bytes = rest.as_bytes();
+    let quote_r = match bytes.first() {
+        Some(b'R') => 0,
+        Some(b'u') if bytes.get(1) == Some(&b'8') => 2,
+        Some(b'u' | b'L' | b'U') => 1,
+        _ => return None,
+    };
+    if bytes.get(quote_r) != Some(&b'R') || bytes.get(quote_r + 1) != Some(&b'"') {
         return None;
     }
     if line

@@ -234,12 +234,15 @@ fn for_each_code_delimiter(
         if state.raw_delimiter.is_none()
             && !state.in_block_comment
             && state.quote.is_none()
-            && !matches!(
-                byte,
-                b'/' | b'u' | b'L' | b'U' | b'R' | b'"' | b'\'' | b'(' | b')' | b'{' | b'}'
-            )
+            && DELIMITER_INERT[usize::from(byte)]
         {
             index += 1;
+            while bytes
+                .get(index)
+                .is_some_and(|&byte| DELIMITER_INERT[usize::from(byte)])
+            {
+                index += 1;
+            }
             continue;
         }
         let next = bytes.get(index + 1).copied();
@@ -306,6 +309,18 @@ fn for_each_code_delimiter(
         index += 1;
     }
 }
+
+/// The bytes `for_each_code_delimiter` passes unread in code.
+const DELIMITER_INERT: [bool; 256] = {
+    let mut inert = [true; 256];
+    let marks = b"/uLUR\"'(){}";
+    let mut index = 0;
+    while index < marks.len() {
+        inert[marks[index] as usize] = false;
+        index += 1;
+    }
+    inert
+};
 
 /// Whether the `'` at byte `index` separates digits of a number.
 fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
