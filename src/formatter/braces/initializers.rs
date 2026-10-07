@@ -705,7 +705,9 @@ impl FormatEngine<'_> {
                     self.tree.tokens.get(token_index + 1),
                     Some(Token::Symbol('('))
                 );
-            base_indent + self.current_char_len() + usize::from(padded_paren)
+            // The elements align to the brace's tab-expanded column; its
+            // closer counts each tab as one column.
+            base_indent + self.current_visual_width_from(base_indent) + usize::from(padded_paren)
         };
         let statement_base = ContinuationIndent::Level(
             self.layout
@@ -809,10 +811,11 @@ impl FormatEngine<'_> {
             .output
             .get(open_output_len)
             .is_some_and(|line| line.trimmed_start().starts_with("return "));
-        let enclosed_run_in = self
-            .output
-            .get(open_output_len)
-            .is_some_and(|line| line.contains_from_first_byte("{ {"));
+        // A returned `{{` keeps its closers on the last row.
+        let enclosed_run_in = self.output.get(open_output_len).is_some_and(|line| {
+            line.contains_from_first_byte("{ {")
+                || !return_initializer && line.contains_from_first_byte("{{")
+        });
         let range_for_initializer = self.output.get(open_output_len).is_some_and(|line| {
             let trimmed = line.trimmed_start();
             trimmed.starts_with("for ") && trimmed.trimmed_end().ends_with('{')

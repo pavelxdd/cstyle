@@ -4365,3 +4365,15 @@ fn broken_row_brace_among_aligned_elements_stands_at_their_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn initializer_elements_align_to_the_tab_expanded_brace_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n\tint\t\t mib[6] = { A, B, C, 0,\n\t\t\t\t    sizeof(struct k), 0 };\n\tx = 1;\n}\n";
+    let expected = "void f()\n{\n    int\t\t mib[6] = { A, B, C, 0,\n                        sizeof(struct k), 0\n                   };\n    x = 1;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
