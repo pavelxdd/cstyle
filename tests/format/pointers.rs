@@ -3539,3 +3539,20 @@ fn pointer_declarator_starting_a_row_stays_with_its_name() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn xor_after_a_call_in_a_one_line_block_stays_binary() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--align-pointer=name".to_owned(),
+            "-O".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    if (x) { srand((unsigned)time(NULL) ^ SEED); }\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

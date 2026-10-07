@@ -4424,3 +4424,42 @@ fn vtk_indents_a_define_block_closer_in_code_unless_it_ends_the_define() {
         "void f(void)\n{\n    x();\n#define OUT(x) do { \\\n        if (dst == end) \\\n            BUG(\"x\"); \\\n        *dst++ = (x); \\\n        } while(0)\n    y();\n}\n",
     );
 }
+
+#[test]
+fn conditional_in_a_block_of_an_indented_case_body_stands_at_the_block_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--indent-switches".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    switch(x) {\n        case A:\n            if(y) {\n                g();\n                #ifdef V\n                h();\n                #endif\n                k();\n            }\n    }\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn assignment_in_an_else_branch_starts_where_the_if_branch_did() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-after-parens".to_owned()],
+    )
+    .expect("valid options");
+    let input = "int f(void)\n{\n#if A\n    flags = CLEAR\n#else\n    flags = LEVEL\n#endif\n        | GREEDY;\n    return 0;\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn block_after_a_negated_parenthesized_condition_is_no_compound_literal() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{   a();\n#if !(A)\n    {   if (x)\n        {   g(); } }\n#endif\n    return; }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

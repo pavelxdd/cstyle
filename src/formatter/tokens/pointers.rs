@@ -710,6 +710,10 @@ impl FormatEngine<'_> {
             .trimmed_end()
             .strip_suffix('\\')
             .map_or(before, str::trim_end);
+        // A brace or `;` before the head ends the statement it follows.
+        let before = before
+            .rfind(['{', '}', ';'])
+            .map_or(before, |end| before[end + 1..].trim_start());
         if before.is_empty() || before.contains('?') || function_head_has_assignment(before) {
             return false;
         }

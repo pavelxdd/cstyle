@@ -15,6 +15,7 @@ pub(crate) mod groups;
 pub(crate) mod statements;
 
 use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::line_view::LineView;
 use blocks::{Blocks, is_code_token, next_code_token};
 use functions::Functions;
@@ -126,6 +127,30 @@ impl SourceTree {
         self.directives
             .get(at)
             .is_some_and(|&index| index < range.end)
+    }
+
+    /// Whether an `#else` or `#elif` in `range` switches away from a branch
+    /// whose `#if` comes before the range.
+    pub(crate) fn switches_outer_branch_in(&self, range: std::ops::Range<usize>) -> bool {
+        let at = self
+            .directives
+            .partition_point(|&index| index < range.start);
+        let mut depth = 0usize;
+        for &index in self.directives[at..]
+            .iter()
+            .take_while(|&&index| index < range.end)
+        {
+            let Token::Preprocessor(directive) = &self.tokens[index] else {
+                continue;
+            };
+            match preprocessor_directive(&directive.text) {
+                Some("if" | "ifdef" | "ifndef") => depth += 1,
+                Some("endif") => depth = depth.saturating_sub(1),
+                Some("else" | "elif" | "elifdef" | "elifndef") if depth == 0 => return true,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Last code token before `index`.

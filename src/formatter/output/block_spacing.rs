@@ -364,7 +364,8 @@ impl FormatEngine<'_> {
 
     pub(crate) fn take_block_spacing_blank(&mut self, line: &str) -> bool {
         let line_start = line.trimmed_start();
-        if !self.options.break_blocks {
+        // A blank due after a block waits for the comment ending its line.
+        if !self.options.break_blocks || self.output.pending_line_continues_comment() {
             return false;
         }
         let previous_opens = self

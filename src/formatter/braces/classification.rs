@@ -504,10 +504,10 @@ impl FormatEngine<'_> {
 
     pub(super) fn current_ends_compound_literal_type(&self) -> bool {
         if self.current_is_blank() {
-            return self
-                .output
-                .last()
-                .is_some_and(|last| line_ends_compound_literal_cast(last));
+            // A directive's condition casts nothing after it.
+            return self.output.last().is_some_and(|last| {
+                !last.trimmed_start().starts_with('#') && line_ends_compound_literal_cast(last)
+            });
         }
         if matches!(self.current.trimmed_start().chars().next(), Some(':' | ',')) {
             return false;

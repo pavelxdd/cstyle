@@ -1835,3 +1835,19 @@ fn break_blocks_keeps_a_header_after_a_comment_and_directive_opening_its_block()
         "void f(void)\n{\n    if (a) {\n#ifndef X\n\n        if (t)\n            g();\n\n#endif\n    }\n\n    if (b) {\n        /* c */\n#ifndef X\n        if (t)\n            g();\n\n#endif\n    }\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_blank_after_a_body_waits_for_its_trailing_comment_to_end() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-blocks=all".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    if(!home)\n        return 1; /* no home\n                     of memory */\n    filealloc = 1;\n}\n";
+    let expected = "void f(void)\n{\n    if(!home)\n        return 1; /* no home\n                     of memory */\n\n    filealloc = 1;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

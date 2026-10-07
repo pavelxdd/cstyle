@@ -1032,6 +1032,18 @@ impl OutputBuffer {
         self.active_comment = index;
     }
 
+    /// Whether the line about to be pushed continues a block comment that
+    /// an earlier line opened.
+    pub(crate) fn pending_line_continues_comment(&self) -> bool {
+        let comment = self
+            .pending_comments
+            .map_or(self.active_comment, |comments| comments.lead);
+        comment.is_some_and(|comment| {
+            self.last_non_empty_index()
+                .is_some_and(|index| self.comments[index].get().mentions(comment))
+        })
+    }
+
     /// Source tokens of the line being finished, before it is pushed.
     pub(crate) fn pending_tokens(&self) -> Option<TokenSpan> {
         self.pending_tokens

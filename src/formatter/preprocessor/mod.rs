@@ -8,6 +8,7 @@ use crate::formatter::constructs::headers::HeaderParenState;
 use crate::formatter::engine::{FormatEngine, LayoutState};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_comment_split_limit, preprocessor_directive};
@@ -1169,8 +1170,11 @@ impl FormatEngine<'_> {
                 spaces,
             }
         } else {
+            // A block nested in a case body stands past the case's own level.
             PreprocessorLineIndent::Level(
-                self.layout.indentation.indent() + self.split_else_directive_extra(),
+                self.layout.indentation.indent()
+                    + self.case_body_indent_extra(LineKind::Normal)
+                    + self.split_else_directive_extra(),
             )
         }
     }
@@ -1280,7 +1284,9 @@ impl FormatEngine<'_> {
                     .flatten()
                     .or_else(|| self.preprocessor_continuation_spaces());
                 self.layout.indentation.push_preprocessor_indent(
-                    self.layout.indentation.indent() + self.split_else_directive_extra(),
+                    self.layout.indentation.indent()
+                        + self.case_body_indent_extra(LineKind::Normal)
+                        + self.split_else_directive_extra(),
                     spaces,
                 );
                 self.preprocessor
