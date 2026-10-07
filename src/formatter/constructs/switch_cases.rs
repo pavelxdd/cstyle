@@ -2317,7 +2317,18 @@ impl FormatEngine<'_> {
         let statement_in_switch_body = line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with_any(b"{}#/")
             && self.directly_in_switch_body();
-        if line_kind == LineKind::SwitchLabel || statement_in_switch_body {
+        // Indented cases set a label in a case block at the block's brace,
+        // its body staying at the block's.
+        let label_in_indented_case_block = line_kind == LineKind::SwitchLabel
+            && self.options.indent_cases
+            && self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.case_block);
+        if (line_kind == LineKind::SwitchLabel || statement_in_switch_body)
+            && !label_in_indented_case_block
+        {
             let current = self.layout.nesting.brace_header_stack.len();
             if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
                 self.layout

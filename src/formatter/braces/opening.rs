@@ -922,7 +922,9 @@ impl FormatEngine<'_> {
                     let keep = ws.len().saturating_sub(absorbed).max(1);
                     self.current.push_str(&ws[..keep]);
                 } else if let Some(target) = target {
+                    let run_in_closer = self.run_in_closer_row() == Some(true);
                     let gap = column_gap(&self.current, target);
+                    let gap = gap.saturating_sub(usize::from(run_in_closer)).max(1);
                     self.current.push_str(&" ".repeat(gap));
                 } else {
                     self.current.push_str(&ws);
@@ -1367,8 +1369,17 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = Some(self.statement_level());
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
+        // A brace after an `else` and a comment is the else's own body.
+        let else_body_brace = self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .is_some_and(|previous| {
+                matches!(&self.tree.tokens[previous], Token::Word(word) if word == "else")
+            });
         if let Some(level) = self.layout.pending_braceless_block_bias.take()
             && brace_type == BraceType::Command
+            && !else_body_brace
         {
             // The bias counts the case body level the indentation lacks.
             let delta = level.saturating_sub(
@@ -2558,7 +2569,10 @@ impl FormatEngine<'_> {
             // The comment keeps its source column past code that a moved
             // closing brace and the broken brace left.
             let code_len = self.current.trimmed().chars().count();
-            let target = target.saturating_sub(self.broken_else_if_prefix_width());
+            let run_in_closer = self.run_in_closer_row() == Some(true);
+            let target = target
+                .saturating_sub(self.broken_else_if_prefix_width())
+                .saturating_sub(usize::from(run_in_closer));
             self.current
                 .push_str(&" ".repeat(target.saturating_sub(code_len).max(1)));
         } else {

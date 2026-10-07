@@ -2060,3 +2060,32 @@ fn kept_else_block_ends_the_braceless_loop_body_it_closes() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn brace_added_after_a_comment_under_an_else_in_an_indented_case_holds_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=1tbs".to_owned(), "-j".to_owned(), "-S".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f(void) {\n    switch (s) {\n    case 1:\n        if (a) {\n            b();\n        }\n        else\n            // At the end\n            prev = num;\n        c();\n    }\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    switch (s) {",
+        "        case 1:",
+        "            if (a) {",
+        "                b();",
+        "            } else",
+        "                // At the end",
+        "            {",
+        "                prev = num;",
+        "            }",
+        "            c();",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+}

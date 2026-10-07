@@ -96,6 +96,34 @@ struct OwnLineBlockComment<'a> {
 }
 
 impl FormatEngine<'_> {
+    /// For a row a pico or lisp closer leads, whether that closer began its
+    /// source line: it then runs into the row before, which takes a column
+    /// out of the gap before a trailing comment.
+    pub(crate) fn run_in_closer_row(&self) -> Option<bool> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) || !self.current.trimmed_start().starts_with('}')
+        {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        let first = self.current.tokens()?.first;
+        if first >= tokens.len() {
+            return None;
+        }
+        let begins_source_line = tokens[..first]
+            .iter()
+            .rev()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_none_or(|token| matches!(token, Token::Newline));
+        // A row ending with a comment takes no closer.
+        let joins_row_before = self.output.last().is_some_and(|line| {
+            !line.trimmed().is_empty() && self.output.code_trimmed_of(line) == line.trimmed_end()
+        });
+        (!begins_source_line || joins_row_before).then_some(begins_source_line)
+    }
+
     pub(crate) fn schedule_run_in_comment_brace_merge(&mut self, brace_line: usize) {
         self.comments.run_in_comment_brace_lines.push(brace_line);
     }
@@ -1667,6 +1695,19 @@ impl FormatEngine<'_> {
                 if introduces_label {
                     let base = self.layout.indentation.indent().saturating_sub(1)
                         * self.options.indent_width;
+                    // Indented cases put a case block's `}` a level past its
+                    // label.
+                    let closed_case_block = self.options.indent_cases
+                        && self
+                            .layout
+                            .frame_stack
+                            .last_closed_brace()
+                            .is_some_and(|frame| frame.case_block);
+                    let previous_indent = if closed_case_block {
+                        previous_indent.saturating_sub(self.options.indent_width)
+                    } else {
+                        previous_indent
+                    };
                     base.max(previous_indent)
                 } else {
                     (self.layout.indentation.indent() * self.options.indent_width)
@@ -2569,6 +2610,9 @@ impl FormatEngine<'_> {
             && !self
                 .source_run_in_brace_lines
                 .contains(&self.output.len().wrapping_sub(1));
+        // The column the comment takes after a run-in element brace, which
+        // its rows follow.
+        let mut run_in_column = None;
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
             if index == 0 && run_in_opener {
@@ -2579,8 +2623,19 @@ impl FormatEngine<'_> {
                     .clone()
                     .filter(|ws| !ws.contains('\n'))
                     .unwrap_or_default();
+                // astyle pads an element brace's comment to the body column,
+                // where it lays the rows; keeping the gap moves them along.
+                let element_brace = matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer)
+                ) && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Pico | BraceStyle::Horstmann
+                );
                 if let Some(brace_line) = self.output.last_mut() {
                     brace_line.push_str(&gap);
+                    run_in_column =
+                        element_brace.then(|| visual_width_from(brace_line, 0, tab_width));
                     brace_line.push_str(line.trimmed_end());
                 }
                 continue;
@@ -2641,6 +2696,12 @@ impl FormatEngine<'_> {
                         format!(
                             "{}{}",
                             " ".repeat(opener_output_column + tab_overshoot(line, kept)),
+                            kept.trimmed_end()
+                        )
+                    } else if let Some(column) = run_in_column {
+                        format!(
+                            "{}{}",
+                            " ".repeat(column + tab_overshoot(line, kept)),
                             kept.trimmed_end()
                         )
                     } else if self.token_input.token_line_opens_with_brace {
@@ -2975,6 +3036,12 @@ impl FormatEngine<'_> {
         let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
             .flatten();
+        // A closer after code on its source line runs back into that line,
+        // which keeps the gap before its comment.
+        if !gap.is_empty() && self.run_in_closer_row() == Some(false) {
+            self.current.push_str(&gap);
+            return;
+        }
         let trimmed_code = self.current.trimmed();
         if trimmed_code.starts_with("case ") || trimmed_code.starts_with("default:") {
             self.current.push_str(&gap);

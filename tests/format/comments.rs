@@ -4598,3 +4598,35 @@ fn stripped_comment_row_keeps_its_own_tab_under_tab_indent() {
 
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn rows_of_a_comment_after_a_run_in_element_brace_follow_the_comment() {
+    let input = "int a[] = {\n  { /* q\n       N */\n    1 },\n};\n";
+    let expected = "int a[] = {\n    { /* q\n         N */\n        1\n    },\n};\n";
+    let options = FormatOptions::default();
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn comment_gap_before_a_broken_initializer_brace_on_a_run_in_closer_row() {
+    let input = "struct A {\n    char *name;\n} X[] = {   /* See */\n    {\"k\", 1},\n};\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "struct A\n{   char *name; } X[] =    /* See */\n{   {\"k\", 1 }, };\n",
+        ),
+        (
+            "--style=lisp",
+            "struct A {\n    char *name; } X[] = {  /* See */\n    {\"k\", 1 }, };\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+}

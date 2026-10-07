@@ -1516,3 +1516,76 @@ fn label_after_a_case_block_closer_in_a_nested_switch_stands_at_the_labels() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn comments_after_an_indented_case_block_before_a_label_stand_at_the_labels() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "-S".to_owned(),
+            "-K".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void){\n  switch(x){\ncase 1: {\n  if( p ){\n  }\n}\n/* A\n*/\n/* B\n*/\ncase 2: {\n}\n  }\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(x)",
+        "    {",
+        "        case 1:",
+        "            {",
+        "                if( p )",
+        "                {",
+        "                }",
+        "            }",
+        "        /* A",
+        "        */",
+        "        /* B",
+        "        */",
+        "        case 2:",
+        "            {",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn label_in_an_indented_case_block_adds_no_case_body_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "-S".to_owned(),
+            "-K".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void){\n  switch(x){\ncase 1: {\n  z();\ncase 2:\n  a();\n  b();\n  break;\n}\n  }\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(x)",
+        "    {",
+        "        case 1:",
+        "            {",
+        "                z();",
+        "            case 2:",
+        "                a();",
+        "                b();",
+        "                break;",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
