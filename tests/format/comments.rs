@@ -4514,3 +4514,26 @@ fn nested_run_in_braces_keep_trailing_comment_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn column_one_comment_in_an_open_condition_aligns_with_the_operands() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n  if((lib == ERR_LIB_SSL) &&\n     ((reason == SSL_R_A)\n/* Missing */\n#ifdef X\n      || (reason == B)\n#endif\n     )) {\n    r = 1;\n  }\n}\n";
+    let expected = "void f()\n{\n    if((lib == ERR_LIB_SSL) &&\n            ((reason == SSL_R_A)\n             /* Missing */\n#ifdef X\n             || (reason == B)\n#endif\n            )) {\n        r = 1;\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn line_comment_after_a_trailing_commented_closer_leaves_the_block_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "static decFloat * decFinalize(decFloat *df, bcdnum *num,\n                              decContext *set)\n{\n    if (!NUMISSPECIAL(num)) {\n        if (*umsd==0) {\n            if (drop<length) {                     // NB lengths not addresses\n                if (set->round==DEC_ROUND_HALF_EVEN) {    // fastpath slowest case\n                    case DEC_ROUND_DOWN: {\n                    } // r-f\n                    case DEC_ROUND_05UP: {\n                        if (reround>0) { // anything out there is 'sticky'\n                        }\n                    }\n                    for (; ub>=umsd; *ub=0, ub--) {\n                        if ((ulsd-umsd+1)==DECPMAX) {\n                        } // subnormal extend\n                    } // had all-nines\n                } // bump needed\n            } // inexact rounding\n            if (*ulsd==0 && ulsd==umsd) {     // have zero\n                switch (set->round) {\n                case DEC_ROUND_DOWN: {\n                } // r-c\n                }\n            } // fold-down?\n        } // high-end edge case\n    } // finite number\n    if (!NUMISSPECIAL(num)) {             // is still finite\n        // encode the combination field and exponent continuation\n    } else encode=num->exponent;         // special [already in word]\n    // private macro to extract a declet, n (where 0<=n<DECLETS and 0\n#define getDPDt(dpd, n) ub=ulsd-(3*(n))-2;                          \\\n} // decFinalize\n";
+    let first = format_exact(input, &options);
+
+    assert!(first.contains("\n    // private macro"), "{first}");
+    assert_eq!(format_exact(&first, &options), first);
+}

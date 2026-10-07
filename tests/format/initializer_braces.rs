@@ -4377,3 +4377,15 @@ fn initializer_elements_align_to_the_tab_expanded_brace_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn broken_row_brace_among_aligned_rows_keeps_their_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n\tconst char *k[][2] = { { \"key1\", \"value1\" },\n\t\t\t     { \"key2\", \"value2\" },\n\t\t\t     { c ? \"key4\" : \"foo\",\n\t\t\t       \"value4\" } };\n\tx = 1;\n}\n";
+    let expected = "void f()\n{\n    const char *k[][2] = { { \"key1\", \"value1\" },\n        { \"key2\", \"value2\" },\n        {\n            c ? \"key4\" : \"foo\",\n            \"value4\"\n        }\n    };\n    x = 1;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

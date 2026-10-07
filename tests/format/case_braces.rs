@@ -1542,3 +1542,27 @@ fn block_comment_before_indented_case_body_brace_keeps_the_body_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn multiline_comment_in_a_case_block_keeps_the_next_statement_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input = "void f() {\n  switch (x) {\n    case A: {\n      /* aaa\n         bbb */\n      if (x) {\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (x)\n    {\n    case A:\n    {\n        /* aaa\n           bbb */\n        if (x)\n        {\n        }\n    }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn block_comment_after_a_multiline_comment_past_an_inner_block_keeps_its_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{\n  switch(x) {\n  case 213: {\n    if(y) {\n    }\n    /* aaa\n       bbb */\n/* ccc\n   ddd */\n    g();\n  }\n  }\n}\n";
+    let expected = "void f(void)\n{\n    switch(x)\n        {\n        case 213:\n        {\n            if(y)\n                {\n                }\n            /* aaa\n               bbb */\n            /* ccc\n               ddd */\n            g();\n        }\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

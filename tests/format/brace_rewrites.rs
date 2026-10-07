@@ -2039,3 +2039,15 @@ fn logical_row_after_added_brace_else_if_aligns_in_the_condition() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn closer_of_a_header_run_in_after_else_for_stands_a_level_past_them() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=1tbs".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n    if (d) {\n        divtop++;\n    } else for (um--; um>=div; um--) if (*um) {\n            divtop++;\n            break;\n        }\n}\n";
+    let expected = "void f()\n{\n    if (d) {\n        divtop++;\n    } else for (um--; um>=div; um--) if (*um) {\n                divtop++;\n                break;\n            }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

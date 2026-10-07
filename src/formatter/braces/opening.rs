@@ -2265,15 +2265,22 @@ impl FormatEngine<'_> {
                 self.layout.indentation.enter_braceless_block(delta);
             }
         }
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Whitesmith
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Horstmann
-                | BraceStyle::Pico
-        ) {
+        // A row's brace among aligned elements keeps their column.
+        let element_row = matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) && self.current_inline_array_column().is_some();
+        if !element_row
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+            )
+        {
             self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }

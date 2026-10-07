@@ -4026,20 +4026,27 @@ impl FormatEngine<'_> {
             {
                 open_line
             } else if let Some(keyword) = self.header_keyword_before(open) {
-                let line = self.line_led_by(keyword)?;
-                // `else while (x) {` nests two headers on one line.
-                if !matches!(&tokens[keyword], Token::Word(word) if word == "if")
-                    && self
-                        .tree
-                        .previous_code_token(keyword)
-                        .is_some_and(|previous| {
-                            matches!(&tokens[previous], Token::Word(word) if word == "else")
-                                && self.output.line_with_token(previous) == Some(line)
-                        })
-                {
-                    extra += self.options.indent_width;
+                if let Some(line) = self.line_led_by(keyword) {
+                    // `else while (x) {` nests two headers on one line.
+                    if !matches!(&tokens[keyword], Token::Word(word) if word == "if")
+                        && self
+                            .tree
+                            .previous_code_token(keyword)
+                            .is_some_and(|previous| {
+                                matches!(&tokens[previous], Token::Word(word) if word == "else")
+                                    && self.output.line_with_token(previous) == Some(line)
+                            })
+                    {
+                        extra += self.options.indent_width;
+                    }
+                    line
+                } else {
+                    // A header after braceless headers on its line, as in
+                    // `} else for (x) if (y) {`, nests a level past each.
+                    let (line, levels) = self.header_chain_before(open)?;
+                    extra += (levels - 1) * self.options.indent_width;
+                    line
                 }
-                line
             } else {
                 let mut owner = owner;
                 while matches!(&tokens[owner], Token::Word(word) if word == "else") {

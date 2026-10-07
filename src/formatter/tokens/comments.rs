@@ -207,10 +207,15 @@ impl FormatEngine<'_> {
             if record_split_else_indent {
                 self.record_split_else_comment_body_indent(line, output_spaces);
             }
-        } else if self.layout.frame_stack.active_comment().is_some()
+        } else if let Some(frame) = self.layout.frame_stack.active_comment()
             && !trimmed.is_empty()
             && !is_comment_line(trimmed)
-            && !line_ends_with_comment(trimmed)
+            // Code standing left of the comments ends the block they were in,
+            // whatever trails it.
+            && (!line_ends_with_comment(trimmed)
+                || frame
+                    .continuation_anchor_column
+                    .is_some_and(|anchor| output_spaces < anchor))
         {
             self.layout.frame_stack.clear_comments();
         }
@@ -1816,11 +1821,13 @@ impl FormatEngine<'_> {
             } else {
                 self.should_break_header_before_comment()
             };
+            // A `)` closing a paren inside the condition leaves it open.
             (header.header == current
                 && pending_header_line
                 && (language::is_non_paren_header(current)
-                    || self.layout.command_state.previous_command_char == Some(')')))
-            .then_some(header.body_indent_spaces)
+                    || self.layout.command_state.previous_command_char == Some(')')
+                        && self.layout.nesting.paren_depth == 0))
+                .then_some(header.body_indent_spaces)
         })
         .flatten()
     }
@@ -2407,22 +2414,6 @@ impl FormatEngine<'_> {
                 opener_prefix = " ".repeat(spaces);
             }
         }
-        if self
-            .layout
-            .nesting
-            .brace_header_stack
-            .last()
-            .is_some_and(|header| header.as_deref() == Some("case"))
-            && let Some(previous) = self.output.last_non_empty_scoped()
-            && previous.trimmed() == "}"
-        {
-            let previous_indent = leading_visual_width(previous, tab_width)
-                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-            let opener_indent = leading_visual_width(&opener_prefix, tab_width);
-            if previous_indent > opener_indent {
-                opener_prefix = " ".repeat(previous_indent);
-            }
-        }
         let opener_output_column = leading_visual_width(&opener_prefix, tab_width);
         self.record_comment_frame(CommentKind::Block, opener_output_column, true);
         let trim_amount = if unindented_namespace_run_in_comment {
@@ -2456,11 +2447,9 @@ impl FormatEngine<'_> {
         );
         if case_comment_unindent > 0 && self.current_is_preindented {
             self.finish_line();
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_column.saturating_sub(case_comment_unindent));
+            self.layout.continuation_indent.next_line_indent_spaces = Some(opener_output_column);
         } else if case_comment_unindent > 0 {
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(opener_output_column.saturating_sub(case_comment_unindent));
+            self.layout.continuation_indent.next_line_indent_spaces = Some(opener_output_column);
         }
         self.attach_source_space_after_block_comment();
         self.layout.previous = PreviousToken::Other;
