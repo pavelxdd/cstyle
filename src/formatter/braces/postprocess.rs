@@ -372,11 +372,21 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
     let mut index = 0usize;
     while index < input.len() {
         let line = input[index];
+        // Only an aggregate's brace runs into a brace nested in it; a block
+        // leaves a block on its own line.
+        let opens_aggregate = |brace_at: usize| {
+            input[..brace_at]
+                .iter()
+                .rev()
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| line.trimmed_end().ends_with_any(b"=,({"))
+        };
         let runs_in = |brace: &str, at: usize| {
             !raw_lines[at - 1]
                 && brace.trimmed() == "{"
                 && input.get(at).is_some_and(|next| {
                     !next.trimmed().is_empty()
+                        && (next.trimmed() != "{" || opens_aggregate(at - 1))
                         && !next.trimmed_start().starts_with('#')
                         && !next.trimmed_start().starts_with('}')
                         && !next.starts_with("//")

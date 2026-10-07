@@ -326,7 +326,10 @@ impl FormatEngine<'_> {
             .rev()
             .skip(1)
             .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|previous| previous.trimmed() == "else")
+            .is_some_and(|previous| {
+                let previous = previous.trimmed();
+                previous.strip_prefix('}').map_or(previous, str::trim_start) == "else"
+            })
         {
             let level = output_spaces / self.options.indent_width;
             self.layout.continuation_indent.set_next_line_level(level);

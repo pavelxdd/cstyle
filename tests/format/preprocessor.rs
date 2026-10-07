@@ -4490,3 +4490,12 @@ fn comment_in_a_branch_of_a_guarded_extern_c_block_stays_unindented() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn split_else_chain_ending_in_an_empty_block_leaves_the_next_block_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{\n    if( a )\n    {}\n    else\n#ifndef X\n        if( b )\n        {\n            x();\n        }\n        else\n        {}\n#endif\n    if( c )\n    {\n        int op = 1;\n        y();\n    }\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

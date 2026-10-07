@@ -860,6 +860,38 @@ impl FormatEngine<'_> {
             .is_some_and(|next| self.added_closing_braces.contains(&next))
     }
 
+    /// Whether the `;` ends a statement of a block the source kept on its
+    /// line and the layout broke: its statements part as a block's do.
+    fn statement_in_broken_one_line_block(&self) -> bool {
+        !self.token_input.replaying_removed_braces
+            && self
+                .current
+                .active_token()
+                .is_some_and(|index| self.in_broken_one_line_block(index))
+    }
+
+    /// Whether token `index` lies in a block the source kept on its line and
+    /// the layout broke.
+    pub(crate) fn in_broken_one_line_block(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        let Some(group) = groups.enclosing(index) else {
+            return false;
+        };
+        let open = groups.get(group).open;
+        let breaks_line = |token: &Token| match token {
+            Token::Newline => true,
+            Token::StringLiteral(text) | Token::Comment(_, text) => text.contains('\n'),
+            _ => false,
+        };
+        matches!(self.tree.tokens[open], Token::Symbol('{'))
+            && !self.current.contains('{')
+            && !self.tree.tokens[open..index].iter().any(breaks_line)
+            && groups
+                .get(group)
+                .close
+                .is_some_and(|close| !self.tree.tokens[index..close].iter().any(breaks_line))
+    }
+
     fn push_semicolon(
         &mut self,
         next: Option<&Token>,
@@ -1002,6 +1034,7 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space_or_ensure();
                 self.schedule_block_spacing_semicolon();
             } else if break_expanded_lisp_header
+                || self.statement_in_broken_one_line_block()
                 || (!keep_following_header
                     && !keep_following_block
                     && (self.options.break_one_line_statements

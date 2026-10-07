@@ -52,6 +52,17 @@ impl FormatEngine<'_> {
                 {
                     return None;
                 }
+                // A comment row whose own whitespace holds a tab keeps it past
+                // the indent of the comment's first line.
+                if let Some(opener) = self.comment_opener(index)
+                    && opener != index
+                    && line[..line.len() - text.len()].contains('\t')
+                {
+                    let width = self.output.lead_width(opener, tab_width);
+                    if line.starts_with(&" ".repeat(width)) {
+                        return Some((width, self.tab_columns(opener, width)));
+                    }
+                }
                 let width = self.output.lead_width(index, tab_width);
                 let tab_columns = match self.output_indent_style {
                     // A standalone comment's rows keep the tabs of its first
@@ -90,7 +101,15 @@ impl FormatEngine<'_> {
                 "\t".repeat(tab_columns / tab_size),
                 " ".repeat(width - tab_columns)
             );
-            let text = self.output[index].trim_start_matches([' ', '\t']);
+            let line = &self.output[index];
+            let text = if line[..line.len() - line.trim_start_matches([' ', '\t']).len()]
+                .contains('\t')
+                && line.starts_with(&" ".repeat(width))
+            {
+                &line[width..]
+            } else {
+                line.trim_start_matches([' ', '\t'])
+            };
             let text = match text.strip_prefix('{') {
                 // A run-in block brace keeps the style's fill before its
                 // text; an initializer row's spaces align its values.

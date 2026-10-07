@@ -4579,3 +4579,22 @@ fn comment_left_after_an_attached_switch_brace_stands_in_the_case_bodies() {
     // a comment written on a line of its own there.
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn stripped_comment_row_keeps_its_own_tab_under_tab_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=mozilla".to_owned(),
+            "--remove-comment-prefix".to_owned(),
+            "--indent=tab=4".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n\t/*\n\t * 1. \"x\"\n\t * \tWhen this\n\t *\tknows it.\n\t */\n\tx();\n}\n";
+    let expected =
+        "void f(void)\n{\n\t/*\n\t    1. \"x\"\n\t  \tWhen this\n\t \tknows it.\n\t*/\n\tx();\n}\n";
+
+    assert_eq!(format_exact(input, &options), expected);
+}

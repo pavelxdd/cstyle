@@ -393,7 +393,8 @@ impl FormatEngine<'_> {
         self.layout.command_state.observe_char('}');
         self.layout.compound_literal.just_closed =
             self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
-        let move_one_line_block_comment = self.options.break_one_line_blocks
+        let move_one_line_block_comment = (self.options.break_one_line_blocks
+            || self.comments.closing_broken_added_block)
             && self.layout.line_state.is_one_line_block
             && !matches!(
                 self.layout.nesting.last_closed_brace_type,

@@ -2631,6 +2631,12 @@ fn macro_word_heading_a_block_keeps_the_block() {
 }
 
 #[test]
+fn macro_word_heading_a_block_after_a_comment_keeps_the_block() {
+    let input = "void f(void)\n{   x();\n\n    /* c */\n    SEH_TRY\n    {   if( rc==SQLITE_OK )\n        {   g();\n        }\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
 fn ratliff_initializer_after_struct_close_nests_from_the_declaration() {
     let input = "static const struct {\n    const char *key;\n    int level;\n    } advice_setting[] = {\n    [A]\t= { \"a\" },\n    [B]\t= { \"b\" },\n    };\nstatic const struct {\n    const char *string;\n    int key;\n    } key_string_table[] = {\n    /* Function keys. */\n        { \"F1\", 1 },\n        { \"F2\", 2 },\n\n    /* Arrow keys. */\n        { \"Up\", 3 },\n    };\n";
     check(input, &["--style=ratliff"], input);

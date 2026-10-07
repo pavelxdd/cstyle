@@ -10,7 +10,8 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, is_comment_only_line, preprocessor_directive,
+    ContainsAnyByte, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    preprocessor_directive,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1190,7 +1191,13 @@ impl FormatEngine<'_> {
             .skip(1)
             .find(|line| !line.trimmed().is_empty())
             .is_some_and(|previous| previous.trimmed() == "else");
-        let closes_by_brace = self.output.code_of(line).trimmed() == "}"
+        // A body kept on one line closes at its own `}` as well.
+        let code = self.output.code_of(line);
+        let code = code.trimmed();
+        let closes_by_brace = (code == "}"
+            || code.starts_with('{')
+                && code.ends_with('}')
+                && line_brace_imbalance(code) == (0, 0))
             && self.layout.indentation.indent() <= self.preprocessor.split_else.brace_indent;
         let closes_by_statement = line.ends_with(';')
             && !starts_string_literal_token(line.trimmed_start())

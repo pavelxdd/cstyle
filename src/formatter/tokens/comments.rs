@@ -3233,6 +3233,9 @@ pub(crate) struct CommentState {
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
     pub(crate) follows_added_one_line_block: bool,
+    /// A block added around a statement is being closed on a line of its
+    /// own.
+    pub(crate) closing_broken_added_block: bool,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
 }

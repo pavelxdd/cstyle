@@ -2097,13 +2097,10 @@ impl FormatEngine<'_> {
                 .nearest_open_switch_indent_spaces()
                 .map(|switch| switch + self.options.indent_width + brace_extra);
         }
-        let case_unindent_depth = self.layout.line_adjuster.total_case_unindent_depth();
-        (case_unindent_depth > 0).then_some(
-            self.layout
-                .indentation
-                .indent()
-                .saturating_sub(case_unindent_depth)
-                * self.options.indent_width,
+        // The labels stand a level out from the switch body; the line
+        // adjuster takes the case blocks around the switch off them.
+        (self.layout.line_adjuster.total_case_unindent_depth() > 0).then_some(
+            self.layout.indentation.indent().saturating_sub(1) * self.options.indent_width,
         )
     }
 

@@ -1098,7 +1098,7 @@ fn pico_header_break_keeps_run_in_one_line_blocks() {
 }
 
 #[test]
-fn statement_keep_is_independent_of_enclosing_one_line_block() {
+fn statements_of_a_broken_one_line_function_body_follow_the_header_break() {
     let mut options = FormatOptions::default();
     let args = ["--keep-one-line-statements", "--break-one-line-headers"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
@@ -1108,7 +1108,7 @@ fn statement_keep_is_independent_of_enclosing_one_line_block() {
             "void f(){if(a) one(); else two(); for(;;) step();}\n",
             &options,
         ),
-        "void f() {\n    if(a) one();\n    else two();\n    for(;;) step();\n}\n",
+        "void f() {\n    if(a)\n        one();\n    else\n        two();\n    for(;;)\n        step();\n}\n",
     );
 }
 
@@ -1740,6 +1740,105 @@ fn asm_operand_colons_in_a_run_in_one_line_block_keep_their_spaces() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
     let input = "static void f(void)\n{   asm volatile (\"lock; xchgq %0, %1\" : \"+q\" (value), \"+m\" (*pointer)); }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn statement_after_a_kept_block_a_word_heads_stays_on_its_line() {
+    let input = "void f(void)\n{\n    x();\n    {   a(); } b;\n    MACRO\n    {   a(); } d;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(void)\n{\n    x();\n    {   a(); }\n    b;\n    MACRO\n    {   a(); } d;\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f(void)\n{   x();\n    {   a(); } b;\n    MACRO\n    {   a(); } d; }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--keep-one-line-blocks".to_owned()],
+        )
+        .expect("valid options");
+        let first = format_exact(input, &options);
+
+        assert_eq!(first, expected, "{style}");
+        assert_eq!(format_exact(&first, &options), first, "{style}");
+    }
+}
+
+#[test]
+fn comment_after_a_statement_stays_inside_the_braces_a_broken_header_adds() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n  for (; c<d; c++) *c=0;  // pad\n}\n";
+    let expected = "void f(void)\n{\n    for (; c<d; c++) {\n        *c=0;    // pad\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn kept_one_line_statements_keep_a_header_after_a_case_label() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "int f(int c)\n{\n    switch (c) {\n    case 1: return 1;\n    default: if (e) g(c);\n    }\n    return 0;\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn statements_of_a_broken_one_line_block_part_under_kept_one_line_statements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    if (z) {x = 1; y = 2; c();}\n    if (z) {x = 1; if (a) b(); c();}\n}\n";
+    let expected = "void f(void)\n{\n    if (z) {\n        x = 1;\n        y = 2;\n        c();\n    }\n    if (z) {\n        x = 1;\n        if (a) b();\n        c();\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn statement_after_a_kept_block_on_a_kept_statement_line_stays() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    x = 1; if (a) { b(); } c();\n}\n";
 
     assert_eq!(format_exact(input, &options), input);
 }

@@ -373,7 +373,9 @@ impl FormatEngine<'_> {
             self.token_input.previous_input_whitespace = Some(" ".to_string().into());
             // The added brace is no text of the statement's last token.
             self.current.set_active_token(None);
+            self.comments.closing_broken_added_block = true;
             self.push_close_brace(next, false);
+            self.comments.closing_broken_added_block = false;
             self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
                 .iter()
                 .find(|token| !matches!(token, Token::Whitespace(_)))
@@ -444,6 +446,7 @@ impl FormatEngine<'_> {
             self.layout.line_state.is_multi_statement_line = true;
             self.layout.line_state.is_one_line_block = false;
         }
+        self.token_input.replaying_removed_braces = true;
         self.push_replayed_statement(
             tokens,
             statement_start,
@@ -452,6 +455,7 @@ impl FormatEngine<'_> {
             start,
             removed_opening_gap.as_deref(),
         );
+        self.token_input.replaying_removed_braces = false;
         if keep_body_with_following {
             self.trim_current_end_horizontal_space();
             for token in &tokens[semicolon + 1..following_index.unwrap_or(close_index + 1)] {
@@ -593,8 +597,17 @@ impl FormatEngine<'_> {
                 _ => false,
             })
         };
+        // A case label before the header leads the line as a statement does.
+        let preceding_case_label = tokens[line_start..start]
+            .iter()
+            .find(|token| crate::formatter::structure::blocks::is_code_token(token))
+            .is_some_and(
+                |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
+            );
         let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
+            && !self.in_broken_one_line_block(start)
             && (preceding_top_level_statement
+                || preceding_case_label
                 || find_statement_semicolon(tokens, statement_start, line_end)
                     .and_then(|semicolon| {
                         next_statement_token(tokens, semicolon + 1, line_end, false)
@@ -817,11 +830,23 @@ impl FormatEngine<'_> {
         let Some(body_index) = next_non_layout_token_index(tokens, newline_index + 1) else {
             return false;
         };
+        // An `if` an empty line splits off its `else` is the else's body.
+        let if_is_else_body = self
+            .tree
+            .statements
+            .starts_else_body_after_blank_line(body_index)
+            && !self.options.delete_empty_lines
+            && !self.preprocessor.split_else.extra_indent
+            && tokens[..body_index]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
         match &tokens[body_index] {
             Token::Symbol('{') | Token::Comment(_, _) | Token::Preprocessor(_) => return false,
             Token::Word(word)
                 if header == "else"
                     && word == "if"
+                    && !if_is_else_body
                     && !self
                         .layout
                         .previous_pre_adjust_line
@@ -947,6 +972,11 @@ impl FormatEngine<'_> {
         if !self.options.break_else_ifs
             || !matches!(tokens.get(start), Some(Token::Word(word)) if word == "if")
             || self.layout.command_state.current_header.as_deref() != Some("else")
+            // A comment between them keeps the `if` from joining its `else`.
+            || tokens[..start]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Comment(_, _)))
         {
             return false;
         }
@@ -1399,6 +1429,12 @@ impl FormatEngine<'_> {
                 .current_header
                 .as_deref()
                 .is_some_and(is_asm_block_header);
+        // A word of its own above the block heads it like a macro call, which
+        // the statement after the block goes on from.
+        let word_headed_block = token_begins_line(tokens, start)
+            && !self.current.trimmed().is_empty()
+            && self.current.trimmed().chars().all(is_word_char)
+            && !is_header(self.options, self.current.trimmed());
         let source_separate_macro_block = token_begins_line(tokens, start)
             && self
                 .current
@@ -1600,6 +1636,8 @@ impl FormatEngine<'_> {
         self.layout.command_state.preprocessor_after_header = false;
         let next = next_non_whitespace(tokens, close_index + 1, line_end)
             .and_then(|next_index| tokens.get(next_index));
+        let next_on_source_line =
+            next.is_some_and(|token| !matches!(token, Token::Newline | Token::Symbol('}')));
         let init_block_continues_expression =
             brace_type == BraceType::Initializer && matches!(next, Some(Token::Symbol('(' | ')')));
         let empty_value_block_continues_expression = is_empty_block
@@ -1621,6 +1659,12 @@ impl FormatEngine<'_> {
             && !empty_value_block_continues_expression
             && !lambda_block_continues_expression
             && !aggregate_trailing_declarator
+            && !((word_headed_block
+                || self.options.brace_style == BraceStyle::Pico
+                || self.options.keeps_multi_statement_line()
+                    && self.layout.line_state.is_multi_statement_line)
+                && next_on_source_line
+                && !next_is_closing_header)
             && (!next_is_closing_header
                 || self.options.break_one_line_statements
                 || self.options.brace_style == BraceStyle::Lisp

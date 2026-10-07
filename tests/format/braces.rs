@@ -2454,3 +2454,97 @@ fn kr_macro_function_head_breaks_its_brace_like_a_function() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn horstmann_block_leaves_a_nested_block_on_its_own_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let input = "void f(void)\n{\n  if (err==ZIP_OK) /* c */\n  {\n    {\n      if(z)\n        a();\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{   if (err==ZIP_OK) /* c */\n    {\n        {   if(z)\n                a();\n        }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn initializer_in_an_if_split_off_its_else_by_a_blank_line_stands_in_the_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f(void){\n  if( a ){\n  }else\n\n  if( b ){\n    x = {\n      1,\n    };\n    y();\n  }\n  z();\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    if( a ) {",
+        "    } else",
+        "",
+        "        if( b ) {",
+        "            x = {",
+        "                1,",
+        "            };",
+        "            y();",
+        "        }",
+        "    z();",
+        "}",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn block_of_an_if_after_a_comment_split_off_its_else_stands_in_the_if() {
+    let input = "void f(void){\n  if (a) {\n  } else\n\n  // comment\n  if (b) {\n    int v[] = {\n      1,\n    };\n  }\n  s();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a) {",
+                "    } else",
+                "",
+                "        // comment",
+                "        if (b) {",
+                "            int v[] = {",
+                "                1,",
+                "            };",
+                "        }",
+                "    s();",
+                "}",
+            ),
+        ),
+        (
+            "--style=vtk",
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a)",
+                "        {",
+                "        }",
+                "    else",
+                "",
+                "        // comment",
+                "        if (b)",
+                "            {",
+                "            int v[] =",
+                "                {",
+                "                1,",
+                "                };",
+                "            }",
+                "    s();",
+                "}",
+            ),
+        ),
+    ] {
+        for extra in [None, Some("--break-elseifs")] {
+            let mut options = FormatOptions::default();
+            let mut args = vec![style.to_owned()];
+            args.extend(extra.map(str::to_owned));
+            apply_command_line_args(&mut options, &args).expect("valid options");
+
+            assert_eq!(format_exact(input, &options), expected, "{style} {extra:?}");
+        }
+    }
+}

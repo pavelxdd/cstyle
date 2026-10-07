@@ -1022,7 +1022,7 @@ fn whitesmith_switch_header_break_preserves_kept_case_actions() {
             "void run()\n{\n    switch (value) { case 1: one(); break; default: two(); }\n}\n",
             &options,
         ),
-        "void run()\n    {\n    switch (value)\n        {\n        case 1: one(); break; default: two();\n        }\n    }\n",
+        "void run()\n    {\n    switch (value)\n        {\n        case 1: one();\n            break;\n        default: two();\n        }\n    }\n",
     );
 }
 
@@ -1496,4 +1496,23 @@ fn whitesmith_switch_nested_in_a_case_block_keeps_labels_at_its_brace() {
     );
 
     assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn label_after_a_case_block_closer_in_a_nested_switch_stands_at_the_labels() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=linux".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(int c)\n{\n\tswitch (c) {\n\tcase 0: {\n\t\twhile (true) {\n\t\t\tswitch (*f) {\n\t\t\tcase 5: case 6: {\n\t\t\t\ty();\n\t\t\t\tbreak;\n\t\t\t} default:\n\t\t\t\tbreak;\n\t\t\t}\n\t\t\tz();\n\t\t}\n\t}\n\t}\n}\n";
+    let expected = "void f(int c)\n{\n    switch (c) {\n    case 0: {\n        while (true) {\n            switch (*f) {\n            case 5: case 6: {\n                y();\n                break;\n            } default:\n                break;\n            }\n            z();\n        }\n    }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
 }

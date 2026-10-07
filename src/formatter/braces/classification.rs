@@ -366,7 +366,9 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_none_or(|previous| {
                     let code = self.output.code_trimmed_of(previous);
-                    code.ends_with_any(b";{}") || code.trimmed_start().starts_with('#')
+                    code.is_empty()
+                        || code.ends_with_any(b";{}")
+                        || code.trimmed_start().starts_with('#')
                 })
         {
             // A macro word heading a block in code, as `SEH_TRY`.

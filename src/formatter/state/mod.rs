@@ -19,6 +19,7 @@ pub(crate) struct TokenInputState {
     pub(crate) input_source_indent: usize,
     pub(crate) has_next_meaningful_token: bool,
     pub(crate) next_token_is_line_comment: bool,
+    pub(crate) replaying_removed_braces: bool,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
