@@ -188,7 +188,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let stops = |trimmed: &str| {
-            trimmed.contains('{') || trimmed.starts_with("};") || trimmed.ends_with(';')
+            trimmed.ends_with(';') || trimmed.starts_with("};") || trimmed.contains('{')
         };
         let range = self.output.scoped_range();
         // The last of the last 8 lines that stops the look or is a class

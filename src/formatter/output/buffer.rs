@@ -1177,6 +1177,19 @@ impl OutputBuffer {
         &self.lines[index][..self.brace_meta(index).comment_code_end as usize]
     }
 
+    /// `trimmed(index)`, `code(index)` and
+    /// `code_before_comment_trimmed(index)`, read from the metadata once.
+    pub(crate) fn trimmed_and_codes(&self, index: usize) -> (&str, &str, &str) {
+        let meta = self.brace_meta(index);
+        let line = &self.lines[index];
+        (
+            &line[meta.trim_start_byte as usize
+                ..meta.trim_end_byte.max(meta.trim_start_byte) as usize],
+            &line[..meta.code_end_byte as usize],
+            &line[..meta.comment_code_end as usize],
+        )
+    }
+
     /// `line` up to its trailing comment, as `trailing_comment_split_limit`
     /// cuts it; one of the last lines is cut from its cached metadata.
     pub(crate) fn code_of<'a>(&'a self, line: &'a str) -> &'a str {
