@@ -371,6 +371,8 @@ impl FormatEngine<'_> {
                 },
             );
             self.token_input.previous_input_whitespace = Some(" ".to_string().into());
+            // The added brace is no text of the statement's last token.
+            self.current.set_active_token(None);
             self.push_close_brace(next, false);
             self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
                 .iter()

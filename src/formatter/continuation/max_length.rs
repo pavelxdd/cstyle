@@ -21,8 +21,8 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, last_unmatched_open_delimiter, trailing_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
@@ -685,7 +685,8 @@ fn continuation_indent_for_split(
             .any(|word| {
                 matches!(word, "return" | "case" | "goto")
                     || matches!(word, "struct" | "union" | "class")
-                        && (macro_groups || !line.contains('('))
+                        && (macro_groups
+                            || !line[..trailing_comment_split_limit(line)].contains('('))
             })
     {
         return Some(ContinuationIndent::Spaces(base_indent_width));

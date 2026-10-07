@@ -4328,3 +4328,40 @@ fn enum_row_broken_off_by_its_closing_brace_keeps_the_element_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn rows_after_a_closed_named_list_align_in_their_own_list() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "enum e {\n};\nint s[] = {\n\t[A] = { 1 },\n\t[B] = { c,\n\t\td }\n};\n";
+    let expected = "enum e {\n};\nint s[] = {\n    [A] = { 1 },\n    [B] = {\n        c,\n        d\n    }\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn designated_row_closer_broken_off_its_row_closes_at_the_row_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--min-conditional-indent=0".to_owned()])
+        .expect("valid options");
+    let input = "static struct tr2_sysenv_entry tr2_sysenv_settings[] = {\n\t[TR2_SYSENV_CFG_PARAM]     = { \"GIT_TRACE2_CONFIG_PARAMS\",\n\t\t\t\t       \"trace2.configparams\" },\n\t[TR2_SYSENV_ENV_VARS]      = { \"GIT_TRACE2_ENV_VARS\",\n\t\t\t\t       \"trace2.envvars\" },\n};\n";
+    let expected = "static struct tr2_sysenv_entry tr2_sysenv_settings[] = {\n    [TR2_SYSENV_CFG_PARAM]     = {\n        \"GIT_TRACE2_CONFIG_PARAMS\",\n        \"trace2.configparams\"\n    },\n    [TR2_SYSENV_ENV_VARS]      = {\n        \"GIT_TRACE2_ENV_VARS\",\n        \"trace2.envvars\"\n    },\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn broken_row_brace_among_aligned_elements_stands_at_their_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n\tconst char *key_val[][2] = { { \"key1\", \"value1\" },\n\t\t\t\t     { \"key2\", \"value2\" },\n\t\t\t\t     { c,\n\t\t\t\t       \"value4\" } };\n}\n";
+    let expected = "void f()\n{\n    const char *key_val[][2] = { { \"key1\", \"value1\" },\n        { \"key2\", \"value2\" },\n        {\n            c,\n            \"value4\"\n        }\n    };\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

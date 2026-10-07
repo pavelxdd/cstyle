@@ -2026,3 +2026,16 @@ fn added_braces_after_chained_headers_keep_the_inner_header_column() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn logical_row_after_added_brace_else_if_aligns_in_the_condition() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=1tbs".to_owned()]).expect("valid options");
+    let input =
+        "int f() {\n  if (x) a=1;\n  else if ((b\n     || c)\n     && d) a=2;\n  return 0;\n}\n";
+    let expected = "int f()\n{\n    if (x) {\n        a=1;\n    } else if ((b\n                || c)\n               && d) {\n        a=2;\n    }\n    return 0;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

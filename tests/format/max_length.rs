@@ -3018,3 +3018,16 @@ fn a_kept_one_line_block_with_a_wide_character_in_its_comment_does_not_split() {
 
     assert_stable_max_length_format(source, &options, source);
 }
+
+#[test]
+fn struct_declaration_split_before_a_trailing_comment_continues_a_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--max-code-length=109".to_owned()])
+        .expect("valid options");
+    let input = "struct c {\n    struct hdr_histogram* latency_histogram; /*points to the command latency command histogram (unit of time nanosecond) */\n};\n";
+    let expected = "struct c {\n    struct hdr_histogram*\n        latency_histogram; /*points to the command latency command histogram (unit of time nanosecond) */\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

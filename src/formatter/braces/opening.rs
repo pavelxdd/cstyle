@@ -1279,8 +1279,15 @@ impl FormatEngine<'_> {
         brace_header: Option<&str>,
         brace_type: BraceType,
     ) {
+        // A row's brace among aligned elements stands at their column.
+        let element_row = matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) && self.current_inline_array_column().is_some();
         if self.current_is_blank() {
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            if !element_row {
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+            }
             if self.layout.command_state.header_broken_before_comment {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.command_state.header_broken_before_comment = false;

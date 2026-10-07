@@ -419,6 +419,21 @@ impl FormatEngine<'_> {
         if operator == "*" && self.current.trimmed_end().ends_with(')') {
             return self.current_ends_type_group();
         }
+        // A declarator that starts a row continues the declaration its line
+        // before left open, as `struct hdr_histogram` above `*latency`.
+        if self.current.trimmed().is_empty()
+            && self.layout.nesting.paren_depth == 0
+            && matches!(next, Some(Token::Word(_)))
+            && self.output.last_line_outside_comment().is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line).trimmed();
+                !code.starts_with('#')
+                    && !is_macro_like_word(code)
+                    && code.ends_with(is_identifier_continue)
+                    && is_pointer_declaration_segment(code)
+            })
+        {
+            return true;
+        }
         is_pointer_type_word(trailing_word(&self.current))
             || self.looks_like_pointer_declaration_context()
     }

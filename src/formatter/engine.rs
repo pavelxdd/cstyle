@@ -1837,7 +1837,11 @@ impl<'a> FormatEngine<'a> {
                 && !self.current.trimmed_start().starts_with('{')
             {
                 let range = self.output.scoped_range();
-                let start = range.start.max(range.end.saturating_sub(64));
+                // The list's own `{` line is the earliest that may name it.
+                let start = range
+                    .start
+                    .max(range.end.saturating_sub(64))
+                    .max(self.output.innermost_open_brace_line_plain().unwrap_or(0));
                 self.output
                     .last_line_looked(&self.named_list_open_look, start, range.end, |index| {
                         let code = self.output.code_before_comment_trimmed(index);

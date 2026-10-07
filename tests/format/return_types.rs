@@ -1105,3 +1105,16 @@ fn break_return_type_splits_only_function_heads() {
 
     assert_eq!(format_exact(source, &options), expected);
 }
+
+#[test]
+fn comment_row_in_a_trailing_paren_keeps_its_level_when_the_return_type_attaches() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--attach-return-type".to_owned()])
+        .expect("valid options");
+    let input = "static void\nsize_class(\n    /* Inputs. */\n    int index) {\n}\n";
+    let expected = "static void size_class(\n    /* Inputs. */\n    int index) {\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

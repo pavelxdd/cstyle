@@ -576,7 +576,9 @@ impl FormatEngine<'_> {
                 .or_else(|| self.return_continuation_indent_spaces())
                 .or_else(|| self.assignment_continuation_indent_spaces())
                 .unwrap_or(previous_indent);
-            base + continuation_spaces + attach_delta
+            // A paren ending its line continues a level past the line,
+            // wherever the return type attached before it moves the paren.
+            base + continuation_spaces
         } else if self.options.indent_after_parens {
             if self.return_continuation_indent_spaces().is_some()
                 && previous_indent == line_indent_spaces

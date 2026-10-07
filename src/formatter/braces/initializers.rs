@@ -163,6 +163,10 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A closer the layout broke off a row has no source indent of its own.
+        if trimmed.starts_with('}') && !self.pending_line_starts_source_line() {
+            return None;
+        }
         if trimmed.starts_with('[')
             && self.token_input.input_source_indent == 0
             && let Some(previous) = previous
@@ -172,6 +176,18 @@ impl FormatEngine<'_> {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         Some(self.token_input.input_source_indent)
+    }
+
+    /// Whether the first token of the line being laid out began a line of
+    /// the source.
+    fn pending_line_starts_source_line(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            self.tree.tokens[..span.first]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .all(|token| matches!(token, Token::Whitespace(_)))
+        })
     }
 
     pub(crate) fn range_designator_source_indent_spaces(

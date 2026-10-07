@@ -3527,3 +3527,15 @@ fn parameters_after_an_escaped_newline_in_a_function_head_align_their_pointers()
         "extern int yylex \\\n(YYSTYPE *yylval_param, YYLTYPE *yylloc_param);\n",
     );
 }
+
+#[test]
+fn pointer_declarator_starting_a_row_stays_with_its_name() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--pad-oper".to_owned()]).expect("valid options");
+    let input = "struct c {\n    struct hdr_histogram\n        *latency_histogram; /* (unit of time) */\n};\n";
+    let expected = "struct c {\n    struct hdr_histogram\n        *latency_histogram; /* (unit of time) */\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
