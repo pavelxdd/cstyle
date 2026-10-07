@@ -417,6 +417,22 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
         }
+        // A label split off the line of the bare label before it stands with
+        // that label.
+        if layout.line_kind == LineKind::SwitchLabel
+            && self.output.pending_tokens().is_none()
+            && let Some(previous) = self.output.last_non_empty_scoped()
+            && {
+                let code = self.output.code_trimmed_of(previous).trimmed_start();
+                (code.starts_with("case ") || code.starts_with("default")) && code.ends_with(':')
+            }
+        {
+            layout.exact_indent_spaces = Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
+            );
+            return layout;
+        }
         if layout.line_kind != LineKind::Normal || line.trimmed_start().starts_with('#') {
             return layout;
         }
@@ -3325,7 +3341,12 @@ impl FormatEngine<'_> {
             return self.first_case_label_column(body);
         };
         let line = self.output.line_with_token(earlier)?;
-        (self.output.line_tokens(line)?.first == earlier).then(|| {
+        // A row a label was split off may span past its own label.
+        let leads_with_label = {
+            let code = self.output.code_trimmed(line);
+            code.starts_with("case ") || code.starts_with("default")
+        };
+        (self.output.line_tokens(line)?.first == earlier || leads_with_label).then(|| {
             self.output.lead_width(line, self.options.tab_width)
                 + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width
         })

@@ -1589,3 +1589,22 @@ fn label_in_an_indented_case_block_adds_no_case_body_level() {
     assert_eq!(format_exact(input, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn label_split_off_a_bare_label_in_a_nested_whitesmith_switch_stands_with_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let input = "void f(void){\n  switch(a){\n    default: {\n  switch( z ){\n    case 1: case 2: {\n      x();\n      break;\n    }\n    case 3: case 4: {\n      y();\n      break;\n    }\n  }\n    }\n  }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert!(
+        first.contains("\n                case 1:\n                case 2:\n"),
+        "{first}"
+    );
+    assert!(
+        first.contains("\n                case 3:\n                case 4:\n"),
+        "{first}"
+    );
+    assert_eq!(format_exact(&first, &options), first);
+}

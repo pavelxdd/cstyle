@@ -2737,3 +2737,17 @@ fn compound_assignment_after_a_bit_test_condition_continues_the_body() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn closing_paren_row_of_a_split_condition_in_an_unindented_case_block_stays_at_its_paren() {
+    let input = "int f(void){\n  switch(c){\n    case 1: {\n#ifndef H\n      if( a ){\n        x();\n      }else\n#endif\n        {\n        if( (z[i]==1 || z[i]==2) &&\n             ( g(z[i+1])\n              || h(z[i+2])\n             )\n        ){\n          y();\n        }\n      }\n      return i;\n    }\n  }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let first = format_exact(input, &options);
+
+    assert!(
+        first.contains("\n              )\n            {\n"),
+        "{first}"
+    );
+    assert_eq!(format_exact(&first, &options), first);
+}

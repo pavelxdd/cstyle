@@ -2380,7 +2380,14 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.split_condition_closing_paren_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
+            // The paren's column is an output one, past case unindenting,
+            // which a brace on the row takes back on its own.
+            let case_unindent = if line.trimmed_end().ends_with('{') {
+                0
+            } else {
+                self.case_unindent_spaces()
+            };
+            layout.exact_indent_spaces = Some(spaces + case_unindent);
         }
         if let Some(spaces) = self.split_else_adjacent_string_call_close_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
