@@ -165,16 +165,16 @@ impl FormatEngine<'_> {
         self.isolated_opening_brace_indent_from_output()
     }
 
-    pub(crate) fn align_isolated_closing_brace_line(&self, line: String) -> String {
+    /// `line` moved to its opening brace's line, when it is an isolated
+    /// closing brace that stands elsewhere.
+    pub(crate) fn align_isolated_closing_brace_line(&self, line: &LineView<'_>) -> Option<String> {
         let line_start = line.trimmed_start();
         if !(line_start == "}" || line_start.starts_with("} else"))
             || self.isolated_opening_brace_is_switch_label()
         {
-            return line;
+            return None;
         }
-        let Some(mut spaces) = self.isolated_opening_brace_indent_from_output() else {
-            return line;
-        };
+        let mut spaces = self.isolated_opening_brace_indent_from_output()?;
         let structural_switch_indent = self
             .layout
             .frame_stack
@@ -188,12 +188,9 @@ impl FormatEngine<'_> {
         if let Some(structural) = structural_switch_indent {
             spaces = structural;
         }
-        let current = leading_visual_width(&line, self.options.tab_width);
-        if current < spaces || structural_switch_indent.is_some() && current != spaces {
-            format!("{}{}", " ".repeat(spaces), line_start)
-        } else {
-            line
-        }
+        let current = leading_visual_width(line, self.options.tab_width);
+        (current < spaces || structural_switch_indent.is_some() && current != spaces)
+            .then(|| format!("{}{}", " ".repeat(spaces), line_start))
     }
 
     pub(crate) fn continuation_adjacent_closing_brace_indent_spaces(

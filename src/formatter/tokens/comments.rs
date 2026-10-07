@@ -207,7 +207,8 @@ impl FormatEngine<'_> {
             if record_split_else_indent {
                 self.record_split_else_comment_body_indent(line, output_spaces);
             }
-        } else if !trimmed.is_empty()
+        } else if self.layout.frame_stack.active_comment().is_some()
+            && !trimmed.is_empty()
             && !is_comment_line(trimmed)
             && !line_ends_with_comment(trimmed)
         {

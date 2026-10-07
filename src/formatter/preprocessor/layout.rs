@@ -118,21 +118,21 @@ fn embedded_branch_separator(code: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn normalize_ready_preprocessor_line(&self, line: String) -> String {
-        if !self.preprocessor.may_have_preprocessor {
-            return line;
+    /// A ready directive line other than `#define` without its trailing
+    /// blanks, and an `#if` line holding `#else` without its indent too,
+    /// when that changes the line.
+    pub(crate) fn normalize_ready_preprocessor_line(&self, line: &LineView<'_>) -> Option<String> {
+        let line_start = line.trimmed_start();
+        if !self.preprocessor.may_have_preprocessor
+            || !line_start.starts_with('#')
+            || line_start.starts_with("#define")
+        {
+            return None;
         }
-        let line_start = line.trimmed_start();
-        let line = if line_start.starts_with('#') && !line_start.starts_with("#define") {
-            line.trimmed_end().to_string()
+        if line_start.starts_with("#if") && line.trimmed_end().contains_from_first_byte("#else") {
+            Some(line.trimmed().to_string())
         } else {
-            line
-        };
-        let line_start = line.trimmed_start();
-        if line_start.starts_with("#if") && line.contains_from_first_byte("#else") {
-            line_start.to_string()
-        } else {
-            line
+            (line.trimmed_end().len() != line.len()).then(|| line.trimmed_end().to_string())
         }
     }
 

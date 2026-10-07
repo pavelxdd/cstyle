@@ -1,5 +1,4 @@
 use crate::formatter::continuation::ContinuationIndent;
-use crate::formatter::continuation::operator_chains::ReadyOperatorChainLine;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
@@ -214,28 +213,24 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn publish_ready_line(&mut self, line: String) {
-        let line = self.normalize_ready_preprocessor_line(line);
+        // Each step that moves the line gives a new line, viewed anew.
         let view = LineView::new(&line);
-        let line = if let Some(spaces) = self.ready_objc_method_closing_brace_indent_spaces(&view) {
-            format!("{}{}", " ".repeat(spaces), view.trimmed_start())
-        } else {
-            self.align_isolated_closing_brace_line(line)
+        let normalized = self.normalize_ready_preprocessor_line(&view);
+        let view = normalized.as_deref().map_or(view, LineView::new);
+        let closing = match self.ready_objc_method_closing_brace_indent_spaces(&view) {
+            Some(spaces) => Some(reindented(spaces, &view)),
+            None => self.align_isolated_closing_brace_line(&view),
         };
-        let view = LineView::new(&line);
-        let line = if let Some(spaces) = self.ready_non_paren_header_indent_spaces(&view) {
-            format!("{}{}", " ".repeat(spaces), view.trimmed_start())
-        } else {
-            line
-        };
-        let view = LineView::new(&line);
-        let line =
-            if let Some(spaces) = self.ready_embedded_preprocessor_return_indent_spaces(&view) {
-                format!("{}{}", " ".repeat(spaces), view.trimmed_start())
-            } else {
-                line
-            };
+        let view = closing.as_deref().map_or(view, LineView::new);
+        let header = self
+            .ready_non_paren_header_indent_spaces(&view)
+            .map(|spaces| reindented(spaces, &view));
+        let view = header.as_deref().map_or(view, LineView::new);
+        let embedded = self
+            .ready_embedded_preprocessor_return_indent_spaces(&view)
+            .map(|spaces| reindented(spaces, &view));
+        let view = embedded.as_deref().map_or(view, LineView::new);
         let output_line_index = self.output.len();
-        let view = LineView::new(&line);
         let output_line_hints = self.output.line_hints(view.trimmed_start());
         self.finish_define_line(&view);
         let anchored_part = self.max_length_line.take_anchored_part();
@@ -243,25 +238,26 @@ impl FormatEngine<'_> {
             None
         } else {
             self.ternary_operator_tail_indent_spaces(&view)
-                .or_else(|| self.maximum_length_using_alias_rhs_indent_spaces(&view))
-                .or_else(|| self.using_alias_rhs_indent_spaces(&view))
-                .or_else(|| self.split_assignment_rhs_indent_spaces(&view))
+                .or_else(|| self.assignment_rhs_indent_spaces(&view))
                 .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&view))
         };
-        let line = match spaces {
-            Some(spaces) if leading_visual_width(&line, self.options.tab_width) != spaces => {
-                format!("{}{}", " ".repeat(spaces), view.trimmed_start())
-            }
-            _ => line,
-        };
-        match self.postprocess_ready_operator_chain_line(output_line_index, line) {
-            ReadyOperatorChainLine::Single(line) => {
-                self.output.push_with_hints(line, output_line_hints);
-            }
-            ReadyOperatorChainLine::SplitTernary { colon, tail } => {
-                self.output.push(colon);
-                self.output.push(tail);
-            }
+        let tail = spaces
+            .filter(|&spaces| leading_visual_width(&view, self.options.tab_width) != spaces)
+            .map(|spaces| reindented(spaces, &view));
+        let view = tail.as_deref().map_or(view, LineView::new);
+        let split = self.postprocess_ready_operator_chain_line(output_line_index, &view);
+        drop(view);
+        if let Some((colon, tail)) = split {
+            self.output.push(colon);
+            self.output.push(tail);
+        } else {
+            let line = tail
+                .or(embedded)
+                .or(header)
+                .or(closing)
+                .or(normalized)
+                .unwrap_or(line);
+            self.output.push_with_hints(line, output_line_hints);
         }
     }
 
@@ -344,4 +340,13 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces.unwrap_or(output_spaces),
         );
     }
+}
+
+/// `line` without its indent, after `spaces` spaces.
+fn reindented(spaces: usize, line: &LineView<'_>) -> String {
+    let text = line.trimmed_start();
+    let mut reindented = String::with_capacity(spaces + text.len());
+    reindented.extend(std::iter::repeat_n(' ', spaces));
+    reindented.push_str(text);
+    reindented
 }

@@ -27,11 +27,6 @@ use crate::formatter::tokens::operators::{
 };
 use crate::source::lex::is_identifier_start;
 
-pub(crate) enum ReadyOperatorChainLine {
-    Single(String),
-    SplitTernary { colon: String, tail: String },
-}
-
 pub(crate) fn starts_operator_chain_continuation(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     starts_with_chain_operator(trimmed) || starts_ternary_arm(trimmed)
@@ -523,21 +518,20 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Marks a ready line led by `:`; returns the `:` line and the tail
+    /// line it splits into, if it does.
     pub(crate) fn postprocess_ready_operator_chain_line(
         &mut self,
         output_line_index: usize,
-        line: String,
-    ) -> ReadyOperatorChainLine {
-        if line.trimmed_start().starts_with(':') {
-            self.layout
-                .frame_stack
-                .mark_last_ternary_colon_output_line(output_line_index);
+        line: &LineView<'_>,
+    ) -> Option<(String, String)> {
+        if !line.trimmed_start().starts_with(':') {
+            return None;
         }
-        if let Some((colon, tail)) = self.split_ternary_colon_after_chained_true_arm(&line) {
-            ReadyOperatorChainLine::SplitTernary { colon, tail }
-        } else {
-            ReadyOperatorChainLine::Single(line)
-        }
+        self.layout
+            .frame_stack
+            .mark_last_ternary_colon_output_line(output_line_index);
+        self.split_ternary_colon_after_chained_true_arm(line)
     }
 
     pub(crate) fn stream_chain_frame_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
@@ -1784,7 +1778,10 @@ impl FormatEngine<'_> {
         })
     }
 
-    fn split_ternary_colon_after_chained_true_arm(&self, line: &str) -> Option<(String, String)> {
+    fn split_ternary_colon_after_chained_true_arm(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<(String, String)> {
         let current = line.trimmed_start();
         let tail = current.strip_prefix(": ")?;
         if tail.is_empty() {

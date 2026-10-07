@@ -121,7 +121,9 @@ impl LineAdjuster {
         }
         let trimmed = line.trimmed_start();
         let is_begin = macro_block_end_for(trimmed, &self.macro_blocks).is_some();
-        let is_end = macro_block_end_macro(trimmed, &self.macro_blocks);
+        // Outside a block, an end changes nothing unless the line begins one.
+        let is_end = (self.macro_block_depth > 0 || is_begin)
+            && macro_block_end_macro(trimmed, &self.macro_blocks);
         let is_preprocessor = trimmed.starts_with('#');
         let extra_levels = if is_preprocessor {
             0

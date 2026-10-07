@@ -534,14 +534,18 @@ impl SwitchCaseLineTransformer {
             && (self.indent_cases
                 || self.switch_depth == 0
                 || (is_preprocessor && !self.indent_preproc_define))
-            && !scan.contains_any_byte(b"{}/\\\"'")
-            && !scan.contains("switch")
+            && !holds_scan_mark(scan)
         {
             return unindents;
         }
         let mut pos = 0;
 
         while let Some(ch) = char_at(scan, pos) {
+            let inert = self.inert_run(&scan.as_bytes()[pos..], is_preprocessor);
+            if inert > 0 {
+                pos += inert;
+                continue;
+            }
             if let Some(delimiter) = self.raw_string_delimiter.clone() {
                 let Some(end) = raw_strings::closing_end(scan, pos, &delimiter) else {
                     break;
@@ -677,6 +681,45 @@ impl SwitchCaseLineTransformer {
         }
         self.marked_label_colon = None;
         unindents
+    }
+
+    /// The length of the run that `rest` starts with whose bytes `scan_line`
+    /// would pass without changing any state.
+    fn inert_run(&mut self, rest: &[u8], is_preprocessor: bool) -> usize {
+        if self.marked_label_colon.is_some() || self.raw_string_delimiter.is_some() {
+            return 0;
+        }
+        if self.in_block_comment {
+            let run = rest.iter().take_while(|&&byte| byte != b'*').count();
+            if self.case_block_state.switch_brace_count == 1
+                && self.case_block_state.unindent_case
+                && rest[..run]
+                    .iter()
+                    .any(|&byte| !matches!(byte, b' ' | b'\t'))
+            {
+                self.should_unindent_comment = true;
+            }
+            return run;
+        }
+        if self.in_quote {
+            return rest
+                .iter()
+                .take_while(|&&byte| byte != b'\\' && char::from(byte) != self.quote_char)
+                .count();
+        }
+        let inert = if self.indent_cases
+            || self.switch_depth == 0
+            || (is_preprocessor && !self.indent_preproc_define)
+        {
+            &INERT_CODE
+        } else if !self.looking_for_case_brace {
+            &INERT_LABEL_CODE
+        } else {
+            return 0;
+        };
+        rest.iter()
+            .take_while(|&&byte| inert[usize::from(byte)])
+            .count()
     }
 
     /// Processes the character `ch` at byte `pos` of a switch's line and
@@ -820,6 +863,50 @@ impl SwitchCaseLineTransformer {
         line.replace_range(0..erase, "");
         erase
     }
+}
+
+/// Bytes of code a line scan passes over: no brace, no literal or comment
+/// mark, and no first letter of `switch` or of a raw string prefix. Inside
+/// an identifier those letters start nothing either, so the scan may stop at
+/// them there.
+const INERT_CODE: [bool; 256] = inert_bytes(b"{}/\\\"'suLUR");
+/// The same among a switch's labels, where `case` and `default` count.
+const INERT_LABEL_CODE: [bool; 256] = inert_bytes(b"{}/\\\"'suLURcd");
+
+const fn inert_bytes(marks: &[u8]) -> [bool; 256] {
+    let mut inert = [false; 256];
+    let mut byte = 0;
+    while byte < 128 {
+        inert[byte] = true;
+        byte += 1;
+    }
+    let mut index = 0;
+    while index < marks.len() {
+        inert[marks[index] as usize] = false;
+        index += 1;
+    }
+    inert
+}
+
+/// Whether `line` holds a brace, a literal or comment mark, or `switch`.
+fn holds_scan_mark(line: &str) -> bool {
+    const MARK: u8 = 1;
+    const W: u8 = 2;
+    const CLASSES: [u8; 256] = {
+        let mut classes = [0; 256];
+        let marks = b"{}/\\\"'";
+        let mut index = 0;
+        while index < marks.len() {
+            classes[marks[index] as usize] = MARK;
+            index += 1;
+        }
+        classes[b'w' as usize] = W;
+        classes
+    };
+    let found = line
+        .bytes()
+        .fold(0, |found, byte| found | CLASSES[usize::from(byte)]);
+    found & MARK != 0 || found & W != 0 && line.contains("switch")
 }
 
 fn starts_with_at(line: &str, byte_index: usize, needle: &str) -> bool {
@@ -2308,15 +2395,15 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
-        if line.trimmed_start().starts_with_any(b"#{}/")
+        if self
+            .layout
+            .nesting
+            .brace_header_stack
+            .last()
+            .is_none_or(|header| header.as_deref() != Some("case"))
+            || line.trimmed_start().starts_with_any(b"#{}/")
             || find_case_colon(line).is_some()
             || self.pending_line_is_label(line)
-            || self
-                .layout
-                .nesting
-                .brace_header_stack
-                .last()
-                .is_none_or(|header| header.as_deref() != Some("case"))
         {
             return None;
         }

@@ -151,7 +151,7 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
-        if !current.contains("= {}") || !current.contains(") ->") || !current.ends_with('{') {
+        if !current.ends_with('{') || !current.contains("= {}") || !current.contains(") ->") {
             return None;
         }
         for (previous_index, previous) in self

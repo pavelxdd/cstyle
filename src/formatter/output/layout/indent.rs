@@ -487,58 +487,47 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn using_alias_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
+    /// The indent of a line after one whose code ends with `=`: a `using`
+    /// alias's right side, or an assignment's after a declarator that is a
+    /// pointer or a reference.
+    pub(crate) fn assignment_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         let current = line.trimmed_start();
         if current.is_empty() || current.starts_with_any(b"#{}") {
             return None;
         }
-        self.output.last_non_empty_scoped().and_then(|previous| {
-            let previous_code = self.output.code_trimmed_of(previous);
-            let previous_trimmed = previous_code.trimmed_start();
-            if previous_trimmed.starts_with("using ") && previous_code.ends_with('=') {
-                let previous_indent = leading_visual_width(previous, self.options.tab_width);
-                if self.recent_base_trailing_return_function_header() {
-                    Some(previous_indent)
-                } else {
-                    Some(previous_indent + self.options.indent_width)
-                }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        // Every assignment operator ends with `=`.
+        if !previous_code.ends_with('=') {
+            return None;
+        }
+        let previous_indent = || leading_visual_width(previous, self.options.tab_width);
+        let continuation_spaces = self.options.continuation_indent * self.options.indent_width;
+        if previous_code.trimmed_start().starts_with("using ") {
+            return Some(if self.options.max_code_length.is_some() {
+                previous_indent() + continuation_spaces
+            } else if self.recent_base_trailing_return_function_header() {
+                previous_indent()
             } else {
-                None
-            }
-        })
-    }
-
-    pub(crate) fn split_assignment_rhs_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
-        let current = line.trimmed_start();
-        if current.is_empty() || current.starts_with_any(b"#{}") {
+                previous_indent() + self.options.indent_width
+            });
+        }
+        if is_comment_text_line(previous) {
             return None;
         }
-        self.output
-            .last_non_empty_scoped()
-            .filter(|previous| !is_comment_text_line(previous))
-            .and_then(|previous| {
-                let previous_code = self.output.code_trimmed_of(previous);
-                let (operator_start, operator) = find_assignment_operator(previous_code)?;
-                // A logical `&&` declares no reference.
-                let before = previous_code[..operator_start]
-                    .trimmed_end()
-                    .replace("&&", "");
-                let before = before.as_str();
-                if operator_start + operator.len() == previous_code.len()
-                    && (before.contains("* ")
-                        || before.contains("& ")
-                        || before.ends_with('*')
-                        || before.ends_with('&')
-                        || self.recent_base_trailing_return_function_header())
-                {
-                    Some(
-                        leading_visual_width(previous, self.options.tab_width)
-                            + self.options.continuation_indent * self.options.indent_width,
-                    )
-                } else {
-                    None
-                }
-            })
+        let (operator_start, operator) = find_assignment_operator(previous_code)?;
+        // A logical `&&` declares no reference.
+        let before = previous_code[..operator_start]
+            .trimmed_end()
+            .replace("&&", "");
+        let before = before.as_str();
+        (operator_start + operator.len() == previous_code.len()
+            && (before.contains("* ")
+                || before.contains("& ")
+                || before.ends_with('*')
+                || before.ends_with('&')
+                || self.recent_base_trailing_return_function_header()))
+        .then(|| previous_indent() + continuation_spaces)
     }
 
     pub(crate) fn current_macro_block_begin_indent_spaces(&self) -> Option<usize> {
