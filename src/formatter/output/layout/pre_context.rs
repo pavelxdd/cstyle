@@ -367,7 +367,12 @@ impl FormatEngine<'_> {
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
-        if layout.line_kind == LineKind::Normal
+        // A plain statement starts with a word right after a line of code
+        // ending with `;`, which no rule reads before the look back for an
+        // `else,` row.
+        let plain = self.plain_statement_line;
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && line_start.starts_with_any(b"<>|&+-*/%=!?:,.~")
             && let Some(previous) = self.output.last_line_outside_comment()
         {
@@ -406,12 +411,14 @@ impl FormatEngine<'_> {
                 ));
             }
         }
-        if let Some(spaces) =
-            self.leading_operator_after_ternary_colon_indent_spaces(line, layout.line_kind)
+        if !plain
+            && let Some(spaces) =
+                self.leading_operator_after_ternary_colon_indent_spaces(line, layout.line_kind)
         {
             layout.exact_indent_spaces = Some(spaces);
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{}")
             && self
                 .output
@@ -454,7 +461,8 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{}")
             && self
                 .output
@@ -486,7 +494,8 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(0);
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && line
                 .trimmed_start()
                 .chars()
@@ -502,7 +511,8 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && line_start.starts_with(';')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
@@ -528,7 +538,8 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(previous_spaces);
             }
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && self
                 .output
                 .last_line_outside_comment()
@@ -539,7 +550,8 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .map(|line| leading_visual_width(line, self.options.tab_width));
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && line_start.starts_with(']')
             && self.output.last_line_outside_comment().is_some_and(|line| {
                 let code = self.output.code_trimmed_of(line);
@@ -548,7 +560,8 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(0);
         }
-        if layout.line_kind == LineKind::Normal
+        if !plain
+            && layout.line_kind == LineKind::Normal
             && let Some(spaces) = self.preprocessor_branch_initializer_member_indent_spaces(line)
         {
             layout.exact_indent_spaces = Some(spaces);
@@ -559,7 +572,8 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(base_spaces);
         }
-        if (self.current_inline_array_column().is_some() || self.in_initializer_brace())
+        if let Some(spaces) = layout.exact_indent_spaces
+            && (self.current_inline_array_column().is_some() || self.in_initializer_brace())
             && !line_start.starts_with_any(b".{}")
             && !self
                 .output
@@ -569,7 +583,6 @@ impl FormatEngine<'_> {
                     has_hash_outside_literals(code) && !code.trimmed_start().starts_with('#')
                 })
             && self.stream_chain_frame_indent_spaces(line).is_none()
-            && let Some(spaces) = layout.exact_indent_spaces
         {
             let base = self.continuation_base_indent() * self.options.indent_width;
             let source_indent = self

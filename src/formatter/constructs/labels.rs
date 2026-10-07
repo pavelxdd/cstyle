@@ -5,6 +5,7 @@ use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::raw_strings;
+use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
@@ -115,12 +116,12 @@ pub(crate) fn ends_with_binary_operator(line: &str) -> bool {
 pub(crate) fn candidate_line_indent_spaces(
     line: &str,
     options: &FormatOptions,
-    in_expression_context: bool,
+    in_expression_context: impl FnOnce() -> bool,
 ) -> Option<usize> {
-    (is_user_label_candidate(line, &options.access_labels)
-        && !options.indent_labels
-        && !in_expression_context)
-        .then_some(0)
+    (!options.indent_labels
+        && is_user_label_candidate(line, &options.access_labels)
+        && !in_expression_context())
+    .then_some(0)
 }
 
 pub(crate) fn current_line_indent_spaces(
@@ -308,16 +309,10 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         kind: LineKind,
         uses_normal_indent: bool,
-        closes_outer_delimiter: bool,
-        has_owned_continuation: bool,
+        delimiters: impl Fn() -> LineDelimiters,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        if kind != LineKind::Normal
-            || !uses_normal_indent
-            || closes_outer_delimiter
-            || has_owned_continuation
-            || line_start.starts_with_any(b")]}")
-        {
+        if kind != LineKind::Normal || !uses_normal_indent || line_start.starts_with_any(b")]}") {
             return None;
         }
         let frame_stack = &self.layout.frame_stack;
@@ -338,6 +333,9 @@ impl FormatEngine<'_> {
                     .and(frame_stack.enclosing_brace())
                     .filter(|frame| frame.label_block)
             })?;
+        if delimiters().continues() {
+            return None;
+        }
         let target = if line_start.starts_with('{') {
             frame.sibling_indent_column
         } else {

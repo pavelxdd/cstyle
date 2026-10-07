@@ -345,6 +345,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) may_have_class_base_access: bool,
     /// Whether the source may spell `noexcept`.
     pub(crate) may_have_noexcept: bool,
+    /// Whether the line in layout starts a statement inside a block after
+    /// a line of code that ended one with `;`.
+    pub(crate) plain_statement_line: bool,
     pub(crate) space_after_cast: bool,
     pub(crate) pad_close_paren_pending: bool,
     pub(crate) header_paren: headers::HeaderParenState,
@@ -481,6 +484,7 @@ impl<'a> FormatEngine<'a> {
             swig: SwigState::default(),
             may_have_class_base_access: true,
             may_have_noexcept: true,
+            plain_statement_line: false,
             space_after_cast: false,
             pad_close_paren_pending: false,
             header_paren: headers::HeaderParenState::default(),

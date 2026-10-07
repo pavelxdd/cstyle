@@ -15,3 +15,5 @@ mod retab;
 mod routing;
 pub(crate) mod source_indent;
 mod whitespace;
+
+pub(crate) use model::LineDelimiters;

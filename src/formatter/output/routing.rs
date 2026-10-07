@@ -47,6 +47,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether `line` starts a statement inside a block right after a line
+    /// of code that ended one with `;`: the rules for continuations,
+    /// labels, directives, comments and block edges have nothing to place
+    /// on it.
+    fn starts_plain_statement(&self, line: &LineView<'_>, kind: LineKind) -> bool {
+        kind == LineKind::Normal
+            && !self.layout.nesting.brace_type_stack.is_empty()
+            && !line.trimmed_end().ends_with(':')
+            && self
+                .output
+                .last()
+                .is_some_and(|last| !last.trimmed().is_empty())
+            && self.follows_ended_statement(line)
+            && self.output.last_code_line_scoped().is_some_and(|previous| {
+                let previous = previous.trimmed();
+                previous.ends_with(';') && !previous.starts_with('#')
+            })
+    }
+
     pub(crate) fn finish_line_text(&mut self, line: &str) {
         let line = &LineView::new(line);
         let replay = self.take_line_replay_layout(line);
@@ -56,13 +75,20 @@ impl FormatEngine<'_> {
         let LineRoute::Layout(observed_line_kind) = self.route_line_before_layout(line) else {
             return;
         };
+        self.plain_statement_line = self.starts_plain_statement(line, observed_line_kind);
         let layout = self.initial_line_layout(line, observed_line_kind, &replay);
         let layout = self.apply_initial_syntax_layout(line, layout);
         let layout = self.apply_initial_operator_and_header_layout(line, layout);
         let layout = self.apply_separated_header_and_comment_layout(line, layout);
         let layout = self.apply_label_and_conditional_context_layout(line, layout);
-        let layout = self.apply_top_level_and_initializer_prefix_layout(line, layout);
-        let ended_statement = self.follows_ended_statement(line);
+        // File scope, comment rows and rows after `,` or `=` have no plain
+        // statement.
+        let layout = if self.plain_statement_line {
+            layout
+        } else {
+            self.apply_top_level_and_initializer_prefix_layout(line, layout)
+        };
+        let ended_statement = self.plain_statement_line || self.follows_ended_statement(line);
         let layout = if ended_statement {
             layout
         } else {
@@ -104,8 +130,13 @@ impl FormatEngine<'_> {
             self.apply_previous_statement_and_operator_prefix_layout(line, contextual_layout);
         let contextual_layout =
             self.apply_label_else_and_conditional_contextual_layout(line, contextual_layout);
-        let contextual_layout =
-            self.apply_none_style_else_and_conditional_body_layout(line, contextual_layout);
+        // Its rules read `} else` and `}` rows, rows after `{`, and rows
+        // after an `else` or a directive.
+        let contextual_layout = if self.plain_statement_line {
+            contextual_layout
+        } else {
+            self.apply_none_style_else_and_conditional_body_layout(line, contextual_layout)
+        };
         let contextual_layout = self.apply_normal_literal_comma_and_split_else_entry_layout(
             line,
             &replay,
@@ -145,6 +176,7 @@ impl FormatEngine<'_> {
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
         let mut layout = self.apply_tree_anchor_layout(line, layout);
+        self.plain_statement_line = false;
         if self.preprocessor.group_blocks.contains(&true)
             && layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with('#')

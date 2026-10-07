@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::{line_is_control_body_header, starts_
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_text};
+use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::LookBack;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
@@ -2124,19 +2125,17 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
         line_kind: LineKind,
-        closes_outer_delimiter: bool,
-        has_owned_continuation: bool,
+        delimiters: impl Fn() -> LineDelimiters,
         is_closing_header: bool,
     ) -> Option<usize> {
         if line_kind != LineKind::Normal
-            || closes_outer_delimiter
-            || has_owned_continuation
             || is_closing_header
             || line.trimmed_start().starts_with_any(b"#{}/)]")
             || self
                 .output
                 .last_line_outside_comment()
                 .is_none_or(|previous| previous.trimmed() != "}")
+            || delimiters().continues()
             || !self.has_case_body_at_current_depth()
             || self
                 .layout
@@ -2177,28 +2176,13 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         line_kind: LineKind,
         uses_normal_indent: bool,
-        closes_outer_delimiter: bool,
-        has_owned_continuation: bool,
+        delimiters: impl Fn() -> LineDelimiters,
         exact_indent_spaces: Option<usize>,
     ) -> Option<CaseBlockBodyLayout> {
         let line_start = line.trimmed_start();
-        let previous_line = self
-            .output
-            .iter()
-            .rposition(|line| !line.trimmed().is_empty());
-        let follows_ternary_arm = previous_line.is_some_and(|previous_line| {
-            self.layout
-                .frame_stack
-                .line_ended_open_ternary(previous_line)
-        });
         if line_kind != LineKind::Normal
             || !uses_normal_indent
-            || closes_outer_delimiter
-            || has_owned_continuation
-            || follows_ternary_arm
             || line_start.starts_with_any(b")]}")
-            || self.pending_line_continues_statement()
-            || self.continues_aligned_brace_elements()
         {
             return None;
         }
@@ -2207,6 +2191,22 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_brace()
             .filter(|frame| frame.case_block)?;
+        let follows_ternary_arm = self
+            .output
+            .iter()
+            .rposition(|line| !line.trimmed().is_empty())
+            .is_some_and(|previous_line| {
+                self.layout
+                    .frame_stack
+                    .line_ended_open_ternary(previous_line)
+            });
+        if delimiters().continues()
+            || follows_ternary_arm
+            || self.pending_line_continues_statement()
+            || self.continues_aligned_brace_elements()
+        {
+            return None;
+        }
         // A block given to a braceless header is its body, not a sibling.
         let header_body_column = self
             .output

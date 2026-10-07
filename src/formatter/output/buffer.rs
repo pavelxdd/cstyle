@@ -1748,6 +1748,14 @@ impl OutputBuffer {
             .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))
     }
 
+    /// The last non-blank line of the scope when no comment holds it.
+    pub(crate) fn last_code_line_scoped(&self) -> Option<&String> {
+        let index = self
+            .last_non_empty_index()
+            .filter(|&index| index >= self.scope_start)?;
+        (self.last_line_outside_comment_index() == Some(index)).then(|| &self.lines[index])
+    }
+
     #[inline]
     fn last_line_outside_comment_index(&self) -> Option<usize> {
         match self.last_outside_comment_cache.get() {

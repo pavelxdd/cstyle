@@ -4,7 +4,7 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::output::model::{LineLayout, LineReplayLayout};
+use crate::formatter::output::model::{LineDelimiters, LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::leading_visual_width;
@@ -237,15 +237,12 @@ impl FormatEngine<'_> {
         let class_scope_label = layout.class_scope_label;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
-        let (line_closing_parens, line_opening_parens) = line.paren_imbalance();
-        let line_closes_outer_delimiter = line_closing_parens > line_opening_parens.len();
-        let line_has_owned_continuation = self.layout.frame_stack.active_delimiter().is_some()
-            || self.operator_chain_owns_continuation(line);
+        // Read only by the rules whose own tests pass.
+        let delimiters = std::cell::OnceCell::new();
         if let Some(spaces) = self.post_block_case_body_indent_override(
             line,
             line_kind,
-            line_closes_outer_delimiter,
-            line_has_owned_continuation,
+            || self.line_delimiters(line, &delimiters),
             is_attachable_closing_header(leading_identifier(line)),
         ) {
             exact_indent_spaces = Some(spaces);
@@ -253,13 +250,11 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.nested_case_label_indent_override(line_kind) {
             exact_indent_spaces = Some(spaces);
         }
-        if let Some(spaces) = self.active_label_block_indent_spaces(
-            line,
-            line_kind,
-            indent == normal_indent,
-            line_closes_outer_delimiter,
-            line_has_owned_continuation,
-        ) {
+        if let Some(spaces) =
+            self.active_label_block_indent_spaces(line, line_kind, indent == normal_indent, || {
+                self.line_delimiters(line, &delimiters)
+            })
+        {
             exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.closed_label_block_indent_spaces(line) {
@@ -269,8 +264,7 @@ impl FormatEngine<'_> {
             line,
             line_kind,
             indent == normal_indent,
-            line_closes_outer_delimiter,
-            line_has_owned_continuation,
+            || self.line_delimiters(line, &delimiters),
             exact_indent_spaces,
         ) {
             exact_indent_spaces = Some(case_layout.exact_indent_spaces);
@@ -309,6 +303,21 @@ impl FormatEngine<'_> {
         layout.exact_indent_spaces = exact_indent_spaces;
         layout
     }
+    /// The delimiters of `line`, read once into `cell`.
+    fn line_delimiters(
+        &self,
+        line: &LineView<'_>,
+        cell: &std::cell::OnceCell<LineDelimiters>,
+    ) -> LineDelimiters {
+        *cell.get_or_init(|| {
+            let (closing_parens, opening_parens) = line.paren_imbalance();
+            LineDelimiters {
+                closes_outer: closing_parens > opening_parens.len(),
+                owned_continuation: self.layout.frame_stack.active_delimiter().is_some()
+                    || self.operator_chain_owns_continuation(line),
+            }
+        })
+    }
 
     /// An `else` starting a line takes the indent of the line holding its
     /// `if`, from the structure tree.
@@ -322,13 +331,17 @@ impl FormatEngine<'_> {
         let line_kind = layout.line_kind;
         let indent = layout.indent;
         let mut exact_indent_spaces = layout.exact_indent_spaces;
-        if line_kind == LineKind::Normal
+        // A plain statement follows a code line ending with `;`, not `,`,
+        // `(` or `{`, and starts with a word.
+        let plain = self.plain_statement_line;
+        if !plain
+            && line_kind == LineKind::Normal
+            && let Some(spaces) = replay.closed_delimiter_continuation_indent
             && !line_start.starts_with_any(b"#(){}")
             && self
                 .argument_after_lambda_call_argument_indent_spaces(line)
                 .is_none()
             && !self.has_over_max_new_call_context()
-            && let Some(spaces) = replay.closed_delimiter_continuation_indent
             && self
                 .output
                 .last_line_outside_comment()
@@ -346,41 +359,47 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        if let Some(spaces) = self.maximum_length_new_call_argument_indent_spaces() {
+        if !plain && let Some(spaces) = self.maximum_length_new_call_argument_indent_spaces() {
             exact_indent_spaces = Some(spaces);
         }
-        if self.options.indent_after_parens
+        if !plain
+            && self.options.indent_after_parens
             && let Some(previous) = self.output.last_line_outside_comment()
             && self.output.code_trimmed_of(previous).ends_with(',')
             && code_holds_word(previous, "new")
         {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }
-        if let Some(spaces) =
-            self.maximum_length_capped_open_paren_argument_indent_spaces(line_kind)
-        {
-            exact_indent_spaces = Some(spaces);
-        }
-        if let Some(spaces) = self.maximum_length_logical_header_indent_spaces(line, line_kind) {
-            exact_indent_spaces = Some(spaces);
-        }
-        if line_kind == LineKind::Normal
-            && self.output.last_line_outside_comment().is_some()
-            && let Some(spaces) = self.trailing_stream_top_level_indent_spaces(line_kind)
-        {
-            exact_indent_spaces = Some(spaces);
-        }
-        if let Some(spaces) = self.maximum_length_return_chain_indent_spaces(line, line_kind) {
-            exact_indent_spaces = Some(spaces);
+        if !plain {
+            if let Some(spaces) =
+                self.maximum_length_capped_open_paren_argument_indent_spaces(line_kind)
+            {
+                exact_indent_spaces = Some(spaces);
+            }
+            if let Some(spaces) = self.maximum_length_logical_header_indent_spaces(line, line_kind)
+            {
+                exact_indent_spaces = Some(spaces);
+            }
+            if line_kind == LineKind::Normal
+                && self.output.last_line_outside_comment().is_some()
+                && let Some(spaces) = self.trailing_stream_top_level_indent_spaces(line_kind)
+            {
+                exact_indent_spaces = Some(spaces);
+            }
+            if let Some(spaces) = self.maximum_length_return_chain_indent_spaces(line, line_kind) {
+                exact_indent_spaces = Some(spaces);
+            }
         }
         if let Some(spaces) = replay.constructor_lambda_header_indent_spaces {
             exact_indent_spaces = Some(spaces);
         }
-        if let Some(spaces) = self.lambda_closing_brace_indent_spaces(line) {
-            exact_indent_spaces = Some(spaces);
-        }
-        if let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line) {
-            exact_indent_spaces = Some(spaces);
+        if !plain {
+            if let Some(spaces) = self.lambda_closing_brace_indent_spaces(line) {
+                exact_indent_spaces = Some(spaces);
+            }
+            if let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line) {
+                exact_indent_spaces = Some(spaces);
+            }
         }
         if let Some(spaces) = replay.inline_body_owner_indent_spaces {
             exact_indent_spaces = Some(spaces);

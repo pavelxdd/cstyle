@@ -29,6 +29,21 @@ pub(super) struct PostEmissionLayout {
     pub(crate) else_while_brace: bool,
 }
 
+/// Whether a line closes a paren opened before it, and whether an open
+/// delimiter or operator chain continues the statement into it.
+#[derive(Clone, Copy)]
+pub(crate) struct LineDelimiters {
+    pub(crate) closes_outer: bool,
+    pub(crate) owned_continuation: bool,
+}
+
+impl LineDelimiters {
+    /// Whether the line continues a statement rather than starting one.
+    pub(crate) fn continues(self) -> bool {
+        self.closes_outer || self.owned_continuation
+    }
+}
+
 pub(crate) struct AlignedLineLayout {
     pub(crate) layout: LineLayout,
     pub(crate) restore_objc_message_align: Option<usize>,
