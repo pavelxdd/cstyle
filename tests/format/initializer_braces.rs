@@ -4316,3 +4316,15 @@ fn indented_brace_styles_close_nested_compound_literals_at_their_fields() {
         );
     }
 }
+
+#[test]
+fn enum_row_broken_off_by_its_closing_brace_keeps_the_element_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{\n\tenum { LEFT,\n\t       CENTRE,\n\t       TOTAL } current = LEFT, last = LEFT;\n\tint x;\n}\n";
+    let expected = "void f(void)\n{\n    enum { LEFT,\n           CENTRE,\n           TOTAL\n         } current = LEFT, last = LEFT;\n    int x;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

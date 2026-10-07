@@ -749,10 +749,19 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn close_inline_array_brace(&mut self) {
+        // An enum's last row, which its `}` breaks off below, stands among
+        // the elements.
+        let broken_enum_row = !self.current_is_blank()
+            && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Enum)
+            && self.inline_array.frames.last().is_some_and(|frame| {
+                frame.depth == self.layout.nesting.brace_header_stack.len()
+                    && self.output.len() > frame.output_line
+            });
         if self.current_is_blank() {
             self.layout.frame_stack.clear_closed_braces();
         } else if self.token_input.token_begins_source_line
             && self.innermost_brace_is_compound_literal()
+            || broken_enum_row
         {
             // The row before a `}` that leads its line stands among the
             // elements, so it publishes while the brace is open.
@@ -870,6 +879,10 @@ impl FormatEngine<'_> {
             if !self.current_is_blank() {
                 self.finish_line();
             }
+            if let Some(column) = closing_column {
+                self.layout.continuation_indent.set_next_line_spaces(column);
+            }
+        } else if broken_enum_row {
             if let Some(column) = closing_column {
                 self.layout.continuation_indent.set_next_line_spaces(column);
             }

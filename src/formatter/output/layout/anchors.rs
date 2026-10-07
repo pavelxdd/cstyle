@@ -8,6 +8,7 @@
 
 use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
+use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::{CommentKind, Token, token_text};
@@ -419,16 +420,18 @@ impl FormatEngine<'_> {
         if layout.line_kind != LineKind::Normal || line.trimmed_start().starts_with('#') {
             return layout;
         }
-        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+        let first = self.output.pending_tokens().map(|span| span.first);
+        // Tokens that the engine moved across lines map to no line of theirs,
+        // and a brace the formatter added maps to no token at all.
+        let Some(first) = first.filter(|&first| {
+            line.trimmed_start()
+                .starts_with(&*token_text(&self.tree.tokens[first]))
+        }) else {
+            if let Some(spaces) = self.added_closing_brace_indent(line) {
+                layout.exact_indent_spaces = Some(spaces);
+            }
             return layout;
         };
-        // Tokens that the engine moved across lines map to no line of theirs.
-        if !line
-            .trimmed_start()
-            .starts_with(&*token_text(&self.tree.tokens[first]))
-        {
-            return layout;
-        }
         if let Some(spaces) = self.tree_anchor_indent(first, line) {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -3852,6 +3855,28 @@ impl FormatEngine<'_> {
 
     /// Case-block unindent the line being laid out will lose; indents from
     /// published lines have lost theirs already.
+    /// A brace added to close a control statement's body stands where the
+    /// line holding the statement's header and its `{` starts.
+    fn added_closing_brace_indent(&self, line: &LineView<'_>) -> Option<usize> {
+        if line.trimmed() != "}" || self.should_indent_brace_line(BraceType::Command) {
+            return None;
+        }
+        let header = self.layout.nesting.last_closed_brace_header.as_deref()?;
+        if !matches!(header, "if" | "else" | "for" | "while" | "do") {
+            return None;
+        }
+        let (spaces, _, open) = self
+            .output
+            .current_closing_brace_open(self.options.tab_width)?;
+        let open = open.strip_prefix('}').map_or(open, str::trim_start);
+        let open = open
+            .strip_prefix("else")
+            .filter(|rest| header == "if" && rest.starts_with([' ', '\t']))
+            .map_or(open, str::trim_start);
+        (starts_header_word(open, header) && header_line_opens_its_block(&open[header.len()..]))
+            .then(|| spaces + self.case_unindent_spaces())
+    }
+
     pub(crate) fn case_unindent_spaces(&self) -> usize {
         self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
     }
@@ -5745,4 +5770,40 @@ fn open_of_row_before(
             || matches!(tokens[index], Token::Symbol(',')) && groups.enclosing(index) == Some(group)
     })?;
     next_code_token(tokens, separator + 1)
+}
+
+/// Whether the text after a header word is only the header's condition, if
+/// any, and the `{` of its block: no further header shares the line.
+fn header_line_opens_its_block(after_header: &str) -> bool {
+    let rest = after_header.trim_start();
+    let Some(condition) = rest.strip_prefix('(') else {
+        return rest == "{";
+    };
+    let mut depth = 1usize;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, ch) in condition.char_indices() {
+        if let Some(open) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == open {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return condition[index + 1..].trim() == "{";
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }

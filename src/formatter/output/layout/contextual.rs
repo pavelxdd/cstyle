@@ -2096,9 +2096,10 @@ impl FormatEngine<'_> {
             && !starts_header_word(open_trimmed, "do")
             && !open_trimmed.starts_with("case ")
             && !open_trimmed.starts_with("default:")
+            // A split control header opens its brace on a condition row.
             && !matches!(
                 self.layout.nesting.last_closed_brace_header.as_deref(),
-                Some("case" | "default")
+                Some("case" | "default" | "if" | "for" | "while" | "switch" | "do")
             )
             // A style indenting braces closes a compound literal at its
             // fields, past the cast that opened it.

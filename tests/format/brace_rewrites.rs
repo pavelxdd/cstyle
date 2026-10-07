@@ -1983,3 +1983,46 @@ fn one_line_braces_keep_the_gap_a_statement_had_after_its_header() {
         )
     );
 }
+
+#[test]
+fn added_brace_after_split_condition_closes_at_the_header_in_nested_case_blocks() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--min-conditional-indent=0".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f() {\n  switch (x) {\n    case 0: {\n      switch (y) {\n        case 1: {\n          if (a ||\n             !b) return NULL;\n          p=ep;\n        }\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n    case 0: {\n        switch (y) {\n        case 1: {\n            if (a ||\n                !b) {\n                return NULL;\n            }\n            p=ep;\n        }\n        }\n    }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn added_brace_after_comment_split_else_closes_at_its_header() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=1tbs".to_owned()]).expect("valid options");
+    let input = "void f() {\n  if (a) {\n    x();\n  } else\n\n  /* c */\n  if (b) {\n    int szB;\n    if (argc != 5) usage(argv[0]);\n    out = 1;\n  }\n}\n";
+    let expected = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        /* c */\n        if (b) {\n            int szB;\n            if (argc != 5) {\n                usage(argv[0]);\n            }\n            out = 1;\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn added_braces_after_chained_headers_keep_the_inner_header_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=1tbs".to_owned()]).expect("valid options");
+    let input = "static char *f(sqlite3 *db)\n{\n    if( z ) for(i=0; z[i]; i++) if( sqlite3Isspace(z[i]) ) z[i] = 0;\n    return z;\n}\n";
+    let expected = "static char *f(sqlite3 *db)\n{\n    if( z ) for(i=0; z[i]; i++) if( sqlite3Isspace(z[i]) ) {\n                z[i] = 0;\n            }\n    return z;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
