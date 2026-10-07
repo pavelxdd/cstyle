@@ -311,7 +311,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_initial_syntax_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -560,7 +560,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_separated_header_and_comment_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -694,7 +694,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_label_and_conditional_context_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -884,7 +884,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_top_level_and_initializer_prefix_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -1035,7 +1035,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_constructor_and_call_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -1121,8 +1121,22 @@ impl FormatEngine<'_> {
         layout
     }
 
+    /// The one rule of [`Self::apply_ternary_template_and_source_layout`]
+    /// that a line after an ended statement may meet, outside a file
+    /// naming `noexcept`.
+    pub(crate) fn apply_template_base_layout(
+        &self,
+        line: &LineView<'_>,
+        mut layout: LineLayout,
+    ) -> LineLayout {
+        if let Some(spaces) = self.simple_template_base_indent_spaces(line) {
+            layout.exact_indent_spaces = Some(spaces);
+        }
+        layout
+    }
+
     pub(crate) fn apply_ternary_template_and_source_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -1331,7 +1345,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_brace_array_and_objc_dictionary_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {
@@ -1506,7 +1520,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_objc_pre_alignment_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {

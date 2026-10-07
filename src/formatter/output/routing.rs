@@ -4,6 +4,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::literals::starts_string_literal_token;
 
 impl FormatEngine<'_> {
     fn route_line_before_layout(&mut self, line: &LineView<'_>) -> LineRoute<LineKind> {
@@ -29,6 +30,23 @@ impl FormatEngine<'_> {
         LineRoute::Layout(observed_line_kind)
     }
 
+    /// Whether the line starts with a word, no string literal, after a
+    /// line whose code ended a statement or a brace and holds no comment:
+    /// the layouts of calls, continuations and constructor initializers
+    /// have nothing to place on such a line.
+    fn follows_ended_statement(&self, line: &LineView<'_>) -> bool {
+        let start = line.trimmed_start();
+        start
+            .as_bytes()
+            .first()
+            .is_some_and(|&byte| byte.is_ascii_alphabetic() || byte == b'_')
+            && !starts_string_literal_token(start)
+            && self.output.last_non_empty_scoped().is_some_and(|previous| {
+                let previous = previous.trimmed_end();
+                previous.ends_with_any(b";{}") && !previous.contains('/')
+            })
+    }
+
     pub(crate) fn finish_line_text(&mut self, line: &str) {
         let line = &LineView::new(line);
         let replay = self.take_line_replay_layout(line);
@@ -44,8 +62,17 @@ impl FormatEngine<'_> {
         let layout = self.apply_separated_header_and_comment_layout(line, layout);
         let layout = self.apply_label_and_conditional_context_layout(line, layout);
         let layout = self.apply_top_level_and_initializer_prefix_layout(line, layout);
-        let layout = self.apply_constructor_and_call_layout(line, layout);
-        let layout = self.apply_ternary_template_and_source_layout(line, layout);
+        let ended_statement = self.follows_ended_statement(line);
+        let layout = if ended_statement {
+            layout
+        } else {
+            self.apply_constructor_and_call_layout(line, layout)
+        };
+        let layout = if ended_statement && !self.may_have_noexcept {
+            self.apply_template_base_layout(line, layout)
+        } else {
+            self.apply_ternary_template_and_source_layout(line, layout)
+        };
         let layout = self.apply_brace_array_and_objc_dictionary_layout(line, layout);
         let layout = self.apply_objc_pre_alignment_layout(line, layout);
         let LineRoute::Layout(aligned_layout) =
@@ -63,8 +90,11 @@ impl FormatEngine<'_> {
         let layout = self.apply_comment_brace_and_ternary_operand_layout(line, layout);
         let layout = self.apply_late_call_and_operator_layout(line, layout);
         let contextual_layout = self.begin_contextual_line_layout(line, layout);
-        let contextual_layout =
-            self.apply_previous_output_call_and_initializer_layout(line, contextual_layout);
+        let contextual_layout = if ended_statement {
+            contextual_layout
+        } else {
+            self.apply_previous_output_call_and_initializer_layout(line, contextual_layout)
+        };
         let contextual_layout = self.apply_source_indent_brace_and_style_operator_layout(
             line,
             case_unindent_closing_line,
@@ -97,8 +127,11 @@ impl FormatEngine<'_> {
             self.apply_conditional_literal_paren_and_else_layout(line, &replay, contextual_layout);
         let contextual_layout =
             self.apply_call_initializer_and_case_control_contextual_layout(line, contextual_layout);
-        let contextual_layout =
-            self.apply_final_sibling_and_directive_contextual_layout(line, contextual_layout);
+        let contextual_layout = if ended_statement {
+            contextual_layout
+        } else {
+            self.apply_final_sibling_and_directive_contextual_layout(line, contextual_layout)
+        };
         let contextual_layout =
             self.apply_preprocessor_and_split_else_recovery_layout(line, contextual_layout);
         let ContextualLineLayout {

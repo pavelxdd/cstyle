@@ -362,7 +362,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_late_call_and_operator_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut layout: LineLayout,
     ) -> LineLayout {

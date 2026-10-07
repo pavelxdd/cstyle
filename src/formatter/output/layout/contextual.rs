@@ -252,7 +252,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_previous_output_call_and_initializer_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -613,7 +613,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_previous_statement_and_operator_prefix_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -835,7 +835,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_label_else_and_conditional_contextual_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -1089,7 +1089,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_none_style_else_and_conditional_body_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -1928,7 +1928,7 @@ impl FormatEngine<'_> {
 
 impl FormatEngine<'_> {
     pub(crate) fn apply_header_label_and_switch_contextual_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut contextual: ContextualLineLayout,
@@ -2226,7 +2226,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_structural_split_else_body_contextual_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -2569,7 +2569,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_macro_case_brace_and_return_contextual_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -2727,7 +2727,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_conditional_literal_paren_and_else_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut contextual: ContextualLineLayout,
@@ -3270,7 +3270,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_final_sibling_and_directive_contextual_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {
@@ -3285,7 +3285,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn apply_preprocessor_and_split_else_recovery_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         mut contextual: ContextualLineLayout,
     ) -> ContextualLineLayout {

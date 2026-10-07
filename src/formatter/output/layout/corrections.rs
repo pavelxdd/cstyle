@@ -313,7 +313,7 @@ impl FormatEngine<'_> {
     /// An `else` starting a line takes the indent of the line holding its
     /// `if`, from the structure tree.
     pub(crate) fn apply_final_recovery_floor_and_replay_layout(
-        &mut self,
+        &self,
         line: &LineView<'_>,
         replay: &LineReplayLayout,
         mut layout: LineLayout,
