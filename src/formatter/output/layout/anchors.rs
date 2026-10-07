@@ -465,20 +465,25 @@ impl FormatEngine<'_> {
             return layout;
         }
         let structural = layout.indent * self.options.indent_width;
-        // Only a statement of a block has a sibling or a block column.
-        let (sibling, block) = if self.tree.statements.starts_block_statement(first) {
-            (
-                self.sibling_statement_column(first),
-                self.block_body_column(first),
-            )
-        } else {
-            (None, None)
+        // Only a statement of a block has a sibling or a block column; the
+        // block column is read only when the sibling leaves it a say.
+        let starts_statement = self.tree.statements.starts_block_statement(first);
+        let sibling = starts_statement
+            .then(|| self.sibling_statement_column(first))
+            .flatten();
+        let block_cell = std::cell::OnceCell::new();
+        let block = || {
+            *block_cell.get_or_init(|| {
+                starts_statement
+                    .then(|| self.block_body_column(first))
+                    .flatten()
+            })
         };
         // Past a directive the engine keeps none of the levels it lost in
         // an `else` body split off by an empty line; the tree places them.
         if layout.exact_indent_spaces.is_none()
             && sibling.is_none()
-            && block.is_none()
+            && block().is_none()
             && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
             && self.tree.statements.in_else_body_after_blank_line(first)
             && self.tree.statements.starts_block_statement(first)
@@ -491,8 +496,8 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
         ) && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
-            && block.is_some()
-            && (sibling.is_some() && sibling == block
+            && block().is_some()
+            && (sibling.is_some() && sibling == block()
                 && self
                     .tree
                     .groups
@@ -500,25 +505,28 @@ impl FormatEngine<'_> {
                     .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
                 // The engine loses levels in an `else` body split off by an
                 // empty line; the tree places its blocks.
-                || sibling.is_none_or(|sibling| Some(sibling) == block)
+                || sibling.is_none_or(|sibling| Some(sibling) == block())
                     && self.tree.statements.in_else_body_after_blank_line(first)
                 // A block's first statement stands at its brace.
                 || self.options.brace_style != BraceStyle::Ratliff
                     && sibling.is_none()
                     && self.tree.statements.block_opening(first).is_some())
         {
-            layout.exact_indent_spaces = block;
+            layout.exact_indent_spaces = block();
             return layout;
         }
-        let brace = self
-            .closing_brace_indent(first)
-            .or_else(|| self.opening_brace_indent(first));
-        if sibling == Some(structural) || block == Some(structural) || brace == Some(structural) {
+        if sibling == Some(structural)
+            || block() == Some(structural)
+            || self
+                .closing_brace_indent(first)
+                .or_else(|| self.opening_brace_indent(first))
+                == Some(structural)
+        {
             // A heuristic moved the line off a structural level that the
             // tree confirms; an anchor off that level is itself misplaced.
             layout.exact_indent_spaces = Some(structural);
         } else if sibling.is_some()
-            && sibling == block
+            && sibling == block()
             && layout.exact_indent_spaces != sibling
             && (!matches!(
                 self.options.brace_style,
@@ -553,9 +561,9 @@ impl FormatEngine<'_> {
         {
             // The statement's sibling and its block agree on a column the
             // engine missed, as after a braceless chain closed by `{}`.
-            layout.exact_indent_spaces = block;
+            layout.exact_indent_spaces = block();
         } else if sibling.is_none()
-            && block.is_some()
+            && block().is_some()
             && self
                 .tree
                 .statements
@@ -566,11 +574,11 @@ impl FormatEngine<'_> {
                         || self.tree.statements.branch_header_of_block(open).is_some()
                 })
             && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
-            && Some(layout.exact_indent_spaces.unwrap_or(structural)) < block
+            && Some(layout.exact_indent_spaces.unwrap_or(structural)) < block()
         {
             // The first statement of a block stands at its body, which the
             // engine may lose in a long `else if` chain.
-            layout.exact_indent_spaces = block;
+            layout.exact_indent_spaces = block();
         } else if matches!(self.tree.tokens[first], Token::Symbol('{'))
             && sibling == Some(structural + self.options.indent_width)
         {
