@@ -1514,3 +1514,31 @@ fn indented_case_block_attaches_array_brace_without_losing_the_line_level() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn block_comment_before_case_body_brace_keeps_the_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n    switch (x)\n    {\n    case 1:\n    {\n        z = 0;\n        /* c */\n        {\n            a();\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n    case 1: {\n        z = 0;\n        /* c */\n        {\n            a();\n        }\n        break;\n    }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn block_comment_before_indented_case_body_brace_keeps_the_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=allman".to_owned(), "-S".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (x)\n    {\n    case 1:\n    {\n        z = 0;\n        /* c */\n        {\n            a();\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x)\n    {\n        case 1:\n        {\n            z = 0;\n            /* c */\n            {\n                a();\n            }\n            break;\n        }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

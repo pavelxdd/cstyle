@@ -1947,7 +1947,9 @@ impl FormatEngine<'_> {
                             || trimmed == "else"
                             || trimmed.starts_with("else if"))
                 });
-            let previous_indent = leading_visual_width(line, self.options.tab_width);
+            // The output line lost the case unindents the comment is yet to.
+            let previous_indent =
+                leading_visual_width(line, self.options.tab_width) + self.case_unindent_spaces();
             let body_indent = (self
                 .layout
                 .indentation
