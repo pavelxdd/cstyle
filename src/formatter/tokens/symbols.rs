@@ -1616,7 +1616,8 @@ impl FormatEngine<'_> {
     }
 
     fn is_asm_operand_colon(&self) -> bool {
-        let current = self.current.trimmed_start();
+        // The statement starts past a brace it shares its line with.
+        let current = self.current[self.current.statement_start()..].trimmed_start();
         self.current.holds_asm_call()
             || current.starts_with("asm ")
             || current.starts_with("asm\t")

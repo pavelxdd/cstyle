@@ -1734,3 +1734,12 @@ fn ratliff_one_line_struct_body_takes_the_brace_indent() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn asm_operand_colons_in_a_run_in_one_line_block_keep_their_spaces() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "static void f(void)\n{   asm volatile (\"lock; xchgq %0, %1\" : \"+q\" (value), \"+m\" (*pointer)); }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

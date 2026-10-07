@@ -1566,3 +1566,12 @@ fn block_comment_after_a_multiline_comment_past_an_inner_block_keeps_its_column(
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn block_after_a_label_kept_after_the_closing_brace_stands_at_the_case_blocks() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f(int b)\n{   switch (b)\n    {   case 16:\n        {   h();\n            break; } default:\n        {   k();\n            break; } } }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

@@ -286,35 +286,40 @@ impl FormatEngine<'_> {
                 + pending_case_label)
                 * self.options.indent_width
         });
+        // The column of the switch's labels.
+        let label_base = || {
+            // VTK's and Whitesmith's labels stand at their switch's brace.
+            let vtk_switch_brace = matches!(
+                self.options.brace_style,
+                BraceStyle::Vtk | BraceStyle::Whitesmith
+            )
+            .then(|| self.layout.frame_stack.active_brace())
+            .flatten()
+            .filter(|frame| frame.header.as_deref() == Some("switch"))
+            .map(|frame| frame.sibling_indent_column);
+            if let Some(column) = vtk_switch_brace
+                && self.preprocessor.split_else.extra_levels == 0
+            {
+                column
+            } else if self.preprocessor.split_else.extra_levels == 0 {
+                self.layout
+                    .indentation
+                    .line_indent(LineKind::SwitchLabel, self.options)
+                    * self.options.indent_width
+            } else {
+                let owner_depth = 1 + self
+                    .preprocessor
+                    .split_else
+                    .extra_levels
+                    .saturating_sub(self.layout.line_adjuster.next_line_case_unindent_depth());
+                self.current_line_indent_spaces()
+                    .saturating_sub(owner_depth * self.options.indent_width)
+            }
+        };
         let case_owner_column = case_header.and_then(|header| {
             case_label_token_offset(&self.current, header)
                 .map(|offset| {
-                    // VTK's and Whitesmith's labels stand at their switch's brace.
-                    let vtk_switch_brace = matches!(
-                        self.options.brace_style,
-                        BraceStyle::Vtk | BraceStyle::Whitesmith
-                    )
-                    .then(|| self.layout.frame_stack.active_brace())
-                    .flatten()
-                    .filter(|frame| frame.header.as_deref() == Some("switch"))
-                    .map(|frame| frame.sibling_indent_column);
-                    let base = if let Some(column) = vtk_switch_brace
-                        && self.preprocessor.split_else.extra_levels == 0
-                    {
-                        column
-                    } else if self.preprocessor.split_else.extra_levels == 0 {
-                        self.layout
-                            .indentation
-                            .line_indent(LineKind::SwitchLabel, self.options)
-                            * self.options.indent_width
-                    } else {
-                        let owner_depth =
-                            1 + self.preprocessor.split_else.extra_levels.saturating_sub(
-                                self.layout.line_adjuster.next_line_case_unindent_depth(),
-                            );
-                        self.current_line_indent_spaces()
-                            .saturating_sub(owner_depth * self.options.indent_width)
-                    };
+                    let base = label_base();
                     // A label after the brace closing the case before stands
                     // at the line's own column.
                     if brace_led(&self.current[..offset]) {
@@ -331,15 +336,9 @@ impl FormatEngine<'_> {
                     self.output.scoped().iter().rev().find_map(|line| {
                         case_label_token_offset(line, header).map(|offset| {
                             if brace_led(&line[..offset]) {
-                                // Styles that indent braces put the closing one
-                                // a level past its label.
-                                let indented_braces = matches!(
-                                    self.options.brace_style,
-                                    BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-                                );
-                                leading_visual_width(line, self.options.tab_width).saturating_sub(
-                                    usize::from(indented_braces) * self.options.indent_width,
-                                )
+                                // The line stands where its closing brace
+                                // does; the label after it at the labels'.
+                                label_base()
                             } else {
                                 visual_width_from(&line[..offset], 0, self.options.tab_width)
                             }
