@@ -333,6 +333,9 @@ pub(crate) struct FormatEngine<'a> {
     /// The line adjuster before it saw the lone `}` published at the
     /// index, restored when a closing header takes that line back.
     pub(crate) adjuster_before_lone_brace: Option<(usize, line_adjust::LineAdjuster)>,
+    /// The line adjuster before it observed the lone `}` routed to the
+    /// index.
+    pub(crate) adjuster_before_observed_lone_brace: Option<(usize, line_adjust::LineAdjuster)>,
     pub(crate) unmatched_closing_brace_recovery: bool,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
@@ -474,6 +477,7 @@ impl<'a> FormatEngine<'a> {
             current_is_preindented: false,
             current_is_verbatim: false,
             adjuster_before_lone_brace: None,
+            adjuster_before_observed_lone_brace: None,
             unmatched_closing_brace_recovery: false,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,
@@ -817,6 +821,7 @@ impl<'a> FormatEngine<'a> {
         self.next_line.leads_with_else =
             matches!(following, Some(Token::Word(word)) if word == "else");
         self.next_line.leads_with_open_paren = matches!(following, Some(Token::Symbol('(')));
+        self.next_line.leads_with_comment = matches!(following, Some(Token::Comment(..)));
         self.next_line.word_followed_by_open_paren = matches!(
             (following, after_following),
             (Some(Token::Word(_)), Some(Token::Symbol('(')))
@@ -1181,6 +1186,7 @@ impl<'a> FormatEngine<'a> {
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
+        self.layout.line_state.bit_field_colon = false;
         self.layout.line_state.is_multi_statement_line = false;
         self.layout.line_state.is_one_line_block = false;
         self.layout.line_state.column1_line_comment = {
@@ -1771,6 +1777,18 @@ impl<'a> FormatEngine<'a> {
             && !self.next_line.leads_with_open_brace
         {
             self.finish_split_class_head_line();
+        } else if self.previous_was_newline
+            && !self.should_preserve_input_empty_line()
+            && !self.next_line.leads_with_comment
+            && self
+                .current
+                .trimmed()
+                .strip_prefix('}')
+                .map_or(self.current.trimmed(), str::trim_start)
+                == "else"
+        {
+            // An empty line the options delete leaves an `else` waiting for
+            // its statement.
         } else if self.previous_was_newline {
             self.finish_line();
             if self.should_preserve_input_empty_line() {
@@ -2037,6 +2055,21 @@ impl<'a> FormatEngine<'a> {
             }
             self.layout.objc.method_continuation = false;
             self.previous_was_newline = true;
+        } else if self.newline_breaks_statement && self.statement_follows_complete_header() {
+            // A statement the source broke after a header's one-line body
+            // continues a level in, and a `return` value a level more.
+            let levels = 1 + usize::from(
+                trailing_word(
+                    self.current[..self.current_trailing_comment_split_limit()].trimmed(),
+                ) == "return",
+            );
+            self.finish_line();
+            if let Some(last) = self.output.last() {
+                let spaces = columns::leading_visual_width(last, self.options.tab_width)
+                    + levels * self.options.indent_width;
+                self.layout.continuation_indent.set_next_line_spaces(spaces);
+            }
+            self.previous_was_newline = true;
         } else if self.next_line.leads_with_else {
             // A body without `;`, as a macro call, still ends before `else`.
             self.finish_line();
@@ -2173,6 +2206,19 @@ impl<'a> FormatEngine<'a> {
         (trailing_word(code) == header || trailing_word(current) == header)
             && self.layout.command_state.previous_command_char != Some(')')
             && self.header_paren.depth.is_none()
+    }
+
+    /// Whether a word of a statement follows a complete control header on
+    /// the line.
+    fn statement_follows_complete_header(&self) -> bool {
+        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
+        matches!(
+            self.layout.command_state.current_header.as_deref(),
+            Some("if" | "for" | "while" | "switch" | "else")
+        ) && self.header_paren.depth.is_none()
+            && !self.incomplete_control_header()
+            && code.ends_with(is_identifier_continue)
+            && code.trim_start_matches('}').trimmed_start() != "else"
     }
 
     fn header_allows_statement_break(&self) -> bool {

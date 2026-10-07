@@ -930,6 +930,10 @@ impl FormatEngine<'_> {
         for scan_index in self.output.scoped_range().rev().take(12) {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
+            // A macro's body continues no statement after it.
+            if code.ends_with('\\') || raw.trimmed_start().starts_with('#') {
+                return None;
+            }
             if code.contains('?') {
                 question_indent = Some(leading_visual_width(raw, self.options.tab_width));
             }

@@ -371,7 +371,11 @@ impl FormatEngine<'_> {
         {
             // A macro word heading a block in code, as `SEH_TRY`.
             BraceType::Command
-        } else if !self.current_is_blank() {
+        } else if !self.current_is_blank()
+            // An argument's brace after the line its `,` ended.
+            || self.layout.command_state.previous_command_char == Some(',')
+                && self.layout.nesting.paren_depth > 0
+        {
             BraceType::Initializer
         } else {
             BraceType::NonStatement

@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::braces::classification::line_opens_lambda_block;
+use crate::formatter::braces::classification::{ExternCGuard, line_opens_lambda_block};
 use crate::formatter::braces::closing::{
     starts_post_closing_declaration, top_level_closing_brace_indent_spaces,
 };
@@ -864,6 +864,16 @@ impl FormatEngine<'_> {
             .is_some_and(|(code, _)| code.trimmed_end().ends_with_any(b";{}"))
     }
 
+    /// Whether the innermost brace opens a body its style leaves unindented:
+    /// a namespace's, or a C++ guarded `extern "C"` block's.
+    fn in_unindented_scope_body(&self) -> bool {
+        match self.layout.nesting.brace_type_stack.last() {
+            Some(BraceType::Namespace) => !self.options.indent_namespaces,
+            Some(BraceType::Extern) => self.extern_c_guard == ExternCGuard::InsideBlock,
+            _ => false,
+        }
+    }
+
     pub(crate) fn apply_label_else_and_conditional_contextual_layout(
         &self,
         line: &LineView<'_>,
@@ -1236,7 +1246,7 @@ impl FormatEngine<'_> {
                     if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
                         layout.exact_indent_spaces = Some(spaces);
                     }
-                } else if header_code.ends_with('{') {
+                } else if header_code.ends_with('{') && !self.in_unindented_scope_body() {
                     let spaces = leading_visual_width(header, self.options.tab_width)
                         + self.options.indent_width;
                     if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
@@ -2018,7 +2028,21 @@ impl FormatEngine<'_> {
                         && self.open_paren_column_of(code).is_none()
                         && line_is_control_body_header(trimmed)))
             {
-                layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
+                // Headers chained after `else` on the line before, as in
+                // `} else for (x) {`, raise the body past this floor.
+                let else_text = trimmed.strip_prefix('}').map_or(trimmed, str::trim_start);
+                let chained_header = else_text.strip_prefix("else").is_some_and(|rest| {
+                    let rest = rest.trim_start();
+                    ["for", "while", "switch", "do"]
+                        .into_iter()
+                        .any(|header| starts_header_word(rest, header))
+                });
+                let base = if chained_header {
+                    layout.indent * self.options.indent_width
+                } else {
+                    0
+                };
+                layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(base).max(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width
                         + self.layout.line_adjuster.next_line_case_unindent_depth()

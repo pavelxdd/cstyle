@@ -160,8 +160,14 @@ impl FormatEngine<'_> {
             Some(previous) => previous.clone_from(&line),
             previous => *previous = Some(line.clone()),
         }
-        self.adjuster_before_lone_brace =
-            (line.trimmed() == "}").then(|| (self.output.len(), self.layout.line_adjuster.clone()));
+        let observed = self
+            .adjuster_before_observed_lone_brace
+            .take()
+            .filter(|(index, _)| *index == self.output.len());
+        self.adjuster_before_lone_brace = (line.trimmed() == "}").then(|| {
+            // The brace's own count of the switch it may close goes back too.
+            observed.unwrap_or_else(|| (self.output.len(), self.layout.line_adjuster.clone()))
+        });
         let line = self.layout.line_adjuster.adjust_line(line);
         let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);

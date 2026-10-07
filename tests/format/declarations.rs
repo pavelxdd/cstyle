@@ -2917,3 +2917,43 @@ fn breaking_return_types_breaks_an_extern_c_declaration() {
         "extern \"C\" int\nyywrap ( yyscan_t yyscanner );\n",
     );
 }
+
+#[test]
+fn comment_before_an_enum_head_keeps_its_one_line_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=mozilla".to_owned()]).expect("valid options");
+    let input = "struct s\n{\n    /* how far */\n    enum\n    { A, B, C } peeled;\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, input);
+}
+
+#[test]
+fn comment_after_an_enum_head_keeps_its_one_line_body() {
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    enum // c\n    { A, B };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    enum // c\n        { A, B };\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let first = format_exact("void f()\n{\n    enum // c\n    { A, B };\n}\n", &options);
+
+        assert_eq!(first, expected);
+        assert_eq!(format_exact(&first, &options), first);
+    }
+}
+
+#[test]
+fn enum_parameter_leaves_an_empty_function_body_closed() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=lisp".to_owned()]).expect("valid options");
+    let input = "void h(enum x r) {}\nvoid g(int a,\n       enum x r) {}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

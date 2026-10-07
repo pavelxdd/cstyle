@@ -492,8 +492,11 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_line_outside_comment()?;
         if self.pending_brace_opens_value() {
+            // A type's closer stands a level past the statement it ends.
+            let closer_level = usize::from(previous.trimmed_start().starts_with('}'));
             return Some(
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+                    - closer_level * self.options.indent_width,
             );
         }
         let previous_code = self.output.code_trimmed_of(previous);
@@ -1990,7 +1993,21 @@ impl FormatEngine<'_> {
         if extra > 0 {
             line = format!("{}{}", " ".repeat(extra), line);
         }
-        self.adjust_and_publish_line(line);
+        if brace_attached_before_trailing_comment
+            && extra == 0
+            && self
+                .options
+                .max_code_length
+                .is_some_and(|max| line.len() > max)
+        {
+            // The brace before the comment lengthens the line astyle
+            // measures for a split.
+            let spaces = leading_visual_width(&line, self.options.tab_width);
+            let level = self.layout.indentation.indent();
+            self.push_formatted_line_exact(line.trimmed_start(), level, spaces);
+        } else {
+            self.adjust_and_publish_line(line);
+        }
         self.update_current_brace_indent_from_last_output_line();
         self.previous_was_newline = false;
         attached_case_label_output_brace
@@ -2952,7 +2969,7 @@ impl FormatEngine<'_> {
             return false;
         }
         if matches!(brace_type, BraceType::Array | BraceType::Initializer)
-            && last.ends_with('=')
+            && (last.ends_with('=') || last.ends_with(',') && self.layout.nesting.paren_depth > 0)
             && matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace
@@ -2984,7 +3001,11 @@ impl FormatEngine<'_> {
         // attaches before the comment.
         if matches!(
             brace_type,
-            BraceType::Struct | BraceType::Union | BraceType::Class | BraceType::Interface
+            BraceType::Struct
+                | BraceType::Union
+                | BraceType::Class
+                | BraceType::Interface
+                | BraceType::Enum
         ) && !self.preprocessor.last_output_was_preprocessor
             && self.current_is_blank()
             && self.output.last().is_some_and(|last| {
@@ -2995,6 +3016,9 @@ impl FormatEngine<'_> {
                     && !code.is_empty()
                     && !code.starts_with('#')
                     && !code.ends_with_any(b";{},")
+                    // astyle leaves an enum's brace after a block comment.
+                    && (brace_type != BraceType::Enum
+                        || last[comment_start..].trimmed_start().starts_with("//"))
             })
         {
             return self.style_attaches_opening_brace(brace_type, None);

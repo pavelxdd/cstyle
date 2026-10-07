@@ -1281,21 +1281,29 @@ impl FormatEngine<'_> {
                     Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
                 ))
         {
+            // A style indenting braces indents an argument's own brace.
+            let argument_brace = self.options.indent_braces
+                && !matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+                );
             self.layout
                 .continuation_indent
-                .set_next_line_level(self.statement_level());
+                .set_next_line_level(self.statement_level() + usize::from(argument_brace));
         }
         // A one-line enum body on its own line stays there.
+        let indented_brace = matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Ratliff
+        );
         if brace_type == BraceType::Enum
             && token_begins_line(tokens, start)
-            && !self.current_is_blank()
+            && (!self.current_is_blank() || indented_brace)
         {
-            let indent = self.layout.indentation.indent()
-                + usize::from(matches!(
-                    self.options.brace_style,
-                    BraceStyle::Whitesmith | BraceStyle::Ratliff
-                ));
-            self.finish_line();
+            let indent = self.layout.indentation.indent() + usize::from(indented_brace);
+            if !self.current_is_blank() {
+                self.finish_line();
+            }
             self.layout.continuation_indent.set_next_line_level(indent);
         }
         // Only a style attaching other braces breaks a one-line enum.
@@ -2813,12 +2821,21 @@ fn enum_head_ends_previous_line(
             )
         })
         .map_or(0, |index| index + 1);
+    // Comments before the head belong to no part of it.
+    let head_start = (head_start..=previous)
+        .find(|&index| {
+            !matches!(
+                tokens[index],
+                Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
+            )
+        })
+        .unwrap_or(previous);
     let head = &tokens[head_start..=previous];
     (head
         .iter()
         .any(|token| matches!(token, Token::Word(word) if word == "enum"))
         && !head.iter().any(|token| {
-            matches!(token, Token::Symbol('(' | '=') | Token::Comment(_, _))
+            matches!(token, Token::Symbol('(' | '='))
                 || matches!(token, Token::Operator(operator) if operator == "=")
         }))
     .then_some(BraceType::Enum)
@@ -2851,10 +2868,16 @@ fn initializer_brace_type(
     let has_block_word = tokens[head_start..open_index].iter().any(|token| {
         matches!(token, Token::Word(word) if language::BLOCK_WORDS.contains(&word.as_str()) || language::PRE_BLOCK_WORDS.contains(&word.as_str()))
     });
-    if tokens[segment_start..open_index]
-        .iter()
-        .any(|token| matches!(token, Token::Word(word) if word == "enum"))
-    {
+    // An `enum` among a function's parameters heads no body.
+    let mut paren_depth = 0usize;
+    if tokens[segment_start..open_index].iter().rev().any(|token| {
+        match token {
+            Token::Symbol(')') => paren_depth += 1,
+            Token::Symbol('(') => paren_depth = paren_depth.saturating_sub(1),
+            _ => {}
+        }
+        paren_depth == 0 && matches!(token, Token::Word(word) if word == "enum")
+    }) {
         return Some(BraceType::Enum);
     }
     if tokens[segment_start..open_index]

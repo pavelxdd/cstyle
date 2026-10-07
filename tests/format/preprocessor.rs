@@ -4463,3 +4463,30 @@ fn block_after_a_negated_parenthesized_condition_is_no_compound_literal() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn ternary_in_a_macro_body_leaves_a_split_declaration_after_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--break-return-type-decl".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "#define MIN(a,b) \\\n  ({ x = 1; \\\n   y = 2; \\\n   _a ? _a : _b; })\nchar*\nstrptime(const char *buf);\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn comment_in_a_branch_of_a_guarded_extern_c_block_stays_unindented() {
+    let options = FormatOptions::default();
+    let input = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef _WIN32\n  /* Windows. */\n#endif\n#ifdef __cplusplus\n}\n#endif\n";
+    let expected = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef _WIN32\n/* Windows. */\n#endif\n#ifdef __cplusplus\n}\n#endif\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

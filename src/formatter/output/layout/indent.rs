@@ -516,9 +516,16 @@ impl FormatEngine<'_> {
             return None;
         }
         let (operator_start, operator) = find_assignment_operator(previous_code)?;
-        // A logical `&&` declares no reference.
-        let before = previous_code[..operator_start]
-            .trimmed_end()
+        // A declarator takes a plain `=`, after any condition's parentheses;
+        // a logical `&&` declares no reference.
+        if operator != "=" {
+            return None;
+        }
+        let before = previous_code[..operator_start].trimmed_end();
+        let before = before
+            .rsplit(')')
+            .next()
+            .unwrap_or(before)
             .replace("&&", "");
         let before = before.as_str();
         (operator_start + operator.len() == previous_code.len()

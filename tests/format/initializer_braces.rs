@@ -4401,3 +4401,57 @@ fn nested_run_in_brace_runs_into_its_block_comment() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn inner_closer_split_from_the_outer_stands_among_the_rows() {
+    let options = FormatOptions::default();
+    let input = "void f(void)\n{\n\tstruct r r1[] = { {\n\t\t.refname = \"b\",\n\t\t.value = { 1, 2 },\n\t} };\n}\n";
+    let expected = "void f(void)\n{\n    struct r r1[] = { {\n            .refname = \"b\",\n            .value = { 1, 2 },\n        }\n    };\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+    let nested = "void f(void)\n{\n\tstruct reftable_record\n\t\trec = { .type = T,\n\t\t\t.u.obj = {\n\t\t\t\t.offsets = e,\n\t\t\t} };\n}\n";
+    let first = format_exact(nested, &options);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn argument_brace_after_a_line_ending_in_a_comma_is_an_initializer() {
+    let input = "void f(void)\n{\n    g(a,\n        {\n        free(n);\n    });\n    g(a,\n      { 1, 2 });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=vtk",
+            "void f(void)\n{\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n    { 1, 2 });\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f(void)\n{\n    g(a, {\n        free(n);\n    });\n    g(a,\n    { 1, 2 });\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n        { 1, 2 });\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let first = format_exact(input, &options);
+
+        assert_eq!(first, expected, "{style}");
+        assert_eq!(format_exact(&first, &options), first, "{style}");
+    }
+}
+
+#[test]
+fn whitesmith_array_brace_after_a_struct_closer_stands_at_the_closer() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let input = "struct s {\n    int x;\n} b[] = { /* c */\n    {1}, {2}\n};\n";
+    let expected =
+        "struct s\n    {\n    int x;\n    } b[] =   /* c */\n    {\n        {1}, {2}\n    };\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

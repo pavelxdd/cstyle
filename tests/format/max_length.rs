@@ -3031,3 +3031,83 @@ fn struct_declaration_split_before_a_trailing_comment_continues_a_level() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn a_member_split_at_its_bit_field_colon_stays_a_member() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=google".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = fixture!(
+        "struct s {",
+        "    unsigned int lastInSegment    : 1;  /* Last item in segment. If set, the next item starts a new one. */",
+        "    unsigned need_reclaim_cache:1; /* A flag to indicate that reclaim cache is required */",
+        "};",
+    );
+    let expected = fixture!(
+        "struct s {",
+        "    unsigned int lastInSegment    :",
+        "    1;  /* Last item in segment. If set, the next item starts a new one. */",
+        "    unsigned need_reclaim_cache:",
+        "    1; /* A flag to indicate that reclaim cache is required */",
+        "};",
+    );
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn a_brace_attached_before_a_trailing_comment_splits_the_long_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=google".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "static int\nmultadd\n(struct dtoa_context* C, Bigint *b, int m, int a)\t/* multiply by m and add a */\n{\n    return 0;\n}\n";
+    let expected = "static int\nmultadd\n(struct dtoa_context* C, Bigint *b, int m,\n int a) {\t/* multiply by m and add a */\n    return 0;\n}\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn declarations_split_before_the_name_or_parameters_continue_nothing() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=google".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "static __attribute__((aligned(CACHE_LINE_SIZE))) used_memory_entry used_memory[MAX_ENTRIES];\nREDISMODULE_API const RedisModuleString * (*RedisModule_GetKeyNameFromModuleKey)(RedisModuleKey *key) REDISMODULE_ATTR;\n";
+    let expected = "static __attribute__((aligned(CACHE_LINE_SIZE))) used_memory_entry\nused_memory[MAX_ENTRIES];\nREDISMODULE_API const RedisModuleString * (*RedisModule_GetKeyNameFromModuleKey)\n(RedisModuleKey *key) REDISMODULE_ATTR;\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=google".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "static const ctl_named_node_t stats_arenas_i_hpa_shard_nonfull_slabs_j_node[] = {\n    {NAME(\"a\"), CHILD(named, x)}\n};\n";
+    let expected = "static const ctl_named_node_t stats_arenas_i_hpa_shard_nonfull_slabs_j_node[] =\n{\n    {NAME(\"a\"), CHILD(named, x)}\n};\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}

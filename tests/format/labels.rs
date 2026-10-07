@@ -571,3 +571,19 @@ fn indent_labels_inside_case_uses_the_case_body_column() {
         "void run(int value)\n{\n    switch(value)\n    {\n    case 1:\n    retry:\n        call();\n        if(next()) goto retry;\n        break;\n    default:\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn method_after_an_access_label_keeps_its_indent_below_a_directive() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-return-type".to_owned()],
+    )
+    .expect("valid options");
+    let input = "#define X 1\nclass R {\n    void c() {\n    }\n  private:\n    void addRead() {\n    }\n};\n";
+    let expected = "#define X 1\nclass R\n{\n    void\n    c()\n    {\n    }\nprivate:\n    void\n    addRead()\n    {\n    }\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

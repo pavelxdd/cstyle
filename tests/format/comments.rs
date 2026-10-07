@@ -4555,3 +4555,27 @@ fn rows_and_closer_of_a_comment_on_a_brace_line_keep_their_offsets() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn comment_trailing_a_broken_switch_brace_stands_at_the_labels() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{\n\tswitch (c)\n\t{ /* blk */\n\tcase 1:\n\t\tbreak;\n\t}\n}\n";
+    let expected = "void f(void)\n{\n    switch (c)\n    {\n    /* blk */\n    case 1:\n        break;\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn comment_left_after_an_attached_switch_brace_stands_in_the_case_bodies() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input =
+        "void f(void)\n{\n\tswitch (c) { /* blk\n\t ** more */\n\tcase 1:\n\t\tbreak;\n\t}\n}\n";
+    let expected = "void f(void)\n{\n    switch (c)\n    {\n        /* blk\n         ** more */\n    case 1:\n        break;\n    }\n}\n";
+    // astyle moves the comment to the labels on a second run, as it places
+    // a comment written on a line of its own there.
+    assert_eq!(format_exact(input, &options), expected);
+}

@@ -415,7 +415,7 @@ impl FormatEngine<'_> {
             || self.is_stream_continuation_break()
             || (self.layout.in_class_base_clause && !self.next_line.leads_with_open_brace)
             || (!bare_question_line && self.current.trimmed_end().ends_with('?'))
-            || self.current.trimmed_end().ends_with(" :")
+            || self.current.trimmed_end().ends_with(" :") && !self.layout.line_state.bit_field_colon
     }
 
     fn current_looks_like_split_function_head(&self) -> bool {
@@ -1885,7 +1885,7 @@ impl FormatEngine<'_> {
             return true;
         }
         let line = self.current.trimmed_end();
-        line.ends_with('?') || line.ends_with(" :")
+        line.ends_with('?') || line.ends_with(" :") && !self.layout.line_state.bit_field_colon
     }
 
     fn current_is_operator_led_continuation(&self) -> bool {

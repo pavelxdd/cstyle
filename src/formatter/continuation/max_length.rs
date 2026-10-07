@@ -652,11 +652,15 @@ fn continuation_indent_for_split(
     // Macro calls the head closes register nothing either.
     let macro_groups = head.contains('(')
         && unmatched_open_paren_columns(head).is_empty()
-        && split.tail.starts_with(is_identifier_continue)
+        && (split.tail.starts_with(is_identifier_continue)
+            // A function pointer's parameters split from its `(*name)`.
+            || split.tail.starts_with('(')
+                && head.trimmed_end().ends_with(')')
+                && head.contains("(*"))
         && head.match_indices('(').all(|(at, _)| {
             // A function pointer's `(*name)` and the parameters after it.
             head[at + 1..].trimmed_start().starts_with('*')
-                || head[..at].trimmed_end().ends_with(')')
+                || head[..at].trimmed_end().ends_with_any(b"()")
                 || head[..at]
                     .rsplit(|ch: char| !is_identifier_continue(ch))
                     .next()
@@ -689,6 +693,24 @@ fn continuation_indent_for_split(
                             || !line[..trailing_comment_split_limit(line)].contains('('))
             })
     {
+        return Some(ContinuationIndent::Spaces(base_indent_width));
+    }
+    // So does a member split at its bit-field colon.
+    if head.trimmed().strip_suffix(':').is_some_and(|member| {
+        let member = member.trimmed_end();
+        member.contains(char::is_whitespace)
+            && member
+                .chars()
+                .all(|ch| is_identifier_continue(ch) || ch.is_whitespace() || ch == '*')
+            && !member
+                .split(|ch: char| !is_identifier_continue(ch))
+                .any(|word| matches!(word, "struct" | "union" | "class" | "enum" | "case"))
+    }) {
+        return Some(ContinuationIndent::Spaces(base_indent_width));
+    }
+    // An aggregate's brace split from its `=` opens a line at the
+    // statement.
+    if split.tail.starts_with('{') && head.trimmed_end().ends_with('=') {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
     // A label split from the labels before it lines up with them.

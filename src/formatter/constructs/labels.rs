@@ -569,6 +569,9 @@ fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
         )
         && find_case_colon(trimmed).is_none()
         && !is_access_label(trimmed, access_labels)
+        // A label names one thing; `unsigned flag:` is a member split at its
+        // bit-field width.
+        && !before_colon.contains_any_byte(b" \t")
 }
 
 /// Text with operators between names continues an expression; no label.

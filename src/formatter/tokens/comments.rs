@@ -1977,6 +1977,20 @@ impl FormatEngine<'_> {
         });
         let previous_opening_body_indent = previous_line.and_then(|line| {
             let code = self.output.code_trimmed_of(line);
+            // A comment after a switch's brace that leads its line stands at
+            // the labels.
+            if code.ends_with('{')
+                && self.token_input.token_line_opens_with_brace
+                && self.directly_in_switch_body()
+                && self.comment_precedes_switch_label()
+            {
+                return Some(
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width,
+                );
+            }
             code.ends_with('{').then(|| {
                 let body_indent = (self
                     .layout

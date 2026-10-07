@@ -1851,3 +1851,55 @@ fn break_blocks_blank_after_a_body_waits_for_its_trailing_comment_to_end() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn deleted_empty_line_after_else_leaves_an_else_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--delete-empty-lines".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    if( a ){\n      x();\n    }else\n\n    if( b ){\n      y();\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if( a ) {\n        x();\n    } else if( b ) {\n        y();\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn deleted_empty_line_after_else_stays_before_a_comment_block_breaks_keep() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--delete-empty-lines".to_owned(),
+            "--break-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void)\n{\n    if( a ){\n      x();\n    }else\n\n    /* c */\n    if( b ){\n      y();\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if( a ) {\n        x();\n    } else\n\n        /* c */\n        if( b ) {\n            y();\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn break_blocks_parts_a_comment_before_a_case_after_an_else_in_the_switch() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=java".to_owned(), "--break-blocks".to_owned()],
+    )
+    .expect("valid options");
+    let input = "void f(int m)\n{\n    switch (m) {\n        case 1:\n            if (a) {\n                b();\n            }\n            else {\n                d();\n            }\n            state = LEN;\n                /* fallthrough */\n\n        case 2:\n            c();\n    }\n}\n";
+    let expected = "void f(int m) {\n    switch (m) {\n    case 1:\n        if (a) {\n            b();\n        } else {\n            d();\n        }\n\n        state = LEN;\n\n    /* fallthrough */\n\n    case 2:\n        c();\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

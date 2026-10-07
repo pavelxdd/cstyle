@@ -17,6 +17,10 @@ impl FormatEngine<'_> {
         {
             return LineRoute::Published;
         }
+        if line.trimmed() == "}" {
+            self.adjuster_before_observed_lone_brace =
+                Some((self.output.len(), self.layout.line_adjuster.clone()));
+        }
         let observed_line_kind = self.layout.line_adjuster.observe_line(line);
         if observed_line_kind == LineKind::Normal
             && line.trimmed_start() == "&else"

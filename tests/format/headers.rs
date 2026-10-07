@@ -2718,3 +2718,22 @@ fn pico_kept_else_block_ends_a_broken_else_if_chain() {
         ),
     );
 }
+
+#[test]
+fn statement_broken_after_a_one_line_header_body_stays_broken() {
+    let options = FormatOptions::default();
+    let input = "int f(int x)\n{\n    if (x) return\n            0;\n    else if (x > 1) return\n            1;\n    if (x) goto\n        fail;\n    return 3;\nfail:\n    return 4;\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, input);
+}
+
+#[test]
+fn compound_assignment_after_a_bit_test_condition_continues_the_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=google".to_owned()]).expect("valid options");
+    let input =
+        "void f() {\n    if (flags & X) new_flags |=\n            CMD_CHANNEL_SUBSCRIBE;\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}

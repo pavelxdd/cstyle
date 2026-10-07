@@ -12,6 +12,7 @@ use crate::formatter::state::frame::{
     DelimiterFrame, ParenRole, TernaryFrame, TernaryOwnerRole,
 };
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_pointer_type_word, is_type_like_pointer_word,
     is_unpad_kept_type_word,
@@ -144,7 +145,7 @@ impl FormatEngine<'_> {
                 );
             }
             ',' => self.push_comma(next),
-            ':' => self.push_colon(next),
+            ':' => self.push_colon(next, token_index),
             '?' => self.push_question(next),
             '.' => self.push_dot(next),
             '#' => {
@@ -1250,7 +1251,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn push_colon(&mut self, next: Option<&Token>) {
+    fn push_colon(&mut self, next: Option<&Token>, token_index: usize) {
         if self.current.trimmed_end().ends_with(':') && self.token_input.previous_input_was_adjacent
         {
             self.current.push(':');
@@ -1280,7 +1281,7 @@ impl FormatEngine<'_> {
             ternary: is_ternary,
             objc_method_definition: is_objc_method_def_colon,
             role: colon_role,
-        } = self.classify_colon(next);
+        } = self.classify_colon(next, token_index);
         let case_label_colon = matches!(
             self.layout.command_state.current_header.as_deref(),
             Some("case" | "default")
@@ -1363,6 +1364,7 @@ impl FormatEngine<'_> {
                 .close_active_ternary(colon_role, colon_output_column);
         }
         self.layout.line_state.passed_colon = true;
+        self.layout.line_state.bit_field_colon = is_bit_field;
         if is_ternary {
             self.layout.line_state.ternary_colon = true;
         } else if is_objc_interface_colon {
@@ -1493,7 +1495,7 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn classify_colon(&self, next: Option<&Token>) -> ColonKind {
+    fn classify_colon(&self, next: Option<&Token>, token_index: usize) -> ColonKind {
         let is_asm_operand_colon = self.is_asm_operand_colon();
         let is_class_initializer = !is_asm_operand_colon
             && (self.is_class_initializer_colon()
@@ -1510,7 +1512,12 @@ impl FormatEngine<'_> {
         let is_bit_field = !is_asm_operand_colon
             && !is_class_initializer
             && !is_enum_underlying_type
-            && self.is_bit_field_colon(next);
+            && self.is_bit_field_colon(match next {
+                // A member split at its colon has its width on the next line.
+                None | Some(Token::Newline) => next_code_token(&self.tree.tokens, token_index + 1)
+                    .map(|index| &self.tree.tokens[index]),
+                _ => next,
+            });
         let has_question = self.layout.nesting.has_question_in_current_brace();
         let is_range_for = !has_question && self.is_range_for_colon();
         let label_text = self.current[self.current.statement_start()..].trimmed();

@@ -321,9 +321,9 @@ impl FormatEngine<'_> {
         if self.layout.frame_stack.active_delimiter().is_some() {
             return None;
         }
-        // VTK already indented the `}` of a struct the declarator follows.
-        if self.options.brace_style == BraceStyle::Vtk
-            && let Some(previous) = self.output.last_line_outside_comment()
+        // The style already indented the `}` of a struct the declarator
+        // follows.
+        if let Some(previous) = self.output.last_line_outside_comment()
             && previous.trimmed_start().starts_with('}')
         {
             return Some(leading_visual_width(previous, self.options.tab_width));
@@ -858,6 +858,24 @@ impl FormatEngine<'_> {
         if forced_break {
             self.layout.compound_literal.forced_break_depths.pop();
         }
+        // An inner closer the line holds stands among the rows of the brace
+        // it closes into.
+        let finished_inner_closer = !forced_break
+            && !broken_enum_row
+            && !self.token_input.token_begins_source_line
+            && self.output.len() > open_output_len
+            && self.current.trimmed_start().starts_with('}')
+            && (closing_line_opened_literal
+                || aggregate_assign
+                || objc_dictionary
+                || closing_enum
+                || enclosed_run_in
+                || range_for_initializer
+                || call_argument_array
+                || typed_initializer);
+        if finished_inner_closer {
+            self.finish_line();
+        }
         self.exit_brace_state();
         if let Some(frame) = self.layout.frame_stack.last_closed_brace_mut() {
             if in_constructor_initializer && let Some(column) = body_column {
@@ -901,7 +919,7 @@ impl FormatEngine<'_> {
             if let Some(column) = closing_column {
                 self.layout.continuation_indent.set_next_line_spaces(column);
             }
-        } else if broken_enum_row {
+        } else if broken_enum_row || finished_inner_closer {
             if let Some(column) = closing_column {
                 self.layout.continuation_indent.set_next_line_spaces(column);
             }
