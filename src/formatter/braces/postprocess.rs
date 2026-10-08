@@ -8,7 +8,8 @@ use crate::formatter::lexer::{self, Token};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, line_ends_with_comment, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -26,7 +27,9 @@ pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -
             let run_in = run_in_horstmann_opening_braces(&output, options);
             attach_lisp_closing_braces(&run_in, options.line_break())
         }
-        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
+        BraceStyle::Lisp => {
+            attach_lisp_closing_braces_aligning_parens(&output, options.line_break())
+        }
         BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
         _ => output,
     }
@@ -322,13 +325,42 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
 }
 
 fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
+    attach_closing_braces(output, line_break, false)
+}
+
+fn attach_lisp_closing_braces_aligning_parens(output: &str, line_break: &str) -> String {
+    attach_closing_braces(output, line_break, true)
+}
+
+fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> String {
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines: Vec<String> = Vec::new();
+    // The columns rows of a paren a joined closer's line opens move by, and
+    // the parens still open.
+    let mut paren_shift = None::<(usize, usize)>;
     for (index, line) in split_output_lines(output, line_break)
         .into_iter()
         .enumerate()
     {
         let trimmed = line.trimmed();
+        if let Some((shift, open)) = paren_shift.take()
+            && !raw_lines[index]
+            && !trimmed.is_empty()
+        {
+            let (closes, opens) = line_paren_imbalance(trimmed);
+            let lead = line.len() - line.trimmed_start().len();
+            lines.push(format!(
+                "{}{}{}",
+                &line[..lead],
+                " ".repeat(shift),
+                &line[lead..]
+            ));
+            let open = open.saturating_sub(closes) + opens.len();
+            if open > 0 {
+                paren_shift = Some((shift, open));
+            }
+            continue;
+        }
         if !raw_lines[index]
             && trimmed.starts_with('}')
             && let Some(previous) = lines.last_mut()
@@ -339,6 +371,19 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
         {
             if !previous.trimmed_end().ends_with('{') {
                 previous.push(' ');
+            }
+            // astyle measures a paren the line leaves open from the joined
+            // line's text at the closer's level.
+            if align_parens {
+                let (_, opens) = line_paren_imbalance(trimmed);
+                // A paren that ends the line takes an indent, not its column.
+                if opens.last().is_some_and(|&column| {
+                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                        .trim()
+                        .is_empty()
+                }) {
+                    paren_shift = Some((previous.trimmed_start().len(), opens.len()));
+                }
             }
             // The brace moves up a column and its comment follows it.
             let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();

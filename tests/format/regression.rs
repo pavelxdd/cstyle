@@ -7046,3 +7046,12 @@ fn a_comment_run_in_after_a_brace_keeps_its_opener_gap_when_stripping_prefixes()
         "int f(int rc)\n{       /* If the db handle must hold the mutex here.\n        ** Otherwise the read is unsafe.\n        */\n        return rc;\n}\n",
     );
 }
+
+#[test]
+fn lisp_aligns_a_while_continuation_on_the_line_its_closer_joins() {
+    check(
+        "void f(void)\n{\n    do {\n        n--;\n    } while (n &&\n             base[n - 1] != '/');\n    do {\n        n--;\n    } while (\n        n > 0\n    );\n}\n",
+        &["--style=lisp", "--attach-closing-while"],
+        "void f(void) {\n    do {\n        n--; } while (n &&\n                  base[n - 1] != '/');\n    do {\n        n--; } while (\n        n > 0\n    ); }\n",
+    );
+}
