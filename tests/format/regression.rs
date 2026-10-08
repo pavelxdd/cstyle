@@ -7079,3 +7079,12 @@ fn an_else_if_block_in_an_else_split_by_a_directive_takes_no_extra_level() {
         "void f(void)\n{\n#ifdef X\n    if (m)\n        n = 1;\n    else\n#endif\n        if (t)\n        {\n            if (r)\n                return -1;\n            else if (n)\n            {\n                g();\n            }\n        }\n}\n",
     );
 }
+
+#[test]
+fn rows_of_a_comment_after_a_brace_indent_with_tabs_to_the_block_body() {
+    check(
+        "void f(void)\n{\n\tif (a) {\n\t\t{ /* Post\n\t\t\t   $(dir) */\n\t\t}\n\t}\n    { /* q\n         r */\n    }\n}\n",
+        &["--style=linux", "--indent=tab=8"],
+        "void f(void)\n{\n\tif (a) {\n\t\t{ /* Post\n\t\t\t   $(dir) */\n\t\t}\n\t}\n\t{ /* q\n\t\t   r */\n\t}\n}\n",
+    );
+}

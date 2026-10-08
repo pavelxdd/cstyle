@@ -179,6 +179,13 @@ impl FormatEngine<'_> {
             // comment's rows keep the tabs of its first line.
             let trailing = self.output.line_tokens(opener).is_some()
                 || !self.output.trimmed(opener).starts_with("/*");
+            // The rows of a comment after a block's brace stand in the block.
+            if trailing && self.output.code_trimmed_of(&self.output[opener]).trimmed() == "{" {
+                return Some(
+                    self.output.lead_width(opener, self.options.tab_width)
+                        + self.options.indent_width,
+                );
+            }
             if trailing {
                 return Some(0);
             }

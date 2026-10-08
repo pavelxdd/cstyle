@@ -2825,13 +2825,15 @@ impl FormatEngine<'_> {
                         // stands past the `/*` column.
                         format!(
                             "{}{}",
-                            " ".repeat(opener_output_column + tab_overshoot(line, kept)),
+                            self.comment_row_prefix(
+                                opener_output_column + tab_overshoot(line, kept)
+                            ),
                             kept.trimmed_end()
                         )
                     } else if let Some(column) = run_in_column {
                         format!(
                             "{}{}",
-                            " ".repeat(column + tab_overshoot(line, kept)),
+                            self.comment_row_prefix(column + tab_overshoot(line, kept)),
                             kept.trimmed_end()
                         )
                     } else if self.token_input.token_line_opens_with_brace {
@@ -2852,14 +2854,14 @@ impl FormatEngine<'_> {
                                 },
                                 |frame| frame.body_indent_column.max(opener_output_column),
                             );
-                        // Each row keeps what stands past the `/*` column.
+                        // Each row keeps what stands past the `/*` column,
+                        // less what a tab crossing it took.
                         format!(
-                            "{}{}{}",
+                            "{}{}",
                             self.options.continuation_indent_prefix(
                                 merged_comment_column / self.options.indent_width.max(1),
                                 merged_comment_column,
                             ),
-                            " ".repeat(tab_overshoot(line, kept)),
                             kept.trimmed_end()
                         )
                     } else if star_shift {
@@ -2883,6 +2885,20 @@ impl FormatEngine<'_> {
                 self.push_raw_comment_output_line(formatted);
             }
         }
+    }
+
+    /// The lead of a comment row at `column`: astyle indents it as the
+    /// block's body and pads the rest.
+    fn comment_row_prefix(&self, column: usize) -> String {
+        let body_column = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .map_or(0, |frame| frame.body_indent_column);
+        self.options.continuation_indent_prefix(
+            column.min(body_column) / self.options.indent_width.max(1),
+            column,
+        )
     }
 
     fn attach_source_space_after_block_comment(&mut self) {
