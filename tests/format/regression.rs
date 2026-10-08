@@ -6929,3 +6929,30 @@ fn a_subscript_past_the_maximum_continues_two_levels_in() {
         "LUAI_DATA const char *const luaP_opnames(NUM_OPCODES,\n        1);\nLUAI_DATA const char *const luaP_opnames[NUM_OPCODES\n        +1];\nvoid f(void)\n{\n    LUAI_DATA const char *const luaP_opnamesxxxxx[NUM_OPCODES\n            +1];\n    x = LUAI_DATA_const_char_const_luaP_opnamesxxxxxxx[NUM_OPCODES\n            +1];\n}\n",
     );
 }
+
+#[test]
+fn the_value_after_a_bare_return_declares_nothing() {
+    check(
+        "int f(void)\n{\n    return\n        a && b;\n}\n",
+        &["--style=kr", "--align-pointer=type"],
+        "int f(void)\n{\n    return\n        a && b;\n}\n",
+    );
+}
+
+#[test]
+fn removing_braces_keeps_a_comment_on_an_initializer_brace() {
+    check(
+        "static const struct spec certs[] = {\n  { /* a valid certificate */\n    \"MIIB\",\n    true\n  },\n};\n",
+        &["--style=gnu", "--remove-braces"],
+        "static const struct spec certs[] = {\n    { /* a valid certificate */\n        \"MIIB\",\n        true\n    },\n};\n",
+    );
+}
+
+#[test]
+fn a_vtk_one_line_else_block_stands_at_the_else() {
+    check(
+        "void f(void)\n{\n    if (a)\n        { x = 1; }\n    else\n        { y = 1; }\n}\n",
+        &["--style=vtk", "--add-one-line-braces"],
+        "void f(void)\n{\n    if (a)\n    { x = 1; }\n    else\n    { y = 1; }\n}\n",
+    );
+}

@@ -4520,10 +4520,25 @@ impl FormatEngine<'_> {
             && let Some(keyword) = self.tree.previous_code_token(first)
             && matches!(&tokens[keyword], Token::Word(word) if word == "else")
         {
+            // VTK leaves a one-line block outside other blocks at its header.
+            let vtk_one_line_block = self.options.brace_style == BraceStyle::Vtk
+                && self.tree.groups.opened_at(first).is_some_and(|group| {
+                    self.tree.groups.get(group).close.is_some_and(|close| {
+                        !tokens[first..close]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                    }) && !self.tree.groups.ancestors(group).skip(1).any(|id| {
+                        matches!(
+                            self.tree.blocks.kind(id),
+                            Some(BlockKind::Control | BlockKind::Block)
+                        )
+                    })
+                });
             let offset = if matches!(
                 self.options.brace_style,
                 BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Gnu | BraceStyle::Ratliff
-            ) {
+            ) && !vtk_one_line_block
+            {
                 self.options.indent_width
             } else {
                 0

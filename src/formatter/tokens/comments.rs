@@ -2591,9 +2591,11 @@ impl FormatEngine<'_> {
         let run_in_opener = self.token_input.token_line_opens_with_brace
             && !self.token_input.token_begins_source_line
             && self.layout.command_state.current_header.is_none()
-            && !self.options.remove_braces
             && match self.layout.nesting.brace_type_stack.last() {
-                Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
+                Some(BraceType::Command) => {
+                    self.options.brace_style == BraceStyle::OneTrueBrace
+                        && !self.options.remove_braces
+                }
                 Some(BraceType::Array | BraceType::Initializer) => true,
                 _ => false,
             }

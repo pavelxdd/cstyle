@@ -545,6 +545,17 @@ impl FormatEngine<'_> {
         if current.is_empty() {
             return false;
         }
+        // The value of a `return` alone on the line before declares nothing.
+        if self.current.declaration_segment_start() == 0
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    trailing_word(self.output.code_trimmed_of(previous)) == "return"
+                })
+        {
+            return false;
+        }
         let segment_start = self.current.declaration_segment_start();
         let segment_text = match self.current.declaration_segment_verdict() {
             Some(false) => return false,
