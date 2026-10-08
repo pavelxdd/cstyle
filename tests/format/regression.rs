@@ -7019,3 +7019,17 @@ fn a_compound_literal_closes_its_paren_unpadded() {
         "void f (void)\n{\n    g (c, (struct timeval) {.tv_sec = 0, .tv_usec = 500000});\n    h ( (int[]) {1, 2});\n}\n",
     );
 }
+
+#[test]
+fn added_braces_skip_headers_in_a_block_inside_parens() {
+    check(
+        "void f(void)\n{\n    foo(a, {\n        if (x)\n            free(b);\n    });\n    if (y)\n        g();\n}\n",
+        &["--style=kr", "--add-braces"],
+        "void f(void)\n{\n    foo(a, {\n        if (x)\n            free(b);\n    });\n    if (y) {\n        g();\n    }\n}\n",
+    );
+    check(
+        "void f(void)\n{\n    foo(a, {\n        if (x)\n            free(b);\n    });\n}\n",
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(void)\n{\n    foo(a, {\n        if (x)\n            free(b);\n    });\n}\n",
+    );
+}

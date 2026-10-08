@@ -815,7 +815,7 @@ impl FormatEngine<'_> {
         tokens: &[Token],
         newline_index: usize,
     ) -> bool {
-        let adding_braces = self.options.add_braces || self.options.add_one_line_braces;
+        let mut adding_braces = self.options.add_braces || self.options.add_one_line_braces;
         let Some(header) = self.layout.command_state.current_header.as_deref() else {
             return false;
         };
@@ -833,6 +833,9 @@ impl FormatEngine<'_> {
             {
                 return false;
             }
+            // A block opened inside parens keeps their count open, so no
+            // header within it ends its condition at a zero count.
+            adding_braces &= self.layout.nesting.paren_depth == 0;
         }
         let Some(body_index) = next_non_layout_token_index(tokens, newline_index + 1) else {
             return false;
@@ -2261,9 +2264,10 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             replace.insert(index - 2, Token::Whitespace(" ".repeat(comment_gap).into()));
         }
     };
+    let in_open_parens = words_in_open_parens(tokens);
     let mut covered_until = 0usize;
     for header_index in 0..tokens.len() {
-        if header_index < covered_until {
+        if header_index < covered_until || in_open_parens.contains(&header_index) {
             continue;
         }
         let Some((header_end, open_insert, close_insert)) =
@@ -2502,6 +2506,40 @@ fn header_condition_open_paren(
         open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
     }
     matches!(tokens.get(open_paren), Some(Token::Symbol('('))).then_some(open_paren)
+}
+
+/// Indices of the words with a paren open around them since the last brace
+/// opened outside parens: a brace opened inside parens keeps the paren count
+/// of the block around it, so no header within it ends its condition at a
+/// zero count.
+fn words_in_open_parens(tokens: &[Token]) -> IndexSet<usize> {
+    let mut counts = vec![0usize];
+    let mut pushed = Vec::new();
+    let mut words = IndexSet::default();
+    for (index, token) in tokens.iter().enumerate() {
+        let count = counts.last_mut().expect("base count");
+        match token {
+            Token::Symbol('(' | '[') => *count += 1,
+            Token::Symbol(')' | ']') => *count = count.saturating_sub(1),
+            Token::Symbol('{') => {
+                let array = *count > 0;
+                pushed.push(!array);
+                if !array {
+                    counts.push(0);
+                }
+            }
+            Token::Symbol('}') => {
+                if pushed.pop() == Some(true) && counts.len() > 1 {
+                    counts.pop();
+                }
+            }
+            Token::Word(_) if *count > 0 => {
+                words.insert(index);
+            }
+            _ => {}
+        }
+    }
+    words
 }
 
 fn add_braces_insertion_range(
