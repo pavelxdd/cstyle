@@ -389,6 +389,11 @@ impl FormatEngine<'_> {
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width,
             );
+            // A label between a braceless header and its body leaves the
+            // body its level.
+            if self.layout.continuation_indent.next_line_indent.is_some() {
+                next_spaces = next_spaces.max(self.current_line_indent_spaces());
+            }
         }
         if kind == LineKind::Label
             && self.output.scoped().iter().rev().take(128).any(|line| {

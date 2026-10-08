@@ -1842,3 +1842,20 @@ fn statement_after_a_kept_block_on_a_kept_statement_line_stays() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn label_between_a_braceless_header_and_its_body_leaves_the_body_level_under_kept_statements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f(void) {\n    if (a)\nlbl:\n        x();\n    y();\n}\n";
+    let expected = "void f(void)\n{\n    if (a)\nlbl:\n        x();\n    y();\n}\n";
+
+    assert_eq!(format_exact(input, &options), expected);
+}

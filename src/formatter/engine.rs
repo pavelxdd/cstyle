@@ -1956,7 +1956,9 @@ impl<'a> FormatEngine<'a> {
             && (self.in_initializer_brace()
                 || self.current_inline_array_column().is_some()
                 || self.current_line_indent_spaces()
-                    > self.continuation_base_indent() * self.options.indent_width)
+                    > self.continuation_base_indent() * self.options.indent_width
+                    && labels::line_kind(self.current.trimmed_start(), &self.options.access_labels)
+                        != LineKind::Label)
         {
             let column = self
                 .current_inline_array_column()
