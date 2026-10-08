@@ -1236,7 +1236,12 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        Some(leading_visual_width(matching_open, self.options.tab_width))
+        let ratliff_extra = if attached && self.options.brace_style == BraceStyle::Ratliff {
+            self.options.indent_width
+        } else {
+            0
+        };
+        Some(leading_visual_width(matching_open, self.options.tab_width) + ratliff_extra)
     }
 
     pub(crate) fn structural_split_else_closing_brace_indent_spaces(

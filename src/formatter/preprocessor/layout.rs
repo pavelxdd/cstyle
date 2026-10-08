@@ -999,6 +999,9 @@ impl FormatEngine<'_> {
                             && code.ends_with('\\')
                     },
                 )?;
+                if !(index..last).all(|line| self.output[line].trimmed_end().ends_with('\\')) {
+                    return None;
+                }
                 let code = self.output.code_before_comment_trimmed(index);
                 (
                     &self.output[index],

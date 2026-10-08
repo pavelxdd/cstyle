@@ -1955,11 +1955,20 @@ impl FormatEngine<'_> {
                 );
             }
             if trimmed.starts_with("switch") && code.ends_with('{') {
+                // A comment that followed the `{` attached to the header
+                // stands with the indented case labels.
+                let levels = if self.comment_precedes_switch_statement() {
+                    1 + usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                } else {
+                    usize::from(
+                        (self.options.indent_switches
+                            || self.options.brace_style == BraceStyle::Ratliff)
+                            && !self.token_input.token_begins_source_line,
+                    )
+                };
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
-                        + usize::from(self.comment_precedes_switch_statement())
-                            * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
-                            * self.options.indent_width,
+                        + levels * self.options.indent_width,
                 );
             }
             if trimmed.starts_with("} else") {

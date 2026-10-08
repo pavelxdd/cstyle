@@ -6500,3 +6500,82 @@ fn a_whitesmith_block_statement_in_a_case_block_follows_its_sibling() {
         "int f(void)\n    {\n    switch(query)\n        {\n        case 1:\n            {\n            for(i = 0; i < n; i++)\n                if(g(i))\n                    {\n                    *pres1 = TRUE;\n                    return 0;\n                    }\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_ratliff_initializer_closer_after_a_directive_split_else_stays_indented() {
+    check(
+        "int f(void)\n{\n  if(a) {\n    x = 1;\n  }\n  else\n#endif\n  {\n    y = 2;\n  }\n  if(b) {\n    int i;\n    struct ulbits ulflag[] = {\n      { 1, \"A\" },\n      { 0, NULL }\n    };\n    r = 1;\n  }\n}\n",
+        &["--style=ratliff"],
+        "int f(void) {\n    if(a) {\n        x = 1;\n        }\n    else\n#endif\n        {\n        y = 2;\n        }\n    if(b) {\n        int i;\n        struct ulbits ulflag[] = {\n                { 1, \"A\" },\n                { 0, NULL }\n            };\n        r = 1;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_continued_conditional_directive_does_not_place_a_later_type_brace() {
+    check(
+        "static uint64_t capsule_ntohll(uint64_t value)\n{\n#if A\n  return value;\n#elif B && \\\n  C\n  return x;\n#else\n  union {\n    uint64_t u64;\n    uint32_t u32[2];\n  } src, dst;\n\n  src.u64 = value;\n#endif\n}\n",
+        &["--style=vtk"],
+        "static uint64_t capsule_ntohll(uint64_t value)\n{\n#if A\n    return value;\n#elif B && \\\n  C\n    return x;\n#else\n    union\n        {\n        uint64_t u64;\n        uint32_t u32[2];\n        } src, dst;\n\n    src.u64 = value;\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn vtk_indents_type_braces_nested_anywhere_in_a_union() {
+    check(
+        "struct a {\n\tunion {\n\t\tunion {\n\t\t\tint x;\n\t\t\tstruct {\n\t\t\t\tint q;\n\t\t\t} w;\n\t\t} v;\n\t} u;\n};\nunion b {\n\tstruct {\n\t\tstruct {\n\t\t\tint z;\n\t\t} k;\n\t} s;\n};\n",
+        &["--style=vtk"],
+        "struct a\n{\n    union\n    {\n        union\n            {\n            int x;\n            struct\n                {\n                int q;\n                } w;\n            } v;\n    } u;\n};\nunion b\n{\n    struct\n        {\n        struct\n            {\n            int z;\n            } k;\n        } s;\n};\n",
+    );
+}
+
+#[test]
+fn a_ratliff_kept_function_block_stands_a_level_in() {
+    check(
+        "int f(void)\n{ return 0; }\nvoid g(void)\n{}\n",
+        &["--style=ratliff"],
+        "int f(void) {\n    return 0;\n    }\nvoid g(void)\n    {}\n",
+    );
+}
+
+#[test]
+fn an_empty_type_body_below_its_header_takes_the_attached_brace() {
+    check(
+        "struct s\n{};\nunion u\n{} v;\nclass C\n{};\nnamespace n\n{}\n",
+        &["--style=kr"],
+        "struct s {\n};\nunion u {\n} v;\nclass C\n{};\nnamespace n\n{}\n",
+    );
+}
+
+#[test]
+fn an_empty_type_body_keeps_its_line_without_a_brace_style() {
+    check(
+        "class C\n{};\nnamespace n\n{}\n",
+        &[],
+        "class C\n{};\nnamespace n\n{}\n",
+    );
+    check(
+        "class C\n{};\nnamespace n\n{}\n",
+        &["--attach-classes", "--attach-namespaces"],
+        "class C {\n};\nnamespace n {\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_attached_switch_brace_stands_with_the_case_labels() {
+    let input = "void f(void)\n{\n\tswitch (a)\n\t{ /* c */\n\tcase 0:\n\t\ty;\n\t}\n}\n";
+    check(
+        input,
+        &["--style=kr", "-S"],
+        "void f(void)\n{\n    switch (a) {\n        /* c */\n        case 0:\n            y;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f(void)\n{\n    switch (a) {\n    /* c */\n    case 0:\n        y;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    switch (a) {\n        /* c */\n        case 0:\n            y;\n        }\n    }\n",
+    );
+}

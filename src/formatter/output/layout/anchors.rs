@@ -4383,8 +4383,8 @@ impl FormatEngine<'_> {
         self.opening_brace_indent(first)
     }
 
-    /// VTK indents the braces and members of a struct, union, or enum that
-    /// is a member of a union one level past its keyword.
+    /// VTK indents the braces and members of a struct, union, or enum nested
+    /// at any depth in a union one level past its keyword.
     #[inline(never)]
     fn vtk_anonymous_member_aggregate_brace_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
@@ -4412,16 +4412,20 @@ impl FormatEngine<'_> {
         if !is_aggregate_keyword(keyword) {
             keyword = self.tree.previous_code_token(keyword)?;
         }
-        let outer = groups.enclosing(open)?;
-        let outer_open = groups.get(outer).open;
+        let in_union = groups
+            .ancestors(groups.enclosing(open)?)
+            .take_while(|&outer| self.tree.blocks.kind(outer) == Some(BlockKind::Aggregate))
+            .any(|outer| {
+                let outer_open = groups.get(outer).open;
+                self.tree.blocks.owner(outer).is_some_and(|start| {
+                    tokens[start..outer_open]
+                        .iter()
+                        .any(|token| matches!(token, Token::Word(word) if word == "union"))
+                })
+            });
         if self.tree.blocks.kind(group) != Some(BlockKind::Aggregate)
             || !is_aggregate_keyword(keyword)
-            || self.tree.blocks.kind(outer) != Some(BlockKind::Aggregate)
-            || !self.tree.blocks.owner(outer).is_some_and(|start| {
-                tokens[start..outer_open]
-                    .iter()
-                    .any(|token| matches!(token, Token::Word(word) if word == "union"))
-            })
+            || !in_union
         {
             return None;
         }

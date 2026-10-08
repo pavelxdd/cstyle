@@ -3120,7 +3120,11 @@ impl FormatEngine<'_> {
         !self.current_is_blank() && self.style_attaches_opening_brace(brace_type, next)
     }
 
-    fn style_attaches_opening_brace(&self, brace_type: BraceType, next: Option<&Token>) -> bool {
+    pub(crate) fn style_attaches_opening_brace(
+        &self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> bool {
         if self.options.break_one_line_blocks
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && brace_type != BraceType::Command

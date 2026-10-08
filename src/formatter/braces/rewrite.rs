@@ -1424,6 +1424,25 @@ impl FormatEngine<'_> {
             return Some(next_index);
         }
         let is_empty_block = is_empty_one_line_block_tokens(&tokens[start..=close_index]);
+        // An empty type or namespace body below its header takes the
+        // style's attached `{` and breaks before its `}`.
+        if is_empty_block
+            && token_begins_line(tokens, start)
+            && let Some(brace_type) = match self.layout.command_state.pending_block_word.as_deref()
+            {
+                Some("struct") => Some(BraceType::Struct),
+                Some("union") => Some(BraceType::Union),
+                Some("class") => Some(BraceType::Class),
+                Some("namespace") => Some(BraceType::Namespace),
+                _ => None,
+            }
+            && (self.options.brace_style != BraceStyle::None
+                || brace_type == BraceType::Class && self.options.attach_class
+                || brace_type == BraceType::Namespace && self.options.attach_namespace)
+            && self.style_attaches_opening_brace(brace_type, tokens.get(start + 1))
+        {
+            return None;
+        }
         let is_comment_only_block =
             is_comment_only_one_line_block_tokens(&tokens[start..=close_index]);
         let is_semicolon_only_block =
@@ -1583,7 +1602,9 @@ impl FormatEngine<'_> {
         if token_begins_line(tokens, start) && self.current_is_blank() {
             // Styles that indent braces indent a block kept after a macro,
             // unless it is empty, and Whitesmith and Ratliff a type's body
-            // as they do a one-line enum body.
+            // as they do a one-line enum body. A function's `{` left on its
+            // own line under Ratliff opens a kept one-line block, set in
+            // like the closing braces.
             let brace_indent = usize::from(
                 source_separate_macro_block
                     && !is_empty_block
@@ -1600,7 +1621,10 @@ impl FormatEngine<'_> {
                     ) && matches!(
                         self.options.brace_style,
                         BraceStyle::Whitesmith | BraceStyle::Ratliff
-                    ),
+                    )
+                    || brace_type == BraceType::Definition
+                        && !inferred_capture_lambda
+                        && self.options.brace_style == BraceStyle::Ratliff,
             );
             self.layout
                 .continuation_indent
