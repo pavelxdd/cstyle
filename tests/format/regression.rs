@@ -6840,3 +6840,16 @@ fn a_case_brace_after_a_comment_stands_at_its_label() {
         "void f(int c)\n{\n    switch (c) {\n    default:\n        /* note */\n    {\n        g();\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_asm_statement_stays_unbroken_past_the_maximum_length() {
+    check(
+        "static inline int64_t xchg(int64_t* field, int64_t value)\n{\n    int64_t result = 0;\n    asm volatile (\"lock; xchgq %1, %2\" : \"=r\" (result), \"+q\" (value), \"+m\" (*field));\n    return result;\n}\n",
+        &[
+            "--style=google",
+            "--max-code-length=80",
+            "--break-after-logical",
+        ],
+        "static inline int64_t xchg(int64_t* field, int64_t value) {\n    int64_t result = 0;\n    asm volatile (\"lock; xchgq %1, %2\" : \"=r\" (result), \"+q\" (value), \"+m\" (*field));\n    return result;\n}\n",
+    );
+}

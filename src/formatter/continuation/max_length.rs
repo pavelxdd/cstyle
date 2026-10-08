@@ -495,8 +495,11 @@ fn should_skip_split(line: &str) -> bool {
             .is_none_or(|ch| matches!(ch, ' ' | '\t' | '/'))
             && trimmed.starts_with('*')
         || trimmed.starts_with('#')
-        || trimmed.starts_with("asm(")
-        || trimmed.starts_with("__asm__")
+        || ["asm", "__asm__", "__asm", "_asm"].iter().any(|keyword| {
+            trimmed
+                .strip_prefix(keyword)
+                .is_some_and(|rest| !rest.starts_with(is_identifier_continue))
+        })
 }
 
 fn is_single_string_call_at(line: &str, open: usize) -> bool {
