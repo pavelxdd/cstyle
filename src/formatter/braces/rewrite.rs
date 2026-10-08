@@ -169,10 +169,16 @@ impl FormatEngine<'_> {
                         || self.options.brace_style == BraceStyle::Gnu
                         || vtk_nested,
                 );
-                // The bias already counts the case body level.
+                // The bias already counts the case body level. A comment
+                // after an `else` biases its braceless body, which these
+                // braces enclose.
+                let bias = self
+                    .layout
+                    .pending_braceless_block_bias
+                    .filter(|_| !(header_is_else && follows_comment_line));
                 let mut block_indent = (self.layout.indentation.indent()
                     + self.case_body_indent_extra(LineKind::Normal))
-                .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
+                .max(bias.unwrap_or(0))
                     + brace_indent_extra;
                 if !follows_comment_line {
                     self.finish_line();

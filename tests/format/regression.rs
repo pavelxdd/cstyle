@@ -6326,3 +6326,23 @@ fn closing_bracket_row_stands_a_level_before_the_rows_its_bracket_opened() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_block_comment_after_an_else_makes_the_following_header_its_body() {
+    let input = "void f(void){\n  if( a ){\n    x();\n  }else\n  /* dump\n  */\n  if( b ){\n    while( c ){\n      switch( op ){\n        case 1: {\n          int i;\n          y();\n          break;\n        }\n      }\n    }\n  }\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f(void)\n{   if( a )\n    {   x(); }\n    else\n        /* dump\n        */\n        if( b )\n        {   while( c )\n            {   switch( op )\n                {   case 1:\n                    {   int i;\n                        y();\n                        break; } } } } }\n",
+    );
+}
+
+#[test]
+fn braces_added_to_an_else_body_after_a_comment_stand_at_the_else() {
+    let input = "void f(void)\n{\n\tif (a)\n\t\tx = 1;\n\telse\n\t\t// c2\n\t\tx = 2;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f(void)\n{\n    if (a)\n    { x = 1; }\n    else\n        // c2\n    { x = 2; }\n}\n",
+    );
+}

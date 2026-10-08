@@ -168,8 +168,21 @@ impl FormatEngine<'_> {
         if self.take_block_spacing_blank(&line) {
             self.push_empty_line();
         }
+        // As a routed comment row does, a comment right after an `else`
+        // makes what follows the else's braceless body; one after a blank
+        // line has its split else.
+        let trimmed = line.trimmed_start();
+        let else_body_level = ((trimmed.starts_with("/*") || trimmed.starts_with("//"))
+            && self.output.scoped().last().is_some_and(|previous| {
+                let previous = previous.trimmed();
+                previous.strip_prefix('}').map_or(previous, str::trim_start) == "else"
+            }))
+        .then(|| leading_visual_width(&line, self.options.tab_width) / self.options.indent_width);
         self.layout.line_adjuster.observe_raw_comment_line(&line);
         self.adjust_and_publish_line(line);
+        if let Some(level) = else_body_level {
+            self.layout.pending_braceless_block_bias = Some(level);
+        }
     }
 
     pub(crate) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {

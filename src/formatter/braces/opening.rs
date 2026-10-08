@@ -1370,13 +1370,14 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
         // A brace after an `else` and a comment is the else's own body.
-        let else_body_brace = self
-            .current
-            .active_token()
-            .and_then(|brace| self.tree.previous_code_token(brace))
-            .is_some_and(|previous| {
-                matches!(&self.tree.tokens[previous], Token::Word(word) if word == "else")
-            });
+        let else_body_brace = brace_header == Some("else")
+            || self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.previous_code_token(brace))
+                .is_some_and(|previous| {
+                    matches!(&self.tree.tokens[previous], Token::Word(word) if word == "else")
+                });
         if let Some(level) = self.layout.pending_braceless_block_bias.take()
             && brace_type == BraceType::Command
             && !else_body_brace
