@@ -1418,7 +1418,11 @@ impl FormatEngine<'_> {
         let mut index = start;
         loop {
             match &tokens[index] {
-                Token::Word(word) if word == "return" || word == "template" || is_header(word) => {
+                Token::Word(word)
+                    if word == "return"
+                        || word == "template" && next_code_token(tokens, index + 1).is_some_and(|next| matches!(&tokens[next], Token::Operator(operator) if operator.starts_with('<')))
+                        || is_header(word) =>
+                {
                     return None;
                 }
                 Token::Operator(operator) if matches!(operator.as_str(), "<<" | ">>") => {

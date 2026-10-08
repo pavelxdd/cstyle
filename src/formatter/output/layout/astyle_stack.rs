@@ -628,8 +628,9 @@ impl FormatEngine<'_> {
                     if is_header(word)
                         || matches!(
                             word.as_str(),
-                            "operator" | "template" | "case" | "default" | "else" | "do"
-                        ) =>
+                            "operator" | "case" | "default" | "else" | "do"
+                        )
+                        || word == "template" && template_keyword(tokens, index) =>
                 {
                     return None;
                 }
@@ -1108,6 +1109,14 @@ fn second_word_column(line: &str, comma: usize) -> usize {
         Some(offset) if after + offset < comma => after + offset,
         _ => 0,
     }
+}
+
+/// Whether the `template` at `index` opens a template parameter list; a
+/// name like any other otherwise.
+fn template_keyword(tokens: &[Token], index: usize) -> bool {
+    next_code_token(tokens, index + 1).is_some_and(
+        |next| matches!(&tokens[next], Token::Operator(operator) if operator.starts_with('<')),
+    )
 }
 
 #[cfg(test)]

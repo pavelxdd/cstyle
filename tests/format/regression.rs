@@ -6728,3 +6728,12 @@ fn define_arguments_past_the_maximum_go_on_at_the_assigned_value() {
         "#define B(p) \\\n    for_each_hook_success = seq_try_load_hooks_long_name( \\\n                            (p), &h[c]); \\\n    x;\n",
     );
 }
+
+#[test]
+fn a_variable_named_template_continues_like_any_name() {
+    check(
+        "void f(void)\n{\n    if (opeer->host->name.len != template->host->name.len\n        || ngx_memcmp(opeer->host->name.data,\n                      template->host->name.data,\n                      template->host->name.len)\n           != 0)\n        g();\n}\n",
+        &["--style=kr", "--indent-after-parens"],
+        "void f(void)\n{\n    if (opeer->host->name.len != template->host->name.len\n        || ngx_memcmp(opeer->host->name.data,\n            template->host->name.data,\n            template->host->name.len)\n        != 0)\n        g();\n}\n",
+    );
+}
