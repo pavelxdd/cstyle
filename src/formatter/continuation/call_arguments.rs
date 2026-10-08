@@ -632,9 +632,11 @@ impl FormatEngine<'_> {
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
         let previous_trimmed = previous.trimmed_start();
         let previous_spaces = leading_visual_width(previous, self.options.tab_width);
-        // A string row closing a paren ends the operand it continued.
+        // A string row closing a paren ends the operand it continued. The
+        // `*` rows of a block comment stand past its column.
         if starts_string_literal_token(current)
             && (is_comment_line(previous_trimmed) || is_comment_only_line(previous_trimmed))
+            && !previous_trimmed.starts_with('*')
             || starts_string_literal_token(current)
                 && starts_string_literal_token(previous_code.trimmed_start())
                 && self.paren_closes_of(previous_code) == 0

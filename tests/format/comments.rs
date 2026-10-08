@@ -4630,3 +4630,12 @@ fn comment_gap_before_a_broken_initializer_brace_on_a_run_in_closer_row() {
         assert_eq!(format_exact(expected, &options), expected, "{style}");
     }
 }
+
+#[test]
+fn string_elements_after_a_comment_run_into_a_pico_brace_stay_at_the_elements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f(void)\n{   WCHAR* from_env[] =\n    {   /* list should be kept\n         * in process.c */\n        L\"HOMEDRIVE\",\n        L\"HOMEPATH\", };\n    x(); }\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
