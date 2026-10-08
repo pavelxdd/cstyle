@@ -4630,11 +4630,25 @@ impl FormatEngine<'_> {
         if self.tree.has_directive_in(do_token..semicolon) {
             return None;
         }
-        // Only a `do` leading its line, or run in after a `{`, places it.
-        let first = self
-            .output
-            .line_tokens(self.output.line_with_token(do_token)?)?
-            .first;
+        // Only a `do` leading its line, or run in after a `{`, places it;
+        // one run in after an `else` stands at the else's body.
+        let line = self.output.line_with_token(do_token)?;
+        let first = self.output.line_tokens(line)?.first;
+        if self
+            .tree
+            .previous_code_token(do_token)
+            .is_some_and(|previous| {
+                matches!(&tokens[previous], Token::Word(word) if word == "else")
+                    && self.output.line_with_token(previous) == Some(line)
+            })
+        {
+            return Some(
+                self.output
+                    .lead_width(self.line_led_by(do_token)?, self.options.tab_width)
+                    + self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        }
         if first != do_token
             && !(matches!(tokens[first], Token::Symbol('{'))
                 && next_code_token(tokens, first + 1) == Some(do_token))

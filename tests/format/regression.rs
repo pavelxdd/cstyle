@@ -6458,3 +6458,12 @@ fn padded_operators_keep_a_wider_gap_before_an_element_brace() {
         "static const struct x a[] = {\n    [A] =  { 1, \"s\" },\n    [C] =  1,\n    .d =  { 2 },\n};\nstruct y b =  { 1 };\n",
     );
 }
+
+#[test]
+fn the_while_of_a_do_run_in_after_an_else_stands_at_the_else_body() {
+    check(
+        "void f(void)\n{\n    if (k)\n        x();\n    else do\n            *x1++ = *x++;\n        while(x < xe);\n    y();\n}\n",
+        &["--style=kr"],
+        "void f(void)\n{\n    if (k)\n        x();\n    else do\n            *x1++ = *x++;\n        while(x < xe);\n    y();\n}\n",
+    );
+}
