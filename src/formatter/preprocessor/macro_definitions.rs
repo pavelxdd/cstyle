@@ -1114,7 +1114,10 @@ impl FormatEngine<'_> {
                 && content.contains(')');
             let continued_designated_initializer_row = continuation_column.is_some()
                 && (content.starts_with('.') || content.starts_with('['));
-            let initializer_close_column = if info.leading_close && content.starts_with('}') {
+            let initializer_close_column = if info.leading_close
+                && content.starts_with('}')
+                && frames.last().copied() != Some(DefineFrame::Brace)
+            {
                 continuation_column.map(|column| column.saturating_sub(2))
             } else {
                 None
@@ -1264,9 +1267,16 @@ impl FormatEngine<'_> {
                 column_before_parens.take()
             } else if let Some(&(_, align)) = paren_anchors.last() {
                 Some(align)
-            } else if continuation_column.is_some() {
+            } else if continuation_column.is_some()
+                && !(define_complete_designated_initializer_row(content)
+                    && frames.last().copied() == Some(DefineFrame::Brace))
+            {
                 continuation_column
-            } else if define_complete_designated_initializer_row(content) {
+            } else if define_complete_designated_initializer_row(content)
+                // astyle reads a brace opening the replacement as a block,
+                // whose assignments each register past the last.
+                && frames.last().copied() != Some(DefineFrame::Brace)
+            {
                 None
             } else {
                 // An assignment registers the column after it, a continuing

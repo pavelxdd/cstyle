@@ -837,10 +837,11 @@ fn indent_preproc_define_statement_expression_body_keeps_block_indent() {
 }
 
 #[test]
-fn indent_preproc_define_keeps_designated_initializer_rows_aligned() {
+fn indent_preproc_define_drifts_designated_rows_of_a_block_brace() {
     let mut options = FormatOptions::default();
     options.indent_preproc_define = true;
-    // Each designated initializer row uses the macro-body column.
+    // astyle reads the brace opening the replacement as a block, whose
+    // assignments each register the column past the last.
     let source = fixture!(
         "#define ITEM(name, value) \\",
         "    { \\",
@@ -849,9 +850,17 @@ fn indent_preproc_define_keeps_designated_initializer_rows_aligned() {
         "        .help = get_help(name), \\",
         "    }",
     );
+    let expected = fixture!(
+        "#define ITEM(name, value) \\",
+        "    { \\",
+        "        .name = (name), \\",
+        "                .value = (value), \\",
+        "                         .help = get_help(name), \\",
+        "    }",
+    );
     let actual = format_with(source, &options);
 
-    assert_eq!(actual, source);
+    assert_eq!(actual, expected);
 }
 
 #[test]
