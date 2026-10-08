@@ -357,8 +357,11 @@ impl FormatEngine<'_> {
                 case_label_token_offset(&self.current, header)
                     .is_some_and(|offset| !brace_led(&self.current[..offset]))
             })
-            || semantic_kind == BraceSemanticKind::Command
-                && brace_header.is_some()
+            || (semantic_kind == BraceSemanticKind::Command && brace_header.is_some()
+                || matches!(
+                    semantic_kind,
+                    BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                ) && self.current.trimmed_end().ends_with('='))
                 && !self.current_is_blank();
         let header_indent_column = owner_column.unwrap_or_else(|| {
             semantic_header.map_or(line_indent, |frame| frame.line_indent_spaces)
@@ -427,7 +430,14 @@ impl FormatEngine<'_> {
         };
         let trimmed = line.trimmed_start();
         let lead = leading_visual_width(line, self.options.tab_width);
+        let case_unindent = self.case_unindent_spaces();
         if let Some(frame) = self.layout.frame_stack.active_brace_mut().filter(|frame| {
+            // An initializer's declaration stands where layout put it, which
+            // may be left of its structural column too.
+            let declaration = matches!(
+                frame.semantic_kind,
+                BraceSemanticKind::Array | BraceSemanticKind::Initializer
+            ) && trimmed.trimmed_end().ends_with('=');
             let opener = if frame.case_block {
                 (trimmed.starts_with("case") || trimmed.starts_with("default"))
                     && trimmed.trimmed_end().ends_with(':')
@@ -438,7 +448,16 @@ impl FormatEngine<'_> {
                     .is_some_and(|header| starts_header_word(trimmed, header))
             };
             opener && frame.header_indent_column < lead
+                || declaration
+                    && frame.header_indent_column != lead + case_unindent
+                    && frame.sibling_indent_column + lead + case_unindent
+                        >= frame.header_indent_column
         }) {
+            let lead = if frame.case_block || frame.header.is_some() {
+                lead
+            } else {
+                lead + case_unindent
+            };
             let rebase = |column: usize| column + lead - frame.header_indent_column;
             frame.body_indent_column = rebase(frame.body_indent_column);
             frame.sibling_indent_column = rebase(frame.sibling_indent_column);

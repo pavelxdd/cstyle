@@ -6645,3 +6645,53 @@ fn labels_after_a_lisp_case_block_closer_keep_their_spacing() {
         "void f(void) {\n    switch (c) {\n    case 0: {\n        a(); } case 2: case 3:\n        c(); } }\n",
     );
 }
+
+#[test]
+fn a_line_comment_after_a_split_do_while_keeps_its_column() {
+    let input = "void f(void) {\n  do {\n    a();\n    } while(0);                         // [for break]\n  b();\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    do\n    {\n        a();\n    }\n    while(0);                           // [for break]\n    b();\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f(void)\n{   do\n    {   a(); }\n    while(0);                           // [for break]\n    b(); }\n",
+    );
+}
+
+#[test]
+fn a_run_in_closer_comment_keeps_its_gap_on_a_second_pass() {
+    let input = "void f(void)\n{   do\n    {   if (ISZERO(rhs))                    // +/- zeros\n        {   decNumberZero(res);               // make clean\n            break; }                          // [no status to set]\n        g(); }\n    while(0); }\n";
+    check(input, &["--style=pico"], input);
+}
+
+#[test]
+fn a_comment_after_a_block_comment_over_lines_stands_at_its_opener() {
+    check(
+        "static int r(int n){\n  int yygoto;\n\n  switch( yyruleno ){\n  /* Beginning here\n  ** follows:\n  */\n/********** Begin reduce actions ****/\n%%\n/********** End reduce actions ****/\n  };\n  return 0;\n}\n",
+        &["--style=ratliff"],
+        "static int r(int n) {\n    int yygoto;\n\n    switch( yyruleno ) {\n            /* Beginning here\n            ** follows:\n            */\n            /********** Begin reduce actions ****/\n            %%\n            /********** End reduce actions ****/\n        };\n    return 0;\n    }\n",
+    );
+}
+
+#[test]
+fn block_comments_before_a_label_stand_with_the_labels_of_their_switch() {
+    let input = "int f(int op){\n  switch( op ){\ncase OP_Concat: {\n  switch( op ){\n    case 1: a(); break;\n  }\n  break;\n}\n\n/* Opcode: Add\n** Synopsis\n*/\n/* Opcode: Multiply\n*/\ncase OP_Add:\ncase OP_Multiply: {\n  b();\n  break;\n}\n  }\n  return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "int f(int op)\n{\n    switch( op ) {\n    case OP_Concat: {\n        switch( op ) {\n        case 1:\n            a();\n            break;\n        }\n        break;\n    }\n\n    /* Opcode: Add\n    ** Synopsis\n    */\n    /* Opcode: Multiply\n    */\n    case OP_Add:\n    case OP_Multiply: {\n        b();\n        break;\n    }\n    }\n    return 0;\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "int f(int op)\n    {\n    switch( op )\n        {\n        case OP_Concat:\n            {\n            switch( op )\n                {\n                case 1:\n                    a();\n                    break;\n                }\n            break;\n            }\n\n        /* Opcode: Add\n        ** Synopsis\n        */\n        /* Opcode: Multiply\n        */\n        case OP_Add:\n        case OP_Multiply:\n            {\n            b();\n            break;\n            }\n        }\n    return 0;\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "int f(int op)\n{\n    switch( op )\n        {\n        case OP_Concat:\n            {\n            switch( op )\n                {\n                case 1:\n                    a();\n                    break;\n                }\n            break;\n            }\n\n        /* Opcode: Add\n        ** Synopsis\n        */\n        /* Opcode: Multiply\n        */\n        case OP_Add:\n        case OP_Multiply:\n            {\n            b();\n            break;\n            }\n        }\n    return 0;\n}\n",
+    );
+}

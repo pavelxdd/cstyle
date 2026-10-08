@@ -630,7 +630,10 @@ impl FormatEngine<'_> {
             let text = self.output[start].trimmed_start();
             let previous = self.output[start - 1].trimmed_start();
             if text.starts_with("/*") {
-                if text.ends_with("*/") && previous.starts_with("/*") && previous.ends_with("*/") {
+                // Block comments one after another move together.
+                if previous.ends_with("*/")
+                    && (previous.starts_with("/*") || previous.starts_with('*'))
+                {
                     start -= 1;
                     continue;
                 }
@@ -646,18 +649,38 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        if line_kind == LineKind::SwitchLabel
-            && let Some(switch_line) = self.output[..start].iter().rev().find(|line| {
-                let code = self.output.code_trimmed_of(line);
-                code.trimmed_start().starts_with("switch") && code.ends_with('{')
+        // The labels' switch is the one whose block holds them, not a switch
+        // nested in the case before.
+        let switch_column = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.header.as_deref() == Some("switch"))
+            .map(|frame| {
+                // VTK's and GNU's labels stand at the switch's indented brace.
+                if matches!(self.options.brace_style, BraceStyle::Vtk | BraceStyle::Gnu) {
+                    frame.sibling_indent_column
+                } else {
+                    frame.header_indent_column
+                }
             })
+            .or_else(|| {
+                self.output[..start]
+                    .iter()
+                    .rev()
+                    .find(|line| {
+                        let code = self.output.code_trimmed_of(line);
+                        code.trimmed_start().starts_with("switch") && code.ends_with('{')
+                    })
+                    .map(|line| leading_visual_width(line, self.options.tab_width))
+            });
+        if line_kind == LineKind::SwitchLabel
+            && let Some(switch_column) = switch_column
         {
             let switch_body_indent = usize::from(
                 self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
             ) * self.options.indent_width;
-            indent = (leading_visual_width(switch_line, self.options.tab_width)
-                + switch_body_indent)
-                / self.options.indent_width;
+            indent = (switch_column + switch_body_indent) / self.options.indent_width;
         }
         self.reindent_output_range(start, end, indent, true);
         true
@@ -1954,6 +1977,22 @@ impl FormatEngine<'_> {
                         + self.case_unindent_spaces(),
                 );
             }
+            // A comment after a block comment over lines stands at its opener.
+            if raw_trimmed.starts_with('*')
+                && raw_trimmed.ends_with("*/")
+                && let Some(last) = self
+                    .output
+                    .scoped_range()
+                    .rev()
+                    .find(|&index| !skips(self.output[index].trimmed_start()))
+                && let Some(opener) = (self.output.scoped_range().start..last)
+                    .rev()
+                    .find(|&index| !self.output[index].trimmed_start().starts_with('*'))
+                && self.output[opener].trimmed_start().starts_with("/*")
+                && !self.output[opener].contains("*/")
+            {
+                return Some(self.output.lead_width(opener, self.options.tab_width));
+            }
             if trimmed.starts_with("switch") && code.ends_with('{') {
                 // A comment that followed the `{` attached to the header
                 // stands with the indented case labels.
@@ -2930,6 +2969,27 @@ impl FormatEngine<'_> {
             })
     }
 
+    fn current_line_broke_off_closing_brace(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        // Only the brace closing a `do` body counts.
+        (line_start..first)
+            .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            .and_then(|brace| self.tree.groups.closed_at(brace))
+            .and_then(|group| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(group).open)
+            })
+            .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
+    }
+
     fn current_line_broke_off_header(&self) -> bool {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
@@ -3098,6 +3158,32 @@ impl FormatEngine<'_> {
         // which keeps the gap before its comment.
         if !gap.is_empty() && self.run_in_closer_row() == Some(false) {
             self.current.push_str(&gap);
+            // The space attaching the closer back takes comes out of the gap
+            // only when the source set the closer against the code.
+            let closer_spaced_in_source = self
+                .current
+                .tokens()
+                .map(|span| span.first)
+                .filter(|&first| {
+                    matches!(self.tree.tokens[first], Token::Symbol('}'))
+                        && !self.added_closing_braces.contains(&first)
+                })
+                .and_then(|first| first.checked_sub(1))
+                .is_some_and(|before| matches!(self.tree.tokens[before], Token::Whitespace(_)));
+            if matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && closer_spaced_in_source
+                && gap.len() > 1
+                && gap.bytes().all(|byte| byte == b' ')
+                && self
+                    .current
+                    .trimmed()
+                    .chars()
+                    .all(|ch| matches!(ch, '}' | ';' | ' '))
+            {
+                self.current.push(' ');
+            }
             return;
         }
         let trimmed_code = self.current.trimmed();
@@ -3213,8 +3299,12 @@ impl FormatEngine<'_> {
             return;
         }
         let space_pad = (code_len + gap_chars) as isize - target_column as isize;
-        // A wide gap before a line comment only shrinks.
-        if kind == CommentKind::Line && gap_chars >= self.options.indent_width * 2 && space_pad < 0
+        // A wide gap before a line comment only shrinks, unless the brace
+        // that led the line left it.
+        if kind == CommentKind::Line
+            && gap_chars >= self.options.indent_width * 2
+            && space_pad < 0
+            && !self.current_line_broke_off_closing_brace()
         {
             self.current.push_str(&gap);
             return;
