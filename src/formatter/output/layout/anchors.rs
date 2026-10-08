@@ -1368,7 +1368,19 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.output.line_with_token(last)?;
-        let start = next_code_token(tokens, self.output.line_tokens(line)?.first)?;
+        let mut start = next_code_token(tokens, self.output.line_tokens(line)?.first)?;
+        // The statement may run in after its headers.
+        while matches!(&tokens[start], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
+            && let Some(open) = next_code_token(tokens, start + 1)
+            && matches!(tokens[open], Token::Symbol('('))
+            && let Some(close) = groups
+                .opened_at(open)
+                .and_then(|group| groups.get(group).close)
+            && close < last
+            && self.output.line_with_token(close) == Some(line)
+        {
+            start = next_code_token(tokens, close + 1)?;
+        }
         if groups.enclosing(start) != group
             || self.tree.previous_code_token(start).is_some_and(|before| {
                 !matches!(tokens[before], Token::Symbol(';' | '{' | '}'))
@@ -1447,7 +1459,12 @@ impl FormatEngine<'_> {
             }
         }
         let top = stack.last().copied()?;
-        Some(lead + top + self.case_unindent_spaces())
+        // A statement run in after its header continues a level in.
+        Some(
+            lead + top
+                + self.run_in_header_levels(start) * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// The first statement of a case starting a line after its label's
@@ -3071,7 +3088,17 @@ impl FormatEngine<'_> {
             return self.stacked_argument_indent(first);
         }
         let content = next_code_token(tokens, open + 1)?;
-        Some(self.token_column(content)? + self.case_unindent_spaces())
+        let column = self.token_column(content)?;
+        // Parens past the continuation limit leave the arm to the stack.
+        if column
+            > self
+                .output
+                .lead_width(previous_line, self.options.tab_width)
+                + self.options.max_continuation_indent
+        {
+            return None;
+        }
+        Some(column + self.case_unindent_spaces())
     }
 
     /// The arm after a `:` ending its line stands at the first arm when that
@@ -4462,7 +4489,6 @@ impl FormatEngine<'_> {
         // The `{` itself stands at its `else`, a level in where the style
         // indents block braces.
         if matches!(tokens[first], Token::Symbol('{'))
-            && self.layout.line_adjuster.total_case_unindent_depth() == 0
             && let Some(keyword) = self.tree.previous_code_token(first)
             && matches!(&tokens[keyword], Token::Word(word) if word == "else")
             && self.tree.has_directive_in(keyword..first)
@@ -4476,7 +4502,38 @@ impl FormatEngine<'_> {
                 0
             };
             let line = self.line_led_by(keyword)?;
-            return Some(self.output.lead_width(line, self.options.tab_width) + offset);
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + offset
+                    + self.case_unindent_spaces(),
+            );
+        }
+        // So does the `{` of a header the split `else` holds.
+        if matches!(tokens[first], Token::Symbol('{'))
+            && let Some(close) = self.tree.previous_code_token(first)
+            && let Some(condition) = self.tree.groups.closed_at(close)
+            && let Some(header) = self
+                .tree
+                .previous_code_token(self.tree.groups.get(condition).open)
+            && matches!(&tokens[header], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
+            && let Some(keyword) = self.tree.previous_code_token(header)
+            && matches!(&tokens[keyword], Token::Word(word) if word == "else")
+            && self.tree.has_directive_in(keyword..header)
+        {
+            let offset = if matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Gnu | BraceStyle::Ratliff
+            ) {
+                self.options.indent_width
+            } else {
+                0
+            };
+            let line = self.line_led_by(header)?;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + offset
+                    + self.case_unindent_spaces(),
+            );
         }
         if matches!(tokens[first], Token::Symbol('{' | '}'))
             || !self.tree.statements.starts_block_statement(first)

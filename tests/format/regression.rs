@@ -6360,3 +6360,31 @@ fn a_comment_after_a_dangling_else_stands_in_its_body() {
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn an_assignment_run_in_after_its_header_continues_a_level_in() {
+    let input = "void f(void) {\n    if (k) *k = (long long) aaaa() -\n                    b;\n    x = aaaa() -\n        b;\n}\n";
+    check(input, &["--style=google"], input);
+}
+
+#[test]
+fn a_ternary_arm_past_the_continuation_limit_stands_at_the_assigned_value() {
+    let input = "void f(void) {\n    {\n        {\n            uint32_t entryFlags = ENTRY_TAKE_VALUE | ((expireAt != 0) ? ENTRY_HAS_EXPIRY :\n                                  0);\n        }\n    }\n}\n";
+    check(input, &["--style=google"], input);
+}
+
+#[test]
+fn a_comment_row_before_a_block_continues_no_operator_for_its_closer() {
+    let input = "void f(void)\n{   x();\n    /* c\n     * d */\n    {   static const char *d[] =\n        {   /* B */\n            \"9\",\n            \"8\",\n        };\n        y();\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
+fn braces_in_a_split_else_inside_case_blocks_stand_at_their_headers() {
+    for input in [
+        "void f(void)\n{   switch( c )\n    {   case 1:\n        {   if( a )\n            {   token = 1; }\n            else\n#ifndef X\n                if( b )\n                {   token = 2; }\n                else\n#endif\n                {   token = 3; }\n            break; } } }\n",
+        "void f(void)\n{   switch( *zSql )\n    {   case 1:\n        {\n#ifdef X\n            unsigned char c;\n#endif\n            if( q )\n            {   switch( *zSql )\n                {   case 2:\n                    {   if( a )\n                        {   token = 1; }\n                        else\n#ifndef Y\n                            if( b )\n                            {   token = 2; }\n                            else\n#endif\n                            {   token = 3; }\n                        break; } } }\n            break; } } }\n",
+    ] {
+        check(input, &["--style=pico"], input);
+    }
+}

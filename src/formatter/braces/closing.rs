@@ -209,11 +209,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let index = self.output.last_open_brace_alone_line()?;
-        let before_open = self.output[..index]
-            .iter()
-            .rev()
-            .find(|line| !line.trimmed().is_empty())?;
-        let code = self.output.code_trimmed_of(before_open);
+        // Rows of a comment hold no operator.
+        let before_open = (0..index).rev().find(|&row| {
+            self.output.comment_start_index(row) == row && !self.output.code_trimmed(row).is_empty()
+        })?;
+        let code = self.output.code_trimmed(before_open);
         (head_ends_binary_operator(code) || code.ends_with("->"))
             .then(|| leading_visual_width(&self.output[index], self.options.tab_width))
     }
