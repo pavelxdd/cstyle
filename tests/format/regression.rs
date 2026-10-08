@@ -7070,3 +7070,12 @@ fn a_block_head_directly_in_a_switch_body_stands_at_the_case_body() {
         "void f(void)\n{\n    switch( iSub )\n        {\n            CASE(0, \"x\")\n                {\n                int n;\n                break;\n                }\n        }\n}\n",
     );
 }
+
+#[test]
+fn an_else_if_block_in_an_else_split_by_a_directive_takes_no_extra_level() {
+    check(
+        "void f(void)\n{\n#ifdef X\n    if (m)\n        n = 1;\n    else\n#endif\n        if (t)\n        {\n            if (r)\n                return -1;\n            else if (n)\n            {\n                g();\n            }\n        }\n}\n",
+        &["--style=allman"],
+        "void f(void)\n{\n#ifdef X\n    if (m)\n        n = 1;\n    else\n#endif\n        if (t)\n        {\n            if (r)\n                return -1;\n            else if (n)\n            {\n                g();\n            }\n        }\n}\n",
+    );
+}
