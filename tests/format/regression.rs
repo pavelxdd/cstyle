@@ -6974,3 +6974,21 @@ fn indenting_after_parens_stacks_a_subscript_bracket() {
         "void f(void) {\n    if (x) {\n        if (y) {\n            memset(&decay->backlog[SMOOTHSTEP_NSTEPS -\n                    nadvance_z], 0, (nadvance_z-1) * sizeof(size_t));\n            a = b[c +\n                    d];\n            g(h[i -\n                    j]);\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_between_else_and_its_block_claims_no_braceless_body() {
+    check(
+        "void f(void)\n{\n    if (a)\n        b();\n    else\n        // In the middle.\n    { prev = -1; }\n\n    if (x)\n    {\n        tail = 0;\n        state = TAIL;\n    }\n}\n",
+        &["--style=allman", "--keep-one-line-blocks"],
+        "void f(void)\n{\n    if (a)\n        b();\n    else\n        // In the middle.\n    { prev = -1; }\n\n    if (x)\n    {\n        tail = 0;\n        state = TAIL;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn declarators_after_a_tab_align_past_its_stop() {
+    check(
+        "void f(void)\n{\n    u_int\twidth_left, width_centre, width_right,\n            width_abs_centre;\n    int\tx, y,\n        z;\n}\n",
+        &["--style=kr"],
+        "void f(void)\n{\n    u_int\twidth_left, width_centre, width_right,\n            width_abs_centre;\n    int\tx, y,\n        z;\n}\n",
+    );
+}

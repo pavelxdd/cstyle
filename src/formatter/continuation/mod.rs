@@ -69,6 +69,21 @@ impl ContinuationIndentState {
     }
 }
 
+/// The width from `start_column` to the first declarator of `line`, its
+/// tabs stopping as they do there.
+fn declaration_comma_continuation_width(
+    line: &str,
+    start_column: usize,
+    tab_width: usize,
+) -> usize {
+    let chars = declaration_comma_continuation_column(line);
+    let bytes = line
+        .char_indices()
+        .nth(chars)
+        .map_or(line.len(), |(index, _)| index);
+    visual_width_from(&line[..bytes], start_column, tab_width)
+}
+
 fn declaration_comma_continuation_column(line: &str) -> usize {
     let chars: Vec<char> = line.chars().collect();
     let comma = match chars.len().checked_sub(1) {
@@ -1516,14 +1531,25 @@ impl FormatEngine<'_> {
             {
                 let previous_prefix = leading_visual_width(previous, self.options.tab_width);
                 if previous_prefix
-                    + declaration_comma_continuation_column(previous_code.trimmed_start())
+                    + declaration_comma_continuation_width(
+                        previous_code.trimmed_start(),
+                        previous_prefix,
+                        self.options.tab_width,
+                    )
                     == prefix_len
                 {
                     return Some(prefix_len);
                 }
             }
         }
-        Some(prefix_len + declaration_comma_continuation_column(line.trimmed_start()))
+        Some(
+            prefix_len
+                + declaration_comma_continuation_width(
+                    line.trimmed_start(),
+                    prefix_len,
+                    self.options.tab_width,
+                ),
+        )
     }
 
     fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {

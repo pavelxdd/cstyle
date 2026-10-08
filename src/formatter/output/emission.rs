@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
+use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{ContainsAnyByte, line_ends_with_comment};
 use crate::formatter::text::line_view::LineView;
@@ -219,6 +220,29 @@ impl FormatEngine<'_> {
         self.output.set(target, row);
     }
 
+    /// Whether the `else` on the row before the last row takes a braced
+    /// body, a comment between them or not.
+    pub(crate) fn else_before_row_has_braced_body(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(else_row) = self.output.len().checked_sub(1).and_then(|last| {
+            (0..last)
+                .rev()
+                .find(|&row| !self.output[row].trimmed().is_empty())
+        }) else {
+            return false;
+        };
+        self.output.line_tokens(else_row).is_some_and(|span| {
+            (span.first..=span.last)
+                .rev()
+                .find(|&index| is_code_token(&tokens[index]))
+                .is_some_and(|keyword| {
+                    matches!(&tokens[keyword], Token::Word(word) if word == "else")
+                        && next_code_token(tokens, keyword + 1)
+                            .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
+                })
+        })
+    }
+
     pub(crate) fn adjust_and_publish_raw_literal_line(
         &mut self,
         line: String,
@@ -359,18 +383,19 @@ impl FormatEngine<'_> {
         }
         self.update_typedef_function_pointer_frame(line);
         self.observe_formatted_output_comment_frame(line, output_spaces);
-        // A row of code led by a dereference is no comment.
-        let comment_row = self
+        // A row of code led by a dereference is no comment, and a comment
+        // before a brace leaves the else its block.
+        let row_tokens = self
             .output
             .len()
             .checked_sub(1)
-            .and_then(|last| self.output.line_tokens(last))
-            .is_none_or(|span| {
-                (span.first..=span.last)
-                    .map(|index| &self.tree.tokens[index])
-                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-                    .is_none_or(|token| matches!(token, Token::Comment(..)))
-            });
+            .and_then(|last| self.output.line_tokens(last));
+        let comment_row = row_tokens.is_none_or(|span| {
+            (span.first..=span.last)
+                .map(|index| &self.tree.tokens[index])
+                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_none_or(|token| matches!(token, Token::Comment(..)))
+        }) && !self.else_before_row_has_braced_body();
         if comment_row
             && matches!(
                 line.trimmed_start(),
