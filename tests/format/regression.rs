@@ -6737,3 +6737,25 @@ fn a_variable_named_template_continues_like_any_name() {
         "void f(void)\n{\n    if (opeer->host->name.len != template->host->name.len\n        || ngx_memcmp(opeer->host->name.data,\n            template->host->name.data,\n            template->host->name.len)\n        != 0)\n        g();\n}\n",
     );
 }
+
+#[test]
+fn a_branch_without_the_else_leaves_the_split_else_if_chain() {
+    check(
+        "int f(void)\n{\n  if(a)\n    return 1;\n  else if(b)\n    return 2;\n#ifdef X\n  else if(c) {\n    return 3;\n  }\n  else {\n    return 4;\n  }\n#else\n  (void)data;\n  return 0;\n#endif\n}\n",
+        &["--style=google", "--break-elseifs"],
+        "int f(void) {\n    if(a)\n        return 1;\n    else\n        if(b)\n            return 2;\n#ifdef X\n        else\n            if(c) {\n                return 3;\n            } else {\n                return 4;\n            }\n#else\n    (void)data;\n    return 0;\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn an_indentable_block_opening_in_a_statement_stands_at_its_level() {
+    check(
+        "static bool have_dss =\n#ifdef JEMALLOC_DSS\n    true\n#else\n    false\n#endif\n    ;\n\nint f(void) {\n\treturn 0;\n}\n",
+        &[
+            "--style=kr",
+            "--indent-preproc-cond",
+            "--indent-preproc-block",
+        ],
+        "static bool have_dss =\n#ifdef JEMALLOC_DSS\n    true\n#else\n    false\n#endif\n    ;\n\nint f(void)\n{\n    return 0;\n}\n",
+    );
+}

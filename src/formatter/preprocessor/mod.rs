@@ -10,6 +10,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{line_comment_split_limit, preprocessor_directive};
 use crate::formatter::text::trim::Trimmed;
@@ -119,6 +120,8 @@ pub(crate) struct PreprocessorBranchState {
     /// The state at the end of the first branch, which astyle continues
     /// from after `#endif`.
     first_branch_end: Option<Box<PreprocessorBranchState>>,
+    /// The token index of the directive that opened the conditional.
+    directive: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1058,6 +1061,13 @@ impl FormatEngine<'_> {
                             self.layout.indentation.indent(),
                         ));
                     }
+                    // An indented block's opening stands at its level, not
+                    // at a continuation.
+                    if opening_indentable == Some(true) {
+                        return Some(PreprocessorLineIndent::Level(
+                            self.layout.indentation.indent(),
+                        ));
+                    }
                 }
                 _ => {
                     if self.preprocessor.indented_block_stack.last() == Some(&true) {
@@ -1313,6 +1323,7 @@ impl FormatEngine<'_> {
                     if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
                         branch.restore_body_indent = branch.first_body_indent_spaces.is_some();
                     }
+                    self.close_braceless_bodies_kept_for_else();
                 }
             }
             Some("endif") => {
@@ -1389,6 +1400,7 @@ impl FormatEngine<'_> {
             pending_extern: self.pending_extern,
             extern_c_guard: self.extern_c_guard,
             first_branch_end: None,
+            directive: self.preprocessor.active_directive,
         }
     }
 
@@ -1404,6 +1416,7 @@ impl FormatEngine<'_> {
             pending_extern,
             extern_c_guard,
             first_branch_end: _,
+            directive: _,
         } = snapshot;
         self.layout = layout;
         self.preprocessor.split_else =
@@ -1452,6 +1465,41 @@ fn track_open_paren_columns(
                 columns.pop();
             }
             _ => {}
+        }
+    }
+}
+
+impl FormatEngine<'_> {
+    /// A first branch that goes on with an `else` keeps the chain's levels;
+    /// a later branch that does not leaves the chain.
+    fn close_braceless_bodies_kept_for_else(&mut self) {
+        let tokens = &self.tree.tokens;
+        let starts_with_else = |directive: usize| {
+            next_code_token(tokens, directive + 1)
+                .is_some_and(|index| matches!(&tokens[index], Token::Word(word) if word == "else"))
+        };
+        let Some(directive) = self.preprocessor.active_directive else {
+            return;
+        };
+        let Some(opening) = self
+            .preprocessor
+            .branch_stack
+            .last()
+            .and_then(|branch| branch.directive)
+        else {
+            return;
+        };
+        if starts_with_else(directive) || !starts_with_else(opening) {
+            return;
+        }
+        while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+            && self.layout.indentation.indent() == base + delta
+        {
+            self.layout.indentation.exit_braceless_block();
+        }
+        self.unwind_else_if_break_depths();
+        if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
+            branch.restore_body_indent = false;
         }
     }
 }
