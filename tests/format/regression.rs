@@ -6759,3 +6759,12 @@ fn an_indentable_block_opening_in_a_statement_stands_at_its_level() {
         "static bool have_dss =\n#ifdef JEMALLOC_DSS\n    true\n#else\n    false\n#endif\n    ;\n\nint f(void)\n{\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn an_initializer_run_in_after_a_block_brace_measures_from_the_brace() {
+    check(
+        "static void f(void)\n{\n    hooks_t hooks = {&noop_alloc_hook, &noop_dalloc_hook, &noop_expand_hook,\n        NULL};\n    g();\n}\n",
+        &["--style=pico", "--indent-after-parens"],
+        "static void f(void)\n{   hooks_t hooks = {&noop_alloc_hook, &noop_dalloc_hook, &noop_expand_hook,\n                    NULL };\n    g(); }\n",
+    );
+}

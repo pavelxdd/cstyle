@@ -9,6 +9,7 @@
 //! continuation, and a paren at a line end registers one continuation
 //! level past the indent before.
 
+use crate::config::BraceStyle;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::Token;
@@ -410,6 +411,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let block_lead = self.output.lead_width(start_line, self.options.tab_width);
+        // Indenting after parens, astyle measures a line run in after a
+        // block brace from the brace.
+        let column_base = self
+            .run_in_brace_lead(start, start_line)
+            .unwrap_or(block_lead);
         // astyle registers no `=` of a designator in an initializer.
         let in_initializer =
             directive_block
@@ -482,7 +488,7 @@ impl FormatEngine<'_> {
                 replay.assigned_this_line = false;
             }
             let relative = |index: usize| -> Option<usize> {
-                self.token_column(index)?.checked_sub(block_lead)
+                self.token_column(index)?.checked_sub(column_base)
             };
             let next_on_line = self
                 .next_code_token_before(index, first)
@@ -664,6 +670,32 @@ impl FormatEngine<'_> {
                 + header_levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// The lead of the block brace alone on the line before `start_line`
+    /// that a style running bodies in joins `start`'s line to.
+    fn run_in_brace_lead(&self, start: usize, start_line: usize) -> Option<usize> {
+        if !self.options.indent_after_parens
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Horstmann
+            )
+        {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        let brace = self.tree.previous_code_token(start)?;
+        let brace_line = self.output.line_with_token(brace)?;
+        (matches!(tokens[brace], Token::Symbol('{'))
+            && brace_line + 1 == start_line
+            && self.output.code_before_comment(brace_line).trimmed() == "{"
+            && self.tree.groups.opened_at(brace).is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                )
+            }))
+        .then(|| self.output.lead_width(brace_line, self.options.tab_width))
     }
 
     /// Whether the `{` at `open` opens an initializer that indenting after
