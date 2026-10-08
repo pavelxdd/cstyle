@@ -935,6 +935,14 @@ impl FormatEngine<'_> {
         let mut column_before_parens = None;
         let mut continuation_column =
             define_expression_continuation_spaces(first_line, self.options.tab_width)
+                // Parens indenting after them indent from the line.
+                .map(|column| {
+                    if self.options.indent_after_parens {
+                        first_indent + self.options.continuation_indent * self.options.indent_width
+                    } else {
+                        column
+                    }
+                })
                 .or_else(|| {
                     // An assignment the replacement starts registers its value.
                     (!first_replacement.contains_any_byte(b"{;"))

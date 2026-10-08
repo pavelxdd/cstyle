@@ -7088,3 +7088,16 @@ fn rows_of_a_comment_after_a_brace_indent_with_tabs_to_the_block_body() {
         "void f(void)\n{\n\tif (a) {\n\t\t{ /* Post\n\t\t\t   $(dir) */\n\t\t}\n\t}\n\t{ /* q\n\t\t   r */\n\t}\n}\n",
     );
 }
+
+#[test]
+fn define_parameters_indent_after_parens() {
+    check(
+        "#define G(type, short_type,\t\t\t\\\n    lg_size)\t\t\t\t\t\t\\\ntypedef struct {\t\t\t\t\t\t\t\\\n    type repr;\t\t\t\t\t\t\t\\\n} atomic_##short_type##_t;\n",
+        &[
+            "--style=java",
+            "--indent-preproc-define",
+            "--indent-after-parens",
+        ],
+        "#define G(type, short_type,\t\t\t\\\n    lg_size)\t\t\t\t\t\t\\\ntypedef struct {\t\t\t\t\t\t\t\\\n    type repr;\t\t\t\t\t\t\t\\\n} atomic_##short_type##_t;\n",
+    );
+}
