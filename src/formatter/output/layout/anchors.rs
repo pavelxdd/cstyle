@@ -4850,7 +4850,15 @@ impl FormatEngine<'_> {
             chained += 1;
         }
         let header = outer;
-        let line = self.line_led_by(header)?;
+        // A dangling `else` stands by the line of its `if`.
+        let line = if matches!(&tokens[header], Token::Word(word) if word == "else")
+            && self.is_dangling_else(header)
+            && let Some(if_token) = self.tree.statements.if_of_else(header)
+        {
+            self.line_led_by(if_token)?
+        } else {
+            self.line_led_by(header)?
+        };
         // `else while (x)` nests two headers on one line; `else if` is one.
         let nested = !matches!(&tokens[header], Token::Word(word) if word == "if")
             && self

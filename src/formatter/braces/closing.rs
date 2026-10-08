@@ -691,7 +691,12 @@ impl FormatEngine<'_> {
                     );
         }
         match next {
-            Some(Token::Word(word)) if word == "else" || word == "catch" => true,
+            // An else's block ends its chain; an `else` after it belongs to
+            // an `if` outside the body.
+            Some(Token::Word(word)) if word == "else" => {
+                self.layout.nesting.last_closed_brace_header.as_deref() != Some("else")
+            }
+            Some(Token::Word(word)) if word == "catch" => true,
             Some(Token::Word(word)) if word == "while" => {
                 self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
             }

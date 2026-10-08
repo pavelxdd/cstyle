@@ -6346,3 +6346,17 @@ fn braces_added_to_an_else_body_after_a_comment_stand_at_the_else() {
         "void f(void)\n{\n    if (a)\n    { x = 1; }\n    else\n        // c2\n    { x = 2; }\n}\n",
     );
 }
+
+#[test]
+fn an_else_after_an_else_block_takes_the_body_level_of_its_if() {
+    let input = "void f(void)\n{\n    if (o)\n        if (l) {\n            s = 1;\n        } else {\n            s = 2;\n        } else\n        s = 3;\n    x();\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_after_a_dangling_else_stands_in_its_body() {
+    let input = "void f(void)\n{\n    if (o)\n        if (l)\n            /*\n             */\n        {\n            s = 1;\n        } else\n            /*\n             */\n        {\n            s = 2;\n        } else\n        /*\n         * c\n         */\n    {\n        s = 3;\n    }\n}\n";
+    for style in ["--style=1tbs", "--style=kr", "--style=linux"] {
+        check(input, &[style], input);
+    }
+}

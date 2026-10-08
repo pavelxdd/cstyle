@@ -1217,10 +1217,16 @@ impl FormatEngine<'_> {
     fn record_header_frame(&mut self, word: &str) {
         let attached_closing_indent =
             (word == "else" && self.current.trimmed_start().starts_with('}')).then(|| {
-                self.layout.frame_stack.last_closed_brace().map_or_else(
-                    || self.current_line_indent_spaces(),
-                    |frame| frame.sibling_indent_column,
-                )
+                let closed = self.layout.frame_stack.last_closed_brace();
+                // After an else's block, an `else` belongs to the braceless
+                // `if` around that chain.
+                closed
+                    .filter(|frame| frame.header.as_deref() == Some("else"))
+                    .and_then(|_| self.layout.frame_stack.active_braceless_header())
+                    .filter(|frame| frame.can_match_else)
+                    .map(|frame| frame.header_indent_spaces)
+                    .or_else(|| closed.map(|frame| frame.sibling_indent_column))
+                    .unwrap_or_else(|| self.current_line_indent_spaces())
             });
         // Only an `else` right after the closing brace pairs with that block.
         let follows_closing_brace = self.current.trimmed_start().starts_with('}')
