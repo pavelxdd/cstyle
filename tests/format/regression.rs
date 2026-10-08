@@ -7055,3 +7055,18 @@ fn lisp_aligns_a_while_continuation_on_the_line_its_closer_joins() {
         "void f(void) {\n    do {\n        n--; } while (n &&\n                  base[n - 1] != '/');\n    do {\n        n--; } while (\n        n > 0\n    ); }\n",
     );
 }
+
+#[test]
+fn a_block_head_directly_in_a_switch_body_stands_at_the_case_body() {
+    let input = "void f(void)\n{\n  switch( iSub ){\n    CASE(0, \"x\") {\n      int n;\n      break;\n    }\n  }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch( iSub )\n        {\n            CASE(0, \"x\")\n                {\n                int n;\n                break;\n                }\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    switch( iSub )\n        {\n            CASE(0, \"x\")\n                {\n                int n;\n                break;\n                }\n        }\n}\n",
+    );
+}

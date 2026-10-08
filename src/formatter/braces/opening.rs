@@ -739,11 +739,24 @@ impl FormatEngine<'_> {
                     let code = &self.output.code_of(line);
                     code.matches('(').count() as isize - code.matches(')').count() as isize
                 };
-                lines
-                    .iter()
-                    .rposition(|line| !line.trimmed().is_empty())
-                    .filter(|&index| paren_balance(&lines[index]) < 0)
-                    .map_or(frame.header_indent_column, |mut index| {
+                let head = lines.iter().rposition(|line| !line.trimmed().is_empty());
+                // The head's row may have moved after the frame took its column.
+                let header_column = head
+                    .map(|index| &lines[index])
+                    .filter(|line| {
+                        let code = self.output.code_trimmed_of(line);
+                        code.trimmed_start()
+                            .starts_with(|ch: char| ch.is_alphabetic() || ch == '_')
+                            && !code.ends_with_any(b";{}")
+                            && paren_balance(line) == 0
+                    })
+                    .map_or(frame.header_indent_column, |line| {
+                        frame
+                            .header_indent_column
+                            .max(leading_visual_width(line, self.options.tab_width))
+                    });
+                head.filter(|&index| paren_balance(&lines[index]) < 0)
+                    .map_or(header_column, |mut index| {
                         let mut balance = paren_balance(&lines[index]);
                         while balance < 0 && index > 0 {
                             index -= 1;

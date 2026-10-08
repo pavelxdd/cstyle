@@ -1546,12 +1546,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let frame = self
-            .layout
-            .frame_stack
-            .active_brace()
-            .filter(|frame| frame.header.as_deref() == Some("switch"))?;
-        Some(frame.body_indent_column + self.options.indent_width)
+        let mut frame = self.layout.frame_stack.active_brace()?;
+        // The head of a block a pushed `{` breaks off stands in the block
+        // around it.
+        if frame.header.is_none()
+            && self
+                .current
+                .active_token()
+                .is_some_and(|index| matches!(self.tree.tokens[index], Token::Symbol('{')))
+        {
+            frame = self.layout.frame_stack.enclosing_brace()?;
+        }
+        (frame.header.as_deref() == Some("switch"))
+            .then(|| frame.body_indent_column + self.options.indent_width)
     }
 
     pub(crate) fn case_body_indent_extra(&self, line_kind: LineKind) -> usize {
