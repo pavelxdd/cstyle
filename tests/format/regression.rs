@@ -6884,3 +6884,21 @@ fn arguments_after_a_line_leading_assignment_stand_past_its_level() {
         "void f(void)\n{\n    if (x) {\n        commit_reflog->reflogs->short_ref\n            = refs_shorten_unambiguous_ref(get_main_ref_store(the_repository),\n                    commit_reflog->reflogs->ref,\n                    0);\n    }\n}\n",
     );
 }
+
+#[test]
+fn unpadding_keeps_the_gap_after_a_declarators_star() {
+    check(
+        "typedef struct {\n    ngx_str_t             name;\n    void               *(*create_conf)(ngx_cycle_t *cycle);\n} ngx_core_module_t;\nstatic char *        (*real_fgets)(char *, int, FILE *);\nint x = a *  (b + c);\n",
+        &["--style=java", "--unpad-paren", "--align-pointer=type"],
+        "typedef struct {\n    ngx_str_t             name;\n    void*               (*create_conf)(ngx_cycle_t* cycle);\n} ngx_core_module_t;\nstatic char*         (*real_fgets)(char*, int, FILE*);\nint x = a * (b + c);\n",
+    );
+}
+
+#[test]
+fn a_block_argument_closer_indents_with_tabs() {
+    check(
+        "void f(void)\n{\n  M(handle, {\n    /* NOP */\n    g(1);\n  });\n}\n",
+        &["--style=whitesmith", "--indent=tab=8"],
+        "void f(void)\n\t{\n\tM(handle,\n\t\t{\n\t\t/* NOP */\n\t\tg(1);\n\t\t});\n\t}\n",
+    );
+}

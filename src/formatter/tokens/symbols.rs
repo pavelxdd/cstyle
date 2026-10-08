@@ -379,6 +379,13 @@ impl FormatEngine<'_> {
             // Unpadding takes the space out from after a bracket.
             self.trim_current_end();
         } else if self.options.unpad_parens
+            && self.layout.previous == PreviousToken::Operator
+            && self.current.ends_with_any(b" \t")
+            && self.current.trimmed_end().ends_with_any(b"*&^")
+            && self.looks_like_pointer_declaration_context()
+        {
+            // Unpadding keeps the whitespace after a declarator's star.
+        } else if self.options.unpad_parens
             && matches!(
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma
