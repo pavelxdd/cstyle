@@ -2751,7 +2751,27 @@ impl FormatEngine<'_> {
                 continue;
             }
             let formatted = if self.options.strip_comment_prefix {
-                strip_block_comment_line(self.options, line, index == 0, opener_prefix, trim_amount)
+                // An opener that runs in after a lone brace keeps its gap.
+                if index == 0
+                    && matches!(
+                        self.options.brace_style,
+                        BraceStyle::Horstmann | BraceStyle::Pico
+                    )
+                    && self
+                        .output
+                        .last()
+                        .is_some_and(|brace| brace.trimmed() == "{")
+                {
+                    format!("{opener_prefix}{}", line.trimmed_end())
+                } else {
+                    strip_block_comment_line(
+                        self.options,
+                        line,
+                        index == 0,
+                        opener_prefix,
+                        trim_amount,
+                    )
+                }
             } else if index == 0 {
                 format!("{opener_prefix}{}", line.trimmed_end())
             } else {

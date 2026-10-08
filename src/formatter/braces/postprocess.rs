@@ -415,13 +415,7 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             loop {
                 let next = input[at];
                 let fill = horstmann_run_in_fill(&brace, next, options);
-                let next = next.trimmed_start();
-                let next = if options.strip_comment_prefix {
-                    next.strip_prefix("/*  ")
-                        .map_or_else(|| next.to_string(), |rest| format!("/* {rest}"))
-                } else {
-                    next.to_string()
-                };
+                let next = next.trimmed_start().to_string();
                 joined.push_str(&fill);
                 // A nested brace runs into its block comment as a brace
                 // leading the row does.

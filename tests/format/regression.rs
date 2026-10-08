@@ -7033,3 +7033,16 @@ fn added_braces_skip_headers_in_a_block_inside_parens() {
         "void f(void)\n{\n    foo(a, {\n        if (x)\n            free(b);\n    });\n}\n",
     );
 }
+
+#[test]
+fn a_comment_run_in_after_a_brace_keeps_its_opener_gap_when_stripping_prefixes() {
+    check(
+        "int f(int rc)\n{\n  /* If the db handle must hold the mutex here.\n  ** Otherwise the read is unsafe.\n  */\n  return rc;\n}\n",
+        &[
+            "--style=horstmann",
+            "--indent=spaces=8",
+            "--remove-comment-prefix",
+        ],
+        "int f(int rc)\n{       /* If the db handle must hold the mutex here.\n        ** Otherwise the read is unsafe.\n        */\n        return rc;\n}\n",
+    );
+}
