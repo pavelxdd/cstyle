@@ -1981,6 +1981,8 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(crate::formatter::structure::blocks::is_code_token);
         self.observe_block_spacing_one_line_block(brace_type, holds_no_code);
+        // A paren's outside pad went before the block, not after it.
+        self.pad_close_paren_pending = false;
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }

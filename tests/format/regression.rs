@@ -7010,3 +7010,12 @@ fn a_conditional_inside_a_function_head_keeps_its_parameters_declarations() {
         "static void\n#if defined(__GNUC__) && __GNUC__ >= 11\n__attribute__((access(none, 2)))\n#endif\nhash_table_del(hashTable *tbl, void *ptr)\n{\n    return;\n}\nstatic void\n__attribute__((access(none, 2)))\nhash_table_del2(hashTable *tbl, void *ptr)\n{\n    return;\n}\n",
     );
 }
+
+#[test]
+fn a_compound_literal_closes_its_paren_unpadded() {
+    check(
+        "void f(void)\n{\n    g(c, (struct timeval) {.tv_sec = 0, .tv_usec = 500000});\n    h((int[]) {1, 2});\n}\n",
+        &["--style=kr", "--pad-paren-out"],
+        "void f (void)\n{\n    g (c, (struct timeval) {.tv_sec = 0, .tv_usec = 500000});\n    h ( (int[]) {1, 2});\n}\n",
+    );
+}
