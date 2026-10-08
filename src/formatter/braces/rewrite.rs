@@ -26,8 +26,8 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
-    unmatched_open_paren_column,
+    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, line_ends_with_comment,
+    preprocessor_directive, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -1342,6 +1342,18 @@ impl FormatEngine<'_> {
                 self.finish_line();
             }
             self.layout.continuation_indent.set_next_line_level(indent);
+            // The brace stands at its header's line, wherever a case block
+            // put that line.
+            if !indented_brace
+                && let Some(header) = self.output.last()
+                && !header.trimmed().is_empty()
+                && !has_hash_outside_literals(header)
+            {
+                let spaces = leading_visual_width(header, self.options.tab_width)
+                    + self.case_unindent_spaces();
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            }
         }
         // Only a style attaching other braces breaks a one-line enum.
         if brace_type == BraceType::Enum

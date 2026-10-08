@@ -8,6 +8,7 @@ use crate::formatter::output::buffer::LookBack;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, advance_quoted_literal, is_comment_line, preprocessor_directive,
@@ -2300,7 +2301,10 @@ impl FormatEngine<'_> {
                     || matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk),
             );
             header_column + brace_extra * self.options.indent_width
-        } else if line_start.starts_with('{') {
+        } else if line_start.starts_with('{')
+            && (self.brace_frame_awaits_line || self.brace_follows_case_label())
+        {
+            // Only the case's own brace stands at its label.
             frame.sibling_indent_column
         } else if frame.nested_case_label {
             frame.header_indent_column + 2 * self.options.indent_width
@@ -2321,6 +2325,33 @@ impl FormatEngine<'_> {
         Some(CaseBlockBodyLayout {
             exact_indent_spaces,
         })
+    }
+
+    /// Whether the brace leading the line being laid out comes right after
+    /// a case label's colon.
+    fn brace_follows_case_label(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(colon) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.previous_code_token(span.first))
+        else {
+            return true;
+        };
+        matches!(tokens[colon], Token::Symbol(':'))
+            && self
+                .output
+                .line_with_token(colon)
+                .and_then(|line| self.output.line_tokens(line))
+                .and_then(|span| next_code_token(tokens, span.first))
+                .is_some_and(|first| {
+                    let first = if matches!(tokens[first], Token::Symbol('}')) {
+                        next_code_token(tokens, first + 1).unwrap_or(first)
+                    } else {
+                        first
+                    };
+                    matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
+                })
     }
 
     pub(crate) fn switch_case_frame_closing_indent_override(

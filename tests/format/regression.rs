@@ -6813,3 +6813,30 @@ fn a_comment_after_a_whitesmith_case_block_closer_spares_a_level() {
         "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n                } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn an_enum_brace_in_a_case_block_stands_at_its_header() {
+    check(
+        "void f(void)\n{\n    switch (c)\n    {\n    case 1:\n    {\n        g();\n        enum E\n        { A, B };\n        g();\n    }\n    }\n}\n",
+        &["--style=allman"],
+        "void f(void)\n{\n    switch (c)\n    {\n    case 1:\n    {\n        g();\n        enum E\n        { A, B };\n        g();\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_run_in_enum_brace_in_a_case_block_stands_at_its_header() {
+    check(
+        "void f(void)\n{   switch( choice )\n    {   case 1:\n        {   g();\n            enum E\n            {   A, B };\n            g(); } } }\nenum X\n{ A, B };\nvoid h(void)\n{\n    enum Y\n    { C, D } y;\n}\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch( choice )\n    {   case 1:\n        {   g();\n            enum E\n            {   A, B };\n            g(); } } }\nenum X\n{ A, B };\nvoid h(void)\n{   enum Y\n    { C, D } y; }\n",
+    );
+}
+
+#[test]
+fn a_case_brace_after_a_comment_stands_at_its_label() {
+    check(
+        "void f(int c)\n{\n    switch (c)\n    {\n    default:\n        /* note */\n    {\n        g();\n    }\n    }\n}\n",
+        &["--style=kr"],
+        "void f(int c)\n{\n    switch (c) {\n    default:\n        /* note */\n    {\n        g();\n    }\n    }\n}\n",
+    );
+}
