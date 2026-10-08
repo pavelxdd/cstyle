@@ -168,6 +168,17 @@ impl FormatEngine<'_> {
         if self.take_block_spacing_blank(&line) {
             self.push_empty_line();
         }
+        // A file scope block astyle indents sets each of its rows at the
+        // block's level.
+        let line = if self.preprocessor.group_blocks.contains(&true) && !line.trimmed().is_empty() {
+            format!(
+                "{}{}",
+                self.options.indent_prefix(self.layout.indentation.indent()),
+                line.trimmed_start()
+            )
+        } else {
+            line
+        };
         // As a routed comment row does, a comment right after an `else`
         // makes what follows the else's braceless body; one after a blank
         // line has its split else.

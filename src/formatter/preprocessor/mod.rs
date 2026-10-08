@@ -305,7 +305,7 @@ impl BlockBreakers {
                         {
                             breakers.unbalanced_conditions.push(index);
                         }
-                        Some("define") if line.lines().count() > 1 => {
+                        Some("define") if define_continues(line) => {
                             breakers.continued_defines.push(index);
                         }
                         _ => {}
@@ -456,7 +456,7 @@ fn is_indentable_preprocessor_block(
                     }
                     Some("define")
                         if depth > 0
-                            && line.lines().count() > 1
+                            && define_continues(line)
                             && (potential_header_guard || !saw_endif_hash_line) =>
                     {
                         return false;
@@ -490,6 +490,16 @@ fn is_indentable_preprocessor_block(
         return false;
     }
     true
+}
+
+/// Whether a `#define` goes on past its line: astyle reads only a
+/// backslash ending it, not a comment it opens.
+fn define_continues(line: &str) -> bool {
+    line.lines().nth(1).is_some()
+        && line
+            .lines()
+            .next()
+            .is_some_and(|first| first.ends_with('\\'))
 }
 
 fn line_has_hash_after(tokens: &[Token], start: usize) -> bool {
@@ -882,7 +892,8 @@ impl FormatEngine<'_> {
         } else if index > 0 && indent_continued_conditional {
             Some(self.conditional_continuation_indent(open_paren_columns))
         } else if index > 0
-            && indent_continued_block_conditional
+            && (indent_continued_block_conditional
+                || !backslash_continued && self.preprocessor.group_blocks.contains(&true))
             && self.preprocessor.indented_block_stack.last() == Some(&true)
         {
             Some(PreprocessorLineIndent::Level(
@@ -1270,7 +1281,7 @@ impl FormatEngine<'_> {
                     // At file scope astyle indents a block's lines by the
                     // block alone, a statement they continue or not.
                     let file_scope = self.layout.indentation.indent() == 0;
-                    group_block = file_scope && self.layout.nesting.paren_depth > 0;
+                    group_block = file_scope;
                     self.layout.indentation.enter_block();
                     if file_scope {
                         suspended = self

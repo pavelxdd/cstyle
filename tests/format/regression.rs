@@ -6853,3 +6853,12 @@ fn an_asm_statement_stays_unbroken_past_the_maximum_length() {
         "static inline int64_t xchg(int64_t* field, int64_t value) {\n    int64_t result = 0;\n    asm volatile (\"lock; xchgq %1, %2\" : \"=r\" (result), \"+q\" (value), \"+m\" (*field));\n    return result;\n}\n",
     );
 }
+
+#[test]
+fn rows_of_a_file_scope_preprocessor_block_stand_at_its_level() {
+    check(
+        "#include \"a.h\"\n#ifdef X\n/*\n * comment\n *   more\n */\nint f(int a, int b);\n/* one\n   two */\nint x = 1 +\n        2;\n#define Y 1 /* a\n             b */\nint g(void); /* t\n                c */\n#endif\n",
+        &["--style=kr", "--indent-preproc-block"],
+        "#include \"a.h\"\n#ifdef X\n    /*\n    * comment\n    *   more\n    */\n    int f(int a, int b);\n    /* one\n    two */\n    int x = 1 +\n    2;\n    #define Y 1 /* a\n    b */\n    int g(void); /* t\n    c */\n#endif\n",
+    );
+}
