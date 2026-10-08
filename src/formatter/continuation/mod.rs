@@ -22,7 +22,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, is_comment_line, is_comment_only_line, line_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1667,6 +1667,18 @@ impl FormatEngine<'_> {
             return None;
         }
         let column = array_bound_operator_column(line)?;
+        // Indenting after parens stacks a subscript's bracket as a paren.
+        if self.options.indent_after_parens {
+            unmatched_open_bracket_column(line)?;
+            let continuation = self.options.continuation_indent * self.options.indent_width;
+            let previous = self
+                .layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .or_else(|| self.assignment_continuation_indent_spaces())
+                .unwrap_or_else(|| self.current_line_indent_spaces() + continuation);
+            return Some(previous + continuation);
+        }
         // Past the maximum it continues two levels in, as a paren does.
         Some(
             self.current_line_indent_spaces()

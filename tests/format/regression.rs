@@ -6965,3 +6965,12 @@ fn a_closer_after_a_comment_only_block_closes_an_empty_block() {
         "void f(void) {\n    while( x ) {\n        if( a ) {\n            if( b ) {\n                g();\n\n            } else {\n                /* ignore */\n            }\n        } else\n            break;\n\n        k();\n    }\n}\n",
     );
 }
+
+#[test]
+fn indenting_after_parens_stacks_a_subscript_bracket() {
+    check(
+        "void f(void)\n{\n    if (x) {\n        if (y) {\n            memset(&decay->backlog[SMOOTHSTEP_NSTEPS -\n                nadvance_z], 0, (nadvance_z-1) * sizeof(size_t));\n            a = b[c +\n                d];\n            g(h[i -\n                j]);\n        }\n    }\n}\n",
+        &["--style=java", "--indent-after-parens"],
+        "void f(void) {\n    if (x) {\n        if (y) {\n            memset(&decay->backlog[SMOOTHSTEP_NSTEPS -\n                    nadvance_z], 0, (nadvance_z-1) * sizeof(size_t));\n            a = b[c +\n                    d];\n            g(h[i -\n                    j]);\n        }\n    }\n}\n",
+    );
+}

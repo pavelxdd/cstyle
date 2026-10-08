@@ -315,7 +315,7 @@ impl FormatEngine<'_> {
     pub(super) fn array_bound_operator_output_indent_spaces(&self) -> Option<usize> {
         let previous = self.output.last()?;
         let trimmed = previous.trimmed_end();
-        if !head_ends_binary_operator(trimmed) {
+        if self.options.indent_after_parens || !head_ends_binary_operator(trimmed) {
             return None;
         }
         let column = array_bound_operator_column(trimmed)?;
