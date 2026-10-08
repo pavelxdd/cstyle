@@ -9,6 +9,7 @@ use crate::formatter::structure::blocks::{
 };
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
 use crate::formatter::syntax::language::{is_header, is_non_type_keyword};
+use crate::formatter::text::line_scan::preprocessor_directive;
 
 /// A function declaration or definition at file, namespace, `extern "C"`,
 /// or class scope.
@@ -141,8 +142,13 @@ impl Functions {
 /// head never continues across one.
 fn previous_head_token(tokens: &[Token], before: usize) -> Option<usize> {
     for index in (0..before).rev() {
-        match tokens[index] {
+        match &tokens[index] {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
+            // Conditionals around part of a head leave it whole.
+            Token::Preprocessor(directive)
+                if preprocessor_directive(&directive.text).is_some_and(|name| {
+                    matches!(name, "if" | "ifdef" | "ifndef" | "elif" | "else" | "endif")
+                }) => {}
             Token::Preprocessor(_) => return None,
             // An escaped newline continues the head.
             Token::Symbol('\\') => {}

@@ -6992,3 +6992,21 @@ fn declarators_after_a_tab_align_past_its_stop() {
         "void f(void)\n{\n    u_int\twidth_left, width_centre, width_right,\n            width_abs_centre;\n    int\tx, y,\n        z;\n}\n",
     );
 }
+
+#[test]
+fn run_in_braces_leave_inline_functions_broken() {
+    check(
+        "class E\n{\n    void finish()\n    {\n        x();\n    }\n};\n",
+        &["--style=horstmann", "--attach-inlines"],
+        "class E\n{   void finish()\n    {   x();\n    }\n};\n",
+    );
+}
+
+#[test]
+fn a_conditional_inside_a_function_head_keeps_its_parameters_declarations() {
+    check(
+        "static void\n#if defined(__GNUC__) && __GNUC__ >= 11\n__attribute__((access(none, 2)))\n#endif\nhash_table_del(hashTable *tbl, void *ptr)\n{\n    return;\n}\nstatic void\n__attribute__((access(none, 2)))\nhash_table_del2(hashTable *tbl, void *ptr)\n{\n    return;\n}\n",
+        &["--style=kr", "--pad-oper"],
+        "static void\n#if defined(__GNUC__) && __GNUC__ >= 11\n__attribute__((access(none, 2)))\n#endif\nhash_table_del(hashTable *tbl, void *ptr)\n{\n    return;\n}\nstatic void\n__attribute__((access(none, 2)))\nhash_table_del2(hashTable *tbl, void *ptr)\n{\n    return;\n}\n",
+    );
+}

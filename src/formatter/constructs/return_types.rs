@@ -246,6 +246,8 @@ impl FormatEngine<'_> {
         head.has_return_type()
             && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
             && !self.inside_extern_block(head.start)
+            // A conditional inside the head keeps astyle from moving it.
+            && !self.tree.has_directive_in(head.start..head.name_start)
     }
 
     /// Whether `index` is in the block of an `extern "C"`, where astyle

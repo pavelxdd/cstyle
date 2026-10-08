@@ -3185,7 +3185,12 @@ impl FormatEngine<'_> {
         {
             return !self.token_input.token_begins_source_line;
         }
+        // Run-in braces leave inline functions broken.
         if self.options.attach_inline
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            )
             && matches!(
                 brace_type,
                 BraceType::Command
