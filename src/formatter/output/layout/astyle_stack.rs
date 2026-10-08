@@ -732,14 +732,20 @@ impl FormatEngine<'_> {
         {
             return holds;
         }
+        // The header ends at its scope's statement before it; the brace of
+        // that scope, as an `extern "C"` block's, is none of its own.
+        let scope = self.tree.groups.enclosing(open);
         let mut index = open;
         let holds = loop {
             let Some(before) = self.tree.previous_code_token(index) else {
                 break false;
             };
-            if self.tree.groups.enclosing(before).is_none()
+            if self.tree.groups.enclosing(before) == scope
                 && matches!(tokens[before], Token::Symbol(';' | '}'))
             {
+                break false;
+            }
+            if scope.is_some_and(|scope| self.tree.groups.get(scope).open == before) {
                 break false;
             }
             if matches!(tokens[before], Token::Symbol('{')) {

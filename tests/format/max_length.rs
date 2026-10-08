@@ -3111,3 +3111,20 @@ fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
 
     assert_stable_max_length_format(source, &options, expected);
 }
+
+#[test]
+fn split_call_argument_in_an_extern_c_function_keeps_its_column_on_a_second_run() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=google".to_owned(),
+            "--max-code-length=80".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "extern \"C\" {\nXXH_PUBLIC_API XXH3_state_t* XXH3_createState(void)\n{\n    XXH3_state_t* const state = (XXH3_state_t*)XXH_alignedMalloc(sizeof(XXH3_state_t), 64);\n}\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(format_exact(&first, &options), first);
+}
