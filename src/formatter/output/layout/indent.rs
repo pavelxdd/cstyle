@@ -879,7 +879,7 @@ impl FormatEngine<'_> {
         {
             let normal_spaces = normal_indent * width;
             let previous_indent = leading_visual_width(previous, tab_width);
-            if previous_indent > normal_spaces
+            if previous_indent != normal_spaces
                 && !self.line_is_braceless_body(previous_index)
                 && self.layout.frame_stack.active_brace().is_some_and(|frame| {
                     frame.body_indent_column == previous_indent

@@ -1700,7 +1700,7 @@ fn allman_breaks_one_line_member_inside_extern_linkage_block() {
             "extern \"C++\" {\nclass F\n{\npublic:\n    int g() const { return y; }\n};\n}\n",
             &options,
         ),
-        "extern \"C++\" {\n    class F\n    {\n    public:\n        int g() const\n        {\n            return y;\n        }\n    };\n}\n",
+        "extern \"C++\"\n{\n    class F\n    {\n    public:\n        int g() const\n        {\n            return y;\n        }\n    };\n}\n",
     );
 }
 

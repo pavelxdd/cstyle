@@ -6476,3 +6476,27 @@ fn an_argument_after_a_ternary_arm_line_is_no_constructor_initializer() {
         "void f(void)\n{\n    strbuf_addf(&s->buf, \"%c%2d: \", hunk->use == USE_HUNK ? 1\n                : hunk->use == SKIP_HUNK ? 2 : 3,\n                (int)start_index);\n    g(a, b ? 1\n      : 2,\n      c);\n}\n",
     );
 }
+
+#[test]
+fn only_extern_c_keeps_its_brace_where_the_source_put_it() {
+    let input = "extern \"C\" {\nint a(void);\n}\nextern \"C++\" {\nint b(void);\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "extern \"C\" {\n    int a(void);\n}\nextern \"C++\"\n{\n    int b(void);\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "extern \"C\" {\n    int a(void);\n}\nextern \"C++\" {\n    int b(void);\n}\n",
+    );
+}
+
+#[test]
+fn a_whitesmith_block_statement_in_a_case_block_follows_its_sibling() {
+    check(
+        "int f(void)\n{\n  switch(query) {\n    case 1: {\n      for(i = 0; i < n; i++)\n        if(g(i)) {\n          *pres1 = TRUE;\n          return 0;\n        }\n      break;\n    }\n  }\n}\n",
+        &["--style=whitesmith"],
+        "int f(void)\n    {\n    switch(query)\n        {\n        case 1:\n            {\n            for(i = 0; i < n; i++)\n                if(g(i))\n                    {\n                    *pres1 = TRUE;\n                    return 0;\n                    }\n            break;\n            }\n        }\n    }\n",
+    );
+}

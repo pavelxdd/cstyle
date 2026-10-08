@@ -3139,6 +3139,15 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // Only `extern "C"` keeps a brace of its own placing; other
+        // linkages, as `extern "C++"`, take the style's for any block.
+        let brace_type = if brace_type == BraceType::Extern
+            && self.current.contains_from_first_byte("\"C++\"")
+        {
+            BraceType::Command
+        } else {
+            brace_type
+        };
         if brace_type == BraceType::Extern {
             if self.options.attach_extern_c {
                 return true;
