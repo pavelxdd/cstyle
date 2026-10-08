@@ -430,8 +430,9 @@ impl FormatEngine<'_> {
                     leading_visual_width(previous, self.options.tab_width) + "return ".len();
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;
-            } else if let Some(spaces) =
-                constructor_initializer_name_indent_from_line(self.options, previous)
+            } else if self.layout.nesting.paren_depth == 0
+                && let Some(spaces) =
+                    constructor_initializer_name_indent_from_line(self.options, previous)
             {
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;

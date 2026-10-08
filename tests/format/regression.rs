@@ -6467,3 +6467,12 @@ fn the_while_of_a_do_run_in_after_an_else_stands_at_the_else_body() {
         "void f(void)\n{\n    if (k)\n        x();\n    else do\n            *x1++ = *x++;\n        while(x < xe);\n    y();\n}\n",
     );
 }
+
+#[test]
+fn an_argument_after_a_ternary_arm_line_is_no_constructor_initializer() {
+    check(
+        "void f(void)\n{\n	strbuf_addf(&s->buf, \"%c%2d: \", hunk->use == USE_HUNK ? 1\n		    : hunk->use == SKIP_HUNK ? 2 : 3,\n		    (int)start_index);\n	g(a, b ? 1\n	  : 2,\n	  c);\n}\n",
+        &["--style=kr"],
+        "void f(void)\n{\n    strbuf_addf(&s->buf, \"%c%2d: \", hunk->use == USE_HUNK ? 1\n                : hunk->use == SKIP_HUNK ? 2 : 3,\n                (int)start_index);\n    g(a, b ? 1\n      : 2,\n      c);\n}\n",
+    );
+}
