@@ -1,6 +1,7 @@
 use crate::config::BraceStyle;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::text::columns::leading_visual_width;
@@ -358,25 +359,39 @@ impl FormatEngine<'_> {
         }
         self.update_typedef_function_pointer_frame(line);
         self.observe_formatted_output_comment_frame(line, output_spaces);
-        if matches!(
-            line.trimmed_start(),
-            text if text.starts_with("//")
-                || text.starts_with("/*")
-                || text.starts_with("*/")
-                || text == "*"
-                || text.starts_with("* ")
-                || text.starts_with("*\t")
-        ) && self
+        // A row of code led by a dereference is no comment.
+        let comment_row = self
             .output
-            .scoped()
-            .iter()
-            .rev()
-            .skip(1)
-            .find(|line| !line.trimmed().is_empty())
-            .is_some_and(|previous| {
-                let previous = previous.trimmed();
-                previous.strip_prefix('}').map_or(previous, str::trim_start) == "else"
-            })
+            .len()
+            .checked_sub(1)
+            .and_then(|last| self.output.line_tokens(last))
+            .is_none_or(|span| {
+                (span.first..=span.last)
+                    .map(|index| &self.tree.tokens[index])
+                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                    .is_none_or(|token| matches!(token, Token::Comment(..)))
+            });
+        if comment_row
+            && matches!(
+                line.trimmed_start(),
+                text if text.starts_with("//")
+                    || text.starts_with("/*")
+                    || text.starts_with("*/")
+                    || text == "*"
+                    || text.starts_with("* ")
+                    || text.starts_with("*\t")
+            )
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|previous| {
+                    let previous = previous.trimmed();
+                    previous.strip_prefix('}').map_or(previous, str::trim_start) == "else"
+                })
         {
             let level = output_spaces / self.options.indent_width;
             self.layout.continuation_indent.set_next_line_level(level);

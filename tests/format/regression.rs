@@ -6902,3 +6902,30 @@ fn a_block_argument_closer_indents_with_tabs() {
         "void f(void)\n\t{\n\tM(handle,\n\t\t{\n\t\t/* NOP */\n\t\tg(1);\n\t\t});\n\t}\n",
     );
 }
+
+#[test]
+fn a_dereference_after_else_is_no_comment_row() {
+    check(
+        "static int parse_separator_arg(const struct option *opt, const char *arg,\n\t\t\t       int unset)\n{\n\tif (unset)\n\t\t*(const char **)opt->value = NULL;\n\telse\n\t\t*(const char **)opt->value = arg ? arg : \"\\n\";\n\treturn 0;\n}\n",
+        &["--style=ratliff", "--pad-first-paren-out"],
+        "static int parse_separator_arg (const struct option *opt, const char *arg,\n                                int unset) {\n    if (unset)\n        * (const char **)opt->value = NULL;\n    else\n        * (const char **)opt->value = arg ? arg : \"\\n\";\n    return 0;\n    }\n",
+    );
+}
+
+#[test]
+fn a_member_split_from_its_struct_type_ends_at_its_semicolon() {
+    check(
+        "typedef struct hnswCursor {\n    struct HNSW *index; // Reference to the index of this cursor.\n    hnswNode *current;  // Element to report when hnsw_cursor_next() is called.\n    struct hnswCursor *next; // Next cursor active.\n} hnswCursor;\n",
+        &["--style=allman", "--max-code-length=60"],
+        "typedef struct hnswCursor\n{\n    struct HNSW\n        *index; // Reference to the index of this cursor.\n    hnswNode *current;  // Element to report when hnsw_cursor_next() is called.\n    struct hnswCursor *next; // Next cursor active.\n} hnswCursor;\n",
+    );
+}
+
+#[test]
+fn a_subscript_past_the_maximum_continues_two_levels_in() {
+    check(
+        "LUAI_DATA const char *const luaP_opnames(NUM_OPCODES,\n1);\nLUAI_DATA const char *const luaP_opnames[NUM_OPCODES\n+1];\nvoid f(void)\n{\n    LUAI_DATA const char *const luaP_opnamesxxxxx[NUM_OPCODES\n    +1];\n    x = LUAI_DATA_const_char_const_luaP_opnamesxxxxxxx[NUM_OPCODES\n    +1];\n}\n",
+        &["--style=kr"],
+        "LUAI_DATA const char *const luaP_opnames(NUM_OPCODES,\n        1);\nLUAI_DATA const char *const luaP_opnames[NUM_OPCODES\n        +1];\nvoid f(void)\n{\n    LUAI_DATA const char *const luaP_opnamesxxxxx[NUM_OPCODES\n            +1];\n    x = LUAI_DATA_const_char_const_luaP_opnamesxxxxxxx[NUM_OPCODES\n            +1];\n}\n",
+    );
+}

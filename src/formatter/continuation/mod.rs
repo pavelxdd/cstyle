@@ -1068,13 +1068,20 @@ impl FormatEngine<'_> {
         {
             let indent = self.current_line_indent_spaces();
             let lead = self.current.len() - self.current.trimmed_start().len();
+            let column = indent
+                + visual_width_from(
+                    &self.current[lead..open + 1],
+                    indent,
+                    self.options.tab_width,
+                );
+            // Past the maximum it continues two levels in, as a paren does.
+            let statement_base = self.continuation_base_indent() * self.options.indent_width;
             return ContinuationIndent::Spaces(
-                indent
-                    + visual_width_from(
-                        &self.current[lead..open + 1],
-                        indent,
-                        self.options.tab_width,
-                    ),
+                if column.saturating_sub(statement_base) > self.options.max_continuation_indent {
+                    statement_base + 2 * self.options.indent_width
+                } else {
+                    column
+                },
             );
         }
         if (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
@@ -1659,7 +1666,16 @@ impl FormatEngine<'_> {
         if !head_ends_binary_operator(line) {
             return None;
         }
-        Some(self.current_line_indent_spaces() + array_bound_operator_column(line)?)
+        let column = array_bound_operator_column(line)?;
+        // Past the maximum it continues two levels in, as a paren does.
+        Some(
+            self.current_line_indent_spaces()
+                + if column > self.options.max_continuation_indent {
+                    2 * self.options.indent_width
+                } else {
+                    column
+                },
+        )
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {

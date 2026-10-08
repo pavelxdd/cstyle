@@ -201,11 +201,13 @@ impl FormatEngine<'_> {
             |index| {
                 let trimmed = self.output.trimmed(index);
                 stops(trimmed)
+                    || stops(self.output.code_trimmed_of(&self.output[index]))
                     || matches!(trimmed, "class" | "struct" | "union")
                     || is_split_export_head(trimmed)
             },
         )?;
-        (!stops(self.output.trimmed(index))).then(|| {
+        let trimmed = self.output.trimmed(index);
+        (!stops(trimmed) && !stops(self.output.code_trimmed_of(&self.output[index]))).then(|| {
             leading_visual_width(&self.output[index], self.options.tab_width)
                 + self.options.indent_width
         })

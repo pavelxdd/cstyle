@@ -725,7 +725,14 @@ fn continuation_indent_for_split(
         .is_some_and(|(open, at)| open == '[' && !head[..at].contains(']'))
         && let Some(column) = array_bound_operator_column(head)
     {
-        return Some(ContinuationIndent::Spaces(base_indent_width + column));
+        return Some(ContinuationIndent::Spaces(
+            base_indent_width
+                + if column > max_continuation_indent {
+                    indent_width * 2
+                } else {
+                    column
+                },
+        ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
     if let Some(spaces) = lambda_parameter_continuation_indent(

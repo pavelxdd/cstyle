@@ -318,7 +318,15 @@ impl FormatEngine<'_> {
         if !head_ends_binary_operator(trimmed) {
             return None;
         }
-        array_bound_operator_column(trimmed)
+        let column = array_bound_operator_column(trimmed)?;
+        let lead = leading_visual_width(previous, self.options.tab_width);
+        Some(
+            if column.saturating_sub(lead) > self.options.max_continuation_indent {
+                lead + 2 * self.options.indent_width
+            } else {
+                column
+            },
+        )
     }
 
     pub(crate) fn adjusted_line_indent_delta(&self, adjusted: &str) -> usize {
