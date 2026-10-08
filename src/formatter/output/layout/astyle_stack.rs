@@ -484,7 +484,20 @@ impl FormatEngine<'_> {
             let starts_line = line != Some(token_line);
             if starts_line {
                 line = Some(token_line);
-                replay.line_space = replay.stack.last().copied().unwrap_or(0);
+                // A line an assignment leads, continuing the statement past
+                // nothing registered, stands a continuation in.
+                let leading_assignment = index != start
+                    && matches!(token, Token::Operator(operator) if operator.ends_with('=')
+                        && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="));
+                replay.line_space = replay
+                    .stack
+                    .last()
+                    .copied()
+                    .unwrap_or(if leading_assignment {
+                        self.options.continuation_indent * self.options.indent_width
+                    } else {
+                        0
+                    });
                 replay.assigned_this_line = false;
             }
             let relative = |index: usize| -> Option<usize> {

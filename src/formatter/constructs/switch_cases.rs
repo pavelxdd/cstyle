@@ -2030,7 +2030,10 @@ impl FormatEngine<'_> {
         let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();
         let indent =
             if starts_header_word(after_brace, "case") || after_brace.starts_with("default:") {
-                self.layout.indentation.indent().saturating_sub(1)
+                self.layout
+                    .indentation
+                    .indent()
+                    .saturating_sub(usize::from(!self.options.indent_switches))
             } else {
                 self.layout.indentation.indent() + 1
             };

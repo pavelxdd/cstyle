@@ -6862,3 +6862,25 @@ fn rows_of_a_file_scope_preprocessor_block_stand_at_its_level() {
         "#include \"a.h\"\n#ifdef X\n    /*\n    * comment\n    *   more\n    */\n    int f(int a, int b);\n    /* one\n    two */\n    int x = 1 +\n    2;\n    #define Y 1 /* a\n    b */\n    int g(void); /* t\n    c */\n#endif\n",
     );
 }
+
+#[test]
+fn a_closer_led_case_label_kept_on_its_line_stands_at_the_labels() {
+    check(
+        "void f(int c)\n{\n\tswitch (c) {\n\tcase 1: {\n\t\tg();\n\t\tbreak;\n\t} case 3: {\n\t\th();\n\t\tbreak;\n\t} default:\n\t\tbreak;\n\t}\n}\n",
+        &[
+            "--style=gnu",
+            "--keep-one-line-statements",
+            "--indent-switches",
+        ],
+        "void f(int c)\n{\n    switch (c)\n        {\n            case 1:\n            {\n                g();\n                break;\n            } case 3:\n            {\n                h();\n                break;\n            } default:\n                break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn arguments_after_a_line_leading_assignment_stand_past_its_level() {
+    check(
+        "void f(void)\n{\n\tif (x) {\n\t\tcommit_reflog->reflogs->short_ref\n\t\t\t= refs_shorten_unambiguous_ref(get_main_ref_store(the_repository),\n\t\t\t\t\t\t\tcommit_reflog->reflogs->ref,\n\t\t\t\t\t\t\t0);\n\t}\n}\n",
+        &["--style=stroustrup", "--indent-after-parens"],
+        "void f(void)\n{\n    if (x) {\n        commit_reflog->reflogs->short_ref\n            = refs_shorten_unambiguous_ref(get_main_ref_store(the_repository),\n                    commit_reflog->reflogs->ref,\n                    0);\n    }\n}\n",
+    );
+}
