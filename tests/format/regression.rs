@@ -6388,3 +6388,50 @@ fn braces_in_a_split_else_inside_case_blocks_stand_at_their_headers() {
         check(input, &["--style=pico"], input);
     }
 }
+
+#[test]
+fn an_else_after_one_line_blocks_ignores_an_earlier_closed_block() {
+    let input = "void f(void)\n{   if( a )\n    {   if( g ) l();\n        s(); }\n    else\n\n        /*\n        ** b\n        */\n        if( b )\n        {   y(); }\n        else\n\n            /*\n            ** c\n            */\n            if( c )\n            {   z(); }\n    v(); }\n";
+    check(input, &["--style=pico"], input);
+}
+
+#[test]
+fn brace_rows_of_a_nested_compound_literal_stand_at_its_first_row() {
+    check(
+        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\"\n                },\n                {   .name = \"x\"\n                },\n                {0}\n            }\n        }\n    }\n};\n",
+        &["--style=horstmann"],
+        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\"\n                },\n                {   .name = \"x\"\n                },\n                {0}\n            }\n        }\n    }\n};\n",
+    );
+    check(
+        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\" },\n                {   .name = \"x\" },\n                {0 } } } } };\n",
+        &["--style=pico"],
+        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\" },\n                {   .name = \"x\" },\n                {0 } } } } };\n",
+    );
+}
+
+#[test]
+fn a_column_one_comment_after_a_case_block_stands_in_the_case_body() {
+    check(
+        "void f(int op)\n{\n  switch( op ){\n    case 1: {\n      a();\n      break;\n    }\n\n/* c1\n** c2 */\n#if defined(X)\n    case 2: {\n      b();\n      break;\n    }\n#endif\n  }\n}\n",
+        &["--style=pico"],
+        "void f(int op)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break; }\n\n            /* c1\n            ** c2 */\n#if defined(X)\n        case 2:\n        {   b();\n            break; }\n#endif\n    } }\n",
+    );
+}
+
+#[test]
+fn a_statement_after_a_comment_in_a_case_block_stands_in_the_block() {
+    check(
+        "void f(int op)\n{\n  switch( op ){\n    case 1: {\n      a();\n      break;\n    }\n    case 2: {\n      /* c1\n      ** c2\n      */\n      b(x,\n        y);\n      break;\n    }\n  }\n}\n",
+        &["--style=horstmann"],
+        "void f(int op)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break;\n        }\n        case 2:\n        {   /* c1\n            ** c2\n            */\n            b(x,\n              y);\n            break;\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_directive_follows_the_comment_before_it() {
+    check(
+        "void f(void) {\n    switch(c) {\n    case 1: {\n        int i;\n        for(i=2; i<objc; i++) {\n            /* a */\n#ifdef T\n            /* b\n            **\n            */\n            if( x ) {\n                i++; }\n            else\n\n                /* c\n                */\n                if( y ) {\n                    z(); }\n#endif\n        }\n        break; } } }\n",
+        &["--style=lisp"],
+        "void f(void) {\n    switch(c) {\n    case 1: {\n        int i;\n        for(i=2; i<objc; i++) {\n            /* a */\n#ifdef T\n            /* b\n            **\n            */\n            if( x ) {\n                i++; }\n            else\n\n                /* c\n                */\n                if( y ) {\n                    z(); }\n#endif\n        }\n        break; } } }\n",
+    );
+}

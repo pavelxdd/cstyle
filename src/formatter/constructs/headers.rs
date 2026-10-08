@@ -8,7 +8,7 @@ use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, tokenize};
 use crate::formatter::preprocessor::is_conditional_preprocessor;
-use crate::formatter::state::frame::{BraceSemanticKind, HeaderFrame};
+use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind, HeaderFrame};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
@@ -1235,12 +1235,20 @@ impl FormatEngine<'_> {
                     .output
                     .last_line_outside_comment()
                     .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('}'));
+        // A block kept on one line records no frame; the last closed one
+        // counts only when its brace ended the line before.
+        let closed_on_previous_line = |frame: &BraceFrame| {
+            self.current.trimmed_start().starts_with('}')
+                || frame.close_output_line.is_none()
+                || frame.close_output_line == self.output.last_non_empty_index()
+        };
         let closed_if_indent = (word == "else" && follows_closing_brace)
             .then(|| {
                 self.layout
                     .frame_stack
                     .last_closed_brace()
                     .filter(|frame| frame.header.as_deref() == Some("if"))
+                    .filter(|frame| closed_on_previous_line(frame))
                     .map(|frame| {
                         // The `if` of a broken else-if stands a level past
                         // the column its frame recorded; its body holds it.

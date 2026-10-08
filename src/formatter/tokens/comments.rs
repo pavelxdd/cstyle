@@ -471,12 +471,19 @@ impl FormatEngine<'_> {
                 self.push_raw_comment_output_line(trimmed);
             }
             // The line after a comment closes at the column the comment opened.
+            // A comment leading its line counts from the line as published,
+            // which the case unindent already moved.
             let next_indent = closes_standalone_block_comment.then(|| {
-                frame_column.unwrap_or_else(|| {
-                    self.output
-                        .comment_indent_width(self.output.len() - 1, self.options.tab_width)
-                }) + self.layout.line_adjuster.total_case_unindent_depth()
-                    * self.options.indent_width
+                let last = self.output.len() - 1;
+                let opener = self.output.comment_start_index(last);
+                frame_column
+                    .filter(|_| !self.output[opener].trimmed_start().starts_with("/*"))
+                    .unwrap_or_else(|| {
+                        self.output
+                            .comment_indent_width(last, self.options.tab_width)
+                    })
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
             });
             if close_paren_ends_declaration {
                 self.comments
@@ -1723,8 +1730,17 @@ impl FormatEngine<'_> {
                     };
                     base.max(previous_indent)
                 } else {
+                    // After a case block the comment stands in the case body.
+                    let case_body = self
+                        .layout
+                        .frame_stack
+                        .last_closed_brace()
+                        .filter(|frame| frame.case_block)
+                        .and_then(|_| self.active_case_label_indent_spaces())
+                        .map_or(0, |label| label + self.options.indent_width);
                     (self.layout.indentation.indent() * self.options.indent_width)
                         .max(previous_indent)
+                        .max(case_body)
                 }
             })
         })
@@ -1910,13 +1926,33 @@ impl FormatEngine<'_> {
         if kind != CommentKind::Block || !self.current.trimmed().is_empty() {
             return None;
         }
-        let previous_line = self.output.last_non_empty_scoped();
+        // A conditional opening before the comment inside braces leaves it
+        // in the context of the line before; at file scope it may open a
+        // preprocessor block.
+        let in_braces = !self.layout.nesting.brace_type_stack.is_empty();
+        let skips = |trimmed: &str| {
+            trimmed.is_empty()
+                || in_braces
+                    && matches!(
+                        preprocessor_directive(trimmed),
+                        Some("if" | "ifdef" | "ifndef")
+                    )
+        };
+        let previous_line = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .find(|line| !skips(line.trimmed_start()));
         if let Some(line) = previous_line {
             let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             let raw_trimmed = line.trimmed();
             if raw_trimmed.starts_with("/*") && raw_trimmed.ends_with("*/") {
-                return Some(leading_visual_width(line, self.options.tab_width));
+                return Some(
+                    leading_visual_width(line, self.options.tab_width)
+                        + self.case_unindent_spaces(),
+                );
             }
             if trimmed.starts_with("switch") && code.ends_with('{') {
                 return Some(

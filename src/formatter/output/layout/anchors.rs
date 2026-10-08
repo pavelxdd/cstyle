@@ -301,11 +301,12 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| when(in_initializer, || self.initializer_row_indent(first)))
-        // Horstmann runs the first row into its brace only later.
+        // Horstmann and pico run the first row into its brace only later.
         .or_else(|| {
-            when(style == BraceStyle::Horstmann, || {
-                self.initializer_first_row_indent(first)
-            })
+            when(
+                matches!(style, BraceStyle::Horstmann | BraceStyle::Pico),
+                || self.initializer_first_row_indent(first),
+            )
         })
         .or_else(|| {
             when(!brace, || {
@@ -825,6 +826,18 @@ impl FormatEngine<'_> {
                 }
                 _ => false,
             });
+        // A brace row after a brace row starting its line stands at it.
+        if !after_comment
+            && matches!(tokens[first], Token::Symbol('{'))
+            && let Some(element) = open_of_row_before(tokens, groups, group, comma)
+            && matches!(tokens[element], Token::Symbol('{'))
+            && let Some(line) = self.output.line_with_token(element)
+            && self.output.line_tokens(line)?.first == element
+        {
+            return Some(
+                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces(),
+            );
+        }
         if !after_comment
             && !after_block_like_close
             && let Some(newline) =
@@ -1988,7 +2001,13 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
-        if span.last != open {
+        // A brace after another on its line nests its rows past both.
+        if span.last != open
+            || self.tree.previous_code_token(open).is_some_and(|before| {
+                matches!(self.tree.tokens[before], Token::Symbol('{'))
+                    && self.output.line_with_token(before) == Some(line)
+            })
+        {
             return None;
         }
         // Rows stand at an indented brace starting its line, and at the
@@ -4486,12 +4505,11 @@ impl FormatEngine<'_> {
     #[inline(never)]
     fn split_else_block_statement_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        // The `{` itself stands at its `else`, a level in where the style
+        // The `{` of an `else` stands at it, a level in where the style
         // indents block braces.
         if matches!(tokens[first], Token::Symbol('{'))
             && let Some(keyword) = self.tree.previous_code_token(first)
             && matches!(&tokens[keyword], Token::Word(word) if word == "else")
-            && self.tree.has_directive_in(keyword..first)
         {
             let offset = if matches!(
                 self.options.brace_style,
@@ -4501,7 +4519,13 @@ impl FormatEngine<'_> {
             } else {
                 0
             };
-            let line = self.line_led_by(keyword)?;
+            // A dangling `else` stands by the line of its `if`.
+            let owner = if self.is_dangling_else(keyword) {
+                self.tree.statements.if_of_else(keyword)?
+            } else {
+                keyword
+            };
+            let line = self.line_led_by(owner)?;
             return Some(
                 self.output.lead_width(line, self.options.tab_width)
                     + offset
