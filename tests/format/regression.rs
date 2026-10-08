@@ -6710,3 +6710,21 @@ fn a_call_split_off_its_case_label_keeps_its_arguments_at_the_paren() {
         "int f(void)\n{\n    switch( prepVersion )\n        {\n        case 1:\n            rc = sqlite3_prepare(pDb, (const char *)pBuf,\n                                 (int)nMax, &pStmt, &zTail);\n            break;\n        case 2:\n            rc = sqlite3_prepare_v2(pDb, (const char *)pBuf,\n                                    (int)nMax, &pStmt, &zTail);\n            break;\n        }\n    return rc;\n}\n",
     );
 }
+
+#[test]
+fn a_paren_closing_a_call_in_a_braced_define_stands_at_its_paren() {
+    check(
+        "#define E(id) \\\n{              \\\n  Z(           \\\n    a, b       \\\n  )            \\\n}\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define E(id) \\\n    {              \\\n        Z(           \\\n                     a, b       \\\n         )            \\\n    }\n",
+    );
+}
+
+#[test]
+fn define_arguments_past_the_maximum_go_on_at_the_assigned_value() {
+    check(
+        "#define B(p) \\\n\tfor_each_hook_success = seq_try_load_hooks_long_name( \\\n\t    (p), &h[c]); \\\n\tx;\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define B(p) \\\n    for_each_hook_success = seq_try_load_hooks_long_name( \\\n                            (p), &h[c]); \\\n    x;\n",
+    );
+}

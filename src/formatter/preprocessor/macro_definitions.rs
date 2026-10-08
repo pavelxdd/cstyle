@@ -542,6 +542,13 @@ fn define_row_paren_continuation(
     if is_define_header_keyword(line) && column < level_spaces + min {
         column = row_indent + min;
     }
+    // Past the maximum, an assignment's rows go on at its value.
+    if column > level_spaces + options.max_continuation_indent
+        && let Some(value) = define_assignment_align_column(body, options.tab_width)
+            .filter(|&value| value <= level_spaces + options.max_continuation_indent)
+    {
+        return Some(value);
+    }
     Some(capped_define_continuation(
         column,
         row_indent,
@@ -1138,9 +1145,16 @@ impl FormatEngine<'_> {
                 && source_indent > 0
                 && (content.starts_with('?')
                     || (content.starts_with(':') && !content.starts_with("::")));
+            // A row led by `)` stands where its paren saved.
+            let paren_close_column = (content.starts_with(')') && !is_structural)
+                .then(|| define_row_anchor(&paren_anchors, content))
+                .flatten();
             let prefix = if keep_source_indent {
                 self.options
                     .continuation_indent_prefix(prefix_structural_level, source_indent)
+            } else if let Some(column) = paren_close_column {
+                self.options
+                    .continuation_indent_prefix(prefix_structural_level, column)
             } else if let Some(column) = initializer_close_column {
                 self.options
                     .continuation_indent_prefix(prefix_structural_level, column)
@@ -1246,7 +1260,7 @@ impl FormatEngine<'_> {
             {
                 // The header's condition closed: its body follows.
                 None
-            } else if parens_closed && column_before_parens.is_some() {
+            } else if parens_closed {
                 column_before_parens.take()
             } else if let Some(&(_, align)) = paren_anchors.last() {
                 Some(align)
