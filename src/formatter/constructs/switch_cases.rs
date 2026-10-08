@@ -421,6 +421,10 @@ struct CaseBlockState {
     switch_brace_count: usize,
     unindent_depth: usize,
     unindent_case: bool,
+    /// The unindent astyle gives a case block whose braces stand at the
+    /// body level, which the layout already leaves out.
+    body_level_depth: usize,
+    body_level_case: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -517,6 +521,9 @@ impl SwitchCaseLineTransformer {
 
         let is_preprocessor =
             self.in_continued_preprocessor || line.trimmed_start().starts_with('#');
+        let starts_with_comment = self.in_block_comment
+            || line.trimmed_start().starts_with("/*")
+            || line.trimmed_start().starts_with("//");
         self.in_continued_preprocessor = is_preprocessor && line.trimmed_end().ends_with('\\');
         self.parse_line(&mut line, is_preprocessor);
 
@@ -524,6 +531,12 @@ impl SwitchCaseLineTransformer {
         self.comment_spared_level = self.should_unindent_comment && unindent_depth > 0;
         if self.should_unindent_comment && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
+        } else if self.should_unindent_comment && self.total_body_level_depth() > 0 {
+            // A directive takes no unindent to spare, and the layout
+            // places comment rows itself.
+            if !is_preprocessor && !starts_with_comment && !line.is_empty() {
+                line.insert_str(0, &" ".repeat(self.indent_width));
+            }
         } else if self.should_unindent_line && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth);
         }
@@ -602,7 +615,8 @@ impl SwitchCaseLineTransformer {
 
             if self.in_block_comment {
                 if self.case_block_state.switch_brace_count == 1
-                    && self.case_block_state.unindent_case
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
                 {
                     self.should_unindent_comment = true;
                 }
@@ -657,7 +671,8 @@ impl SwitchCaseLineTransformer {
                 }
                 if first_non_ws_byte(scan) == Some(pos)
                     && self.case_block_state.switch_brace_count == 1
-                    && self.case_block_state.unindent_case
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
                 {
                     self.should_unindent_comment = true;
                 }
@@ -665,7 +680,8 @@ impl SwitchCaseLineTransformer {
             }
             if ch == '/' && starts_with_at(scan, pos, "/*") {
                 if self.case_block_state.switch_brace_count == 1
-                    && self.case_block_state.unindent_case
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
                 {
                     self.should_unindent_comment = true;
                 }
@@ -717,7 +733,7 @@ impl SwitchCaseLineTransformer {
         if self.in_block_comment {
             let run = rest.iter().take_while(|&&byte| byte != b'*').count();
             if self.case_block_state.switch_brace_count == 1
-                && self.case_block_state.unindent_case
+                && (self.case_block_state.unindent_case || self.case_block_state.body_level_case)
                 && rest[..run]
                     .iter()
                     .any(|&byte| !matches!(byte, b' ' | b'\t'))
@@ -761,7 +777,10 @@ impl SwitchCaseLineTransformer {
         if ch == '{' {
             self.case_block_state.switch_brace_count += 1;
             if self.looking_for_case_brace {
-                if !self.body_level_braces {
+                if self.body_level_braces {
+                    self.case_block_state.body_level_case = true;
+                    self.case_block_state.body_level_depth += 1;
+                } else {
                     self.case_block_state.unindent_case = true;
                     self.case_block_state.unindent_depth += 1;
                 }
@@ -799,6 +818,11 @@ impl SwitchCaseLineTransformer {
                 self.case_block_state.unindent_depth =
                     self.case_block_state.unindent_depth.saturating_sub(1);
             }
+            if self.case_block_state.body_level_case {
+                self.case_block_state.body_level_case = false;
+                self.case_block_state.body_level_depth =
+                    self.case_block_state.body_level_depth.saturating_sub(1);
+            }
 
             let Some(colon) = find_case_colon_from(scan, pos) else {
                 return pos + 1;
@@ -827,6 +851,15 @@ impl SwitchCaseLineTransformer {
             return skip_identifier(scan, pos);
         }
         pos + ch.len_utf8()
+    }
+
+    fn total_body_level_depth(&self) -> usize {
+        self.case_block_state.body_level_depth
+            + self
+                .case_stack
+                .iter()
+                .map(|state| state.body_level_depth)
+                .sum::<usize>()
     }
 
     pub(crate) fn total_unindent_depth(&self) -> usize {

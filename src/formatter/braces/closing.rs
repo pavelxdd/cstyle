@@ -243,15 +243,19 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
-        if self.options.brace_style != BraceStyle::Ratliff
-            || !line.trimmed_start().starts_with("} ")
-        {
+        if self.options.brace_style != BraceStyle::Ratliff {
             return None;
         }
+        let after = line.trimmed_start().strip_prefix("} ")?;
+        // A comment leaves a case block's closer where the case unindent
+        // puts it.
+        let comment = after.trimmed_start().starts_with('/');
         self.layout
             .frame_stack
             .last_closed_brace()
-            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Command)
+            .filter(|frame| {
+                frame.semantic_kind == BraceSemanticKind::Command && !(comment && frame.case_block)
+            })
             .map(|frame| frame.header_indent_column + self.options.indent_width)
     }
 

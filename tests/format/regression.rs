@@ -6786,3 +6786,30 @@ fn a_comment_after_a_lone_case_block_closer_keeps_a_level() {
         "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n            }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n            }  /* x */\n    } }\n",
     );
 }
+
+#[test]
+fn a_comment_spares_a_level_after_a_whitesmith_case_block() {
+    check(
+        "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }\n    /* after */\n    h(); /* t */\n    case B: {\n      g(e);  /* c */\n    } // y\n    case C:\n      g(); /* z */\n  }\n}\n",
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch (k)\n        {\n        case A:\n            {\n            g(e);\n            }\n            /* after */\n            h(); /* t */\n        case B:\n            {\n            g(e);  /* c */\n            } // y\n        case C:\n            g(); /* z */\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_ratliff_case_closer_keeps_its_column_before_a_comment() {
+    check(
+        "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
+        &["--style=ratliff"],
+        "void f(void) {\n    switch (k) {\n        case B: {\n            g(e);\n            } // y\n        case C: {\n            g(e);\n                } /* z */\n        case D: {\n            g(e);\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_whitesmith_case_block_closer_spares_a_level() {
+    check(
+        "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n                } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
+    );
+}
