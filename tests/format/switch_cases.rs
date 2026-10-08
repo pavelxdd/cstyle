@@ -1608,3 +1608,24 @@ fn label_split_off_a_bare_label_in_a_nested_whitesmith_switch_stands_with_it() {
     );
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn pico_default_body_after_a_closed_case_block_stands_in_that_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f(void) {\n\tswitch (b) {\n\tcase 1: {\n\tswitch (*f) {\n\tcase 2: {\n\t\tx();\n\t\tbreak;\n\t} case 3:\n\t\ty();\n\t\tbreak;\n\t}\n\tz();\n\t}\n\t}\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{   switch (b)",
+        "    {   case 1:",
+        "        {   switch (*f)",
+        "            {   case 2:",
+        "                {   x();",
+        "                    break; } case 3:",
+        "                    y();",
+        "                    break; }",
+        "            z(); } } }",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+}

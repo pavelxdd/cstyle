@@ -1740,7 +1740,11 @@ impl FormatEngine<'_> {
                 return Some(None);
             }
         }
-        if trimmed == "}" {
+        // A `}` before a label closes a block as a bare one does.
+        if trimmed == "}"
+            || trimmed.starts_with('}')
+                && (label.starts_with("case ") || label.starts_with("default:"))
+        {
             closing_indents.push(self.output.lead_width(index, tab_width));
         }
         None

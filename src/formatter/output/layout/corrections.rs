@@ -423,6 +423,30 @@ impl FormatEngine<'_> {
                 exact_indent_spaces = Some(spaces);
             }
         }
+        // A label after a pico closer, which runs into the row before, takes
+        // no level: the row after it stands in the closed block.
+        if self.options.brace_style == BraceStyle::Pico
+            && line_kind == LineKind::Normal
+            && !line_start.starts_with_any(b"{}#")
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && self
+                .output
+                .code_trimmed_of(previous)
+                .trimmed_start()
+                .strip_prefix('}')
+                .is_some_and(|after| {
+                    let label = after.trimmed();
+                    (starts_header_word(label, "case") || label.starts_with("default"))
+                        && label.ends_with(':')
+                })
+            && let Some(frame) = self.layout.frame_stack.last_closed_brace()
+        {
+            exact_indent_spaces = Some(
+                frame.body_indent_column
+                    + self.layout.line_adjuster.next_line_case_unindent_depth()
+                        * self.options.indent_width,
+            );
+        }
         if let Some(spaces) = self.restored_preprocessor_branch_body_indent_spaces(line) {
             exact_indent_spaces = Some(spaces);
         }
