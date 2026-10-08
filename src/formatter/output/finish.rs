@@ -7,7 +7,7 @@ use crate::formatter::ends_inside_block_comment;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::PreviousToken;
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, is_comment_line, line_comment_split_limit, preprocessor_directive,
@@ -172,6 +172,11 @@ impl FormatEngine<'_> {
             if self.options.break_one_line_statements
                 && let Some((label, mut statement)) = split_switch_label_statement(line)
             {
+                let line_indent = if leading_visual_width(line, self.options.tab_width) == 0 {
+                    self.current_line_indent_spaces()
+                } else {
+                    0
+                };
                 self.finish_line_text(&label);
                 // Each of several labels on a line takes a line of its own.
                 while (statement.starts_with("case ") || statement.starts_with("default"))
@@ -202,7 +207,20 @@ impl FormatEngine<'_> {
                     self.layout.continuation_indent.next_line_indent = None;
                     self.layout.continuation_indent.next_line_indent_spaces =
                         Some(label_spaces + extra);
+                    let source_column = line_indent
+                        + visual_width_from(
+                            &line[..line.len() - statement.trimmed_start().len()],
+                            0,
+                            self.options.tab_width,
+                        );
                     self.finish_line_text(&statement);
+                    self.label_split_shift = self.output.last().map(|published| {
+                        (
+                            self.output.len() - 1,
+                            leading_visual_width(published, self.options.tab_width) as isize
+                                - source_column as isize,
+                        )
+                    });
                 }
             } else {
                 self.finish_line_text(line);

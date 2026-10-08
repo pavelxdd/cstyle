@@ -329,6 +329,9 @@ pub(crate) struct FormatEngine<'a> {
     /// A brace frame opened while its case label or header still stood on
     /// the current line, placed from structural columns.
     pub(crate) brace_frame_awaits_line: bool,
+    /// How far splitting a statement off its case label moved the
+    /// statement's columns.
+    pub(crate) label_split_shift: Option<(usize, isize)>,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
     /// The current line is a comment row astyle writes as it stands.
@@ -477,6 +480,7 @@ impl<'a> FormatEngine<'a> {
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
             brace_frame_awaits_line: false,
+            label_split_shift: None,
             disabled_formatting: None,
             current_is_preindented: false,
             current_is_verbatim: false,
@@ -2164,6 +2168,18 @@ impl<'a> FormatEngine<'a> {
         ) {
             self.layout.previous = previous_before_line;
         }
+        // The columns of a statement split off its case label moved with it.
+        let shift = self
+            .label_split_shift
+            .take()
+            .filter(|&(line, _)| line + 1 == self.output.len())
+            .map(|(_, shift)| shift);
+        let indent = match (indent, shift) {
+            (ContinuationIndent::Spaces(spaces), Some(shift)) => {
+                ContinuationIndent::Spaces(spaces.saturating_add_signed(shift))
+            }
+            (indent, _) => indent,
+        };
         if !clear_continuation_after_line {
             if let Some(spaces) = one_shot_indent {
                 self.layout

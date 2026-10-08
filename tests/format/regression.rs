@@ -6695,3 +6695,18 @@ fn block_comments_before_a_label_stand_with_the_labels_of_their_switch() {
         "int f(int op)\n{\n    switch( op )\n        {\n        case OP_Concat:\n            {\n            switch( op )\n                {\n                case 1:\n                    a();\n                    break;\n                }\n            break;\n            }\n\n        /* Opcode: Add\n        ** Synopsis\n        */\n        /* Opcode: Multiply\n        */\n        case OP_Add:\n        case OP_Multiply:\n            {\n            b();\n            break;\n            }\n        }\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn a_call_split_off_its_case_label_keeps_its_arguments_at_the_paren() {
+    let input = "int f(void){\n  switch( prepVersion ){\n    case 1: rc = sqlite3_prepare(pDb, (const char *)pBuf,\n                                 (int)nMax, &pStmt, &zTail);\n      break;\n    case 2: rc = sqlite3_prepare_v2(pDb, (const char *)pBuf,\n                                    (int)nMax, &pStmt, &zTail);\n      break;\n  }\n  return rc;\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "int f(void)\n    {\n    switch( prepVersion )\n        {\n        case 1:\n            rc = sqlite3_prepare(pDb, (const char *)pBuf,\n                                 (int)nMax, &pStmt, &zTail);\n            break;\n        case 2:\n            rc = sqlite3_prepare_v2(pDb, (const char *)pBuf,\n                                    (int)nMax, &pStmt, &zTail);\n            break;\n        }\n    return rc;\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "int f(void)\n{\n    switch( prepVersion )\n        {\n        case 1:\n            rc = sqlite3_prepare(pDb, (const char *)pBuf,\n                                 (int)nMax, &pStmt, &zTail);\n            break;\n        case 2:\n            rc = sqlite3_prepare_v2(pDb, (const char *)pBuf,\n                                    (int)nMax, &pStmt, &zTail);\n            break;\n        }\n    return rc;\n}\n",
+    );
+}
