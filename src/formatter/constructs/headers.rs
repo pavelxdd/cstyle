@@ -1,7 +1,9 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::assembly::is_asm_block_header;
-use crate::formatter::constructs::switch_cases::{is_case_label_start, is_default_label_start};
+use crate::formatter::constructs::switch_cases::{
+    is_case_label_start, is_default_label_start, label_line_holds_braceless_header,
+};
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, tokenize};
@@ -1307,6 +1309,23 @@ impl FormatEngine<'_> {
             .inline_nested_header_braceless_bias
             .filter(|_| word == "else" || !self.token_input.token_begins_source_line)
             .map(|level| level * self.options.indent_width);
+        // A header after `case X:` on its line stands in the case body.
+        let case_label_body_indent = (!self.current_is_blank())
+            .then(|| self.output.code_of(&self.current))
+            .filter(|code| {
+                let code = code.trimmed();
+                code.ends_with(':') && (is_case_label_start(code) || is_default_label_start(code))
+            })
+            .map(|_| {
+                self.switch_label_indent_spaces().unwrap_or_else(|| {
+                    (self
+                        .layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        + self.case_body_indent_extra(LineKind::SwitchLabel))
+                        * self.options.indent_width
+                }) + self.options.indent_width
+            });
         let line_indent_spaces = attached_closing_indent
             .or(closed_if_indent)
             .or(open_if_indent)
@@ -1314,6 +1333,7 @@ impl FormatEngine<'_> {
             .or(sequential_after_close_indent)
             .or(enclosing_else_body_indent)
             .or(pending_line_indent)
+            .or(case_label_body_indent)
             .unwrap_or_else(|| {
                 let current_indent = self.current_line_indent_spaces();
                 let current_indent = if starts_output_line
@@ -2015,9 +2035,16 @@ impl FormatEngine<'_> {
         if !(trimmed.starts_with("} else") || trimmed.starts_with("}else")) {
             return None;
         }
-        let (open_spaces, _, _) = self
+        let (open_spaces, _, open_code) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
+        // A header kept on a case label's line stands in the case body.
+        let open_spaces = open_spaces
+            + usize::from(
+                open_code
+                    .strip_suffix('{')
+                    .is_some_and(|head| label_line_holds_braceless_header(head.trimmed_end())),
+            ) * self.options.indent_width;
         let (_, previous_code) = self.output.last_code_outside_comment()?;
         let closing_multiline_header_indent = self.current_closing_multiline_header_indent();
         let open_spaces = closing_multiline_header_indent.unwrap_or(open_spaces);

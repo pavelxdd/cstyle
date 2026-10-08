@@ -1629,3 +1629,86 @@ fn pico_default_body_after_a_closed_case_block_stands_in_that_block() {
 
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn a_header_kept_after_a_case_label_places_its_block_in_the_case_body() {
+    let input =
+        "void f(void)\n{\n  switch( x ){\n  case 1: if( z ){\n    a();\n  }\n  break;\n  }\n}\n";
+    let expected = [
+        (
+            "pico",
+            fixture!(
+                "void f(void)",
+                "{   switch( x )",
+                "    {   case 1: if( z )",
+                "            {   a(); }",
+                "            break; } }",
+            ),
+        ),
+        (
+            "whitesmith",
+            fixture!(
+                "void f(void)",
+                "    {",
+                "    switch( x )",
+                "        {",
+                "        case 1:",
+                "            if( z )",
+                "                {",
+                "                a();",
+                "                }",
+                "            break;",
+                "        }",
+                "    }",
+            ),
+        ),
+        (
+            "lisp",
+            fixture!(
+                "void f(void) {",
+                "    switch( x ) {",
+                "    case 1: if( z ) {",
+                "            a(); }",
+                "        break; } }",
+            ),
+        ),
+    ];
+    for (style, expected) in expected {
+        let options = options_from_args(&[&format!("--style={style}")]);
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn a_header_block_kept_after_a_case_label_closes_at_the_header() {
+    let input =
+        "void f(void)\n{\n  switch( x ){\n  case 1: if( z ){\n    a();\n  }\n  break;\n  }\n}\n";
+    let ratliff = options_from_args(&["--style=ratliff", "-o"]);
+    let expected = fixture!(
+        "void f(void) {",
+        "    switch( x ) {",
+        "        case 1: if( z ) {",
+        "                a();",
+        "                }",
+        "            break;",
+        "        }",
+        "    }",
+    );
+    assert_eq!(format_exact(input, &ratliff), expected);
+
+    let input = "void f(void)\n{\n switch(c) {\n  case 3: if (x) {\n y();\n   } else\n z();\n break;\n }\n}\n";
+    let kr = options_from_args(&["--style=kr", "-o"]);
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    switch(c) {",
+        "    case 3: if (x) {",
+        "            y();",
+        "        } else",
+        "            z();",
+        "        break;",
+        "    }",
+        "}",
+    );
+    assert_eq!(format_exact(input, &kr), expected);
+}

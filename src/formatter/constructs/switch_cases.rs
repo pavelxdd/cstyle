@@ -979,7 +979,14 @@ fn skip_identifier(text: &str, mut pos: usize) -> usize {
 
 /// Whether `code` is a case label line whose statement is a header
 /// awaiting its braceless body, as `case 1: if (x)`.
-fn label_line_holds_braceless_header(code: &str) -> bool {
+/// Whether the `{` ending a label line opens the case's block rather than
+/// a header's kept on the line.
+fn label_opens_case_block(code: &str) -> bool {
+    code.strip_suffix('{')
+        .is_some_and(|head| !label_line_holds_braceless_header(head.trimmed_end()))
+}
+
+pub(crate) fn label_line_holds_braceless_header(code: &str) -> bool {
     let Some(colon) = find_case_colon(code) else {
         return false;
     };
@@ -1256,12 +1263,14 @@ impl FormatEngine<'_> {
                 .is_some_and(|(_, _, trimmed)| starts_header_word(trimmed, "switch"));
         if closes_switch
             || self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-                && nearest_case.is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{'))
+                && nearest_case
+                    .is_some_and(|line| label_opens_case_block(self.output.code_trimmed_of(line)))
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
         }
         if self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
-            && nearest_case.is_some_and(|line| !self.output.code_trimmed_of(line).ends_with('{'))
+            && nearest_case
+                .is_some_and(|line| !label_opens_case_block(self.output.code_trimmed_of(line)))
         {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             return current_spaces
@@ -1709,11 +1718,12 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(|closing| *closing <= indent_spaces)
             {
-                // A block after a statement kept on the label line
-                // is the statement's, not the label's.
-                let statement_block = code
-                    .strip_suffix('{')
-                    .is_some_and(|head| head.trimmed_end().ends_with(';'));
+                // A block after a statement or a header kept on the label
+                // line is theirs, not the label's.
+                let statement_block = code.strip_suffix('{').is_some_and(|head| {
+                    let head = head.trimmed_end();
+                    head.ends_with(';') || label_line_holds_braceless_header(head)
+                });
                 return Some(Some(ActiveCaseLayout {
                     indent_spaces,
                     opens_block: code.ends_with('{') && !statement_block,
@@ -1740,14 +1750,25 @@ impl FormatEngine<'_> {
                 return Some(None);
             }
         }
-        // A `}` before a label closes a block as a bare one does.
-        if trimmed == "}"
-            || trimmed.starts_with('}')
-                && (label.starts_with("case ") || label.starts_with("default:"))
-        {
+        // A `}` before a label or `else` closes a block as a bare one does.
+        if trimmed.starts_with('}') {
             closing_indents.push(self.output.lead_width(index, tab_width));
         }
         None
+    }
+
+    /// The column of a label in the innermost open switch, when the
+    /// switch line sets it.
+    pub(crate) fn switch_label_indent_spaces(&self) -> Option<usize> {
+        let spaces = self.nearest_open_switch_indent_spaces()?;
+        let switch_body_indent = usize::from(
+            self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
+        ) * self.options.indent_width;
+        Some(
+            spaces
+                + switch_body_indent
+                + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
+        )
     }
 
     pub(crate) fn initial_switch_case_indent_spaces(
@@ -1757,16 +1778,9 @@ impl FormatEngine<'_> {
         mut exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         if line_kind == LineKind::SwitchLabel
-            && let Some(spaces) = self.nearest_open_switch_indent_spaces()
+            && let Some(spaces) = self.switch_label_indent_spaces()
         {
-            let switch_body_indent = usize::from(
-                self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
-            ) * self.options.indent_width;
-            exact_indent_spaces = Some(
-                spaces
-                    + switch_body_indent
-                    + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
-            );
+            exact_indent_spaces = Some(spaces);
         }
 
         let trimmed = line.trimmed_start();
@@ -1817,10 +1831,12 @@ impl FormatEngine<'_> {
             ) * indent_width;
             // The body of a braceless header kept on the label's line
             // stands a level past the case body.
-            let header_body_extra =
-                usize::from(self.output.last_non_empty_index().is_some_and(|index| {
-                    label_line_holds_braceless_header(self.output.code(index))
-                })) * indent_width;
+            let header_body_extra = usize::from(
+                !trimmed.starts_with('{')
+                    && self.output.last_non_empty_index().is_some_and(|index| {
+                        label_line_holds_braceless_header(self.output.code(index))
+                    }),
+            ) * indent_width;
             Some(case_indent + case_body_extra + indent_width + block_extra + header_body_extra)
         };
         if let Some(target) = target
@@ -2312,6 +2328,15 @@ impl FormatEngine<'_> {
                 return None;
             }
             depth -= meta.opens();
+            // A header kept on a label's line opens its block there.
+            if depth == 0 && meta.opens() > 0 && self.output.comment_start_index(index) == index {
+                let code = self.output.code_trimmed(index);
+                if (code.starts_with("case ") || code.starts_with("default:"))
+                    && !label_opens_case_block(code)
+                {
+                    return Some(self.output.lead_width(index, tab_width));
+                }
+            }
         }
         None
     }
