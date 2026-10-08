@@ -6768,3 +6768,21 @@ fn an_initializer_run_in_after_a_block_brace_measures_from_the_brace() {
         "static void f(void)\n{   hooks_t hooks = {&noop_alloc_hook, &noop_dalloc_hook, &noop_expand_hook,\n                    NULL };\n    g(); }\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_joined_case_block_closer_keeps_a_level() {
+    check(
+        "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }  /* x */\n    case B: {\n      g(e);\n    }\n    case C: {\n      h();\n      break;\n    }\n  }\n}\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch (k)\n    {   case A:\n            {   g(e); } /* x */\n        case B:\n        {   g(e); }\n        case C:\n        {   h();\n            break; } } }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_lone_case_block_closer_keeps_a_level() {
+    check(
+        "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);  /* c */\n    }  /* x */\n    case B: {\n      g(e);  /* c */\n    }\n    case C: {\n      g(e);  // c\n    }  /* x */\n  }\n}\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n            }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n            }  /* x */\n    } }\n",
+    );
+}

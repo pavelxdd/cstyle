@@ -433,6 +433,8 @@ pub(crate) struct SwitchCaseLineTransformer {
     unindent_next_line: bool,
     should_unindent_line: bool,
     should_unindent_comment: bool,
+    /// The last line kept a level of its unindent for a comment on it.
+    comment_spared_level: bool,
     in_continued_preprocessor: bool,
     in_block_comment: bool,
     in_quote: bool,
@@ -460,6 +462,7 @@ impl SwitchCaseLineTransformer {
             unindent_next_line: false,
             should_unindent_line: true,
             should_unindent_comment: false,
+            comment_spared_level: false,
             in_continued_preprocessor: false,
             in_block_comment: false,
             in_quote: false,
@@ -499,6 +502,7 @@ impl SwitchCaseLineTransformer {
     pub(crate) fn transform_line(&mut self, mut line: String) -> String {
         self.should_unindent_line = true;
         self.should_unindent_comment = false;
+        self.comment_spared_level = false;
         self.line_unindent = 0;
 
         if line.is_empty() && !self.empty_line_fill {
@@ -517,12 +521,17 @@ impl SwitchCaseLineTransformer {
         self.parse_line(&mut line, is_preprocessor);
 
         let unindent_depth = self.total_unindent_depth();
+        self.comment_spared_level = self.should_unindent_comment && unindent_depth > 0;
         if self.should_unindent_comment && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
         } else if self.should_unindent_line && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth);
         }
         line
+    }
+
+    pub(crate) fn comment_spared_level(&self) -> bool {
+        self.comment_spared_level
     }
 
     /// The columns the last transformed line lost to case unindents.
@@ -1970,8 +1979,18 @@ impl FormatEngine<'_> {
             .current_closing_brace_open(self.options.tab_width)
             .is_some_and(|(_, _, opener)| opener == "{");
         let code = self.output.code_of(line).trimmed();
-        if line.trimmed() == "}" || ((closes_switch || opened_alone) && code == "}") {
+        if line.trimmed() == "}" || closes_switch && code == "}" {
             return Some(self.layout.indentation.indent() * self.options.indent_width);
+        }
+        // A comment after the closer keeps it a level of the unindent its
+        // opener took.
+        if opened_alone
+            && code == "}"
+            && let Some((open_spaces, _, _)) = self
+                .output
+                .current_closing_brace_open(self.options.tab_width)
+        {
+            return Some(open_spaces + self.case_unindent_spaces());
         }
 
         let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();

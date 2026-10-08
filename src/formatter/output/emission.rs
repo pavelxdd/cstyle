@@ -1,8 +1,10 @@
+use crate::config::BraceStyle;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::output::model::{LineLayout, PostEmissionLayout};
 use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{ContainsAnyByte, line_ends_with_comment};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::line_comment_backslash_trailing_space;
@@ -169,9 +171,51 @@ impl FormatEngine<'_> {
             observed.unwrap_or_else(|| (self.output.len(), self.layout.line_adjuster.clone()))
         });
         let line = self.layout.line_adjuster.adjust_line(line);
+        self.shift_run_in_brace_for_spared_level(&line);
         let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);
         self.publish_ready_line(line);
+    }
+
+    /// astyle unindents a case block's lines as joined, where a comment
+    /// after its closer keeps the joined line a level of its unindent.
+    fn shift_run_in_brace_for_spared_level(&mut self, line: &str) {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) || !self.layout.line_adjuster.last_line_comment_spared_level()
+        {
+            return;
+        }
+        let lone_brace = |index: usize| {
+            self.output
+                .get(index)
+                .is_some_and(|row| row.trimmed() == "{")
+        };
+        let len = self.output.len();
+        let target = if line.trimmed_start().starts_with('}') {
+            // The closer joins the row before, which joins a lone brace
+            // before it.
+            if self.output.last().is_none_or(|previous| {
+                previous.trimmed().is_empty()
+                    || previous.trimmed_start().starts_with('#')
+                    || line_ends_with_comment(previous)
+            }) {
+                return;
+            }
+            if len >= 2 && lone_brace(len - 2) {
+                len - 2
+            } else {
+                len - 1
+            }
+        } else if !line.trimmed_start().starts_with_any(b"#/") && len >= 1 && lone_brace(len - 1) {
+            len - 1
+        } else {
+            return;
+        };
+        let indent = self.options.indent_prefix(1);
+        let row = format!("{indent}{}", self.output[target]);
+        self.output.set(target, row);
     }
 
     pub(crate) fn adjust_and_publish_raw_literal_line(

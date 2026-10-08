@@ -87,6 +87,12 @@ impl LineAdjuster {
         self.convert_line_tabs(line)
     }
 
+    /// Whether a comment on the last adjusted line kept it a level of its
+    /// case unindent.
+    pub fn last_line_comment_spared_level(&self) -> bool {
+        self.case_processing_enabled && self.switch_case_transformer.comment_spared_level()
+    }
+
     /// The columns the last adjusted line lost to case unindents.
     pub fn last_line_case_unindent(&self) -> usize {
         self.last_line_case_unindent
