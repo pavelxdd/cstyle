@@ -2548,3 +2548,27 @@ fn block_of_an_if_after_a_comment_split_off_its_else_stands_in_the_if() {
         }
     }
 }
+
+#[test]
+fn gnu_brace_after_a_macro_condition_in_a_block_indents_as_a_header_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
+    let input =
+        "void f(void) {\n  if (!a) {\n    if ISZERO(dn) {\n      x=0;\n      }\n    y();\n  }\n}\n";
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    if (!a)",
+        "        {",
+        "            if ISZERO(dn)",
+        "                {",
+        "                    x=0;",
+        "                }",
+        "            y();",
+        "        }",
+        "}",
+    );
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

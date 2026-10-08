@@ -1420,10 +1420,11 @@ impl FormatEngine<'_> {
             {
                 return false;
             }
+            // A macro may stand for the parenthesized condition.
             return matches!(
                 next,
-                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _))
-            ) || matches!(next, Some(Token::Word(word)) if word == "constexpr");
+                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _) | Token::Word(_))
+            );
         }
         if word == "else" && matches!(next, Some(Token::Symbol(','))) {
             return false;
