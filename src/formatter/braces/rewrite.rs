@@ -1914,7 +1914,14 @@ impl FormatEngine<'_> {
                 && self.options.pad_operators
                 && self.current.trimmed_end().ends_with('=') =>
             {
-                self.ensure_space();
+                // A wider gap the source left after `=` stays.
+                match source_gap {
+                    Some(gap) if gap.len() > 1 => {
+                        self.trim_current_end();
+                        self.current.push_str(gap);
+                    }
+                    _ => self.ensure_space(),
+                }
             }
             None if braced_init => self.current.push_str(source_gap.unwrap_or_default()),
             None => {}

@@ -6449,3 +6449,12 @@ fn a_label_block_after_a_case_label_on_its_line_stands_in_the_case_body() {
         "void f(void)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break; }\n        case 2: lbl:\n            {   int j = 1;\n                b();\n                break; }\n        case 3:\n        {   c(); } } }\n",
     );
 }
+
+#[test]
+fn padded_operators_keep_a_wider_gap_before_an_element_brace() {
+    check(
+        "static const struct x a[] = {\n	[A] =  { 1, \"s\" },\n	[C] =  1,\n	.d =  { 2 },\n};\nstruct y b =  { 1 };\n",
+        &["--style=linux", "--pad-oper"],
+        "static const struct x a[] = {\n    [A] =  { 1, \"s\" },\n    [C] =  1,\n    .d =  { 2 },\n};\nstruct y b =  { 1 };\n",
+    );
+}
