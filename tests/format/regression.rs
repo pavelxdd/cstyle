@@ -6435,3 +6435,17 @@ fn a_comment_after_a_directive_follows_the_comment_before_it() {
         "void f(void) {\n    switch(c) {\n    case 1: {\n        int i;\n        for(i=2; i<objc; i++) {\n            /* a */\n#ifdef T\n            /* b\n            **\n            */\n            if( x ) {\n                i++; }\n            else\n\n                /* c\n                */\n                if( y ) {\n                    z(); }\n#endif\n        }\n        break; } } }\n",
     );
 }
+
+#[test]
+fn a_label_block_after_a_case_label_on_its_line_stands_in_the_case_body() {
+    check(
+        "void f(void) {\n  switch( op ){\n    case 1: {\n      a();\n      break;\n    }\n    case 2: lbl: {\n      int j = 1;\n      b();\n      break;\n    }\n    case 3: {\n      c();\n    }\n  }\n}\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break; }\n        case 2: lbl:\n            {   int j = 1;\n                b();\n                break; }\n        case 3:\n        {   c(); } } }\n",
+    );
+    check(
+        "void f(void)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break; }\n        case 2: lbl:\n            {   int j = 1;\n                b();\n                break; }\n        case 3:\n        {   c(); } } }\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch( op )\n    {   case 1:\n        {   a();\n            break; }\n        case 2: lbl:\n            {   int j = 1;\n                b();\n                break; }\n        case 3:\n        {   c(); } } }\n",
+    );
+}

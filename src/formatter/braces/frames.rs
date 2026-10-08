@@ -274,8 +274,11 @@ impl FormatEngine<'_> {
         });
         // A switch label still leading the line opens its body first; VTK
         // counts its switch brace's level in place of it.
+        // A case body the indent already counts holds no pending label.
         let pending_case_label = usize::from(
-            self.options.brace_style != BraceStyle::Vtk && find_case_colon(&self.current).is_some(),
+            self.options.brace_style != BraceStyle::Vtk
+                && find_case_colon(&self.current).is_some()
+                && self.case_body_indent_extra(LineKind::Normal) == 0,
         );
         let label_owner_column = label_block.then(|| {
             (self
