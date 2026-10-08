@@ -589,6 +589,7 @@ impl FormatEngine<'_> {
                     self.brace_stands_at_its_header(open)
                         || self.brace_attached_to_control_header(open)
                         || self.tree.statements.branch_header_of_block(open).is_some()
+                        || self.tree.statements.in_else_body_after_blank_line(open)
                 })
             && !matches!(self.tree.tokens[first], Token::Symbol('{' | '}'))
             && Some(layout.exact_indent_spaces.unwrap_or(structural)) < block()

@@ -269,6 +269,30 @@ impl FormatEngine<'_> {
         ) {
             exact_indent_spaces = Some(case_layout.exact_indent_spaces);
         }
+        // A broken `{` stands at the header that opened its frame.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Allman | BraceStyle::Horstmann | BraceStyle::Pico
+        ) && !self.options.indent_braces
+            && line.trimmed() == "{"
+            && let Some(header) = self
+                .layout
+                .frame_stack
+                .active_brace()
+                .filter(|frame| {
+                    frame.semantic_kind == BraceSemanticKind::Command && !frame.case_block
+                })
+                .and_then(|frame| frame.header.as_deref())
+                .filter(|header| !matches!(*header, "case" | "default"))
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && starts_header_word(previous.trimmed_start(), header)
+            && same_line_nested_header_extra(previous) == 0
+        {
+            exact_indent_spaces = Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
+        }
         if let Some(spaces) =
             self.switch_case_frame_closing_indent_override(line, exact_indent_spaces)
         {

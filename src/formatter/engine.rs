@@ -326,6 +326,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) block_spacing: BlockSpacingState,
     pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
+    /// A brace frame opened while its case label or header still stood on
+    /// the current line, placed from structural columns.
+    pub(crate) brace_frame_awaits_line: bool,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
     /// The current line is a comment row astyle writes as it stands.
@@ -473,6 +476,7 @@ impl<'a> FormatEngine<'a> {
             block_spacing: BlockSpacingState::default(),
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
+            brace_frame_awaits_line: false,
             disabled_formatting: None,
             current_is_preindented: false,
             current_is_verbatim: false,

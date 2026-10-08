@@ -6579,3 +6579,69 @@ fn a_comment_after_an_attached_switch_brace_stands_with_the_case_labels() {
         "void f(void) {\n    switch (a) {\n        /* c */\n        case 0:\n            y;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_case_block_in_an_else_body_after_a_blank_line_keeps_its_levels() {
+    let input = "int main(void){\n  if( a ){\n    x();\n  }else\n\n  /* c */\n  if( c ){\n    switch( op ){\n      case X: {\n        int i;\n        for(i=0; i<n; i++){\n          int v;\n          g();\n          if( v ){\n            k();\n          }\n        }\n        h();\n        break;\n      }\n    }\n  }\n  return 0;\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "int main(void)\n{   if( a )\n    {   x(); }\n    else\n\n        /* c */\n        if( c )\n        {   switch( op )\n            {   case X:\n                {   int i;\n                    for(i=0; i<n; i++)\n                    {   int v;\n                        g();\n                        if( v )\n                        {   k(); } }\n                    h();\n                    break; } } }\n    return 0; }\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "int main(void)\n{   if( a )\n    {   x();\n    }\n    else\n\n        /* c */\n        if( c )\n        {   switch( op )\n            {   case X:\n                {   int i;\n                    for(i=0; i<n; i++)\n                    {   int v;\n                        g();\n                        if( v )\n                        {   k();\n                        }\n                    }\n                    h();\n                    break;\n                }\n            }\n        }\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_directive_before_a_case_block_brace_adds_no_level_past_the_case() {
+    check(
+        "void f(void)\n{\n    switch ( a )\n    {\n    case Z:\n#line 4 \"y\"\n    {\n        pop();\n    }\n    YY_BREAK\n    case W:\n        x = 1;\n        if (b)\n        {\n            c();\n        }\n        YY_BREAK\n    case V:\n        if (b)\n            c();\n    }\n}\n",
+        &["--style=allman"],
+        "void f(void)\n{\n    switch ( a )\n    {\n    case Z:\n#line 4 \"y\"\n        {\n            pop();\n        }\n        YY_BREAK\n    case W:\n        x = 1;\n        if (b)\n        {\n            c();\n        }\n        YY_BREAK\n    case V:\n        if (b)\n            c();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_endif_leaves_a_continued_macro_body() {
+    check(
+        "#if A\n#define C(N) \\\n      do \\\n          x = (N); \\\n      while (0)\n#endif\n/* YYFINAL */\n",
+        &["--style=kr"],
+        "#if A\n#define C(N) \\\n      do \\\n          x = (N); \\\n      while (0)\n#endif\n/* YYFINAL */\n",
+    );
+}
+
+#[test]
+fn a_switch_closer_after_a_directive_split_else_keeps_its_column() {
+    let input = "int f(void){\n  switch( x ){\n  case 1: {\n    for(i=2; i<n; i++){\n      if( a ){\n        b();\n      }else\n#endif\n      {\n        c();\n      }\n    }\n  }\n\n  } /* End */\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "int f(void)\n{   switch( x )\n    {   case 1:\n        {   for(i=2; i<n; i++)\n            {   if( a )\n                {   b(); }\n                else\n#endif\n                {   c(); } } }\n\n    } /* End */\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "int f(void)\n{\n    switch( x )\n    {\n    case 1:\n    {\n        for(i=2; i<n; i++)\n        {\n            if( a )\n            {\n                b();\n            }\n            else\n#endif\n            {\n                c();\n            }\n        }\n    }\n\n    } /* End */\n}\n",
+    );
+}
+
+#[test]
+fn a_case_block_after_labels_following_a_closer_stands_at_the_first_label() {
+    check(
+        "void f(void){\n\tswitch (c) {\n\tcase 0: {\n\t\ta();\n\t\tbreak;\n\t} case 1: {\n\t\tb();\n\t\tbreak;\n\t} case 2: case 3: {\n\t\tc();\n\t\tbreak;\n\t}\n\t}\n}\n",
+        &["--style=pico"],
+        "void f(void)\n{   switch (c)\n    {   case 0:\n        {   a();\n            break; } case 1:\n        {   b();\n            break; } case 2: case 3:\n        {   c();\n            break; } } }\n",
+    );
+}
+
+#[test]
+fn labels_after_a_lisp_case_block_closer_keep_their_spacing() {
+    check(
+        "void f(void){\n\tswitch (c) {\n\tcase 0: {\n\t\ta();\n\t} case 2: case 3:\n\t\tc();\n\t}\n}\n",
+        &["--style=lisp"],
+        "void f(void) {\n    switch (c) {\n    case 0: {\n        a(); } case 2: case 3:\n        c(); } }\n",
+    );
+}

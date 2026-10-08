@@ -309,6 +309,9 @@ impl FormatEngine<'_> {
             line_kind,
             layout.exact_indent_spaces.unwrap_or(output_spaces),
         );
+        if std::mem::take(&mut self.brace_frame_awaits_line) {
+            self.rebase_brace_frame_on_emitted_line();
+        }
         self.update_typedef_function_pointer_frame(line);
         self.observe_formatted_output_comment_frame(line, output_spaces);
         if matches!(

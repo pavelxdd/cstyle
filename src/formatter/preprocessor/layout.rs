@@ -1089,7 +1089,7 @@ impl FormatEngine<'_> {
             {
                 continue;
             }
-            if branch_trimmed.starts_with('#') {
+            if branch_trimmed.starts_with('#') || self.output.is_directive_line(branch_index) {
                 if previous_directive == "endif" {
                     continue;
                 }

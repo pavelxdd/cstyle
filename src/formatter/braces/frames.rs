@@ -1,4 +1,5 @@
 use crate::config::BraceStyle;
+use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
@@ -17,8 +18,9 @@ use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..trailing_comment_split_limit(line)];
-    // Labels that lead the line own what follows them all.
-    let trimmed = code.trimmed_start();
+    // Labels that lead the line, or follow the brace closing the case
+    // before, own what follows them all.
+    let trimmed = code.trimmed_start().trim_start_matches('}').trimmed_start();
     if (trimmed.starts_with("case") || trimmed.starts_with("default"))
         && code.matches(':').count() > 1
         && trimmed.starts_with(header)
@@ -350,6 +352,14 @@ impl FormatEngine<'_> {
                 })
         });
         let owner_column = label_owner_column.or(case_owner_column);
+        self.brace_frame_awaits_line = label_owner_column.is_none()
+            && case_header.is_some_and(|header| {
+                case_label_token_offset(&self.current, header)
+                    .is_some_and(|offset| !brace_led(&self.current[..offset]))
+            })
+            || semantic_kind == BraceSemanticKind::Command
+                && brace_header.is_some()
+                && !self.current_is_blank();
         let header_indent_column = owner_column.unwrap_or_else(|| {
             semantic_header.map_or(line_indent, |frame| frame.line_indent_spaces)
         });
@@ -406,6 +416,34 @@ impl FormatEngine<'_> {
             close_output_line: None,
             close_ends_output_line: false,
         });
+    }
+
+    /// Moves a brace frame's columns with the case label or header that
+    /// opened it, published after the frame at a column layout may have
+    /// changed.
+    pub(crate) fn rebase_brace_frame_on_emitted_line(&mut self) {
+        let Some(line) = self.output.last() else {
+            return;
+        };
+        let trimmed = line.trimmed_start();
+        let lead = leading_visual_width(line, self.options.tab_width);
+        if let Some(frame) = self.layout.frame_stack.active_brace_mut().filter(|frame| {
+            let opener = if frame.case_block {
+                (trimmed.starts_with("case") || trimmed.starts_with("default"))
+                    && trimmed.trimmed_end().ends_with(':')
+            } else {
+                frame
+                    .header
+                    .as_deref()
+                    .is_some_and(|header| starts_header_word(trimmed, header))
+            };
+            opener && frame.header_indent_column < lead
+        }) {
+            let rebase = |column: usize| column + lead - frame.header_indent_column;
+            frame.body_indent_column = rebase(frame.body_indent_column);
+            frame.sibling_indent_column = rebase(frame.sibling_indent_column);
+            frame.header_indent_column = lead;
+        }
     }
 
     pub(crate) fn update_current_brace_indent_columns(&mut self, body: usize, sibling: usize) {

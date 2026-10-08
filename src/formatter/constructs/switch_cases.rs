@@ -2203,10 +2203,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A header's frame may open before its line: the header stands in
+        // the block around it.
         let frame = self
             .layout
             .frame_stack
             .active_brace()
+            .filter(|frame| !self.brace_frame_awaits_line || frame.case_block)
+            .or_else(|| self.layout.frame_stack.enclosing_brace())
             .filter(|frame| frame.case_block)?;
         let follows_ternary_arm = self
             .output
@@ -2401,6 +2405,14 @@ impl FormatEngine<'_> {
 
         if line_kind == LineKind::SwitchLabel {
             layout.case_block_closed_depth = None;
+            // A label ends the case before it, and its directive's level.
+            while layout
+                .preprocessor_brace_depths
+                .last()
+                .is_some_and(|&depth| depth >= current)
+            {
+                layout.preprocessor_brace_depths.pop();
+            }
             let code = self.output.code_trimmed_of(line);
             if code.ends_with('{') {
                 self.layout

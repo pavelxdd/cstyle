@@ -1339,6 +1339,11 @@ impl FormatEngine<'_> {
             .current_closing_brace_open(self.options.tab_width)?;
         if open_trimmed.starts_with("switch")
             || self
+                .layout
+                .frame_stack
+                .last_closed_brace()
+                .is_some_and(|frame| frame.header.as_deref() == Some("switch"))
+            || self
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|line| line.trimmed() == "}")

@@ -1554,7 +1554,11 @@ impl FormatEngine<'_> {
             });
         let has_question = self.layout.nesting.has_question_in_current_brace();
         let is_range_for = !has_question && self.is_range_for_colon();
-        let label_text = self.current[self.current.statement_start()..].trimmed();
+        // A label after the brace closing the case before stands on its own.
+        let label_text = self.current[self.current.statement_start()..]
+            .trimmed()
+            .trim_start_matches('}')
+            .trimmed();
         let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
