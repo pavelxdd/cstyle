@@ -6956,3 +6956,12 @@ fn a_vtk_one_line_else_block_stands_at_the_else() {
         "void f(void)\n{\n    if (a)\n    { x = 1; }\n    else\n    { y = 1; }\n}\n",
     );
 }
+
+#[test]
+fn a_closer_after_a_comment_only_block_closes_an_empty_block() {
+    check(
+        "void f(void)\n{\n    while( x ) {\n        if( a ) {\n            if( b ) {\n                g();\n            } else {\n                /* ignore */\n            }\n        } else\n            break;\n        k();\n    }\n}\n",
+        &["--style=java", "--break-blocks=all"],
+        "void f(void) {\n    while( x ) {\n        if( a ) {\n            if( b ) {\n                g();\n\n            } else {\n                /* ignore */\n            }\n        } else\n            break;\n\n        k();\n    }\n}\n",
+    );
+}

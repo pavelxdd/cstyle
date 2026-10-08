@@ -390,8 +390,15 @@ impl FormatEngine<'_> {
                 .previous_pre_adjust_line
                 .as_deref()
                 .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with("{}"));
+            // A closer right after an empty block's closes it too, to astyle.
+            let follows_empty_block_closer = self.block_spacing.closed_empty_block
+                && self
+                    .layout
+                    .previous_pre_adjust_line
+                    .as_deref()
+                    .is_some_and(|previous| previous.trimmed() == "}");
             self.block_spacing.closed_empty_block =
-                previous_opens || holds_no_code || ends_empty_block;
+                previous_opens || holds_no_code || ends_empty_block || follows_empty_block_closer;
         }
         let case_block_before_directive =
             std::mem::take(&mut self.block_spacing.case_block_before_directive);
