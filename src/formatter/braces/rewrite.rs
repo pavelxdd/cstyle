@@ -21,6 +21,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
@@ -1557,12 +1558,18 @@ impl FormatEngine<'_> {
         if self.previous_was_newline || source_separate_macro_block {
             self.finish_line();
         }
+        // A statement other than a label in a switch stands in a case body.
+        let switch_statement = self.layout.command_state.current_header.as_deref()
+            == Some("switch")
+            && next_code_token(tokens, start + 1).is_some_and(|first| {
+                !matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
+            });
         let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
             && self.current_is_blank()
             && (self.layout.command_state.current_header.is_some()
                 || self.current_ends_definition_header()
                 || self.output_ends_objc_method_header()))
-        .then(|| " ".repeat(self.options.indent_width.saturating_sub(1)));
+        .then(|| " ".repeat((usize::from(switch_statement) + 1) * self.options.indent_width - 1));
         let empty_block_after_operator =
             is_empty_block && self.layout.previous == PreviousToken::Operator;
         let brace_header = is_asm_block.then_some("_asm");

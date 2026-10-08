@@ -1712,3 +1712,18 @@ fn a_header_block_kept_after_a_case_label_closes_at_the_header() {
     );
     assert_eq!(format_exact(input, &kr), expected);
 }
+
+#[test]
+fn a_pico_one_line_switch_block_runs_a_statement_in_at_the_case_body() {
+    let options = options_from_args(&["--style=pico"]);
+    let input = "int f(int err)\n{   switch (err)\n    {  M(G) }\n    switch (err)\n    {  case 1: x(); }\n    return u(err); }\n";
+    let expected = fixture!(
+        "int f(int err)",
+        "{   switch (err)",
+        "    {       M(G) }",
+        "    switch (err)",
+        "    {   case 1: x(); }",
+        "    return u(err); }",
+    );
+    assert_eq!(format_exact(input, &options), expected);
+}
