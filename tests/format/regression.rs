@@ -7418,3 +7418,28 @@ fn unnamed_pointer_or_reference_before_assignment_survives_name_alignment() {
         "Item * =\n    make();\n",
     );
 }
+
+#[test]
+fn fields_of_a_returned_compound_literal_share_one_column() {
+    check(
+        "struct s f(void)\n{\n    return (struct s) {\n        .a = 1,\n        .b = 2,\n        .c = 3,\n    };\n}\n",
+        &[],
+        "struct s f(void)\n{\n    return (struct s) {\n        .a = 1,\n        .b = 2,\n        .c = 3,\n    };\n}\n",
+    );
+}
+
+#[test]
+fn one_line_compound_literal_assigned_through_a_member_arrow_keeps_its_closing_gap() {
+    check(
+        "void f(void)\n{\n    a->b = (struct s) { .c = 1 };\n    a->b += (T) { 1, 2 };\n    a->b = { 1 };\n}\n",
+        &[],
+        "void f(void)\n{\n    a->b = (struct s) { .c = 1 };\n    a->b += (T) { 1, 2 };\n    a->b = { 1 };\n}\n",
+    );
+}
+
+#[test]
+fn group_opened_at_the_end_of_a_compound_literal_row_indents_its_rows() {
+    let source = "void f(void)\n{\n    y = (struct s) {\n        .addr = {\n            1, 2,\n            3, 4,\n        },\n        .c = {\n            .x = {\n                1,\n            },\n        },\n        [0] = {\n            5,\n        },\n    };\n}\n";
+    check(source, &[], source);
+    check(source, &["--style=kr", "--indent-switches"], source);
+}

@@ -157,6 +157,9 @@ struct OpenBrace {
     brace_type: BraceType,
     block_indent_extra: usize,
     class_block_indent_extra: usize,
+    /// Levels a group opened at the end of a compound literal's row takes
+    /// past the block level: the literal places its rows by column.
+    element_row_levels: usize,
     breaks_before_call: bool,
 }
 
@@ -1061,11 +1064,13 @@ impl FormatEngine<'_> {
         .then(|| self.current_inline_array_column())
         .flatten();
         self.realign_compound_literal_cast_brace(brace_type);
+        let element_row_levels = self.element_row_levels(brace_type, next);
         let mut brace = OpenBrace {
             header: brace_header,
             brace_type,
             block_indent_extra,
             class_block_indent_extra,
+            element_row_levels,
             breaks_before_call: lambda.breaks_before_call,
         };
         if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
@@ -1113,6 +1118,26 @@ impl FormatEngine<'_> {
             attach_case_label_brace || attached_case_label_output_brace,
         );
         self.layout.previous = PreviousToken::Other;
+    }
+
+    /// The levels between the block level and a row of the compound literal
+    /// around, for a group that row opens at its end.
+    fn element_row_levels(&self, brace_type: BraceType, next: Option<&Token>) -> usize {
+        if !matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) || !matches!(next, None | Some(Token::Newline))
+            || self.current_is_blank()
+            || !self.innermost_brace_is_compound_literal()
+        {
+            return 0;
+        }
+        self.current_inline_array_column()
+            .filter(|column| column % self.options.indent_width == 0)
+            .map_or(0, |column| {
+                (column / self.options.indent_width)
+                    .saturating_sub(self.layout.indentation.indent())
+            })
     }
 
     fn clear_continuation_before_open_brace(&mut self) {
@@ -2764,7 +2789,10 @@ impl FormatEngine<'_> {
             );
             self.layout.indentation.enter_block_with_extra(
                 false,
-                block_indent_extra + class_block_indent_extra + double_brace_extra,
+                block_indent_extra
+                    + class_block_indent_extra
+                    + double_brace_extra
+                    + brace.element_row_levels,
             );
         }
         if attached_case_label {

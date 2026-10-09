@@ -2983,6 +2983,39 @@ fn enum_head_ends_previous_line(
     .then_some(BraceType::Enum)
 }
 
+/// Whether `head` declares a trailing return type, `) -> T` or
+/// `) const -> T`, before a body; a member access `a->b` before an
+/// assignment heads a value.
+fn heads_trailing_return_body(head: &[Token]) -> bool {
+    let mut previous = None;
+    for (index, token) in head.iter().enumerate() {
+        match token {
+            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => continue,
+            Token::Operator(operator) if operator == "->" => {
+                let after_parameters = previous.is_some_and(|previous| {
+                    matches!(head[previous], Token::Symbol(')'))
+                        || matches!(&head[previous], Token::Word(word) if matches!(
+                            word.as_str(),
+                            "const" | "volatile" | "mutable" | "noexcept" | "override" | "final"
+                        ))
+                        || matches!(&head[previous], Token::Operator(operator)
+                            if operator == "&" || operator == "&&")
+                });
+                if after_parameters
+                    && !head[index..]
+                        .iter()
+                        .any(|token| matches!(token, Token::Operator(operator) if operator == "="))
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        previous = Some(index);
+    }
+    false
+}
+
 fn initializer_brace_type(
     tokens: &[Token],
     open_index: usize,
@@ -3022,10 +3055,7 @@ fn initializer_brace_type(
     }) {
         return Some(BraceType::Enum);
     }
-    if tokens[segment_start..open_index]
-        .iter()
-        .any(|token| matches!(token, Token::Operator(operator) if operator == "->"))
-    {
+    if heads_trailing_return_body(&tokens[segment_start..open_index]) {
         return None;
     }
     match tokens.get(previous)? {
