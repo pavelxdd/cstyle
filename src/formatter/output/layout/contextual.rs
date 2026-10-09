@@ -23,6 +23,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -2931,8 +2932,12 @@ impl FormatEngine<'_> {
         }
         // A row of a compound literal among the arguments is none of them.
         let compound_literal_row = self.output.pending_tokens().is_some_and(|span| {
-            self.tree.groups.enclosing(span.first).is_some_and(|group| {
+            let groups = &self.tree.groups;
+            groups.enclosing(span.first).is_some_and(|group| {
                 self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+                    && groups
+                        .ancestors(group)
+                        .any(|outer| groups.get(outer).delimiter == Delimiter::Paren)
             })
         });
         if self.options.indent_after_parens
