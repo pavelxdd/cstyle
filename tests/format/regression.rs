@@ -7304,3 +7304,62 @@ fn rows_after_a_string_continued_over_lines_align_to_its_paren() {
         "void f(void) {\n    __asm__ __volatile__ (\"x\\n\\\n  y\"\n                          : \"=r\" (r));\n    h (\"a\\\n  b\", x,\n       y);\n}\n",
     );
 }
+
+#[test]
+fn declarators_continued_after_a_run_in_brace_stand_a_level_past_their_word() {
+    check(
+        "int f(void)\n{\n    uint32_t commit_count = 0,\n        tag_count = 0;\n    if (a)\n    {\n        int *p = 0,\n            *q = 1;\n    }\n}\n",
+        &["--style=horstmann"],
+        "int f(void)\n{   uint32_t commit_count = 0,\n                 tag_count = 0;\n    if (a)\n    {   int *p = 0,\n                 *q = 1;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn members_continued_after_a_run_in_brace_register_nothing() {
+    check(
+        "static struct p\n{\n    unsigned int want_add:1,\n             want_delete:1;\n    char *r;\n};\n",
+        &["--style=horstmann"],
+        "static struct p\n{   unsigned int want_add:1,\n    want_delete:1;\n    char *r;\n};\n",
+    );
+}
+
+#[test]
+fn braces_added_around_a_do_body_on_its_own_line_break_it() {
+    check(
+        "void f(void)\n{\n    do\n        x++;\n    while (x);\n}\n",
+        &["--style=1tbs", "--keep-one-line-blocks"],
+        "void f(void)\n{\n    do {\n        x++;\n    } while (x);\n}\n",
+    );
+}
+
+#[test]
+fn run_in_declarators_register_the_name_or_the_array_value() {
+    check(
+        "int f(void)\n{\n    static const char xl[] = \"ab\",\n        xu[] = \"AB\";\n    if (x)\n    {\n        int a,\n            b;\n    }\n}\n",
+        &["--style=horstmann"],
+        "int f(void)\n{   static const char xl[] = \"ab\",\n                             xu[] = \"AB\";\n    if (x)\n    {   int a,\n        b;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn comment_after_a_one_line_header_block_broken_by_break_one_line_headers_moves_in() {
+    check(
+        "void f(void)\n{\n  if (*s == 1) { s++; neg = 1; }  /* handle sign */\n  else if (*s == 2) s++;\n}\n",
+        &[
+            "--style=1tbs",
+            "--keep-one-line-blocks",
+            "--keep-one-line-statements",
+            "--break-one-line-headers",
+        ],
+        "void f(void)\n{\n    if (*s == 1) {\n        s++;    /* handle sign */\n        neg = 1;\n    } else if (*s == 2) {\n        s++;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn comment_led_row_after_a_kept_case_statement_stands_in_the_body() {
+    check(
+        "void f(int n)\n{\n  switch( nVal ){\n    case 6: nToken = 1;\n      /* no break */ deliberate_fall_through\n    case 5: iCol = 2;\n  }\n}\n",
+        &["--keep-one-line-statements"],
+        "void f(int n)\n{\n    switch( nVal ) {\n    case 6: nToken = 1;\n        /* no break */ deliberate_fall_through\n    case 5: iCol = 2;\n    }\n}\n",
+    );
+}

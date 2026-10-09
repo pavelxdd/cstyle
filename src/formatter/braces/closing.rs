@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     ExternCGuard, is_lambda_body_header, is_namespace_or_module_block_header,
 };
+use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
@@ -397,8 +398,18 @@ impl FormatEngine<'_> {
         self.layout.command_state.observe_char('}');
         self.layout.compound_literal.just_closed =
             self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
+        // Breaking one-line headers breaks the one-line blocks they open.
         let move_one_line_block_comment = (self.options.break_one_line_blocks
-            || self.comments.closing_broken_added_block)
+            || self.comments.closing_broken_added_block
+            || self.options.break_one_line_headers
+                && self
+                    .layout
+                    .nesting
+                    .last_closed_brace_header
+                    .as_deref()
+                    .is_some_and(|header| {
+                        is_standard_add_braces_header(header) || header == "switch"
+                    }))
             && self.layout.line_state.is_one_line_block
             && !matches!(
                 self.layout.nesting.last_closed_brace_type,

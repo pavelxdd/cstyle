@@ -143,10 +143,16 @@ impl FormatEngine<'_> {
                         .is_some_and(|token| matches!(token, Token::Comment(..))));
         // Breaking one-line headers leaves a statement on a line of its own
         // to the one-line block around it.
+        // Braces added around a `do` body on its own line break it unless
+        // they are one-line braces.
+        let breaks_do_body = header_is_do
+            && !self.options.add_one_line_braces
+            && token_begins_line(tokens, statement_start);
         if (!self.options.break_one_line_headers || token_begins_line(tokens, statement_start))
             && (self.options.add_one_line_braces || !self.options.break_one_line_blocks)
             && !self.options.lisp_add_one_line_braces_breaks_blocks()
             && !lisp_breaks_added_block
+            && !breaks_do_body
         {
             let statement_starts_line = token_begins_line(tokens, statement_start);
             // A comment between the header and its statement leaves the

@@ -2105,9 +2105,13 @@ impl FormatEngine<'_> {
                             || trimmed == "else"
                             || trimmed.starts_with("else if"))
                 });
-            // The output line lost the case unindents the comment is yet to.
-            let previous_indent =
-                leading_visual_width(line, self.options.tab_width) + self.case_unindent_spaces();
+            // The output line lost the case unindents the comment is yet to;
+            // a statement kept after its case label stands in the body.
+            let after_label = find_case_colon(code.trimmed_start())
+                .is_some_and(|colon| !code.trimmed_start()[colon + 1..].trimmed().is_empty());
+            let previous_indent = leading_visual_width(line, self.options.tab_width)
+                + self.case_unindent_spaces()
+                + usize::from(after_label) * self.options.indent_width;
             let body_indent = (self
                 .layout
                 .indentation

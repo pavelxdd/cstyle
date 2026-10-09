@@ -1868,6 +1868,11 @@ impl FormatEngine<'_> {
             start,
             colon,
         }));
+        // Members run in after the brace register nothing.
+        if self.runs_in_after_block_brace(start) {
+            let line = self.output.line_with_token(start)?;
+            return Some(self.output.lead_width(line, self.options.tab_width));
+        }
         // A declarator row after a row that continues the declaration
         // stands at that row.
         if let Some(comma_line) = self.output.line_with_token(comma)
@@ -2243,6 +2248,40 @@ impl FormatEngine<'_> {
     /// `=` and ends at a `,` stands where astyle registers that `=`: at
     /// the word before it, or at the value after an array's `]`.
     #[inline(never)]
+    /// Whether the statement at `start` runs in after the lone block brace
+    /// on the line before, as Horstmann and Pico join them.
+    fn runs_in_after_block_brace(&self, start: usize) -> bool {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Horstmann
+        ) {
+            return false;
+        }
+        let Some(brace) = self.tree.previous_code_token(start) else {
+            return false;
+        };
+        let (Some(brace_line), Some(start_line)) = (
+            self.output.line_with_token(brace),
+            self.output.line_with_token(start),
+        ) else {
+            return false;
+        };
+        matches!(self.tree.tokens[brace], Token::Symbol('{'))
+            && brace_line + 1 == start_line
+            && self.output.code_before_comment(brace_line).trimmed() == "{"
+            && self.tree.groups.opened_at(brace).is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(
+                        BlockKind::FunctionBody
+                            | BlockKind::Control
+                            | BlockKind::Block
+                            | BlockKind::Aggregate
+                    )
+                )
+            })
+    }
+
     fn declarator_after_comma_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
@@ -2329,9 +2368,18 @@ impl FormatEngine<'_> {
                         + self.case_unindent_spaces()
                 });
         }
+        // A statement run in after a block brace registers its name a level
+        // past the line astyle reads, and no second word.
+        let run_in = self.runs_in_after_block_brace(start);
         let mut index = start;
         let assign = loop {
             if index >= line_end {
+                if run_in {
+                    return Some(
+                        self.output.lead_width(start_line, self.options.tab_width)
+                            + self.case_unindent_spaces(),
+                    );
+                }
                 // No `=`: the `,` ending the line registers the second word,
                 // and that indent holds for the lines after.
                 let second = next_code_token(tokens, start + 1)?;
@@ -2369,12 +2417,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let before = self.tree.previous_code_token(assign)?;
-        let target = match &tokens[before] {
-            Token::Symbol(']') => next_code_token(tokens, assign + 1)?,
-            Token::Word(_) => before,
+        let (target, run_in_extra) = match &tokens[before] {
+            Token::Symbol(']') => (next_code_token(tokens, assign + 1)?, 0),
+            Token::Word(_) => (before, usize::from(run_in) * self.options.indent_width),
             _ => return None,
         };
-        Some(self.token_column(target)? + self.case_unindent_spaces())
+        Some(self.token_column(target)? + run_in_extra + self.case_unindent_spaces())
     }
 
     /// Visual column of the code token `token` on its output line, found
