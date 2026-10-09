@@ -2106,6 +2106,9 @@ impl FormatEngine<'_> {
                                 || starts_header_word(trimmed, "while")
                                 || starts_header_word(trimmed, "if")
                         })
+                // A header whose body its own line opened is not the one
+                // the previous line continues.
+                && !self.output.code_trimmed_of(header).ends_with('{')
             {
                 let header_indent = leading_visual_width(header, self.options.tab_width);
                 if header_indent < leading_visual_width(previous, self.options.tab_width) {

@@ -7443,3 +7443,19 @@ fn group_opened_at_the_end_of_a_compound_literal_row_indents_its_rows() {
     check(source, &[], source);
     check(source, &["--style=kr", "--indent-switches"], source);
 }
+
+#[test]
+fn initializer_rows_in_a_control_block_indent_past_a_declarator_with_a_call_in_its_bound() {
+    let source = "void f(void)\n{\n    for (;;) {\n        char *argv[ARRAY_COUNT(cases[i].args) + 2] = {\n            const_cast(\"kvmemd\"),\n            NULL,\n        };\n    }\n    if (a &&\n        b(c)) {\n        x();\n    }\n}\n";
+    check(
+        source,
+        &[
+            "--style=1tbs",
+            "--pad-oper",
+            "--unpad-paren",
+            "--pad-header",
+            "--min-conditional-indent=0",
+        ],
+        source,
+    );
+}
