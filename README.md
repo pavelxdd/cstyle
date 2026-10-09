@@ -9,7 +9,8 @@ syntax used by AStyle, so existing configs can often be reused.
 ## Install
 
 ```sh
-just install
+just install      # cargo install from the working tree
+just install-pgo  # copy the binary from `just build-pgo`
 ```
 
 ## Library

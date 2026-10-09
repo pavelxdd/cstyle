@@ -29,6 +29,15 @@ build-pgo *dirs:
 install:
     cargo install --path .
 
+# Install the profile-guided binary from target/pgo (run build-pgo first)
+[group('build')]
+install-pgo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bin=target/pgo/release/cstyle
+    [ -x "$bin" ] || { echo "install-pgo: $bin is missing; run just build-pgo first" >&2; exit 1; }
+    install -m 755 "$bin" "${CARGO_HOME:-$HOME/.cargo}/bin/cstyle"
+
 # Remove Cargo build artifacts
 [group('build')]
 clean:
