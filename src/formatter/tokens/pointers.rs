@@ -593,12 +593,16 @@ impl FormatEngine<'_> {
         if let Some(declaration) = self.tree_declaration_context() {
             return declaration;
         }
-        for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trimmed_end();
+        for index in self.output.scoped_range().rev().take(8) {
+            let trimmed = self.output[index].trimmed_end();
+            // A comment's rows are prose.
+            if self.output.line_tokens(index).is_none() {
+                continue;
+            }
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
-            if is_comment_row(trimmed) || !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
+            if !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
                 continue;
             }
             let Some(open) = trimmed.find('(') else {
@@ -770,12 +774,16 @@ impl FormatEngine<'_> {
     /// Head text of the open paren that encloses the current parameter
     /// continuation line.
     fn enclosing_open_paren_head(&self) -> Option<&str> {
-        for line in self.output.scoped().iter().rev().take(8) {
-            let trimmed = line.trimmed_end();
+        for index in self.output.scoped_range().rev().take(8) {
+            let trimmed = self.output[index].trimmed_end();
+            // A comment's rows are prose.
+            if self.output.line_tokens(index).is_none() {
+                continue;
+            }
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
-            if is_comment_row(trimmed) || !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
+            if !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
                 continue;
             }
             let open = trimmed.find('(')?;
@@ -1641,16 +1649,6 @@ fn strip_balanced_angles(segment: &str) -> String {
         }
     }
     result
-}
-
-/// Whether `line` holds only part of a comment, whose parens are prose.
-fn is_comment_row(line: &str) -> bool {
-    let text = line.trimmed_start();
-    text == "*"
-        || text.starts_with("* ")
-        || text.starts_with("*/")
-        || text.starts_with("/*")
-        || text.starts_with("//")
 }
 
 fn has_unclosed_balanced_delimiter(text: &str, open: &str, close: &str) -> bool {

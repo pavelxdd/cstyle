@@ -7155,3 +7155,12 @@ fn parens_in_a_comment_row_open_no_parameter_list() {
         "void f(void)\n{\n    /*\n     * x (i.e. y\n     */\n    if (a & b)\n        h(a * b);\n}\n",
     );
 }
+
+#[test]
+fn parens_in_unstarred_comment_rows_open_no_parameter_list() {
+    check(
+        "void f(void)\n{\n    /* Compare the build number separately (eg 1.9\n       is less). */\n    if(matched && buildVersion &&\n            x)\n        g();\n}\n",
+        &["--style=kr", "--align-pointer=type"],
+        "void f(void)\n{\n    /* Compare the build number separately (eg 1.9\n       is less). */\n    if(matched && buildVersion &&\n            x)\n        g();\n}\n",
+    );
+}
