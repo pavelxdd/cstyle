@@ -7128,3 +7128,12 @@ fn tabs_lead_block_comments_case_label_rows_and_close_paren_rows_as_astyle() {
         "void f(void)\n{\n\tP(h, {\n\t\t/* NOP */\n\t});\n\tTRY(L, &lj,\n\t    (*f)(L, ud);\n\t   );\n\tswitch (m) {\n\tcase A|\n\t\t\tB:\n\t\treturn 1;\n\t}\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_reads_a_bare_block_after_a_header_block_as_that_header() {
+    check(
+        "void g(void)\n{\n    if(rc) {\n    }\n    {\n        x();\n    }\n    rc = n(a, b);\n    {\n        y();\n    }\n    z();\n}\n",
+        &["--style=kr", "--break-blocks", "--delete-empty-lines"],
+        "void g(void)\n{\n    if(rc) {\n    }\n\n    {\n        x();\n    }\n\n    rc = n(a, b);\n    {\n        y();\n    }\n    z();\n}\n",
+    );
+}

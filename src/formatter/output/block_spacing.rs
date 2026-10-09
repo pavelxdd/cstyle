@@ -18,6 +18,9 @@ pub(crate) struct BlockSpacingState {
     closed_empty_block: bool,
     pending_closed_empty_block: Option<bool>,
     case_block_before_directive: bool,
+    /// Depths of blocks opened right after a header's block closed, which
+    /// astyle reads as more of that header.
+    header_continued_depths: Vec<usize>,
 }
 
 impl FormatEngine<'_> {
@@ -317,6 +320,29 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_block_spacing_open_brace(&mut self) {
         if self.options.break_blocks {
+            // A directive or comment between the blocks ends the header.
+            let follows_close_brace = self.current.active_token().is_some_and(|brace| {
+                self.tree.tokens[..brace]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            });
+            if follows_close_brace
+                && self
+                    .layout
+                    .nesting
+                    .last_closed_brace_header
+                    .as_deref()
+                    .is_some_and(|header| {
+                        !matches!(header, "case" | "default")
+                            && (is_standard_break_blocks_opening_header(header)
+                                || is_break_blocks_closing_header(header))
+                    })
+            {
+                let depth = self.layout.nesting.brace_header_stack.len();
+                self.block_spacing.header_continued_depths.push(depth);
+            }
             self.clear_block_spacing_header();
         }
     }
@@ -343,8 +369,14 @@ impl FormatEngine<'_> {
         // A case block's brace parts from a directive after it.
         self.block_spacing.case_block_before_directive =
             closed_header.is_some_and(|header| matches!(header, "case" | "default"));
+        let depth = self.layout.nesting.brace_header_stack.len();
+        let continues_header = self.block_spacing.header_continued_depths.last() == Some(&depth);
+        if continues_header {
+            self.block_spacing.header_continued_depths.pop();
+        }
         if closed_command_header
-            && closed_header.is_some_and(|header| !matches!(header, "case" | "default"))
+            && (continues_header
+                || closed_header.is_some_and(|header| !matches!(header, "case" | "default")))
         {
             // A comment after the brace still ends its line.
             if comment_follows && !self.current_is_blank() {
