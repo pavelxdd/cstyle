@@ -7516,3 +7516,28 @@ fn compound_literal_argument_on_its_own_line_stays_with_the_arguments() {
         indented,
     );
 }
+
+#[test]
+fn unclosed_paren_before_a_compound_literal_leaves_the_code_after_it_in_place() {
+    // Parens the source never closes are no call's arguments, even when a
+    // compound literal spanning lines follows inside them.
+    let input =
+        "f(a,\n\nvoid g(void)\n{\n    y();\n}\n\nstruct s v = (struct s) {\n    .a = 1,\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let output = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format bytes"))
+        .expect("utf8");
+    assert!(output.contains("\n{\n    y();\n}\n"), "{output}");
+    assert!(
+        output.ends_with("\nstruct s v = (struct s) {\n    .a = 1,\n};\n"),
+        "{output}"
+    );
+}
+
+#[test]
+fn lambda_trailing_return_split_onto_its_own_line_heads_a_body() {
+    // A `->` that starts its line follows the lambda's parameters above it.
+    let input = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string { return p.name; });\n}\n";
+    let expected = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string\n    {\n        return p.name;\n    });\n}\n";
+    check(input, &["--style=allman"], expected);
+}

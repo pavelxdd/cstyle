@@ -27,7 +27,13 @@ impl FormatEngine<'_> {
         let Some(parens) = groups.opened_at(open) else {
             return false;
         };
+        // Only a call's closed argument list counts: parens left open or
+        // holding statements are no call's arguments.
         groups.get(parens).delimiter == Delimiter::Paren
+            && groups.get(parens).close.is_some()
+            && !groups
+                .members(parens)
+                .any(|member| matches!(tokens[member], Token::Symbol(';')))
             && groups.members(parens).any(|brace| {
                 groups.opened_at(brace).is_some_and(|literal| {
                     // The literal starts at its cast, before any line break
