@@ -2512,7 +2512,10 @@ fn closing_brace_after_braces_opened_in_both_directive_branches_finds_its_opener
 #[test]
 fn designator_rows_after_run_in_first_element_align_with_it() {
     let input = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n    x();\n}\n";
-    check(input, &["--style=kr"], input);
+    // A struct declaration closes its aggregate at the statement.
+    let expected = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n    };\n    x();\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -6217,9 +6220,9 @@ fn compound_literal_closing_brace_leaves_the_last_row() {
 }
 
 #[test]
-fn compound_literal_rows_align_under_a_run_in_first_element() {
+fn compound_literal_rows_after_a_run_in_first_element_stand_a_level_past_the_statement() {
     let input = "void f(void)\n{\n    q = (int[]){ 1, 2,\n        3 };\n    return (struct p){ .a = 1,\n        .b = 2 };\n    g((int[]){ 1,\n        2 }, 3);\n}\n";
-    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n                  3\n                };\n    return (struct p) { .a = 1,\n                        .b = 2\n                      };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
+    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n        3\n    };\n    return (struct p) { .a = 1,\n        .b = 2\n    };\n    g((int[]) { 1,\n        2\n    }, 3);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -7458,4 +7461,20 @@ fn initializer_rows_in_a_control_block_indent_past_a_declarator_with_a_call_in_i
         ],
         source,
     );
+}
+
+#[test]
+fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
+    let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
+    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2\n    };\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
 }

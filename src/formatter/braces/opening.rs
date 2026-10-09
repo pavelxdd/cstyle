@@ -2765,6 +2765,7 @@ impl FormatEngine<'_> {
                 brace_column: opening_indent,
                 output_line: self.output.len(),
                 aggregate_assignment: false,
+                leveled_literal: false,
             });
         } else if (brace_type == BraceType::Namespace && !self.options.indent_namespaces)
             || cpp_extern_c_block
