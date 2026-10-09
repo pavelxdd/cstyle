@@ -405,7 +405,7 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
         return None;
     }
     let mut declarator = *word_starts.last()?;
-    while declarator < eq && matches!(head_bytes[declarator], b'*' | b'&') {
+    while declarator < head_bytes.len() && matches!(head_bytes[declarator], b'*' | b'&') {
         declarator += 1;
     }
     if declarator >= head.len() || !is_word_char(head[declarator..].chars().next()?) {

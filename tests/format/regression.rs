@@ -7404,3 +7404,17 @@ fn comment_after_a_braceless_body_in_an_indented_case_stays_in_the_case() {
         "void f(int e)\n{\n    switch (e) {\n        case 1:\n            if (g(e))\n                break;\n            /* else */ /* FALLTHROUGH */\n        case 3:\n            y();\n    }\n}\n",
     );
 }
+
+#[test]
+fn unnamed_pointer_or_reference_before_assignment_survives_name_alignment() {
+    check(
+        "const Item& =\n    Item();\n",
+        &["--align-pointer=name"],
+        "const Item & =\n    Item();\n",
+    );
+    check(
+        "Item* =\n    make();\n",
+        &["--align-pointer=name"],
+        "Item * =\n    make();\n",
+    );
+}
