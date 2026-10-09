@@ -7164,3 +7164,12 @@ fn parens_in_unstarred_comment_rows_open_no_parameter_list() {
         "void f(void)\n{\n    /* Compare the build number separately (eg 1.9\n       is less). */\n    if(matched && buildVersion &&\n            x)\n        g();\n}\n",
     );
 }
+
+#[test]
+fn a_call_after_a_one_line_header_takes_no_declarators() {
+    check(
+        "void f(int flags)\n{\n    if (color) put_str(color, F, S, flags & JV);\n    if (c) g(a * b);\n}\n",
+        &["--style=kr", "--align-pointer=type"],
+        "void f(int flags)\n{\n    if (color) put_str(color, F, S, flags & JV);\n    if (c) g(a * b);\n}\n",
+    );
+}

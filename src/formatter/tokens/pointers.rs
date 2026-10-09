@@ -759,9 +759,15 @@ impl FormatEngine<'_> {
                 .last()
                 .is_some_and(|brace_type| is_class_like_brace_type(*brace_type));
         }
-        // A head inside an open paren is a call's argument.
+        // A head inside an open paren is a call's argument; one after a
+        // header's condition is its body.
+        let first_word = return_type
+            .split(|ch: char| !is_identifier_continue(ch))
+            .find(|word| !word.is_empty())
+            .unwrap_or("");
         if return_type.contains_any_byte(b".[]")
             || has_unclosed_balanced_delimiter(return_type, "(", ")")
+            || is_header(self.options, first_word) && return_type.ends_with(')')
         {
             return false;
         }
