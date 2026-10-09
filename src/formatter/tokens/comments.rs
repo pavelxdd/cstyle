@@ -4,6 +4,7 @@ use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::headers::is_header;
+use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::ContinuationIndent;
@@ -749,6 +750,17 @@ impl FormatEngine<'_> {
                     + self.case_body_indent_extra(LineKind::Normal))
                     * self.options.indent_width,
             )
+        } else if frame
+            .header
+            .as_deref()
+            .is_some_and(|header| starts_header_word(header, "switch"))
+        {
+            // A switch's body column holds its labels; indented switches
+            // set the statements of a case a level past them, the column
+            // counting the switches around it.
+            frame.body_indent_column
+                + usize::from(self.case_body_indent_extra(LineKind::Normal) > 0)
+                    * self.options.indent_width
         } else {
             frame.body_indent_column
         };

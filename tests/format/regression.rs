@@ -7386,3 +7386,21 @@ fn block_comment_in_column_one_takes_the_indent_of_the_code_after_it() {
         "void f(void)\n    {\n    switch( y )\n        {\n            /* Beginning\n            ** follows:\n            */\n            /********** Begin **/\n            x();\n        }\n    }\n",
     );
 }
+
+#[test]
+fn row_of_adjacent_block_comments_in_an_indented_case_stays_in_its_body() {
+    check(
+        "void f(int e)\n{\n  switch (e) {\n    case 1:\n      x();\n      /* else */ /* FALLTHROUGH */\n    case 2:\n      y();\n  }\n}\n",
+        &["--indent-switches"],
+        "void f(int e)\n{\n    switch (e) {\n        case 1:\n            x();\n            /* else */ /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn comment_after_a_braceless_body_in_an_indented_case_stays_in_the_case() {
+    check(
+        "void f(int e)\n{\n  switch (e) {\n    case 1:\n      if (g(e))\n        break;\n      /* else */ /* FALLTHROUGH */\n    case 3:\n      y();\n  }\n}\n",
+        &["--indent-switches"],
+        "void f(int e)\n{\n    switch (e) {\n        case 1:\n            if (g(e))\n                break;\n            /* else */ /* FALLTHROUGH */\n        case 3:\n            y();\n    }\n}\n",
+    );
+}
