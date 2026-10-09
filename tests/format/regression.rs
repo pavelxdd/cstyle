@@ -7173,3 +7173,12 @@ fn a_call_after_a_one_line_header_takes_no_declarators() {
         "void f(int flags)\n{\n    if (color) put_str(color, F, S, flags & JV);\n    if (c) g(a * b);\n}\n",
     );
 }
+
+#[test]
+fn a_block_reads_stars_between_names_in_parens_and_after_closers_as_written() {
+    check(
+        "void f(void)\n{\n    struct s {\n        int a;\n    } *entries;\n    STACK_OF(X509_INFO) *inf;\n    extern int g(sqlite3 *db, const char*);\n    nByte = sizeof(A)*n\n            + sizeof(B)*n;\n}\nextern int h(sqlite3 *db);\n",
+        &["--style=kr", "--align-pointer=type"],
+        "void f(void)\n{\n    struct s {\n        int a;\n    } *entries;\n    STACK_OF(X509_INFO) *inf;\n    extern int g(sqlite3 *db, const char*);\n    nByte = sizeof(A)*n\n            + sizeof(B)*n;\n}\nextern int h(sqlite3* db);\n",
+    );
+}

@@ -149,6 +149,55 @@ impl FormatEngine<'_> {
             || self.looks_like_pointer_declaration_context()
     }
 
+    /// In parens in a block, astyle reads a star or ampersand between names
+    /// as an operator, unless a basic type comes before it or an assignment
+    /// after the name.
+    pub(super) fn block_paren_reads_operator(
+        &self,
+        next: Option<&Token>,
+        following_operator: Option<&str>,
+    ) -> bool {
+        self.layout.previous == PreviousToken::Word
+            && matches!(next, Some(Token::Word(_)))
+            && self.layout.nesting.paren_depth
+                > self.layout.nesting.current_brace_paren_depth().unwrap_or(0)
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            )
+            && self.layout.frame_stack.bracket_depth() == 0
+            && !is_basic_pointer_type_word(trailing_word(&self.current))
+            && !matches!(following_operator, Some("=" | ":"))
+            && !self.current_paren_started_by_catch()
+            && !self.current_paren_is_lambda_parameter_list()
+    }
+
+    /// In a block, astyle reads a star or ampersand after a closing paren,
+    /// bracket or brace, before a name, as a dereference it leaves as
+    /// written, unless an assignment or `return` reads it as an operator.
+    pub(super) fn block_statement_reads_dereference(&self, next: Option<&Token>) -> bool {
+        (matches!(
+            self.layout.previous,
+            PreviousToken::CloseParen | PreviousToken::CloseBracket
+        ) || self.current.trimmed_end().ends_with('}'))
+            && matches!(next, Some(Token::Word(_)))
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            )
+            && self.layout.nesting.paren_depth
+                == self.layout.nesting.current_brace_paren_depth().unwrap_or(0)
+            && self.layout.frame_stack.bracket_depth() == 0
+            && !self.current_statement_contains_assignment()
+            && !self.current.trimmed_start().starts_with("return")
+            // A row continuing a statement may continue its assignment.
+            && self.output.last_line_outside_comment().is_none_or(|line| {
+                self.output
+                    .code_trimmed_of(line)
+                    .ends_with_any(b";{}:")
+            })
+    }
+
     pub(super) fn is_pointer_like(
         &self,
         operator: &str,
@@ -1655,6 +1704,12 @@ fn strip_balanced_angles(segment: &str) -> String {
         }
     }
     result
+}
+
+/// Words astyle takes for a type before a star in any context.
+fn is_basic_pointer_type_word(word: &str) -> bool {
+    matches!(word, "char" | "int" | "void" | "INT" | "VOID")
+        || word.len() >= 6 && word.ends_with("_t")
 }
 
 fn has_unclosed_balanced_delimiter(text: &str, open: &str, close: &str) -> bool {

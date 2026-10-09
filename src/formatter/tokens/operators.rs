@@ -1044,6 +1044,17 @@ impl FormatEngine<'_> {
             "*" if self.current_ends_prefix_increment_or_decrement() => {
                 self.push_unary_prefix(operator);
             }
+            "&" | "*"
+                if operator_role != OperatorRole::UnaryOperator
+                    && self.block_paren_reads_operator(next, following_operator) =>
+            {
+                self.push_binary_operator(operator);
+            }
+            "&" | "*" if self.block_statement_reads_dereference(next) => {
+                self.emit_source_space();
+                self.current.push_str(operator);
+                self.emit_trailing_source_space();
+            }
             "*" if operator_role == OperatorRole::PointerDeclarator
                 && self.tree_declaration_context() != Some(true)
                 && self.current.trimmed_start().starts_with('(')
