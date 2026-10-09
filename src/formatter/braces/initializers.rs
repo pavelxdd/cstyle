@@ -35,6 +35,15 @@ fn line_opens_typed_initializer(line: &str) -> bool {
     before.contains('<') && before.ends_with('>')
 }
 
+/// Whether `line`, a declaration up to its `=`, declares a `struct`, whose
+/// aggregate astyle closes at the statement rather than under its brace.
+fn line_declares_struct(line: &str) -> bool {
+    let head = line.trimmed_end().trim_end_matches('=');
+    let head = head.split(['[', '(']).next().unwrap_or(head);
+    head.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .any(|word| word == "struct")
+}
+
 pub(crate) fn has_nested_designated_init_brace(tokens: &[Token]) -> bool {
     let mut saw_open = false;
     let mut saw_designator = false;
@@ -373,6 +382,10 @@ impl FormatEngine<'_> {
                 .trimmed_end()
                 .strip_suffix('{')
                 .is_some_and(|prefix| line_ends_compound_literal_cast(prefix.trimmed_end()))
+            || self
+                .output
+                .pending_tokens()
+                .is_some_and(|span| self.multiline_literal_argument_parens(span.first).is_some())
         {
             return None;
         }
@@ -507,6 +520,7 @@ impl FormatEngine<'_> {
             brace_column,
             output_line: self.output.len().saturating_sub(1),
             aggregate_assignment: control_paren_indent.is_some(),
+            leveled_literal: false,
         });
         self.layout
             .continuation_indent
@@ -536,6 +550,7 @@ impl FormatEngine<'_> {
             brace_column: opening_indent,
             output_line: self.output.len().saturating_sub(1),
             aggregate_assignment: false,
+            leveled_literal: false,
         });
         self.update_current_brace_indent_columns(
             opening_indent + self.options.indent_width,
@@ -571,6 +586,7 @@ impl FormatEngine<'_> {
             brace_column: opening_indent,
             output_line: self.output.len(),
             aggregate_assignment: true,
+            leveled_literal: false,
         });
         self.update_current_brace_indent_columns(opening_indent + 1, opening_indent);
         self.layout.previous = PreviousToken::Other;
@@ -642,6 +658,9 @@ impl FormatEngine<'_> {
         // aggregate is.
         let aggregate_assign = self.current.trimmed_end().ends_with('=')
             || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
+        let struct_declaration = !nested
+            && self.current.trimmed_end().ends_with('=')
+            && line_declares_struct(&self.current);
         if self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end())
         {
@@ -709,6 +728,16 @@ impl FormatEngine<'_> {
             // closer counts each tab as one column.
             base_indent + self.current_visual_width_from(base_indent) + usize::from(padded_paren)
         };
+        // A compound literal stands the rows after its brace's line a level
+        // past its statement, where its `}` closes. One among a call's
+        // arguments keeps its rows with them.
+        let leveled_literal = brace_type == BraceType::CompoundLiteral
+            && !nested
+            && !break_first
+            && self.layout.nesting.paren_depth == 0;
+        if leveled_literal {
+            column = base_indent + self.options.indent_width;
+        }
         let statement_base = ContinuationIndent::Level(
             self.layout
                 .indentation
@@ -731,6 +760,13 @@ impl FormatEngine<'_> {
             column
         } else if run_in_nested_brace {
             base_indent + self.options.indent_width
+        } else if struct_declaration {
+            base_indent
+        } else if leveled_literal {
+            // Ratliff closes it at its rows.
+            base_indent
+                + usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                    * self.options.indent_width
         } else {
             brace_column
         };
@@ -744,6 +780,7 @@ impl FormatEngine<'_> {
             brace_column: stored_brace_column,
             output_line: self.output.len(),
             aggregate_assignment: aggregate_assign,
+            leveled_literal,
         });
         if self.current.trimmed() == "{" {
             self.update_current_brace_indent_columns(column + self.options.indent_width, column);
@@ -775,11 +812,20 @@ impl FormatEngine<'_> {
                 frame.depth == self.layout.nesting.brace_header_stack.len()
                     && self.output.len() > frame.output_line
             });
+        // So does the last row of a compound literal whose rows stand a
+        // level past its statement: its `}` breaks off below.
+        let broken_literal_row = !self.current_is_blank()
+            && self.inline_array.frames.last().is_some_and(|frame| {
+                frame.leveled_literal
+                    && frame.depth == self.layout.nesting.brace_header_stack.len()
+                    && self.output.len() > frame.output_line
+            });
         if self.current_is_blank() {
             self.layout.frame_stack.clear_closed_braces();
         } else if self.token_input.token_begins_source_line
             && self.innermost_brace_is_compound_literal()
             || broken_enum_row
+            || broken_literal_row
         {
             // The row before a `}` that leads its line stands among the
             // elements, so it publishes while the brace is open.
@@ -822,10 +868,11 @@ impl FormatEngine<'_> {
         });
         // A compound literal its line opened closes on a line of its own.
         let closing_line_opened_literal = closing_compound_literal
-            && self
-                .output
-                .get(open_output_len)
-                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{'));
+            && (inline_array.is_some_and(|frame| frame.leveled_literal)
+                || self
+                    .output
+                    .get(open_output_len)
+                    .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{')));
         let call_argument_array_column = self.output.get(open_output_len).and_then(|line| {
             line.rfind(", {")
                 .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
@@ -919,7 +966,7 @@ impl FormatEngine<'_> {
             if let Some(column) = closing_column {
                 self.layout.continuation_indent.set_next_line_spaces(column);
             }
-        } else if broken_enum_row || finished_inner_closer {
+        } else if broken_enum_row || broken_literal_row || finished_inner_closer {
             if let Some(column) = closing_column {
                 self.layout.continuation_indent.set_next_line_spaces(column);
             }
@@ -1572,6 +1619,9 @@ pub(crate) struct InlineArrayFrame {
     pub(crate) brace_column: usize,
     pub(crate) output_line: usize,
     pub(crate) aggregate_assignment: bool,
+    /// A compound literal whose rows run in after its brace, which stands
+    /// them a level past its statement and closes on a line of its own.
+    pub(crate) leveled_literal: bool,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

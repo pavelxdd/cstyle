@@ -126,6 +126,7 @@ impl FormatEngine<'_> {
         when(closes_brace || is_word(token, "else"), || {
             self.else_matching_if_indent(first)
         })
+        .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| when(is_word(token, "while"), || self.do_while_indent(first)))
         .or_else(|| {
@@ -5199,6 +5200,40 @@ impl FormatEngine<'_> {
         Some(self.token_column(content)? + self.options.indent_width + self.case_unindent_spaces())
     }
 
+    /// An argument of a call whose parens hold a compound literal spanning
+    /// lines, or a brace of that literal, stays with the call's other
+    /// arguments: a level past the line of a `(` that ends its line, else
+    /// at the first argument. Parens that indent after them place it as
+    /// any argument.
+    #[inline(never)]
+    fn literal_argument_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.indent_after_parens {
+            return None;
+        }
+        if matches!(tokens[first], Token::Symbol('{' | '}'))
+            && groups.delimited_by(first).is_none_or(|brace| {
+                self.tree.blocks.kind(brace) != Some(BlockKind::CompoundLiteral)
+            })
+        {
+            return None;
+        }
+        let open = self.multiline_literal_argument_parens(first)?;
+        let column = if self.literal_argument_parens(first).is_some() {
+            let line = self.output.line_with_token(open)?;
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.continuation_indent * self.options.indent_width
+        } else {
+            let argument = next_code_token(tokens, open + 1)?;
+            if argument >= first {
+                return None;
+            }
+            self.token_column(argument)?
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
     /// An argument after the `(` that ends the line of a call assigned
     /// with `=` stands a level past the call.
     #[inline(never)]
@@ -5220,7 +5255,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.output.line_with_token(open)?;
-        if self.output.line_with_token(assign)? != line {
+        if self.output.line_with_token(assign)? != line
+            // Parens that indent place a compound literal's line as the
+            // continuation does any argument.
+            || self.options.indent_after_parens
+                && self.multiline_literal_argument_parens(first).is_some()
+        {
             return None;
         }
         let column = self.token_column(callee)?

@@ -22,7 +22,8 @@ use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineRepl
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -2106,6 +2107,9 @@ impl FormatEngine<'_> {
                                 || starts_header_word(trimmed, "while")
                                 || starts_header_word(trimmed, "if")
                         })
+                // A header whose body its own line opened is not the one
+                // the previous line continues.
+                && !self.output.code_trimmed_of(header).ends_with('{')
             {
                 let header_indent = leading_visual_width(header, self.options.tab_width);
                 if header_indent < leading_visual_width(previous, self.options.tab_width) {
@@ -2926,9 +2930,20 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
+        // A row of a compound literal among the arguments is none of them.
+        let compound_literal_row = self.output.pending_tokens().is_some_and(|span| {
+            let groups = &self.tree.groups;
+            groups.enclosing(span.first).is_some_and(|group| {
+                self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+                    && groups
+                        .ancestors(group)
+                        .any(|outer| groups.get(outer).delimiter == Delimiter::Paren)
+            })
+        });
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")
+            && !compound_literal_row
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);

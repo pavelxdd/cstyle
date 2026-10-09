@@ -269,6 +269,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         brace_column: 3,
         output_line: 4,
         aggregate_assignment: true,
+        leveled_literal: false,
     });
     formatter.pending_extern = true;
     formatter.extern_c_guard = ExternCGuard::ExternC;
@@ -328,6 +329,7 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
             brace_column: 3,
             output_line: 4,
             aggregate_assignment: true,
+            leveled_literal: false,
         }]
     );
     assert!(formatter.pending_extern);

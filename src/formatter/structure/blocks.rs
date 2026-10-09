@@ -292,6 +292,7 @@ fn classify_after_paren(
         Token::Word(word) if is_control_keyword(word) && !follows_type(tokens, before) => {
             BlockKind::Control
         }
+        Token::Word(word) if is_value_keyword(word) => BlockKind::CompoundLiteral,
         Token::Word(_) | Token::Symbol('>') | Token::Operator(_)
             if BlockKind::is_declaration_scope(parent_block)
                 && !matches!(&tokens[before], Token::Operator(operator) if operator == "=") =>
@@ -324,6 +325,15 @@ fn classify_after_paren(
         }
         _ => BlockKind::CompoundLiteral,
     }
+}
+
+/// Whether `word` takes an expression after it, so that `word (T) {` is a
+/// cast to a compound literal rather than a statement-like macro head.
+fn is_value_keyword(word: &str) -> bool {
+    matches!(
+        word,
+        "return" | "throw" | "co_return" | "co_yield" | "co_await"
+    )
 }
 
 /// Whether the word at `index` follows a type, as a function named like a

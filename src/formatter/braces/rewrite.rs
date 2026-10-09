@@ -1494,7 +1494,10 @@ impl FormatEngine<'_> {
                 && self.macro_line_before_directives();
         let backslash_continuation_block =
             !token_begins_line(tokens, start) && self.current.trimmed_end().ends_with('\\');
-        let previous_line_lambda_header = self.current_is_blank()
+        // A trailing return type split onto a line of its own goes on from
+        // the lambda's header above it.
+        let split_trailing_return = self.current.trimmed_start().starts_with("->");
+        let previous_line_lambda_header = (self.current_is_blank() || split_trailing_return)
             && self
                 .output
                 .last_non_empty_scoped()
@@ -2983,6 +2986,40 @@ fn enum_head_ends_previous_line(
     .then_some(BraceType::Enum)
 }
 
+/// Whether the head `tokens[start..end]` declares a trailing return type,
+/// `) -> T` or `) const -> T`, before a body; a member access `a->b`
+/// before an assignment heads a value. A `->` that starts the head follows
+/// the code before it, as the parameters of a lambda split before `->`.
+fn heads_trailing_return_body(tokens: &[Token], start: usize, end: usize) -> bool {
+    let mut previous = previous_code_token(tokens, start, 0);
+    for index in start..end {
+        match &tokens[index] {
+            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => continue,
+            Token::Operator(operator) if operator == "->" => {
+                let after_parameters = previous.is_some_and(|previous| {
+                    matches!(tokens[previous], Token::Symbol(')'))
+                        || matches!(&tokens[previous], Token::Word(word) if matches!(
+                            word.as_str(),
+                            "const" | "volatile" | "mutable" | "noexcept" | "override" | "final"
+                        ))
+                        || matches!(&tokens[previous], Token::Operator(operator)
+                            if operator == "&" || operator == "&&")
+                });
+                if after_parameters
+                    && !tokens[index..end]
+                        .iter()
+                        .any(|token| matches!(token, Token::Operator(operator) if operator == "="))
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        previous = Some(index);
+    }
+    false
+}
+
 fn initializer_brace_type(
     tokens: &[Token],
     open_index: usize,
@@ -3022,10 +3059,7 @@ fn initializer_brace_type(
     }) {
         return Some(BraceType::Enum);
     }
-    if tokens[segment_start..open_index]
-        .iter()
-        .any(|token| matches!(token, Token::Operator(operator) if operator == "->"))
-    {
+    if heads_trailing_return_body(tokens, segment_start, open_index) {
         return None;
     }
     match tokens.get(previous)? {
