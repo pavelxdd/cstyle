@@ -2338,7 +2338,7 @@ fn designated_initializer_member_after_shift_value_keeps_member_indent() {
 }
 
 #[test]
-fn designated_initializer_rows_preserve_explicit_source_indent() {
+fn designated_initializer_rows_take_their_level_whatever_the_source_indent() {
     let source = fixture!(
         "static const struct Item items[] = {",
         "    [ITEM_ALPHA] = {",
@@ -2350,7 +2350,19 @@ fn designated_initializer_rows_preserve_explicit_source_indent() {
         "};",
     );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    assert_eq!(
+        format_exact(source, &one_true_brace_c_options()),
+        fixture!(
+            "static const struct Item items[] = {",
+            "    [ITEM_ALPHA] = {",
+            "        .value = 1,",
+            "    },",
+            "    [ITEM_BETA] = {",
+            "        .value = 2,",
+            "    },",
+            "};",
+        )
+    );
 }
 
 #[test]

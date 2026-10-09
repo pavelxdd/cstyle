@@ -420,9 +420,6 @@ pub(crate) struct OutputBuffer {
     may_have_asm: bool,
     /// The last look back for a line that holds `new `.
     mentions_new_cache: Cell<Option<RecentMatch>>,
-    /// The last answer of [`Self::designator_since_closed_row`]: the scope
-    /// start, version and line count it read, and the answer.
-    designator_cache: Cell<Option<(usize, u64, usize, bool)>>,
     last_non_empty_index: Cell<Option<usize>>,
     last_non_empty_dirty: Cell<bool>,
     /// Counts changes to lines already pushed and to the scope.
@@ -1489,38 +1486,6 @@ impl OutputBuffer {
         self.has_line_from(&self.mentions_new_cache, start, |index| {
             self.lines[index].contains("new ")
         })
-    }
-
-    /// Whether a line in scope led by `[` follows the last one led by `},`.
-    pub(crate) fn designator_since_closed_row(&self) -> bool {
-        let range = self.scoped_range();
-        let key = (range.start, self.version, range.end);
-        let designator = match self.designator_cache.get() {
-            Some((start, version, len, designator))
-                if (start, version) == (key.0, key.1) && len <= range.end =>
-            {
-                // The lines come since read on from the last answer.
-                self.lines[len..range.end]
-                    .iter()
-                    .fold(designator, |designator, line| {
-                        let trimmed = line.trimmed_start();
-                        if trimmed.starts_with("},") {
-                            false
-                        } else {
-                            designator || trimmed.starts_with('[')
-                        }
-                    })
-            }
-            _ => self.lines[range]
-                .iter()
-                .rev()
-                .map(|line| line.trimmed_start())
-                .take_while(|trimmed| !trimmed.starts_with("},"))
-                .any(|trimmed| trimmed.starts_with('[')),
-        };
-        self.designator_cache
-            .set(Some((key.0, key.1, key.2, designator)));
-        designator
     }
 
     pub(crate) fn clear_scope(&mut self) {

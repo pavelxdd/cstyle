@@ -216,9 +216,6 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(spaces);
         }
-        if let Some(spaces) = self.designated_initializer_source_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
-        }
         if let Some(spaces) = self.closed_initializer_or_array_indent_spaces(
             line,
             layout.indent,

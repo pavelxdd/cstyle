@@ -7562,3 +7562,40 @@ fn lambda_with_a_kept_one_line_body_keeps_the_rest_of_its_line_in_breaking_style
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn designator_row_after_attribute_line_takes_its_initializer_level() {
+    let expected = "[[nodiscard]]\nstatic inline Item make_item(Config *config)\n{\n    return (Item) {\n        .config = config,\n        .value = value_of(config),\n    };\n}\n";
+    for indent in ["", "  ", "            "] {
+        let input = expected.replace(
+            "        .value = value_of(config),",
+            &format!("{indent}.value = value_of(config),"),
+        );
+        for args in [
+            &["--style=1tbs", "--min-conditional-indent=0"][..],
+            &["--style=kr", "--min-conditional-indent=0"][..],
+        ] {
+            check(&input, args, expected);
+        }
+    }
+}
+
+#[test]
+fn designator_row_after_index_initializer_in_same_function_takes_its_level() {
+    let expected = "void helper(void)\n{\n    int table[] = {\n        [0] = 1,\n    };\n    result = (Item) {\n        .first = 1,\n        .second = 2,\n    };\n}\n";
+    let input = expected.replace("        .second = 2,", "   .second = 2,");
+    check(
+        &input,
+        &["--style=kr", "--min-conditional-indent=0"],
+        expected,
+    );
+}
+
+#[test]
+fn index_group_closing_row_takes_its_initializer_level() {
+    let expected = "Item items[] = {\n    [0] = {\n        .value = 1,\n    },\n};\n";
+    let input = expected.replace("    },", "         },");
+    for style in ["--style=kr", "--style=allman"] {
+        check(&input, &[style, "--min-conditional-indent=0"], expected);
+    }
+}
