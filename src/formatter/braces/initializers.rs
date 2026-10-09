@@ -729,8 +729,12 @@ impl FormatEngine<'_> {
             base_indent + self.current_visual_width_from(base_indent) + usize::from(padded_paren)
         };
         // A compound literal stands the rows after its brace's line a level
-        // past its statement, where its `}` closes.
-        let leveled_literal = brace_type == BraceType::CompoundLiteral && !nested && !break_first;
+        // past its statement, where its `}` closes. One among a call's
+        // arguments keeps its rows with them.
+        let leveled_literal = brace_type == BraceType::CompoundLiteral
+            && !nested
+            && !break_first
+            && self.layout.nesting.paren_depth == 0;
         if leveled_literal {
             column = base_indent + self.options.indent_width;
         }

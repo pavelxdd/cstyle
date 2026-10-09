@@ -6220,9 +6220,9 @@ fn compound_literal_closing_brace_leaves_the_last_row() {
 }
 
 #[test]
-fn compound_literal_rows_after_a_run_in_first_element_stand_a_level_past_the_statement() {
+fn statement_compound_literal_rows_after_a_run_in_first_element_stand_a_level_in() {
     let input = "void f(void)\n{\n    q = (int[]){ 1, 2,\n        3 };\n    return (struct p){ .a = 1,\n        .b = 2 };\n    g((int[]){ 1,\n        2 }, 3);\n}\n";
-    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n        3\n    };\n    return (struct p) { .a = 1,\n        .b = 2\n    };\n    g((int[]) { 1,\n        2\n    }, 3);\n}\n";
+    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n        3\n    };\n    return (struct p) { .a = 1,\n        .b = 2\n    };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
