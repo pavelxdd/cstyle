@@ -1538,7 +1538,11 @@ impl FormatEngine<'_> {
                 // A comment ending its line keeps its column as a trailing
                 // comment does.
                 self.pad_before_trailing_comment(kind, comment);
-            } else if self.options.pad_parens_inside {
+                return;
+            }
+            // The comment's column is no trailing comment's to take.
+            self.layout.line_state.trailing_comment_columns.pop_front();
+            if self.options.pad_parens_inside {
                 self.pad_inside_paren_space();
             } else if comment_ends_line && outside_pad {
                 self.emit_source_space_or_ensure();

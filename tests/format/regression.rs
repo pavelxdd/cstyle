@@ -7137,3 +7137,12 @@ fn break_blocks_reads_a_bare_block_after_a_header_block_as_that_header() {
         "void g(void)\n{\n    if(rc) {\n    }\n\n    {\n        x();\n    }\n\n    rc = n(a, b);\n    {\n        y();\n    }\n    z();\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_an_open_paren_leaves_the_trailing_comment_its_gap() {
+    check(
+        "int f(void)\n{\n    if(/*c*/ n) return 1;  /* x */\n    f(/*c*/ n);  /* x */\n}\n",
+        &["--style=kr"],
+        "int f(void)\n{\n    if(/*c*/ n) return 1;  /* x */\n    f(/*c*/ n);  /* x */\n}\n",
+    );
+}
