@@ -7101,3 +7101,12 @@ fn define_parameters_indent_after_parens() {
         "#define G(type, short_type,\t\t\t\\\n    lg_size)\t\t\t\t\t\t\\\ntypedef struct {\t\t\t\t\t\t\t\\\n    type repr;\t\t\t\t\t\t\t\\\n} atomic_##short_type##_t;\n",
     );
 }
+
+#[test]
+fn padding_outside_parens_pads_an_empty_list_after_a_close_paren() {
+    check(
+        "void g(void)\n{\n\t(*g)();\n\tx = (a)();\n}\n",
+        &["--style=kr", "--pad-paren-out", "--unpad-paren"],
+        "void g (void)\n{\n    (*g) ();\n    x = (a) ();\n}\n",
+    );
+}

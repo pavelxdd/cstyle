@@ -370,7 +370,10 @@ impl FormatEngine<'_> {
             if !self.function_pointer_parameter_keeps_space_before_name_group() {
                 self.trim_current_end();
             }
-        } else if outside_pad {
+        } else if outside_pad
+            || self.options.pad_parens_outside && self.layout.previous == PreviousToken::CloseParen
+        {
+            // Padding after a `)` pads an empty argument list too.
             self.pad_before_open_paren_space();
         } else if self.options.unpad_parens
             && self.current.ends_with_any(b" \t")
