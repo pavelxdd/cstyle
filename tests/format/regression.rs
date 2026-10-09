@@ -7535,11 +7535,13 @@ fn unclosed_paren_before_a_compound_literal_leaves_the_code_after_it_in_place() 
 }
 
 #[test]
-fn lambda_trailing_return_split_onto_its_own_line_heads_a_body() {
-    // A `->` that starts its line follows the lambda's parameters above it.
+fn lambda_trailing_return_split_onto_its_own_line_keeps_its_one_line_body() {
+    // A `->` that starts its line follows the lambda's parameters above it,
+    // and the lambda's one-line body stays whole, as astyle keeps it.
     let input = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string { return p.name; });\n}\n";
-    let expected = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string\n    {\n        return p.name;\n    });\n}\n";
-    check(input, &["--style=allman"], expected);
+    for style in ["--style=kr", "--style=allman", "--style=gnu"] {
+        check(input, &[style], input);
+    }
 }
 
 #[test]

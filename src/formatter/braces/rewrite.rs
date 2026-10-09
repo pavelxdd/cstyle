@@ -1494,7 +1494,10 @@ impl FormatEngine<'_> {
                 && self.macro_line_before_directives();
         let backslash_continuation_block =
             !token_begins_line(tokens, start) && self.current.trimmed_end().ends_with('\\');
-        let previous_line_lambda_header = self.current_is_blank()
+        // A trailing return type split onto a line of its own goes on from
+        // the lambda's header above it.
+        let split_trailing_return = self.current.trimmed_start().starts_with("->");
+        let previous_line_lambda_header = (self.current_is_blank() || split_trailing_return)
             && self
                 .output
                 .last_non_empty_scoped()
