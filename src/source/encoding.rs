@@ -92,8 +92,10 @@ fn decode_utf16(bytes: &[u8], convert: fn([u8; 2]) -> u16) -> io::Result<String>
         return Err(invalid_data("invalid UTF-16 input length"));
     }
     let units = bytes
-        .chunks_exact(2)
-        .map(|chunk| convert([chunk[0], chunk[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| convert(*chunk))
         .collect::<Vec<_>>();
     String::from_utf16(&units)
         .map_err(|error| invalid_data(format!("invalid UTF-16 input: {error}")))
@@ -127,4 +129,34 @@ fn encode_output(text: &str, encoding: TextEncoding) -> Vec<u8> {
 
 fn invalid_data(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DecodedSource;
+    use std::io;
+
+    #[test]
+    fn decodes_utf16_bodies_at_unit_and_surrogate_boundaries() {
+        let cases: [(&[u8], &str); 6] = [
+            (&[0xFF, 0xFE], ""),
+            (&[0xFF, 0xFE, 0x41, 0x00], "A"),
+            (&[0xFF, 0xFE, 0x3D, 0xD8, 0x00, 0xDE], "\u{1F600}"),
+            (&[0xFE, 0xFF], ""),
+            (&[0xFE, 0xFF, 0x00, 0x41], "A"),
+            (&[0xFE, 0xFF, 0xD8, 0x3D, 0xDE, 0x00], "\u{1F600}"),
+        ];
+        for (bytes, expected) in cases {
+            let mut decoded = DecodedSource::from_vec(bytes.to_vec()).expect("valid UTF-16");
+            assert_eq!(decoded.take_text(), expected, "{bytes:02x?}");
+        }
+    }
+
+    #[test]
+    fn rejects_utf16_bodies_with_an_odd_byte_count() {
+        for bytes in [&[0xFF, 0xFE, 0x41][..], &[0xFE, 0xFF, 0x00][..]] {
+            let error = DecodedSource::from_vec(bytes.to_vec()).expect_err("odd UTF-16 body");
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        }
+    }
 }

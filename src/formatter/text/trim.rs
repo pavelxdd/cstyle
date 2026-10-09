@@ -41,27 +41,33 @@ fn leading_whitespace(bytes: &[u8]) -> usize {
 /// The number of spaces `bytes` start with, read eight bytes at a time.
 pub(crate) fn leading_spaces(bytes: &[u8]) -> usize {
     const SPACES: u64 = u64::from_le_bytes([b' '; 8]);
-    let mut chunks = bytes.chunks_exact(8);
+    let (chunks, remainder) = bytes.as_chunks::<8>();
     let mut index = 0;
-    for chunk in &mut chunks {
+    for chunk in chunks {
         // The first byte that is no space sets the lowest differing bits.
-        let differing = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ SPACES;
+        let differing = u64::from_le_bytes(*chunk) ^ SPACES;
         if differing != 0 {
             return index + differing.trailing_zeros() as usize / 8;
         }
         index += 8;
     }
-    index
-        + chunks
-            .remainder()
-            .iter()
-            .take_while(|&&byte| byte == b' ')
-            .count()
+    index + remainder.iter().take_while(|&&byte| byte == b' ').count()
 }
 
 #[cfg(test)]
 mod tests {
     use super::Trimmed;
+
+    #[test]
+    fn leading_spaces_counts_spaces_at_every_length() {
+        for len in 0..=40 {
+            for spaces in 0..=len {
+                let mut text = vec![b' '; spaces];
+                text.resize(len, b'x');
+                assert_eq!(super::leading_spaces(&text), spaces, "{len} {spaces}");
+            }
+        }
+    }
 
     #[test]
     fn trims_as_the_standard_library_does() {

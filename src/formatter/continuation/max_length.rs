@@ -1901,10 +1901,8 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                             register((&mut fit, &mut pending), PAREN, at, end <= width);
                         }
                     }
-                    b';' => {
-                        if !matches!(next, b' ' | b'}' | b'/') {
-                            register((&mut fit, &mut pending), SEMI, end, end <= width);
-                        }
+                    b';' if !matches!(next, b' ' | b'}' | b'/') => {
+                        register((&mut fit, &mut pending), SEMI, end, end <= width);
                     }
                     _ => {}
                 }

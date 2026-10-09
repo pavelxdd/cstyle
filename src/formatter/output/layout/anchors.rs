@@ -1465,7 +1465,7 @@ impl FormatEngine<'_> {
                 Some(opened) => groups.get(opened).close?,
                 None => index,
             };
-            if index >= last && index != last {
+            if index > last {
                 return None;
             }
             if index == last {
