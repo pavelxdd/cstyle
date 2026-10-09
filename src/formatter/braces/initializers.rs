@@ -150,55 +150,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn designated_initializer_source_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        if self.options.min_conditional_indent != MinConditionalIndent::Zero {
-            return None;
-        }
-        let trimmed = line.trimmed_start();
-        let previous = self.output.last_line_outside_comment();
-        if !(self.in_initializer_brace()
-            || self.in_aggregate_declaration_brace()
-            || (trimmed.starts_with('[')
-                && previous.is_some_and(|line| line.trimmed_start().starts_with('['))))
-        {
-            return None;
-        }
-        if !trimmed.starts_with('[')
-            && !((trimmed.starts_with('.') || trimmed.starts_with("},"))
-                && self.output.designator_since_closed_row())
-        {
-            return None;
-        }
-        // A closer the layout broke off a row has no source indent of its own.
-        if trimmed.starts_with('}') && !self.pending_line_starts_source_line() {
-            return None;
-        }
-        if trimmed.starts_with('[')
-            && self.token_input.input_source_indent == 0
-            && let Some(previous) = previous
-            && previous.trimmed_start().starts_with('[')
-            && previous.trimmed_end().ends_with(',')
-        {
-            return Some(leading_visual_width(previous, self.options.tab_width));
-        }
-        Some(self.token_input.input_source_indent)
-    }
-
-    /// Whether the first token of the line being laid out began a line of
-    /// the source.
-    fn pending_line_starts_source_line(&self) -> bool {
-        self.output.pending_tokens().is_some_and(|span| {
-            self.tree.tokens[..span.first]
-                .iter()
-                .rev()
-                .take_while(|token| !matches!(token, Token::Newline))
-                .all(|token| matches!(token, Token::Whitespace(_)))
-        })
-    }
-
     pub(crate) fn range_designator_source_indent_spaces(
         &self,
         line: &LineView<'_>,
