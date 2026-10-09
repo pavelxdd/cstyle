@@ -1005,7 +1005,7 @@ impl FormatEngine<'_> {
                 let spaces = self
                     .assignment_continuation_indent_spaces()
                     .or_else(|| self.return_continuation_indent_spaces())
-                    .unwrap_or_else(|| self.current_line_indent_spaces());
+                    .unwrap_or_else(|| self.statement_line_indent_spaces());
                 return ContinuationIndent::Spaces(spaces);
             }
         }

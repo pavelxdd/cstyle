@@ -90,8 +90,10 @@ impl FormatEngine<'_> {
         }
         // The line comes between a case label and a brace after it.
         self.update_case_brace_unindent(LineKind::Normal, trimmed);
-        let indent =
-            self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
+        // The levels broken else-ifs add stand under the line as well.
+        let indent = self.layout.indentation.indent()
+            + self.case_body_indent_extra(LineKind::Normal)
+            + self.else_if_break_extra();
         let exact_indent_spaces =
             self.layout
                 .previous_pre_adjust_line

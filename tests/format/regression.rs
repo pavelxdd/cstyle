@@ -7182,3 +7182,12 @@ fn a_block_reads_stars_between_names_in_parens_and_after_closers_as_written() {
         "void f(void)\n{\n    struct s {\n        int a;\n    } *entries;\n    STACK_OF(X509_INFO) *inf;\n    extern int g(sqlite3 *db, const char*);\n    nByte = sizeof(A)*n\n            + sizeof(B)*n;\n}\nextern int h(sqlite3* db);\n",
     );
 }
+
+#[test]
+fn broken_else_ifs_keep_their_level_after_a_ternary_colon_and_on_macro_rows() {
+    check(
+        "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else if( b ) {\n        SWAP(a[i],a[j])\n        s ? g(d) :\n        h(d);\n    }\n    x();\n}\n",
+        &["--style=kr", "--break-elseifs"],
+        "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else\n        if( b ) {\n            SWAP(a[i],a[j])\n            s ? g(d) :\n            h(d);\n        }\n    x();\n}\n",
+    );
+}
