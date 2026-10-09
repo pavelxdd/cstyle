@@ -213,11 +213,9 @@ impl FormatEngine<'_> {
         let Some(open) = line.rfind('{') else {
             return false;
         };
-        if !(is_lambda_body_header(line[..open].trimmed_end()) && {
-            let head = line[..open].trimmed_end();
-            let one_line_body = line[open + 1..].contains('}');
-            !(one_line_body && (!self.options.break_one_line_blocks || head.contains("->")))
-        }) {
+        // A body that closes on the line was kept whole; splitting the
+        // header off would drop it.
+        if !is_lambda_body_header(line[..open].trimmed_end()) || line[open + 1..].contains('}') {
             return false;
         }
         self.finish_line_text(line[..open].trimmed_end());

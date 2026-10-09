@@ -7550,3 +7550,13 @@ fn block_after_a_header_in_unclosed_parens_is_no_compound_literal_argument() {
     let expected = "f(a,\n  for (int i = NALLOCS - 1; i >= 0; i--)\n{\n}\n\"Incorrect number of allocations\");\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn lambda_with_a_kept_one_line_body_keeps_the_rest_of_its_line_in_breaking_styles() {
+    // Splitting the lambda's header off a body that closes on the line
+    // dropped the body and the code after it.
+    let input = "void f()\n{\n    run([](int p) {});\n    run([](int p) { /* c */ });\n    run([](int p) { ; });\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], input);
+    }
+}
