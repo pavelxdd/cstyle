@@ -7492,3 +7492,27 @@ fn call_arguments_holding_a_multiline_compound_literal_stand_a_level_past_the_st
     ];
     check(input, &args, input);
 }
+
+#[test]
+fn compound_literal_argument_on_its_own_line_stays_with_the_arguments() {
+    let source = "void m(void)\n{\n    rc = udp_send(session,\n                  &(struct msg) {\n                      .len = 1,\n                      .flags = 0,\n                  },\n                  timeout);\n    udp_send(session,\n             (struct msg) { .len = 1 },\n             timeout);\n    CHECK(run(a,\n              (struct t) {\n                  .x = 1,\n              }) == 0);\n    f(a,\n      b, (struct t) {\n          .x = 1,\n      }, c);\n    udp_send(session, &(struct msg) {\n        .len = 1,\n    });\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(source, &args, source);
+    let allman = "void m(void)\n{\n    rc = udp_send(session,\n                  &(struct msg)\n                  {\n                      .len = 1,\n                      .flags = 0,\n                  },\n                  timeout);\n    udp_send(session,\n             (struct msg) { .len = 1 },\n             timeout);\n    CHECK(run(a,\n              (struct t)\n              {\n                  .x = 1,\n              }) == 0);\n    f(a,\n      b, (struct t)\n      {\n          .x = 1,\n      }, c);\n    udp_send(session, &(struct msg)\n    {\n        .len = 1,\n    });\n}\n";
+    check(source, &["--style=allman"], allman);
+    check(allman, &["--style=allman"], allman);
+    let indented = "void m(void) {\n    rc = udp_send(session,\n            &(struct msg) {\n                .len = 1,\n                .flags = 0,\n            },\n            timeout);\n    udp_send(session,\n        (struct msg) { .len = 1 },\n        timeout);\n    CHECK(run(a,\n            (struct t) {\n                .x = 1,\n            }) == 0);\n    f(a,\n        b, (struct t) {\n            .x = 1,\n        }, c);\n    udp_send(session, &(struct msg) {\n        .len = 1,\n    });\n}\n";
+    check(source, &["--style=java", "--indent-after-parens"], indented);
+    check(
+        indented,
+        &["--style=java", "--indent-after-parens"],
+        indented,
+    );
+}

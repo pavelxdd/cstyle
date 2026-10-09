@@ -1453,7 +1453,7 @@ impl FormatEngine<'_> {
             && self
                 .current
                 .active_token()
-                .is_none_or(|brace| self.literal_argument_parens(brace).is_none())
+                .is_none_or(|brace| self.multiline_literal_argument_parens(brace).is_none())
             && self
                 .output
                 .last_non_empty_scoped()

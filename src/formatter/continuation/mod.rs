@@ -631,6 +631,7 @@ impl FormatEngine<'_> {
             spaces = indent + continuation_spaces;
         }
         let literal_arguments = !has_next
+            && !self.options.indent_after_parens
             && self
                 .current
                 .active_token()

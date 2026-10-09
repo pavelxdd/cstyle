@@ -22,7 +22,7 @@ use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineRepl
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -2929,9 +2929,16 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
+        // A row of a compound literal among the arguments is none of them.
+        let compound_literal_row = self.output.pending_tokens().is_some_and(|span| {
+            self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+            })
+        });
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")
+            && !compound_literal_row
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);

@@ -19,7 +19,8 @@ pub(crate) struct CompoundLiteralState {
 
 impl FormatEngine<'_> {
     /// Whether the parens opened at `open` hold, as an argument of their
-    /// own, a compound literal whose braces span lines.
+    /// own on a line after the `(`, a compound literal whose braces span
+    /// lines.
     pub(crate) fn parens_hold_multiline_compound_literal(&self, open: usize) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
@@ -29,7 +30,17 @@ impl FormatEngine<'_> {
         groups.get(parens).delimiter == Delimiter::Paren
             && groups.members(parens).any(|brace| {
                 groups.opened_at(brace).is_some_and(|literal| {
+                    // The literal starts at its cast, before any line break
+                    // a breaking style puts ahead of its brace.
+                    let start = self
+                        .tree
+                        .previous_code_token(brace)
+                        .and_then(|cast| groups.closed_at(cast))
+                        .map_or(brace, |cast| groups.get(cast).open);
                     self.tree.blocks.kind(literal) == Some(BlockKind::CompoundLiteral)
+                        && tokens[open..start]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
                         && groups.get(literal).close.is_some_and(|close| {
                             tokens[brace..close]
                                 .iter()
@@ -39,19 +50,27 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// The `(` of the parens holding the token at `index`, when they hold
+    /// a compound literal spanning lines. The literal and the arguments
+    /// after it stay with the call's other arguments.
+    pub(crate) fn multiline_literal_argument_parens(&self, index: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let open = groups.get(groups.enclosing(index)?).open;
+        self.parens_hold_multiline_compound_literal(open)
+            .then_some(open)
+    }
+
     /// The `(` that ends its line and opens the parens holding the token at
     /// `index`, when they hold a compound literal spanning lines. The
     /// arguments of such a call stand a level past the line of its `(`,
     /// where the literal's rows have room.
     pub(crate) fn literal_argument_parens(&self, index: usize) -> Option<usize> {
-        let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
-        let open = groups.get(groups.enclosing(index)?).open;
-        let ends_line = tokens[open + 1..]
+        let open = self.multiline_literal_argument_parens(index)?;
+        self.tree.tokens[open + 1..]
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
-            .is_some_and(|token| matches!(token, Token::Newline));
-        (ends_line && self.parens_hold_multiline_compound_literal(open)).then_some(open)
+            .is_some_and(|token| matches!(token, Token::Newline))
+            .then_some(open)
     }
 }
 
