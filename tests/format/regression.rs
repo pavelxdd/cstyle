@@ -7110,3 +7110,12 @@ fn padding_outside_parens_pads_an_empty_list_after_a_close_paren() {
         "void g (void)\n{\n    (*g) ();\n    x = (a) ();\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_tabs_an_initializer_closer_aligned_past_code_as_continuation() {
+    check(
+        "void f(void)\n{\n\thooks_t hooks = {&a, &b,\n\t\t&c, (void *)123};\n}\nstatic const char *const k[][2] = { { \"11\", \"one\" },\n\t{ \"22\", \"two\" }\n};\n",
+        &["--style=whitesmith", "--indent=tab=4"],
+        "void f(void)\n\t{\n\thooks_t hooks = {&a, &b,\n\t                 &c, (void *)123\n\t                };\n\t}\nstatic const char *const k[][2] = { { \"11\", \"one\" },\n\t\t{ \"22\", \"two\" }\n\t};\n",
+    );
+}

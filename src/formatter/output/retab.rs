@@ -13,6 +13,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 
@@ -398,10 +399,29 @@ impl FormatEngine<'_> {
                     Some(BlockKind::CompoundLiteral | BlockKind::Initializer)
                 )
             });
+        // A brace closing at the column of one opened after code aligns
+        // with it past the statement's indent.
+        let closes_after_code = closes_compound_literal
+            && groups.closed_at(first).is_some_and(|group| {
+                let open = groups.get(group).open;
+                let tab_width = self.options.tab_width;
+                let close_column = self.output.lead_width(index, tab_width);
+                self.output.line_with_token(open).is_some_and(|line| {
+                    let text = &self.output[line];
+                    self.output
+                        .line_tokens(line)
+                        .is_some_and(|span| span.first != open)
+                        && text.char_indices().any(|(at, ch)| {
+                            ch == '{'
+                                && visual_width_from(&text[..at], 0, tab_width) == close_column
+                        })
+                })
+            });
         if matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-        ) && (matches!(self.tree.tokens[first], Token::Symbol('{')) || closes_compound_literal)
+        ) && (matches!(self.tree.tokens[first], Token::Symbol('{'))
+            || closes_compound_literal && !closes_after_code)
         {
             return None;
         }
