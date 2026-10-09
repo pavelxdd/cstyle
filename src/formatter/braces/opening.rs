@@ -2444,10 +2444,7 @@ impl FormatEngine<'_> {
         let attach_runin_comment = self.token_input.token_begins_source_line
             && self.layout.command_state.current_header.is_none()
             && match brace_type {
-                BraceType::Command => {
-                    self.options.brace_style == BraceStyle::OneTrueBrace
-                        && !self.options.remove_braces
-                }
+                BraceType::Command => self.options.brace_style == BraceStyle::OneTrueBrace,
                 BraceType::Array | BraceType::Initializer => true,
                 _ => false,
             };

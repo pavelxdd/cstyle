@@ -2596,10 +2596,7 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && self.layout.command_state.current_header.is_none()
             && match self.layout.nesting.brace_type_stack.last() {
-                Some(BraceType::Command) => {
-                    self.options.brace_style == BraceStyle::OneTrueBrace
-                        && !self.options.remove_braces
-                }
+                Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
                 Some(BraceType::Array | BraceType::Initializer) => true,
                 _ => false,
             }

@@ -7191,3 +7191,12 @@ fn broken_else_ifs_keep_their_level_after_a_ternary_colon_and_on_macro_rows() {
         "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else\n        if( b ) {\n            SWAP(a[i],a[j])\n            s ? g(d) :\n            h(d);\n        }\n    x();\n}\n",
     );
 }
+
+#[test]
+fn removing_braces_keeps_a_bare_block_run_in_comment() {
+    check(
+        "void f(void)\n{\n    x();\n\n    { /* Server */\n        int a;\n        g(a);\n    }\n}\n",
+        &["--style=kr", "--remove-braces"],
+        "void f(void)\n{\n    x();\n\n    { /* Server */\n        int a;\n        g(a);\n    }\n}\n",
+    );
+}
