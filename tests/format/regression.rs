@@ -2087,9 +2087,9 @@ fn call_argument_after_switch_keeps_statement_indent() {
 }
 
 #[test]
-fn compound_literal_call_argument_uses_statement_indent() {
+fn compound_literal_call_arguments_stand_a_level_past_the_statement() {
     let input = "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
-    let expected = "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
+    let expected = "static void check_value(void)\n{\n    CHECK(run_case(\n        request,\n        sizeof(request),\n        (struct call_case) {\n            .first_active = true,\n            .second_busy = true,\n        },\n        &action\n          ) == RESULT_OK);\n}\n";
     check(input, TEST_SAMPLE_OPTIONS, expected);
     check(expected, TEST_SAMPLE_OPTIONS, expected);
 }
@@ -2104,11 +2104,11 @@ fn statement_after_subscripted_compound_literal_uses_block_indent() {
 }
 
 #[test]
-fn compound_literal_call_argument_reindents_from_argument_column() {
+fn compound_literal_call_arguments_reindent_from_argument_column() {
     check(
         "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n               (struct call_case) {\n                   .first_active = true,\n                   .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
         TEST_SAMPLE_OPTIONS,
-        "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
+        "static void check_value(void)\n{\n    CHECK(run_case(\n        request,\n        sizeof(request),\n        (struct call_case) {\n            .first_active = true,\n            .second_busy = true,\n        },\n        &action\n          ) == RESULT_OK);\n}\n",
     );
 }
 
@@ -7477,4 +7477,18 @@ fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
     ];
     check(input, &args, expected);
     check(expected, &args, expected);
+}
+
+#[test]
+fn call_arguments_holding_a_multiline_compound_literal_stand_a_level_past_the_statement() {
+    let input = "void m(void)\n{\n    struct udp_session *session = udp_session_create(\n        &(struct udp_session_config) {\n            .loop = loop,\n            .fd = fd,\n        },\n        other_arg);\n    int rc = udp_session_send(\n        session, &(struct msg) {\n            .len = 1,\n        });\n    session = make(\n        a, b,\n        &(struct msg) {\n            .len = 1,\n        });\n    int r = call(\n                a, b);\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &args, input);
 }

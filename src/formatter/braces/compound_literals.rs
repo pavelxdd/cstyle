@@ -1,3 +1,7 @@
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
+use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
@@ -11,6 +15,44 @@ pub(crate) struct CompoundLiteralState {
     pub(crate) arg_indent_spaces: Option<usize>,
     pub(crate) arg_paren_depth: Option<usize>,
     pub(crate) arg_brace_depth: Option<usize>,
+}
+
+impl FormatEngine<'_> {
+    /// Whether the parens opened at `open` hold, as an argument of their
+    /// own, a compound literal whose braces span lines.
+    pub(crate) fn parens_hold_multiline_compound_literal(&self, open: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(parens) = groups.opened_at(open) else {
+            return false;
+        };
+        groups.get(parens).delimiter == Delimiter::Paren
+            && groups.members(parens).any(|brace| {
+                groups.opened_at(brace).is_some_and(|literal| {
+                    self.tree.blocks.kind(literal) == Some(BlockKind::CompoundLiteral)
+                        && groups.get(literal).close.is_some_and(|close| {
+                            tokens[brace..close]
+                                .iter()
+                                .any(|token| matches!(token, Token::Newline))
+                        })
+                })
+            })
+    }
+
+    /// The `(` that ends its line and opens the parens holding the token at
+    /// `index`, when they hold a compound literal spanning lines. The
+    /// arguments of such a call stand a level past the line of its `(`,
+    /// where the literal's rows have room.
+    pub(crate) fn literal_argument_parens(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let open = groups.get(groups.enclosing(index)?).open;
+        let ends_line = tokens[open + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Newline));
+        (ends_line && self.parens_hold_multiline_compound_literal(open)).then_some(open)
+    }
 }
 
 pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {

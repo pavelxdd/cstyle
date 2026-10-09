@@ -1451,6 +1451,10 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth > 0
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && self
+                .current
+                .active_token()
+                .is_none_or(|brace| self.literal_argument_parens(brace).is_none())
+            && self
                 .output
                 .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))

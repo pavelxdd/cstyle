@@ -3379,7 +3379,7 @@ fn compound_literal_argument_body_uses_body_indent() {
 }
 
 #[test]
-fn nested_call_compound_literal_argument_body_uses_body_indent() {
+fn nested_call_compound_literal_arguments_stand_a_level_past_the_statement() {
     let mut options = FormatOptions::default();
     let args = [
         "--style=1tbs",
@@ -3402,7 +3402,7 @@ fn nested_call_compound_literal_argument_body_uses_body_indent() {
             "void f(void)\n{\n    assert_true(process_pending_item(\n    context.queue,\n    &(struct Data) {\n        .id = (uint32_t)item->id,\n        .hash = item->hash,\n        .cookie = 0x2ab,\n        .status = STATUS_FULL,\n    }));\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    assert_true(process_pending_item(\n                    context.queue,\n    &(struct Data) {\n        .id = (uint32_t)item->id,\n        .hash = item->hash,\n        .cookie = 0x2ab,\n        .status = STATUS_FULL,\n    }));\n}\n",
+        "void f(void)\n{\n    assert_true(process_pending_item(\n        context.queue,\n        &(struct Data) {\n            .id = (uint32_t)item->id,\n            .hash = item->hash,\n            .cookie = 0x2ab,\n            .status = STATUS_FULL,\n        }));\n}\n",
     );
 }
 

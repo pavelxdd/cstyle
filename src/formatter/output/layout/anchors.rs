@@ -126,6 +126,7 @@ impl FormatEngine<'_> {
         when(closes_brace || is_word(token, "else"), || {
             self.else_matching_if_indent(first)
         })
+        .or_else(|| when(in_parens && !brace, || self.literal_argument_indent(first)))
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| when(is_word(token, "while"), || self.do_while_indent(first)))
         .or_else(|| {
@@ -5197,6 +5198,20 @@ impl FormatEngine<'_> {
             return None;
         }
         Some(self.token_column(content)? + self.options.indent_width + self.case_unindent_spaces())
+    }
+
+    /// An argument of a call whose `(` ends its line and whose parens hold
+    /// a compound literal spanning lines stands a level past the line of
+    /// the `(`.
+    #[inline(never)]
+    fn literal_argument_indent(&self, first: usize) -> Option<usize> {
+        let open = self.literal_argument_parens(first)?;
+        let line = self.output.line_with_token(open)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.continuation_indent * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// An argument after the `(` that ends the line of a call assigned

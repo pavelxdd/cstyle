@@ -382,6 +382,10 @@ impl FormatEngine<'_> {
                 .trimmed_end()
                 .strip_suffix('{')
                 .is_some_and(|prefix| line_ends_compound_literal_cast(prefix.trimmed_end()))
+            || self
+                .output
+                .pending_tokens()
+                .is_some_and(|span| self.literal_argument_parens(span.first).is_some())
         {
             return None;
         }
