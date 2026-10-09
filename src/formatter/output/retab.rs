@@ -305,11 +305,21 @@ impl FormatEngine<'_> {
     /// The line opening the block comment that output line `index`, holding
     /// no code, continues.
     fn comment_opener(&self, index: usize) -> Option<usize> {
-        if self.output.line_tokens(index).is_some() {
+        // The row ending a comment holds that comment's token and no code.
+        if self.output.line_tokens(index).is_some_and(|span| {
+            self.tree.tokens[span.first..=span.last]
+                .iter()
+                .any(|token| !matches!(token, Token::Comment(..) | Token::Whitespace(_)))
+        }) {
             return None;
         }
         let opener = self.output.comment_start_index(index);
         if opener != index {
+            // A comment run in after a brace records no lead on its first
+            // line; the row that opens it is the one holding its `/*`.
+            if !self.output[opener].contains("/*") {
+                return self.open_comment_line(opener).or(Some(opener));
+            }
             return Some(opener);
         }
         self.open_comment_line(index)

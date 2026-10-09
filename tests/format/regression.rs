@@ -7363,3 +7363,26 @@ fn comment_led_row_after_a_kept_case_statement_stands_in_the_body() {
         "void f(int n)\n{\n    switch( nVal ) {\n    case 6: nToken = 1;\n        /* no break */ deliberate_fall_through\n    case 5: iCol = 2;\n    }\n}\n",
     );
 }
+
+#[test]
+fn every_row_of_a_comment_run_in_after_a_brace_indents_with_tabs() {
+    check(
+        "void f(void)\n{\n    { /* Validate that\n      ** expectations. We\n      ** checking the. */\n      int a = 0;\n    }\n}\n",
+        &["--style=linux", "--indent=tab=8"],
+        "void f(void)\n{\n\t{ /* Validate that\n\t\t** expectations. We\n\t\t** checking the. */\n\t\tint a = 0;\n\t}\n}\n",
+    );
+}
+
+#[test]
+fn block_comment_in_column_one_takes_the_indent_of_the_code_after_it() {
+    check(
+        "void f(void)\n{\n  switch( y ){\n  /* Beginning\n  ** follows:\n  */\n/********** Begin **/\n  x();\n  }\n}\n",
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch( y )\n        {\n            /* Beginning\n            ** follows:\n            */\n            /********** Begin **/\n            x();\n        }\n    }\n",
+    );
+    check(
+        "void f(void)\n    {\n    switch( y )\n        {\n            /* Beginning\n            ** follows:\n            */\n            /********** Begin **/\n            x();\n        }\n    }\n",
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch( y )\n        {\n            /* Beginning\n            ** follows:\n            */\n            /********** Begin **/\n            x();\n        }\n    }\n",
+    );
+}

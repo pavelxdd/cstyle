@@ -3731,13 +3731,14 @@ impl FormatEngine<'_> {
             let opener_line = &self.output.as_slice()[start];
             let opener_prefix =
                 &opener_line[..opener_line.len() - opener_line.trimmed_start().len()];
-            // A comment that starts the source line keeps column one.
-            let source_column_one = self
-                .output
-                .comment_token(start)
-                .map_or(lead == 0, |comment| {
-                    comment == 0 || matches!(self.tree.tokens[comment - 1], Token::Newline)
-                });
+            // A line comment that starts the source line keeps column one.
+            let source_column_one = opener.starts_with("//")
+                && self
+                    .output
+                    .comment_token(start)
+                    .map_or(lead == 0, |comment| {
+                        comment == 0 || matches!(self.tree.tokens[comment - 1], Token::Newline)
+                    });
             if opener_prefix != prefix && (!source_column_one || self.options.indent_col1_comments)
             {
                 for offset in start..=index {
