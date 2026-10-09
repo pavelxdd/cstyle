@@ -10,5 +10,6 @@ pub mod api;
 pub mod cli;
 pub mod config;
 mod formatter;
-mod io;
 mod source;
+#[cfg(test)]
+mod test_support;

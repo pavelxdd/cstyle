@@ -1,9 +1,13 @@
-use super::super::FormatEngine;
-use super::super::indentation::LineKind;
-use super::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
+use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::literals::starts_string_literal_token;
 
 impl FormatEngine<'_> {
-    fn route_line_before_layout(&mut self, line: &str) -> LineRoute<LineKind> {
+    fn route_line_before_layout(&mut self, line: &LineView<'_>) -> LineRoute<LineKind> {
         if self.try_emit_whitesmith_lambda_close(line)
             || self.try_split_lambda_body_header(line)
             || self.try_split_operator_body(line)
@@ -13,12 +17,16 @@ impl FormatEngine<'_> {
         {
             return LineRoute::Published;
         }
-        let observed_line_kind = self.line_adjuster.observe_line(line);
+        if line.trimmed() == "}" {
+            self.adjuster_before_observed_lone_brace =
+                Some((self.output.len(), self.layout.line_adjuster.clone()));
+        }
+        let observed_line_kind = self.layout.line_adjuster.observe_line(line);
         if observed_line_kind == LineKind::Normal
-            && line.trim_start() == "&else"
+            && line.trimmed_start() == "&else"
             && let Some(previous) = self.output.last_mut()
-            && previous.contains("#if")
-            && !previous.trim_start().starts_with('#')
+            && previous.contains_from_first_byte("#if")
+            && !previous.trimmed_start().starts_with('#')
         {
             previous.push_str(" & else");
             return LineRoute::Published;
@@ -26,22 +34,75 @@ impl FormatEngine<'_> {
         LineRoute::Layout(observed_line_kind)
     }
 
-    pub(in super::super) fn finish_line_text(&mut self, line: &str) {
+    /// Whether the line starts with a word, no string literal, after a
+    /// line whose code ended a statement or a brace and holds no comment:
+    /// the layouts of calls, continuations and constructor initializers
+    /// have nothing to place on such a line.
+    fn follows_ended_statement(&self, line: &LineView<'_>) -> bool {
+        let start = line.trimmed_start();
+        start
+            .as_bytes()
+            .first()
+            .is_some_and(|&byte| byte.is_ascii_alphabetic() || byte == b'_')
+            && !starts_string_literal_token(start)
+            && self.output.last_non_empty_scoped().is_some_and(|previous| {
+                let previous = previous.trimmed_end();
+                previous.ends_with_any(b";{}") && !previous.contains('/')
+            })
+    }
+
+    /// Whether `line` starts a statement inside a block right after a line
+    /// of code that ended one with `;`: the rules for continuations,
+    /// labels, directives, comments and block edges have nothing to place
+    /// on it.
+    fn starts_plain_statement(&self, line: &LineView<'_>, kind: LineKind) -> bool {
+        kind == LineKind::Normal
+            && !self.layout.nesting.brace_type_stack.is_empty()
+            && !line.trimmed_end().ends_with(':')
+            && self
+                .output
+                .last()
+                .is_some_and(|last| !last.trimmed().is_empty())
+            && self.follows_ended_statement(line)
+            && self.output.last_code_line_scoped().is_some_and(|previous| {
+                let previous = previous.trimmed();
+                previous.ends_with(';') && !previous.starts_with('#')
+            })
+    }
+
+    pub(crate) fn finish_line_text(&mut self, line: &str) {
+        let line = &LineView::new(line);
         let replay = self.take_line_replay_layout(line);
-        let line_closed_brackets = self.frame_stack.take_line_closed_brackets();
+        let line_closed_brackets = self.layout.frame_stack.take_line_closed_brackets();
         self.record_closed_objc_message_indent(line, &line_closed_brackets);
         self.preprocessor.last_output_was_preprocessor = false;
         let LineRoute::Layout(observed_line_kind) = self.route_line_before_layout(line) else {
             return;
         };
+        self.plain_statement_line = self.starts_plain_statement(line, observed_line_kind);
         let layout = self.initial_line_layout(line, observed_line_kind, &replay);
         let layout = self.apply_initial_syntax_layout(line, layout);
         let layout = self.apply_initial_operator_and_header_layout(line, layout);
         let layout = self.apply_separated_header_and_comment_layout(line, layout);
         let layout = self.apply_label_and_conditional_context_layout(line, layout);
-        let layout = self.apply_top_level_and_initializer_prefix_layout(line, layout);
-        let layout = self.apply_constructor_and_call_layout(line, layout);
-        let layout = self.apply_ternary_template_and_source_layout(line, layout);
+        // File scope, comment rows and rows after `,` or `=` have no plain
+        // statement.
+        let layout = if self.plain_statement_line {
+            layout
+        } else {
+            self.apply_top_level_and_initializer_prefix_layout(line, layout)
+        };
+        let ended_statement = self.plain_statement_line || self.follows_ended_statement(line);
+        let layout = if ended_statement {
+            layout
+        } else {
+            self.apply_constructor_and_call_layout(line, layout)
+        };
+        let layout = if ended_statement && !self.may_have_noexcept {
+            self.apply_template_base_layout(line, layout)
+        } else {
+            self.apply_ternary_template_and_source_layout(line, layout)
+        };
         let layout = self.apply_brace_array_and_objc_dictionary_layout(line, layout);
         let layout = self.apply_objc_pre_alignment_layout(line, layout);
         let LineRoute::Layout(aligned_layout) =
@@ -59,8 +120,11 @@ impl FormatEngine<'_> {
         let layout = self.apply_comment_brace_and_ternary_operand_layout(line, layout);
         let layout = self.apply_late_call_and_operator_layout(line, layout);
         let contextual_layout = self.begin_contextual_line_layout(line, layout);
-        let contextual_layout =
-            self.apply_previous_output_call_and_initializer_layout(line, contextual_layout);
+        let contextual_layout = if ended_statement {
+            contextual_layout
+        } else {
+            self.apply_previous_output_call_and_initializer_layout(line, contextual_layout)
+        };
         let contextual_layout = self.apply_source_indent_brace_and_style_operator_layout(
             line,
             case_unindent_closing_line,
@@ -70,8 +134,13 @@ impl FormatEngine<'_> {
             self.apply_previous_statement_and_operator_prefix_layout(line, contextual_layout);
         let contextual_layout =
             self.apply_label_else_and_conditional_contextual_layout(line, contextual_layout);
-        let contextual_layout =
-            self.apply_none_style_else_and_conditional_body_layout(line, contextual_layout);
+        // Its rules read `} else` and `}` rows, rows after `{`, and rows
+        // after an `else` or a directive.
+        let contextual_layout = if self.plain_statement_line {
+            contextual_layout
+        } else {
+            self.apply_none_style_else_and_conditional_body_layout(line, contextual_layout)
+        };
         let contextual_layout = self.apply_normal_literal_comma_and_split_else_entry_layout(
             line,
             &replay,
@@ -93,8 +162,11 @@ impl FormatEngine<'_> {
             self.apply_conditional_literal_paren_and_else_layout(line, &replay, contextual_layout);
         let contextual_layout =
             self.apply_call_initializer_and_case_control_contextual_layout(line, contextual_layout);
-        let contextual_layout =
-            self.apply_final_sibling_and_directive_contextual_layout(line, contextual_layout);
+        let contextual_layout = if ended_statement {
+            contextual_layout
+        } else {
+            self.apply_final_sibling_and_directive_contextual_layout(line, contextual_layout)
+        };
         let contextual_layout =
             self.apply_preprocessor_and_split_else_recovery_layout(line, contextual_layout);
         let ContextualLineLayout {
@@ -107,6 +179,16 @@ impl FormatEngine<'_> {
             self.deferred_post_emission_layout(line, &layout, restore_objc_message_align);
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
+        let mut layout = self.apply_tree_anchor_layout(line, layout);
+        self.plain_statement_line = false;
+        if self.preprocessor.group_blocks.contains(&true)
+            && layout.line_kind == LineKind::Normal
+            && !line.trimmed_start().starts_with('#')
+        {
+            layout.exact_indent_spaces =
+                Some(self.layout.indentation.indent() * self.options.indent_width);
+            self.preprocessor.group_block_rows.push(self.output.len());
+        }
         let emitted_indent_spaces = self.publish_formatted_line_layout(line, &layout);
         self.apply_post_emission_state(
             line,

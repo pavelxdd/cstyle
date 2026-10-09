@@ -250,3 +250,279 @@ fn mixed_template_struct_malformed_input_stays_bounded() {
         "mixed malformed template struct input took {elapsed:?}, expected bounded runtime (< 5s)"
     );
 }
+
+#[test]
+fn long_multi_line_expression_stays_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = format!("int x = a\n{};\n", "    + a\n".repeat(30_000));
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "multi-line expression took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn many_parenthesized_ternary_arms_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = format!(
+        "void f() {{\n{}}}\n",
+        "    x = f(a ?\n          b : c);\n".repeat(20_000)
+    );
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "parenthesized ternary arms took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn long_line_split_at_maximum_length_stays_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let terms = vec!["a"; 30_000].join(" + ");
+    let input = format!("int x = {terms};\n");
+    let mut options = FormatOptions::default();
+    options.max_code_length = Some(100);
+    let start = Instant::now();
+    let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+    let elapsed = start.elapsed();
+    assert!(output.len() > input.len());
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "splitting a long line took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn braceless_headers_nested_past_the_stack_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let input = "if(a) ".repeat(60_000);
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "deeply nested headers took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn nested_ternary_colons_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 20_000;
+    let input = format!("x = {}1{};\n", "a ? ".repeat(n), " : 2".repeat(n));
+    let start = Instant::now();
+    format_ok(&input);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 5.0,
+        "nested ternary colons took {elapsed:?}, expected bounded runtime (< 5s)"
+    );
+}
+
+#[test]
+fn nested_calls_and_subscripts_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 50_000;
+    for input in [
+        format!("x = {}{};\n", "f(".repeat(n), ")".repeat(n)),
+        format!("x = a{}{};\n", "[a".repeat(n), "]".repeat(n)),
+    ] {
+        let start = Instant::now();
+        format_ok(&input);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "nested calls or subscripts took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}
+
+#[test]
+fn long_bodies_that_look_back_to_their_opener_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 60_000;
+    let statements = |indent: &str| {
+        (0..n)
+            .map(|i| format!("{indent}a{i} = b{i} + c;\n"))
+            .collect::<String>()
+    };
+    let calls = (0..n / 2)
+        .map(|i| format!("    f{i}(\n        a);\n"))
+        .collect::<String>();
+    let entries = (0..n)
+        .map(|i| format!("    ON_COMMAND(ID_{i}, f{i})\n"))
+        .collect::<String>();
+    for (shape, input) in [
+        (
+            "a label block",
+            format!(
+                "void f(int x)\n{{\n    switch (x) {{\n    default: {{\n        break;\n    }}\n    }}\n{}}}\n",
+                statements("    ")
+            ),
+        ),
+        (
+            "a case body split by a directive",
+            format!(
+                "void f(int x)\n{{\n    switch (x) {{\n    case 1:\n#if A\n        if (x)\n#else\n        if (!x)\n#endif\n{}    }}\n}}\n",
+                statements("        ")
+            ),
+        ),
+        (
+            "calls split after their paren",
+            format!("void f(void)\n{{\n{calls}}}\n"),
+        ),
+        (
+            "a macro block of calls",
+            format!("BEGIN_MESSAGE_MAP(A, B)\n{entries}END_MESSAGE_MAP()\n"),
+        ),
+    ] {
+        let start = Instant::now();
+        format_ok(&input);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "{shape} took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}
+
+#[test]
+fn runs_that_each_line_looked_across_stay_bounded() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let _guard = performance_lock();
+    let n = 60_000;
+    let mut allman = FormatOptions::default();
+    allman.set_style(cstyle::config::StylePreset::Allman);
+    let mut capped = FormatOptions::default();
+    capped.max_code_length = Some(100);
+    let blocks = |block: &dyn Fn(usize) -> String| {
+        format!(
+            "void f(void)\n{{\n{}}}\n",
+            (0..n / 5).map(block).collect::<String>()
+        )
+    };
+    for (shape, input, options) in [
+        (
+            "a run of blank lines",
+            format!("int a;\n{}int b;\n", "\n".repeat(n * 4)),
+            FormatOptions::default(),
+        ),
+        (
+            "a chain of shifts",
+            format!("void f() {{ std::cout{}; }}\n", " << a".repeat(n)),
+            FormatOptions::default(),
+        ),
+        (
+            "nested conditional blocks",
+            format!(
+                "{}int a;\n{}",
+                "#if A\n".repeat(n / 6),
+                "#endif\n".repeat(n / 6)
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a long logical condition",
+            format!(
+                "void f() {{\n    if (a\n{}       ) c();\n}}\n",
+                "        && b\n".repeat(n)
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "switch blocks with braces on their own lines",
+            blocks(&|i| {
+                format!("    switch (a{i}) {{\n    case 1:\n        x();\n        break;\n    }}\n")
+            }),
+            allman.clone(),
+        ),
+        (
+            "else bodies after comments",
+            blocks(&|i| {
+                format!("    if (a{i})\n        x();\n    else\n    // c\n        y{i}();\n")
+            }),
+            allman.clone(),
+        ),
+        (
+            "rows of designated initializers",
+            format!(
+                "static const struct e t[] = {{\n{}}};\n",
+                (0..n / 2)
+                    .map(|i| format!("    {{\n        .a = {i},\n        .b = 2,\n    }},\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "initializer braces nested a line each",
+            format!(
+                "int a =\n{}1\n{};\n",
+                "{\n".repeat(n / 60),
+                "},\n".repeat(n / 60)
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a line of nested parens",
+            format!("int x = {}a{};\n", "(".repeat(n / 6), " + b)".repeat(n / 6)),
+            capped.clone(),
+        ),
+        (
+            "rows of new calls",
+            format!(
+                "void f() {{\n    T *t[] = {{\n{}    }};\n}}\n",
+                (0..n / 2)
+                    .map(|i| format!("        new T({i}),\n"))
+                    .collect::<String>()
+            ),
+            capped.clone(),
+        ),
+        (
+            "a long constructor initializer list",
+            format!(
+                "class A : public B {{\npublic:\n    A() :\n{}        z(0) {{}}\n}};\n",
+                (0..n / 2)
+                    .map(|i| format!("        m{i}({i}),\n"))
+                    .collect::<String>()
+            ),
+            capped.clone(),
+        ),
+    ] {
+        let start = Instant::now();
+        let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+        let elapsed = start.elapsed();
+        assert!(!output.is_empty());
+        assert!(
+            elapsed.as_secs_f64() < 5.0,
+            "{shape} took {elapsed:?}, expected bounded runtime (< 5s)"
+        );
+    }
+}

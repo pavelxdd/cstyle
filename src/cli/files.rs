@@ -1,14 +1,20 @@
-use super::args::{ConsoleOptions, ExcludeErrorMode};
-use super::{CliError, targets};
+use crate::cli::args::{ConsoleOptions, ExcludeErrorMode};
+use crate::cli::in_place::{InPlaceOptions, Prepared, format_prepared_file_in_place, prepare_file};
+use crate::cli::{CliError, targets};
 use crate::config::FormatOptions;
-use crate::io as cstyle_io;
+use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Condvar, Mutex};
+use std::thread;
+
+/// Files formatted ahead per thread while the files before them are
+/// written.
+const PREPARED_PER_THREAD: usize = 4;
 
 pub(super) fn format(
     paths: &[PathBuf],
     options: &FormatOptions,
-    recursive: bool,
     console: &ConsoleOptions,
     program_name: &str,
     version: &str,
@@ -16,7 +22,7 @@ pub(super) fn format(
     let mut matched_excludes = vec![false; console.excludes.len()];
     let expanded = targets::expand_target_paths_with_excludes(
         paths,
-        recursive,
+        console.recursive,
         console.accept_empty_list,
         console.backup_suffix.as_deref(),
         &console.excludes,
@@ -30,16 +36,32 @@ pub(super) fn format(
     if console.verbose && !console.quiet {
         writeln!(stdout, "{program_name} {version}").map_err(CliError::stdout)?;
     }
-    for path in expanded {
-        targets::validate_target_path(&path)?;
-        let changed = format_file(&path, options, console)?;
-        if changed {
-            formatted += 1;
-        } else {
-            unchanged += 1;
+    let threads = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(expanded.len());
+    let ahead = Ahead::new(threads * PREPARED_PER_THREAD);
+    thread::scope(|scope| {
+        // Other threads read and format the files ahead; each file is
+        // written in turn here, from what it holds then.
+        if threads > 1 {
+            for _ in 0..threads {
+                scope.spawn(|| ahead.prepare(&expanded, options));
+            }
         }
-        print_file_status(&mut stdout, &path, changed, console).map_err(CliError::stdout)?;
-    }
+        let result = expanded.iter().enumerate().try_for_each(|(index, path)| {
+            targets::validate_target_path(path)?;
+            let prepared = if threads > 1 { ahead.take(index) } else { None };
+            let changed = format_file(path, options, console, prepared)?;
+            if changed {
+                formatted += 1;
+            } else {
+                unchanged += 1;
+            }
+            print_file_status(&mut stdout, path, changed, console).map_err(CliError::stdout)
+        });
+        ahead.stop();
+        result
+    })?;
     if console.verbose && !console.quiet {
         writeln!(stdout, " {formatted} formatted   {unchanged} unchanged")
             .map_err(CliError::stdout)?;
@@ -92,48 +114,132 @@ fn print_file_status(
     writeln!(writer, "{status}  {}", path.display())
 }
 
+/// Files read and formatted ahead of the one being written, at most
+/// `window` past it.
+struct Ahead {
+    window: usize,
+    state: Mutex<AheadState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct AheadState {
+    /// The next file to read ahead.
+    next: usize,
+    /// The file being written.
+    taking: usize,
+    /// Files read ahead, by index; `None` when reading or formatting one
+    /// failed, which its turn then reports.
+    ready: BTreeMap<usize, Option<Prepared>>,
+    stopped: bool,
+}
+
+impl Ahead {
+    fn new(window: usize) -> Self {
+        Self {
+            window,
+            state: Mutex::default(),
+            changed: Condvar::new(),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, AheadState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Reads and formats the next files of `paths` until they run out or
+    /// the writing stops.
+    fn prepare(&self, paths: &[PathBuf], options: &FormatOptions) {
+        loop {
+            let index = {
+                let mut state = self.lock();
+                while !state.stopped && state.next >= state.taking + self.window {
+                    state = self
+                        .changed
+                        .wait(state)
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                }
+                if state.stopped || state.next >= paths.len() {
+                    return;
+                }
+                state.next += 1;
+                state.next - 1
+            };
+            // A file that panics is formatted again in its turn, which
+            // then reports the panic as the formatting of that file alone
+            // would.
+            let prepared = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                prepare_file(&paths[index], options)
+            }))
+            .ok()
+            .flatten();
+            self.lock().ready.insert(index, prepared);
+            self.changed.notify_all();
+        }
+    }
+
+    /// The file `index` as it was read ahead, once it is.
+    fn take(&self, index: usize) -> Option<Prepared> {
+        let mut state = self.lock();
+        state.taking = index;
+        self.changed.notify_all();
+        loop {
+            if let Some(prepared) = state.ready.remove(&index) {
+                return prepared;
+            }
+            state = self
+                .changed
+                .wait(state)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+
+    fn stop(&self) {
+        self.lock().stopped = true;
+        self.changed.notify_all();
+    }
+}
+
 fn format_file(
     path: &Path,
     options: &FormatOptions,
     console: &ConsoleOptions,
+    prepared: Option<Prepared>,
 ) -> Result<bool, CliError> {
-    cstyle_io::format_path_with_options(
+    format_prepared_file_in_place(
         path,
         options,
-        &cstyle_io::FileFormatOptions {
+        &InPlaceOptions {
             backup_suffix: console.backup_suffix.as_deref().map(str::to_owned),
             dry_run: console.dry_run,
             preserve_date: console.preserve_date,
         },
+        prepared,
     )
-    .map(|result| result.changed)
     .map_err(|error| CliError::new(format!("failed to format {}: {error}", path.display()), 1))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_path;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_path(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-cli-{stamp}-{name}"))
-    }
 
     fn format_paths(
         paths: &[PathBuf],
         recursive: bool,
         console: &ConsoleOptions,
     ) -> Result<(), CliError> {
+        let console = ConsoleOptions {
+            recursive,
+            ..console.clone()
+        };
         format(
             paths,
             &FormatOptions::default(),
-            recursive,
-            console,
+            &console,
             "cstyle",
             "test-version",
         )
@@ -218,6 +324,41 @@ mod tests {
             ".orig"
         )))
         .expect("remove backup");
+    }
+
+    #[test]
+    fn files_after_a_failing_one_stay_as_they_were_and_repeats_find_their_first_turn() {
+        let dir = temp_path("ordered-turns");
+        fs::create_dir_all(&dir).expect("create dir");
+        let source = "int f(){return 0;}\n";
+        let files = (0..12)
+            .map(|index| {
+                let path = dir.join(format!("f{index}.c"));
+                fs::write(&path, source).expect("write source");
+                path
+            })
+            .collect::<Vec<_>>();
+        let console = ConsoleOptions {
+            backup_suffix: crate::config::BackupSuffix::None,
+            ..ConsoleOptions::default()
+        };
+        let mut paths = vec![files[0].clone(), files[0].clone()];
+        paths.extend_from_slice(&files[1..6]);
+        paths.push(dir.join("missing.c"));
+        paths.extend_from_slice(&files[6..]);
+
+        let result = format_paths(&paths, false, &console);
+
+        let formatted = fs::read_to_string(&files[0]).expect("read first file");
+        assert_ne!(formatted, source);
+        for path in &files[1..6] {
+            assert_eq!(fs::read_to_string(path).expect("read file"), formatted);
+        }
+        for path in &files[6..] {
+            assert_eq!(fs::read_to_string(path).expect("read file"), source);
+        }
+        fs::remove_dir_all(dir).expect("remove dir");
+        assert!(result.is_err(), "a missing file must fail");
     }
 
     #[test]

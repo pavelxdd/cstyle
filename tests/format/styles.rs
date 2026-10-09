@@ -1,0 +1,1467 @@
+use crate::common::{format_exact, format_with};
+use cstyle::config::{BraceStyle, FormatOptions, IndentStyle, apply_command_line_args};
+
+#[test]
+fn horstmann_normalizes_run_in_body_gap() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=run-in".to_owned()]).expect("valid options");
+
+    assert_eq!(
+        format_exact(fixture!("void run()", "{     if (ready())"), &options,),
+        fixture!("void run()", "{   if (ready())")
+    );
+    assert_eq!(
+        format_exact(fixture!("void run()", "{ if (ready())"), &options),
+        fixture!("void run()", "{   if (ready())")
+    );
+}
+
+#[test]
+fn attach_and_one_true_brace_styles_place_definition_and_closing_braces() {
+    let mut attach = FormatOptions::default();
+    attach.brace_style = BraceStyle::Attach;
+    let attach_actual = format_with(fixture!("int f(){if(x){y();}else{z();}}"), &attach);
+    assert_eq!(
+        attach_actual,
+        fixture!(
+            "int f() {",
+            "    if (x) {",
+            "        y();",
+            "    } else {",
+            "        z();",
+            "    }",
+            "}",
+        )
+    );
+
+    let mut linux = FormatOptions::default();
+    linux.brace_style = BraceStyle::OneTrueBrace;
+    let linux_actual = format_with(fixture!("int f(){if(x){y();}else{z();}}"), &linux);
+    assert_eq!(
+        linux_actual,
+        fixture!(
+            "int f()",
+            "{",
+            "    if (x) {",
+            "        y();",
+            "    } else {",
+            "        z();",
+            "    }",
+            "}",
+        )
+    );
+
+    let mut stroustrup = linux.clone();
+    stroustrup.break_closing_braces = true;
+    let stroustrup_actual = format_with(fixture!("int f(){if(x){y();}else{z();}}"), &stroustrup);
+    assert_eq!(
+        stroustrup_actual,
+        fixture!(
+            "int f()",
+            "{",
+            "    if (x) {",
+            "        y();",
+            "    }",
+            "    else {",
+            "        z();",
+            "    }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn webkit_style_indents_class_members_and_breaks_definition_braces() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::WebKit;
+    let actual = format_with(
+        fixture!(
+            "namespace N{class C{public:void m(){if(x){y();}}};}",
+            "int f(){return 0;}",
+        ),
+        &options,
+    );
+
+    assert_eq!(
+        actual,
+        fixture!(
+            "namespace N {",
+            "class C {",
+            "public:",
+            "    void m()",
+            "    {",
+            "        if (x) {",
+            "            y();",
+            "        }",
+            "    }",
+            "};",
+            "}",
+            "int f()",
+            "{",
+            "    return 0;",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn brace_style_variants_place_function_and_control_braces() {
+    let source = fixture!("int f(){if(x){call();}}");
+
+    let mut whitesmith = FormatOptions::default();
+    whitesmith.brace_style = BraceStyle::Whitesmith;
+    whitesmith.indent_braces = true;
+    whitesmith.indent_switches = true;
+    assert_eq!(
+        format_exact(source, &whitesmith),
+        fixture!(
+            "int f()",
+            "    {",
+            "    if(x)",
+            "        {",
+            "        call();",
+            "        }",
+            "    }",
+        )
+    );
+
+    let mut vtk = FormatOptions::default();
+    vtk.brace_style = BraceStyle::Vtk;
+    assert_eq!(
+        format_exact(source, &vtk),
+        fixture!(
+            "int f()",
+            "{",
+            "    if(x)",
+            "        {",
+            "        call();",
+            "        }",
+            "}",
+        )
+    );
+
+    let mut ratliff = FormatOptions::default();
+    ratliff.brace_style = BraceStyle::Ratliff;
+    ratliff.indent_braces = true;
+    assert_eq!(
+        format_exact(source, &ratliff),
+        fixture!(
+            "int f() {",
+            "    if(x) {",
+            "        call();",
+            "        }",
+            "    }",
+        )
+    );
+
+    let mut gnu = FormatOptions::default();
+    gnu.brace_style = BraceStyle::Gnu;
+    gnu.indent_blocks = true;
+    assert_eq!(
+        format_exact(source, &gnu),
+        fixture!(
+            "int f()",
+            "{",
+            "    if(x)",
+            "        {",
+            "            call();",
+            "        }",
+            "}",
+        )
+    );
+
+    let mut google = FormatOptions::default();
+    google.brace_style = BraceStyle::Attach;
+    assert_eq!(
+        format_exact(source, &google),
+        fixture!("int f() {", "    if(x) {", "        call();", "    }", "}",)
+    );
+
+    let mut pico = FormatOptions::default();
+    pico.brace_style = BraceStyle::Pico;
+    pico.break_one_line_blocks = false;
+    pico.break_one_line_statements = false;
+    assert_eq!(
+        format_exact(source, &pico),
+        fixture!("int f() {if(x) {call();}}")
+    );
+
+    let mut lisp = FormatOptions::default();
+    lisp.brace_style = BraceStyle::Lisp;
+    lisp.break_one_line_statements = false;
+    assert_eq!(
+        format_exact(source, &lisp),
+        fixture!("int f() {", "    if(x) {", "        call(); } }",)
+    );
+
+    let mut horstmann = FormatOptions::default();
+    horstmann.brace_style = BraceStyle::Horstmann;
+    horstmann.indent_switches = true;
+    assert_eq!(
+        format_exact(source, &horstmann),
+        fixture!("int f()", "{   if(x)", "    {   call();", "    }", "}",)
+    );
+}
+
+#[test]
+fn whitesmith_else_block_uses_whitesmith_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid Whitesmith style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void run() {",
+                "if (ready) {",
+                "work();",
+                "} else {",
+                "stop();",
+                "}",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "    {",
+            "    if (ready)",
+            "        {",
+            "        work();",
+            "        }",
+            "    else",
+            "        {",
+            "        stop();",
+            "        }",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn vtk_else_block_uses_vtk_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid VTK style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void run() {",
+                "if (ready) {",
+                "work();",
+                "} else {",
+                "stop();",
+                "}",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{",
+            "    if (ready)",
+            "        {",
+            "        work();",
+            "        }",
+            "    else",
+            "        {",
+            "        stop();",
+            "        }",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn whitesmith_add_braces_indents_nested_inline_header_blocks() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Whitesmith;
+    options.indent_braces = true;
+    options.indent_classes = true;
+    options.indent_switches = true;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "    {",
+            "    if(alpha) if(beta)",
+            "            {",
+            "            one();",
+            "            }",
+            "        else",
+            "            {",
+            "            two();",
+            "            }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn vtk_add_braces_indents_nested_inline_header_blocks() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Vtk;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{",
+            "    if(alpha) if(beta)",
+            "            {",
+            "            one();",
+            "            }",
+            "        else",
+            "            {",
+            "            two();",
+            "            }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn ratliff_add_braces_aligns_nested_inline_header_closers() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Ratliff;
+    options.indent_braces = true;
+    options.indent_classes = true;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run() {",
+            "    if(alpha) if(beta) {",
+            "            one();",
+            "            }",
+            "        else {",
+            "            two();",
+            "            }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn run_in_styles_keep_nested_inline_headers_at_body_indent() {
+    let source = "void run(){\nif(alpha) if(beta) one(); else two();\n}\n";
+
+    let mut pico = FormatOptions::default();
+    pico.brace_style = BraceStyle::Pico;
+    pico.break_one_line_blocks = false;
+    pico.break_one_line_statements = false;
+    pico.indent_switches = true;
+    let pico_expected = fixture!("void run()", "{   if(alpha) if(beta) one(); else two(); }",);
+
+    let mut lisp = FormatOptions::default();
+    lisp.brace_style = BraceStyle::Lisp;
+    lisp.break_one_line_statements = false;
+    let lisp_expected = fixture!(
+        "void run() {",
+        "    if(alpha) if(beta) one(); else two(); }",
+    );
+
+    // No-op one-line options cannot shift a complete nested-header row.
+    for configure in [
+        |options: &mut FormatOptions| options.remove_braces = true,
+        |options: &mut FormatOptions| options.break_one_line_headers = true,
+        |options: &mut FormatOptions| options.break_one_line_blocks = false,
+    ] {
+        let mut options = pico.clone();
+        configure(&mut options);
+        assert_eq!(format_exact(source, &options), pico_expected);
+
+        let mut options = lisp.clone();
+        configure(&mut options);
+        assert_eq!(format_exact(source, &options), lisp_expected);
+    }
+}
+
+#[test]
+fn gnu_add_braces_indents_nested_inline_else_block() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Gnu;
+    options.indent_blocks = true;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{",
+            "    if(alpha) if(beta)",
+            "            {",
+            "                one();",
+            "            }",
+            "        else",
+            "            {",
+            "                two();",
+            "            }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn whitesmith_keep_one_line_statements_keeps_case_action_with_label() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Whitesmith;
+    options.indent_braces = true;
+    options.indent_classes = true;
+    options.indent_switches = true;
+    options.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nswitch(value){case 1: one(); break;}\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "    {",
+            "    switch(value)",
+            "        {",
+            "        case 1: one();",
+            "            break;",
+            "        }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn indent_braces_places_added_one_line_braces_at_control_body_indent() {
+    let source = "void run(){\nif(ready)\nwork();\n}\n";
+
+    let mut whitesmith = FormatOptions::default();
+    whitesmith.brace_style = BraceStyle::Whitesmith;
+    whitesmith.indent_braces = true;
+    whitesmith.indent_classes = true;
+    whitesmith.indent_switches = true;
+    whitesmith.add_braces = true;
+    whitesmith.add_one_line_braces = true;
+    assert_eq!(
+        format_exact(source, &whitesmith),
+        fixture!(
+            "void run()",
+            "    {",
+            "    if(ready)",
+            "        { work(); }",
+            "    }",
+        )
+    );
+
+    let mut ratliff = FormatOptions::default();
+    ratliff.brace_style = BraceStyle::Ratliff;
+    ratliff.indent_braces = true;
+    ratliff.indent_classes = true;
+    ratliff.add_braces = true;
+    ratliff.add_one_line_braces = true;
+    assert_eq!(
+        format_exact(source, &ratliff),
+        fixture!(
+            "void run() {",
+            "    if(ready)",
+            "        { work(); }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn add_braces_keeps_following_same_line_header_outside_added_block() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Whitesmith;
+    options.indent_braces = true;
+    options.indent_classes = true;
+    options.indent_switches = true;
+    options.add_braces = true;
+    options.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(value)one();else two();for(int i=0;i<value;i++)step();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "    {",
+            "    if(value)",
+            "        {",
+            "        one();",
+            "        }",
+            "    else",
+            "        {",
+            "        two();",
+            "        } for(int i=0; i<value; i++)",
+            "        {",
+            "        step();",
+            "        }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn gnu_add_one_line_braces_uses_control_block_indent() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Gnu;
+    options.indent_blocks = true;
+    options.add_braces = true;
+    options.add_one_line_braces = true;
+
+    assert_eq!(
+        format_exact("void run(){\nif(ready)\nwork();\n}\n", &options),
+        fixture!(
+            "void run()",
+            "{",
+            "    if(ready)",
+            "        { work(); }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn pico_add_braces_aligns_dangling_else_with_inner_header() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.break_one_line_blocks = false;
+    options.break_one_line_statements = false;
+    options.indent_switches = true;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{   if(alpha) if(beta) { one(); }",
+            "        else { two(); } }",
+        )
+    );
+}
+
+#[test]
+fn pico_add_braces_keeps_same_line_control_blocks_together() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.break_one_line_blocks = false;
+    options.break_one_line_statements = false;
+    options.indent_switches = true;
+    options.add_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nfor(int i=0;i<2;i++) one(); while(ready) two(); do three(); while(done);\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{   for(int i=0; i<2; i++) { one(); } while(ready) { two(); } do { three(); }",
+            "    while(done); }",
+        )
+    );
+}
+
+#[test]
+fn pico_add_one_line_braces_starts_split_body_at_body_column() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.break_one_line_blocks = false;
+    options.break_one_line_statements = false;
+    options.add_braces = true;
+    options.add_one_line_braces = true;
+
+    assert_eq!(
+        format_exact("void run(){\nif(ready)\nwork();\n}\n", &options),
+        fixture!("void run()", "{   if(ready)", "    {   work(); } }")
+    );
+}
+
+#[test]
+fn pico_remove_braces_preserves_opening_brace_gaps() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.break_one_line_blocks = false;
+    options.break_one_line_statements = false;
+    options.remove_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(ready) { work(); } else { stop(); }\n}\n",
+            &options,
+        ),
+        fixture!("void run()", "{   if(ready)  work();   else  stop();  }")
+    );
+}
+
+#[test]
+fn lisp_remove_braces_preserves_closing_brace_gap() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.break_one_line_statements = false;
+    options.remove_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(ready) { work(); } else { stop(); }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run() {",
+            "    if(ready)",
+            "        work();   else",
+            "        stop();  }",
+        )
+    );
+}
+
+#[test]
+fn lisp_kept_one_line_block_breaks_following_else() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.break_one_line_blocks = false;
+    options.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(ready) { work(); } else { stop(); }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run() {",
+            "    if(ready) { work(); }",
+            "    else { stop(); } }",
+        )
+    );
+}
+
+#[test]
+fn lisp_add_one_line_braces_uses_lisp_block_layout() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.break_one_line_statements = false;
+    options.add_braces = true;
+    options.add_one_line_braces = true;
+
+    assert_eq!(
+        format_exact("void run(){\nif(ready) work();\n}\n", &options),
+        fixture!("void run() {", "    if(ready) {", "        work(); } }")
+    );
+}
+
+#[test]
+fn horstmann_add_one_line_braces_keeps_function_closer_at_definition_column() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Horstmann;
+    options.indent_switches = true;
+    options.add_braces = true;
+    options.add_one_line_braces = true;
+
+    assert_eq!(
+        format_exact(
+            "void run(){\nif(alpha) if(beta) one(); else two();\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void run()",
+            "{   if(alpha) if(beta) { one(); }",
+            "        else { two(); }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn horstmann_tabs_align_run_in_access_label_to_tab_stop() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Horstmann;
+    options.indent_style = IndentStyle::Tabs;
+    options.indent_width = 4;
+    options.tab_width = 4;
+    options.indent_classes = true;
+
+    assert_eq!(
+        format_exact("class Item{\npublic:\nint value;\n};\n", &options),
+        fixture!("class Item", "{\tpublic:", "\t\tint value;", "};")
+    );
+}
+
+#[test]
+fn horstmann_force_tabs_uses_configured_indent_and_tab_widths() {
+    let source = fixture!(
+        "void run(void)",
+        "{",
+        "    if (alpha)",
+        "    {",
+        "        work();",
+        "    }",
+        "}",
+    );
+
+    let mut narrow = FormatOptions::default();
+    narrow.brace_style = BraceStyle::Horstmann;
+    narrow.indent_style = IndentStyle::ForceTabs;
+    narrow.indent_width = 4;
+    narrow.tab_width = 8;
+    assert_eq!(
+        format_exact(source, &narrow),
+        fixture!(
+            "void run(void)",
+            "{   if (alpha)",
+            "    {   work();",
+            "    }",
+            "}",
+        )
+    );
+
+    let mut wide = FormatOptions::default();
+    wide.brace_style = BraceStyle::Horstmann;
+    wide.indent_style = IndentStyle::ForceTabs;
+    wide.indent_width = 8;
+    wide.tab_width = 4;
+    assert_eq!(
+        format_exact(source, &wide),
+        fixture!(
+            "void run(void)",
+            "{\t\tif (alpha)",
+            "\t\t{\t\twork();",
+            "\t\t}",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn pico_and_lisp_pad_aggregate_closing_braces() {
+    let mut pico = FormatOptions::default();
+    pico.brace_style = BraceStyle::Pico;
+    pico.break_one_line_blocks = false;
+    pico.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(fixture!("int arr[]={1,2,3};"), &pico),
+        fixture!("int arr[]= {1,2,3 };")
+    );
+    assert_eq!(
+        format_exact(fixture!("int m[2][2]={{1,2},{3,4}};"), &pico),
+        fixture!("int m[2][2]= {{1,2 },{3,4 } };")
+    );
+    assert_eq!(
+        format_exact(fixture!("int a[]={};"), &pico),
+        fixture!("int a[]= { };")
+    );
+    assert_eq!(
+        format_exact(fixture!("enum E{A,B};"), &pico),
+        fixture!("enum E {A,B };")
+    );
+    assert_eq!(
+        format_exact(fixture!("void f(void){int a[]={1,2};}"), &pico),
+        fixture!("void f(void) {int a[]= {1,2 };}")
+    );
+
+    let mut lisp = FormatOptions::default();
+    lisp.brace_style = BraceStyle::Lisp;
+    lisp.break_one_line_statements = false;
+
+    assert_eq!(
+        format_exact(fixture!("int arr[]={1,2,3};"), &lisp),
+        fixture!("int arr[]= {1,2,3 };")
+    );
+    assert_eq!(
+        format_exact(fixture!("int m[2][2]={{1,2},{3,4}};"), &lisp),
+        fixture!("int m[2][2]= {{1,2 },{3,4 } };")
+    );
+}
+
+#[test]
+fn allman_attach_horstmann_and_ratliff_leave_aggregate_closing_braces_unpadded() {
+    for style in [
+        BraceStyle::Allman,
+        BraceStyle::Attach,
+        BraceStyle::Horstmann,
+        BraceStyle::Ratliff,
+    ] {
+        let mut options = FormatOptions::default();
+        options.brace_style = style;
+        assert_eq!(
+            format_exact(fixture!("int a[]={1,2};"), &options),
+            fixture!("int a[]= {1,2};"),
+            "style {style:?} must not pad the array closing brace"
+        );
+    }
+}
+
+#[test]
+fn indented_brace_styles_keep_sibling_indent_after_closing_declaration() {
+    for (style, source) in [
+        (
+            "--style=whitesmith",
+            "typedef struct a\n    {\n    int d;\n    } a;\n\ntypedef struct\n    {\n    int x;\n    } B;\nvoid f(void)\n    {\n    struct b\n        {\n        int q;\n        } b;\n    int y;\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "typedef struct a {\n    int d;\n    } a;\n\nint x;\nvoid f(void) {\n    struct b {\n        int q;\n        } b;\n    int y;\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+
+        assert_eq!(format_exact(source, &options), source, "{style}");
+    }
+}
+
+#[test]
+fn ratliff_closes_else_of_broken_braceless_else_if_chain_at_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f(void)",
+                "{",
+                "    if (a)",
+                "        x();",
+                "    else if (b)",
+                "        y();",
+                "    else {",
+                "        z();",
+                "    }",
+                "    w();",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f(void) {",
+            "    if (a)",
+            "        x();",
+            "    else",
+            "        if (b)",
+            "            y();",
+            "        else {",
+            "            z();",
+            "            }",
+            "    w();",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn ratliff_nests_header_in_else_body_after_broken_braced_else_if() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void)",
+                "{",
+                "    if (fd < 0)",
+                "        res = 1;",
+                "    else if (w() < 0) {",
+                "        res = 2;",
+                "    } else if (c() < 0)",
+                "        res = 3;",
+                "    else {",
+                "        reset();",
+                "        if (l() < 0)",
+                "            res = 4;",
+                "    }",
+                "    return res;",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void) {",
+            "    if (fd < 0)",
+            "        res = 1;",
+            "    else",
+            "        if (w() < 0) {",
+            "            res = 2;",
+            "            }",
+            "        else",
+            "            if (c() < 0)",
+            "                res = 3;",
+            "            else {",
+            "                reset();",
+            "                if (l() < 0)",
+            "                    res = 4;",
+            "                }",
+            "    return res;",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn horstmann_block_after_braceless_broken_else_if_chain_runs_in_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--break-elseifs".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "int f(void)",
+                "{",
+                "    for (;;)",
+                "        if (a)",
+                "            x = 1;",
+                "        else if (b) {",
+                "            y();",
+                "            return 2;",
+                "        }",
+                "",
+                "    if (c) {",
+                "        z();",
+                "        w();",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "int f(void)",
+            "{   for (;;)",
+            "        if (a)",
+            "            x = 1;",
+            "        else",
+            "            if (b)",
+            "            {   y();",
+            "                return 2;",
+            "            }",
+            "",
+            "    if (c)",
+            "    {   z();",
+            "        w();",
+            "    }",
+            "}",
+        ),
+    );
+}
+
+#[test]
+fn pico_counts_no_closer_past_an_empty_line_in_a_statement_length() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    options.max_code_length = Some(60);
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    if (a)",
+                "    {",
+                "        tutil_rlim2str(strbuff, sizeof(strbuff), rl.rlim_max);",
+                "        curl_mfprintf(stderr, \"current hard limit: %s\\n\", strbuff);",
+                "",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "{   if (a)",
+            "    {   tutil_rlim2str(strbuff, sizeof(strbuff), rl.rlim_max);",
+            "        curl_mfprintf(stderr, \"current hard limit: %s\\n\", strbuff);",
+            "",
+            "    } }",
+        ),
+    );
+}
+
+#[test]
+fn ratliff_closer_in_a_split_else_body_stands_past_its_header_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()])
+        .expect("valid Ratliff style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  if( a ){",
+                "    x();",
+                "  }else",
+                "",
+                "  if( iCol==1 ){",
+                "    y();",
+                "  }else if( iCol==2 ){",
+                "    if( b ){",
+                "      y();",
+                "    }else if( c ){",
+                "      z();",
+                "    }",
+                "  }else{",
+                "    w();",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    if( a ) {",
+            "        x();",
+            "        }",
+            "    else",
+            "",
+            "        if( iCol==1 ) {",
+            "            y();",
+            "            }",
+            "        else if( iCol==2 ) {",
+            "            if( b ) {",
+            "                y();",
+            "                }",
+            "            else if( c ) {",
+            "                z();",
+            "                }",
+            "            }",
+            "        else {",
+            "            w();",
+            "            }",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn ratliff_closer_of_a_dangling_else_block_stands_past_the_else() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()])
+        .expect("valid Ratliff style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    while(*str) {",
+                "        if(p)",
+                "            switch(action) {",
+                "            case deny:",
+                "                x();",
+                "                break;",
+                "            }",
+                "        else {",
+                "            y();",
+                "            return 1;",
+                "        }",
+                "    }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f() {",
+            "    while(*str) {",
+            "        if(p)",
+            "            switch(action) {",
+            "                case deny:",
+            "                    x();",
+            "                    break;",
+            "                }",
+            "        else {",
+            "            y();",
+            "            return 1;",
+            "            }",
+            "        }",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn whitesmith_first_statement_of_a_block_in_a_labeled_case_block_stands_at_its_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid Whitesmith style");
+
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "  switch( op ){",
+                "    case A: lab: {",
+                "      int j = 1;",
+                "      for(j=1; j<n; j++){",
+                "        if( a ){",
+                "          x();",
+                "        }",
+                "      }",
+                "      break;",
+                "    }",
+                "  }",
+                "}",
+            ),
+            &options,
+        ),
+        fixture!(
+            "void f()",
+            "    {",
+            "    switch( op )",
+            "        {",
+            "        case A:",
+            "lab:",
+            "                {",
+            "                int j = 1;",
+            "                for(j=1; j<n; j++)",
+            "                    {",
+            "                    if( a )",
+            "                        {",
+            "                        x();",
+            "                        }",
+            "                    }",
+            "                break;",
+            "                }",
+            "        }",
+            "    }",
+        ),
+    );
+}
+
+#[test]
+fn pico_initializer_closer_stays_after_its_block_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "static const s t[] = {\n    { 0xC03B, \"TLS\",\n              \"ECDHE\" },\n    { 0xC03C, \"TLS\",\n              \"ARIA128-SHA256\" /* ns */ },\n};\nstatic const s u[] = {\n    { 1,\n      \"A\" /* ns */\n    },\n};\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "static const s t[] = {\n    {   0xC03B, \"TLS\",\n        \"ECDHE\" },\n    {   0xC03C, \"TLS\",\n        \"ARIA128-SHA256\" /* ns */ }, };\nstatic const s u[] =\n{   {   1,\n        \"A\" /* ns */\n    }, };\n",
+    );
+}
+
+#[test]
+fn ratliff_closes_a_statement_expression_at_its_statements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()]).expect("valid options");
+    let source = "void f()\n{\n    DEBUG_OUT({\n        x();\n    });\n    y();\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f() {\n    DEBUG_OUT({\n        x();\n        });\n    y();\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_case_block_after_a_closed_case_block_keeps_its_statements() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=ratliff".to_owned()]).expect("valid options");
+    let source = "void f()\n{\n    switch (c) {\n    case 1: {\n        x();\n        break;\n    }\n    case 2: {\n        if (a) {\n            y();\n        }\n        break;\n    }\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f() {\n    switch (c) {\n        case 1: {\n            x();\n            break;\n            }\n        case 2: {\n            if (a) {\n                y();\n                }\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_indents_a_padded_macro_row_before_the_first_case_as_a_case_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=ratliff".to_owned(), "--pad-paren-out".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void h(int type) {\nswitch (type) {\nx = 1;\nMAP(XX)\ndefault:\nreturn;\n}\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void h (int type) {",
+            "    switch (type) {",
+            "            x = 1;",
+            "            MAP (XX)",
+            "        default:",
+            "            return;",
+            "        }",
+            "    }",
+        )
+    );
+}
+
+#[test]
+fn horstmann_indented_cases_resume_the_outer_case_body_after_a_nested_switch_and_label() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-cases".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int c)\n{\n  switch (c) {\n    case 1: {\n      switch (c) {\n        case 2: {\n          c = 2;\n        }\n      }\n     read_save:\n       next(ls);\n    }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{   switch (c)",
+            "    {   case 1:",
+            "            {   switch (c)",
+            "                {   case 2:",
+            "                        {   c = 2;",
+            "                        }",
+            "                }",
+            "read_save:",
+            "                next(ls);",
+            "            }",
+            "    }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn indented_switches_indent_the_cases_of_a_switch_held_by_an_attached_else() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "int f(int idx)\n{\n  if (idx > 0) {\n    return 1;\n  }\n  else switch (idx) {\n    case 1: return 2;\n    default: return 3;\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "int f(int idx)",
+            "{",
+            "    if (idx > 0) {",
+            "        return 1;",
+            "    } else switch (idx) {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "                return 3;",
+            "        }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn a_braceless_header_kept_on_a_case_label_line_indents_its_body_past_the_case_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+        ],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int c)\n{\n    switch (c) {\n    case 1: if (x)\n            y();\n        else\n            z();\n        break;\n    }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int c)",
+            "{",
+            "    switch (c) {",
+            "    case 1: if (x)",
+            "            y();",
+            "        else",
+            "            z();",
+            "        break;",
+            "    }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn lisp_breaking_a_return_type_keeps_the_next_directive_branch_at_file_scope() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--break-return-type".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "#ifndef N\nstatic void check(void* arg) {\n  int r;\n}\n#else\nint b;\n#endif\nint c;\n",
+            &options,
+        ),
+        fixture!(
+            "#ifndef N",
+            "static void",
+            "check(void* arg) {",
+            "    int r; }",
+            "#else",
+            "int b;",
+            "#endif",
+            "int c;",
+        )
+    );
+}
+
+#[test]
+fn gnu_places_the_labels_of_an_else_switch_at_its_broken_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_owned()])
+        .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n  if (a)\n    x();\n  else switch (idx) {\n    case 1: return 2;\n    default: { y(); return 3; }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)",
+            "        x();",
+            "    else switch (idx)",
+            "            {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "            {",
+            "                y();",
+            "                return 3;",
+            "            }",
+            "            }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn mozilla_breaks_an_enum_brace_with_its_trailing_comment() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=mozilla".to_owned()])
+        .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "enum t {   // c4\n    B,\n};\nstruct s {   // c3\n    int a;\n};\n",
+            &options,
+        ),
+        fixture!(
+            "enum t",
+            "{   // c4",
+            "    B,",
+            "};",
+            "struct s     // c3",
+            "{",
+            "    int a;",
+            "};",
+        )
+    );
+}
+
+#[test]
+fn vtk_indented_switches_indent_an_initializer_brace_in_a_case_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=vtk".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(int x)\n{\n  switch (x) {\n    case 1: {\n      const char *az[] = {\n        \"sql\", \"indexes\", 0\n      };\n      break;\n    }\n    case 2:\n      g();\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(int x)",
+            "{",
+            "    switch (x)",
+            "        {",
+            "        case 1:",
+            "            {",
+            "            const char *az[] =",
+            "                {",
+            "                \"sql\", \"indexes\", 0",
+            "                };",
+            "            break;",
+            "            }",
+            "        case 2:",
+            "            g();",
+            "        }",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn vtk_indented_switches_place_else_switch_labels_at_the_indented_brace() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=vtk".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid style options");
+
+    assert_eq!(
+        format_exact(
+            "void f(void)\n{\n  if (a)\n    x();\n  else switch (idx) {\n    case 1: return 2;\n    default: { y(); return 3; }\n  }\n}\n",
+            &options,
+        ),
+        fixture!(
+            "void f(void)",
+            "{",
+            "    if (a)",
+            "        x();",
+            "    else switch (idx)",
+            "            {",
+            "            case 1:",
+            "                return 2;",
+            "            default:",
+            "                {",
+            "                y();",
+            "                return 3;",
+            "                }",
+            "            }",
+            "}",
+        )
+    );
+}

@@ -1,0 +1,296 @@
+use crate::cli::args::{Command, FormatCommand};
+use crate::config;
+use std::ffi::OsString;
+use std::io::{self, Write};
+use std::{env, fmt};
+
+mod args;
+mod files;
+mod help;
+mod in_place;
+mod option_sources;
+mod streams;
+mod targets;
+
+const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
+const DISPLAY_NAME: &str = "CStyle";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug)]
+pub struct CliError {
+    message: String,
+    exit_code: u8,
+    errors_to_stdout: bool,
+}
+
+impl CliError {
+    fn new(message: impl Into<String>, exit_code: u8) -> Self {
+        Self {
+            message: message.into(),
+            exit_code,
+            errors_to_stdout: false,
+        }
+    }
+
+    fn with_stdout(mut self, errors_to_stdout: bool) -> Self {
+        self.errors_to_stdout = errors_to_stdout;
+        self
+    }
+
+    fn stdout(error: io::Error) -> Self {
+        Self::new(format!("failed to write stdout: {error}"), 1)
+    }
+
+    pub fn exit_code(&self) -> u8 {
+        self.exit_code
+    }
+
+    pub fn errors_to_stdout(&self) -> bool {
+        self.errors_to_stdout
+    }
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for CliError {}
+
+pub fn run_from_env() -> Result<(), CliError> {
+    run(env::args_os().skip(1))
+}
+
+fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), CliError> {
+    let args = args.into_iter().collect::<Vec<_>>();
+    let errors_to_stdout = args::requests_errors_to_stdout(&args);
+    match args::parse(args).map_err(|error| error.with_stdout(errors_to_stdout))? {
+        Command::Help => help::print(DISPLAY_NAME, VERSION),
+        Command::Version => {
+            writeln!(io::stdout().lock(), "{} {}", PROGRAM_NAME, VERSION).map_err(CliError::stdout)
+        }
+        Command::Format(command) => format_command(command),
+    }
+}
+
+fn format_command(command: FormatCommand) -> Result<(), CliError> {
+    let FormatCommand {
+        config,
+        project_config,
+        option_args,
+        paths,
+        stdin_path,
+        stdout_path,
+        mut console,
+    } = command;
+    let command_line_errors_to_stdout = console.errors_to_stdout;
+    let mut options = option_sources::load_selected_config(&config, &env::var_os)
+        .map_err(|error| CliError::new(format!("config error: {error}"), 2))
+        .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
+    option_sources::apply_selected_project_config(
+        &mut options,
+        &project_config,
+        &paths,
+        stdin_path.as_deref(),
+        &env::var_os,
+    )
+    .map_err(|error| CliError::new(format!("config error: {error}"), 2))
+    .map_err(|error| error.with_stdout(command_line_errors_to_stdout))?;
+    config::apply_command_line_args(&mut options.format, &option_args)
+        .map_err(|error| CliError::new(format!("option error: {error}. Try 'cstyle --help'."), 2))
+        .map_err(|error| error.with_stdout(console.errors_to_stdout))?;
+    console.backup_suffix.inherit(options.backup_suffix);
+    if paths.is_empty() {
+        streams::format(
+            stdin_path.as_deref(),
+            stdout_path.as_deref(),
+            &options.format,
+        )
+    } else {
+        files::format(&paths, &options.format, &console, PROGRAM_NAME, VERSION)
+    }
+    .map_err(|error| error.with_stdout(console.errors_to_stdout))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::temp_path;
+    use std::fs;
+
+    fn args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn rejects_bare_short_option_marker() {
+        let error = run([OsString::from("--options=none"), OsString::from("-")])
+            .expect_err("bare short option marker must fail");
+
+        assert_eq!(error.exit_code(), 2);
+        assert!(error.to_string().contains("unknown option '-'"), "{error}");
+    }
+
+    #[test]
+    fn parse_errors_honor_errors_to_stdout() {
+        for flag in ["--errors-to-stdout", "-X"] {
+            let error =
+                run(args(&[flag, "--options="])).expect_err("empty options value must fail");
+
+            assert_eq!(error.exit_code(), 2);
+            assert!(error.errors_to_stdout());
+        }
+    }
+
+    #[test]
+    fn config_formatter_options_and_console_controls_are_composed() {
+        let config_path = temp_path("formatter-options.rc");
+        let source_path = temp_path("formatter-options.c");
+        fs::write(&config_path, "pad-oper\n").expect("write formatter options");
+        fs::write(&source_path, "int value=1+2;\n").expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let error = run([
+            config_arg,
+            OsString::from("--dry-run"),
+            OsString::from("--error-on-changes"),
+            source_path.as_os_str().to_os_string(),
+        ])
+        .expect_err("configured formatter change must be reported by dry-run");
+
+        assert_eq!(error.exit_code(), 1);
+        assert_eq!(
+            fs::read_to_string(&source_path).expect("read source"),
+            "int value=1+2;\n"
+        );
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+    }
+
+    #[test]
+    fn config_suffix_none_disables_backups() {
+        let config_path = temp_path("suffix-none.rc");
+        let source_path = temp_path("suffix-none.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".orig"
+        ));
+        fs::write(&config_path, "suffix=none\n").expect("write options");
+        fs::write(&source_path, "int main(){return 0;}\n").expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([config_arg, source_path.as_os_str().to_os_string()]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup_exists = backup_path.is_file();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup_exists {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with suffix=none config");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert!(!backup_exists);
+    }
+
+    #[test]
+    fn config_suffix_selects_backup_name() {
+        let config_path = temp_path("suffix-custom.rc");
+        let source_path = temp_path("suffix-custom.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".bak"
+        ));
+        let input = "int main(){return 0;}\n";
+        fs::write(&config_path, "suffix=.bak\n").expect("write options");
+        fs::write(&source_path, input).expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([config_arg, source_path.as_os_str().to_os_string()]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup = fs::read_to_string(&backup_path).ok();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup.is_some() {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with custom suffix config");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert_eq!(backup.as_deref(), Some(input));
+    }
+
+    #[test]
+    fn command_line_no_backup_overrides_config_suffix() {
+        let config_path = temp_path("suffix-override.rc");
+        let source_path = temp_path("suffix-override.c");
+        let backup_path = source_path.with_file_name(format!(
+            "{}{}",
+            source_path
+                .file_name()
+                .expect("source file name")
+                .to_string_lossy(),
+            ".bak"
+        ));
+        fs::write(&config_path, "suffix=.bak\n").expect("write options");
+        fs::write(&source_path, "int main(){return 0;}\n").expect("write source");
+        let mut config_arg = OsString::from("--options=");
+        config_arg.push(&config_path);
+
+        let result = run([
+            config_arg,
+            OsString::from("-n"),
+            source_path.as_os_str().to_os_string(),
+        ]);
+        let output = fs::read_to_string(&source_path).expect("read source");
+        let backup_exists = backup_path.is_file();
+        fs::remove_file(config_path).expect("remove options");
+        fs::remove_file(source_path).expect("remove source");
+        if backup_exists {
+            fs::remove_file(backup_path).expect("remove backup");
+        }
+
+        result.expect("format with command-line no-backup override");
+        assert_eq!(output, "int main() {\n    return 0;\n}\n");
+        assert!(!backup_exists);
+    }
+
+    #[test]
+    fn mixed_console_and_formatter_short_options_share_one_bundle() {
+        let path = temp_path("mixed-short-options.c");
+        let backup = path.with_file_name(format!(
+            "{}{}",
+            path.file_name().expect("file name").to_string_lossy(),
+            ".orig"
+        ));
+        fs::write(&path, "int f(){return 1+2;}\n").expect("write input");
+
+        let result = run([
+            OsString::from("--options=none"),
+            OsString::from("-nA1p"),
+            path.as_os_str().to_os_string(),
+        ]);
+        let output = fs::read_to_string(&path).expect("read output");
+        let backup_exists = backup.is_file();
+        fs::remove_file(&path).expect("remove input");
+        if backup_exists {
+            fs::remove_file(backup).expect("remove backup");
+        }
+
+        result.expect("mixed short bundle must format");
+        assert_eq!(output, "int f()\n{\n    return 1 + 2;\n}\n");
+        assert!(!backup_exists);
+    }
+}

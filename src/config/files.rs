@@ -1,12 +1,10 @@
-use super::parser::{apply_config_source, apply_source, parse_config_source, parse_source};
-use super::{
+use crate::config::parser::{apply_config_source, apply_source, parse_config_source, parse_source};
+use crate::config::{
     ASTYLE_CONFIG_FILE_NAME, CONFIG_FILE_NAME, ConfigError, ConfigFileOptions, FormatOptions,
 };
-use std::env;
 use std::ffi::OsStr;
-use std::fs;
-use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::{env, fs, io};
 
 pub fn load_from_current_dir() -> Result<FormatOptions, ConfigError> {
     let current_dir = env::current_dir()
@@ -168,14 +166,10 @@ fn project_file_exists(path: &Path) -> Result<bool, ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use crate::test_support::temp_path;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        let dir = env::temp_dir().join(format!("cstyle-config-{stamp}-{name}"));
+        let dir = temp_path(name);
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
@@ -231,24 +225,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn config_lookup_reports_inaccessible_directory() {
-        use std::os::unix::fs::PermissionsExt;
+        // A file where a directory belongs fails the lookup for any user,
+        // as permissions would not for root.
+        let root = temp_dir("config-inaccessible");
+        let not_dir = root.join("not-dir");
+        fs::write(&not_dir, "").expect("write file");
 
-        let root = temp_dir("config-permission");
-        let locked = root.join("locked");
-        fs::create_dir(&locked).expect("create config dir");
-        let mut permissions = fs::metadata(&locked)
-            .expect("locked metadata")
-            .permissions();
-        permissions.set_mode(0o000);
-        fs::set_permissions(&locked, permissions).expect("lock config dir");
+        let result = load_from_dir(&not_dir);
 
-        let result = load_from_dir(&locked);
-
-        let mut permissions = fs::metadata(&locked)
-            .expect("locked metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&locked, permissions).expect("unlock config dir");
         fs::remove_dir_all(root).expect("remove temp dir");
         assert!(result.is_err(), "inaccessible config path must fail");
     }
@@ -256,27 +240,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn project_search_reports_inaccessible_start_directory() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let root = temp_dir("project-permission");
-        let locked = root.join("locked");
-        let child = locked.join("child");
-        fs::create_dir_all(&child).expect("create project dirs");
+        let root = temp_dir("project-inaccessible");
+        let not_dir = root.join("not-dir");
+        fs::write(&not_dir, "").expect("write file");
         fs::write(root.join(ASTYLE_CONFIG_FILE_NAME), "indent=spaces=2\n")
             .expect("write parent project options");
-        let mut permissions = fs::metadata(&locked)
-            .expect("locked metadata")
-            .permissions();
-        permissions.set_mode(0o000);
-        fs::set_permissions(&locked, permissions).expect("lock project dir");
 
-        let result = find_project_file(ASTYLE_CONFIG_FILE_NAME, &child);
+        let result = find_project_file(ASTYLE_CONFIG_FILE_NAME, &not_dir.join("child"));
 
-        let mut permissions = fs::metadata(&locked)
-            .expect("locked metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&locked, permissions).expect("unlock project dir");
         fs::remove_dir_all(root).expect("remove temp dir");
         assert!(result.is_err(), "inaccessible search path must fail");
     }

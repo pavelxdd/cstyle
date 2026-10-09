@@ -1,8 +1,8 @@
-use super::CliError;
+use crate::api;
+use crate::cli::CliError;
 use crate::config::FormatOptions;
-use crate::io as cstyle_io;
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 pub(super) fn format(
@@ -24,22 +24,32 @@ pub(super) fn format(
             let reader = File::open(input).map_err(|error| {
                 CliError::new(format!("failed to open stdin {input:?}: {error}"), 1)
             })?;
-            cstyle_io::format_reader_to_writer(reader, io::stdout(), options)
+            format_stream(reader, io::stdout(), options)
                 .map_err(|error| CliError::new(format!("failed to format stdin: {error}"), 1))
         }
         (None, Some(output)) => format_stream_to_path(io::stdin(), output, options),
-        (None, None) => cstyle_io::format_reader_to_writer(io::stdin(), io::stdout(), options)
+        (None, None) => format_stream(io::stdin(), io::stdout(), options)
             .map_err(|error| CliError::new(format!("failed to format stdin: {error}"), 1)),
     }
 }
 
+fn format_stream(
+    mut reader: impl Read,
+    mut writer: impl Write,
+    options: &FormatOptions,
+) -> io::Result<()> {
+    let mut input = Vec::new();
+    reader.read_to_end(&mut input)?;
+    writer.write_all(&api::format_owned_bytes(input, options)?)
+}
+
 fn format_stream_to_path(
-    reader: impl io::Read,
+    reader: impl Read,
     output_path: &Path,
     options: &FormatOptions,
 ) -> Result<(), CliError> {
     let mut output = Vec::new();
-    cstyle_io::format_reader_to_writer(reader, &mut output, options)
+    format_stream(reader, &mut output, options)
         .map_err(|error| CliError::new(format!("failed to format stdin: {error}"), 1))?;
     fs::write(output_path, output).map_err(|error| {
         CliError::new(
@@ -126,16 +136,7 @@ fn same_file_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_path(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-cli-{stamp}-{name}"))
-    }
+    use crate::test_support::temp_path;
 
     #[test]
     fn rejects_same_stdio_input_and_output_path_without_truncating() {

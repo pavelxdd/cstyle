@@ -1,46 +1,62 @@
-use super::super::{ContinuationIndent, LineKind};
+use crate::formatter::continuation::ContinuationIndent;
+use crate::formatter::state::indentation::LineKind;
 
-pub(super) struct LineReplayLayout {
-    pub(super) input_continuation_indent: Option<ContinuationIndent>,
-    pub(super) closed_delimiter_continuation_indent: Option<usize>,
-    pub(super) constructor_lambda_header_indent_spaces: Option<usize>,
-    pub(super) inline_body_owner_indent_spaces: Option<usize>,
-    pub(super) lisp_attached_suffix_indent_spaces: Option<usize>,
-    pub(super) header_operator_indent_spaces: Option<usize>,
-    pub(super) closed_lambda_parameter_list: bool,
-    pub(super) closed_split_lambda_parameter_list: bool,
-    pub(super) lambda_parameter_indent_spaces: Option<usize>,
+pub(crate) struct LineReplayLayout {
+    pub(crate) input_continuation_indent: Option<ContinuationIndent>,
+    pub(crate) closed_delimiter_continuation_indent: Option<usize>,
+    pub(crate) constructor_lambda_header_indent_spaces: Option<usize>,
+    pub(crate) inline_body_owner_indent_spaces: Option<usize>,
+    pub(crate) lisp_attached_suffix_indent_spaces: Option<usize>,
+    pub(crate) header_operator_indent_spaces: Option<usize>,
+    pub(crate) closed_lambda_parameter_list: bool,
+    pub(crate) closed_split_lambda_parameter_list: bool,
+    pub(crate) lambda_parameter_indent_spaces: Option<usize>,
 }
 
-pub(super) struct LineLayout {
-    pub(super) line_kind: LineKind,
-    pub(super) normal_indent: usize,
-    pub(super) indent: usize,
-    pub(super) exact_indent_spaces: Option<usize>,
-    pub(super) class_scope_label: bool,
-    pub(super) else_while_brace: bool,
+pub(crate) struct LineLayout {
+    pub(crate) line_kind: LineKind,
+    pub(crate) normal_indent: usize,
+    pub(crate) indent: usize,
+    pub(crate) exact_indent_spaces: Option<usize>,
+    pub(crate) class_scope_label: bool,
+    pub(crate) else_while_brace: bool,
 }
 
 pub(super) struct PostEmissionLayout {
-    pub(super) restore_objc_message_align: Option<usize>,
+    pub(crate) restore_objc_message_align: Option<usize>,
     pub(super) split_condition_body_indent_spaces: Option<usize>,
-    pub(super) ternary_call_clear_indent_spaces: Option<usize>,
-    pub(super) else_while_brace: bool,
+    pub(crate) ternary_call_clear_indent_spaces: Option<usize>,
+    pub(crate) else_while_brace: bool,
 }
 
-pub(super) struct AlignedLineLayout {
-    pub(super) layout: LineLayout,
-    pub(super) restore_objc_message_align: Option<usize>,
-    pub(super) case_unindent_closing_line: bool,
+/// Whether a line closes a paren opened before it, and whether an open
+/// delimiter or operator chain continues the statement into it.
+#[derive(Clone, Copy)]
+pub(crate) struct LineDelimiters {
+    pub(crate) closes_outer: bool,
+    pub(crate) owned_continuation: bool,
 }
 
-pub(super) struct ContextualLineLayout {
-    pub(super) layout: LineLayout,
-    pub(super) output_spaces: usize,
-    pub(super) split_else_state_active: bool,
+impl LineDelimiters {
+    /// Whether the line continues a statement rather than starting one.
+    pub(crate) fn continues(self) -> bool {
+        self.closes_outer || self.owned_continuation
+    }
 }
 
-pub(super) enum LineRoute<T> {
+pub(crate) struct AlignedLineLayout {
+    pub(crate) layout: LineLayout,
+    pub(crate) restore_objc_message_align: Option<usize>,
+    pub(crate) case_unindent_closing_line: bool,
+}
+
+pub(crate) struct ContextualLineLayout {
+    pub(crate) layout: LineLayout,
+    pub(crate) output_spaces: usize,
+    pub(crate) split_else_state_active: bool,
+}
+
+pub(crate) enum LineRoute<T> {
     Published,
     Layout(T),
 }

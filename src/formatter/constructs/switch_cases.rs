@@ -1,0 +1,2738 @@
+use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::constructs::labels;
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_text};
+use crate::formatter::output::LineDelimiters;
+use crate::formatter::output::buffer::LookBack;
+use crate::formatter::preprocessor::is_conditional_preprocessor;
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, advance_quoted_literal, is_comment_line, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_column,
+};
+use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::trim::Trimmed;
+use crate::source::lex::{is_identifier_continue, is_identifier_start};
+
+pub(crate) fn find_case_colon(line: &str) -> Option<usize> {
+    let trimmed = line.trimmed_start();
+    if !(is_case_label_start(trimmed) || is_default_label_start(trimmed)) {
+        return None;
+    }
+    let start = line.len() - trimmed.len();
+    find_case_colon_from(line, start)
+}
+
+pub(crate) fn split_switch_label_statement(line: &str) -> Option<(String, String)> {
+    let colon = find_case_colon(line)?;
+    let statement = line[colon + 1..].trimmed_start();
+    if statement.is_empty()
+        || statement.starts_with('{')
+        || statement.starts_with("//")
+        || statement.starts_with("/*")
+    {
+        return None;
+    }
+    Some((line[..=colon].to_string(), statement.to_string()))
+}
+
+pub(crate) fn case_label_with_trailing_comment(line: &str) -> bool {
+    if !line.contains(':') {
+        return false;
+    }
+    let comment = trailing_comment_split_limit(line);
+    if comment == line.len() {
+        return false;
+    }
+    let code = line[..comment].trimmed_end();
+    (find_case_colon(code).is_some() || code == "default:") && code.ends_with(':')
+}
+
+/// Whether the line of `tokens` may start with a `case` or `default`
+/// label, a cheap test before the line's text is formed.
+pub(crate) fn tokens_may_start_label(tokens: &[Token]) -> bool {
+    first_visible_token(tokens).is_some_and(|token| {
+        let text = token_text(token);
+        text.starts_with("case") || text.starts_with("default")
+    })
+}
+
+pub(crate) fn multiline_switch_label_colon(
+    tokens: &[Token],
+    line_start: usize,
+    line_end: usize,
+) -> Option<(usize, bool)> {
+    if !tokens_may_start_label(&tokens[line_start..line_end]) {
+        return None;
+    }
+    let line = tokens[line_start..line_end]
+        .iter()
+        .filter(|token| !matches!(token, Token::Newline))
+        .map(token_text)
+        .collect::<String>();
+    let colon = find_case_colon(&line)?;
+    if !line[..colon].contains('\n') {
+        return None;
+    }
+    let has_action = split_switch_label_statement(&line).is_some();
+
+    let mut offset = 0usize;
+    for (relative, token) in tokens[line_start..line_end].iter().enumerate() {
+        if matches!(token, Token::Newline) {
+            continue;
+        }
+        if offset == colon && matches!(token, Token::Symbol(':')) {
+            return Some((line_start + relative, has_action));
+        }
+        offset += token_text(token).len();
+    }
+    None
+}
+
+pub(crate) fn is_case_label_start(line: &str) -> bool {
+    line.strip_prefix("case")
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(|ch| !is_identifier_continue(ch))
+}
+
+pub(crate) fn is_default_label_start(line: &str) -> bool {
+    line.strip_prefix("default").is_some_and(|rest| {
+        rest.chars()
+            .next()
+            .is_none_or(|ch| !is_identifier_continue(ch))
+    })
+}
+
+fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
+    let mut index = start;
+    while index < bytes.len() && !line.is_char_boundary(index) {
+        index += 1;
+    }
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut in_block_comment = false;
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut ternary_contexts = Vec::new();
+
+    while let Some(&byte) = bytes.get(index) {
+        let next = bytes.get(index + 1).copied();
+
+        if in_block_comment {
+            if byte == b'*' && next == Some(b'/') {
+                in_block_comment = false;
+                index += 2;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+
+        if quote.is_some() {
+            advance_quoted_literal(char::from(byte), &mut quote, &mut escaped);
+            index += 1;
+            continue;
+        }
+
+        if byte == b'/' && next == Some(b'/') {
+            return None;
+        }
+        if byte == b'/' && next == Some(b'*') {
+            in_block_comment = true;
+            index += 2;
+            continue;
+        }
+        if matches!(byte, b'u' | b'L' | b'U' | b'R')
+            && let Some(end) = raw_strings::end(line, index)
+        {
+            index = end;
+            continue;
+        }
+        if byte == b'"' || (byte == b'\'' && !is_byte_digit_separator(bytes, index)) {
+            quote = Some(char::from(byte));
+            index += 1;
+            continue;
+        }
+        match byte {
+            b'(' => paren_depth += 1,
+            b')' => paren_depth = paren_depth.saturating_sub(1),
+            b'[' => bracket_depth += 1,
+            b']' => bracket_depth = bracket_depth.saturating_sub(1),
+            b'{' => brace_depth += 1,
+            b'}' => brace_depth = brace_depth.saturating_sub(1),
+            b'?' => ternary_contexts.push((paren_depth, bracket_depth, brace_depth)),
+            b':' if next == Some(b':') => {
+                index += 2;
+                continue;
+            }
+            b':' if ternary_contexts.last().copied()
+                == Some((paren_depth, bracket_depth, brace_depth)) =>
+            {
+                ternary_contexts.pop();
+            }
+            b':' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                return Some(index);
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    None
+}
+
+fn is_one_line_block_reached(line: &str, start: usize) -> bool {
+    let braces = code_delimiters(line, start);
+    let Some(open) = braces.iter().position(|(_, ch)| *ch == '{') else {
+        return false;
+    };
+    braces[open + 1..].iter().any(|(_, ch)| *ch == '}')
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+struct CodeDelimiterState {
+    in_block_comment: bool,
+    quote: Option<char>,
+    escaped: bool,
+    raw_delimiter: Option<String>,
+}
+
+fn code_delimiters(line: &str, start: usize) -> Vec<(usize, char)> {
+    let mut braces = Vec::new();
+    for_each_code_delimiter(
+        line,
+        start,
+        &mut CodeDelimiterState::default(),
+        |index, delimiter| braces.push((index, delimiter)),
+    );
+    braces
+}
+
+/// Visits each paren and brace of `line`'s code from byte `start` on.
+fn for_each_code_delimiter(
+    line: &str,
+    start: usize,
+    state: &mut CodeDelimiterState,
+    mut visit: impl FnMut(usize, char),
+) {
+    // Every byte that matters is ASCII, and no byte of a wider character
+    // equals one.
+    let bytes = line.as_bytes();
+    let mut index = start;
+    while index < bytes.len() && !line.is_char_boundary(index) {
+        index += 1;
+    }
+
+    while let Some(&byte) = bytes.get(index) {
+        // Code bytes that start nothing and delimit nothing pass unread.
+        if state.raw_delimiter.is_none()
+            && !state.in_block_comment
+            && state.quote.is_none()
+            && DELIMITER_INERT[usize::from(byte)]
+        {
+            index += 1;
+            while bytes
+                .get(index)
+                .is_some_and(|&byte| DELIMITER_INERT[usize::from(byte)])
+            {
+                index += 1;
+            }
+            continue;
+        }
+        let next = bytes.get(index + 1).copied();
+
+        if let Some(delimiter) = state.raw_delimiter.as_deref() {
+            let Some(end) = raw_strings::closing_end(line, index, delimiter) else {
+                break;
+            };
+            state.raw_delimiter = None;
+            index = end;
+            continue;
+        }
+
+        if state.in_block_comment {
+            if byte == b'*' && next == Some(b'/') {
+                state.in_block_comment = false;
+                index += 2;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+
+        if let Some(quote_char) = state.quote {
+            if state.escaped {
+                state.escaped = false;
+            } else if byte == b'\\' {
+                state.escaped = true;
+            } else if char::from(byte) == quote_char {
+                state.quote = None;
+            }
+            index += 1;
+            continue;
+        }
+
+        if byte == b'/' && next == Some(b'/') {
+            break;
+        }
+        if byte == b'/' && next == Some(b'*') {
+            state.in_block_comment = true;
+            index += 2;
+            continue;
+        }
+        if matches!(byte, b'u' | b'L' | b'U' | b'R')
+            && let Some(raw) = raw_strings::start(line, index)
+        {
+            if let Some(end) = raw.end {
+                index = end;
+            } else {
+                state.raw_delimiter = Some(raw.delimiter);
+                break;
+            }
+            continue;
+        }
+        if byte == b'"' || (byte == b'\'' && !is_byte_digit_separator(bytes, index)) {
+            state.quote = Some(char::from(byte));
+            state.escaped = false;
+            index += 1;
+            continue;
+        }
+        if matches!(byte, b'(' | b')' | b'{' | b'}') {
+            visit(index, char::from(byte));
+        }
+        index += 1;
+    }
+}
+
+/// The bytes `for_each_code_delimiter` passes unread in code.
+const DELIMITER_INERT: [bool; 256] = {
+    let mut inert = [true; 256];
+    let marks = b"/uLUR\"'(){}";
+    let mut index = 0;
+    while index < marks.len() {
+        inert[marks[index] as usize] = false;
+        index += 1;
+    }
+    inert
+};
+
+/// Whether the `'` at byte `index` separates digits of a number.
+fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
+    index > 0
+        && bytes[index - 1].is_ascii_hexdigit()
+        && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit)
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub(crate) struct SwitchCaseObserver {
+    switch_depth: usize,
+    switch_stack: Vec<usize>,
+    brace_depth: usize,
+    pending_switch: bool,
+    pending_switch_paren_depth: usize,
+    delimiter_state: CodeDelimiterState,
+    looking_for_case_brace: bool,
+    unindent_next_line: bool,
+}
+
+impl SwitchCaseObserver {
+    pub(crate) fn observe_line(&mut self, line: &str, mut kind: LineKind) -> LineKind {
+        let trimmed = line.trimmed_start();
+        if kind == LineKind::Normal
+            && !self.switch_stack.is_empty()
+            && (is_case_label_start(trimmed) || is_default_label_start(trimmed))
+        {
+            kind = LineKind::SwitchLabel;
+        }
+
+        if kind == LineKind::SwitchLabel {
+            self.looking_for_case_brace = true;
+            self.unindent_next_line = true;
+        } else if !trimmed.is_empty() {
+            self.unindent_next_line = false;
+        }
+
+        let starts_in_opaque_text = self.delimiter_state.in_block_comment
+            || self.delimiter_state.quote.is_some()
+            || self.delimiter_state.raw_delimiter.is_some();
+        if !starts_in_opaque_text
+            && trimmed.strip_prefix("switch").is_some_and(|rest| {
+                rest.chars()
+                    .next()
+                    .is_none_or(|ch| ch == '(' || ch.is_whitespace())
+            })
+        {
+            self.pending_switch = true;
+            self.pending_switch_paren_depth = 0;
+        }
+        let mut delimiter_state = std::mem::take(&mut self.delimiter_state);
+        for_each_code_delimiter(
+            trimmed,
+            0,
+            &mut delimiter_state,
+            |_, delimiter| match delimiter {
+                '(' if self.pending_switch => self.pending_switch_paren_depth += 1,
+                ')' if self.pending_switch => {
+                    self.pending_switch_paren_depth =
+                        self.pending_switch_paren_depth.saturating_sub(1);
+                }
+                '{' => {
+                    self.brace_depth += 1;
+                    if self.pending_switch && self.pending_switch_paren_depth == 0 {
+                        self.switch_stack.push(self.brace_depth);
+                        self.switch_depth += 1;
+                        self.pending_switch = false;
+                    }
+                    self.looking_for_case_brace = false;
+                }
+                '}' => {
+                    self.brace_depth = self.brace_depth.saturating_sub(1);
+                    while self
+                        .switch_stack
+                        .last()
+                        .is_some_and(|depth| *depth > self.brace_depth)
+                    {
+                        self.switch_stack.pop();
+                        self.switch_depth = self.switch_depth.saturating_sub(1);
+                    }
+                }
+                _ => {}
+            },
+        );
+        self.delimiter_state = delimiter_state;
+
+        kind
+    }
+
+    pub(crate) fn switch_depth(&self) -> usize {
+        self.switch_depth
+    }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+struct CaseBlockState {
+    switch_brace_count: usize,
+    unindent_depth: usize,
+    unindent_case: bool,
+    /// The unindent astyle gives a case block whose braces stand at the
+    /// body level, which the layout already leaves out.
+    body_level_depth: usize,
+    body_level_case: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SwitchCaseLineTransformer {
+    case_block_state: CaseBlockState,
+    case_stack: Vec<CaseBlockState>,
+    brace_depth: usize,
+    switch_depth: usize,
+    looking_for_case_brace: bool,
+    unindent_next_line: bool,
+    should_unindent_line: bool,
+    should_unindent_comment: bool,
+    /// The last line kept a level of its unindent for a comment on it.
+    comment_spared_level: bool,
+    in_continued_preprocessor: bool,
+    in_block_comment: bool,
+    in_quote: bool,
+    quote_char: char,
+    raw_string_delimiter: Option<String>,
+    marked_label_colon: Option<usize>,
+    line_unindent: usize,
+    line_number: usize,
+    tab_width: usize,
+    indent_width: usize,
+    indent_cases: bool,
+    indent_preproc_define: bool,
+    empty_line_fill: bool,
+    body_level_braces: bool,
+}
+
+impl SwitchCaseLineTransformer {
+    pub(crate) fn new(options: &FormatOptions) -> Self {
+        Self {
+            case_block_state: CaseBlockState::default(),
+            case_stack: Vec::new(),
+            brace_depth: 0,
+            switch_depth: 0,
+            looking_for_case_brace: false,
+            unindent_next_line: false,
+            should_unindent_line: true,
+            should_unindent_comment: false,
+            comment_spared_level: false,
+            in_continued_preprocessor: false,
+            in_block_comment: false,
+            in_quote: false,
+            quote_char: '\'',
+            raw_string_delimiter: None,
+            marked_label_colon: None,
+            line_unindent: 0,
+            line_number: 0,
+            tab_width: options.tab_width,
+            indent_width: options.indent_width,
+            indent_cases: options.indent_cases,
+            indent_preproc_define: options.indent_preproc_define,
+            empty_line_fill: options.empty_line_fill,
+            body_level_braces: options.brace_style == BraceStyle::Whitesmith,
+        }
+    }
+
+    pub(crate) fn begin_line(&mut self) {
+        self.line_number += 1;
+    }
+
+    pub(crate) fn mark_label_colon(&mut self, byte_index: usize) {
+        self.marked_label_colon = Some(byte_index);
+    }
+
+    pub(crate) fn raw_literal_suffix_start(&self, line: &str) -> Option<usize> {
+        self.raw_string_delimiter
+            .as_deref()
+            .and_then(|delimiter| raw_strings::closing_end(line, 0, delimiter))
+    }
+
+    pub(crate) fn scan_raw_literal_line(&mut self, line: &str) {
+        let is_preprocessor = line.trimmed_start().starts_with('#');
+        self.scan_line(line, is_preprocessor);
+    }
+
+    pub(crate) fn transform_line(&mut self, mut line: String) -> String {
+        self.should_unindent_line = true;
+        self.should_unindent_comment = false;
+        self.comment_spared_level = false;
+        self.line_unindent = 0;
+
+        if line.is_empty() && !self.empty_line_fill {
+            return line;
+        }
+
+        if self.unindent_next_line {
+            self.case_block_state.unindent_depth += 1;
+            self.case_block_state.unindent_case = true;
+            self.unindent_next_line = false;
+        }
+
+        let is_preprocessor =
+            self.in_continued_preprocessor || line.trimmed_start().starts_with('#');
+        let starts_with_comment = self.in_block_comment
+            || line.trimmed_start().starts_with("/*")
+            || line.trimmed_start().starts_with("//");
+        self.in_continued_preprocessor = is_preprocessor && line.trimmed_end().ends_with('\\');
+        self.parse_line(&mut line, is_preprocessor);
+
+        let unindent_depth = self.total_unindent_depth();
+        self.comment_spared_level = self.should_unindent_comment && unindent_depth > 0;
+        if self.should_unindent_comment && unindent_depth > 0 {
+            self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
+        } else if self.should_unindent_comment && self.total_body_level_depth() > 0 {
+            // A directive takes no unindent to spare, and the layout
+            // places comment rows itself.
+            if !is_preprocessor && !starts_with_comment && !line.is_empty() {
+                line.insert_str(0, &" ".repeat(self.indent_width));
+            }
+        } else if self.should_unindent_line && unindent_depth > 0 {
+            self.line_unindent += self.unindent_line(&mut line, unindent_depth);
+        }
+        line
+    }
+
+    pub(crate) fn comment_spared_level(&self) -> bool {
+        self.comment_spared_level
+    }
+
+    /// The columns the last transformed line lost to case unindents.
+    pub(crate) fn line_unindent(&self) -> usize {
+        self.line_unindent
+    }
+
+    fn parse_line(&mut self, line: &mut String, is_preprocessor: bool) {
+        for levels in self.scan_line(line, is_preprocessor) {
+            self.line_unindent += self.unindent_line(line, levels);
+        }
+    }
+
+    /// Reads a line's switches, labels, and braces; returns the unindents
+    /// due to the line, in order.
+    fn scan_line(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
+        let mut unindents = Vec::new();
+        // Outside a switch's labels, a line that holds no switch and nothing
+        // that opens or closes a literal, a comment, or a brace changes
+        // nothing.
+        if self.raw_string_delimiter.is_none()
+            && !self.in_block_comment
+            && !self.in_quote
+            && self.marked_label_colon.is_none()
+            && (self.indent_cases
+                || self.switch_depth == 0
+                || (is_preprocessor && !self.indent_preproc_define))
+            && !holds_scan_mark(scan)
+        {
+            return unindents;
+        }
+        let mut pos = 0;
+
+        while let Some(ch) = char_at(scan, pos) {
+            let inert = self.inert_run(&scan.as_bytes()[pos..], is_preprocessor);
+            if inert > 0 {
+                pos += inert;
+                continue;
+            }
+            if let Some(delimiter) = self.raw_string_delimiter.clone() {
+                let Some(end) = raw_strings::closing_end(scan, pos, &delimiter) else {
+                    break;
+                };
+                self.raw_string_delimiter = None;
+                pos = end;
+                continue;
+            }
+
+            if self.marked_label_colon == Some(pos) {
+                self.marked_label_colon = None;
+                self.looking_for_case_brace = true;
+                pos += ch.len_utf8();
+                continue;
+            }
+
+            if matches!(ch, ' ' | '\t') {
+                let blanks = scan.as_bytes()[pos..]
+                    .iter()
+                    .take_while(|&&byte| matches!(byte, b' ' | b'\t'))
+                    .count();
+                // A run of blanks ends early at a marked colon.
+                pos = match self.marked_label_colon {
+                    Some(colon) if (pos..pos + blanks).contains(&colon) => colon,
+                    _ => pos + blanks,
+                };
+                continue;
+            }
+
+            if self.in_block_comment {
+                if self.case_block_state.switch_brace_count == 1
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
+                {
+                    self.should_unindent_comment = true;
+                }
+                if ch == '*' && starts_with_at(scan, pos, "*/") {
+                    self.in_block_comment = false;
+                    pos += 2;
+                } else {
+                    pos += ch.len_utf8();
+                }
+                continue;
+            }
+
+            if self.in_quote {
+                if ch == '\\' {
+                    pos = after_char(scan, pos + 1);
+                    continue;
+                }
+                if ch == self.quote_char {
+                    self.in_quote = false;
+                }
+                pos += ch.len_utf8();
+                continue;
+            }
+
+            if ch == '\\' {
+                pos = after_char(scan, pos + 1);
+                continue;
+            }
+
+            if matches!(ch, 'u' | 'L' | 'U' | 'R')
+                && let Some(raw) = raw_strings::start(scan, pos)
+            {
+                if let Some(end) = raw.end {
+                    pos = end;
+                } else {
+                    self.raw_string_delimiter = Some(raw.delimiter);
+                    break;
+                }
+                continue;
+            }
+
+            if ch == '"' || (ch == '\'' && !is_byte_digit_separator(scan.as_bytes(), pos)) {
+                self.in_quote = true;
+                self.quote_char = ch;
+                pos += 1;
+                continue;
+            }
+
+            if ch == '/' && starts_with_at(scan, pos, "//") {
+                if has_windows_line_marker_after_line_comment(scan, pos) {
+                    self.line_number = self.line_number.saturating_sub(1);
+                }
+                if first_non_ws_byte(scan) == Some(pos)
+                    && self.case_block_state.switch_brace_count == 1
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
+                {
+                    self.should_unindent_comment = true;
+                }
+                break;
+            }
+            if ch == '/' && starts_with_at(scan, pos, "/*") {
+                if self.case_block_state.switch_brace_count == 1
+                    && (self.case_block_state.unindent_case
+                        || self.case_block_state.body_level_case)
+                {
+                    self.should_unindent_comment = true;
+                }
+                self.in_block_comment = true;
+                pos += 2;
+                continue;
+            }
+
+            if ch == '{' {
+                self.brace_depth += 1;
+            }
+            if ch == '}' {
+                self.brace_depth = self.brace_depth.saturating_sub(1);
+            }
+
+            let is_potential_keyword = is_identifier_start(ch);
+            if is_potential_keyword && keyword_at(scan, pos, "switch") {
+                self.switch_depth += 1;
+                self.case_stack.push(self.case_block_state.clone());
+                self.case_block_state = CaseBlockState::default();
+                pos = skip_identifier(scan, pos);
+                continue;
+            }
+
+            if self.indent_cases
+                || self.switch_depth == 0
+                || (is_preprocessor && !self.indent_preproc_define)
+            {
+                pos = if is_potential_keyword {
+                    skip_identifier(scan, pos)
+                } else {
+                    pos + ch.len_utf8()
+                };
+                continue;
+            }
+
+            pos = self.process_switch_block(scan, pos, ch, &mut unindents);
+        }
+        self.marked_label_colon = None;
+        unindents
+    }
+
+    /// The length of the run that `rest` starts with whose bytes `scan_line`
+    /// would pass without changing any state.
+    fn inert_run(&mut self, rest: &[u8], is_preprocessor: bool) -> usize {
+        if self.marked_label_colon.is_some() || self.raw_string_delimiter.is_some() {
+            return 0;
+        }
+        if self.in_block_comment {
+            let run = rest.iter().take_while(|&&byte| byte != b'*').count();
+            if self.case_block_state.switch_brace_count == 1
+                && (self.case_block_state.unindent_case || self.case_block_state.body_level_case)
+                && rest[..run]
+                    .iter()
+                    .any(|&byte| !matches!(byte, b' ' | b'\t'))
+            {
+                self.should_unindent_comment = true;
+            }
+            return run;
+        }
+        if self.in_quote {
+            return rest
+                .iter()
+                .take_while(|&&byte| byte != b'\\' && char::from(byte) != self.quote_char)
+                .count();
+        }
+        let inert = if self.indent_cases
+            || self.switch_depth == 0
+            || (is_preprocessor && !self.indent_preproc_define)
+        {
+            &INERT_CODE
+        } else if !self.looking_for_case_brace {
+            &INERT_LABEL_CODE
+        } else {
+            return 0;
+        };
+        rest.iter()
+            .take_while(|&&byte| inert[usize::from(byte)])
+            .count()
+    }
+
+    /// Processes the character `ch` at byte `pos` of a switch's line and
+    /// returns the byte where scanning resumes.
+    fn process_switch_block(
+        &mut self,
+        scan: &str,
+        pos: usize,
+        ch: char,
+        unindents: &mut Vec<usize>,
+    ) -> usize {
+        let is_potential_keyword = is_identifier_start(ch);
+
+        if ch == '{' {
+            self.case_block_state.switch_brace_count += 1;
+            if self.looking_for_case_brace {
+                if self.body_level_braces {
+                    self.case_block_state.body_level_case = true;
+                    self.case_block_state.body_level_depth += 1;
+                } else {
+                    self.case_block_state.unindent_case = true;
+                    self.case_block_state.unindent_depth += 1;
+                }
+                self.looking_for_case_brace = false;
+            }
+            return pos + 1;
+        }
+        self.looking_for_case_brace = false;
+
+        if ch == '}' {
+            self.case_block_state.switch_brace_count =
+                self.case_block_state.switch_brace_count.saturating_sub(1);
+            if self.case_block_state.switch_brace_count == 0 && self.switch_depth > 0 {
+                let mut line_unindent = self.total_unindent_depth();
+                if first_non_ws_byte(scan) == Some(pos) && !self.case_stack.is_empty() {
+                    line_unindent = self.stack_unindent_depth();
+                }
+                if self.should_unindent_line {
+                    if line_unindent > 0 {
+                        unindents.push(line_unindent);
+                    }
+                    self.should_unindent_line = false;
+                }
+                self.switch_depth = self.switch_depth.saturating_sub(1);
+                self.case_block_state = self.case_stack.pop().unwrap_or_default();
+            }
+            return pos + 1;
+        }
+
+        if is_potential_keyword
+            && (keyword_at(scan, pos, "case") || keyword_at(scan, pos, "default"))
+        {
+            if self.case_block_state.unindent_case {
+                self.case_block_state.unindent_case = false;
+                self.case_block_state.unindent_depth =
+                    self.case_block_state.unindent_depth.saturating_sub(1);
+            }
+            if self.case_block_state.body_level_case {
+                self.case_block_state.body_level_case = false;
+                self.case_block_state.body_level_depth =
+                    self.case_block_state.body_level_depth.saturating_sub(1);
+            }
+
+            let Some(colon) = find_case_colon_from(scan, pos) else {
+                return pos + 1;
+            };
+            let bytes = scan.as_bytes();
+            let mut next = after_char(scan, colon);
+            while bytes
+                .get(next)
+                .is_some_and(|byte| matches!(byte, b' ' | b'\t'))
+            {
+                next += 1;
+            }
+            if bytes.get(next) == Some(&b'{') {
+                self.brace_depth += 1;
+                self.case_block_state.switch_brace_count += 1;
+                if !self.body_level_braces && !is_one_line_block_reached(scan, next) {
+                    self.unindent_next_line = true;
+                }
+                return next + 1;
+            }
+            self.looking_for_case_brace = true;
+            return next;
+        }
+
+        if is_potential_keyword {
+            return skip_identifier(scan, pos);
+        }
+        pos + ch.len_utf8()
+    }
+
+    fn total_body_level_depth(&self) -> usize {
+        self.case_block_state.body_level_depth
+            + self
+                .case_stack
+                .iter()
+                .map(|state| state.body_level_depth)
+                .sum::<usize>()
+    }
+
+    pub(crate) fn total_unindent_depth(&self) -> usize {
+        self.case_block_state.unindent_depth + self.stack_unindent_depth()
+    }
+
+    pub(crate) fn next_line_unindent_depth(&self) -> usize {
+        self.total_unindent_depth() + usize::from(self.unindent_next_line)
+    }
+
+    pub(crate) fn unindent_depth_for_line(&self, line: &str) -> usize {
+        if !self.indent_cases
+            && first_non_ws_byte(line).is_some_and(|index| line[index..].starts_with('}'))
+            && self.case_block_state.switch_brace_count == 1
+            && self.switch_depth > 0
+            && !self.case_stack.is_empty()
+        {
+            return self.stack_unindent_depth();
+        }
+        self.next_line_unindent_depth()
+            + usize::from(
+                !self.indent_cases
+                    && !self.body_level_braces
+                    && self.looking_for_case_brace
+                    && line.trimmed_start().starts_with('{'),
+            )
+    }
+
+    pub(crate) fn pending_unindent_depth(&self) -> usize {
+        let total = self.total_unindent_depth();
+        if self.case_block_state.unindent_case {
+            total.saturating_sub(1)
+        } else {
+            total
+        }
+    }
+
+    fn stack_unindent_depth(&self) -> usize {
+        self.case_stack
+            .iter()
+            .map(|state| state.unindent_depth)
+            .sum()
+    }
+
+    fn unindent_line(&self, line: &mut String, levels: usize) -> usize {
+        if line.is_empty() && !self.empty_line_fill {
+            return 0;
+        }
+
+        let whitespace = leading_whitespace_len(line);
+        if whitespace == 0 {
+            return 0;
+        }
+
+        let erase = levels * self.indent_width;
+        if erase > whitespace {
+            return 0;
+        }
+        line.replace_range(0..erase, "");
+        erase
+    }
+}
+
+/// Bytes of code a line scan passes over: no brace, no literal or comment
+/// mark, and no first letter of `switch` or of a raw string prefix. Inside
+/// an identifier those letters start nothing either, so the scan may stop at
+/// them there.
+const INERT_CODE: [bool; 256] = inert_bytes(b"{}/\\\"'suLUR");
+/// The same among a switch's labels, where `case` and `default` count.
+const INERT_LABEL_CODE: [bool; 256] = inert_bytes(b"{}/\\\"'suLURcd");
+
+const fn inert_bytes(marks: &[u8]) -> [bool; 256] {
+    let mut inert = [false; 256];
+    let mut byte = 0;
+    while byte < 128 {
+        inert[byte] = true;
+        byte += 1;
+    }
+    let mut index = 0;
+    while index < marks.len() {
+        inert[marks[index] as usize] = false;
+        index += 1;
+    }
+    inert
+}
+
+/// Whether `line` holds a brace, a literal or comment mark, or `switch`.
+fn holds_scan_mark(line: &str) -> bool {
+    const MARK: u8 = 1;
+    const W: u8 = 2;
+    const CLASSES: [u8; 256] = {
+        let mut classes = [0; 256];
+        let marks = b"{}/\\\"'";
+        let mut index = 0;
+        while index < marks.len() {
+            classes[marks[index] as usize] = MARK;
+            index += 1;
+        }
+        classes[b'w' as usize] = W;
+        classes
+    };
+    let found = line
+        .bytes()
+        .fold(0, |found, byte| found | CLASSES[usize::from(byte)]);
+    found & MARK != 0 || found & W != 0 && line.contains("switch")
+}
+
+fn starts_with_at(line: &str, byte_index: usize, needle: &str) -> bool {
+    line.get(byte_index..)
+        .is_some_and(|rest| rest.starts_with(needle))
+}
+
+fn first_non_ws_byte(line: &str) -> Option<usize> {
+    line.char_indices()
+        .find(|(_, ch)| !matches!(ch, ' ' | '\t'))
+        .map(|(index, _)| index)
+}
+
+fn has_windows_line_marker_after_line_comment(line: &str, byte_index: usize) -> bool {
+    line.get(byte_index + 2..)
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(|ch| ch > '\u{f0}')
+}
+
+fn keyword_at(line: &str, byte_index: usize, keyword: &str) -> bool {
+    let Some(rest) = line.get(byte_index..) else {
+        return false;
+    };
+    if !rest.starts_with(keyword) {
+        return false;
+    }
+    let before = line[..byte_index].chars().next_back();
+    let after = rest[keyword.len()..].chars().next();
+    before.is_none_or(|ch| !is_identifier_continue(ch))
+        && after.is_none_or(|ch| !is_identifier_continue(ch))
+}
+
+/// The character starting at byte `pos`, ASCII without decoding.
+fn char_at(text: &str, pos: usize) -> Option<char> {
+    let byte = *text.as_bytes().get(pos)?;
+    if byte.is_ascii() {
+        Some(char::from(byte))
+    } else {
+        text.get(pos..).and_then(|rest| rest.chars().next())
+    }
+}
+
+/// The byte after the character starting at `pos`.
+fn after_char(text: &str, pos: usize) -> usize {
+    pos + char_at(text, pos).map_or(1, char::len_utf8)
+}
+
+fn skip_identifier(text: &str, mut pos: usize) -> usize {
+    while let Some(ch) = char_at(text, pos).filter(|&ch| is_identifier_continue(ch)) {
+        pos += ch.len_utf8();
+    }
+    pos
+}
+
+/// Whether `code` is a case label line whose statement is a header
+/// awaiting its braceless body, as `case 1: if (x)`.
+/// Whether the `{` ending a label line opens the case's block rather than
+/// a header's kept on the line.
+fn label_opens_case_block(code: &str) -> bool {
+    code.strip_suffix('{')
+        .is_some_and(|head| !label_line_holds_braceless_header(head.trimmed_end()))
+}
+
+pub(crate) fn label_line_holds_braceless_header(code: &str) -> bool {
+    let Some(colon) = find_case_colon(code) else {
+        return false;
+    };
+    let statement = code[colon + 1..].trimmed();
+    let header = ["if", "while", "for", "else"]
+        .into_iter()
+        .any(|word| starts_header_word(statement, word));
+    header && (statement.ends_with(')') || statement == "else")
+}
+
+fn starts_inline_case_statement(line: &str) -> bool {
+    let line = line.trimmed_start();
+    if !(starts_header_word(line, "case") || starts_header_word(line, "default")) {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    let mut index = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut question_depth = 0usize;
+    while let Some(&byte) = bytes.get(index) {
+        if let Some(quote_byte) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == quote_byte {
+                quote = None;
+            }
+            index += 1;
+            continue;
+        }
+        match byte {
+            b'"' | b'\'' => quote = Some(byte),
+            b'?' => question_depth += 1,
+            b':' if bytes.get(index.wrapping_sub(1)) == Some(&b':')
+                || bytes.get(index + 1) == Some(&b':') => {}
+            b':' if question_depth > 0 => question_depth -= 1,
+            b':' => return !line[index + 1..].trimmed().is_empty(),
+            _ => {}
+        }
+        index += 1;
+    }
+    false
+}
+
+fn is_braced_switch_label_line(line: &str) -> bool {
+    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+    let trimmed = code.trimmed_start();
+    code.ends_with('{') && (find_case_colon(trimmed).is_some() || trimmed == "default: {")
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub(crate) struct SwitchCaseLayoutState {
+    body_brace_depths: Vec<usize>,
+    pending_label_brace: bool,
+    preprocessor_brace_depths: Vec<usize>,
+    unindent_brace_depths: Vec<usize>,
+    closing_line_needs_unindent: bool,
+    /// Switch body depth where a case block closed since the last label:
+    /// astyle lays out the rest of a Whitesmith case at its label.
+    case_block_closed_depth: Option<usize>,
+}
+
+pub(crate) struct CaseBlockBodyLayout {
+    pub(crate) exact_indent_spaces: usize,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ActiveCaseLayout {
+    indent_spaces: usize,
+    opens_block: bool,
+    /// The label line ends in the open block of a statement kept on it.
+    statement_block_open: bool,
+}
+
+impl FormatEngine<'_> {
+    pub(crate) fn split_else_header_operator_case_compensation_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: Option<usize>,
+        header_operator_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let spaces = current_spaces?;
+        if spaces == 0
+            || self.layout.line_adjuster.next_line_case_unindent_depth()
+                <= self.layout.line_adjuster.total_case_unindent_depth()
+            || self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| is_braced_switch_label_line(previous))
+            || !self.line_aligns_to_open_paren_content(line)
+        {
+            return None;
+        }
+        let trimmed = line.trimmed_start();
+        let header_operator_indent = self.split_else_body_indent_active()
+            && (trimmed.starts_with("&&") || trimmed.starts_with("||"))
+            && header_operator_spaces == Some(spaces);
+        (!header_operator_indent).then_some(spaces + self.options.indent_width)
+    }
+
+    pub(crate) fn split_else_switch_comment_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_output_context: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !split_else_output_context
+            || !(is_comment_line(line_start) || line_start.starts_with("/*"))
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.trimmed_start().starts_with("switch") || !previous_code.ends_with('{') {
+            return None;
+        }
+        let case_unindent = self
+            .layout
+            .line_adjuster
+            .next_line_case_unindent_depth()
+            .max(self.layout.line_adjuster.total_case_unindent_depth())
+            * self.options.indent_width;
+        Some(leading_visual_width(previous, self.options.tab_width) + case_unindent)
+    }
+
+    pub(crate) fn split_else_adjusted_case_indent_floor(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        split_else_context: bool,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !split_else_context
+            || line_kind != LineKind::Normal
+            || line_start.starts_with('#')
+            || self.layout.line_adjuster.total_case_unindent_depth() == 0
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let previous_trimmed = previous_code.trimmed_start();
+        let adjusted_delta = self.adjusted_line_indent_delta(previous);
+        let target = if previous_code.ends_with('{')
+            && !line_start.starts_with('}')
+            && !previous_trimmed.starts_with("case ")
+            && !previous_trimmed.starts_with("default:")
+            && !previous_trimmed.starts_with("switch")
+            && adjusted_delta > 0
+        {
+            leading_visual_width(previous, self.options.tab_width)
+                + self.options.indent_width
+                + adjusted_delta
+        } else if previous_code.ends_with(',')
+            && !line_start.starts_with_any(b"#})")
+            && adjusted_delta > 0
+        {
+            leading_visual_width(previous, self.options.tab_width) + adjusted_delta
+        } else {
+            return None;
+        };
+        (current_spaces.unwrap_or(0) <= target).then_some(target)
+    }
+
+    pub(crate) fn split_else_switch_label_indent_spaces(
+        &self,
+        line_kind: LineKind,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context || line_kind != LineKind::SwitchLabel {
+            return None;
+        }
+        let switch_line = self.output.scoped().iter().rev().find(|line| {
+            let code = self.output.code_trimmed_of(line);
+            code.trimmed_start().starts_with("switch")
+        })?;
+        let body_indent = usize::from(
+            self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
+        ) * self.options.indent_width;
+        Some(leading_visual_width(switch_line, self.options.tab_width) + body_indent)
+    }
+
+    pub(crate) fn split_else_case_body_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context
+            || line_kind != LineKind::Normal
+            || line.trimmed_start().starts_with_any(b"#{}")
+        {
+            return None;
+        }
+        // The nearest case label decides unless a switch or a block edge
+        // comes first.
+        let scope_start = self.output.scoped_range().start;
+        let index = self.output.last_case_or_block_edge_line_from(scope_start)?;
+        let previous = &self.output[index];
+        let code = self.output.code_before_comment_trimmed(index);
+        let trimmed = code.trimmed_start();
+        if !(trimmed.starts_with("case ") || trimmed.starts_with("default:")) {
+            return None;
+        }
+        let follows_comment = (scope_start..index)
+            .rev()
+            .map(|before| &self.output[before])
+            .find(|line| !line.trimmed().is_empty())
+            .is_some_and(|line| is_comment_line(line.trimmed_start()));
+        if code.ends_with('{') && !follows_comment {
+            return None;
+        }
+        let case_unindent = usize::from(code.ends_with('{') && follows_comment)
+            * self.layout.line_adjuster.next_line_case_unindent_depth()
+            * self.options.indent_width;
+        Some(
+            leading_visual_width(previous, self.options.tab_width)
+                + self.options.indent_width
+                + case_unindent
+                + usize::from(!code.ends_with('{'))
+                    * self.layout.line_adjuster.total_case_unindent_depth()
+                    * self.options.indent_width,
+        )
+    }
+
+    pub(crate) fn split_else_case_closed_block_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let line_trimmed = line.trimmed();
+        if self.options.indent_cases {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        if previous.trimmed() != "}" {
+            return None;
+        }
+        let target = leading_visual_width(previous, self.options.tab_width)
+            + self
+                .layout
+                .line_adjuster
+                .total_case_unindent_depth()
+                .max(self.layout.line_adjuster.next_line_case_unindent_depth())
+                * self.options.indent_width;
+        if line_kind == LineKind::Normal
+            && !line.trimmed_start().starts_with_any(b"#{}")
+            && line_trimmed != "break;"
+            && self
+                .layout
+                .nesting
+                .brace_header_stack
+                .iter()
+                .any(|header| header.as_deref() == Some("case"))
+            && self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
+        {
+            return (current_spaces.unwrap_or(0) < target).then_some(target);
+        }
+        if line_trimmed != "break;" {
+            return None;
+        }
+        let nearest_case = self.output.scoped().iter().rev().find(|line| {
+            let code = self.output.code_trimmed_of(line);
+            let trimmed = code.trimmed_start();
+            trimmed.starts_with("case ") || trimmed.starts_with("default:")
+        });
+        let closes_switch = self.layout.nesting.last_closed_brace_header.as_deref()
+            == Some("switch")
+            || self
+                .output
+                .current_closing_brace_open(self.options.tab_width)
+                .is_some_and(|(_, _, trimmed)| starts_header_word(trimmed, "switch"));
+        if closes_switch
+            || self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
+                && nearest_case
+                    .is_some_and(|line| label_opens_case_block(self.output.code_trimmed_of(line)))
+        {
+            return (current_spaces.unwrap_or(0) < target).then_some(target);
+        }
+        if self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
+            && nearest_case
+                .is_some_and(|line| !label_opens_case_block(self.output.code_trimmed_of(line)))
+        {
+            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            return current_spaces
+                .is_none_or(|spaces| spaces > previous_indent)
+                .then_some(previous_indent);
+        }
+        None
+    }
+
+    pub(crate) fn split_else_case_completed_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        normal_indent: usize,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if !self.preprocessor.split_else.extra_indent
+            || line_kind != LineKind::Normal
+            || line.trimmed_start().starts_with_any(b"#{}")
+        {
+            return None;
+        }
+        let current = current_spaces?;
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        if case_unindent == 0 {
+            return None;
+        }
+        let body_spaces = normal_indent * self.options.indent_width;
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let call_indent = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(8)
+            .take_while(|line| {
+                let code = self.output.code_trimmed_of(line);
+                let trimmed = code.trimmed_start();
+                !trimmed.starts_with("case ")
+                    && !trimmed.starts_with("default:")
+                    && trimmed != "}"
+                    && !trimmed.ends_with('{')
+            })
+            .find_map(|line| {
+                let code = self.output.code_trimmed_of(line);
+                (self.open_paren_column_of(code).is_some() && !code.ends_with(';'))
+                    .then(|| leading_visual_width(line, self.options.tab_width))
+            })?;
+        let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        if !previous_code.ends_with(';')
+            || previous_code.trimmed() == "};"
+            || previous_code.trimmed_start().starts_with(");")
+            || self.open_paren_column_of(previous_code).is_some()
+            || !(previous_indent.saturating_sub(body_spaces)
+                <= self.options.max_continuation_indent
+                || previous_indent.saturating_sub(call_indent)
+                    <= self.options.max_continuation_indent)
+        {
+            return None;
+        }
+        let target = call_indent.max(body_spaces) + case_unindent;
+        (target != current).then_some(target)
+    }
+
+    pub(crate) fn case_parenthesized_block_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: usize,
+    ) -> Option<usize> {
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        (case_unindent > 0
+            && line.trimmed_start().starts_with(')')
+            && self.output.code_trimmed_of(line).ends_with('{'))
+        .then_some(current_spaces + case_unindent)
+    }
+
+    pub(crate) fn case_control_indent_floor(
+        &self,
+        line: &LineView<'_>,
+        normal_indent: usize,
+        current_spaces: usize,
+    ) -> Option<usize> {
+        if self.layout.line_adjuster.total_case_unindent_depth() == 0 {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        let trimmed = line.trimmed_start();
+        let owns_case_floor = previous_code.ends_with(") {")
+            || trimmed == "}"
+                && self
+                    .output
+                    .current_closing_brace_open(self.options.tab_width)
+                    .is_some_and(|(_, _, open)| starts_header_word(open, "switch"))
+            || trimmed.starts_with("break;") && previous_code.trimmed() == "}"
+            || trimmed.starts_with("} else")
+            || trimmed.starts_with("}else")
+            || previous_code.trimmed_start().starts_with("} else") && previous_code.ends_with('{');
+        owns_case_floor.then(|| current_spaces.max(normal_indent * self.options.indent_width))
+    }
+
+    pub(crate) fn case_post_comment_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if line_kind != LineKind::Normal
+            || line.trimmed_start().starts_with_any(b"#{}/")
+            || self.layout.line_adjuster.total_case_unindent_depth() == 0
+            || self
+                .layout
+                .nesting
+                .brace_header_stack
+                .last()
+                .is_none_or(|header| header.as_deref() != Some("case"))
+        {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        if !is_comment_line(previous.trimmed_start()) {
+            return None;
+        }
+        let previous_indent = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .take_while(|line| is_comment_line(line.trimmed_start()))
+            .find(|line| line.trimmed_start().starts_with("/*"))
+            .map_or_else(
+                || leading_visual_width(previous, self.options.tab_width),
+                |line| leading_visual_width(line, self.options.tab_width),
+            );
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        current_spaces
+            .is_some_and(|spaces| spaces <= previous_indent)
+            .then_some(previous_indent + case_unindent)
+    }
+
+    pub(crate) fn logical_case_unindent_adjusted_spaces(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: usize,
+        normal_indent: usize,
+    ) -> Option<usize> {
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let trimmed = line.trimmed_start();
+        (case_unindent > 0
+            && (trimmed.starts_with("&&") || trimmed.starts_with("||"))
+            && current_spaces <= normal_indent * self.options.indent_width + case_unindent)
+            .then_some(current_spaces + case_unindent)
+    }
+
+    pub(crate) fn has_pending_case_label_brace(&self) -> bool {
+        self.layout.switch_case_layout.pending_label_brace
+    }
+
+    pub(crate) fn case_closing_line_needs_unindent(&self) -> bool {
+        self.layout.switch_case_layout.closing_line_needs_unindent
+    }
+
+    fn has_case_body_at_current_depth(&self) -> bool {
+        let current = self.layout.nesting.brace_header_stack.len();
+        self.layout
+            .switch_case_layout
+            .body_brace_depths
+            .contains(&current)
+    }
+
+    pub(crate) fn has_case_body_indent(&self) -> bool {
+        !self.layout.switch_case_layout.body_brace_depths.is_empty()
+    }
+
+    pub(crate) fn register_attached_case_label_brace(&mut self) {
+        if !self.layout.switch_case_layout.pending_label_brace {
+            return;
+        }
+        self.layout
+            .switch_case_layout
+            .unindent_brace_depths
+            .push(self.layout.nesting.brace_header_stack.len());
+        self.layout.switch_case_layout.pending_label_brace = false;
+    }
+
+    pub(crate) fn prepare_case_closing_brace(&mut self) {
+        self.layout.switch_case_layout.closing_line_needs_unindent = self
+            .layout
+            .switch_case_layout
+            .unindent_brace_depths
+            .last()
+            .is_some_and(|depth| *depth == self.layout.nesting.brace_header_stack.len());
+    }
+
+    pub(crate) fn clear_case_body_indent_if_past_switch(&mut self) {
+        let current = self.layout.nesting.brace_header_stack.len();
+        while self
+            .layout
+            .switch_case_layout
+            .body_brace_depths
+            .last()
+            .is_some_and(|depth| current < *depth)
+        {
+            self.layout.switch_case_layout.body_brace_depths.pop();
+        }
+        while self
+            .layout
+            .switch_case_layout
+            .preprocessor_brace_depths
+            .last()
+            .is_some_and(|depth| current + 1 < *depth)
+        {
+            self.layout
+                .switch_case_layout
+                .preprocessor_brace_depths
+                .pop();
+        }
+    }
+
+    pub(crate) fn direct_switch_body_indent_spaces(&self) -> Option<usize> {
+        if !self.options.indent_switches
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Vtk | BraceStyle::Ratliff
+            )
+        {
+            return None;
+        }
+        let mut frame = self.layout.frame_stack.active_brace()?;
+        // The head of a block a pushed `{` breaks off stands in the block
+        // around it.
+        if frame.header.is_none()
+            && self
+                .current
+                .active_token()
+                .is_some_and(|index| matches!(self.tree.tokens[index], Token::Symbol('{')))
+        {
+            frame = self.layout.frame_stack.enclosing_brace()?;
+        }
+        (frame.header.as_deref() == Some("switch"))
+            .then(|| frame.body_indent_column + self.options.indent_width)
+    }
+
+    pub(crate) fn case_body_indent_extra(&self, line_kind: LineKind) -> usize {
+        if !self.options.indent_switches {
+            return 0;
+        }
+        let current = self.layout.nesting.brace_header_stack.len();
+        match line_kind {
+            // A Whitesmith case block's body stands at its brace, the case
+            // body column; other blocks nest in the case body.
+            LineKind::Normal if self.options.brace_style == BraceStyle::Whitesmith => {
+                let layout = &self.layout.switch_case_layout;
+                layout
+                    .body_brace_depths
+                    .iter()
+                    .filter(|&&depth| {
+                        if depth < current {
+                            return !layout.unindent_brace_depths.contains(&(depth + 1));
+                        }
+                        depth == current
+                            && (layout.closing_line_needs_unindent
+                                || !layout.unindent_brace_depths.contains(&(depth + 1))
+                                    && layout.case_block_closed_depth != Some(depth))
+                    })
+                    .count()
+            }
+            LineKind::Normal => self
+                .layout
+                .switch_case_layout
+                .body_brace_depths
+                .iter()
+                .filter(|depth| **depth <= current)
+                .count(),
+            LineKind::SwitchLabel => self
+                .layout
+                .switch_case_layout
+                .body_brace_depths
+                .iter()
+                .filter(|depth| **depth < current)
+                .count(),
+            LineKind::Label => 0,
+        }
+    }
+
+    pub(crate) fn case_preprocessor_body_indent_extra(
+        &self,
+        line_kind: LineKind,
+        line: &LineView<'_>,
+    ) -> usize {
+        if line_kind != LineKind::Normal {
+            return 0;
+        }
+        if line.trimmed() == "}"
+            && !self.layout.switch_case_layout.closing_line_needs_unindent
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let trimmed = previous.trimmed_start();
+                    trimmed.starts_with("break;")
+                })
+        {
+            return 0;
+        }
+        let current = self.layout.nesting.brace_header_stack.len();
+        self.layout
+            .switch_case_layout
+            .preprocessor_brace_depths
+            .iter()
+            .filter(|depth| current + 1 >= **depth)
+            .count()
+    }
+
+    pub(crate) fn isolated_opening_brace_is_switch_label(&self) -> bool {
+        let Some(index) = self.output.innermost_open_brace_line_plain() else {
+            return false;
+        };
+        let mut trimmed = self.output.code_trimmed(index);
+        // Ratliff closes a case block at its body, past the label.
+        while self.options.brace_style != BraceStyle::Ratliff
+            && let Some(rest) = trimmed
+                .strip_prefix("/*")
+                .and_then(|rest| rest.split_once("*/"))
+        {
+            trimmed = rest.1.trimmed_start();
+        }
+        trimmed.ends_with('{') && (trimmed.starts_with("case ") || trimmed.starts_with("default:"))
+    }
+
+    fn nearest_open_switch_indent_spaces(&self) -> Option<usize> {
+        // A switch lies within the current top-level construct.
+        let scope_start = self.output.len() - self.output.scoped().len();
+        self.output.open_switch_walk_line(scope_start, |index| {
+            self.open_switch_line_indent_spaces(scope_start, index)
+        })
+    }
+
+    /// The indent of the switch the open line `index` holds.
+    fn open_switch_line_indent_spaces(&self, scope_start: usize, index: usize) -> Option<usize> {
+        let tab_width = self.options.tab_width;
+        let trimmed = self.output.code_trimmed(index);
+        if trimmed.starts_with("switch ") || trimmed.starts_with("switch(") {
+            return Some(self.output.lead_width(index, tab_width));
+        }
+        // A switch an `else` holds on its line stands at its body.
+        let after_else = trimmed
+            .strip_prefix('}')
+            .unwrap_or(trimmed)
+            .trimmed_start()
+            .strip_prefix("else")
+            .map(str::trim_start);
+        if after_else.is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
+        {
+            return Some(self.output.lead_width(index, tab_width) + self.options.indent_width);
+        }
+        // A brace opening the line after one holds the switch at its own
+        // column.
+        if trimmed.starts_with('{')
+            && let Some(header) = (scope_start..index)
+                .rev()
+                .find(|&line| !self.output.code_trimmed(line).is_empty())
+            && self
+                .output
+                .code_trimmed(header)
+                .strip_prefix("else")
+                .map(str::trim_start)
+                .is_some_and(|rest| rest.starts_with("switch ") || rest.starts_with("switch("))
+        {
+            let lead = self.output.lead_width(index, tab_width);
+            // VTK indents the brace a level, where the labels stand.
+            let indented_brace =
+                self.options.brace_style == BraceStyle::Vtk && self.options.indent_switches;
+            return Some(
+                lead.saturating_sub(usize::from(indented_brace) * self.options.indent_width),
+            );
+        }
+        None
+    }
+
+    fn active_emitted_case_layout(&self) -> Option<ActiveCaseLayout> {
+        let range = self.output.scoped_range();
+        let mut cache = self.active_case_cache.borrow_mut();
+        let answers = self
+            .output
+            .look_back_answers(LookBack::ActiveCase, range.start, &mut cache);
+        // A look back from a line with no closing brace pending reads only
+        // the lines up to it, so its answer holds for every later look back
+        // that gets there.
+        let mut reached = Vec::new();
+        let mut closing_indents = Vec::new();
+        let mut found = None;
+        for index in range.clone().rev() {
+            if closing_indents.is_empty() {
+                if let Some(answer) = answers[index - range.start] {
+                    found = answer;
+                    break;
+                }
+                reached.push(index);
+            }
+            if let Some(answer) = self.active_case_step(index, &mut closing_indents) {
+                found = answer;
+                break;
+            }
+        }
+        for index in reached {
+            answers[index - range.start] = Some(found);
+        }
+        found
+    }
+
+    /// One line of the look back for the active case label: the answer
+    /// when the line decides it, with the indents of the closing braces
+    /// read on.
+    fn active_case_step(
+        &self,
+        index: usize,
+        closing_indents: &mut Vec<usize>,
+    ) -> Option<Option<ActiveCaseLayout>> {
+        let tab_width = self.options.tab_width;
+        let trimmed = self.output.code_trimmed(index);
+        if trimmed.is_empty() {
+            return None;
+        }
+        let code = self.output.code(index);
+        // A label kept after the `}` closing the case block before it.
+        let label = trimmed.trim_start_matches('}').trimmed_start();
+        if (trimmed.starts_with('}')
+            && (label.starts_with("case ") || label.starts_with("default:")))
+            && closing_indents.is_empty()
+        {
+            // An indented brace stands a level past its label.
+            let brace_extra = usize::from(
+                self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
+            ) * self.options.indent_width;
+            return Some(Some(ActiveCaseLayout {
+                indent_spaces: self
+                    .output
+                    .lead_width(index, tab_width)
+                    .saturating_sub(brace_extra),
+                opens_block: false,
+                statement_block_open: false,
+            }));
+        }
+        if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
+            let indent_spaces = self.output.lead_width(index, tab_width);
+            if !closing_indents
+                .iter()
+                .any(|closing| *closing <= indent_spaces)
+            {
+                // A block after a statement or a header kept on the label
+                // line is theirs, not the label's.
+                let statement_block = code.strip_suffix('{').is_some_and(|head| {
+                    let head = head.trimmed_end();
+                    head.ends_with(';') || label_line_holds_braceless_header(head)
+                });
+                return Some(Some(ActiveCaseLayout {
+                    indent_spaces,
+                    opens_block: code.ends_with('{') && !statement_block,
+                    statement_block_open: statement_block && closing_indents.is_empty(),
+                }));
+            }
+            return Some(None);
+        }
+        if trimmed.starts_with("switch") {
+            return Some(None);
+        }
+        if code.ends_with('{') {
+            let open_indent = self.output.lead_width(index, tab_width);
+            // The brace closes at the deepest closer not past it.
+            if let Some(index) = closing_indents
+                .iter()
+                .enumerate()
+                .filter(|(_, closing)| **closing <= open_indent)
+                .max_by_key(|(_, closing)| **closing)
+                .map(|(index, _)| index)
+            {
+                closing_indents.remove(index);
+            } else {
+                return Some(None);
+            }
+        }
+        // A `}` before a label or `else` closes a block as a bare one does.
+        if trimmed.starts_with('}') {
+            closing_indents.push(self.output.lead_width(index, tab_width));
+        }
+        None
+    }
+
+    /// The column of a label in the innermost open switch, when the
+    /// switch line sets it.
+    pub(crate) fn switch_label_indent_spaces(&self) -> Option<usize> {
+        let spaces = self.nearest_open_switch_indent_spaces()?;
+        let switch_body_indent = usize::from(
+            self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
+        ) * self.options.indent_width;
+        Some(
+            spaces
+                + switch_body_indent
+                + self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
+        )
+    }
+
+    pub(crate) fn initial_switch_case_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        mut exact_indent_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if line_kind == LineKind::SwitchLabel
+            && let Some(spaces) = self.switch_label_indent_spaces()
+        {
+            exact_indent_spaces = Some(spaces);
+        }
+
+        let trimmed = line.trimmed_start();
+        if self.layout.line_adjuster.switch_depth() == 0
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("case ")
+            || trimmed.starts_with("default")
+        {
+            return exact_indent_spaces;
+        }
+
+        if self.closes_run_in_brace(trimmed) {
+            return exact_indent_spaces;
+        }
+        let indent_width = self.options.indent_width;
+        let tab_width = self.options.tab_width;
+        let Some(case_layout) = self.active_emitted_case_layout() else {
+            return exact_indent_spaces;
+        };
+        let case_indent = case_layout.indent_spaces;
+        let case_body_extra = usize::from(self.preprocessor.split_else.extra_indent) * indent_width;
+        let target = if trimmed.starts_with('}') && case_layout.statement_block_open {
+            Some(case_indent + case_body_extra + indent_width)
+        } else if trimmed.starts_with('}') && !case_layout.opens_block {
+            None
+        } else if trimmed.starts_with('}') {
+            self.output.last_non_empty_index().and_then(|index| {
+                let previous_indent = self.output.lead_width(index, tab_width);
+                if previous_indent >= case_indent + case_body_extra + indent_width {
+                    Some(
+                        if previous_indent > case_indent + case_body_extra + indent_width {
+                            previous_indent - indent_width
+                        } else {
+                            case_indent + case_body_extra
+                        },
+                    )
+                } else if previous_indent >= case_indent + indent_width {
+                    Some(case_indent)
+                } else {
+                    None
+                }
+            })
+        } else {
+            // Indented cases indent the block a case opens once more.
+            let block_extra = usize::from(
+                case_layout.opens_block && self.options.indent_cases
+                    || case_layout.statement_block_open,
+            ) * indent_width;
+            // The body of a braceless header kept on the label's line
+            // stands a level past the case body.
+            let header_body_extra = usize::from(
+                !trimmed.starts_with('{')
+                    && self.output.last_non_empty_index().is_some_and(|index| {
+                        label_line_holds_braceless_header(self.output.code(index))
+                    }),
+            ) * indent_width;
+            Some(case_indent + case_body_extra + indent_width + block_extra + header_body_extra)
+        };
+        if let Some(target) = target
+            && (trimmed.starts_with('}') || exact_indent_spaces.unwrap_or(0) < target)
+        {
+            exact_indent_spaces = Some(target);
+        }
+        exact_indent_spaces
+    }
+
+    /// A closer whose brace opened inside a line (`x = { a,`) lines up
+    /// with that brace, not with the case body.
+    fn closes_run_in_brace(&self, trimmed: &str) -> bool {
+        trimmed.starts_with('}')
+            && self
+                .output
+                .current_closing_brace_open(self.options.tab_width)
+                .is_some_and(|(_, _, opener)| !opener.ends_with('{'))
+    }
+
+    pub(crate) fn emitted_case_body_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if self.layout.line_adjuster.switch_depth() == 0
+            || trimmed.starts_with('#')
+            || self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| labels::ends_with_binary_operator(previous))
+            || trimmed.starts_with("case ")
+            || trimmed.starts_with("default")
+            || trimmed.starts_with("} while")
+            || self.closes_run_in_brace(trimmed)
+        {
+            return None;
+        }
+        let case_layout = self.active_emitted_case_layout()?;
+        let case_indent = case_layout.indent_spaces;
+        let tab_width = self.options.tab_width;
+        let indent_width = self.options.indent_width;
+        let target = if trimmed.starts_with('}') && case_layout.statement_block_open {
+            Some(case_indent + indent_width)
+        } else if trimmed.starts_with('}') && !case_layout.opens_block {
+            None
+        } else if trimmed.starts_with('}') {
+            let mut closed = 0usize;
+            (0..self.output.len()).rev().find_map(|index| {
+                let previous_trimmed = self.output.code_trimmed(index);
+                if previous_trimmed.is_empty() {
+                    return None;
+                }
+                let code = self.output.code(index);
+                if previous_trimmed.starts_with("case ") || previous_trimmed.starts_with("default:")
+                {
+                    // Indented cases indent the brace closing a case block.
+                    return Some(
+                        case_indent + usize::from(self.options.indent_cases) * indent_width,
+                    );
+                }
+                if previous_trimmed.starts_with('}') {
+                    closed += 1;
+                    return None;
+                }
+                if code.ends_with('{') {
+                    if closed > 0 {
+                        closed -= 1;
+                        return None;
+                    }
+                    let indent = self.output.lead_width(index, tab_width);
+                    if indent > case_indent {
+                        if !(line_is_control_body_header(previous_trimmed)
+                            || starts_header_word(previous_trimmed, "for")
+                            || starts_header_word(previous_trimmed, "while")
+                            || starts_header_word(previous_trimmed, "if")
+                            || starts_header_word(previous_trimmed, "do"))
+                            && let Some(header) = (0..index).rev().take(8).find(|header| {
+                                let trimmed = self.output.code_trimmed(*header);
+                                line_is_control_body_header(trimmed)
+                                    || starts_header_word(trimmed, "for")
+                                    || starts_header_word(trimmed, "while")
+                                    || starts_header_word(trimmed, "if")
+                            })
+                        {
+                            return Some(self.output.lead_width(header, tab_width));
+                        }
+                        return Some(indent);
+                    }
+                }
+                None
+            })
+        } else {
+            Some(
+                case_indent
+                    + (1 + usize::from(case_layout.statement_block_open))
+                        * self.options.indent_width,
+            )
+        }?;
+        let target = target
+            + self.layout.line_adjuster.next_line_case_unindent_depth() * self.options.indent_width;
+        (trimmed.starts_with('}') || current_spaces.unwrap_or(0) < target).then_some(target)
+    }
+
+    pub(crate) fn immediate_case_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        closing_line_needs_unindent: bool,
+    ) -> Option<usize> {
+        if !closing_line_needs_unindent || self.options.indent_cases {
+            return None;
+        }
+        // A switch body's closer lines up however a comment trails it, as
+        // does a case block closer whose `{` stands alone at its label; one
+        // closing a block opened on its label, or VTK's and Horstmann's
+        // indented case block, keeps astyle's extra level.
+        let closes_switch = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.closed_at(span.first))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(
+                |owner| matches!(&self.tree.tokens[owner], Token::Word(word) if word == "switch"),
+            );
+        let opened_alone = !matches!(
+            self.options.brace_style,
+            BraceStyle::Vtk | BraceStyle::Horstmann
+        ) && self
+            .output
+            .current_closing_brace_open(self.options.tab_width)
+            .is_some_and(|(_, _, opener)| opener == "{");
+        let code = self.output.code_of(line).trimmed();
+        if line.trimmed() == "}" || closes_switch && code == "}" {
+            return Some(self.layout.indentation.indent() * self.options.indent_width);
+        }
+        // A comment after the closer keeps it a level of the unindent its
+        // opener took.
+        if opened_alone
+            && code == "}"
+            && let Some((open_spaces, _, _)) = self
+                .output
+                .current_closing_brace_open(self.options.tab_width)
+        {
+            return Some(open_spaces + self.case_unindent_spaces());
+        }
+
+        let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();
+        let indent =
+            if starts_header_word(after_brace, "case") || after_brace.starts_with("default:") {
+                self.layout
+                    .indentation
+                    .indent()
+                    .saturating_sub(usize::from(!self.options.indent_switches))
+            } else {
+                self.layout.indentation.indent() + 1
+            };
+        Some(indent * self.options.indent_width)
+    }
+
+    pub(crate) fn case_label_block_indent_override(
+        &self,
+        line: &LineView<'_>,
+        structural_indent: usize,
+        exact_indent_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
+            return None;
+        }
+        let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
+        // Only a case unindent or a closing row can use the case block;
+        // checking that first spares a walk back through the function.
+        if case_unindent_depth == 0 && !matches!(trimmed, "};" | "},") {
+            return None;
+        }
+        let (open_spaces, _, open_trimmed) = self
+            .output
+            .current_closing_brace_open(self.options.tab_width)?;
+        if !(open_trimmed.starts_with("case ") || open_trimmed.starts_with("default:")) {
+            return None;
+        }
+
+        if matches!(trimmed, "};" | "},") {
+            // Ratliff closes a block at its body, as indented cases do.
+            let body = (usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                + usize::from(self.options.indent_cases))
+                * self.options.indent_width;
+            return Some(open_spaces + body + case_unindent_depth * self.options.indent_width);
+        }
+        if case_unindent_depth == 0 {
+            return None;
+        }
+
+        let target = if trimmed.starts_with('}') {
+            open_spaces
+        } else {
+            open_spaces + self.options.indent_width
+        };
+        let current = exact_indent_spaces.unwrap_or(structural_indent * self.options.indent_width);
+        (current <= target).then_some(target + case_unindent_depth * self.options.indent_width)
+    }
+
+    pub(crate) fn active_case_control_closing_indent_override(
+        &self,
+        line: &LineView<'_>,
+        structural_indent: usize,
+        exact_indent_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if line.trimmed() != "}" {
+            return None;
+        }
+        let case_unindent_depth = self.layout.line_adjuster.next_line_case_unindent_depth();
+        if case_unindent_depth == 0 {
+            return None;
+        }
+
+        let mut target = None;
+        // Only the brace of a `} else {` line closes to that line.
+        let closes_else_block = self
+            .output
+            .current_closing_brace_open(self.options.tab_width)
+            .is_some_and(|(_, _, open_trimmed)| {
+                open_trimmed.starts_with("} else") || open_trimmed.starts_with("}else")
+            });
+        if closes_else_block
+            && !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let trimmed = previous.trimmed();
+                    trimmed.starts_with('#') || matches!(trimmed, "}" | "};" | "break;")
+                })
+            && let Some(open_spaces) = self.recent_same_line_else_open_indent_spaces()
+        {
+            target = Some(open_spaces + case_unindent_depth * self.options.indent_width);
+        }
+        if let Some((open_spaces, _, open_trimmed)) = self
+            .output
+            .current_closing_brace_open(self.options.tab_width)
+            && (starts_header_word(open_trimmed, "if")
+                || starts_header_word(open_trimmed, "for")
+                || starts_header_word(open_trimmed, "while")
+                || starts_header_word(open_trimmed, "do")
+                || open_trimmed.starts_with("else"))
+        {
+            let control_target = open_spaces + case_unindent_depth * self.options.indent_width;
+            target = Some(target.map_or(control_target, |current| current.max(control_target)));
+        }
+
+        target.map(|target| {
+            exact_indent_spaces
+                .unwrap_or(structural_indent * self.options.indent_width)
+                .max(target)
+        })
+    }
+
+    fn recent_same_line_else_open_indent_spaces(&self) -> Option<usize> {
+        let tab_width = self.options.tab_width;
+        for scan_index in self.output.scoped_range().rev().take(32) {
+            let line = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trimmed_end();
+            let trimmed = self.output.code_body(scan_index);
+            if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
+                break;
+            }
+            if (trimmed.starts_with("} else") || trimmed.starts_with("}else"))
+                && code.ends_with('{')
+            {
+                return Some(leading_visual_width(line, tab_width));
+            }
+        }
+        None
+    }
+
+    pub(crate) fn compound_case_label_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
+        if self.options.indent_cases {
+            return None;
+        }
+        let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();
+        if !(starts_header_word(after_brace, "case") || after_brace.starts_with("default:")) {
+            return None;
+        }
+        if self.options.indent_switches {
+            // The line stands at the labels, or at an indented brace past
+            // them.
+            let brace_extra = usize::from(
+                self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
+            ) * self.options.indent_width;
+            return self
+                .nearest_open_switch_indent_spaces()
+                .map(|switch| switch + self.options.indent_width + brace_extra);
+        }
+        // The labels stand a level out from the switch body; the line
+        // adjuster takes the case blocks around the switch off them.
+        (self.layout.line_adjuster.total_case_unindent_depth() > 0).then_some(
+            self.layout.indentation.indent().saturating_sub(1) * self.options.indent_width,
+        )
+    }
+
+    pub(crate) fn split_switch_closing_indent_override(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if line.trimmed() != "}" {
+            return None;
+        }
+        let frame = self.layout.frame_stack.last_closed_brace()?;
+        (frame.semantic_kind == BraceSemanticKind::Command
+            && frame.header.as_deref() == Some("switch")
+            && frame.split_header)
+            .then_some(frame.sibling_indent_column)
+    }
+
+    pub(crate) fn post_block_case_body_indent_override(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        delimiters: impl Fn() -> LineDelimiters,
+        is_closing_header: bool,
+    ) -> Option<usize> {
+        if line_kind != LineKind::Normal
+            || is_closing_header
+            || line.trimmed_start().starts_with_any(b"#{}/)]")
+            || self
+                .output
+                .last_line_outside_comment()
+                .is_none_or(|previous| previous.trimmed() != "}")
+            || delimiters().continues()
+            || !self.has_case_body_at_current_depth()
+            || self
+                .layout
+                .frame_stack
+                .last_closed_brace()
+                .is_none_or(|frame| frame.case_block)
+        {
+            return None;
+        }
+
+        self.active_case_label_indent_spaces()
+            .map(|spaces| spaces + self.options.indent_width)
+    }
+
+    pub(crate) fn nested_case_label_indent_override(
+        &mut self,
+        line_kind: LineKind,
+    ) -> Option<usize> {
+        if line_kind != LineKind::SwitchLabel {
+            return None;
+        }
+        let indent_width = self.options.indent_width;
+        let frame = self
+            .layout
+            .frame_stack
+            .active_brace_mut()
+            .filter(|frame| frame.case_block)?;
+        if frame.case_header_pending > 0 {
+            frame.case_header_pending -= 1;
+            return None;
+        }
+        frame.nested_case_label = true;
+        Some(frame.header_indent_column + indent_width)
+    }
+
+    pub(crate) fn active_case_block_body_layout(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        uses_normal_indent: bool,
+        delimiters: impl Fn() -> LineDelimiters,
+        exact_indent_spaces: Option<usize>,
+    ) -> Option<CaseBlockBodyLayout> {
+        let line_start = line.trimmed_start();
+        if line_kind != LineKind::Normal
+            || !uses_normal_indent
+            || line_start.starts_with_any(b")]}")
+        {
+            return None;
+        }
+        // A header's frame may open before its line: the header stands in
+        // the block around it.
+        let frame = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| !self.brace_frame_awaits_line || frame.case_block)
+            .or_else(|| self.layout.frame_stack.enclosing_brace())
+            .filter(|frame| frame.case_block)?;
+        let follows_ternary_arm = self
+            .output
+            .iter()
+            .rposition(|line| !line.trimmed().is_empty())
+            .is_some_and(|previous_line| {
+                self.layout
+                    .frame_stack
+                    .line_ended_open_ternary(previous_line)
+            });
+        if delimiters().continues()
+            || follows_ternary_arm
+            || self.pending_line_continues_statement()
+            || self.continues_aligned_brace_elements()
+        {
+            return None;
+        }
+        // A block given to a braceless header is its body, not a sibling.
+        let header_body_column = self
+            .output
+            .last_line_outside_comment()
+            .filter(|previous| {
+                let header = previous
+                    .trimmed_start()
+                    .trim_start_matches('}')
+                    .trimmed_start();
+                line_is_control_body_header(header) || header.trimmed_end() == "do"
+            })
+            .map(|previous| leading_visual_width(previous, self.options.tab_width));
+        let target = if line_start.starts_with('{')
+            && let Some(header_column) = header_body_column
+        {
+            let brace_extra = usize::from(
+                self.options.indent_braces
+                    || matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk),
+            );
+            header_column + brace_extra * self.options.indent_width
+        } else if line_start.starts_with('{')
+            && (self.brace_frame_awaits_line || self.brace_follows_case_label())
+        {
+            // Only the case's own brace stands at its label.
+            frame.sibling_indent_column
+        } else if frame.nested_case_label {
+            frame.header_indent_column + 2 * self.options.indent_width
+        } else {
+            frame.body_indent_column
+        };
+        let target = target
+            + self.layout.line_adjuster.case_unindent_depth_for_line(line)
+                * self.options.indent_width;
+        // Indented cases indent a case block's body past what the frame
+        // recorded.
+        let exact_indent_spaces =
+            if self.preprocessor.split_else.extra_levels > 0 || self.options.indent_cases {
+                exact_indent_spaces.map_or(target, |current| current.max(target))
+            } else {
+                target
+            };
+        Some(CaseBlockBodyLayout {
+            exact_indent_spaces,
+        })
+    }
+
+    /// Whether the brace leading the line being laid out comes right after
+    /// a case label's colon.
+    fn brace_follows_case_label(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(colon) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.previous_code_token(span.first))
+        else {
+            return true;
+        };
+        matches!(tokens[colon], Token::Symbol(':'))
+            && self
+                .output
+                .line_with_token(colon)
+                .and_then(|line| self.output.line_tokens(line))
+                .and_then(|span| next_code_token(tokens, span.first))
+                .is_some_and(|first| {
+                    let first = if matches!(tokens[first], Token::Symbol('}')) {
+                        next_code_token(tokens, first + 1).unwrap_or(first)
+                    } else {
+                        first
+                    };
+                    matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
+                })
+    }
+
+    pub(crate) fn switch_case_frame_closing_indent_override(
+        &self,
+        line: &LineView<'_>,
+        exact_indent_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if line.trimmed() != "}" {
+            return None;
+        }
+        let frame = self
+            .layout
+            .frame_stack
+            .last_closed_brace()
+            .filter(|frame| frame.case_block || frame.header.as_deref() == Some("switch"))?;
+        let target = if frame.case_block && frame.nested_case_label {
+            frame.header_indent_column
+                + if matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+                ) {
+                    2 * self.options.indent_width
+                } else {
+                    self.options.indent_width
+                }
+        } else if self.options.brace_style == BraceStyle::Ratliff
+            && frame.header.as_deref() == Some("switch")
+        {
+            frame.body_indent_column
+        } else {
+            frame.sibling_indent_column
+        };
+        let target = target
+            + self.layout.line_adjuster.case_unindent_depth_for_line(line)
+                * self.options.indent_width;
+        Some(
+            if frame.case_block
+                && (self.preprocessor.split_else.extra_levels > 0 || self.options.indent_cases)
+            {
+                exact_indent_spaces.map_or(target, |current| current.max(target))
+            } else {
+                target
+            },
+        )
+    }
+
+    pub(crate) fn active_case_label_indent_spaces(&self) -> Option<usize> {
+        let tab_width = self.options.tab_width;
+        let mut depth = 0usize;
+        for index in (0..self.output.len()).rev() {
+            let meta = self.output.brace_meta(index);
+            depth += meta.closes();
+            // A row of a comment holds no label.
+            if depth == 0 && self.output.comment_start_index(index) == index {
+                let code = self.output.code_trimmed(index);
+                if code.starts_with("case ") || code.starts_with("default:") {
+                    return Some(self.output.lead_width(index, tab_width));
+                }
+            }
+            if meta.opens() > depth {
+                return None;
+            }
+            depth -= meta.opens();
+            // A header kept on a label's line opens its block there.
+            if depth == 0 && meta.opens() > 0 && self.output.comment_start_index(index) == index {
+                let code = self.output.code_trimmed(index);
+                if (code.starts_with("case ") || code.starts_with("default:"))
+                    && !label_opens_case_block(code)
+                {
+                    return Some(self.output.lead_width(index, tab_width));
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind, line: &str) {
+        // A statement before the first label stands in the case body too.
+        let statement_in_switch_body = line_kind == LineKind::Normal
+            && !line.trimmed_start().starts_with_any(b"{}#/")
+            && self.directly_in_switch_body();
+        // Indented cases set a label in a case block at the block's brace,
+        // its body staying at the block's.
+        let label_in_indented_case_block = line_kind == LineKind::SwitchLabel
+            && self.options.indent_cases
+            && self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.case_block);
+        if (line_kind == LineKind::SwitchLabel || statement_in_switch_body)
+            && !label_in_indented_case_block
+        {
+            let current = self.layout.nesting.brace_header_stack.len();
+            if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
+                self.layout
+                    .switch_case_layout
+                    .body_brace_depths
+                    .push(current);
+            }
+        }
+    }
+
+    pub(crate) fn directly_in_switch_body(&self) -> bool {
+        self.layout
+            .nesting
+            .brace_header_stack
+            .last()
+            .is_some_and(|header| header.as_deref() == Some("switch"))
+    }
+
+    pub(crate) fn update_case_brace_unindent(&mut self, line_kind: LineKind, line: &str) {
+        if self.options.indent_cases {
+            self.layout.switch_case_layout.pending_label_brace = false;
+            self.layout.switch_case_layout.closing_line_needs_unindent = false;
+            return;
+        }
+
+        let layout = &mut self.layout.switch_case_layout;
+        if layout.closing_line_needs_unindent {
+            if let Some(depth) = layout.unindent_brace_depths.pop() {
+                layout.case_block_closed_depth = Some(depth - 1);
+            }
+            layout.closing_line_needs_unindent = false;
+        }
+
+        let current = self.layout.nesting.brace_header_stack.len();
+        while let Some(&depth) = layout.unindent_brace_depths.last()
+            && current < depth
+        {
+            layout.unindent_brace_depths.pop();
+            layout.case_block_closed_depth = Some(depth - 1);
+        }
+
+        if line_kind == LineKind::SwitchLabel {
+            layout.case_block_closed_depth = None;
+            // A label ends the case before it, and its directive's level.
+            while layout
+                .preprocessor_brace_depths
+                .last()
+                .is_some_and(|&depth| depth >= current)
+            {
+                layout.preprocessor_brace_depths.pop();
+            }
+            let code = self.output.code_trimmed_of(line);
+            if code.ends_with('{') {
+                self.layout
+                    .switch_case_layout
+                    .unindent_brace_depths
+                    .push(self.layout.nesting.brace_header_stack.len());
+                self.layout.switch_case_layout.pending_label_brace = false;
+            } else {
+                self.layout.switch_case_layout.pending_label_brace = true;
+            }
+            return;
+        }
+
+        if line_kind == LineKind::Normal && !line.trimmed().is_empty() {
+            let trimmed = line.trimmed_start();
+            if self.layout.switch_case_layout.pending_label_brace && trimmed.starts_with('{') {
+                let current = self.layout.nesting.brace_header_stack.len();
+                self.layout
+                    .switch_case_layout
+                    .unindent_brace_depths
+                    .push(current + 1);
+                if self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    let previous = previous.trimmed_start();
+                    previous.starts_with('#')
+                        && !preprocessor_directive(previous)
+                            .is_some_and(is_conditional_preprocessor)
+                }) {
+                    self.layout
+                        .switch_case_layout
+                        .preprocessor_brace_depths
+                        .push(current);
+                }
+                self.layout.switch_case_layout.pending_label_brace = false;
+            } else if !is_comment_line(trimmed) && !trimmed.starts_with('#') {
+                self.layout.switch_case_layout.pending_label_brace = false;
+            }
+            if trimmed.starts_with("break;") {
+                self.layout
+                    .switch_case_layout
+                    .preprocessor_brace_depths
+                    .pop();
+            }
+        }
+    }
+
+    pub(crate) fn case_comment_following_indent_spaces(&self, line: &str) -> Option<usize> {
+        if self
+            .layout
+            .nesting
+            .brace_header_stack
+            .last()
+            .is_none_or(|header| header.as_deref() != Some("case"))
+            || line.trimmed_start().starts_with_any(b"#{}/")
+            || find_case_colon(line).is_some()
+            || self.pending_line_is_label(line)
+        {
+            return None;
+        }
+        if let Some(frame) = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.case_block)
+        {
+            return Some(if frame.nested_case_label {
+                frame.header_indent_column + 2 * self.options.indent_width
+            } else {
+                frame.body_indent_column
+            });
+        }
+        let mut comment_indent = self
+            .layout
+            .previous_pre_adjust_line
+            .as_deref()
+            .filter(|line| is_comment_line(line.trimmed_start()))
+            .map(|line| leading_visual_width(line, self.options.tab_width));
+        for previous in self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .filter(|line| !line.trimmed().is_empty())
+        {
+            if is_comment_line(previous.trimmed_start()) {
+                comment_indent = Some(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + self.options.indent_width,
+                );
+                continue;
+            }
+            let code = self.output.code_trimmed_of(previous);
+            let trimmed = code.trimmed_start();
+            if code.ends_with('{')
+                && (trimmed.starts_with("case ") || trimmed.starts_with("default:"))
+            {
+                return comment_indent;
+            }
+            break;
+        }
+        None
+    }
+}
+
+pub(crate) fn replayed_inline_case_body_indent_spaces(
+    options: &FormatOptions,
+    previous: &str,
+    delimiter_replayed: bool,
+) -> Option<usize> {
+    if options.max_code_length.is_none()
+        || !delimiter_replayed
+        || !starts_inline_case_statement(previous)
+    {
+        return None;
+    }
+    let trimmed = previous.trimmed_start();
+    unmatched_open_paren_column(trimmed).map(|open| {
+        leading_visual_width(previous, options.tab_width) + open + 1 + options.indent_width
+    })
+}
+
+pub(crate) fn max_length_inline_case_body_indent_extra(
+    options: &FormatOptions,
+    line: &str,
+) -> Option<usize> {
+    starts_inline_case_statement(line).then_some(options.indent_width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn observe(state: &mut SwitchCaseObserver, line: &str) -> LineKind {
+        let kind = if find_case_colon(line).is_some() {
+            LineKind::SwitchLabel
+        } else {
+            LineKind::Normal
+        };
+        state.observe_line(line, kind)
+    }
+
+    #[test]
+    fn finds_case_colons_outside_comments_and_literals() {
+        assert_eq!(find_case_colon("case 1:"), Some(6));
+        assert_eq!(find_case_colon("case ':' :"), Some(9));
+        assert_eq!(find_case_colon("case \"x:y\" :"), Some(11));
+        assert_eq!(find_case_colon("case value /* : */:"), Some(18));
+        assert_eq!(find_case_colon("case 1'000:"), Some(10));
+        assert_eq!(find_case_colon("case value // :"), None);
+        assert_eq!(find_case_colon("default_value:"), None);
+    }
+
+    #[test]
+    fn splits_switch_label_statements_before_max_length_wrapping() {
+        assert_eq!(
+            split_switch_label_statement("case A: write_log(foo);").unwrap(),
+            ("case A:".to_string(), "write_log(foo);".to_string())
+        );
+    }
+
+    #[test]
+    fn observer_tracks_nested_switches() {
+        let mut state = SwitchCaseObserver::default();
+
+        assert_eq!(observe(&mut state, "switch (x)"), LineKind::Normal);
+        assert_eq!(observe(&mut state, "{"), LineKind::Normal);
+        assert_eq!(state.switch_depth(), 1);
+        assert_eq!(observe(&mut state, "case 1:"), LineKind::SwitchLabel);
+        assert!(state.looking_for_case_brace);
+        assert!(state.unindent_next_line);
+        assert_eq!(observe(&mut state, "{"), LineKind::Normal);
+        assert!(!state.looking_for_case_brace);
+        assert_eq!(observe(&mut state, "switch (y)"), LineKind::Normal);
+        assert_eq!(observe(&mut state, "{"), LineKind::Normal);
+        assert_eq!(state.switch_depth(), 2);
+        assert_eq!(observe(&mut state, "case 2:"), LineKind::SwitchLabel);
+        assert_eq!(observe(&mut state, "}"), LineKind::Normal);
+        assert_eq!(observe(&mut state, "}"), LineKind::Normal);
+        assert_eq!(state.switch_depth(), 1);
+        assert_eq!(observe(&mut state, "}"), LineKind::Normal);
+        assert_eq!(state.switch_depth(), 0);
+    }
+
+    #[test]
+    fn observer_ignores_expression_braces_and_counts_inline_blocks() {
+        let mut state = SwitchCaseObserver::default();
+
+        assert_eq!(
+            observe(&mut state, "switch ([] { return 1; }()) {"),
+            LineKind::Normal
+        );
+        assert_eq!(state.switch_depth(), 1);
+        assert_eq!(
+            observe(&mut state, "if (ready) { call(); }"),
+            LineKind::Normal
+        );
+        assert_eq!(
+            observe(&mut state, "case hash(R\"(a)\"):"),
+            LineKind::SwitchLabel
+        );
+        assert_eq!(observe(&mut state, "}"), LineKind::Normal);
+        assert_eq!(state.switch_depth(), 0);
+    }
+
+    #[test]
+    fn finds_one_line_blocks_outside_comments_and_literals() {
+        assert!(is_one_line_block_reached("{ printf(\"}\"); }", 0));
+        assert!(is_one_line_block_reached("{ /* } */ return; }", 0));
+        assert!(is_one_line_block_reached("{ int x = 1'000; }", 0));
+        assert!(!is_one_line_block_reached("{ printf(\"}\");", 0));
+    }
+
+    #[test]
+    fn windows_line_markers_do_not_advance_case_line_number() {
+        let options = FormatOptions::default();
+        let mut transformer = SwitchCaseLineTransformer::new(&options);
+
+        transformer.begin_line();
+        assert_eq!(
+            transformer.transform_line("//\u{f1}".to_string()),
+            "//\u{f1}"
+        );
+        assert_eq!(transformer.line_number, 0);
+        transformer.begin_line();
+        assert_eq!(
+            transformer.transform_line("int value;".to_string()),
+            "int value;"
+        );
+        assert_eq!(transformer.line_number, 1);
+    }
+}

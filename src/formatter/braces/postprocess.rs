@@ -1,0 +1,629 @@
+use crate::config::{BraceStyle, FormatOptions, IndentStyle};
+use crate::formatter::braces::classification::{
+    is_lambda_body_header, is_namespace_or_module_block_header,
+};
+use crate::formatter::constructs::{labels, switch_cases};
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{self, Token};
+use crate::formatter::state::indentation::LineKind;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, line_ends_with_comment, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit,
+};
+use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::trim::Trimmed;
+
+pub(crate) struct MaxLengthBraceRowLayout {
+    pub(crate) first_width: usize,
+    /// The run-in brace and fill ahead of the row on its line.
+    pub(crate) prefix_width: usize,
+    pub(crate) attaches_lisp_closer: bool,
+}
+
+pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -> String {
+    match options.brace_style {
+        BraceStyle::Pico => {
+            let run_in = run_in_horstmann_opening_braces(&output, options);
+            attach_lisp_closing_braces(&run_in, options.line_break())
+        }
+        BraceStyle::Lisp => {
+            attach_lisp_closing_braces_aligning_parens(&output, options.line_break())
+        }
+        BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
+        _ => output,
+    }
+}
+
+impl FormatEngine<'_> {
+    pub(crate) fn merge_source_run_in_braces(&mut self) {
+        let mut indices = std::mem::take(&mut self.source_run_in_brace_lines);
+        indices.sort_unstable();
+        indices.dedup();
+        for index in indices.into_iter().rev() {
+            let Some(next_line) = self.output.get(index + 1) else {
+                continue;
+            };
+            if next_line.trimmed().is_empty() || self.output[index].trimmed() != "{" {
+                continue;
+            }
+            let next_line = self.output.remove(index + 1);
+            let fill = horstmann_run_in_fill(&self.output[index], &next_line, self.options);
+            let merged = format!(
+                "{}{}{}",
+                self.output[index],
+                fill,
+                next_line.trimmed_start()
+            );
+            self.output.set(index, merged);
+        }
+    }
+
+    pub(crate) fn replayed_lisp_attached_suffix_indent_spaces(&self) -> Option<usize> {
+        if self.options.max_code_length.is_none()
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            )
+            || !self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| {
+                    let code = self.output.code_trimmed_of(previous);
+                    code.trimmed_start().starts_with('}') && code.ends_with(',')
+                })
+        {
+            return None;
+        }
+        let spaces = self.layout.indentation.indent() * self.options.indent_width;
+        (spaces == self.token_input.input_source_indent).then_some(spaces)
+    }
+
+    pub(crate) fn max_length_brace_row_layout(
+        &self,
+        line: &str,
+        structural_level: usize,
+        base_indent_width: impl FnOnce() -> usize,
+        width: usize,
+    ) -> MaxLengthBraceRowLayout {
+        let line_start = line.trimmed_start();
+        let attaches_lisp_closer = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && line_start.starts_with('}')
+            && self.output.last().is_some_and(|previous| {
+                !previous.trimmed().is_empty()
+                    && preprocessor_directive(previous.trimmed_start()).is_none()
+                    && !line_ends_with_comment(previous)
+            });
+        let mut prefix_width = 0;
+        let first_width = if attaches_lisp_closer && let Some(previous) = self.output.last() {
+            let separator_width = usize::from(!previous.trimmed_end().ends_with('{'));
+            width
+                .saturating_sub(
+                    visual_width_from(previous, 0, self.options.tab_width) + separator_width,
+                )
+                .max(1)
+        } else if matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) && let Some(brace) = self.output.last()
+            && brace.trimmed() == "{"
+            && !line_start.starts_with_any(b"#}")
+            && !line_start.starts_with("//")
+            && !line.contains("*INDENT-OFF*")
+            && !labels::is_access_label(line, &self.options.access_labels)
+            && !self.output[..self.output.len() - 1]
+                .iter()
+                .rev()
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| is_namespace_or_module_block_header(line))
+        {
+            // astyle measures the run-in line from its brace, with the fill
+            // as written, which may be a tab.
+            let output_options = self.output_options();
+            let prefix =
+                output_options.continuation_indent_prefix(structural_level, base_indent_width());
+            let next = format!("{prefix}{}", line_start);
+            let brace_width = leading_visual_width(brace, self.options.tab_width);
+            let brace_prefix = output_options.continuation_indent_prefix(
+                brace_width / self.options.indent_width.max(1),
+                brace_width,
+            );
+            let brace = format!("{brace_prefix}{{");
+            let fill = horstmann_run_in_fill(&brace, &next, &output_options);
+            // A space fill is one indent, wherever the row stood before
+            // postprocessing.
+            let fill_width = if self.options.indent_style == IndentStyle::Spaces {
+                fill.len()
+                    .min(self.options.indent_width.saturating_sub(1).max(1))
+            } else {
+                fill.len()
+            };
+            let run_in_width = 1 + fill_width;
+            prefix_width = run_in_width;
+            let mut has_word_logical = false;
+            let mut has_symbol_logical = false;
+            for token in lexer::tokenize(line) {
+                match token {
+                    Token::Word(word) if matches!(word.as_str(), "and" | "or") => {
+                        has_word_logical = true;
+                    }
+                    Token::Operator(operator) if matches!(operator.as_str(), "&&" | "||") => {
+                        has_symbol_logical = true;
+                    }
+                    _ => {}
+                }
+            }
+            let strict_logical_boundary =
+                has_word_logical || (self.options.break_after_logical && has_symbol_logical);
+            width
+                .saturating_sub(run_in_width + usize::from(strict_logical_boundary))
+                .max(1)
+        } else {
+            width
+        };
+        MaxLengthBraceRowLayout {
+            first_width,
+            prefix_width,
+            attaches_lisp_closer,
+        }
+    }
+
+    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &LineView<'_>) -> bool {
+        let line_trimmed = line.trimmed();
+        if !(matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk
+        ) && line_trimmed == "};"
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(4)
+                .any(|line| is_lambda_body_header(line.trimmed_end())))
+        {
+            return false;
+        }
+        let base = self
+            .layout
+            .indentation
+            .line_indent(LineKind::Normal, self.options);
+        let indent = if self.options.brace_style == BraceStyle::Vtk && base == 0 {
+            base
+        } else {
+            base + 1
+        };
+        self.push_output_line(line_trimmed, indent);
+        true
+    }
+
+    pub(crate) fn try_split_lambda_body_header(&mut self, line: &LineView<'_>) -> bool {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Allman
+                | BraceStyle::Whitesmith
+                | BraceStyle::Vtk
+                | BraceStyle::Gnu
+                | BraceStyle::Horstmann
+        ) {
+            return false;
+        }
+        let Some(open) = line.rfind('{') else {
+            return false;
+        };
+        if !(is_lambda_body_header(line[..open].trimmed_end()) && {
+            let head = line[..open].trimmed_end();
+            let one_line_body = line[open + 1..].contains('}');
+            !(one_line_body && (!self.options.break_one_line_blocks || head.contains("->")))
+        }) {
+            return false;
+        }
+        self.finish_line_text(line[..open].trimmed_end());
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk
+        ) {
+            let base = self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options);
+            self.push_output_line("{", base + 1);
+        } else {
+            self.finish_line_text("{");
+        }
+        true
+    }
+
+    pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Allman
+                | BraceStyle::Vtk
+                | BraceStyle::Gnu
+                | BraceStyle::Whitesmith
+                | BraceStyle::Horstmann
+        ) {
+            return false;
+        }
+        let Some(open) = line.rfind('{') else {
+            return false;
+        };
+        let Some(close) = line.rfind('}') else {
+            return false;
+        };
+        if !(open < close
+            && line[..open].contains("operator")
+            && line[..open].trimmed_end().ends_with(')'))
+        {
+            return false;
+        }
+        let head = line[..open].trimmed_end();
+        let body = line[open + 1..close].trimmed();
+        let base = self
+            .layout
+            .indentation
+            .line_indent(LineKind::Normal, self.options);
+        if self.options.brace_style == BraceStyle::Horstmann {
+            self.push_output_line(head, base);
+            if !body.is_empty() {
+                self.push_output_line(&format!("{{   {body}"), base);
+            } else {
+                self.push_output_line("{", base);
+            }
+            self.push_output_line("}", base);
+            return true;
+        }
+        let brace_indent = if self.options.brace_style == BraceStyle::Whitesmith {
+            base + 1
+        } else {
+            base
+        };
+        self.push_output_line(head, base);
+        self.push_output_line("{", brace_indent);
+        if !body.is_empty() {
+            self.push_output_line(body, base + 1);
+        }
+        self.push_output_line("}", brace_indent);
+        true
+    }
+}
+
+fn split_output_lines<'a>(output: &'a str, line_break: &str) -> Vec<&'a str> {
+    let mut lines: Vec<&str> = output.split(line_break).collect();
+    if lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    lines
+}
+
+fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
+    let mut raw_lines = vec![false; split_output_lines(output, line_break).len()];
+    let mut line_index = 0usize;
+    for token in lexer::tokenize(output) {
+        let text = lexer::token_text(&token);
+        let line_breaks = text.bytes().filter(|byte| *byte == b'\n').count();
+        // Lines inside a raw string or a block comment are no code.
+        if matches!(&token, Token::StringLiteral(literal) if ["u8R\"", "LR\"", "uR\"", "UR\"", "R\""]
+            .into_iter()
+            .any(|prefix| literal.starts_with(prefix)))
+            || matches!(&token, Token::Comment(_, text) if text.starts_with("/*"))
+        {
+            let end = line_index.saturating_add(line_breaks);
+            for raw_line in raw_lines
+                .iter_mut()
+                .take(end.saturating_add(1))
+                .skip(line_index.saturating_add(1))
+            {
+                *raw_line = true;
+            }
+        }
+        line_index = line_index.saturating_add(line_breaks);
+    }
+    raw_lines
+}
+
+fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
+    attach_closing_braces(output, line_break, false)
+}
+
+fn attach_lisp_closing_braces_aligning_parens(output: &str, line_break: &str) -> String {
+    attach_closing_braces(output, line_break, true)
+}
+
+fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> String {
+    let raw_lines = raw_literal_lines(output, line_break);
+    let mut lines: Vec<String> = Vec::new();
+    // The columns rows of a paren a joined closer's line opens move by, and
+    // the parens still open.
+    let mut paren_shift = None::<(usize, usize)>;
+    for (index, line) in split_output_lines(output, line_break)
+        .into_iter()
+        .enumerate()
+    {
+        let trimmed = line.trimmed();
+        if let Some((shift, open)) = paren_shift.take()
+            && !raw_lines[index]
+            && !trimmed.is_empty()
+        {
+            let (closes, opens) = line_paren_imbalance(trimmed);
+            let lead = line.len() - line.trimmed_start().len();
+            lines.push(format!(
+                "{}{}{}",
+                &line[..lead],
+                " ".repeat(shift),
+                &line[lead..]
+            ));
+            let open = open.saturating_sub(closes) + opens.len();
+            if open > 0 {
+                paren_shift = Some((shift, open));
+            }
+            continue;
+        }
+        if !raw_lines[index]
+            && trimmed.starts_with('}')
+            && let Some(previous) = lines.last_mut()
+            && !previous.trimmed().is_empty()
+            && preprocessor_directive(previous.trimmed_start()).is_none()
+            && !previous.trimmed_end().ends_with('\\')
+            && !line_ends_with_comment(previous)
+        {
+            if !previous.trimmed_end().ends_with('{') {
+                previous.push(' ');
+            }
+            // astyle measures a paren the line leaves open from the joined
+            // line's text at the closer's level.
+            if align_parens {
+                let (_, opens) = line_paren_imbalance(trimmed);
+                // A paren that ends the line takes an indent, not its column.
+                if opens.last().is_some_and(|&column| {
+                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                        .trim()
+                        .is_empty()
+                }) {
+                    paren_shift = Some((previous.trimmed_start().len(), opens.len()));
+                }
+            }
+            // The brace moves up a column and its comment follows it.
+            let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
+            let comment = trimmed.len() - trimmed[code.len()..].trimmed_start().len();
+            let gap = &trimmed[code.len()..comment];
+            // Only a bare closer moves; an element's comment keeps its
+            // column after the `},`.
+            if comment < trimmed.len()
+                && code.chars().all(|ch| matches!(ch, '}' | ';' | ' '))
+                && gap.len() > 1
+                && gap.bytes().all(|byte| byte == b' ')
+            {
+                previous.push_str(code);
+                previous.push_str(&gap[1..]);
+                previous.push_str(&trimmed[comment..]);
+            } else {
+                previous.push_str(trimmed);
+            }
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
+}
+
+fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> String {
+    let line_break = options.line_break();
+    let raw_lines = raw_literal_lines(output, line_break);
+    let mut lines = Vec::new();
+    let input = split_output_lines(output, line_break);
+    let mut index = 0usize;
+    while index < input.len() {
+        let line = input[index];
+        // Only an aggregate's brace runs into a brace nested in it; a block
+        // leaves a block on its own line.
+        let opens_aggregate = |brace_at: usize| {
+            input[..brace_at]
+                .iter()
+                .rev()
+                .find(|line| !line.trimmed().is_empty())
+                .is_some_and(|line| line.trimmed_end().ends_with_any(b"=,({"))
+        };
+        let runs_in = |brace: &str, at: usize| {
+            !raw_lines[at - 1]
+                && brace.trimmed() == "{"
+                && input.get(at).is_some_and(|next| {
+                    !next.trimmed().is_empty()
+                        && (next.trimmed() != "{" || opens_aggregate(at - 1))
+                        && !next.trimmed_start().starts_with('#')
+                        && !next.trimmed_start().starts_with('}')
+                        && !next.starts_with("//")
+                        && !next.contains("*INDENT-OFF*")
+                        && !run_in_next_line_is_access_label(brace, next, options)
+                })
+        };
+        // A brace leading a row runs into the block comment after it.
+        if let Some(comment) = brace_led_block_comment(line)
+            && !raw_lines[index]
+        {
+            let brace = &line[..line.len() - line.trimmed_start().len() + 1];
+            lines.push(format!(
+                "{brace}{}{comment}",
+                brace_comment_fill(brace, comment, options)
+            ));
+            index += 1;
+            continue;
+        }
+        if runs_in(line, index + 1) && !previous_line_is_namespace_header(&input, index) {
+            // A `{` that runs in may carry a nested `{` whose own first line
+            // runs in after it.
+            let mut joined = line.to_string();
+            let mut brace = line.to_string();
+            let mut at = index + 1;
+            loop {
+                let next = input[at];
+                let fill = horstmann_run_in_fill(&brace, next, options);
+                let next = next.trimmed_start().to_string();
+                joined.push_str(&fill);
+                // A nested brace runs into its block comment as a brace
+                // leading the row does.
+                if let Some(comment) = brace_led_block_comment(&next)
+                    && !raw_lines[at]
+                {
+                    let column = visual_width_from(&joined, 0, options.tab_width.max(1));
+                    let brace = format!("{}{{", " ".repeat(column));
+                    let fill = brace_comment_fill(&brace, comment, options);
+                    joined.push_str(&format!("{{{fill}{comment}"));
+                    at += 1;
+                    break;
+                }
+                joined.push_str(&next);
+                at += 1;
+                if next != "{" {
+                    break;
+                }
+                let column =
+                    visual_width_from(&joined[..joined.len() - 1], 0, options.tab_width.max(1));
+                brace = format!("{}{{", " ".repeat(column));
+                if !runs_in(&brace, at) {
+                    break;
+                }
+            }
+            lines.push(joined);
+            index = at;
+        } else {
+            lines.push(line.to_string());
+            index += 1;
+        }
+    }
+    finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
+}
+
+/// The block comment after the `{` that leads `line`, when the comment is
+/// all that follows the brace or runs past the line.
+fn brace_led_block_comment(line: &str) -> Option<&str> {
+    line.trimmed_start()
+        .strip_prefix('{')
+        .filter(|rest| rest.starts_with_any(b" \t"))
+        .map(str::trim_start)
+        .filter(|rest| {
+            rest.starts_with("/*")
+                && (rest.ends_with("*/") && rest.matches("*/").count() == 1 || !rest.contains("*/"))
+        })
+}
+
+/// The fill between the `{` ending `brace` and the block comment it runs
+/// into.
+fn brace_comment_fill(brace: &str, comment: &str, options: &FormatOptions) -> String {
+    let body = format!(
+        "{}{comment}",
+        " ".repeat(leading_visual_width(brace, options.tab_width) + options.indent_width)
+    );
+    horstmann_run_in_fill(brace, &body, options)
+}
+
+fn run_in_next_line_is_access_label(
+    brace_line: &str,
+    next_line: &str,
+    options: &FormatOptions,
+) -> bool {
+    labels::is_access_label(next_line, &options.access_labels)
+        && leading_visual_width(next_line, options.tab_width)
+            <= leading_visual_width(brace_line, options.tab_width)
+}
+
+fn previous_line_is_namespace_header(input: &[&str], before: usize) -> bool {
+    input[..before]
+        .iter()
+        .rev()
+        .find(|line| !line.trimmed().is_empty())
+        .is_some_and(|line| is_namespace_or_module_block_header(line))
+}
+
+pub(crate) fn horstmann_run_in_fill(
+    brace_line: &str,
+    next_line: &str,
+    options: &FormatOptions,
+) -> String {
+    let switch_label = switch_cases::find_case_colon(next_line.trimmed_start()).is_some();
+    if !matches!(options.indent_style, IndentStyle::ForceTabs)
+        && labels::is_access_label(next_line, &options.access_labels)
+    {
+        let tab_width = options.tab_width.max(1);
+        let brace_column = leading_visual_width(brace_line, tab_width);
+        let target_column = leading_visual_width(next_line, tab_width);
+        if options.indent_style == IndentStyle::Tabs {
+            let mut fill = String::new();
+            let mut column = brace_column + 1;
+            while column < target_column {
+                let next_stop = (column / tab_width + 1) * tab_width;
+                if next_stop > target_column {
+                    break;
+                }
+                fill.push('\t');
+                column = next_stop;
+            }
+            fill.push_str(&" ".repeat(target_column.saturating_sub(column)));
+            return if fill.is_empty() {
+                " ".to_string()
+            } else {
+                fill
+            };
+        }
+        return " ".repeat(target_column.saturating_sub(brace_column + 1).max(1));
+    }
+    match options.indent_style {
+        IndentStyle::Spaces => {
+            let brace_column = leading_visual_width(brace_line, options.tab_width.max(1));
+            let target_column = if switch_label {
+                brace_column + options.indent_width
+            } else {
+                leading_visual_width(next_line, options.tab_width.max(1))
+            };
+            " ".repeat(
+                target_column
+                    .saturating_sub(brace_column + 1)
+                    .max(options.indent_width.saturating_sub(1)),
+            )
+        }
+        IndentStyle::Tabs => "\t".to_string(),
+        IndentStyle::ForceTabs => {
+            let tab_width = options.tab_width.max(1);
+            let brace_column = leading_visual_width(brace_line, tab_width);
+            let target_column = if switch_label {
+                brace_column + options.indent_width.max(1)
+            } else {
+                leading_visual_width(next_line, tab_width)
+                    .max(brace_column + options.indent_width.max(1))
+            };
+            if options.tab_width > options.indent_width {
+                return " ".repeat(target_column.saturating_sub(brace_column + 1));
+            }
+            let mut fill = String::new();
+            let mut column = brace_column + 1;
+            while column < target_column {
+                let next_stop = (column / tab_width + 1) * tab_width;
+                if next_stop <= target_column {
+                    fill.push('\t');
+                    column = next_stop;
+                } else {
+                    break;
+                }
+            }
+            fill.push_str(&" ".repeat(target_column.saturating_sub(column)));
+            fill
+        }
+    }
+}
+
+fn finish_postprocessed_lines(
+    lines: Vec<String>,
+    line_break: &str,
+    trailing_break: bool,
+) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let mut output = lines.join(line_break);
+    if trailing_break {
+        output.push_str(line_break);
+    }
+    output
+}

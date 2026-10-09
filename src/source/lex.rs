@@ -26,7 +26,7 @@ pub fn is_digit_separator(chars: &[char], index: usize) -> bool {
 }
 
 pub fn trailing_word(line: &str) -> &str {
-    let line = line.trim_end();
+    let line = line.trim_ascii_end();
     let Some((last_index, last_char)) = line.char_indices().next_back() else {
         return "";
     };
@@ -45,16 +45,53 @@ pub fn trailing_word(line: &str) -> &str {
 }
 
 pub fn leading_identifier(line: &str) -> &str {
-    let line = line.trim_start();
-    let end = line
-        .find(|ch: char| !is_identifier_continue(ch))
-        .unwrap_or(line.len());
+    let line = line.trim_ascii_start();
+    let bytes = line.as_bytes();
+    let mut end = 0;
+    // ASCII bytes are read as they are; a wider character is decoded.
+    while let Some(&byte) = bytes.get(end) {
+        if byte.is_ascii() {
+            if !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')) {
+                break;
+            }
+            end += 1;
+        } else {
+            match line[end..].chars().next() {
+                Some(ch) if is_identifier_continue(ch) => end += ch.len_utf8(),
+                _ => break,
+            }
+        }
+    }
     &line[..end]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_leading_identifiers_as_a_character_search_does() {
+        for line in [
+            "",
+            "  ",
+            "x",
+            "  abc def",
+            "a$b(c",
+            "é1x y",
+            "1abc",
+            "_a_b",
+            " \tx",
+            "aé b",
+            "(x",
+            "a\u{a0}b",
+        ] {
+            let trimmed = line.trim_ascii_start();
+            let end = trimmed
+                .find(|ch: char| !is_identifier_continue(ch))
+                .unwrap_or(trimmed.len());
+            assert_eq!(leading_identifier(line), &trimmed[..end], "{line:?}");
+        }
+    }
 
     #[test]
     fn finds_trailing_word() {
