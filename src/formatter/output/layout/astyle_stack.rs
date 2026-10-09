@@ -474,13 +474,19 @@ impl FormatEngine<'_> {
                 .map(|(span, next)| (line, span, next));
             Some(line)
         };
+        // A string continued over lines maps to the line it ends on and
+        // stands on the line it starts on.
+        let rows_before_end = |index: usize| match &tokens[index] {
+            Token::StringLiteral(text) => text.matches('\n').count(),
+            _ => 0,
+        };
         while index < first {
             let token = &tokens[index];
             if !is_code_token(token) {
                 index += 1;
                 continue;
             }
-            let token_line = line_of(index)?;
+            let token_line = line_of(index)?.checked_sub(rows_before_end(index))?;
             let starts_line = line != Some(token_line);
             if starts_line {
                 line = Some(token_line);
@@ -503,9 +509,10 @@ impl FormatEngine<'_> {
             let relative = |index: usize| -> Option<usize> {
                 self.token_column(index)?.checked_sub(column_base)
             };
-            let next_on_line = self
-                .next_code_token_before(index, first)
-                .filter(|&next| line_of(next) == Some(token_line));
+            let next_on_line = self.next_code_token_before(index, first).filter(|&next| {
+                line_of(next).and_then(|line| line.checked_sub(rows_before_end(next)))
+                    == Some(token_line)
+            });
             match token {
                 Token::Symbol('(' | '[') => {
                     if replay.depth == 0 {

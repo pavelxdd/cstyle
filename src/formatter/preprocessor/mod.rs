@@ -77,7 +77,7 @@ impl PreprocessorSplitElseState {
             || self.extra_levels > 0
     }
 
-    fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         let brace_indent = self.brace_indent;
         *self = Self {
             brace_indent,
@@ -153,6 +153,9 @@ struct PreprocessorLineParts<'a> {
     /// The directive is a conditional that indenting preprocessor blocks
     /// indents: its continued lines stand a level past it.
     indent_continued_block_conditional: bool,
+    /// astyle reads `#error`, `#warning`, and `#line` as comments and
+    /// starts each of their continued lines where the directive starts.
+    comment_directive: bool,
 }
 
 impl FormatEngine<'_> {
@@ -778,6 +781,7 @@ impl FormatEngine<'_> {
                     branch_separator_after_else,
                     indent_continued_conditional,
                     indent_continued_block_conditional,
+                    comment_directive: matches!(directive, Some("error" | "warning" | "line")),
                 },
                 &mut continued_line_comment,
                 &mut open_paren_columns,
@@ -846,7 +850,19 @@ impl FormatEngine<'_> {
             branch_separator_after_else,
             indent_continued_conditional,
             indent_continued_block_conditional,
+            comment_directive,
         } = *parts;
+        if comment_directive && index > 0 {
+            // A directive an indented preprocessor block moves takes its
+            // lines along.
+            let prefix = self
+                .output
+                .last()
+                .map(|row| row[..row.len() - row.trimmed_start().len()].to_string())
+                .unwrap_or_default();
+            self.adjust_and_publish_line(format!("{prefix}{}", part.trimmed()));
+            return;
+        }
         let line_is_continued_comment = *continued_line_comment;
         let is_opaque_literal_line = opaque_literal_line_ranges
             .iter()

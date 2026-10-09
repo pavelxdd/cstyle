@@ -1749,6 +1749,7 @@ impl FormatEngine<'_> {
             if !else_follows {
                 if brace_type == BraceType::Command {
                     self.layout.pending_braceless_block_bias = None;
+                    self.layout.inline_nested_header_braceless_bias = None;
                 }
                 self.unwind_else_if_break_depths();
                 if let Some((base, delta)) = self.layout.indentation.last_braceless_block()

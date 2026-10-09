@@ -7209,3 +7209,98 @@ fn comment_rows_trim_as_astyle_trims_them_past_tabs() {
         "void f(void)\n{\n    if (size == 0)\n    {\n        /* 12 is sizeof.\n        Use the values,\n         the extra bytes\n         allocated.  */\n        int extra = 1;\n    }\n}\n",
     );
 }
+
+#[test]
+fn braceless_chain_in_an_else_body_split_off_by_a_directive_keeps_its_block_level() {
+    let source = "void f(void)\n{\n#ifdef _LIBC\n    if (a)\n    {\n        w();\n    }\n    else\n#endif\n        for (; p >= end; --p)\n            if (q)\n            {\n                mbstate_t cur_state;\n                wchar_t wc2;\n            }\n}\n";
+    check(source, &["--style=allman"], source);
+}
+
+#[test]
+fn comment_after_a_broken_one_line_block_follows_the_gap_after_its_first_statement() {
+    check(
+        "void f(void) {\n  if (g==0) {t=*up;g+=D;}  // a\n  if (g==0) {t=*up;   g+=D;}  // b\n  if (g==0) {t=*up;}  // c\n}\n",
+        &["--style=kr"],
+        "void f(void)\n{\n    if (g==0) {\n        t=*up;    // a\n        g+=D;\n    }\n    if (g==0) {\n        t=*up;      // b\n        g+=D;\n    }\n    if (g==0) {\n        t=*up;   // c\n    }\n}\n",
+    );
+}
+
+#[test]
+fn comment_after_a_while_broken_off_a_one_line_do_body_keeps_its_joined_column() {
+    check(
+        "void f(void) {\n  do { rn.c = l_getc(rn.f); } while (isspace(rn.c));  /* skip spaces */\n  x();\n}\n",
+        &["--style=gnu"],
+        "void f(void)\n{\n    do\n        {\n            rn.c = l_getc(rn.f);\n        }\n    while (isspace(rn.c));    /* skip spaces */\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn do_body_of_an_else_split_off_by_a_directive_keeps_its_block_level() {
+    let source = "static int f(int h)\n{\n    int rc;\n#ifdef A\n    if( sz )\n    {\n        rc = 0;\n    }\n    else\n#endif\n        do\n        {\n            rc = g(h);\n        }\n        while( rc<0 );\n    return rc;\n}\n";
+    check(source, &["--style=allman"], source);
+}
+
+#[test]
+fn empty_block_of_a_header_nested_in_a_braceless_if_ends_its_body() {
+    check(
+        "static void f(int nIn){\n  if( nIn<0 ) for(nIn=0; zIn[nIn]; nIn++){}\n  while( iWidth>nIn ){ a = 1; b--; }\n  x();\n}\n",
+        &["--style=allman"],
+        "static void f(int nIn)\n{\n    if( nIn<0 ) for(nIn=0; zIn[nIn]; nIn++) {}\n    while( iWidth>nIn )\n    {\n        a = 1;\n        b--;\n    }\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn brace_attached_into_a_comment_gap_takes_its_second_column() {
+    check(
+        "void f(int c)\n{\n    switch (c) {\n        case 2:\t/* a */\n        {\n            x();\n        }\n        case 1:      /* c */\n        {\n            y();\n        }\n        case 3:\t   /* d */\n        {\n            y();\n        }\n    }\n    if (a)      /* f */\n    {\n        z();\n    }\n}\n",
+        &["--style=kr"],
+        "void f(int c)\n{\n    switch (c) {\n    case 2: {\t/* a */\n        x();\n    }\n    case 1: {    /* c */\n        y();\n    }\n    case 3: {   /* d */\n        y();\n    }\n    }\n    if (a) {    /* f */\n        z();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn statement_after_endif_skips_a_braceless_body_before_the_directive() {
+    let source = "static int f(void)\n{\n#if defined(A)\n    if (b) {\n        return 1;\n    }\n#elif defined(W)\n    if (G(&m))\n        return m;\n#endif\n    return 0;\n}\n";
+    check(source, &[], source);
+}
+
+#[test]
+fn unstyled_brace_on_its_label_line_keeps_its_source_gap() {
+    check(
+        "void f(int c)\n{\n\tswitch (c) {\n\tcase 1:\t{\n\t\tx();\n\t}\n\tdefault:  {\n\t\tx();\n\t}\n\t}\n}\n",
+        &[],
+        "void f(int c)\n{\n    switch (c) {\n    case 1:\t{\n        x();\n    }\n    default:  {\n        x();\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn space_joining_a_closing_brace_to_its_header_moves_no_comment() {
+    check(
+        "static void f(D *p){\n  if( !p->rawS ){\n    p->rawS = 0;\n  }else if( p->s>=-2        /* a */\n         && p->s<=2   /* b */\n  ){\n    x();\n  }else if( b )      /* c */\n  {\n    y();\n  }else      /* d */\n  {\n    z();\n  }\n}\n",
+        &[],
+        "static void f(D *p) {\n    if( !p->rawS ) {\n        p->rawS = 0;\n    } else if( p->s>=-2        /* a */\n               && p->s<=2   /* b */\n             ) {\n        x();\n    } else if( b )      /* c */\n    {\n        y();\n    } else      /* d */\n    {\n        z();\n    }\n}\n",
+    );
+    check(
+        "static void f(D *p){\n  if( !p->rawS ){\n    p->rawS = 0;\n  }else if( p->s>=-2        // a\n         && p->s<=2   // b\n  ){\n    x();\n  }else if( b )      // c\n  {\n    y();\n  }else      // d\n  {\n    z();\n  }\n}\n",
+        &["--style=allman"],
+        "static void f(D *p)\n{\n    if( !p->rawS )\n    {\n        p->rawS = 0;\n    }\n    else if( p->s>=-2         // a\n             && p->s<=2   // b\n           )\n    {\n        x();\n    }\n    else if( b )       // c\n    {\n        y();\n    }\n    else       // d\n    {\n        z();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn continued_lines_of_comment_like_directives_start_at_column_one() {
+    check(
+        "#if A\n# error \"Must not \\\n         and SQL\"\n#endif\n#error plain \\\n   more \\\n     words\nvoid f(void)\n{\n#warning \"in \\\n    func\"\n    x();\n}\n",
+        &[],
+        "#if A\n# error \"Must not \\\nand SQL\"\n#endif\n#error plain \\\nmore \\\nwords\nvoid f(void)\n{\n#warning \"in \\\nfunc\"\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn rows_after_a_string_continued_over_lines_align_to_its_paren() {
+    check(
+        "void f(void){\n      __asm__ __volatile__ (\"x\\n\\\n  y\"\n          : \"=r\" (r));\n      h (\"a\\\n  b\", x,\n  y);\n}\n",
+        &[],
+        "void f(void) {\n    __asm__ __volatile__ (\"x\\n\\\n  y\"\n                          : \"=r\" (r));\n    h (\"a\\\n  b\", x,\n       y);\n}\n",
+    );
+}

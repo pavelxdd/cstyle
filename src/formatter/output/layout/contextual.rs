@@ -1255,13 +1255,23 @@ impl FormatEngine<'_> {
                 }
             } else if let Some(directive) = preprocessor_directive(previous_trimmed)
                 && (directive == "else" || directive == "endif" || directive.starts_with("elif"))
-                && let Some(sibling) = self.output.scoped().iter().rev().skip(1).find(|line| {
-                    let trimmed = line.trimmed_start();
-                    !trimmed.is_empty() && !trimmed.starts_with('#')
-                })
+                && let Some(sibling_index) =
+                    self.output.scoped_range().rev().skip(1).find(|&index| {
+                        let trimmed = self.output[index].trimmed_start();
+                        !trimmed.is_empty() && !trimmed.starts_with('#')
+                    })
             {
+                let sibling = &self.output[sibling_index];
                 let sibling_code = self.output.code_trimmed_of(sibling);
-                if sibling_code.ends_with(';') && !is_comment_line(sibling.trimmed_start()) {
+                // The body of a braceless header stands past the statements
+                // of its block.
+                let braceless_body = self.output.line_tokens(sibling_index).is_some_and(|span| {
+                    self.tree.statements.braceless_header(span.first).is_some()
+                });
+                if sibling_code.ends_with(';')
+                    && !braceless_body
+                    && !is_comment_line(sibling.trimmed_start())
+                {
                     let sibling_spaces = leading_visual_width(sibling, self.options.tab_width);
                     let spaces = (directive != "endif")
                         .then(|| {

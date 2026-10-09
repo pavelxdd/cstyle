@@ -531,9 +531,12 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| self.output.len().checked_sub(1));
             // astyle puts the brace's indent less one after the space
-            // before the brace.
+            // that follows the block's first statement, a space at least
+            // where another statement follows.
             let gap = format!(
-                "{whitespace_before_brace}{}",
+                "{}{}",
+                self.first_block_statement_gap()
+                    .unwrap_or_else(|| whitespace_before_brace.to_string()),
                 " ".repeat(self.options.indent_width.saturating_sub(1))
             );
             if let Some(line) = target_index.and_then(|index| self.output.get_mut(index)) {
@@ -552,6 +555,32 @@ impl FormatEngine<'_> {
         if let Some(tail) = moved_comment_tail {
             self.output.push(tail);
         }
+    }
+
+    /// The source whitespace after the first statement of the block the
+    /// closing brace being pushed ends.
+    fn first_block_statement_gap(&self) -> Option<String> {
+        let tokens = &self.tree.tokens;
+        let close = self
+            .current
+            .active_token()
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))?;
+        let group = self.tree.groups.closed_at(close)?;
+        let open = self.tree.groups.get(group).open;
+        let semicolon = (open + 1..close).find(|&index| {
+            matches!(tokens[index], Token::Symbol(';'))
+                && self.tree.groups.enclosing(index) == Some(group)
+        })?;
+        let gap = match &tokens[semicolon + 1] {
+            Token::Whitespace(whitespace) => whitespace.to_string(),
+            _ => String::new(),
+        };
+        let next = next_code_token(tokens, semicolon + 1)?;
+        Some(if gap.is_empty() && next != close {
+            " ".to_string()
+        } else {
+            gap
+        })
     }
 
     fn finish_line_after_closing_brace(

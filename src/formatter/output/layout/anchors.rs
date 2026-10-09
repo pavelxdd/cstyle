@@ -2382,6 +2382,16 @@ impl FormatEngine<'_> {
     pub(super) fn token_column(&self, token: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let line = self.output.line_with_token(token)?;
+        // A string continued over lines maps to the line it ends on and
+        // starts at the end of the line its first row ends.
+        if let Token::StringLiteral(literal) = &tokens[token]
+            && let Some((first_row, _)) = literal.split_once('\n')
+        {
+            let start_line = line.checked_sub(literal.matches('\n').count())?;
+            let text = &self.output.as_slice()[start_line];
+            let before = text.strip_suffix(first_row)?;
+            return Some(visual_width_from(before, 0, self.options.tab_width));
+        }
         let span = self.output.line_tokens(line)?;
         let text = &self.output.as_slice()[line];
         let key = TokenColumnKey {

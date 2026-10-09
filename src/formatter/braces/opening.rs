@@ -86,10 +86,7 @@ fn attach_case_label_brace_to_line(line: &str, access_labels: &[String]) -> Opti
     {
         return None;
     }
-    Some(attach_brace_to_code_and_comment(
-        code,
-        &line[comment_start..],
-    ))
+    Some(attach_brace_in_comment_gap(code, &line[code.len()..]))
 }
 
 fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
@@ -106,25 +103,34 @@ fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
     if code.is_empty() {
         return None;
     }
-    let rest = &line[comment_start..];
+    Some(attach_brace_in_comment_gap(code, &line[comment_start..]))
+}
+
+fn attach_brace_in_comment_gap(code: &str, rest: &str) -> String {
     let comment = rest.trimmed_start();
     let gap = rest.len() - comment.len();
-    if rest[..gap].contains('\t') {
-        let mut gap_text = rest[..gap].to_string();
-        if gap_text.chars().count() > 1 {
-            gap_text.pop();
-        }
-        return Some(format!("{code} {{{gap_text}{}", comment.trimmed_end()));
-    }
     if gap == 0 {
-        return Some(attach_brace_to_code_and_comment(code, rest));
+        return attach_brace_to_code_and_comment(code, rest);
     }
-    let new_gap = gap.saturating_sub(" {".len()).max(1);
-    Some(format!(
-        "{code} {{{}{}",
-        " ".repeat(new_gap),
+    format!(
+        "{code}{}{}",
+        brace_in_comment_gap(&rest[..gap]),
         comment.trimmed_end()
-    ))
+    )
+}
+
+/// The gap before a trailing comment with a brace attached into it: astyle
+/// pads the gap to three columns, never starts it with a tab, and puts the
+/// brace in its second column.
+fn brace_in_comment_gap(gap: &str) -> String {
+    let mut columns: Vec<char> = gap.chars().collect();
+    let padding = 3usize.saturating_sub(columns.len());
+    columns.splice(0..0, std::iter::repeat_n(' ', padding));
+    if columns[0] == '\t' {
+        columns.insert(0, ' ');
+    }
+    columns[1] = '{';
+    columns.into_iter().collect()
 }
 
 fn is_single_trailing_block_comment(comment: &str) -> bool {
@@ -1400,7 +1406,17 @@ impl FormatEngine<'_> {
                 self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal),
             );
             if delta > 0 {
+                let base = self.layout.indentation.indent();
                 self.layout.indentation.enter_braceless_block(delta);
+                // The bias of a braceless chain in an `else` body split off
+                // by a directive counts the levels the split kept apart.
+                let split_else = &mut self.preprocessor.split_else;
+                if split_else.extra_indent
+                    && base <= split_else.brace_indent
+                    && level >= split_else.brace_indent + split_else.extra_levels
+                {
+                    split_else.reset();
+                }
             }
         }
     }
@@ -1944,7 +1960,19 @@ impl FormatEngine<'_> {
     ) -> bool {
         let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
         self.republish_tokens(tokens);
-        let case_label_line = attach_case_label_brace_to_line(&line, &self.options.access_labels);
+        // Unstyled, a brace on its label's source line keeps the gap before it.
+        let source_gap = (self.options.brace_style == BraceStyle::None
+            && !self.token_input.token_begins_source_line)
+            .then(|| self.token_input.previous_input_whitespace.clone())
+            .flatten()
+            .filter(|gap| !gap.is_empty() && !gap.contains('\n'));
+        let case_label_line = attach_case_label_brace_to_line(&line, &self.options.access_labels)
+            .map(|attached| match &source_gap {
+                Some(gap) if trailing_comment_split_limit(&line) == line.len() => {
+                    format!("{}{gap}{{", line.trimmed_end())
+                }
+                _ => attached,
+            });
         let attached_case_label_output_brace = case_label_line.is_some();
         let line_with_brace_before_comment = case_label_line
             .is_none()

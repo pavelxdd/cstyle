@@ -2906,6 +2906,41 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// The space astyle puts between a `}` and the closing header set
+    /// against it in the source, which moves no comment after them.
+    pub(crate) fn joined_closing_header_space(&self) -> usize {
+        let tokens = &self.tree.tokens;
+        self.current
+            .tokens()
+            .map(|span| span.first)
+            .filter(|&first| {
+                matches!(tokens[first], Token::Symbol('}'))
+                    && matches!(tokens.get(first + 1), Some(Token::Word(word)) if is_break_blocks_closing_header(word))
+                    && self.current.trimmed_start().starts_with("} ")
+            })
+            .map_or(0, |_| 1)
+    }
+
+    /// The source width from a `}` to the `while` that starts the current
+    /// line after it on its source line.
+    fn do_while_closer_width(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let first = self.current.tokens()?.first;
+        if !matches!(&tokens[first], Token::Word(word) if word == "while") {
+            return None;
+        }
+        let close = self.tree.previous_code_token(first)?;
+        if !matches!(tokens[close], Token::Symbol('}')) {
+            return None;
+        }
+        tokens[close..first]
+            .iter()
+            .try_fold(0, |width, token| match token {
+                Token::Newline => None,
+                token => Some(width + token_char_len(token)),
+            })
+    }
+
     fn attach_source_space_after_block_comment(&mut self) {
         if !self.current_is_preindented {
             return;
@@ -3032,16 +3067,25 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |index| index + 1);
-        // Only the brace closing a `do` body counts.
+        // Only the brace closing a `do` body or one before a closing header
+        // counts.
         (line_start..first)
             .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
             .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
-            .and_then(|brace| self.tree.groups.closed_at(brace))
-            .and_then(|group| {
-                self.tree
-                    .previous_code_token(self.tree.groups.get(group).open)
+            .is_some_and(|brace| {
+                matches!(&tokens[first], Token::Word(word) if is_break_blocks_closing_header(word))
+                    || self
+                        .tree
+                        .groups
+                        .closed_at(brace)
+                        .and_then(|group| {
+                            self.tree
+                                .previous_code_token(self.tree.groups.get(group).open)
+                        })
+                        .is_some_and(
+                            |before| matches!(&tokens[before], Token::Word(word) if word == "do"),
+                        )
             })
-            .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
     }
 
     fn current_line_broke_off_header(&self) -> bool {
@@ -3150,6 +3194,11 @@ impl FormatEngine<'_> {
                 self.current.push_str(&" ".repeat(width));
             } else {
                 self.current.push_str(&gap);
+                // A `while` broken off the `}` of its `do` body leaves the
+                // comment where the joined line had it.
+                if let Some(width) = self.do_while_closer_width() {
+                    self.current.push_str(&" ".repeat(width));
+                }
             }
             return;
         }
@@ -3352,6 +3401,7 @@ impl FormatEngine<'_> {
             }
             return;
         }
+        let target_column = target_column + self.joined_closing_header_space();
         let space_pad = (code_len + gap_chars) as isize - target_column as isize;
         // A wide gap before a line comment only shrinks, unless the brace
         // that led the line left it.
