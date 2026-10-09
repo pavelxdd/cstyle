@@ -6,10 +6,10 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
     const ONES: u64 = u64::from_le_bytes([0x01; 8]);
     const HIGHS: u64 = u64::from_le_bytes([0x80; 8]);
     let pattern = ONES * u64::from(byte);
-    let mut chunks = bytes.chunks_exact(8);
+    let (chunks, remainder) = bytes.as_chunks::<8>();
     let mut index = 0;
-    for chunk in &mut chunks {
-        let word = u64::from_le_bytes(chunk.try_into().expect("eight bytes")) ^ pattern;
+    for chunk in chunks {
+        let word = u64::from_le_bytes(*chunk) ^ pattern;
         // The lowest high bit set marks the first zero byte: a borrow only
         // runs past a zero.
         let zeros = word.wrapping_sub(ONES) & !word & HIGHS;
@@ -18,8 +18,7 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
         }
         index += 8;
     }
-    chunks
-        .remainder()
+    remainder
         .iter()
         .position(|&found| found == byte)
         .map(|offset| index + offset)
@@ -85,13 +84,13 @@ impl ContainsAnyByte for str {
             let mut wanted = [first; 4];
             wanted[..set.len()].copy_from_slice(set);
             let hit = |byte: u8| wanted.iter().fold(false, |hit, &want| hit | (byte == want));
-            let mut chunks = bytes.chunks_exact(32);
-            for chunk in &mut chunks {
+            let (chunks, remainder) = bytes.as_chunks::<32>();
+            for chunk in chunks {
                 if chunk.iter().fold(false, |found, &byte| found | hit(byte)) {
                     return true;
                 }
             }
-            return chunks.remainder().iter().any(|&byte| hit(byte));
+            return remainder.iter().any(|&byte| hit(byte));
         }
         let mask = set.iter().fold(0u128, |mask, &byte| mask | 1 << byte);
         bytes
@@ -856,7 +855,7 @@ mod tests {
             "\x01\u{80}\u{81}\x7f\x2e\x2f\x30",
         ];
         for text in texts {
-            for byte in [b'/', b'x', b'\x80', b'\x01', b'0', b'\xc3'] {
+            for byte in *b"/x\x80\x010\xc3" {
                 assert_eq!(
                     super::find_byte(text.as_bytes(), byte),
                     text.bytes().position(|found| found == byte),
@@ -874,6 +873,46 @@ mod tests {
                     text.find(needle),
                     "{text:?} {needle:?}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn find_byte_matches_a_scan_at_every_length() {
+        for len in 0..=40 {
+            for at in 0..=len {
+                let mut text = "a".repeat(len).into_bytes();
+                if let Some(byte) = text.get_mut(at) {
+                    *byte = b'/';
+                }
+                assert_eq!(
+                    super::find_byte(&text, b'/'),
+                    text.iter().position(|&found| found == b'/'),
+                    "{len} {at}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn contains_any_byte_matches_a_scan_at_every_length() {
+        let sets: [&[u8]; 4] = [b"", b"/", b"x/*\n", b"x/*\n\t"];
+        for len in 0..=40 {
+            for at in 0..=len {
+                for hit in *b"/x\n\tz" {
+                    let mut text = "a".repeat(len).into_bytes();
+                    if let Some(byte) = text.get_mut(at) {
+                        *byte = hit;
+                    }
+                    let text = String::from_utf8(text).expect("ASCII text");
+                    for set in sets {
+                        assert_eq!(
+                            super::ContainsAnyByte::contains_any_byte(text.as_str(), set),
+                            text.bytes().any(|byte| set.contains(&byte)),
+                            "{text:?} {set:?}"
+                        );
+                    }
+                }
             }
         }
     }
@@ -1020,12 +1059,12 @@ struct LineHasher(u64);
 impl std::hash::Hasher for LineHasher {
     fn write(&mut self, bytes: &[u8]) {
         const SEED: u64 = 0x51_7c_c1_b7_27_22_0a_95;
-        let mut chunks = bytes.chunks_exact(8);
-        for chunk in &mut chunks {
-            let word = u64::from_le_bytes(chunk.try_into().expect("eight bytes"));
+        let (chunks, remainder) = bytes.as_chunks::<8>();
+        for chunk in chunks {
+            let word = u64::from_le_bytes(*chunk);
             self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(SEED);
         }
-        for &byte in chunks.remainder() {
+        for &byte in remainder {
             self.0 = (self.0.rotate_left(5) ^ u64::from(byte)).wrapping_mul(SEED);
         }
     }

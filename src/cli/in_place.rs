@@ -183,9 +183,12 @@ mod tests {
 
     fn decode_utf16be_with_bom(bytes: &[u8]) -> String {
         let body = bytes.strip_prefix(&[0xFE, 0xFF]).expect("UTF-16BE BOM");
+        assert!(body.len().is_multiple_of(2), "odd UTF-16BE output");
         let units = body
-            .chunks_exact(2)
-            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| u16::from_be_bytes(*chunk))
             .collect::<Vec<_>>();
         String::from_utf16(&units).expect("UTF-16BE output")
     }

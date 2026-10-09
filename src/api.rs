@@ -217,9 +217,12 @@ mod tests {
 
     fn decode_utf16le_with_bom(bytes: &[u8]) -> String {
         let body = bytes.strip_prefix(&[0xFF, 0xFE]).expect("UTF-16LE BOM");
+        assert!(body.len().is_multiple_of(2), "odd UTF-16LE output");
         let units = body
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| u16::from_le_bytes(*chunk))
             .collect::<Vec<_>>();
         String::from_utf16(&units).expect("UTF-16LE output")
     }
