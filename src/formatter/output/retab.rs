@@ -197,6 +197,18 @@ impl FormatEngine<'_> {
             return Some(self.tab_columns(opener, opener_width));
         }
         if text.starts_with("/*") || text.starts_with("//") {
+            // A comment opening a block's body stands at its level.
+            let opens_block = (0..index)
+                .rev()
+                .find(|&previous| self.output.line_tokens(previous).is_some())
+                .is_some_and(|previous| {
+                    self.output
+                        .code_trimmed_of(&self.output[previous])
+                        .ends_with('{')
+                });
+            if opens_block {
+                return None;
+            }
             // A comment inside a statement continues it.
             let next =
                 (index + 1..self.output.len()).find_map(|next| self.output.line_tokens(next))?;
@@ -430,9 +442,19 @@ impl FormatEngine<'_> {
         if self.follows_header_macro_call(first) {
             return None;
         }
-        let start = self.statement_start(first);
+        // A row a closing paren leads continues the statement its paren
+        // opened in.
+        let from = match self.tree.tokens[first] {
+            Token::Symbol(')' | ']') => groups
+                .closed_at(first)
+                .map_or(first, |group| groups.get(group).open),
+            _ => first,
+        };
+        let start = self.statement_start(from);
         let line = self.output.line_with_token(start)?;
-        if line >= index {
+        // A case label's rows take levels.
+        if line >= index || matches!(&self.tree.tokens[start], Token::Word(word) if word == "case")
+        {
             return None;
         }
         // An initializer list that opens with a nested brace, as

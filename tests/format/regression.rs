@@ -7119,3 +7119,12 @@ fn whitesmith_tabs_an_initializer_closer_aligned_past_code_as_continuation() {
         "void f(void)\n\t{\n\thooks_t hooks = {&a, &b,\n\t                 &c, (void *)123\n\t                };\n\t}\nstatic const char *const k[][2] = { { \"11\", \"one\" },\n\t\t{ \"22\", \"two\" }\n\t};\n",
     );
 }
+
+#[test]
+fn tabs_lead_block_comments_case_label_rows_and_close_paren_rows_as_astyle() {
+    check(
+        "void f(void)\n{\n\tP(h, {\n\t\t/* NOP */\n\t});\n\tTRY(L, &lj,\n\t    (*f)(L, ud);\n\t   );\n\tswitch (m) {\n\tcase A|\n\t\t\tB:\n\t\treturn 1;\n\t}\n}\n",
+        &["--style=kr", "--indent=tab"],
+        "void f(void)\n{\n\tP(h, {\n\t\t/* NOP */\n\t});\n\tTRY(L, &lj,\n\t    (*f)(L, ud);\n\t   );\n\tswitch (m) {\n\tcase A|\n\t\t\tB:\n\t\treturn 1;\n\t}\n}\n",
+    );
+}
