@@ -1,7 +1,7 @@
-use super::{
+use crate::config::{
     BackupSuffix, ConfigError, ConfigFileOptions, FormatOptions, IndentStyle, LineBetweenMembers,
-    LineEnding, MinConditionalIndent, Mode, ObjCColonPad, PointerAlign, ReferenceAlign,
-    StylePreset,
+    LineEnding, MinConditionalIndent, Mode, ObjCColonPad, OptionLocation, PointerAlign,
+    ReferenceAlign, StylePreset,
 };
 use crate::source::{lex, line_endings};
 use std::path::Path;
@@ -13,7 +13,15 @@ pub fn apply_command_line_args(
     let path = Path::new("<command-line>");
     let mut updated = options.clone();
     for arg in args {
-        apply_option_token(path, 1, arg, &mut updated, OptionSource::CommandLine)?;
+        apply_option_token(
+            OptionLocation {
+                path,
+                line_number: 1,
+            },
+            arg,
+            &mut updated,
+            OptionSource::CommandLine,
+        )?;
     }
     *options = updated;
     Ok(())
@@ -68,8 +76,10 @@ pub(super) fn apply_config_source(
             continue;
         }
         apply_option_token(
-            path,
-            token.line_number,
+            OptionLocation {
+                path,
+                line_number: token.line_number,
+            },
             &token.text,
             &mut options.format,
             OptionSource::Config,
@@ -124,7 +134,7 @@ fn import_option_tokens(source: &str) -> Vec<OptionToken> {
 }
 
 fn push_option_token(tokens: &mut Vec<OptionToken>, token: &mut String, line_number: usize) {
-    let text = token.trim();
+    let text = token.trim_ascii();
     if !text.is_empty() {
         tokens.push(OptionToken {
             text: text.to_string(),
@@ -135,43 +145,41 @@ fn push_option_token(tokens: &mut Vec<OptionToken>, token: &mut String, line_num
 }
 
 fn apply_option_token(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     token: &str,
     options: &mut FormatOptions,
     source: OptionSource,
 ) -> Result<(), ConfigError> {
-    let token = token.trim();
+    let token = token.trim_ascii();
     if token.is_empty() {
         return Ok(());
     }
 
     let mut updated = options.clone();
     if let Some(option) = token.strip_prefix("--") {
-        apply_single_option_with_style(path, line_number, option, &mut updated, source)?;
+        apply_single_option_with_style(at, option, &mut updated, source)?;
     } else if let Some(short_options) = token.strip_prefix('-') {
         if short_options.is_empty() {
-            return Err(unknown_option_error(path, line_number, token, source));
+            return Err(unknown_option_error(at, token, source));
         }
         for option in split_short_options(short_options) {
-            apply_single_option_with_style(path, line_number, &option, &mut updated, source)?;
+            apply_single_option_with_style(at, &option, &mut updated, source)?;
         }
     } else {
-        apply_single_option_with_style(path, line_number, token, &mut updated, source)?;
+        apply_single_option_with_style(at, token, &mut updated, source)?;
     }
     *options = updated;
     Ok(())
 }
 
 fn apply_single_option_with_style(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     option: &str,
     options: &mut FormatOptions,
     source: OptionSource,
 ) -> Result<(), ConfigError> {
     let previous_style = options.remove_active_style();
-    apply_single_option(path, line_number, option, options, source)?;
+    apply_single_option(at, option, options, source)?;
     if !options.has_active_style()
         && let Some(style) = previous_style
     {
@@ -199,73 +207,64 @@ pub(crate) fn split_short_options(options: &str) -> Vec<String> {
 }
 
 fn apply_single_option(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     option: &str,
     options: &mut FormatOptions,
     source: OptionSource,
 ) -> Result<(), ConfigError> {
-    if apply_short_alias(path, line_number, option, options)? {
+    if apply_short_alias(at, option, options)? {
         return Ok(());
     }
 
     let Some((key, value)) = option.split_once('=') else {
-        return apply_flag(path, line_number, option, options, source);
+        return apply_flag(at, option, options, source);
     };
 
-    match key.trim() {
-        "indent" => apply_indent(path, line_number, value.trim(), options),
-        "style" => apply_style(path, line_number, value.trim(), options),
+    match key.trim_ascii() {
+        "indent" => apply_indent(at, value.trim_ascii(), options),
+        "style" => apply_style(at, value.trim_ascii(), options),
         "indent-continuation" => apply_usize_range(
-            path,
-            line_number,
-            value.trim(),
+            at,
+            value.trim_ascii(),
             "continuation indent",
             0,
             4,
             |value| options.continuation_indent = value,
         ),
         "max-continuation-indent" | "max-instatement-indent" => apply_usize_range(
-            path,
-            line_number,
-            value.trim(),
+            at,
+            value.trim_ascii(),
             "max continuation indent",
             40,
             120,
             |value| options.max_continuation_indent = value,
         ),
-        "min-conditional-indent" => {
-            apply_min_conditional_indent(path, line_number, value.trim(), options)
-        }
-        "align-pointer" => apply_pointer_align(path, line_number, value.trim(), options),
-        "align-reference" => apply_reference_align(path, line_number, value.trim(), options),
+        "min-conditional-indent" => apply_min_conditional_indent(at, value.trim_ascii(), options),
+        "align-pointer" => apply_pointer_align(at, value.trim_ascii(), options),
+        "align-reference" => apply_reference_align(at, value.trim_ascii(), options),
         "max-code-length" => apply_usize_range(
-            path,
-            line_number,
-            value.trim(),
+            at,
+            value.trim_ascii(),
             "max code length",
             50,
             200,
             |value| options.max_code_length = Some(value),
         ),
-        "break-blocks" => apply_break_blocks_value(path, line_number, value.trim(), options),
-        "pad-method-colon" => apply_method_colon_pad(path, line_number, value.trim(), options),
-        "line-between-members" => {
-            apply_line_between_members(path, line_number, value.trim(), options)
-        }
-        "lineend" => apply_line_end(path, line_number, value.trim(), options),
-        "mode" => apply_mode(path, line_number, value.trim(), options),
-        "access-label" => apply_access_label(path, line_number, value.trim(), options),
-        "macro-block" => apply_macro_block(path, line_number, value.trim(), options),
-        "control-header" => apply_control_header(path, line_number, value.trim(), options),
-        "non-paren-header" => apply_non_paren_header(path, line_number, value.trim(), options),
-        key => Err(unknown_option_error(path, line_number, key, source)),
+        "break-blocks" => apply_break_blocks_value(at, value.trim_ascii(), options),
+        "pad-method-colon" => apply_method_colon_pad(at, value.trim_ascii(), options),
+        "line-between-members" => apply_line_between_members(at, value.trim_ascii(), options),
+        "lineend" => apply_line_end(at, value.trim_ascii(), options),
+        "mode" => apply_mode(at, value.trim_ascii(), options),
+        "access-label" => apply_access_label(at, value.trim_ascii(), options),
+        "macro-block" => apply_macro_block(at, value.trim_ascii(), options),
+        "control-header" => apply_control_header(at, value.trim_ascii(), options),
+        "non-paren-header" => apply_non_paren_header(at, value.trim_ascii(), options),
+        key => Err(unknown_option_error(at, key, source)),
     }
 }
 
 fn apply_flag(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     flag: &str,
     options: &mut FormatOptions,
     source: OptionSource,
@@ -299,11 +298,9 @@ fn apply_flag(
         "break-one-line-headers" => options.break_one_line_headers = true,
         "keep-one-line-blocks" => apply_keep_one_line_blocks(options),
         "keep-one-line-statements" => apply_keep_one_line_statements(options),
-        "add-braces" | "add-brackets" => apply_add_braces(path, line_number, options)?,
-        "add-one-line-braces" | "add-one-line-brackets" => {
-            apply_add_one_line_braces(path, line_number, options)?
-        }
-        "remove-braces" | "remove-brackets" => apply_remove_braces(path, line_number, options)?,
+        "add-braces" | "add-brackets" => apply_add_braces(options),
+        "add-one-line-braces" | "add-one-line-brackets" => apply_add_one_line_braces(options),
+        "remove-braces" | "remove-brackets" => apply_remove_braces(options),
         "pad-oper" => options.pad_operators = true,
         "pad-comma" => options.pad_commas = true,
         "pad-paren" => {
@@ -326,53 +323,47 @@ fn apply_flag(
         "break-elseifs" => options.break_else_ifs = true,
         "no-indent-if-after-else" => options.no_indent_if_after_else = true,
         "line-between-members" => options.line_between_members = LineBetweenMembers::Members,
-        "break-return-type" => apply_break_return_type(path, line_number, options)?,
-        "break-return-type-decl" => apply_break_return_type_decl(path, line_number, options)?,
-        "attach-return-type" => apply_attach_return_type(path, line_number, options)?,
-        "attach-return-type-decl" => apply_attach_return_type_decl(path, line_number, options)?,
+        "break-return-type" => apply_break_return_type(options),
+        "break-return-type-decl" => apply_break_return_type_decl(options),
+        "attach-return-type" => apply_attach_return_type(options),
+        "attach-return-type-decl" => apply_attach_return_type_decl(options),
         _ => {
-            return Err(unknown_option_error(path, line_number, flag, source));
+            return Err(unknown_option_error(at, flag, source));
         }
     }
     Ok(())
 }
 
-fn unknown_option_error(
-    path: &Path,
-    line_number: usize,
-    option: &str,
-    source: OptionSource,
-) -> ConfigError {
+fn unknown_option_error(at: OptionLocation<'_>, option: &str, source: OptionSource) -> ConfigError {
     let label = match source {
         OptionSource::Config => "unknown config key",
         OptionSource::CommandLine => "unknown option",
     };
-    ConfigError::line(path, line_number, format!("{label} '{option}'"))
+    ConfigError::at(at, format!("{label} '{option}'"))
 }
 
 fn apply_short_alias(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     option: &str,
     options: &mut FormatOptions,
 ) -> Result<bool, ConfigError> {
     match option {
-        "A1" => apply_style(path, line_number, "allman", options)?,
-        "A2" => apply_style(path, line_number, "java", options)?,
-        "A3" => apply_style(path, line_number, "kr", options)?,
-        "A4" => apply_style(path, line_number, "stroustrup", options)?,
-        "A5" => apply_style(path, line_number, "whitesmith", options)?,
-        "A6" => apply_style(path, line_number, "ratliff", options)?,
-        "A7" => apply_style(path, line_number, "gnu", options)?,
-        "A8" => apply_style(path, line_number, "linux", options)?,
-        "A9" => apply_style(path, line_number, "horstmann", options)?,
-        "A10" => apply_style(path, line_number, "1tbs", options)?,
-        "A11" => apply_style(path, line_number, "pico", options)?,
-        "A12" => apply_style(path, line_number, "lisp", options)?,
-        "A14" => apply_style(path, line_number, "google", options)?,
-        "A15" => apply_style(path, line_number, "vtk", options)?,
-        "A16" => apply_style(path, line_number, "mozilla", options)?,
-        "A17" => apply_style(path, line_number, "webkit", options)?,
+        "A1" => apply_style(at, "allman", options)?,
+        "A2" => apply_style(at, "java", options)?,
+        "A3" => apply_style(at, "kr", options)?,
+        "A4" => apply_style(at, "stroustrup", options)?,
+        "A5" => apply_style(at, "whitesmith", options)?,
+        "A6" => apply_style(at, "ratliff", options)?,
+        "A7" => apply_style(at, "gnu", options)?,
+        "A8" => apply_style(at, "linux", options)?,
+        "A9" => apply_style(at, "horstmann", options)?,
+        "A10" => apply_style(at, "1tbs", options)?,
+        "A11" => apply_style(at, "pico", options)?,
+        "A12" => apply_style(at, "lisp", options)?,
+        "A14" => apply_style(at, "google", options)?,
+        "A15" => apply_style(at, "vtk", options)?,
+        "A16" => apply_style(at, "mozilla", options)?,
+        "A17" => apply_style(at, "webkit", options)?,
         "S" => options.indent_switches = true,
         "K" => options.indent_cases = true,
         "xU" => options.indent_after_parens = true,
@@ -399,9 +390,9 @@ fn apply_short_alias(
         "xb" => options.break_one_line_headers = true,
         "O" => apply_keep_one_line_blocks(options),
         "o" => apply_keep_one_line_statements(options),
-        "j" => apply_add_braces(path, line_number, options)?,
-        "J" => apply_add_one_line_braces(path, line_number, options)?,
-        "xj" => apply_remove_braces(path, line_number, options)?,
+        "j" => apply_add_braces(options),
+        "J" => apply_add_one_line_braces(options),
+        "xj" => apply_remove_braces(options),
         "p" => options.pad_operators = true,
         "xg" => options.pad_commas = true,
         "P" => {
@@ -426,12 +417,12 @@ fn apply_short_alias(
         "xk" => options.attach_extern_c = true,
         "xV" => options.attach_closing_while = true,
         "e" => options.break_else_ifs = true,
-        "xB" => apply_break_return_type(path, line_number, options)?,
-        "xD" => apply_break_return_type_decl(path, line_number, options)?,
-        "xf" => apply_attach_return_type(path, line_number, options)?,
-        "xh" => apply_attach_return_type_decl(path, line_number, options)?,
+        "xB" => apply_break_return_type(options),
+        "xD" => apply_break_return_type_decl(options),
+        "xf" => apply_attach_return_type(options),
+        "xh" => apply_attach_return_type_decl(options),
         _ => {
-            if apply_short_param_alias(path, line_number, option, options)? {
+            if apply_short_param_alias(at, option, options)? {
                 return Ok(true);
             }
             return Ok(false);
@@ -441,63 +432,47 @@ fn apply_short_alias(
 }
 
 fn apply_short_param_alias(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     option: &str,
     options: &mut FormatOptions,
 ) -> Result<bool, ConfigError> {
     if let Some(value) = short_param(option, "s") {
         let value = default_param(value, "4");
-        return apply_indent_width(path, line_number, value, IndentStyle::Spaces, options)
-            .map(|()| true);
+        return apply_indent_width(at, value, IndentStyle::Spaces, options).map(|()| true);
     }
     if let Some(value) = short_param(option, "t") {
         let value = default_param(value, "4");
-        return apply_indent_width(path, line_number, value, IndentStyle::Tabs, options)
-            .map(|()| true);
+        return apply_indent_width(at, value, IndentStyle::Tabs, options).map(|()| true);
     }
     if let Some(value) = short_param(option, "T") {
         let value = default_param(value, "4");
-        return apply_indent_width(path, line_number, value, IndentStyle::ForceTabs, options)
-            .map(|()| true);
+        return apply_indent_width(at, value, IndentStyle::ForceTabs, options).map(|()| true);
     }
     if let Some(value) = short_param(option, "xT") {
         let value = default_param(value, "8");
-        let tab_width = parse_usize(path, line_number, value, "tab width")?;
-        validate_range(path, line_number, tab_width, "tab width", 2, 20)?;
+        let tab_width = parse_usize(at, value, "tab width")?;
+        validate_range(at, tab_width, "tab width", 2, 20)?;
         options.indent_style = IndentStyle::ForceTabs;
         options.set_force_tab_width(tab_width);
         return Ok(true);
     }
     if let Some(value) = short_param(option, "xt") {
         let value = default_param(value, "1");
-        return apply_usize_range(
-            path,
-            line_number,
-            value,
-            "continuation indent",
-            0,
-            4,
-            |value| options.continuation_indent = value,
-        )
+        return apply_usize_range(at, value, "continuation indent", 0, 4, |value| {
+            options.continuation_indent = value
+        })
         .map(|()| true);
     }
     if let Some(value) = short_param(option, "M") {
         let value = default_param(value, "40");
-        return apply_usize_range(
-            path,
-            line_number,
-            value,
-            "max continuation indent",
-            40,
-            120,
-            |value| options.max_continuation_indent = value,
-        )
+        return apply_usize_range(at, value, "max continuation indent", 40, 120, |value| {
+            options.max_continuation_indent = value
+        })
         .map(|()| true);
     }
     if let Some(value) = short_param(option, "m") {
         let value = default_param(value, "2");
-        return apply_min_conditional_indent(path, line_number, value, options).map(|()| true);
+        return apply_min_conditional_indent(at, value, options).map(|()| true);
     }
     if let Some(value) = short_param(option, "k") {
         match value {
@@ -505,11 +480,7 @@ fn apply_short_param_alias(
             "2" => options.pointer_align = PointerAlign::Middle,
             "3" => options.pointer_align = PointerAlign::Name,
             _ => {
-                return Err(ConfigError::line(
-                    path,
-                    line_number,
-                    "align-pointer must be 1, 2, or 3",
-                ));
+                return Err(ConfigError::at(at, "align-pointer must be 1, 2, or 3"));
             }
         }
         return Ok(true);
@@ -521,26 +492,16 @@ fn apply_short_param_alias(
             "2" => options.reference_align = ReferenceAlign::Middle,
             "3" => options.reference_align = ReferenceAlign::Name,
             _ => {
-                return Err(ConfigError::line(
-                    path,
-                    line_number,
-                    "align-reference must be 0, 1, 2, or 3",
-                ));
+                return Err(ConfigError::at(at, "align-reference must be 0, 1, 2, or 3"));
             }
         }
         return Ok(true);
     }
     if let Some(value) = short_param(option, "xC") {
         let value = default_param(value, "50");
-        return apply_usize_range(
-            path,
-            line_number,
-            value,
-            "max code length",
-            50,
-            200,
-            |value| options.max_code_length = Some(value),
-        )
+        return apply_usize_range(at, value, "max code length", 50, 200, |value| {
+            options.max_code_length = Some(value)
+        })
         .map(|()| true);
     }
     if let Some(value) = short_param(option, "z") {
@@ -549,11 +510,7 @@ fn apply_short_param_alias(
             "2" => options.line_ending = LineEnding::Lf,
             "3" => options.line_ending = LineEnding::Cr,
             _ => {
-                return Err(ConfigError::line(
-                    path,
-                    line_number,
-                    "lineend must be 1, 2, or 3",
-                ));
+                return Err(ConfigError::at(at, "lineend must be 1, 2, or 3"));
             }
         }
         return Ok(true);
@@ -565,9 +522,8 @@ fn apply_short_param_alias(
             "2" => ObjCColonPad::After,
             "3" => ObjCColonPad::Before,
             _ => {
-                return Err(ConfigError::line(
-                    path,
-                    line_number,
+                return Err(ConfigError::at(
+                    at,
                     "pad-method-colon must be 0, 1, 2, or 3",
                 ));
             }
@@ -591,8 +547,7 @@ fn default_param<'a>(value: &'a str, default: &'a str) -> &'a str {
 }
 
 fn apply_style(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -614,18 +569,14 @@ fn apply_style(
         "google" => StylePreset::Google,
         "pico" => StylePreset::Pico,
         "lisp" | "python" => StylePreset::Lisp,
-        _ => return Err(unsupported_style_error(path, line_number, value)),
+        _ => return Err(unsupported_style_error(at, value)),
     };
     options.set_style(style);
     Ok(())
 }
 
-fn unsupported_style_error(path: &Path, line_number: usize, value: &str) -> ConfigError {
-    ConfigError::line(
-        path,
-        line_number,
-        format!("unsupported style value '{value}'"),
-    )
+fn unsupported_style_error(at: OptionLocation<'_>, value: &str) -> ConfigError {
+    ConfigError::at(at, format!("unsupported style value '{value}'"))
 }
 
 fn apply_keep_one_line_blocks(options: &mut FormatOptions) {
@@ -636,83 +587,47 @@ fn apply_keep_one_line_statements(options: &mut FormatOptions) {
     options.break_one_line_statements = false;
 }
 
-fn apply_add_braces(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_add_braces(options: &mut FormatOptions) {
     options.add_braces = true;
     options.remove_braces = false;
-    Ok(())
 }
 
-fn apply_add_one_line_braces(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_add_one_line_braces(options: &mut FormatOptions) {
     options.add_one_line_braces = true;
     options.remove_braces = false;
     options.break_one_line_blocks = false;
-    Ok(())
 }
 
-fn apply_remove_braces(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_remove_braces(options: &mut FormatOptions) {
     if !options.add_braces && !options.add_one_line_braces {
         options.remove_braces = true;
     }
-    Ok(())
 }
 
-fn apply_break_return_type(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_break_return_type(options: &mut FormatOptions) {
     options.break_return_type = true;
     options.attach_return_type = false;
-    Ok(())
 }
 
-fn apply_break_return_type_decl(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_break_return_type_decl(options: &mut FormatOptions) {
     options.break_return_type_decl = true;
     options.attach_return_type_decl = false;
-    Ok(())
 }
 
-fn apply_attach_return_type(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_attach_return_type(options: &mut FormatOptions) {
     if !options.break_return_type {
         options.attach_return_type = true;
     }
-    Ok(())
 }
 
-fn apply_attach_return_type_decl(
-    _path: &Path,
-    _line_number: usize,
-    options: &mut FormatOptions,
-) -> Result<(), ConfigError> {
+fn apply_attach_return_type_decl(options: &mut FormatOptions) {
     if !options.break_return_type_decl {
         options.attach_return_type_decl = true;
     }
-    Ok(())
 }
 
 fn apply_break_blocks_value(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -722,17 +637,12 @@ fn apply_break_blocks_value(
             options.break_closing_header_blocks = true;
             Ok(())
         }
-        _ => Err(ConfigError::line(
-            path,
-            line_number,
-            "break-blocks value must be all",
-        )),
+        _ => Err(ConfigError::at(at, "break-blocks value must be all")),
     }
 }
 
 fn apply_method_colon_pad(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -742,9 +652,8 @@ fn apply_method_colon_pad(
         "after" => ObjCColonPad::After,
         "before" => ObjCColonPad::Before,
         _ => {
-            return Err(ConfigError::line(
-                path,
-                line_number,
+            return Err(ConfigError::at(
+                at,
                 "pad-method-colon must be none, all, after, or before",
             ));
         }
@@ -753,17 +662,15 @@ fn apply_method_colon_pad(
 }
 
 fn apply_line_between_members(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
     options.line_between_members = match value {
         "all" => LineBetweenMembers::All,
         _ => {
-            return Err(ConfigError::line(
-                path,
-                line_number,
+            return Err(ConfigError::at(
+                at,
                 "line-between-members value must be all",
             ));
         }
@@ -772,8 +679,7 @@ fn apply_line_between_members(
 }
 
 fn apply_indent(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -796,70 +702,61 @@ fn apply_indent(
     }
 
     if let Some(width) = value.strip_prefix("spaces=") {
-        return apply_indent_width(path, line_number, width, IndentStyle::Spaces, options);
+        return apply_indent_width(at, width, IndentStyle::Spaces, options);
     }
     if let Some(width) = value.strip_prefix("tab=") {
-        return apply_indent_width(path, line_number, width, IndentStyle::Tabs, options);
+        return apply_indent_width(at, width, IndentStyle::Tabs, options);
     }
     if let Some(width) = value.strip_prefix("force-tab=") {
-        return apply_indent_width(path, line_number, width, IndentStyle::ForceTabs, options);
+        return apply_indent_width(at, width, IndentStyle::ForceTabs, options);
     }
     if let Some(width) = value.strip_prefix("force-tab-x=") {
-        let width = parse_usize(path, line_number, width, "tab width")?;
-        validate_range(path, line_number, width, "tab width", 2, 20)?;
+        let width = parse_usize(at, width, "tab width")?;
+        validate_range(at, width, "tab width", 2, 20)?;
         options.indent_style = IndentStyle::ForceTabs;
         options.set_force_tab_width(width);
         return Ok(());
     }
 
-    Err(ConfigError::line(
-        path,
-        line_number,
+    Err(ConfigError::at(
+        at,
         "expected indent=spaces=N, indent=tab=N, indent=force-tab=N, or indent=force-tab-x=N",
     ))
 }
 
 fn apply_indent_width(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     raw: &str,
     style: IndentStyle,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let width = parse_usize(path, line_number, raw, "indent width")?;
-    validate_range(path, line_number, width, "indent width", 2, 20)?;
+    let width = parse_usize(at, raw, "indent width")?;
+    validate_range(at, width, "indent width", 2, 20)?;
     options.set_indent_style_width(style, width);
     Ok(())
 }
 
 fn apply_usize_range(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     raw: &str,
     label: &str,
     min: usize,
     max: usize,
     apply: impl FnOnce(usize),
 ) -> Result<(), ConfigError> {
-    let value = parse_usize(path, line_number, raw, label)?;
-    validate_range(path, line_number, value, label, min, max)?;
+    let value = parse_usize(at, raw, label)?;
+    validate_range(at, value, label, min, max)?;
     apply(value);
     Ok(())
 }
 
-fn parse_usize(
-    path: &Path,
-    line_number: usize,
-    raw: &str,
-    label: &str,
-) -> Result<usize, ConfigError> {
+fn parse_usize(at: OptionLocation<'_>, raw: &str, label: &str) -> Result<usize, ConfigError> {
     raw.parse::<usize>()
-        .map_err(|_| ConfigError::line(path, line_number, format!("invalid {label} '{raw}'")))
+        .map_err(|_| ConfigError::at(at, format!("invalid {label} '{raw}'")))
 }
 
 fn validate_range(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: usize,
     label: &str,
     min: usize,
@@ -868,17 +765,15 @@ fn validate_range(
     if (min..=max).contains(&value) {
         Ok(())
     } else {
-        Err(ConfigError::line(
-            path,
-            line_number,
+        Err(ConfigError::at(
+            at,
             format!("{label} must be between {min} and {max}"),
         ))
     }
 }
 
 fn apply_min_conditional_indent(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -888,9 +783,8 @@ fn apply_min_conditional_indent(
         "2" => MinConditionalIndent::Two,
         "3" => MinConditionalIndent::OneHalf,
         _ => {
-            return Err(ConfigError::line(
-                path,
-                line_number,
+            return Err(ConfigError::at(
+                at,
                 "min conditional indent must be 0, 1, 2, or 3",
             ));
         }
@@ -899,8 +793,7 @@ fn apply_min_conditional_indent(
 }
 
 fn apply_pointer_align(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -909,9 +802,8 @@ fn apply_pointer_align(
         "middle" => PointerAlign::Middle,
         "name" => PointerAlign::Name,
         _ => {
-            return Err(ConfigError::line(
-                path,
-                line_number,
+            return Err(ConfigError::at(
+                at,
                 "align-pointer must be type, middle, or name",
             ));
         }
@@ -920,8 +812,7 @@ fn apply_pointer_align(
 }
 
 fn apply_reference_align(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -931,9 +822,8 @@ fn apply_reference_align(
         "middle" => ReferenceAlign::Middle,
         "name" => ReferenceAlign::Name,
         _ => {
-            return Err(ConfigError::line(
-                path,
-                line_number,
+            return Err(ConfigError::at(
+                at,
                 "align-reference must be none, type, middle, or name",
             ));
         }
@@ -942,8 +832,7 @@ fn apply_reference_align(
 }
 
 fn apply_line_end(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -960,17 +849,15 @@ fn apply_line_end(
             options.line_ending = LineEnding::Cr;
             Ok(())
         }
-        _ => Err(ConfigError::line(
-            path,
-            line_number,
+        _ => Err(ConfigError::at(
+            at,
             format!("unsupported lineend value '{value}'"),
         )),
     }
 }
 
 fn apply_mode(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
@@ -983,27 +870,21 @@ fn apply_mode(
             options.mode = Mode::ObjC;
             Ok(())
         }
-        _ => Err(ConfigError::line(
-            path,
-            line_number,
+        _ => Err(ConfigError::at(
+            at,
             format!("unsupported mode value '{value}'"),
         )),
     }
 }
 
 fn apply_access_label(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let label = value.trim().trim_end_matches(':').trim();
+    let label = value.trim_ascii().trim_end_matches(':').trim_ascii();
     if label.is_empty() {
-        return Err(ConfigError::line(
-            path,
-            line_number,
-            "access-label must not be empty",
-        ));
+        return Err(ConfigError::at(at, "access-label must not be empty"));
     }
     add_access_label(options, label);
     Ok(())
@@ -1020,34 +901,27 @@ fn add_access_label(options: &mut FormatOptions, label: &str) {
 }
 
 fn apply_control_header(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let header = value.trim();
+    let header = value.trim_ascii();
     if !is_macro_name(header) {
-        return Err(ConfigError::line(
-            path,
-            line_number,
-            "control-header must be an identifier",
-        ));
+        return Err(ConfigError::at(at, "control-header must be an identifier"));
     }
     add_word(&mut options.control_headers, header);
     Ok(())
 }
 
 fn apply_non_paren_header(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    let header = value.trim();
+    let header = value.trim_ascii();
     if !is_macro_name(header) {
-        return Err(ConfigError::line(
-            path,
-            line_number,
+        return Err(ConfigError::at(
+            at,
             "non-paren-header must be an identifier",
         ));
     }
@@ -1063,26 +937,17 @@ fn add_word(words: &mut Vec<String>, word: &str) {
 }
 
 fn apply_macro_block(
-    path: &Path,
-    line_number: usize,
+    at: OptionLocation<'_>,
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
     let Some((begin, end)) = value.split_once(':') else {
-        return Err(ConfigError::line(
-            path,
-            line_number,
-            "macro-block must be BEGIN:END",
-        ));
+        return Err(ConfigError::at(at, "macro-block must be BEGIN:END"));
     };
-    let begin = begin.trim();
-    let end = end.trim();
+    let begin = begin.trim_ascii();
+    let end = end.trim_ascii();
     if !is_macro_name(begin) || !is_macro_name(end) {
-        return Err(ConfigError::line(
-            path,
-            line_number,
-            "macro-block names must be identifiers",
-        ));
+        return Err(ConfigError::at(at, "macro-block names must be identifiers"));
     }
     if !options
         .macro_blocks

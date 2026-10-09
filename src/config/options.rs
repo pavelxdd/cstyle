@@ -364,7 +364,10 @@ impl FormatOptions {
         let base = StyleFields::capture(self);
         match style {
             StylePreset::None => self.brace_style = BraceStyle::None,
-            StylePreset::Allman => self.brace_style = BraceStyle::Allman,
+            StylePreset::Allman => {
+                self.brace_style = BraceStyle::Allman;
+                self.attach_enum = false;
+            }
             StylePreset::Java => self.brace_style = BraceStyle::Attach,
             StylePreset::Kr => {
                 self.brace_style = BraceStyle::OneTrueBrace;
@@ -394,11 +397,15 @@ impl FormatOptions {
             }
             StylePreset::Whitesmith => {
                 self.brace_style = BraceStyle::Whitesmith;
+                self.attach_enum = false;
                 self.indent_braces = true;
                 self.indent_classes = true;
                 self.indent_switches = true;
             }
-            StylePreset::Vtk => self.brace_style = BraceStyle::Vtk,
+            StylePreset::Vtk => {
+                self.brace_style = BraceStyle::Vtk;
+                self.attach_enum = false;
+            }
             StylePreset::Ratliff => {
                 self.brace_style = BraceStyle::Ratliff;
                 self.indent_braces = true;
@@ -406,10 +413,12 @@ impl FormatOptions {
             }
             StylePreset::Gnu => {
                 self.brace_style = BraceStyle::Gnu;
+                self.attach_enum = false;
                 self.indent_blocks = true;
             }
             StylePreset::Horstmann => {
                 self.brace_style = BraceStyle::Horstmann;
+                self.attach_enum = false;
                 self.indent_switches = true;
             }
             StylePreset::OneTrueBrace => {
@@ -425,6 +434,7 @@ impl FormatOptions {
             }
             StylePreset::Pico => {
                 self.brace_style = BraceStyle::Pico;
+                self.attach_enum = false;
                 self.break_one_line_blocks = false;
                 self.break_one_line_statements = false;
                 self.indent_switches = true;
@@ -501,17 +511,21 @@ impl FormatOptions {
     }
 
     pub fn indent_prefix(&self, level: usize) -> String {
+        let mut prefix = String::new();
+        self.push_indent_prefix(&mut prefix, level);
+        prefix
+    }
+
+    /// Appends [`Self::indent_prefix`] to `out`.
+    pub fn push_indent_prefix(&self, out: &mut String, level: usize) {
         let columns = level * self.indent_width;
         match self.indent_style {
-            IndentStyle::Spaces => " ".repeat(columns),
-            IndentStyle::Tabs => "\t".repeat(level),
+            IndentStyle::Spaces => push_repeated(out, ' ', columns),
+            IndentStyle::Tabs => push_repeated(out, '\t', level),
             IndentStyle::ForceTabs => {
                 let tab_width = self.tab_width.max(1);
-                format!(
-                    "{}{}",
-                    "\t".repeat(columns / tab_width),
-                    " ".repeat(columns % tab_width)
-                )
+                push_repeated(out, '\t', columns / tab_width);
+                push_repeated(out, ' ', columns % tab_width);
             }
         }
     }
@@ -521,25 +535,44 @@ impl FormatOptions {
         structural_level: usize,
         total_columns: usize,
     ) -> String {
+        let mut prefix = String::new();
+        self.push_continuation_indent_prefix(&mut prefix, structural_level, total_columns);
+        prefix
+    }
+
+    /// Appends [`Self::continuation_indent_prefix`] to `out`.
+    pub fn push_continuation_indent_prefix(
+        &self,
+        out: &mut String,
+        structural_level: usize,
+        total_columns: usize,
+    ) {
         match self.indent_style {
-            IndentStyle::Spaces => " ".repeat(total_columns),
+            IndentStyle::Spaces => push_repeated(out, ' ', total_columns),
             IndentStyle::ForceTabs => {
                 let tab_width = self.tab_width.max(1);
-                format!(
-                    "{}{}",
-                    "\t".repeat(total_columns / tab_width),
-                    " ".repeat(total_columns % tab_width)
-                )
+                push_repeated(out, '\t', total_columns / tab_width);
+                push_repeated(out, ' ', total_columns % tab_width);
             }
             IndentStyle::Tabs => {
                 let width = self.indent_width.max(1);
                 let tabs = structural_level.min(total_columns / width);
-                format!(
-                    "{}{}",
-                    "\t".repeat(tabs),
-                    " ".repeat(total_columns - tabs * width)
-                )
+                push_repeated(out, '\t', tabs);
+                push_repeated(out, ' ', total_columns - tabs * width);
             }
         }
+    }
+}
+
+/// Appends `count` copies of `ch`, a space or a tab.
+fn push_repeated(out: &mut String, ch: char, count: usize) {
+    const SPACES: &str = "                                ";
+    const TABS: &str = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+    let run = if ch == '\t' { TABS } else { SPACES };
+    let mut left = count;
+    while left > 0 {
+        let take = left.min(run.len());
+        out.push_str(&run[..take]);
+        left -= take;
     }
 }

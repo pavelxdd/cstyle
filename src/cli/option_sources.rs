@@ -1,5 +1,6 @@
-use super::args::{ConfigSelection, ProjectConfigSelection};
-use crate::config::{self, ConfigFileOptions};
+use crate::cli::args::{ConfigSelection, ProjectConfigSelection};
+use crate::config;
+use crate::config::ConfigFileOptions;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
@@ -13,7 +14,7 @@ pub(super) fn load_selected_config(
     get_env: &impl Fn(&'static str) -> Option<OsString>,
 ) -> Result<ConfigFileOptions, config::ConfigError> {
     match selection {
-        ConfigSelection::Auto => load_auto_config(get_env),
+        ConfigSelection::Auto => load_auto_config(Path::new(""), get_env),
         ConfigSelection::File(path) => config::load_config_file(path),
         ConfigSelection::None => Ok(ConfigFileOptions::default()),
     }
@@ -57,13 +58,14 @@ pub(super) fn apply_selected_project_config(
 }
 
 fn load_auto_config(
+    current_dir: &Path,
     get_env: &impl Fn(&'static str) -> Option<OsString>,
 ) -> Result<ConfigFileOptions, config::ConfigError> {
     if let Some(path) = env_fallback(get_env, CSTYLE_OPTIONS_ENV, ASTYLE_OPTIONS_ENV) {
         return config::load_config_file(&PathBuf::from(path));
     }
     for name in [config::CONFIG_FILE_NAME, config::ASTYLE_CONFIG_FILE_NAME] {
-        if let Some(options) = config::load_optional_config_file(Path::new(name))? {
+        if let Some(options) = config::load_optional_config_file(&current_dir.join(name))? {
             return Ok(options);
         }
     }
@@ -99,46 +101,32 @@ fn project_start_dir<'a>(paths: &'a [PathBuf], stdin_path: Option<&'a Path>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_path;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_path(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("cstyle-cli-{stamp}-{name}"))
-    }
 
     #[cfg(unix)]
     #[test]
     fn auto_config_reports_inaccessible_home_options_path() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let root = temp_path("home-options-permission");
+        let root = temp_path("home-options-inaccessible");
+        fs::create_dir_all(&root).expect("create root dir");
         let home = root.join("home");
-        fs::create_dir_all(&home).expect("create home dir");
-        let mut permissions = fs::metadata(&home).expect("home metadata").permissions();
-        permissions.set_mode(0o000);
-        fs::set_permissions(&home, permissions).expect("lock home dir");
+        fs::write(&home, "").expect("write file in place of home");
         let get_env = |name| match name {
             "HOME" => Some(home.clone().into_os_string()),
             _ => None,
         };
 
-        let result = load_auto_config(&get_env);
+        let result = load_auto_config(&root, &get_env);
 
-        let mut permissions = fs::metadata(&home).expect("home metadata").permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&home, permissions).expect("unlock home dir");
-        fs::remove_dir_all(root).expect("remove home dir");
+        fs::remove_dir_all(root).expect("remove root dir");
         assert!(result.is_err(), "inaccessible config lookup must fail");
     }
 
     #[test]
     fn auto_config_falls_back_to_home_legacy_options() {
         let dir = temp_path("home-options");
-        fs::create_dir_all(&dir).expect("create home options dir");
+        let current_dir = dir.join("work");
+        fs::create_dir_all(&current_dir).expect("create home options dir");
         fs::write(
             dir.join(config::ASTYLE_CONFIG_FILE_NAME),
             "indent=spaces=6\n",
@@ -149,7 +137,7 @@ mod tests {
             _ => None,
         };
 
-        let options = load_auto_config(&get_env).expect("load home legacy rc");
+        let options = load_auto_config(&current_dir, &get_env).expect("load home legacy rc");
 
         assert_eq!(options.format.indent_width, 6);
         fs::remove_dir_all(dir).expect("remove home options dir");

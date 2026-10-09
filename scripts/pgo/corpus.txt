@@ -1,0 +1,15 @@
+# Projects whose C and C++ sources train the PGO profile, fetched by
+# scripts/pgo/build.sh into its cache: name, git URL, and tag.
+curl     https://github.com/curl/curl.git          curl-8_22_0
+git      https://github.com/git/git.git            v2.56.0
+jq       https://github.com/jqlang/jq.git          jq-1.8.2
+libuv    https://github.com/libuv/libuv.git        v1.53.0
+lua      https://github.com/lua/lua.git            v5.5.1
+nginx    https://github.com/nginx/nginx.git        release-1.31.6
+redis    https://github.com/redis/redis.git        8.10.2
+sqlite   https://github.com/sqlite/sqlite.git      version-3.53.4
+tmux     https://github.com/tmux/tmux.git          3.7c
+zlib     https://github.com/madler/zlib.git        v1.3.2
+fmt      https://github.com/fmtlib/fmt.git         12.2.0
+leveldb  https://github.com/google/leveldb.git     1.23
+json     https://github.com/nlohmann/json.git      v3.12.0

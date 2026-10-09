@@ -1,0 +1,2441 @@
+use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::braces::classification::{
+    is_lambda_body_header, is_lambda_capture_header, lambda_header_has_trailing_return,
+    line_opens_lambda_block,
+};
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
+use crate::formatter::state::frame::CommaRole;
+use crate::formatter::state::indentation::LineKind;
+use crate::formatter::syntax::language;
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::text::columns::column_after;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{
+    code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
+    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
+};
+use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::literals::{first_string_literal_start, starts_string_literal_token};
+use crate::formatter::tokens::operators::{
+    find_assignment_operator, starts_ternary_arm, starts_with_chain_operator,
+};
+use crate::source::lex::is_identifier_continue;
+
+pub(crate) struct SplitElseCallLineLayout {
+    pub(crate) indent_spaces: usize,
+    pub(crate) clear_continuation_after_line: Option<usize>,
+}
+
+pub(crate) fn assignment_call_value_column(line: &str, tab_width: usize) -> Option<usize> {
+    if !line.trimmed_end().ends_with('(') {
+        return None;
+    }
+    let (assignment, operator) = find_assignment_operator(line)?;
+    let after_operator = assignment + operator.len();
+    let value_start = line[after_operator..]
+        .char_indices()
+        .find(|(_, ch)| !ch.is_whitespace())
+        .map_or(line.len(), |(offset, _)| after_operator + offset);
+    Some(visual_width_from(&line[..value_start], 0, tab_width))
+}
+
+fn line_starts_call_expression(line: &str) -> bool {
+    let word_end = line
+        .find(|ch: char| !is_identifier_continue(ch))
+        .unwrap_or(line.len());
+    word_end > 0 && line[word_end..].trimmed_start().starts_with('(')
+}
+
+fn has_top_level_comma_text(line: &str) -> bool {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for ch in line.chars() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+fn simple_trailing_open_paren_line(line: &str) -> bool {
+    let Some(before) = line.trimmed_end().strip_suffix('(') else {
+        return false;
+    };
+    let before = before.trimmed_end();
+    if before.is_empty() || before.contains('=') || before.ends_with_any(b")]") {
+        return false;
+    }
+    let name = before
+        .rsplit(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_' || ch == ':' || ch == '~'))
+        .next()
+        .unwrap_or_default();
+    name.chars()
+        .next()
+        .is_some_and(|ch| ch == '_' || ch == '~' || ch.is_ascii_alphabetic())
+}
+
+pub(crate) fn callee_name_start_before_open(line: &str, open_column: usize) -> Option<usize> {
+    let chars = line.chars().collect::<Vec<_>>();
+    if open_column == 0 || open_column > chars.len() {
+        return None;
+    }
+    let mut end = open_column;
+    while end > 0 && chars[end - 1].is_whitespace() {
+        end -= 1;
+    }
+    let mut start = end;
+    while start > 0 {
+        let ch = chars[start - 1];
+        if ch == '_' || ch.is_ascii_alphanumeric() {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    (start < end).then_some(start)
+}
+
+pub(crate) fn plain_call_opener_indent_for_closing_line(
+    output: &[String],
+    tab_width: usize,
+) -> Option<usize> {
+    let mut balance = 1isize;
+    for line in output.iter().rev() {
+        let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+        if code.trimmed().is_empty() {
+            continue;
+        }
+        for (index, ch) in code.char_indices().rev() {
+            match ch {
+                ')' => balance += 1,
+                '(' => {
+                    balance -= 1;
+                    if balance == 0 {
+                        let before = code[..index].trimmed_start();
+                        let after = code[index + ch.len_utf8()..].trimmed();
+                        return (after.is_empty()
+                            && (before.is_empty() || !before.chars().any(char::is_whitespace)))
+                        .then(|| leading_visual_width(line, tab_width));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
+impl FormatEngine<'_> {
+    pub(crate) fn split_else_string_comma_argument_layout(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<SplitElseCallLineLayout> {
+        let line_start = line.trimmed_start();
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !(previous_code.ends_with(',') || line_start.starts_with(','))
+            || !starts_string_literal_token(previous_code.trimmed_start())
+        {
+            return None;
+        }
+        if let Some(value_column) =
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    assignment_call_value_column(code, self.options.tab_width)
+                })
+        {
+            return Some(SplitElseCallLineLayout {
+                indent_spaces: value_column + self.options.indent_width,
+                clear_continuation_after_line: None,
+            });
+        }
+        let clear_continuation_after_line = if line.trimmed_end().ends_with(");") {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (code.ends_with(',') && self.open_paren_column_of(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                })
+        } else {
+            None
+        };
+        Some(SplitElseCallLineLayout {
+            indent_spaces: leading_visual_width(previous, self.options.tab_width),
+            clear_continuation_after_line,
+        })
+    }
+
+    pub(crate) fn split_else_comma_argument_layout(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<SplitElseCallLineLayout> {
+        let line_start = line.trimmed_start();
+        if !split_else_context || line_start.starts_with_any(b"#{}") || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let open = previous_code
+            .ends_with(',')
+            .then(|| self.open_paren_column_of(previous_code))??;
+        let previous_spaces = leading_visual_width(previous, self.options.tab_width);
+        Some(SplitElseCallLineLayout {
+            indent_spaces: (open + 1).max(previous_spaces),
+            clear_continuation_after_line: line
+                .trimmed_end()
+                .ends_with(");")
+                .then_some(previous_spaces),
+        })
+    }
+
+    pub(crate) fn none_style_split_else_comma_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        split_else_state_active: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if line_kind != LineKind::Normal
+            || self.options.brace_style != BraceStyle::None
+            || line_start.starts_with_any(b"#{}")
+            || is_comment_line(line_start)
+            || !split_else_state_active
+            || !self.commented_split_else_preprocessor_region_active()
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let open = previous_code
+            .ends_with(',')
+            .then(|| self.open_paren_column_of(previous_code))??;
+        Some((open + 1).max(leading_visual_width(previous, self.options.tab_width)))
+    }
+
+    pub(crate) fn structural_split_else_string_comma_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        structural_split_else_context: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !structural_split_else_context
+            || starts_string_literal_token(line_start)
+            || line_start.starts_with_any(b"#{})")
+            || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        ((previous_code.ends_with(',') || line_start.starts_with(','))
+            && starts_string_literal_token(previous_code.trimmed_start()))
+        .then_some(leading_visual_width(previous, self.options.tab_width))
+    }
+
+    fn split_else_case_comma_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"{}#") {
+            return None;
+        }
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        if case_unindent == 0 {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        previous_code
+            .ends_with(',')
+            .then(|| self.open_paren_column_of(previous_code))?
+            .map(|open| open + 1 + case_unindent)
+    }
+
+    pub(crate) fn split_else_case_call_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"{}#") {
+            return None;
+        }
+        if let Some(spaces) =
+            self.split_else_case_comma_argument_indent_spaces(line, split_else_context)
+        {
+            return Some(spaces);
+        }
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        if case_unindent == 0 {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        previous_code.trimmed_start().starts_with(");").then(|| {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (code.ends_with(',') && self.open_paren_column_of(code).is_some())
+                        .then(|| leading_visual_width(line, self.options.tab_width) + case_unindent)
+                })
+        })?
+    }
+
+    pub(crate) fn split_else_comma_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context || line.trimmed_start().starts_with_any(b"#{})") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        self.open_paren_column_of(previous_code)
+            .map(|open| open + 1)
+            .or_else(|| {
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(8)
+                    .any(|line| unmatched_open_paren_column(self.output.code_of(line)).is_some())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
+    }
+
+    pub(crate) fn split_else_call_closing_layout(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<SplitElseCallLineLayout> {
+        let line_start = line.trimmed_start();
+        if !split_else_context || !line_start.starts_with(')') {
+            return None;
+        }
+        let call = if line_start.starts_with(");")
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(8)
+                .any(|line| starts_string_literal_token(line.trimmed_start()))
+        {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    if starts_string_literal_token(code.trimmed_start()) {
+                        return None;
+                    }
+                    unmatched_open_paren_columns(code)
+                        .last()
+                        .copied()
+                        .map(|open| {
+                            (
+                                leading_visual_width(line, self.options.tab_width),
+                                assignment_call_value_column(code, self.options.tab_width)
+                                    .unwrap_or(open),
+                            )
+                        })
+                })
+        } else {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    assignment_call_value_column(code, self.options.tab_width).map(|value_column| {
+                        (
+                            leading_visual_width(line, self.options.tab_width),
+                            value_column,
+                        )
+                    })
+                })
+        }?;
+        Some(SplitElseCallLineLayout {
+            indent_spaces: call.1,
+            clear_continuation_after_line: line.trimmed_end().ends_with(';').then_some(call.0),
+        })
+    }
+
+    pub(crate) fn split_else_following_assignment_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        previous_code.trimmed_start().starts_with(");").then(|| {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    assignment_call_value_column(code, self.options.tab_width)
+                        .map(|_| leading_visual_width(line, self.options.tab_width))
+                })
+        })?
+    }
+
+    pub(crate) fn split_else_following_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !split_else_context || line_start.starts_with_any(b"#{})") || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(");") {
+            return None;
+        }
+        if starts_string_literal_token(previous_code.trimmed_start()) {
+            return self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (code.ends_with(',') && self.open_paren_column_of(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                });
+        }
+        let call_start = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .find(|line| !line.trimmed().is_empty())?;
+        let call_start_code = self.output.code_trimmed_of(call_start);
+        if call_start_code.ends_with(',') && self.open_paren_column_of(call_start_code).is_some() {
+            return Some(leading_visual_width(call_start, self.options.tab_width));
+        }
+        (self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(8)
+            .any(|line| starts_string_literal_token(line.trimmed_start())))
+        .then(|| {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(8)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (code.ends_with(',') && self.open_paren_column_of(code).is_some())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                })
+        })?
+    }
+
+    pub(crate) fn structural_split_else_string_call_close_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        structural_split_else_context: bool,
+    ) -> Option<usize> {
+        if !structural_split_else_context || !line.trimmed_start().starts_with(')') {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !starts_string_literal_token(previous_code.trimmed_start()) {
+            return None;
+        }
+        let call_start = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(16)
+            .find(|line| {
+                let code = self.output.code_trimmed_of(line);
+                !unmatched_open_paren_columns(code).is_empty()
+                    && !starts_string_literal_token(code.trimmed_start())
+            })?;
+        let call_code = self.output.code_trimmed_of(call_start);
+        assignment_call_value_column(call_code, self.options.tab_width)
+            .is_none()
+            .then(|| leading_visual_width(previous, self.options.tab_width).saturating_sub(1))
+    }
+
+    pub(crate) fn structural_split_else_following_string_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        structural_split_else_context: bool,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !structural_split_else_context
+            || line_start.starts_with_any(b"#{})")
+            || is_comment_line(line_start)
+        {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(");")
+            || !starts_string_literal_token(previous_code.trimmed_start())
+        {
+            return None;
+        }
+        self.output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .take(16)
+            .find_map(|line| {
+                let code = self.output.code_trimmed_of(line);
+                (!unmatched_open_paren_columns(code).is_empty()
+                    && !starts_string_literal_token(code.trimmed_start()))
+                .then_some(leading_visual_width(line, self.options.tab_width))
+            })
+    }
+
+    pub(crate) fn split_else_adjacent_string_call_close_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if !line.trimmed_start().starts_with(");") || !self.recent_split_else_call_region_active() {
+            return None;
+        }
+        let mut saw_string = false;
+        for scan_index in self.output.scoped_range().rev().take(16) {
+            let previous = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trimmed_end();
+            let trimmed = self.output.code_body(scan_index);
+            if trimmed.is_empty() {
+                continue;
+            }
+            if starts_string_literal_token(trimmed) {
+                saw_string = true;
+                continue;
+            }
+            if let Some(open) = unmatched_open_paren_columns(code).last().copied() {
+                if !saw_string {
+                    return None;
+                }
+                let adjacent_strings = self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .take(8)
+                    .filter(|line| starts_string_literal_token(line.trimmed_start()))
+                    .count()
+                    > 1
+                    || self
+                        .output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .take(4)
+                        .any(|line| line.trimmed_start().starts_with(','));
+                return Some(
+                    if code.trimmed_end().ends_with('(')
+                        && adjacent_strings
+                        && assignment_call_value_column(code, self.options.tab_width).is_none()
+                    {
+                        leading_visual_width(previous, self.options.tab_width)
+                            + self
+                                .layout
+                                .line_adjuster
+                                .total_case_unindent_depth()
+                                .max(self.layout.line_adjuster.next_line_case_unindent_depth())
+                                * self.options.indent_width
+                    } else {
+                        assignment_call_value_column(code, self.options.tab_width).unwrap_or(open)
+                            + self.adjusted_line_indent_delta(previous)
+                    },
+                );
+            }
+            if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
+                return None;
+            }
+        }
+        None
+    }
+
+    pub(crate) fn string_call_continuation_layout(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<SplitElseCallLineLayout> {
+        let current = line.trimmed_start();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let previous_trimmed = previous.trimmed_start();
+        let previous_spaces = leading_visual_width(previous, self.options.tab_width);
+        // A string row closing a paren ends the operand it continued. The
+        // `*` rows of a block comment stand past its column.
+        if starts_string_literal_token(current)
+            && (is_comment_line(previous_trimmed) || is_comment_only_line(previous_trimmed))
+            && !previous_trimmed.starts_with('*')
+            || starts_string_literal_token(current)
+                && starts_string_literal_token(previous_code.trimmed_start())
+                && self.paren_closes_of(previous_code) == 0
+        {
+            return Some(SplitElseCallLineLayout {
+                indent_spaces: previous_spaces,
+                clear_continuation_after_line: None,
+            });
+        }
+        if current.starts_with(',')
+            && starts_string_literal_token(previous_code.trimmed_start())
+            && self.paren_closes_of(previous_code) == 0
+        {
+            let clear_continuation_after_line = line.trimmed_end().ends_with(';').then(|| {
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(128)
+                    .find_map(|line| {
+                        let code = self.output.code_trimmed_of(line);
+                        (!starts_string_literal_token(code.trimmed_start())
+                            && !unmatched_open_paren_columns(code).is_empty())
+                        .then_some(leading_visual_width(line, self.options.tab_width))
+                    })
+                    .unwrap_or(previous_spaces.saturating_sub(self.options.indent_width))
+            });
+            return Some(SplitElseCallLineLayout {
+                indent_spaces: previous_spaces,
+                clear_continuation_after_line,
+            });
+        }
+        if previous_code.trimmed_start().starts_with(',')
+            && previous_code.ends_with(");")
+            && !current.starts_with_any(b"#{})")
+            && !starts_string_literal_token(current)
+            && !is_comment_line(current)
+        {
+            let indent_spaces = self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .skip(1)
+                .take(128)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (!starts_string_literal_token(code.trimmed_start())
+                        && !unmatched_open_paren_columns(code).is_empty())
+                    .then_some(leading_visual_width(line, self.options.tab_width))
+                })
+                .unwrap_or(previous_spaces.saturating_sub(self.options.indent_width));
+            return Some(SplitElseCallLineLayout {
+                indent_spaces,
+                clear_continuation_after_line: None,
+            });
+        }
+        None
+    }
+
+    pub(crate) fn string_call_closing_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        if !line.trimmed_start().starts_with(");") {
+            return None;
+        }
+        let case_unindent = self
+            .layout
+            .line_adjuster
+            .total_case_unindent_depth()
+            .max(self.layout.line_adjuster.next_line_case_unindent_depth())
+            * self.options.indent_width;
+        let mut result = None;
+        if !self.options.indent_cases
+            && self
+                .layout
+                .nesting
+                .brace_header_stack
+                .iter()
+                .any(|header| header.as_deref() == Some("case"))
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(8)
+                .any(|line| starts_string_literal_token(line.trimmed_start()))
+            && let Some((call_line, open)) =
+                self.output.scoped().iter().rev().take(16).find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    if starts_string_literal_token(code.trimmed_start()) {
+                        return None;
+                    }
+                    unmatched_open_paren_columns(code)
+                        .last()
+                        .copied()
+                        .map(|open| (line, open))
+                })
+        {
+            let call_code = self.output.code_trimmed_of(call_line);
+            let target = if call_code.ends_with('(') {
+                leading_visual_width(call_line, self.options.tab_width) + case_unindent
+            } else {
+                open + self
+                    .adjusted_line_indent_delta(call_line)
+                    .max(case_unindent)
+            };
+            if current_spaces.unwrap_or(0) < target {
+                result = Some(target);
+            }
+        }
+        if (self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .take(8)
+            .filter(|line| starts_string_literal_token(line.trimmed_start()))
+            .count()
+            > 1
+            || self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(4)
+                .any(|line| line.trimmed_start().starts_with(',')))
+            && let Some(call_line) = self.output.scoped().iter().rev().take(16).find(|line| {
+                let code = self.output.code_trimmed_of(line);
+                code.ends_with('(')
+                    && !starts_string_literal_token(code.trimmed_start())
+                    && assignment_call_value_column(code, self.options.tab_width).is_none()
+            })
+        {
+            result = Some(leading_visual_width(call_line, self.options.tab_width) + case_unindent);
+        }
+        result
+    }
+
+    pub(crate) fn string_argument_after_comma_indent_floor(
+        &self,
+        line: &LineView<'_>,
+        current_spaces: usize,
+    ) -> Option<usize> {
+        if !starts_string_literal_token(line.trimmed_start()) {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let open = previous_code
+            .ends_with(',')
+            .then(|| self.open_paren_column_of(previous_code))??;
+        let target = open + 1 + self.adjusted_line_indent_delta(previous);
+        (current_spaces < target).then_some(target)
+    }
+
+    pub(crate) fn active_split_else_comma_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+    ) -> Option<usize> {
+        if !self.split_else_body_indent_active()
+            || line_kind != LineKind::Normal
+            || line.trimmed_start().starts_with_any(b"#(){}")
+        {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        let open = previous_code
+            .ends_with(',')
+            .then(|| self.open_paren_column_of(previous_code))??;
+        Some(
+            open + 1
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+        )
+    }
+
+    pub(crate) fn active_split_else_comma_and_string_indent_floor(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+        current_spaces: Option<usize>,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if !self.split_else_body_indent_active()
+            || line_kind != LineKind::Normal
+            || line_start.starts_with_any(b"#{}")
+        {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        let split = trailing_comment_split_limit(previous);
+        let previous_code = previous[..split].trimmed_end();
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let target = if previous_code.ends_with(',')
+            && let Some(open) = self.open_paren_column_of(previous_code)
+        {
+            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            let open_column = column_after(previous_code, open, self.options.tab_width);
+            (if open_column <= previous_indent {
+                previous_indent + open_column
+            } else {
+                open_column
+            }) + case_unindent
+        } else if split < previous.len()
+            && previous.trimmed_end().ends_with(',')
+            && let Some(open) = self.open_paren_column_of(previous)
+        {
+            column_after(previous, open, self.options.tab_width) + case_unindent
+        } else if previous_code.ends_with(',')
+            && starts_string_literal_token(previous_code.trimmed_start())
+        {
+            leading_visual_width(previous, self.options.tab_width) + case_unindent
+        } else if !starts_with_chain_operator(line_start)
+            && first_string_literal_start(line_start).is_some()
+            && first_string_literal_start(previous_code.trimmed_start()).is_some()
+            && let Some(open) = self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take_while(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    !(code.ends_with(';') || code.ends_with('{') || code.ends_with('}'))
+                })
+                .take(16)
+                .find_map(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    (first_string_literal_start(code.trimmed_start()).is_some())
+                        .then(|| self.open_paren_column_of(code))?
+                })
+        {
+            open + 1 + case_unindent
+        } else if starts_string_literal_token(line_start)
+            && previous_code.trimmed_end().ends_with('(')
+        {
+            leading_visual_width(previous, self.options.tab_width)
+                + self.options.indent_width
+                + case_unindent
+        } else if starts_string_literal_token(line_start)
+            && let Some(open) = self.open_paren_column_of(previous_code)
+        {
+            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            let open_column = column_after(previous_code, open, self.options.tab_width);
+            (if open_column <= previous_indent {
+                previous_indent + open_column
+            } else {
+                open_column
+            }) + case_unindent
+        } else if (starts_string_literal_token(line_start) || line_start.starts_with(','))
+            && starts_string_literal_token(previous_code.trimmed_start())
+        {
+            leading_visual_width(previous, self.options.tab_width) + case_unindent
+        } else {
+            return None;
+        };
+        (current_spaces.unwrap_or(0) < target).then_some(target)
+    }
+
+    pub(crate) fn split_else_adjacent_string_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        split_else_context: bool,
+        structural_context: bool,
+    ) -> Option<usize> {
+        if !split_else_context || !starts_string_literal_token(line.trimmed_start()) {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if is_comment_line(previous_code.trimmed_start()) {
+            return Some(leading_visual_width(previous, self.options.tab_width));
+        }
+        if structural_context {
+            return self.output.scoped().iter().rev().take(16).find_map(|line| {
+                let code = self.output.code_trimmed_of(line);
+                (!starts_string_literal_token(code.trimmed_start())).then(|| {
+                    assignment_call_value_column(code, self.options.tab_width)
+                        .map(|column| column + self.options.indent_width)
+                        .or_else(|| {
+                            code.trimmed_end().ends_with('(').then(|| {
+                                leading_visual_width(line, self.options.tab_width)
+                                    + self.options.indent_width
+                            })
+                        })
+                        .or_else(|| {
+                            unmatched_open_paren_columns(code)
+                                .last()
+                                .map(|open| open + 1)
+                        })
+                        .or_else(|| {
+                            code.ends_with('=').then(|| {
+                                leading_visual_width(line, self.options.tab_width)
+                                    + self.options.indent_width
+                            })
+                        })
+                })?
+            });
+        }
+        if let Some(open) = unmatched_open_paren_columns(previous_code).last().copied() {
+            return Some(open + 1);
+        }
+        if starts_string_literal_token(previous_code.trimmed_start())
+            && let Some(open) =
+                self.output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .take(16)
+                    .find_map(|line| {
+                        let code = self.output.code_trimmed_of(line);
+                        (!starts_string_literal_token(code.trimmed_start()))
+                            .then(|| unmatched_open_paren_columns(code).last().copied())?
+                    })
+        {
+            return Some(open + 1);
+        }
+        assignment_call_value_column(previous_code, self.options.tab_width)
+            .or_else(|| {
+                starts_string_literal_token(previous_code.trimmed_start()).then(|| {
+                    self.output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .take(8)
+                        .find_map(|line| {
+                            let code = self.output.code_trimmed_of(line);
+                            assignment_call_value_column(code, self.options.tab_width)
+                        })
+                })?
+            })
+            .map(|column| column + self.options.indent_width)
+    }
+
+    pub(crate) fn previous_call_argument_sibling_indent(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if !self.options.break_after_logical {
+            return None;
+        }
+        let trimmed_end = line.trimmed_end();
+        let closes_enclosing_call = line.paren_imbalance().0 > 0;
+        if self.layout.nesting.paren_depth == 0 && !closes_enclosing_call {
+            return None;
+        }
+        let trimmed = line.trimmed_start();
+        if trimmed.starts_with_any(b"}).[")
+            || starts_with_chain_operator(trimmed)
+            || starts_ternary_arm(trimmed)
+            || trimmed_end.ends_with('{')
+            || self.in_initializer_brace()
+            || self.output_has_open_initializer_brace()
+            || self.in_aggregate_declaration_brace()
+            || self.current_inline_array_column().is_some()
+        {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if !previous_code.ends_with(',') || self.leaves_paren_open(previous_code) {
+            return None;
+        }
+        if !self.call_arguments_contain_brace_block() {
+            return None;
+        }
+        Some(leading_visual_width(previous, self.options.tab_width))
+    }
+
+    fn call_arguments_contain_brace_block(&self) -> bool {
+        let len = self.output.len();
+        let older = len.saturating_sub(16);
+        for index in (older..len).rev() {
+            if self.output.code_trimmed(index).is_empty() {
+                continue;
+            }
+            if self.code_holds_brace(index) {
+                return true;
+            }
+            if self.output.code(index).ends_with(';') || self.output_code_leaves_paren_open(index) {
+                return false;
+            }
+        }
+        // Past the last lines a line's parens are read from its code alone,
+        // so the looks back over them keep their answers.
+        let start = len.saturating_sub(64);
+        self.output
+            .last_line_looked(&self.brace_code_look, start, older, |index| {
+                self.code_holds_brace(index)
+            })
+            .is_some_and(|brace| {
+                self.output
+                    .last_line_looked(&self.argument_end_look, brace + 1, older, |index| {
+                        let code = self.output.code(index);
+                        code.ends_with(';') || !line_paren_imbalance(code).1.is_empty()
+                    })
+                    .is_none()
+            })
+    }
+
+    /// Whether the code of output line `index` holds a brace.
+    fn code_holds_brace(&self, index: usize) -> bool {
+        (self.output.code_has(index, b'{') || self.output.code_has(index, b'}'))
+            && line_has_brace(self.output.code(index))
+    }
+
+    pub(crate) fn call_shaped_brace_body_indent_floor(
+        &self,
+        line: &LineView<'_>,
+        normal_indent: usize,
+    ) -> Option<usize> {
+        if line.trimmed_start().starts_with_any(b"{}#") {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        let code = self.output.code_trimmed_of(previous);
+        let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        // The tail of a continued condition closes parens it never opened.
+        let closes_outer_paren = || code.matches(')').count() > code.matches('(').count();
+        (code.ends_with('{')
+            && line_starts_call_expression(code.trimmed_start())
+            && !closes_outer_paren()
+            && previous_indent < normal_indent * self.options.indent_width)
+            .then_some(previous_indent + self.options.indent_width)
+    }
+
+    pub(crate) fn macro_call_continuation_output_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let trimmed_line = line.trimmed_start();
+        if trimmed_line.is_empty()
+            || trimmed_line.starts_with_any(b"#{})")
+            || trimmed_line.starts_with("&&")
+            || trimmed_line.starts_with("||")
+        {
+            return None;
+        }
+        if trimmed_line
+            .trimmed_end()
+            .strip_suffix('{')
+            .is_some_and(|prefix| line_ends_compound_literal_cast(prefix.trimmed_end()))
+            && self
+                .output
+                .last_line_outside_comment()
+                .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with(','))
+        {
+            return None;
+        }
+        let mut close_pending = 0usize;
+        let mut in_block_comment = false;
+        for index in self.output.scoped_range().rev().take(8) {
+            let previous = &self.output[index];
+            let trimmed = previous.trimmed_end();
+            if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
+                continue;
+            }
+            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+                return None;
+            }
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let cancel = close_pending.min(opens.len());
+            let opens = &opens[..opens.len() - cancel];
+            close_pending = close_pending - cancel + closes;
+            if opens.is_empty() {
+                continue;
+            }
+            let is_macro_paren = self.open_paren_column_of(trimmed).is_some_and(|column| {
+                opens.last() == Some(&column)
+                    && trimmed.find('(') == Some(column)
+                    && is_macro_like_word(trimmed[..column].trimmed())
+            });
+            if !is_macro_paren {
+                return None;
+            }
+            let column = self.open_paren_column_of(trimmed)?;
+            // The paren's byte offset counts a tab as one column.
+            let after_paren = visual_width_from(&trimmed[..=column], 0, self.options.tab_width);
+            let padding = trimmed[column + 1..]
+                .chars()
+                .take_while(|ch| ch.is_whitespace())
+                .collect::<String>();
+            let padding_width = visual_width_from(&padding, after_paren, self.options.tab_width);
+            let spaces = after_paren + padding_width + self.adjusted_line_indent_delta(previous);
+            return (spaces <= self.options.max_continuation_indent).then_some(spaces);
+        }
+        None
+    }
+
+    pub(crate) fn enclosing_macro_call_output_context(&self) -> bool {
+        let key = (self.output.len(), self.output.version());
+        if let Some((cached, context)) = self.macro_call_context_cache.get()
+            && cached == key
+        {
+            return context;
+        }
+        let context = self.scan_enclosing_macro_call_output_context();
+        self.macro_call_context_cache.set(Some((key, context)));
+        context
+    }
+
+    fn scan_enclosing_macro_call_output_context(&self) -> bool {
+        let mut close_pending = 0usize;
+        let mut in_block_comment = false;
+        for index in self.output.scoped_range().rev().take(8) {
+            let trimmed = self.output[index].trimmed_end();
+            if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
+                continue;
+            }
+            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+                return false;
+            }
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let cancel = close_pending.min(opens.len());
+            let opens = &opens[..opens.len() - cancel];
+            close_pending = close_pending - cancel + closes;
+            if opens.iter().rev().any(|&column| {
+                trimmed.find('(') == Some(column) && is_macro_like_word(trimmed[..column].trimmed())
+            }) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn immediate_macro_call_opener_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") || !self.enclosing_macro_call_output_context() {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        let previous_code = previous.trimmed_end();
+        (simple_trailing_open_paren_line(previous_code) && self.leaves_paren_open(previous_code))
+            .then(|| {
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+            })
+    }
+
+    pub(crate) fn macro_call_sibling_fallback_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") || !self.enclosing_macro_call_output_context() {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        // A split opener stands among the lines before the last since the
+        // last statement edge.
+        let range = self.output.scoped_range();
+        let end = range.end.saturating_sub(1).max(range.start);
+        let opener =
+            self.output
+                .last_line_looked(&self.split_opener_look, range.start, end, |index| {
+                    simple_trailing_open_paren_line(self.output[index].trimmed_end())
+                        && !self.output.paren_imbalance(index).1.is_empty()
+                });
+        let has_split_opener = opener.is_some_and(|opener| {
+            self.output
+                .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
+                    let code = self.output[index].trimmed_end();
+                    code.ends_with(';') || code == "{" || code == "}"
+                })
+                .is_none()
+        });
+        has_split_opener.then(|| {
+            leading_visual_width(previous, self.options.tab_width)
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+        })
+    }
+
+    pub(crate) fn split_call_opening_paren_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if let Some(spaces) = self.split_call_opening_paren_frame_indent_spaces(line) {
+            return Some(spaces);
+        }
+        if line.trimmed() != "(" {
+            return None;
+        }
+        let previous = self
+            .layout
+            .previous_pre_adjust_line
+            .as_ref()
+            .filter(|line| !line.trimmed().is_empty())
+            .or_else(|| self.output.last_non_empty_scoped())?;
+        let code = self.output.code_trimmed_of(previous);
+        if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
+            return None;
+        }
+        let first_word = code
+            .trimmed_start()
+            .split(|ch: char| !is_identifier_continue(ch))
+            .find(|word| !word.is_empty())?;
+        if language::is_header(first_word) {
+            return None;
+        }
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let leading = leading_visual_width(previous, self.options.tab_width);
+        if code.trimmed_start().starts_with("return new ") {
+            return Some(leading + "return ".len() + case_unindent);
+        }
+        if (code.contains(" new ") && find_assignment_operator(code).is_some())
+            || code.trimmed_start().starts_with("new ")
+        {
+            return Some(leading + case_unindent);
+        }
+        self.open_paren_column_of(code).map(|column| column + 1)
+    }
+
+    fn split_call_opening_paren_frame_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
+        if line.trimmed() != "(" {
+            return None;
+        }
+        let delimiter = self.layout.frame_stack.enclosing_delimiter()?;
+        let call = delimiter.call.as_ref()?;
+        call.first_argument_column
+            .or_else(|| Some(delimiter.opener_output_column + 1))
+    }
+
+    pub(crate) fn split_call_closing_paren_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if !line.trimmed_start().starts_with(')') {
+            return None;
+        }
+        let mut close_pending = 0usize;
+        let mut brace_depth = 0usize;
+        let mut in_block_comment = false;
+        for index in self.output.scoped_range().rev().take(32) {
+            let previous = &self.output.as_slice()[index];
+            let trimmed = previous.trimmed_end();
+            if reverse_scan_skips_block_comment(trimmed, &mut in_block_comment) {
+                continue;
+            }
+            let (brace_closes, brace_opens) = line_brace_imbalance(trimmed);
+            brace_depth += brace_closes;
+            if brace_depth > 0 {
+                brace_depth = brace_depth.saturating_sub(brace_opens);
+                continue;
+            }
+            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+                return None;
+            }
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let mut opens = opens.to_vec();
+            let cancel = close_pending.min(opens.len());
+            for _ in 0..cancel {
+                opens.pop();
+            }
+            close_pending = close_pending - cancel + closes;
+            if opens.is_empty() {
+                continue;
+            }
+            if opens.len() != 1 {
+                return None;
+            }
+            let code = self.output.code_trimmed_of(trimmed);
+            if !code.ends_with('(') {
+                return None;
+            }
+            let leading = leading_visual_width(previous, self.options.tab_width);
+            let body = code.trimmed_start();
+            if body.starts_with("return ") {
+                return Some(leading + "return ".len());
+            }
+            if body == "(" {
+                return Some(
+                    leading
+                        + self.layout.line_adjuster.total_case_unindent_depth()
+                            * self.options.indent_width,
+                );
+            }
+            if code.contains(" new ") && find_assignment_operator(code).is_some() {
+                return Some(leading);
+            }
+            return None;
+        }
+        None
+    }
+
+    pub(crate) fn active_split_else_call_argument_fallback_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+    ) -> Option<usize> {
+        if line_kind != LineKind::Normal
+            || line.trimmed_start().starts_with_any(b"#{}")
+            || !self.preprocessor_split_else_active()
+            || self.output.last_line_outside_comment().is_none()
+        {
+            return None;
+        }
+        self.recent_call_argument_indent_spaces()
+    }
+
+    pub(crate) fn restore_split_else_call_argument_indent_after_emission(
+        &mut self,
+        line: &LineView<'_>,
+        line_kind: LineKind,
+    ) {
+        if line_kind != LineKind::Normal
+            || !line.trimmed_end().ends_with(");")
+            || !self.recent_split_else_preprocessor_region_active()
+        {
+            return;
+        }
+        let Some(spaces) = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .find(|line| !line.trimmed().is_empty())
+            .and_then(|previous| {
+                let code = self.output.code_trimmed_of(previous);
+                (code.ends_with(',') && self.open_paren_column_of(code).is_some())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
+        else {
+            return;
+        };
+        self.layout.continuation_indent.set_next_line_spaces(spaces);
+        self.layout.nesting.clear_continuation_indents();
+    }
+
+    fn recent_call_argument_indent_spaces(&self) -> Option<usize> {
+        let indent_width = self.options.indent_width;
+        let tab_width = self.options.tab_width;
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        for scan_index in self.output.scoped_range().rev().take(16) {
+            let code = self.output.code_before_comment(scan_index).trimmed_end();
+            let trimmed = self.output.code_body(scan_index);
+            if code.ends_with(';') || code.ends_with('{') || trimmed == "}" {
+                break;
+            }
+            if let Some(open) = unmatched_open_paren_columns(code).last()
+                && !line_is_control_body_header(trimmed)
+            {
+                let call_indent = assignment_call_value_column(code, tab_width)
+                    .map(|column| column + indent_width)
+                    .unwrap_or_else(|| visual_width_from(&code[..open + 1], 0, tab_width));
+                return Some(
+                    call_indent
+                        + self.layout.line_adjuster.total_case_unindent_depth() * indent_width,
+                );
+            }
+        }
+        None
+    }
+
+    fn new_over_max_call_base_indent_spaces(&self) -> Option<usize> {
+        if !self.output.recent_scoped_line_mentions_new(64) {
+            return None;
+        }
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last over-long `new` call line counts unless a line ending
+        // its statement or a group follows it.
+        let call = self.output.last_line_looked(
+            &self.over_max_new_call_look,
+            start,
+            range.end,
+            |index| self.holds_over_max_new_call(index),
+        )?;
+        self.output
+            .last_line_looked(&self.new_call_edge_look, call + 1, range.end, |index| {
+                let code = self.output.code_before_comment_trimmed(index);
+                let start = code.trimmed_start();
+                !code.ends_with(',') && self.paren_closes_of(code) > 0
+                    || start.starts_with(')')
+                    || start.ends_with(';')
+                    || start.ends_with('{')
+                    || start.ends_with('}')
+            })
+            .is_none()
+            .then(|| {
+                leading_visual_width(&self.output[call], self.options.tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
+            })
+    }
+
+    /// Whether output line `index` ends with `,` inside a `new` call whose
+    /// paren opens past the maximum continuation indent.
+    fn holds_over_max_new_call(&self, index: usize) -> bool {
+        let code = self.output.code_before_comment_trimmed(index);
+        if !code.ends_with(',') || !code.contains("new ") {
+            return false;
+        }
+        let base = leading_visual_width(&self.output[index], self.options.tab_width);
+        unmatched_open_paren_columns(code).into_iter().any(|open| {
+            open.saturating_sub(base) >= self.options.max_continuation_indent
+                && code[..open].match_indices("new ").any(|(index, _)| {
+                    code[..index]
+                        .chars()
+                        .next_back()
+                        .is_none_or(|ch| !is_identifier_continue(ch))
+                        && !code[index + "new ".len()..open].contains_any_byte(b"()")
+                })
+        })
+    }
+
+    pub(crate) fn over_max_new_call_default_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let base_indent = self.new_over_max_call_base_indent_spaces()?;
+        Some(if line.trimmed_start().starts_with(')') {
+            base_indent
+        } else {
+            base_indent + self.options.indent_width * 2
+        })
+    }
+
+    pub(crate) fn over_max_new_call_adjacent_string_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        if self.options.indent_after_parens {
+            return None;
+        }
+        let base_indent = self.new_over_max_call_base_indent_spaces()?;
+        let comment_string_spaces = if starts_string_literal_token(line_start) {
+            self.output.last_non_empty_scoped().and_then(|previous| {
+                is_comment_line(previous.trimmed_start())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
+        } else {
+            None
+        };
+        let comma_after_string_spaces = if line_start.starts_with(',') {
+            self.output.last_non_empty_scoped().and_then(|previous| {
+                starts_string_literal_token(previous.trimmed_start())
+                    .then_some(leading_visual_width(previous, self.options.tab_width))
+            })
+        } else {
+            None
+        };
+        let adjacent_string_call_close = if line_start.starts_with(");")
+            && self
+                .output
+                .scoped()
+                .iter()
+                .rev()
+                .take(8)
+                .any(|line| starts_string_literal_token(line.trimmed_start()))
+        {
+            self.output.scoped().iter().rev().take(8).find_map(|line| {
+                let code = self.output.code_trimmed_of(line);
+                if starts_string_literal_token(code.trimmed_start()) {
+                    return None;
+                }
+                unmatched_open_paren_columns(code)
+                    .last()
+                    .copied()
+                    .map(|open| {
+                        assignment_call_value_column(code, self.options.tab_width).unwrap_or(open)
+                    })
+            })
+        } else {
+            None
+        };
+        Some(
+            comment_string_spaces
+                .or(comma_after_string_spaces)
+                .or(adjacent_string_call_close)
+                .unwrap_or_else(|| {
+                    if line_start.starts_with(')') {
+                        base_indent
+                    } else {
+                        base_indent + self.options.indent_width * 2
+                    }
+                }),
+        )
+    }
+
+    pub(crate) fn has_over_max_new_call_context(&self) -> bool {
+        self.new_over_max_call_base_indent_spaces().is_some()
+    }
+
+    fn new_empty_call_base_indent_spaces(&self) -> Option<usize> {
+        // Only a line holding ` new ` gives the base.
+        if !self.output.recent_scoped_line_mentions_new(64) {
+            return None;
+        }
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last empty `new` call line counts unless a line ending the
+        // call's lines follows it.
+        let call =
+            self.output
+                .last_line_looked(&self.empty_new_call_look, start, range.end, |index| {
+                    self.opens_empty_new_call(index)
+                })?;
+        self.output
+            .last_line_looked(
+                &self.new_call_lines_end_look,
+                call + 1,
+                range.end,
+                |index| self.ends_new_call_lines(index),
+            )
+            .is_none()
+            .then(|| {
+                leading_visual_width(&self.output[call], self.options.tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width
+            })
+    }
+
+    /// Whether output line `index` ends with the `(` of a `new` call no
+    /// paren comes before.
+    fn opens_empty_new_call(&self, index: usize) -> bool {
+        let trimmed = self.output[index].trimmed_end();
+        if !trimmed.ends_with('(')
+            || !trimmed.contains(" new ")
+            || trimmed.trimmed_start().starts_with("return ")
+        {
+            return false;
+        }
+        let open_index = trimmed.len() - 1;
+        trimmed.rfind(" new ").is_some_and(|new_index| {
+            new_index < open_index
+                && !trimmed[new_index + "new ".len()..open_index].contains_any_byte(b"()")
+        })
+    }
+
+    /// Whether output line `index` starts with `)`, ends with `;`, `{`, or
+    /// `}`, or closes a paren it did not open.
+    fn ends_new_call_lines(&self, index: usize) -> bool {
+        let trimmed = self.output.trimmed(index);
+        trimmed.starts_with(')')
+            || trimmed.ends_with_any(b";{}")
+            || self.output.paren_imbalance(index).0 > 0
+    }
+
+    pub(crate) fn split_or_empty_new_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let line_start = line.trimmed_start();
+        let mut spaces = None;
+        if line.trimmed() == "("
+            && let Some(previous) = self.output.last_line_outside_comment()
+            && previous.contains(" new ")
+        {
+            spaces = Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.layout.line_adjuster.total_case_unindent_depth()
+                        * self.options.indent_width,
+            );
+        }
+        if let Some(paren_indent) = self.split_new_call_paren_indent_spaces() {
+            spaces = Some(if line_start.starts_with(')') {
+                paren_indent
+            } else {
+                paren_indent + self.options.indent_width
+            });
+        }
+        if let Some(base_indent) = self.new_empty_call_base_indent_spaces() {
+            spaces = Some(if line_start.starts_with(')') {
+                base_indent
+            } else {
+                base_indent + self.options.indent_width
+            });
+        }
+        spaces
+    }
+
+    pub(crate) fn argument_after_split_new_call_opener_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        if previous.trimmed() != "(" {
+            return None;
+        }
+        let before_paren = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip_while(|line| line.as_str() != previous)
+            .skip(1)
+            .find(|line| !line.trimmed().is_empty())?;
+        if !before_paren.contains(" new ") && !before_paren.contains("(new ") {
+            return None;
+        }
+        let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        let extra = if previous_indent >= self.options.max_continuation_indent {
+            self.options.indent_width * 2
+        } else {
+            self.options.indent_width
+        };
+        Some(
+            previous_indent
+                + extra
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
+        )
+    }
+
+    pub(crate) fn maximum_length_new_call_argument_indent_spaces(&self) -> Option<usize> {
+        if self.options.max_code_length.is_none() || self.options.indent_after_parens {
+            return None;
+        }
+        let previous = self.output.last_line_outside_comment()?;
+        if !self.output.code_trimmed_of(previous).ends_with(',')
+            || !code_holds_word(previous, "new")
+        {
+            return None;
+        }
+        self.active_output_paren_continuation_indent_spaces()
+    }
+
+    pub(crate) fn maximum_length_capped_open_paren_argument_indent_spaces(
+        &self,
+        line_kind: LineKind,
+    ) -> Option<usize> {
+        if line_kind != LineKind::Normal
+            || self.options.max_code_length.is_none()
+            || self.options.indent_after_parens
+        {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let base = self.continuation_base_indent() * self.options.indent_width;
+        (previous_code.ends_with('(')
+            && leading_visual_width(previous, self.options.tab_width) == base
+            && self
+                .open_paren_column_of(previous_code)
+                .is_some_and(|open| open + 1 > base + self.options.max_continuation_indent))
+        .then_some(base + self.options.indent_width * 2)
+    }
+
+    pub(crate) fn over_max_new_call_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        let new_pos = previous_code
+            .find(" new ")
+            .or_else(|| previous_code.find("(new "))?;
+        let opens = unmatched_open_paren_columns(previous_code);
+        let (&outer, &inner) = (opens.first()?, opens.last()?);
+        if inner <= outer {
+            return None;
+        }
+        let base = leading_visual_width(previous, self.options.tab_width);
+        if inner.saturating_sub(base) <= self.options.max_continuation_indent {
+            return None;
+        }
+        if !unmatched_open_paren_columns(&previous_code[..new_pos]).is_empty() {
+            let padding = previous_code
+                .chars()
+                .skip(outer + 1)
+                .take_while(|ch| ch.is_whitespace())
+                .collect::<String>();
+            let padding_width = visual_width_from(&padding, outer + 1, self.options.tab_width);
+            return Some(outer + 1 + padding_width);
+        }
+        (previous_code[..new_pos].contains('=') && previous_code[new_pos..].contains("(new "))
+            .then_some(base + self.options.indent_width * 2)
+    }
+
+    pub(crate) fn closed_over_max_new_call_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with("),") {
+            return None;
+        }
+        let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
+            let line = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trimmed_end();
+            let trimmed = code.trimmed();
+            if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
+                break;
+            }
+            if let Some(new_pos) = code.find(" new ").or_else(|| code.find("(new ")) {
+                let opens = unmatched_open_paren_columns(code);
+                if let Some(&inner) = opens.last() {
+                    let base = leading_visual_width(line, self.options.tab_width);
+                    if inner.saturating_sub(base) > self.options.max_continuation_indent
+                        && unmatched_open_paren_columns(&code[..new_pos]).is_empty()
+                        && code[..new_pos].contains('=')
+                        && code[new_pos..].contains("(new ")
+                        && previous_indent <= base + self.options.indent_width * 2
+                    {
+                        return Some(previous_indent);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn preprocessor_branch_new_call_fallback_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        if !self.preprocessor.split_else.extra_indent {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        if self.open_paren_column_of(previous_code).is_none() {
+            for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+                let code = self.output.code_before_comment(scan_index).trimmed_end();
+                if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {
+                    break;
+                }
+                if (code.contains(" new ") || code.contains("(new "))
+                    && self.open_paren_column_of(code).is_some()
+                {
+                    return Some(leading_visual_width(previous, self.options.tab_width));
+                }
+            }
+        }
+        if (previous_code.contains(" new ") || previous_code.contains("(new "))
+            && let Some(open) = self.open_paren_column_of(previous_code)
+        {
+            let base = leading_visual_width(previous, self.options.tab_width);
+            if open.saturating_sub(base) <= self.options.max_continuation_indent {
+                return Some(open + 1);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn split_new_call_owner_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (_, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        let open = self.open_paren_column_of(previous_code)?;
+        let mut nonempty = self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .skip(1)
+            .filter(|line| !line.trimmed().is_empty());
+        while let Some(line) = nonempty.next() {
+            let trimmed = line.trimmed();
+            if trimmed == "(" {
+                return nonempty
+                    .next()
+                    .is_some_and(|line| line.contains(" new ") || line.contains("(new "))
+                    .then_some(open + 1);
+            }
+            if trimmed.starts_with(')')
+                || trimmed.ends_with(';')
+                || trimmed.ends_with('{')
+                || trimmed.ends_with('}')
+            {
+                break;
+            }
+        }
+        None
+    }
+
+    pub(crate) fn split_new_call_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        // Only a call after `new` takes this layout.
+        if !self.output.may_have_new() {
+            return None;
+        }
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        let base = self.split_new_call_paren_indent_spaces()?;
+        let previous_indent = leading_visual_width(previous, self.options.tab_width);
+        if let Some(open) = self.open_paren_column_of(previous_code)
+            && column_after(previous_code, open, self.options.tab_width) > previous_indent
+        {
+            return Some(column_after(previous_code, open, self.options.tab_width));
+        }
+        (previous_indent > base + self.options.indent_width).then_some(previous_indent)
+    }
+
+    fn split_new_call_paren_indent_spaces(&self) -> Option<usize> {
+        if !self.output.recent_scoped_line_mentions_new(64) {
+            return None;
+        }
+        if let Some(previous) = self.output.last_non_empty_scoped() {
+            let code = self.output.code_trimmed_of(previous);
+            if code.trimmed() != "(" && self.open_paren_column_of(code).is_some() {
+                return None;
+            }
+        }
+        let range = self.output.scoped_range();
+        let start = range.start.max(range.end.saturating_sub(64));
+        // The last `(` alone counts unless a line ending the call's lines
+        // follows it.
+        let paren =
+            self.output
+                .last_line_looked(&self.paren_alone_look, start, range.end, |index| {
+                    self.output.trimmed(index) == "("
+                })?;
+        if self
+            .output
+            .last_line_looked(
+                &self.new_call_lines_end_look,
+                paren + 1,
+                range.end,
+                |index| self.ends_new_call_lines(index),
+            )
+            .is_some()
+        {
+            return None;
+        }
+        let before_paren = (start..paren)
+            .rev()
+            .find(|&index| !self.output.trimmed(index).is_empty())?;
+        let before_paren = &self.output[before_paren];
+        (before_paren.contains(" new ") || before_paren.contains("(new ")).then(|| {
+            leading_visual_width(&self.output[paren], self.options.tab_width)
+                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+        })
+    }
+
+    pub(crate) fn call_argument_sibling_frame_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if self.options.min_conditional_indent != MinConditionalIndent::Zero {
+            return None;
+        }
+        let trimmed = line.trimmed_start();
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let argument = self.layout.frame_stack.last_argument()?;
+        if argument.role != CommaRole::CallArgument {
+            return None;
+        }
+        // Only a line the source put at the anchor stays there.
+        let anchor = argument.sibling_anchor_column?;
+        if self.token_input.token_source_line_indent != anchor {
+            return None;
+        }
+        let code = self.output.code_trimmed_of(line);
+        if code.ends_with('{')
+            && (line_opens_lambda_block(line)
+                || line
+                    .trimmed()
+                    .strip_suffix('{')
+                    .is_some_and(|head| is_lambda_capture_header(head.trimmed_end())))
+        {
+            return None;
+        }
+        if self.open_paren_column_of(code).is_some() {
+            return None;
+        }
+        let active_owner_matches = self
+            .layout
+            .frame_stack
+            .active_delimiter_with_id()
+            .is_some_and(|(owner, delimiter)| {
+                argument.owner == Some(owner) && delimiter.role.is_call_like()
+            });
+        if !active_owner_matches {
+            let (_, previous_code) = self.output.last_code_outside_comment()?;
+            if !code.contains(')') || !previous_code.ends_with(',') || argument.owner.is_none() {
+                return None;
+            }
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let case_unindent = (self.layout.line_adjuster.total_case_unindent_depth()
+            * self.options.indent_width)
+            .max(self.adjusted_line_indent_delta(previous));
+        Some(anchor + case_unindent)
+    }
+
+    pub(crate) fn outer_call_argument_after_closed_inner_call_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if previous_code.ends_with("),") {
+            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            for scan_index in self.output.scoped_range().rev().skip(1).take(8) {
+                let raw = &self.output[scan_index];
+                let code = self.output.code_before_comment(scan_index).trimmed_end();
+                let trimmed = code.trimmed();
+                if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
+                    break;
+                }
+                if (code.contains(" new ") || code.contains("(new "))
+                    && find_assignment_operator(code).is_some()
+                    && let Some(open) = self.open_paren_column_of(code)
+                {
+                    let base = leading_visual_width(raw, self.options.tab_width);
+                    if open.saturating_sub(base) > self.options.max_continuation_indent {
+                        return Some(previous_indent);
+                    }
+                }
+            }
+        }
+        if previous_code.ends_with(',') {
+            let previous_imbalance = self.paren_imbalance_of(previous_code);
+            let case_unindent =
+                self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+            // Outside a case block only a line closing a paren it did not
+            // open takes the outer call's indent.
+            if case_unindent == 0 && previous_imbalance.0 == 0 {
+                return None;
+            }
+            let spaces = self.outer_call_indent_after_closed_previous_line()?;
+            let spaces =
+                if self.current_inline_array_column().is_some() || self.in_initializer_brace() {
+                    spaces.saturating_sub(1)
+                } else {
+                    spaces
+                };
+            if case_unindent > 0 {
+                let spaces = if previous_imbalance.1.is_empty() {
+                    spaces + case_unindent
+                } else {
+                    spaces
+                };
+                if leading_visual_width(line, self.options.tab_width) > 0
+                    || self.token_input.token_source_line_indent > spaces
+                    || leading_visual_width(previous, self.options.tab_width) == spaces
+                    || previous_imbalance.0 > 0
+                {
+                    return Some(spaces);
+                }
+            } else if previous_imbalance.0 > 0 {
+                return Some(spaces);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn outer_call_indent_after_closed_previous_line(&self) -> Option<usize> {
+        let mut close_pending = 0usize;
+        for index in self
+            .output
+            .scoped_range()
+            .rev()
+            .filter(|&index| !self.output.trimmed(index).is_empty())
+            .take(12)
+        {
+            let code = self.output.code_before_comment(index).trimmed_end();
+            let (closes, opens) = self.output.paren_imbalance(index);
+            let cancel = close_pending.min(opens.len());
+            let opens = &opens[..opens.len() - cancel];
+            close_pending = close_pending - cancel + closes;
+            if let Some(open) = opens.last() {
+                return Some(visual_width_from(
+                    &code[..open + 1],
+                    0,
+                    self.options.tab_width,
+                ));
+            }
+            let trimmed = code.trimmed();
+            if trimmed.ends_with(';') || trimmed == "{" || trimmed == "}" {
+                break;
+            }
+        }
+        None
+    }
+
+    pub(crate) fn completed_call_top_level_comma_sibling_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let current = line.trimmed_start();
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        let previous_trimmed = previous_code.trimmed_start();
+        if !previous_code.ends_with("),")
+            || self.pending_line_starts_initializer_element()
+            || self.pending_line_starts_enum_member()
+            || previous_trimmed.starts_with(':')
+            || previous_code.contains('<')
+            || current.contains('>')
+            || current.starts_with_any(b"#{})")
+            || self.open_paren_column_of(previous_code).is_some()
+            || !previous_code
+                .strip_suffix(',')
+                .is_some_and(has_top_level_comma_text)
+        {
+            return None;
+        }
+        if self.paren_closes_of(previous_code) > 0
+            && let Some(spaces) = self.outer_call_indent_after_closed_previous_line()
+        {
+            return Some(spaces);
+        }
+        Some(leading_visual_width(previous, self.options.tab_width))
+    }
+
+    pub(crate) fn closed_call_sibling_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
+        let current = line.trimmed_start();
+        if current.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let (previous, previous_code) = self.output.last_code_outside_comment()?;
+        if !previous_code.ends_with(',') {
+            return None;
+        }
+        if self.paren_closes_of(previous_code) > 0
+            && let Some(spaces) = self.outer_call_indent_after_closed_previous_line()
+        {
+            return Some(spaces);
+        }
+        (previous_code.contains(").") && self.open_paren_column_of(previous_code).is_none())
+            .then(|| leading_visual_width(previous, self.options.tab_width))
+    }
+
+    pub(crate) fn nested_call_argument_over_max_output_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        // Most lines follow none that leaves a paren open before a `,`;
+        // several layouts ask of the same output.
+        let key = (
+            self.output.len(),
+            self.output.version(),
+            self.output.scoped_range().start,
+        );
+        let open_before_comma = match self.open_before_comma_cache.get() {
+            Some((cached, open)) if cached == key => open,
+            _ => {
+                let open = self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    let code = self.output.code_trimmed_of(previous);
+                    code.ends_with(',') && !unmatched_open_paren_columns(code).is_empty()
+                });
+                self.open_before_comma_cache.set(Some((key, open)));
+                open
+            }
+        };
+        if !open_before_comma {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        // The indent never changes how the line ends.
+        if !self.output.code_trimmed_of(previous).ends_with(',') {
+            return None;
+        }
+        // Byte offsets in the line are its columns once its indent's tabs
+        // are spaces.
+        let expanded;
+        let previous_start = previous.trimmed_start();
+        let previous = if previous[..previous.len() - previous_start.len()]
+            .bytes()
+            .all(|byte| byte == b' ')
+        {
+            previous.as_str()
+        } else {
+            expanded = format!(
+                "{}{}",
+                " ".repeat(leading_visual_width(previous, self.options.tab_width)),
+                previous_start
+            );
+            expanded.as_str()
+        };
+        let previous_code = self.output.code_trimmed_of(previous);
+        if !previous_code.ends_with(',')
+            || previous_code.contains(" new ")
+            || previous_code.contains("(new ")
+        {
+            return None;
+        }
+        let columns = unmatched_open_paren_columns(previous_code);
+        let base = leading_visual_width(previous, self.options.tab_width);
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        let inner = *columns.last()?;
+        let over_statement_max = inner >= statement_base + self.options.max_continuation_indent;
+        if inner < base + self.options.max_continuation_indent && !over_statement_max
+            || self.constructor_initializer_base_indent_spaces().is_some()
+            || self.output_has_constructor_initializer_colon()
+        {
+            return None;
+        }
+        if over_statement_max
+            && let Some(spaces) = self
+                .layout
+                .frame_stack
+                .active_delimiter()
+                .filter(|delimiter| delimiter.opener_output_column == inner)
+                .and_then(|delimiter| delimiter.continuation_indent_column)
+        {
+            return Some(spaces);
+        }
+        // The columns come from output lines, which already carry the
+        // case-block unindent.
+        self.over_max_argument_output_column(
+            previous_code,
+            &columns,
+            base,
+            statement_base,
+            over_statement_max,
+        )
+        .map(|column| column + self.case_unindent_spaces())
+    }
+
+    fn over_max_argument_output_column(
+        &self,
+        previous_code: &str,
+        columns: &[usize],
+        base: usize,
+        statement_base: usize,
+        over_statement_max: bool,
+    ) -> Option<usize> {
+        let inner = *columns.last()?;
+        if columns.len() < 2 {
+            if previous_code.contains(" new ") || previous_code.contains("(new ") {
+                return None;
+            }
+            if base >= self.options.indent_width * 2
+                && self.pending_line_in_plain_block()
+                && (!self.preprocessor.branch_stack.is_empty()
+                    || output_has_active_preprocessor_branch(self.output.as_slice()))
+            {
+                return Some(base + self.options.indent_width * 2);
+            }
+            if let Some((mut eq, mut operator)) = find_assignment_operator(previous_code)
+                && eq < inner
+            {
+                let mut search_start = eq + operator.len();
+                while search_start < inner {
+                    let Some((next, next_operator)) =
+                        find_assignment_operator(&previous_code[search_start..inner])
+                    else {
+                        break;
+                    };
+                    eq = search_start + next;
+                    operator = next_operator;
+                    search_start = eq + operator.len();
+                }
+                let value_start = previous_code[eq + operator.len()..]
+                    .char_indices()
+                    .find(|(_, ch)| !ch.is_whitespace())
+                    .map_or(previous_code.len(), |(offset, _)| {
+                        eq + operator.len() + offset
+                    });
+                let spaces =
+                    visual_width_from(&previous_code[..value_start], 0, self.options.tab_width);
+                // astyle falls back to two levels past the line, but never
+                // before the assigned value's column.
+                let fallback = base + self.options.indent_width * 2;
+                if spaces.saturating_sub(base) > self.options.max_continuation_indent {
+                    return Some(fallback);
+                }
+                return Some(spaces.max(fallback));
+            }
+            if over_statement_max {
+                return Some(base + self.options.indent_width * 2);
+            }
+            return None;
+        }
+        let outer = columns[columns.len() - 2] + 1;
+        if columns.len() == 2
+            && over_statement_max
+            && starts_header_word(previous_code.trimmed_start(), "if")
+        {
+            return Some(base + self.options.indent_width * 2);
+        }
+        if over_statement_max && outer <= base {
+            return Some(base + self.options.indent_width * 2);
+        }
+        let max_base = if over_statement_max {
+            statement_base
+        } else {
+            base
+        };
+        if outer.saturating_sub(max_base) > self.options.max_continuation_indent {
+            return Some(base + self.options.indent_width * 2);
+        }
+        // An assignment in the outer parentheses puts the arguments at its
+        // value.
+        if let Some((eq, operator)) = find_assignment_operator(&previous_code[outer..inner])
+            && let Some(offset) = previous_code[outer + eq + operator.len()..inner]
+                .find(|ch: char| !ch.is_whitespace())
+        {
+            return Some(visual_width_from(
+                &previous_code[..outer + eq + operator.len() + offset],
+                0,
+                self.options.tab_width,
+            ));
+        }
+        Some(outer)
+    }
+
+    pub(crate) fn over_max_inner_call_open_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if !previous.trimmed_end().ends_with('(') {
+            return None;
+        }
+        let opens = self.paren_imbalance_of(previous_code).1;
+        if opens.len() < 2 {
+            return None;
+        }
+        if previous_code.contains(").") {
+            return Some(opens[opens.len() - 2] + 1 + self.options.indent_width);
+        }
+        let inner = *opens.last()?;
+        let base = leading_visual_width(previous, self.options.tab_width);
+        let head = previous_code[..opens[0]].trimmed_start();
+        let callee = previous_code[..inner]
+            .rsplit(|ch: char| !(is_identifier_continue(ch) || matches!(ch, '.' | ':')))
+            .next()
+            .unwrap_or_default();
+        if callee.contains('.') && is_macro_like_word(head) {
+            return Some(base + self.options.indent_width * 3);
+        }
+        if callee.contains('.') && inner + 1 > base + self.options.max_continuation_indent {
+            return Some(base + self.options.indent_width * 3);
+        }
+        None
+    }
+
+    pub(crate) fn lambda_call_argument_after_split_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        if !line.trimmed_start().starts_with('[')
+            || !line_opens_attachable_lambda_block(self.options, line)
+        {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if !previous_code.ends_with(',') || self.leaves_paren_open(previous_code) {
+            return None;
+        }
+        for scan_index in self.output.scoped_range().rev().skip(1).take(12) {
+            let raw = &self.output[scan_index];
+            let code = self.output.code_before_comment(scan_index).trimmed_end();
+            if self.leaves_paren_open(code) {
+                return Some(leading_visual_width(raw, self.options.tab_width));
+            }
+            let trimmed = code.trimmed_start();
+            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+                break;
+            }
+        }
+        None
+    }
+
+    pub(crate) fn argument_after_lambda_call_argument_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+    ) -> Option<usize> {
+        let trimmed = line.trimmed_start();
+        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        let previous = self.output.last_non_empty_scoped()?;
+        let previous_code = self.output.code_trimmed_of(previous);
+        if previous_code.ends_with(',') && self.previous_output_line_closes_lambda_body() {
+            return Some(leading_visual_width(previous, self.options.tab_width));
+        }
+        None
+    }
+
+    fn previous_output_line_closes_lambda_body(&self) -> bool {
+        let mut depth = 0usize;
+        for raw in self
+            .output
+            .scoped()
+            .iter()
+            .rev()
+            .filter(|line| !line.trimmed().is_empty())
+        {
+            let code = self.output.code_trimmed_of(raw);
+            if depth == 0 && !code.trimmed_start().starts_with('}') {
+                return false;
+            }
+            for (index, ch) in code.char_indices().rev() {
+                match ch {
+                    '}' => depth += 1,
+                    '{' if depth > 0 => {
+                        depth -= 1;
+                        if depth == 0 {
+                            let head = code[..=index].trimmed_end();
+                            return line_opens_lambda_block(head)
+                                || head.trimmed().strip_suffix('{').is_some_and(|head| {
+                                    is_lambda_capture_header(head.trimmed_end())
+                                });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        false
+    }
+}
+
+pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
+    let trimmed = line.trimmed_end();
+    if trimmed.ends_with('{') {
+        return line_opens_lambda_block(line)
+            || trimmed
+                .strip_suffix('{')
+                .is_some_and(|head| is_lambda_capture_header(head.trimmed_end()));
+    }
+    !trimmed.contains('{')
+        && trimmed.trimmed_start().starts_with('[')
+        && matches!(
+            options.brace_style,
+            BraceStyle::Attach
+                | BraceStyle::OneTrueBrace
+                | BraceStyle::WebKit
+                | BraceStyle::Ratliff
+                | BraceStyle::Lisp
+        )
+        && is_lambda_body_header(trimmed)
+        && lambda_header_has_trailing_return(trimmed)
+}

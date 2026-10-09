@@ -1,0 +1,3402 @@
+use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::classification::{
+    is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
+};
+use crate::formatter::braces::closing::is_attached_closing_header_style;
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
+use crate::formatter::constructs::assembly::is_asm_block_header;
+use crate::formatter::constructs::headers::is_header;
+use crate::formatter::constructs::headers::line_is_control_body_header;
+use crate::formatter::engine::{FormatEngine, TokenPushContext};
+use crate::formatter::index_hash::{IndexMap, IndexSet};
+use crate::formatter::lexer::{
+    CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
+    next_non_whitespace, previous_non_layout_token_index, token_char_len, token_text,
+};
+use crate::formatter::preprocessor::{
+    is_conditional_preprocessor, is_known_preprocessor_directive,
+};
+use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::indentation::LineKind;
+use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::SourceTree;
+use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
+use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, line_ends_with_comment,
+    preprocessor_directive, unmatched_open_paren_column,
+};
+use crate::formatter::text::trim::Trimmed;
+use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+use std::collections::BTreeMap;
+
+impl FormatEngine<'_> {
+    pub(crate) fn try_add_braces_to_statement(
+        &mut self,
+        tokens: &[Token],
+        line_start: usize,
+        start: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        if !(self.options.add_braces || self.options.add_one_line_braces) {
+            return None;
+        }
+        // A label such as `case X:` before a directive takes no body.
+        if self.layout.command_state.preprocessor_after_header
+            && !self
+                .layout
+                .command_state
+                .current_header
+                .as_deref()
+                .is_some_and(is_standard_add_braces_header)
+        {
+            self.layout.command_state.preprocessor_after_header = false;
+        }
+        if self.layout.command_state.preprocessor_after_header {
+            if self.layout.nesting.paren_depth > 0
+                || matches!(tokens.get(start), Some(Token::Symbol('{')))
+            {
+                return None;
+            }
+            if matches!(
+                tokens.get(start),
+                Some(
+                    Token::Whitespace(_)
+                        | Token::Newline
+                        | Token::Preprocessor(_)
+                        | Token::Comment(_, _)
+                )
+            ) {
+                return None;
+            }
+            let body_indent = self
+                .layout
+                .indentation
+                .indent()
+                .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
+                + 1;
+            self.layout
+                .continuation_indent
+                .set_next_line_level(body_indent);
+            self.layout.pending_braceless_block_bias = Some(body_indent);
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            return None;
+        }
+        let header = self.layout.command_state.current_header.as_deref()?;
+        if !is_standard_add_braces_header(header)
+            || is_defer_header(header)
+            || self.line_comment_before(tokens, line_start, start)
+        {
+            return None;
+        }
+        // astyle adds no braces to an `if` after a statement on a line it
+        // keeps, when its body is on that line too.
+        let follows_statement = header == "if"
+            && self.options.keeps_multi_statement_line()
+            && if_follows_statement_on_line(tokens, start);
+        let header_is_else = header == "else";
+        let header_is_if = header == "if";
+        let header_is_do = header == "do";
+        if matches!(header, "if" | "for" | "while")
+            && (self.layout.command_state.previous_command_char != Some(')')
+                || self.layout.nesting.paren_depth > 0)
+        {
+            return None;
+        }
+        let statement_start = next_non_whitespace(tokens, start, line_end)?;
+        if !self.follows_header_end(tokens, statement_start, header)
+            || follows_statement
+                && !matches!(tokens[statement_start], Token::Newline)
+                && !token_begins_line(tokens, statement_start)
+        {
+            return None;
+        }
+        match tokens.get(statement_start)? {
+            Token::Symbol('{')
+            | Token::Symbol(';')
+            | Token::Comment(_, _)
+            | Token::Preprocessor(_)
+            | Token::Newline => return None,
+            Token::Word(word) if is_header(self.options, word) => return None,
+            _ => {}
+        }
+
+        let semicolon = find_statement_semicolon(tokens, statement_start, line_end)?;
+        if tokens[statement_start..semicolon]
+            .iter()
+            .any(|token| matches!(token, Token::Newline))
+        {
+            return None;
+        }
+        // Lisp breaks the block it adds around a statement on its own line,
+        // or one a comment follows.
+        let lisp_breaks_added_block = self.options.brace_style == BraceStyle::Lisp
+            && (token_begins_line(tokens, statement_start)
+                || self.options.break_one_line_blocks
+                    && tokens[semicolon + 1..]
+                        .iter()
+                        .find(|token| !matches!(token, Token::Whitespace(_)))
+                        .is_some_and(|token| matches!(token, Token::Comment(..))));
+        // Breaking one-line headers leaves a statement on a line of its own
+        // to the one-line block around it.
+        // Braces added around a `do` body on its own line break it unless
+        // they are one-line braces.
+        let breaks_do_body = header_is_do
+            && !self.options.add_one_line_braces
+            && token_begins_line(tokens, statement_start);
+        if (!self.options.break_one_line_headers || token_begins_line(tokens, statement_start))
+            && (self.options.add_one_line_braces || !self.options.break_one_line_blocks)
+            && !self.options.lisp_add_one_line_braces_breaks_blocks()
+            && !lisp_breaks_added_block
+            && !breaks_do_body
+        {
+            let statement_starts_line = token_begins_line(tokens, statement_start);
+            // A comment between the header and its statement leaves the
+            // brace at the header's level all the same.
+            let follows_comment_line = self.current_is_blank()
+                && tokens[..statement_start]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                    .is_some_and(|token| matches!(token, Token::Comment(..)));
+            if statement_starts_line && (!self.current_is_blank() || follows_comment_line) {
+                // VTK indents the brace within a block other than a function's.
+                let vtk_nested = self.options.brace_style == BraceStyle::Vtk
+                    && self
+                        .layout
+                        .frame_stack
+                        .active_brace()
+                        .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command);
+                let brace_indent_extra = usize::from(
+                    self.options.indent_braces
+                        || self.options.brace_style == BraceStyle::Gnu
+                        || vtk_nested,
+                );
+                // The bias already counts the case body level. A comment
+                // after an `else` biases its braceless body, which these
+                // braces enclose.
+                let bias = self
+                    .layout
+                    .pending_braceless_block_bias
+                    .filter(|_| !(header_is_else && follows_comment_line));
+                let mut block_indent = (self.layout.indentation.indent()
+                    + self.case_body_indent_extra(LineKind::Normal))
+                .max(bias.unwrap_or(0))
+                    + brace_indent_extra;
+                if !follows_comment_line {
+                    self.finish_line();
+                    // The header's line holds the level a braceless body
+                    // around it left no trace of.
+                    if let Some(line) = self.output.last() {
+                        let code = line.trimmed();
+                        let code = code.strip_prefix('}').map_or(code, str::trim_start);
+                        if code.starts_with("else")
+                            && line_is_control_body_header(code)
+                            && self.preprocessor.split_else.extra_levels == 0
+                        {
+                            // The line counts the levels broken else-ifs add,
+                            // which the layout adds again.
+                            let level = (leading_visual_width(line, self.options.tab_width)
+                                / self.options.indent_width)
+                                .saturating_sub(self.else_if_break_extra());
+                            block_indent = block_indent.max(level + brace_indent_extra);
+                        }
+                    }
+                }
+                // A case body sets its own floor under a level.
+                if self.layout.line_adjuster.switch_depth() > 0 {
+                    // Spaces take no level a broken else-if adds; count it.
+                    self.layout.continuation_indent.set_next_line_spaces(
+                        (block_indent + self.else_if_break_extra()) * self.options.indent_width,
+                    );
+                } else {
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(block_indent);
+                }
+                // An `else` stands where its `if` put it; the brace joins it.
+                if header_is_else
+                    && !follows_comment_line
+                    && !self.split_else_line_layout_active()
+                    && let Some(else_line) = self.output.last()
+                    && else_line.trimmed() == "else"
+                {
+                    let spaces = leading_visual_width(else_line, self.options.tab_width)
+                        + self.adjusted_line_indent_delta(else_line)
+                        + usize::from(
+                            brace_indent_extra > 0
+                                || self.options.brace_style == BraceStyle::Whitesmith,
+                        ) * self.options.indent_width;
+                    self.layout.continuation_indent.set_next_line_spaces(spaces);
+                }
+            }
+            let mut block_tokens = Vec::with_capacity(semicolon - statement_start + 5);
+            block_tokens.push(Token::Symbol('{'));
+            let body_gap = if statement_starts_line && self.options.brace_style == BraceStyle::Pico
+            {
+                " ".repeat(self.options.indent_width.saturating_sub(1))
+            } else {
+                " ".to_string()
+            };
+            block_tokens.push(Token::Whitespace(body_gap.into()));
+            block_tokens.extend_from_slice(&tokens[statement_start..=semicolon]);
+            block_tokens.push(Token::Whitespace(" ".to_string().into()));
+            block_tokens.push(Token::Symbol('}'));
+            // A block one-line braces add takes the gap the statement had
+            // after its header.
+            let header_gap = statement_start
+                .checked_sub(1)
+                .filter(|_| self.options.add_one_line_braces && !statement_starts_line)
+                .and_then(|before| match &tokens[before] {
+                    Token::Whitespace(gap) if gap.len() > 1 || gap.contains('\t') => {
+                        Some(gap.clone())
+                    }
+                    _ => None,
+                });
+            self.push_attached_one_line_block(
+                &block_tokens,
+                BraceType::Command,
+                header_gap.as_deref(),
+                None::<&str>,
+                false,
+                None,
+            );
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            let header_body_bias = self.layout.pending_braceless_block_bias.take();
+            if header_is_do {
+                self.layout.nesting.last_closed_brace_header = Some("do".to_string());
+            }
+            let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true)
+                .and_then(|next_index| tokens.get(next_index));
+            let same_line_next = next_statement_token(tokens, semicolon + 1, line_end, false)
+                .and_then(|next_index| tokens.get(next_index));
+            let next_is_else = matches!(next, Some(Token::Word(word)) if word == "else");
+            let next_is_closing_while = header_is_do
+                && matches!(same_line_next, Some(Token::Word(word)) if word == "while");
+            let next_is_closing_header = next_is_else || next_is_closing_while;
+            let attach_closing_header = self.should_attach_closing_header(next);
+            let keep_following_statement = !self.options.break_one_line_statements
+                && same_line_next.is_some()
+                && (!next_is_closing_header || attach_closing_header);
+            let nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
+            // A comment after the statement stays after the block.
+            let trailing_comment = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Comment(..)));
+            if trailing_comment {
+                self.comments.follows_added_one_line_block = true;
+            } else if (next_is_else
+                && attach_closing_header
+                && (nested_header_level.is_none() || !self.options.break_one_line_statements))
+                || keep_following_statement
+            {
+                self.ensure_space();
+            } else {
+                self.finish_line();
+            }
+            if self.current_is_blank() {
+                // An else-chain goes on in the braceless body holding it.
+                if let Some(level) = nested_header_level.or(header_body_bias
+                    .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
+                {
+                    let delta = level.saturating_sub(self.layout.indentation.indent());
+                    if delta > 0 {
+                        self.layout.indentation.enter_braceless_block(delta);
+                    }
+                }
+            } else if matches!(next, Some(Token::Word(word)) if word == "else") {
+                self.layout.inline_nested_header_braceless_bias = nested_header_level;
+            }
+            if header_is_else && !matches!(next, Some(Token::Word(word)) if word == "else") {
+                while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+                    && self.layout.indentation.indent() == base + delta
+                {
+                    self.layout.indentation.exit_braceless_block();
+                    if self.layout.frame_stack.active_braceless_header().is_some() {
+                        self.layout.frame_stack.pop_braceless_header();
+                    }
+                }
+            }
+            // The block of a chain's last `else`, or of its last broken
+            // `else if`, ends the chain.
+            let broken_else_if = header_is_if && {
+                let lines = self.output.scoped();
+                let mut rows = lines.iter().rev().filter(|line| !line.trimmed().is_empty());
+                rows.nth(2).is_some_and(|line| line.trimmed() == "else")
+            };
+            let else_follows = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_)
+                            | Token::Newline
+                            | Token::Comment(..)
+                            | Token::Preprocessor(_)
+                    )
+                })
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
+            if (header_is_else || broken_else_if) && !else_follows {
+                // A comment the block's line still takes ends it later.
+                if self.current_is_blank() {
+                    self.unwind_else_if_break_depths();
+                } else {
+                    self.layout.unwind_else_if_after_line = true;
+                }
+            }
+        } else {
+            self.token_input.token_begins_source_line = false;
+            // A block lisp breaks is no one-line block to its neighbors.
+            self.layout.line_state.is_one_line_block =
+                !(lisp_breaks_added_block || self.options.lisp_add_one_line_braces_breaks_blocks());
+            // The added brace follows its header by one space, whatever the
+            // source held before the header's `)`.
+            self.token_input.previous_input_whitespace = Some(" ".to_string().into());
+            self.push_open_brace(None, usize::MAX, false);
+            self.push_replayed_statement(
+                tokens,
+                statement_start,
+                semicolon,
+                None,
+                statement_start,
+                None,
+            );
+            // A comment or a statement on a later line follows the block,
+            // not the brace; a closing header still joins it.
+            let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true).and_then(
+                |next_index| {
+                    let on_later_line = tokens[semicolon + 1..next_index]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline));
+                    let closing_header = matches!(&tokens[next_index], Token::Word(word)
+                        if matches!(word.as_str(), "else" | "while" | "catch"));
+                    if on_later_line && !closing_header {
+                        Some(&Token::Newline)
+                    } else {
+                        tokens.get(next_index)
+                    }
+                },
+            );
+            self.token_input.previous_input_whitespace = Some(" ".to_string().into());
+            // The added brace is no text of the statement's last token.
+            self.current.set_active_token(None);
+            self.comments.closing_broken_added_block = true;
+            self.push_close_brace(next, false);
+            self.comments.closing_broken_added_block = false;
+            self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Comment(..)));
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            if header_is_else && !matches!(next, Some(Token::Word(word)) if word == "else") {
+                while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+                    && self.layout.indentation.indent() == base + delta
+                {
+                    self.layout.indentation.exit_braceless_block();
+                    if self.layout.frame_stack.active_braceless_header().is_some() {
+                        self.layout.frame_stack.pop_braceless_header();
+                    }
+                }
+            }
+        }
+        Some(semicolon + 1)
+    }
+
+    pub(crate) fn try_remove_braces_from_statement(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        if !self.options.remove_braces
+            || !matches!(tokens.get(start), Some(Token::Symbol('{')))
+            || !is_remove_braces_opening(tokens, start)
+        {
+            return None;
+        }
+        let header = self.layout.command_state.current_header.as_deref()?;
+        if !is_remove_braces_header(header) || is_defer_header(header) {
+            return None;
+        }
+        let (statement_start, semicolon, close_index) =
+            removable_statement_brace_range(tokens, start, line_end, false)?;
+        let block_starts_line = token_begins_line(tokens, start);
+        let removed_opening_gap =
+            (!self.options.break_one_line_blocks && !block_starts_line).then(|| {
+                let mut gap = match tokens.get(start.wrapping_sub(1)) {
+                    Some(Token::Whitespace(whitespace)) => whitespace.to_string(),
+                    _ => String::new(),
+                };
+                for token in &tokens[start + 1..statement_start] {
+                    if let Token::Whitespace(whitespace) = token {
+                        gap.push_str(whitespace);
+                    }
+                }
+                gap
+            });
+        if self.options.break_one_line_blocks || block_starts_line {
+            self.finish_line();
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.statement_level() + 1);
+            self.layout.command_state.current_header = None;
+        }
+        let following_index = next_statement_token(tokens, close_index + 1, line_end, false);
+        let following = following_index.and_then(|index| tokens.get(index));
+        let following_is_header =
+            matches!(following, Some(Token::Word(word)) if is_header(self.options, word));
+        let keep_body_with_following = following.is_some()
+            && self.options.keeps_multi_statement_line()
+            && !(self.options.break_one_line_headers && following_is_header);
+        if keep_body_with_following {
+            self.layout.line_state.is_multi_statement_line = true;
+            self.layout.line_state.is_one_line_block = false;
+        }
+        self.token_input.replaying_removed_braces = true;
+        self.push_replayed_statement(
+            tokens,
+            statement_start,
+            semicolon,
+            following,
+            start,
+            removed_opening_gap.as_deref(),
+        );
+        self.token_input.replaying_removed_braces = false;
+        if keep_body_with_following {
+            self.trim_current_end_horizontal_space();
+            for token in &tokens[semicolon + 1..following_index.unwrap_or(close_index + 1)] {
+                match token {
+                    Token::Whitespace(whitespace) => self.current.push_str(whitespace),
+                    Token::Symbol('}') => self.current.push(' '),
+                    _ => {}
+                }
+            }
+        }
+        if !keep_body_with_following
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            )
+            && following_index.is_none()
+            && next_statement_token(tokens, close_index + 1, tokens.len(), true)
+                .is_some_and(|index| matches!(tokens.get(index), Some(Token::Symbol('}'))))
+        {
+            let closing_gap = tokens[semicolon + 1..close_index]
+                .iter()
+                .filter_map(|token| match token {
+                    Token::Whitespace(whitespace) => Some(whitespace.as_str()),
+                    _ => None,
+                })
+                .collect::<String>();
+            if self.current_is_blank() {
+                if let Some(previous) = self.output.last_mut() {
+                    previous.truncate(previous.trimmed_end().len());
+                    previous.push_str(&closing_gap);
+                }
+            } else {
+                self.trim_current_end_horizontal_space();
+                self.current.push_str(&closing_gap);
+                self.preserve_run_in_join_space = true;
+            }
+        }
+        Some(close_index + 1)
+    }
+
+    /// Whether a line comment stands among the tokens of the line starting
+    /// at `line_start` before `start`.
+    fn line_comment_before(&self, tokens: &[Token], line_start: usize, start: usize) -> bool {
+        let key = (tokens.as_ptr() as usize, tokens.len(), line_start);
+        let first = match self.line_comment_cache.get() {
+            Some((address, len, cached_start, first)) if (address, len, cached_start) == key => {
+                first
+            }
+            _ => {
+                let first = tokens[line_start..]
+                    .iter()
+                    .take_while(|token| !matches!(token, Token::Newline))
+                    .position(|token| matches!(token, Token::Comment(CommentKind::Line, _)))
+                    .map(|offset| line_start + offset);
+                self.line_comment_cache
+                    .set(Some((key.0, key.1, key.2, first)));
+                first
+            }
+        };
+        first.is_some_and(|first| first < start)
+    }
+
+    pub(crate) fn try_break_one_line_header(
+        &mut self,
+        tokens: &[Token],
+        line_start: usize,
+        start: usize,
+        line_end: usize,
+    ) -> bool {
+        let split_else_after_preprocessor = self.is_after_preprocessor_split_else()
+            && self.preprocessor.split_else.trigger_output_len != Some(self.output.len());
+        if !split_else_after_preprocessor && !self.options.break_one_line_headers
+            || self.line_comment_before(tokens, line_start, start)
+        {
+            return false;
+        }
+        let header = self.layout.command_state.current_header.as_deref();
+        if !split_else_after_preprocessor {
+            let Some(header) = header else {
+                return false;
+            };
+            if !(is_standard_add_braces_header(header) || header == "switch")
+                || is_defer_header(header)
+            {
+                return false;
+            }
+        }
+        if matches!(header, Some("if" | "for" | "while" | "switch"))
+            && (self.layout.command_state.previous_command_char != Some(')')
+                || self.layout.nesting.paren_depth > 0)
+        {
+            return false;
+        }
+        let Some(statement_start) = next_non_whitespace(tokens, start, line_end) else {
+            return false;
+        };
+        // A header whose condition a macro call gives, as in `if EQ(x) {`,
+        // has no body until that call closes.
+        if self.layout.nesting.paren_depth > 0
+            || tokens[line_start..start]
+                .iter()
+                .rev()
+                .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(_, _)))
+                .find(|token| !matches!(token, Token::Word(word) if !is_header(self.options, word)))
+                .is_some_and(|token| {
+                    matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                })
+        {
+            return false;
+        }
+        let header_brace_depth = tokens[line_start..start]
+            .iter()
+            .fold(0usize, |depth, token| match token {
+                Token::Symbol('{') => depth + 1,
+                Token::Symbol('}') => depth.saturating_sub(1),
+                _ => depth,
+            });
+        let preceding_top_level_statement = {
+            let mut brace_depth = 0usize;
+            let mut paren_depth = 0usize;
+            tokens[line_start..start].iter().any(|token| match token {
+                Token::Symbol('{') => {
+                    brace_depth += 1;
+                    false
+                }
+                Token::Symbol('}') => {
+                    brace_depth = brace_depth.saturating_sub(1);
+                    false
+                }
+                Token::Symbol('(') => {
+                    paren_depth += 1;
+                    false
+                }
+                Token::Symbol(')') => {
+                    paren_depth = paren_depth.saturating_sub(1);
+                    false
+                }
+                Token::Symbol(';') => brace_depth == header_brace_depth && paren_depth == 0,
+                _ => false,
+            })
+        };
+        // A case label before the header leads the line as a statement does.
+        let preceding_case_label = tokens[line_start..start]
+            .iter()
+            .find(|token| crate::formatter::structure::blocks::is_code_token(token))
+            .is_some_and(
+                |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
+            );
+        let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
+            && !self.in_broken_one_line_block(start)
+            && (preceding_top_level_statement
+                || preceding_case_label
+                || find_statement_semicolon(tokens, statement_start, line_end)
+                    .and_then(|semicolon| {
+                        next_statement_token(tokens, semicolon + 1, line_end, false)
+                    })
+                    .is_some_and(|index| {
+                        !matches!(
+                            tokens.get(index),
+                            Some(Token::Symbol('}') | Token::Comment(..))
+                        )
+                    }));
+        if keeps_multi_statement_line {
+            return false;
+        }
+        if split_else_after_preprocessor
+            || (self.layout.command_state.preprocessor_after_header && header == Some("else"))
+        {
+            match tokens.get(statement_start) {
+                Some(Token::Word(word)) if is_header(self.options, word) => {
+                    let header_body_braceless =
+                        header_body_start(tokens, statement_start, line_end).is_some_and(|index| {
+                            !matches!(tokens.get(index), Some(Token::Symbol('{')))
+                        });
+                    let header_has_else = word == "if"
+                        && find_statement_semicolon(tokens, statement_start, tokens.len())
+                            .and_then(|index| next_non_layout_token_index(tokens, index + 1))
+                            .is_some_and(|index| {
+                                matches!(tokens.get(index), Some(Token::Word(next)) if next == "else")
+                            });
+                    self.finish_line();
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(self.statement_level() + 1);
+                    self.preprocessor.split_else.extra_indent = true;
+                    self.preprocessor.split_else.extra_levels += 1;
+                    self.preprocessor.split_else.pending_body = false;
+                    self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
+                    self.preprocessor.split_else.body_braceless =
+                        header_body_braceless && !header_has_else;
+                    self.preprocessor.split_else.brace_indent = self.layout.indentation.indent();
+                    self.layout.command_state.current_header = None;
+                    self.layout.command_state.preprocessor_after_header = false;
+                    return true;
+                }
+                Some(Token::Symbol('{')) if self.preprocessor.split_else.extra_indent => {
+                    self.finish_line();
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_level(self.statement_level() + 1);
+                    self.preprocessor.split_else.pending_body = false;
+                    self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
+                    self.layout.command_state.preprocessor_after_header = false;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        match tokens.get(statement_start) {
+            Some(Token::Symbol('{')) if self.options.brace_style == BraceStyle::Pico => {
+                // A comment ending the brace's line stays on the header's.
+                if next_non_whitespace(tokens, statement_start + 1, line_end).is_some_and(|index| {
+                    match tokens.get(index) {
+                        Some(Token::Comment(CommentKind::Line, _)) => true,
+                        Some(Token::Comment(CommentKind::Block, comment)) => {
+                            !comment.contains('\n')
+                                && tokens[index + 1..line_end].iter().all(|token| {
+                                    matches!(token, Token::Whitespace(_) | Token::Newline)
+                                })
+                        }
+                        _ => false,
+                    }
+                }) {
+                    return false;
+                }
+                // A block holding no code stays on its header's line.
+                if tokens[statement_start + 1..line_end]
+                    .iter()
+                    .find(|token| {
+                        !matches!(
+                            token,
+                            Token::Whitespace(_) | Token::Comment(CommentKind::Block, _)
+                        )
+                    })
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+                {
+                    return false;
+                }
+                let header_indent = self
+                    .layout
+                    .indentation
+                    .indent()
+                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                self.finish_line();
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent);
+                return false;
+            }
+            Some(Token::Symbol('{') | Token::Symbol(';'))
+            | Some(Token::Comment(_, _) | Token::Preprocessor(_) | Token::Newline) => return false,
+            Some(Token::Word(word))
+                if (is_standard_add_braces_header(word) || word == "switch")
+                    && !is_defer_header(word)
+                    && (header != Some("else") || word != "if")
+                    && !split_else_after_preprocessor =>
+            {
+                let header_indent = self
+                    .layout
+                    .continuation_indent
+                    .next_line_indent
+                    .unwrap_or_else(|| self.layout.indentation.indent())
+                    .max(
+                        self.layout.indentation.indent()
+                            + self.case_body_indent_extra(LineKind::Normal),
+                    )
+                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                self.finish_line();
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent + 1);
+                self.layout.pending_braceless_block_bias = Some(header_indent + 1);
+                self.layout.command_state.current_header = None;
+                self.previous_was_newline = true;
+                return true;
+            }
+            Some(Token::Word(word)) if is_header(self.options, word) => return false,
+            Some(Token::Symbol('#')) => {
+                let header_indent = self
+                    .layout
+                    .indentation
+                    .indent()
+                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                let conditional_after_else = header == Some("else")
+                    && matches!(
+                        tokens.get(statement_start + 1),
+                        Some(Token::Word(word)) if matches!(word.as_str(), "if" | "ifdef" | "ifndef")
+                    );
+                let directive = match tokens.get(statement_start + 1) {
+                    Some(Token::Word(word)) => Some(word.as_str()),
+                    _ => None,
+                };
+                let known_preprocessor = directive.is_some_and(is_known_preprocessor_directive);
+                let conditional_preprocessor = directive.is_some_and(is_conditional_preprocessor);
+                self.finish_line();
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = known_preprocessor
+                    .then_some(if conditional_preprocessor {
+                        0
+                    } else {
+                        header_indent * self.options.indent_width
+                    });
+                if conditional_after_else {
+                    self.layout.indentation.clear_continuation_indents();
+                    self.layout.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.logical_chain_indent_spaces = None;
+                    self.preprocessor.split_else.pending_body = true;
+                    self.preprocessor.split_else.body_braceless = true;
+                    self.preprocessor.split_else.trigger_output_len = Some(usize::MAX);
+                }
+                self.previous_was_newline = true;
+                self.layout.command_state.current_header = None;
+                self.layout.command_state.preprocessor_after_header = false;
+                return true;
+            }
+            Some(_) => {}
+            None => return false,
+        }
+
+        let header_indent = self
+            .layout
+            .indentation
+            .indent()
+            .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+        self.finish_line();
+        let split_else_keeps_body_level = split_else_after_preprocessor
+            && (self.preprocessor.split_else.extra_levels > 0
+                || split_else_preprocessor_follows_closing_brace(&self.output));
+        let body_indent = header_indent
+            + usize::from(!split_else_after_preprocessor || split_else_keeps_body_level);
+        self.layout
+            .continuation_indent
+            .set_next_line_level(body_indent);
+        if !split_else_after_preprocessor {
+            self.layout.pending_braceless_block_bias = Some(body_indent);
+        }
+        self.previous_was_newline = true;
+        if split_else_after_preprocessor {
+            self.preprocessor.split_else.pending_body = false;
+            self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
+            self.preprocessor.split_else.body_braceless = true;
+        }
+        self.layout.command_state.current_header = None;
+        self.layout.command_state.preprocessor_after_header = false;
+        true
+    }
+
+    pub(crate) fn try_break_braceless_header_body(
+        &mut self,
+        tokens: &[Token],
+        newline_index: usize,
+    ) -> bool {
+        let mut adding_braces = self.options.add_braces || self.options.add_one_line_braces;
+        let Some(header) = self.layout.command_state.current_header.as_deref() else {
+            return false;
+        };
+        if !is_standard_add_braces_header(header) || is_defer_header(header) {
+            return false;
+        }
+        if matches!(header, "if" | "for" | "while") {
+            let open_parens_are_outside_current_block = self
+                .layout
+                .nesting
+                .current_brace_paren_depth()
+                .is_some_and(|depth| depth == self.layout.nesting.paren_depth);
+            if self.layout.command_state.previous_command_char != Some(')')
+                || (self.layout.nesting.paren_depth > 0 && !open_parens_are_outside_current_block)
+            {
+                return false;
+            }
+            // A block opened inside parens keeps their count open, so no
+            // header within it ends its condition at a zero count.
+            adding_braces &= self.layout.nesting.paren_depth == 0;
+        }
+        let Some(body_index) = next_non_layout_token_index(tokens, newline_index + 1) else {
+            return false;
+        };
+        // An `if` an empty line splits off its `else` is the else's body.
+        let if_is_else_body = self
+            .tree
+            .statements
+            .starts_else_body_after_blank_line(body_index)
+            && !self.options.delete_empty_lines
+            && !self.preprocessor.split_else.extra_indent
+            && tokens[..body_index]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
+        match &tokens[body_index] {
+            Token::Symbol('{') | Token::Comment(_, _) | Token::Preprocessor(_) => return false,
+            Token::Word(word)
+                if header == "else"
+                    && word == "if"
+                    && !if_is_else_body
+                    && !self
+                        .layout
+                        .previous_pre_adjust_line
+                        .as_deref()
+                        .is_some_and(|line| {
+                            let code = self.output.code_trimmed_of(line);
+                            code.trimmed_start() == "else" && line_ends_with_comment(line)
+                        }) =>
+            {
+                return false;
+            }
+            _ => {}
+        }
+        // Added braces skip a body that is itself a header, as `switch`.
+        let body_is_nested_header = matches!(&tokens[body_index], Token::Word(word)
+            if is_standard_add_braces_header(word) || language::is_header(word));
+        // An empty statement gets no braces and keeps its own line; so does
+        // a line after a macro call that ends the header line.
+        let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'))
+            || !self.follows_header_end(tokens, body_index, header);
+        if adding_braces && !body_is_nested_header && !body_is_empty {
+            // A body with no `;` of its own, as a macro loop over a block,
+            // gets no braces either.
+            let body_is_multi_line = find_statement_semicolon(tokens, body_index, tokens.len())
+                .is_none_or(|semicolon| {
+                    tokens[body_index..semicolon]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline))
+                });
+            if !body_is_multi_line {
+                return false;
+            }
+        }
+        let preserves_return_continuation_column = self.options.brace_style
+            == BraceStyle::Whitesmith
+            && self.output.last_line_outside_comment().is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line);
+                code.trimmed_start().starts_with("return ") && code.ends_with(':')
+            });
+        let semantic_header = self
+            .layout
+            .frame_stack
+            .active_header()
+            .filter(|frame| {
+                frame.header == header
+                    && (preserves_return_continuation_column
+                        || frame
+                            .line_indent_spaces
+                            .is_multiple_of(self.options.indent_width))
+            })
+            .map(|frame| (frame.line_indent_spaces, frame.body_indent_spaces));
+        let (header_indent, exact_body_indent) =
+            if self.layout.command_state.header_broken_before_comment {
+                self.layout.command_state.header_broken_before_comment = false;
+                (
+                    self.layout.indentation.indent()
+                        + self.case_body_indent_extra(LineKind::Normal),
+                    None,
+                )
+            } else if let Some((line_indent, body_indent)) = semantic_header {
+                (
+                    line_indent / self.options.indent_width,
+                    (!line_indent.is_multiple_of(self.options.indent_width)).then_some(body_indent),
+                )
+            } else {
+                (
+                    self.layout
+                        .continuation_indent
+                        .next_line_indent
+                        .unwrap_or_else(|| self.layout.indentation.indent())
+                        .max(
+                            self.layout.indentation.indent()
+                                + self.case_body_indent_extra(LineKind::Normal),
+                        )
+                        .max(self.layout.pending_braceless_block_bias.unwrap_or(0)),
+                    None,
+                )
+            };
+        self.finish_line();
+        if let Some(spaces) = exact_body_indent {
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
+            self.layout.pending_braceless_block_bias = Some(spaces / self.options.indent_width);
+        } else {
+            self.layout
+                .continuation_indent
+                .set_next_line_level(header_indent + 1);
+            self.layout.pending_braceless_block_bias = Some(header_indent + 1);
+        }
+        self.layout.command_state.current_header = None;
+        self.previous_was_newline = true;
+        true
+    }
+
+    /// Whether the code token before `body` ends the header `header`: its
+    /// keyword, or the `)` of its condition. A macro call after the header,
+    /// as `if (x) SWAP(a, b)`, is the body itself.
+    fn follows_header_end(&self, tokens: &[Token], body: usize, header: &str) -> bool {
+        // Rewritten token streams carry no tree to check against.
+        if tokens.len() != self.tree.tokens.len() || body >= tokens.len() {
+            return true;
+        }
+        let Some(previous) = self.tree.previous_code_token(body) else {
+            return true;
+        };
+        match &tokens[previous] {
+            Token::Symbol(')') => self
+                .tree
+                .groups
+                .closed_at(previous)
+                .and_then(|group| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(group).open)
+                })
+                .is_none_or(|keyword| {
+                    matches!(&tokens[keyword], Token::Word(word)
+                        if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                }),
+            _ => true,
+        }
+    }
+
+    pub(crate) fn try_break_else_if(&mut self, tokens: &[Token], start: usize) -> bool {
+        if !self.options.break_else_ifs
+            || !matches!(tokens.get(start), Some(Token::Word(word)) if word == "if")
+            || self.layout.command_state.current_header.as_deref() != Some("else")
+            // A comment between them keeps the `if` from joining its `else`.
+            || tokens[..start]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Comment(_, _)))
+        {
+            return false;
+        }
+        if !self.current_is_blank() {
+            self.finish_line();
+        }
+        self.layout
+            .else_if_break_depths
+            .push(self.layout.indentation.indent());
+        // A comment after a braceless condition keeps its place relative to
+        // the `if`, the `else` gone from its line.
+        let line_start = tokens[..start]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let prefix = &tokens[line_start..start];
+        let leading = prefix
+            .iter()
+            .take_while(|token| matches!(token, Token::Whitespace(_)))
+            .map(token_char_len)
+            .sum::<usize>();
+        let else_width = prefix.iter().map(token_char_len).sum::<usize>() - leading;
+        let brace_leaves_line = tokens[start..]
+            .iter()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .any(|token| matches!(token, Token::Symbol('{')));
+        if !brace_leaves_line {
+            for column in &mut self.layout.line_state.trailing_comment_columns {
+                *column = column.saturating_sub(else_width);
+            }
+        }
+        true
+    }
+
+    fn is_after_preprocessor_split_else(&self) -> bool {
+        self.preprocessor.split_else.pending_body && self.preprocessor.split_else.after_line
+    }
+
+    pub(crate) fn try_push_one_line_defer_block(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        let Token::Word(word) = tokens.get(start)? else {
+            return None;
+        };
+        if !is_defer_header(word) {
+            return None;
+        }
+
+        let open_index = next_non_whitespace(tokens, start + 1, line_end)?;
+        if !matches!(tokens.get(open_index), Some(Token::Symbol('{'))) {
+            return None;
+        }
+        let close_index = self.matching_brace_on_current_line(open_index)?;
+        let line = format_one_line_block_tokens(
+            &tokens[start..=close_index],
+            self.options,
+            Some(BraceType::DeferArray),
+            None,
+            false,
+        );
+        self.push_output_line(&line, self.layout.indentation.indent());
+        self.layout.command_state.current_header = None;
+        self.layout.command_state.preprocessor_after_header = false;
+        self.layout.command_state.previous_command_char = Some('}');
+        self.layout.command_state.previous_non_ws_char = Some('}');
+        self.layout.previous = PreviousToken::None;
+        self.previous_was_newline = false;
+        Some(close_index + 1)
+    }
+
+    // A bare `{` in a non-command scope (file scope or a bare block) is an
+    // array-type brace: it opens after no code, after another bare block, or
+    // right after the enclosing bare `{`. Command context (`;`, a header, a
+    // command block close) makes it a statement block instead.
+    fn bare_scope_one_line_block_type(&self, tokens: &[Token], start: usize) -> Option<BraceType> {
+        let bare_scope = matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            None | Some(BraceType::NonStatement)
+        );
+        if !bare_scope || self.layout.nesting.paren_depth > 0 {
+            return None;
+        }
+        let begins_line = token_begins_line(tokens, start) && self.current_is_blank();
+        let kept = match self.layout.command_state.previous_command_char {
+            None => begins_line,
+            Some('{') => {
+                begins_line
+                    && matches!(
+                        self.layout.nesting.brace_type_stack.last(),
+                        Some(BraceType::NonStatement)
+                    )
+            }
+            Some('}') => {
+                matches!(
+                    self.layout.nesting.last_closed_brace_type,
+                    Some(BraceType::Array | BraceType::NonStatement)
+                ) && (begins_line || self.current.trimmed_end().ends_with('}'))
+            }
+            _ => false,
+        };
+        kept.then_some(BraceType::Array)
+    }
+
+    fn previous_output_code_ends_assignment(&self) -> bool {
+        self.output.last().is_some_and(|line| {
+            let code = self.output.code_trimmed_of(line);
+            code.ends_with('=')
+        })
+    }
+
+    fn current_or_previous_is_lambda_capture_header(&self) -> bool {
+        let current = self.current.trimmed_end();
+        is_lambda_capture_header(current)
+            || (current.is_empty()
+                && self
+                    .output
+                    .last_non_empty_scoped()
+                    .is_some_and(|line| is_lambda_capture_header(line.trimmed_end())))
+    }
+
+    fn in_declaration_brace_scope(&self) -> bool {
+        self.layout
+            .nesting
+            .brace_type_stack
+            .last()
+            .is_none_or(|brace_type| {
+                matches!(
+                    brace_type,
+                    BraceType::Namespace
+                        | BraceType::Class
+                        | BraceType::Interface
+                        | BraceType::Struct
+                        | BraceType::Union
+                        | BraceType::Enum
+                        | BraceType::Extern
+                )
+            })
+    }
+
+    pub(crate) fn inferred_definition_brace(&self, tokens: &[Token], brace_index: usize) -> bool {
+        if !self.in_declaration_brace_scope() || !segment_follows_inferred_type(tokens, brace_index)
+        {
+            return false;
+        }
+        previous_code_token(tokens, brace_index, 0).is_some_and(|previous| {
+            !matches!(tokens.get(previous), Some(Token::Operator(operator)) if operator == "=")
+        })
+    }
+
+    fn inferred_capture_lambda_breaks(&self, tokens: &[Token], brace_index: usize) -> bool {
+        self.current_or_previous_is_lambda_capture_header()
+            && self.inferred_definition_brace(tokens, brace_index)
+    }
+
+    pub(crate) fn try_push_one_line_initializer_block(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        line_start: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        if !matches!(tokens.get(start), Some(Token::Symbol('{'))) {
+            return None;
+        }
+        if self.is_objc_method_line()
+            || self
+                .layout
+                .command_state
+                .current_header
+                .as_deref()
+                .is_some_and(|header| {
+                    matches!(header, "autoreleasepool" | "@try" | "@catch" | "@finally")
+                })
+            || self.inferred_definition_brace(tokens, start)
+        {
+            return None;
+        }
+        let brace_type = initializer_brace_type(tokens, start, line_start)
+            .or_else(|| enum_head_ends_previous_line(tokens, start, line_start))
+            .or_else(|| {
+                let previous = previous_non_whitespace(tokens, start, line_start);
+                (previous.is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
+                    && tokens[line_start..start]
+                        .iter()
+                        .any(|token| matches!(token, Token::Word(word) if word == "for"))
+                    && self.open_lambda_body_indent_spaces().is_some())
+                .then_some(BraceType::Array)
+            })
+            .or_else(|| {
+                (self.current_is_blank() && self.previous_output_code_ends_assignment())
+                    .then_some(BraceType::Initializer)
+            })
+            .or_else(|| {
+                let previous_code = self
+                    .output
+                    .last()
+                    .map(|line| self.output.code_trimmed_of(line).to_string());
+                (self.current_is_blank()
+                    && previous_code
+                        .as_deref()
+                        .is_some_and(|code| code.ends_with(','))
+                    && (self.in_initializer_brace()
+                        || previous_code
+                            .as_deref()
+                            .is_some_and(has_unmatched_open_brace)))
+                .then_some(BraceType::Array)
+            })
+            .or_else(|| {
+                (self.current_is_blank() && self.layout.nesting.paren_depth > 0)
+                    .then_some(BraceType::Array)
+            })
+            .or_else(|| {
+                self.layout
+                    .nesting
+                    .brace_type_stack
+                    .last()
+                    .is_some_and(|brace_type| {
+                        matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
+                    })
+                    .then_some(BraceType::Array)
+            })
+            .or_else(|| self.bare_scope_one_line_block_type(tokens, start))?;
+        let close_index = self.matching_brace_on_current_line(start)?;
+        let inferred_capture_lambda = self.inferred_capture_lambda_breaks(tokens, start);
+
+        let previous_line_lambda_header = self.current_is_blank()
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+        let lambda_header = self.current_is_lambda_body_header()
+            || previous_line_lambda_header
+            || (self.current.trimmed_end().ends_with(')')
+                && self.current.contains('[')
+                && self.current.contains(']')
+                && brace_type != BraceType::CompoundLiteral);
+        if lambda_header
+            && self.options.break_one_line_blocks
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+            )
+        {
+            return None;
+        }
+        if one_line_block_contains_plain_lambda_body(&tokens[start..=close_index]) {
+            return None;
+        }
+        if (lambda_header || inferred_capture_lambda)
+            && self.options.break_one_line_blocks
+            && self.current.last_arrow().is_none()
+            && !line_ends_compound_literal_cast(self.current.trimmed_end())
+            && !is_empty_one_line_block_tokens(&tokens[start..=close_index])
+            && !is_comment_only_one_line_block_tokens(&tokens[start..=close_index])
+            && !is_semicolon_only_one_line_block_tokens(&tokens[start..=close_index])
+        {
+            return None;
+        }
+        if self.options.break_one_line_blocks
+            && !token_begins_line(tokens, start)
+            && self
+                .layout
+                .compound_literal
+                .forced_break_depths
+                .last()
+                .is_some_and(|depth| *depth == self.layout.nesting.brace_header_stack.len())
+            && !is_empty_one_line_block_tokens(&tokens[start..=close_index])
+            && !is_comment_only_one_line_block_tokens(&tokens[start..=close_index])
+        {
+            return None;
+        }
+        let source_gap = (start > line_start)
+            .then(|| match tokens.get(start - 1) {
+                Some(Token::Whitespace(gap)) => Some(gap.as_str()),
+                _ => None,
+            })
+            .flatten();
+        if token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && self.previous_output_code_ends_assignment()
+        {
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.statement_level());
+        }
+        if token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && let Some(previous) = self.output.last()
+        {
+            let previous_code = self.output.code_trimmed_of(previous);
+            if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + self.options.indent_width,
+                );
+            }
+        }
+        if token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && self.options.indent_braces
+            && matches!(
+                brace_type,
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+            )
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
+        {
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.statement_level() + 1);
+        }
+        if token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && self.layout.nesting.paren_depth > 0
+            && !(self
+                .layout
+                .continuation_indent
+                .next_line_indent_spaces
+                .is_some()
+                && matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+                ))
+        {
+            // A style indenting braces indents an argument's own brace.
+            let argument_brace = self.options.indent_braces
+                && !matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+                );
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.statement_level() + usize::from(argument_brace));
+        }
+        // A one-line enum body on its own line stays there.
+        let indented_brace = matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Ratliff
+        );
+        if brace_type == BraceType::Enum
+            && token_begins_line(tokens, start)
+            && (!self.current_is_blank() || indented_brace)
+        {
+            let indent = self.layout.indentation.indent() + usize::from(indented_brace);
+            if !self.current_is_blank() {
+                self.finish_line();
+            }
+            self.layout.continuation_indent.set_next_line_level(indent);
+            // The brace stands at its header's line, wherever a case block
+            // put that line.
+            if !indented_brace
+                && let Some(header) = self.output.last()
+                && !header.trimmed().is_empty()
+                && !has_hash_outside_literals(header)
+            {
+                let spaces = leading_visual_width(header, self.options.tab_width)
+                    + self.case_unindent_spaces();
+                self.layout.continuation_indent.next_line_indent = None;
+                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            }
+        }
+        // Only a style attaching other braces breaks a one-line enum.
+        if brace_type == BraceType::Enum
+            && !self.options.attach_enum
+            && self.options.brace_style == BraceStyle::OneTrueBrace
+            && !self.current_is_blank()
+        {
+            let indent = self.layout.indentation.indent();
+            self.finish_line();
+            self.layout.continuation_indent.set_next_line_level(indent);
+        }
+        if brace_type == BraceType::Array
+            && token_begins_line(tokens, start)
+            && !self.current_is_blank()
+            && self.layout.command_state.previous_command_char == Some('}')
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                None | Some(BraceType::NonStatement)
+            )
+        {
+            let indent = self.layout.indentation.indent();
+            self.finish_line();
+            self.layout.continuation_indent.set_next_line_level(indent);
+        }
+        self.push_attached_one_line_block(
+            &tokens[start..=close_index],
+            brace_type,
+            None::<&str>,
+            source_gap,
+            false,
+            None,
+        );
+        if brace_type == BraceType::CompoundLiteral {
+            self.layout.compound_literal.just_closed = true;
+        }
+        if brace_type == BraceType::Enum {
+            let next = next_non_whitespace(tokens, close_index + 1, line_end)
+                .and_then(|next_index| tokens.get(next_index));
+            if matches!(next, Some(Token::Word(_)) | Some(Token::Symbol('['))) {
+                self.ensure_space();
+            }
+        }
+        Some(close_index + 1)
+    }
+
+    pub(crate) fn try_push_kept_one_line_block(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        if !matches!(tokens.get(start), Some(Token::Symbol('{'))) {
+            return None;
+        }
+        let close_index = self.matching_brace_on_current_line(start)?;
+        let break_one_line_blocks = self.options.break_one_line_blocks
+            || self.options.lisp_add_one_line_braces_breaks_blocks()
+            || (self.options.break_one_line_headers
+                && !(self.options.brace_style == BraceStyle::Pico
+                    && self.layout.command_state.current_header.as_deref() == Some("switch"))
+                && self.layout.command_state.current_header.is_some()
+                // A block on a line of its own already leaves its header.
+                && !token_begins_line(tokens, start));
+        if self.options.break_one_line_headers
+            && self.layout.command_state.current_header.is_some()
+            && tokens[start + 1..close_index]
+                .iter()
+                .any(|token| matches!(token, Token::Word(word) if is_standard_add_braces_header(word) || word == "switch"))
+        {
+            return None;
+        }
+        if self.options.break_one_line_statements
+            && one_line_block_contains_case_label(&tokens[start..=close_index])
+        {
+            return None;
+        }
+        if let Some(next_index) =
+            self.try_push_one_line_preprocessor_block(tokens, start, close_index, line_end)
+        {
+            return Some(next_index);
+        }
+        let is_empty_block = is_empty_one_line_block_tokens(&tokens[start..=close_index]);
+        // An empty type or namespace body below its header takes the
+        // style's attached `{` and breaks before its `}`.
+        if is_empty_block
+            && token_begins_line(tokens, start)
+            && let Some(brace_type) = match self.layout.command_state.pending_block_word.as_deref()
+            {
+                Some("struct") => Some(BraceType::Struct),
+                Some("union") => Some(BraceType::Union),
+                Some("class") => Some(BraceType::Class),
+                Some("namespace") => Some(BraceType::Namespace),
+                _ => None,
+            }
+            && (self.options.brace_style != BraceStyle::None
+                || brace_type == BraceType::Class && self.options.attach_class
+                || brace_type == BraceType::Namespace && self.options.attach_namespace)
+            && self.style_attaches_opening_brace(brace_type, tokens.get(start + 1))
+        {
+            return None;
+        }
+        let is_comment_only_block =
+            is_comment_only_one_line_block_tokens(&tokens[start..=close_index]);
+        let is_semicolon_only_block =
+            is_semicolon_only_one_line_block_tokens(&tokens[start..=close_index]);
+        let inferred_capture_lambda = self.inferred_capture_lambda_breaks(tokens, start);
+        let is_asm_block = is_asm_block_header(trailing_word(&self.current))
+            || self
+                .layout
+                .command_state
+                .current_header
+                .as_deref()
+                .is_some_and(is_asm_block_header);
+        // A word of its own above the block heads it like a macro call, which
+        // the statement after the block goes on from.
+        let word_headed_block = token_begins_line(tokens, start)
+            && !self.current.trimmed().is_empty()
+            && self.current.trimmed().chars().all(is_word_char)
+            && !is_header(self.options, self.current.trimmed());
+        let source_separate_macro_block = token_begins_line(tokens, start)
+            && self
+                .current
+                .split_whitespace()
+                .next()
+                .is_some_and(is_macro_like_word)
+            && self.current.split_whitespace().count() == 1
+            || token_begins_line(tokens, start)
+                && self.current_is_blank()
+                && self.macro_line_before_directives();
+        let backslash_continuation_block =
+            !token_begins_line(tokens, start) && self.current.trimmed_end().ends_with('\\');
+        let previous_line_lambda_header = self.current_is_blank()
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+        let previous_line_trailing_return_lambda_header = self.current_is_blank()
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let line = line.trimmed_end();
+                is_lambda_body_header(line) && line.contains("->")
+            });
+        // A control header's condition indexing an array opens no lambda.
+        let control_header_line = self
+            .layout
+            .command_state
+            .current_header
+            .as_deref()
+            .is_some_and(|header| {
+                matches!(header, "if" | "while" | "for" | "switch")
+                    && self
+                        .current
+                        .trimmed_start()
+                        .trim_start_matches('}')
+                        .trimmed_start()
+                        .trim_start_matches("else")
+                        .trimmed_start()
+                        .starts_with(header)
+            });
+        let lambda_header = self.current_is_lambda_body_header()
+            || previous_line_lambda_header
+            || (!control_header_line
+                && self.current.trimmed_end().ends_with(')')
+                && self.current.contains('[')
+                && self.current.contains(']'));
+        let parameterized_lambda_header = self.current_is_lambda_body_header()
+            || (self.current.trimmed_end().ends_with(')')
+                && self.current.contains('[')
+                && self.current.contains(']'));
+        let in_declaration_scope = match self.layout.nesting.brace_type_stack.last() {
+            None => self.layout.nesting.paren_depth == 0,
+            Some(brace_type) => matches!(
+                brace_type,
+                BraceType::Namespace
+                    | BraceType::Class
+                    | BraceType::Interface
+                    | BraceType::Struct
+                    | BraceType::Union
+                    | BraceType::Enum
+                    | BraceType::Extern
+            ),
+        };
+        let trailing_return_lambda_body = lambda_header
+            && (self.current.last_arrow().is_some() || previous_line_trailing_return_lambda_header)
+            && !(in_declaration_scope && self.current_ends_trailing_return_definition());
+        if (parameterized_lambda_header || inferred_capture_lambda)
+            && break_one_line_blocks
+            && self.current.last_arrow().is_none()
+            && !is_empty_block
+            && !is_comment_only_block
+            && !is_semicolon_only_block
+        {
+            return None;
+        }
+        let operator_header =
+            self.current.trimmed_end().ends_with(')') && self.current.contains("operator");
+        let non_attaching_lambda_style = matches!(
+            self.options.brace_style,
+            BraceStyle::Allman
+                | BraceStyle::Whitesmith
+                | BraceStyle::Vtk
+                | BraceStyle::Gnu
+                | BraceStyle::Horstmann
+        );
+        let non_attaching_lambda_body = (lambda_header || operator_header)
+            && non_attaching_lambda_style
+            && break_one_line_blocks
+            && !trailing_return_lambda_body;
+        if break_one_line_blocks
+            && non_attaching_lambda_style
+            && (one_line_block_contains_lambda_body(&tokens[start..=close_index])
+                || one_line_block_contains_operator_body(&tokens[start..=close_index]))
+        {
+            return None;
+        }
+        if non_attaching_lambda_body
+            && !is_empty_block
+            && !is_comment_only_block
+            && !is_semicolon_only_block
+        {
+            return None;
+        }
+        if break_one_line_blocks
+            && !is_empty_block
+            && !is_comment_only_block
+            && !is_semicolon_only_block
+            && !is_asm_block
+            && !source_separate_macro_block
+            && !backslash_continuation_block
+            && !trailing_return_lambda_body
+        {
+            return None;
+        }
+        if self.previous_was_newline || source_separate_macro_block {
+            self.finish_line();
+        }
+        // A statement other than a label in a switch stands in a case body.
+        let switch_statement = self.layout.command_state.current_header.as_deref()
+            == Some("switch")
+            && next_code_token(tokens, start + 1).is_some_and(|first| {
+                !matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
+            });
+        let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
+            && self.current_is_blank()
+            && (self.layout.command_state.current_header.is_some()
+                || self.current_ends_definition_header()
+                || self.output_ends_objc_method_header()))
+        .then(|| " ".repeat((usize::from(switch_statement) + 1) * self.options.indent_width - 1));
+        let empty_block_after_operator =
+            is_empty_block && self.layout.previous == PreviousToken::Operator;
+        let brace_header = is_asm_block.then_some("_asm");
+        let brace_type = if inferred_capture_lambda || self.inferred_definition_brace(tokens, start)
+        {
+            self.classify_opening_brace(brace_header, self.pending_extern);
+            BraceType::Definition
+        } else {
+            self.classify_opening_brace(brace_header, self.pending_extern)
+        };
+        if token_begins_line(tokens, start) && self.current_is_blank() {
+            // Styles that indent braces indent a block kept after a macro,
+            // unless it is empty, and Whitesmith and Ratliff a type's body
+            // as they do a one-line enum body. A function's `{` left on its
+            // own line under Ratliff opens a kept one-line block, set in
+            // like the closing braces.
+            let brace_indent = usize::from(
+                source_separate_macro_block
+                    && !is_empty_block
+                    && matches!(
+                        self.options.brace_style,
+                        BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+                    )
+                    || matches!(
+                        brace_type,
+                        BraceType::Struct
+                            | BraceType::Union
+                            | BraceType::Class
+                            | BraceType::Interface
+                    ) && matches!(
+                        self.options.brace_style,
+                        BraceStyle::Whitesmith | BraceStyle::Ratliff
+                    )
+                    || brace_type == BraceType::Definition
+                        && !inferred_capture_lambda
+                        && self.options.brace_style == BraceStyle::Ratliff,
+            );
+            self.layout
+                .continuation_indent
+                .set_next_line_level(self.statement_level() + brace_indent);
+        }
+        let source_gap = match tokens.get(start.wrapping_sub(1)) {
+            Some(Token::Whitespace(gap)) => Some(gap.as_str()),
+            _ => None,
+        };
+        let leading_gap = is_asm_block.then(|| source_gap.unwrap_or(""));
+        self.push_attached_one_line_block(
+            &tokens[start..=close_index],
+            brace_type,
+            leading_gap,
+            source_gap,
+            source_separate_macro_block,
+            opening_body_gap,
+        );
+        if is_empty_block
+            && (self.options.brace_style == BraceStyle::None
+                || is_attached_closing_header_style(self.options))
+            && self.layout.command_state.current_header.as_deref() == Some("do")
+            && let Some(while_index) = next_non_whitespace(tokens, close_index + 1, line_end)
+            && matches!(tokens.get(while_index), Some(Token::Word(word)) if word == "while")
+            && let Some(semi_index) = (while_index..line_end)
+                .find(|index| matches!(tokens.get(*index), Some(Token::Symbol(';'))))
+        {
+            for token in &tokens[close_index + 1..=semi_index] {
+                self.current.push_str(&token_text(token));
+            }
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            self.layout.command_state.previous_command_char = Some(';');
+            self.layout.command_state.previous_non_ws_char = Some(';');
+            let trailing = next_non_whitespace(tokens, semi_index + 1, line_end)
+                .and_then(|index| tokens.get(index));
+            if !matches!(trailing, Some(Token::Comment(_, _))) {
+                self.finish_line();
+            }
+            return Some(semi_index + 1);
+        }
+        if self.layout.command_state.current_header.as_deref() == Some("do") {
+            self.layout.nesting.last_closed_brace_header = Some("do".to_string());
+        }
+        self.layout.command_state.current_header = None;
+        self.layout.command_state.preprocessor_after_header = false;
+        let next = next_non_whitespace(tokens, close_index + 1, line_end)
+            .and_then(|next_index| tokens.get(next_index));
+        let next_on_source_line =
+            next.is_some_and(|token| !matches!(token, Token::Newline | Token::Symbol('}')));
+        let init_block_continues_expression =
+            brace_type == BraceType::Initializer && matches!(next, Some(Token::Symbol('(' | ')')));
+        let empty_value_block_continues_expression = is_empty_block
+            && (matches!(next, Some(Token::Symbol('(' | ')')))
+                || (empty_block_after_operator && next.is_some()));
+        let lambda_block_continues_expression =
+            (lambda_header || operator_header) && matches!(next, Some(Token::Symbol('(' | ')')));
+        let next_is_pointer_declarator =
+            matches!(next, Some(Token::Operator(op)) if matches!(op.as_str(), "*" | "&"));
+        let aggregate_trailing_declarator = (is_class_like_brace_type(brace_type)
+            || brace_type == BraceType::Enum)
+            && (matches!(next, Some(Token::Word(_))) || next_is_pointer_declarator);
+        let next_is_closing_header = matches!(
+            next,
+            Some(Token::Word(word))
+                if matches!(word.as_str(), "else" | "catch" | "@catch" | "__finally" | "__except" | "while")
+        );
+        if !init_block_continues_expression
+            && !empty_value_block_continues_expression
+            && !lambda_block_continues_expression
+            && !aggregate_trailing_declarator
+            && !((word_headed_block
+                || self.options.brace_style == BraceStyle::Pico
+                || self.options.keeps_multi_statement_line()
+                    && self.layout.line_state.is_multi_statement_line)
+                && next_on_source_line
+                && !next_is_closing_header)
+            && (!next_is_closing_header
+                || self.options.break_one_line_statements
+                || self.options.brace_style == BraceStyle::Lisp
+                || !self.should_attach_closing_header(next))
+            && !matches!(next, Some(Token::Symbol(';' | ',')))
+            && !matches!(next, Some(Token::Comment(_, _)))
+        {
+            self.finish_line();
+            if brace_type == BraceType::Command {
+                self.layout.continuation_indent.clear_next_line();
+            }
+        }
+        // A kept block ends the braceless bodies it was the statement of,
+        // unless an `else` goes on with them.
+        if matches!(brace_type, BraceType::Command | BraceType::NonStatement)
+            && self.current_is_blank()
+        {
+            let else_follows = tokens[close_index + 1..]
+                .iter()
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_)
+                            | Token::Newline
+                            | Token::Comment(..)
+                            | Token::Preprocessor(_)
+                    )
+                })
+                .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
+            if !else_follows {
+                if brace_type == BraceType::Command {
+                    self.layout.pending_braceless_block_bias = None;
+                    self.layout.inline_nested_header_braceless_bias = None;
+                }
+                self.unwind_else_if_break_depths();
+                if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+                    && self.layout.indentation.indent() == base + delta
+                {
+                    self.layout.indentation.exit_braceless_block();
+                }
+            }
+        }
+        Some(close_index + 1)
+    }
+
+    fn try_push_one_line_preprocessor_block(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        close_index: usize,
+        line_end: usize,
+    ) -> Option<usize> {
+        let hash_index = (start + 1..close_index)
+            .find(|index| matches!(tokens.get(*index), Some(Token::Symbol('#'))))?;
+        if previous_non_whitespace(tokens, start, 0)
+            .is_some_and(|index| matches!(tokens[index], Token::Operator(_)))
+        {
+            return None;
+        }
+        let next =
+            next_non_whitespace(tokens, start + 1, close_index).and_then(|index| tokens.get(index));
+        self.set_input_whitespace(tokens, start, 0);
+        self.token_input.token_begins_source_line = token_begins_line(tokens, start);
+        self.push_open_brace(next, start, self.inferred_definition_brace(tokens, start));
+        if self.output.last().is_some_and(|line| line.trimmed() == "{") {
+            let brace_line = self.output.len() - 1;
+            self.source_run_in_brace_lines
+                .retain(|index| *index != brace_line);
+        }
+
+        let line = tokens[hash_index..close_index]
+            .iter()
+            .map(token_text)
+            .collect::<String>();
+        self.adjust_and_publish_line(line);
+        self.preprocessor.last_output_was_preprocessor = true;
+
+        let next = next_non_whitespace(tokens, close_index + 1, line_end)
+            .and_then(|index| tokens.get(index));
+        self.set_input_whitespace(tokens, close_index, 0);
+        self.token_input.token_begins_source_line = token_begins_line(tokens, close_index);
+        self.push_close_brace(next, false);
+        let trimmed_len = self.current.trimmed_end().len();
+        if self.current[..trimmed_len].ends_with("{}") {
+            let open = trimmed_len.saturating_sub(2);
+            if self.should_space_before_one_line_block(BraceType::Command)
+                && open > 0
+                && !self.current.as_bytes()[open - 1].is_ascii_whitespace()
+            {
+                self.current.insert(open, ' ');
+            }
+            if !matches!(
+                next,
+                Some(Token::Symbol(';' | ',' | ')')) | Some(Token::Comment(_, _))
+            ) {
+                self.finish_line();
+            }
+        }
+        Some(close_index + 1)
+    }
+
+    /// Whether the output ends with directive lines after a line holding
+    /// one macro-like word, which astyle reads past as it does the lines.
+    fn macro_line_before_directives(&self) -> bool {
+        for (directives, line) in self.output.scoped().iter().rev().enumerate() {
+            let trimmed = line.trimmed();
+            if !trimmed.starts_with('#') || trimmed.ends_with('\\') {
+                return directives > 0
+                    && trimmed.split_whitespace().count() == 1
+                    && is_macro_like_word(trimmed);
+            }
+        }
+        false
+    }
+
+    fn push_attached_one_line_block(
+        &mut self,
+        tokens: &[Token],
+        brace_type: BraceType,
+        leading_gap: Option<&str>,
+        source_gap: Option<&str>,
+        preserve_raw: bool,
+        opening_body_gap: Option<String>,
+    ) {
+        let block = if preserve_raw || is_comment_only_one_line_block_tokens(tokens) {
+            tokens.iter().map(token_text).collect::<String>()
+        } else {
+            format_one_line_block_tokens(
+                tokens,
+                self.options,
+                Some(brace_type),
+                opening_body_gap.as_deref(),
+                self.output
+                    .last()
+                    .is_some_and(|line| preprocessor_directive(line.trimmed_start()).is_some()),
+            )
+        };
+        let braced_init = (brace_type == BraceType::Initializer
+            && (self
+                .layout
+                .command_state
+                .previous_command_char
+                .is_some_and(|ch| is_identifier_continue(ch) || ch == '>' || ch == ']')
+                || self.current.trimmed_end().ends_with('>')))
+            || self.is_nested_designated_init_field();
+        let after_comma = self.layout.command_state.previous_command_char == Some(',');
+        let run_in_array_gap_after_brace = self.current.ends_with_any(b" \t")
+            && matches!(
+                self.current.trimmed_end().chars().next_back(),
+                Some('{' | '[')
+            )
+            && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral);
+        if !after_comma && !run_in_array_gap_after_brace {
+            self.trim_current_end();
+        }
+        let array_element_after_brace =
+            matches!(
+                self.current.trimmed_end().chars().next_back(),
+                Some('{' | '[')
+            ) && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral);
+        match leading_gap {
+            Some(gap) => self.current.push_str(gap),
+            None if after_comma => {}
+            None if array_element_after_brace && run_in_array_gap_after_brace => {
+                let target_column = if self.current.trimmed_end() == "{" {
+                    Some(
+                        leading_visual_width(&self.current, self.options.tab_width)
+                            + self.options.indent_width,
+                    )
+                } else {
+                    self.current_inline_array_column()
+                };
+                if let Some(column) = target_column {
+                    let current_column = self.current_visual_width();
+                    if current_column < column {
+                        self.current.push_str(&" ".repeat(column - current_column));
+                    }
+                }
+            }
+            None if array_element_after_brace => {
+                self.current.push_str(source_gap.unwrap_or_default());
+            }
+            None if self.layout.command_state.previous_command_char == Some('(') => {
+                match source_gap {
+                    _ if self.options.pad_parens_inside && self.options.unpad_parens => {
+                        self.trim_current_end_horizontal_space();
+                        self.current
+                            .push(if source_gap.is_some_and(|gap| gap.ends_with('\t')) {
+                                '\t'
+                            } else {
+                                ' '
+                            });
+                    }
+                    Some(gap) if !gap.is_empty() => self.current.push_str(gap),
+                    _ if self.options.pad_parens_inside => {
+                        self.ensure_space();
+                    }
+                    _ => {}
+                }
+            }
+            None if self.current_is_lambda_body_header()
+                && self.current.has_arrow_after_paren() =>
+            {
+                self.current.push_str(source_gap.unwrap_or_default());
+            }
+            None if self.should_space_before_one_line_block(brace_type) => match source_gap {
+                Some(gap) if gap.len() > 1 => self.current.push_str(gap),
+                _ => self.ensure_space(),
+            },
+            None if braced_init
+                && self
+                    .output
+                    .last_non_empty_scoped()
+                    .is_some_and(|line| line.trimmed_start().starts_with("#if")) =>
+            {
+                self.ensure_space();
+            }
+            None if braced_init
+                && unmatched_open_paren_column(&self.current).is_none()
+                && ((block.trimmed_start().starts_with("{-")
+                    && (self
+                        .layout
+                        .indentation
+                        .current_preprocessor_indent()
+                        .is_some()
+                        || !self.preprocessor.branch_stack.is_empty()))
+                    || self
+                        .output
+                        .last_non_empty_scoped()
+                        .is_some_and(|line| line.trimmed_start().starts_with("#endif"))) =>
+            {
+                self.ensure_space();
+            }
+            None if braced_init
+                && self.options.pad_operators
+                && self.current.trimmed_end().ends_with('=') =>
+            {
+                // A wider gap the source left after `=` stays.
+                match source_gap {
+                    Some(gap) if gap.len() > 1 => {
+                        self.trim_current_end();
+                        self.current.push_str(gap);
+                    }
+                    _ => self.ensure_space(),
+                }
+            }
+            None if braced_init => self.current.push_str(source_gap.unwrap_or_default()),
+            None => {}
+        }
+        let collapsed_non_empty_command_block = brace_type == BraceType::Command
+            && block == "{}"
+            && !is_empty_one_line_block_tokens(tokens);
+        if collapsed_non_empty_command_block && self.should_space_before_one_line_block(brace_type)
+        {
+            self.ensure_space();
+        }
+        self.current.push_str(&block);
+        if collapsed_non_empty_command_block {
+            self.finish_line();
+        }
+        self.layout.nesting.last_closed_brace_type = Some(brace_type);
+        self.layout.command_state.previous_command_char = Some('}');
+        self.layout.command_state.previous_non_ws_char = Some('}');
+        let holds_no_code = tokens.len() >= 2
+            && !tokens[1..tokens.len() - 1]
+                .iter()
+                .any(crate::formatter::structure::blocks::is_code_token);
+        self.observe_block_spacing_one_line_block(brace_type, holds_no_code);
+        // A paren's outside pad went before the block, not after it.
+        self.pad_close_paren_pending = false;
+        self.layout.previous = PreviousToken::Other;
+        self.previous_was_newline = false;
+    }
+
+    pub(super) fn is_nested_designated_init_field(&self) -> bool {
+        self.layout.command_state.previous_command_char == Some('=')
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(
+                    BraceType::Array
+                        | BraceType::Initializer
+                        | BraceType::CompoundLiteral
+                        | BraceType::Enum
+                )
+            )
+    }
+
+    fn should_space_before_one_line_block(&self, brace_type: BraceType) -> bool {
+        if self.layout.command_state.previous_command_char == Some('(') {
+            return self.options.pad_parens_inside;
+        }
+        if self.is_nested_designated_init_field() {
+            return false;
+        }
+        if matches!(
+            self.current.trimmed_end().chars().next_back(),
+            Some('{' | '[')
+        ) && matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
+        {
+            return false;
+        }
+        !matches!(brace_type, BraceType::Initializer)
+            || self.current.trimmed_end().ends_with('>')
+            || !self
+                .layout
+                .command_state
+                .previous_command_char
+                .is_some_and(is_identifier_continue)
+    }
+
+    pub(super) fn push_inline_open_brace(&mut self) {
+        let inside_aggregate = self.inline_array.aggregate_braces.last() == Some(&true);
+        let is_aggregate = self.inline_open_brace_is_aggregate();
+        self.inline_array.aggregate_braces.push(is_aggregate);
+        let braced_init = is_aggregate
+            && (inside_aggregate
+                || self
+                    .layout
+                    .command_state
+                    .previous_command_char
+                    .is_some_and(is_word_char));
+        if !matches!(
+            self.layout.command_state.previous_command_char,
+            Some(',' | '{')
+        ) {
+            self.trim_current_end();
+            if self.layout.previous == PreviousToken::OpenParen
+                || self.layout.command_state.previous_command_char == Some('(')
+            {
+                if self.options.pad_parens_inside {
+                    self.pad_inside_paren_space();
+                } else {
+                    self.emit_source_space();
+                }
+            } else if braced_init {
+                if self.options.pad_operators && self.current.trimmed_end().ends_with('=') {
+                    self.emit_source_space_or_ensure();
+                } else {
+                    self.emit_source_space();
+                }
+            } else if self
+                .layout
+                .command_state
+                .previous_command_char
+                .is_some_and(|ch| is_word_char(ch) || ch == '>')
+                && self.current_is_lambda_body_header()
+                && self.current.has_arrow_after_paren()
+            {
+                self.emit_source_space();
+            } else {
+                self.emit_source_space_or_ensure();
+            }
+        }
+        self.current.push('{');
+        self.emit_trailing_source_space();
+        self.layout.command_state.observe_char('{');
+        self.layout.previous = PreviousToken::Other;
+        self.previous_was_newline = false;
+    }
+
+    fn inline_open_brace_is_aggregate(&self) -> bool {
+        if self.current.trimmed_end().ends_with('@') {
+            return true;
+        }
+        match self.inline_array.aggregate_braces.last() {
+            Some(true) => true,
+            Some(false) => match self.layout.command_state.previous_command_char {
+                Some('=') => true,
+                Some(')') => self.current_ends_compound_literal_type(),
+                _ => false,
+            },
+            None => matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(
+                    BraceType::Array
+                        | BraceType::Initializer
+                        | BraceType::CompoundLiteral
+                        | BraceType::Enum
+                )
+            ),
+        }
+    }
+
+    /// astyle pads no brace that follows a comment directly or sits on the
+    /// line after a directive.
+    fn closing_brace_keeps_source_gap(&self) -> bool {
+        let follows_comment = self.current.trimmed_end().ends_with("*/")
+            && self
+                .token_input
+                .previous_input_whitespace
+                .as_deref()
+                .is_none_or(str::is_empty);
+        follows_comment || self.one_line_block_after_directive
+    }
+
+    pub(super) fn push_inline_close_brace(&mut self, next: Option<&Token>) {
+        let is_aggregate = self.inline_array.aggregate_braces.pop().unwrap_or(false);
+        let closes_compound_literal = is_aggregate
+            && self
+                .current
+                .rsplit_once('{')
+                .is_some_and(|(head, _)| line_ends_compound_literal_cast(head.trimmed_end()));
+        if is_aggregate
+            && attach_closing_brace_mode(self.options)
+            && !self.closing_brace_keeps_source_gap()
+        {
+            self.emit_source_space_or_ensure();
+        } else {
+            self.emit_source_space();
+        }
+        self.current.push('}');
+        self.layout.command_state.observe_char('}');
+        self.layout.compound_literal.just_closed = closes_compound_literal;
+        if matches!(next, Some(Token::Word(_) | Token::Number(_))) {
+            self.emit_trailing_source_space_or_ensure();
+        } else {
+            self.emit_trailing_source_space();
+        }
+        self.observe_block_spacing_inline_close_brace();
+        self.layout.previous = PreviousToken::Other;
+        self.previous_was_newline = false;
+    }
+
+    pub(crate) fn push_inline_semicolon(&mut self, next: Option<&Token>) {
+        self.emit_source_space();
+        self.current.push(';');
+        self.layout.command_state.observe_char(';');
+        match next {
+            Some(Token::Symbol(';' | ')' | '}')) | Some(Token::Comment(..)) | None => {
+                self.emit_trailing_source_space();
+            }
+            _ => self.emit_trailing_source_space_or_ensure(),
+        }
+        self.layout.command_state.current_header = None;
+        self.layout.command_state.preprocessor_after_header = false;
+        self.layout.command_state.pending_block_word = None;
+        self.layout.previous = PreviousToken::Other;
+        self.previous_was_newline = false;
+    }
+
+    fn push_replayed_statement(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        end_inclusive: usize,
+        following: Option<&Token>,
+        whitespace_lower: usize,
+        leading_whitespace: Option<&str>,
+    ) {
+        for index in start..=end_inclusive {
+            if matches!(tokens[index], Token::Whitespace(_)) {
+                continue;
+            }
+            let next_index = next_non_whitespace(tokens, index + 1, end_inclusive + 1);
+            let next = next_index
+                .and_then(|next_index| tokens.get(next_index))
+                .or((index == end_inclusive).then_some(following).flatten());
+            self.set_input_whitespace(tokens, index, whitespace_lower);
+            if index == start
+                && let Some(whitespace) = leading_whitespace
+            {
+                self.token_input.previous_input_was_adjacent = false;
+                self.token_input.previous_input_whitespace = Some(whitespace.to_string().into());
+            }
+            self.current.set_active_token(Some(index));
+            self.push_token(
+                &tokens[index],
+                TokenPushContext {
+                    next,
+                    next_is_adjacent: next_index == Some(index + 1),
+                    following_operator: None,
+                    template_angle: TemplateAngle::None,
+                    token_index: index,
+                    starts_initializer_designator: false,
+                    inferred_definition_brace: false,
+                    following_closer_width: 0,
+                },
+            );
+        }
+    }
+}
+
+pub(crate) fn is_defer_header(word: &str) -> bool {
+    matches!(word, "defer" | "_Defer")
+}
+
+pub(crate) fn is_standard_add_braces_header(word: &str) -> bool {
+    matches!(
+        word,
+        "if" | "else" | "for" | "foreach" | "Q_FOREACH" | "while" | "do"
+    )
+}
+
+fn split_else_preprocessor_follows_closing_brace(output: &[String]) -> bool {
+    let mut saw_preprocessor = false;
+    for line in output.iter().rev().take(8) {
+        let trimmed = line.trimmed();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            saw_preprocessor = true;
+            continue;
+        }
+        return saw_preprocessor && trimmed.ends_with("} else");
+    }
+    false
+}
+
+fn is_remove_braces_header(word: &str) -> bool {
+    matches!(word, "if" | "else" | "for" | "while")
+}
+
+/// Adds braces around braceless statements that span lines, returning the
+/// tokens and the indices of the closing braces it added.
+pub(crate) fn add_marked_cross_line_statement_braces(
+    owned_tokens: Vec<Token>,
+    attach_added_braces: bool,
+    attach_closing_brace: bool,
+    comment_gap: usize,
+) -> AddedBraces {
+    let tokens = owned_tokens.as_slice();
+    let mut insert_before = BTreeMap::<usize, Vec<Token>>::new();
+    // Columns an added `{` takes past the gap before a comment, by input
+    // index of its insertion.
+    let mut opener_overruns = IndexMap::default();
+    let mut replace = BTreeMap::<usize, Token>::new();
+    // astyle sets the comment after a braced statement an indent past it,
+    // and takes the brace it attaches out of the gap before a comment.
+    let set_statement_comment_gap = |replace: &mut BTreeMap<usize, Token>, close_insert: usize| {
+        let mut index = close_insert;
+        while index > 0 && matches!(tokens[index - 1], Token::Newline | Token::Whitespace(_)) {
+            index -= 1;
+        }
+        if index >= 2
+            && matches!(&tokens[index - 1], Token::Comment(_, text) if !text.contains('\n'))
+            && matches!(tokens[index - 2], Token::Whitespace(_))
+            && index >= 3
+            && matches!(tokens[index - 3], Token::Symbol(';'))
+        {
+            replace.insert(index - 2, Token::Whitespace(" ".repeat(comment_gap).into()));
+        }
+    };
+    let in_open_parens = words_in_open_parens(tokens);
+    let mut covered_until = 0usize;
+    for header_index in 0..tokens.len() {
+        if header_index < covered_until || in_open_parens.contains(&header_index) {
+            continue;
+        }
+        let Some((header_end, open_insert, close_insert)) =
+            add_braces_insertion_range(tokens, header_index)
+        else {
+            continue;
+        };
+        if open_insert >= close_insert {
+            continue;
+        }
+        if attach_added_braces
+            && open_brace_attaches_to_header_line(tokens, header_end, open_insert)
+        {
+            let comment = (header_end + 1..open_insert - 1)
+                .find(|&index| matches!(tokens[index], Token::Comment(_, _)));
+            match comment {
+                Some(comment) => {
+                    insert_before
+                        .entry(header_end + 1)
+                        .or_default()
+                        .push(Token::Whitespace(" ".to_owned().into()));
+                    insert_before
+                        .entry(header_end + 1)
+                        .or_default()
+                        .push(Token::Symbol('{'));
+                    // The brace takes its two columns out of the start of the
+                    // gap, a tab freeing both.
+                    if comment == header_end + 2
+                        && let Token::Whitespace(gap) = &tokens[header_end + 1]
+                    {
+                        let mut kept = gap.as_str();
+                        let mut freed = 0;
+                        while freed < 2 && kept.len() > 1 {
+                            freed += if kept.starts_with('\t') { 2 } else { 1 };
+                            kept = &kept[1..];
+                        }
+                        if freed < 2 {
+                            opener_overruns.insert(header_end + 1, 2 - freed);
+                        }
+                        replace.insert(header_end + 1, Token::Whitespace(kept.to_owned().into()));
+                    } else if comment == header_end + 1 {
+                        insert_before
+                            .entry(comment)
+                            .or_default()
+                            .push(Token::Whitespace(" ".to_owned().into()));
+                    }
+                }
+                None => {
+                    // Trailing source whitespace makes no gap before the brace.
+                    if open_insert >= 2
+                        && matches!(tokens[open_insert - 2], Token::Whitespace(_))
+                        && matches!(tokens[open_insert - 1], Token::Newline)
+                    {
+                        replace.insert(open_insert - 2, Token::Whitespace(" ".to_owned().into()));
+                    }
+                    insert_before
+                        .entry(open_insert - 1)
+                        .or_default()
+                        .push(Token::Symbol('{'));
+                }
+            }
+        } else {
+            insert_before
+                .entry(open_insert)
+                .or_default()
+                .push(Token::Symbol('{'));
+            insert_before
+                .entry(open_insert)
+                .or_default()
+                .push(Token::Newline);
+        }
+        // A closer kept on its statement's line goes before the statement's
+        // comment, which keeps its gap.
+        let mut code_end = close_insert;
+        while code_end > 0 && matches!(tokens[code_end - 1], Token::Newline | Token::Whitespace(_))
+        {
+            code_end -= 1;
+        }
+        if attach_closing_brace
+            && code_end >= 3
+            && matches!(&tokens[code_end - 1], Token::Comment(_, text) if !text.contains('\n'))
+            && matches!(tokens[code_end - 2], Token::Whitespace(_))
+            && matches!(tokens[code_end - 3], Token::Symbol(';'))
+        {
+            insert_before
+                .entry(code_end - 2)
+                .or_default()
+                .push(Token::Whitespace(" ".to_owned().into()));
+            insert_before
+                .entry(code_end - 2)
+                .or_default()
+                .push(Token::Symbol('}'));
+            // Joining the closer back takes a space of the gap; this one
+            // was never moved.
+            if let Token::Whitespace(gap) = &tokens[code_end - 2]
+                && gap.bytes().all(|byte| byte == b' ')
+            {
+                replace.insert(code_end - 2, Token::Whitespace(format!("{gap} ").into()));
+            }
+        } else {
+            insert_before
+                .entry(close_insert)
+                .or_default()
+                .push(Token::Newline);
+            insert_before
+                .entry(close_insert)
+                .or_default()
+                .push(Token::Symbol('}'));
+            set_statement_comment_gap(&mut replace, close_insert);
+        }
+        covered_until = close_insert;
+    }
+
+    let added = insert_before.values().map(Vec::len).sum::<usize>();
+    if added == 0 && replace.is_empty() {
+        return AddedBraces {
+            tokens: owned_tokens,
+            closers: IndexSet::default(),
+            opener_overruns: IndexMap::default(),
+        };
+    }
+    let token_count = tokens.len();
+    // The tokens move back to make room in place, the last first, so the
+    // source tokens are never held twice.
+    let mut tokens = owned_tokens;
+    for (index, replacement) in replace {
+        tokens[index] = replacement;
+    }
+    // Nothing goes in past the end of the tokens.
+    insert_before.split_off(&(token_count + 1));
+    let added = insert_before.values().map(Vec::len).sum::<usize>();
+    tokens.reserve_exact(added);
+    tokens.resize_with(token_count + added, || Token::Newline);
+    let mut write = tokens.len();
+    let mut closers = Vec::new();
+    let mut overruns = Vec::new();
+    let mut place_inserted = |tokens: &mut Vec<Token>,
+                              write: &mut usize,
+                              inserted: Vec<Token>,
+                              overrun: Option<usize>| {
+        for token in inserted.into_iter().rev() {
+            *write -= 1;
+            match token {
+                Token::Symbol('}') => closers.push(*write),
+                Token::Symbol('{') => {
+                    if let Some(overrun) = overrun {
+                        overruns.push((*write, overrun));
+                    }
+                }
+                _ => {}
+            }
+            tokens[*write] = token;
+        }
+    };
+    if let Some(inserted) = insert_before.remove(&token_count) {
+        place_inserted(&mut tokens, &mut write, inserted, None);
+    }
+    for index in (0..token_count).rev() {
+        write -= 1;
+        tokens.swap(index, write);
+        if let Some(inserted) = insert_before
+            .last_entry()
+            .filter(|entry| *entry.key() == index)
+        {
+            place_inserted(
+                &mut tokens,
+                &mut write,
+                inserted.remove(),
+                opener_overruns.get(&index).copied(),
+            );
+        }
+    }
+    debug_assert_eq!(write, 0);
+    AddedBraces {
+        tokens,
+        closers: closers.into_iter().rev().collect(),
+        opener_overruns: overruns.into_iter().rev().collect(),
+    }
+}
+
+/// Tokens with the braces add-braces put in, the indexes of the added
+/// closers, and the columns each added opener takes past the gap before a
+/// comment after it.
+pub(crate) struct AddedBraces {
+    pub(crate) tokens: Vec<Token>,
+    pub(crate) closers: IndexSet<usize>,
+    pub(crate) opener_overruns: IndexMap<usize, usize>,
+}
+
+fn open_brace_attaches_to_header_line(
+    tokens: &[Token],
+    header_end: usize,
+    open_insert: usize,
+) -> bool {
+    if open_insert == 0 || !matches!(tokens.get(open_insert - 1), Some(Token::Newline)) {
+        return false;
+    }
+    if !tokens[header_end + 1..open_insert - 1]
+        .iter()
+        .all(|token| matches!(token, Token::Whitespace(_) | Token::Comment(_, _)))
+    {
+        return false;
+    }
+    tokens[open_insert..]
+        .iter()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+        .is_none_or(|token| !matches!(token, Token::Comment(_, _)))
+}
+
+fn header_body_start(tokens: &[Token], header_index: usize, line_end: usize) -> Option<usize> {
+    let header = match tokens.get(header_index)? {
+        Token::Word(word) => word.as_str(),
+        _ => return None,
+    };
+    let header_end = if header == "else" {
+        header_index
+    } else {
+        matching_close_paren_index(
+            tokens,
+            header_condition_open_paren(tokens, header_index, line_end, header)?,
+        )?
+    };
+    next_non_layout_token_index(tokens, header_end + 1)
+}
+
+fn header_condition_open_paren(
+    tokens: &[Token],
+    header_index: usize,
+    end: usize,
+    header: &str,
+) -> Option<usize> {
+    let mut open_paren = next_statement_token(tokens, header_index + 1, end, true)?;
+    if header == "if"
+        && matches!(tokens.get(open_paren), Some(Token::Word(word)) if word == "constexpr")
+    {
+        open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
+    }
+    matches!(tokens.get(open_paren), Some(Token::Symbol('('))).then_some(open_paren)
+}
+
+/// Indices of the words with a paren open around them since the last brace
+/// opened outside parens: a brace opened inside parens keeps the paren count
+/// of the block around it, so no header within it ends its condition at a
+/// zero count.
+fn words_in_open_parens(tokens: &[Token]) -> IndexSet<usize> {
+    let mut counts = vec![0usize];
+    let mut pushed = Vec::new();
+    let mut words = IndexSet::default();
+    for (index, token) in tokens.iter().enumerate() {
+        let count = counts.last_mut().expect("base count");
+        match token {
+            Token::Symbol('(' | '[') => *count += 1,
+            Token::Symbol(')' | ']') => *count = count.saturating_sub(1),
+            Token::Symbol('{') => {
+                let array = *count > 0;
+                pushed.push(!array);
+                if !array {
+                    counts.push(0);
+                }
+            }
+            Token::Symbol('}') => {
+                if pushed.pop() == Some(true) && counts.len() > 1 {
+                    counts.pop();
+                }
+            }
+            Token::Word(_) if *count > 0 => {
+                words.insert(index);
+            }
+            _ => {}
+        }
+    }
+    words
+}
+
+fn add_braces_insertion_range(
+    tokens: &[Token],
+    header_index: usize,
+) -> Option<(usize, usize, usize)> {
+    let header = match tokens.get(header_index)? {
+        Token::Word(word) if is_standard_add_braces_header(word) && !is_defer_header(word) => {
+            word.as_str()
+        }
+        _ => return None,
+    };
+    let header_end = if header == "else" {
+        header_index
+    } else {
+        matching_close_paren_index(
+            tokens,
+            header_condition_open_paren(tokens, header_index, tokens.len(), header)?,
+        )?
+    };
+    let statement_start = next_add_braces_statement_token(tokens, header_end + 1)?;
+    if !tokens[header_end + 1..statement_start]
+        .iter()
+        .any(|token| matches!(token, Token::Newline))
+    {
+        return None;
+    }
+    match tokens.get(statement_start)? {
+        Token::Symbol('{') | Token::Symbol(';') | Token::Preprocessor(_) | Token::Newline => {
+            return None;
+        }
+        Token::Comment(_, _) => return None,
+        Token::Word(word) if language::is_header(word) => return None,
+        _ => {}
+    }
+    let semicolon = find_statement_semicolon(tokens, statement_start, tokens.len())?;
+    if tokens[statement_start..semicolon]
+        .iter()
+        .any(|token| matches!(token, Token::Newline))
+    {
+        return None;
+    }
+    let (_, statement_line_end) = line_bounds(tokens, semicolon);
+    Some((
+        header_end,
+        line_bounds(tokens, statement_start).0,
+        statement_line_end,
+    ))
+}
+
+fn next_add_braces_statement_token(tokens: &[Token], start: usize) -> Option<usize> {
+    for (index, token) in tokens.iter().enumerate().skip(start) {
+        match token {
+            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
+            Token::Preprocessor(_) => return None,
+            _ => return Some(index),
+        }
+    }
+    None
+}
+
+pub(crate) fn remove_cross_line_statement_braces(tokens: &[Token]) -> Vec<Token> {
+    let mut remove = vec![false; tokens.len()];
+    let mut replace_with_space = vec![false; tokens.len()];
+    for open_index in 0..tokens.len() {
+        if remove[open_index] || !matches!(tokens[open_index], Token::Symbol('{')) {
+            continue;
+        }
+        if !is_remove_braces_opening(tokens, open_index) {
+            continue;
+        }
+        let Some((statement_start, semicolon, close_index)) =
+            removable_statement_brace_range(tokens, open_index, tokens.len(), true)
+        else {
+            continue;
+        };
+        // astyle keeps the braces of a statement that spans lines.
+        if tokens[statement_start..semicolon]
+            .iter()
+            .any(|token| matches!(token, Token::Newline))
+        {
+            continue;
+        }
+        if !tokens[open_index..=close_index]
+            .iter()
+            .any(|token| matches!(token, Token::Newline))
+        {
+            continue;
+        }
+        let brace_leads_line = tokens[line_bounds(tokens, open_index).0..open_index]
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));
+        // A brace leading its line keeps the comment after it in the block.
+        if brace_leads_line && opening_brace_has_line_comment(tokens, open_index) {
+            continue;
+        }
+        mark_removed_brace(tokens, open_index, &mut remove);
+        // astyle blanks the brace before a comment, unless a tab follows it.
+        if opening_brace_has_line_comment(tokens, open_index)
+            && !matches!(&tokens[open_index + 1], Token::Whitespace(gap) if gap.starts_with('\t'))
+        {
+            replace_with_space[open_index] = true;
+        }
+        mark_removed_brace(tokens, close_index, &mut remove);
+        let (_, close_line_end) = line_bounds(tokens, close_index);
+        if tokens[close_index + 1..close_line_end]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| {
+                matches!(
+                    token,
+                    Token::Word(_) | Token::Number(_) | Token::Comment(_, _)
+                )
+            })
+        {
+            replace_with_space[close_index] = true;
+        }
+    }
+
+    let mut output = Vec::with_capacity(tokens.len());
+    // Whether the whitespace run ending the output takes a removed brace's
+    // place: only that gap stays at a line end before a closing brace.
+    let mut gap_from_removal = false;
+    for (index, token) in tokens.iter().cloned().enumerate() {
+        let token = if replace_with_space[index] {
+            gap_from_removal = true;
+            Some(Token::Whitespace(" ".to_string().into()))
+        } else if remove[index] {
+            gap_from_removal |= matches!(output.last(), Some(Token::Whitespace(_)));
+            None
+        } else {
+            Some(token)
+        };
+        let Some(token) = token else {
+            continue;
+        };
+        match token {
+            Token::Whitespace(whitespace) => {
+                if let Some(Token::Whitespace(previous)) = output.last_mut() {
+                    *previous = format!("{previous}{whitespace}").into();
+                } else {
+                    output.push(Token::Whitespace(whitespace));
+                }
+            }
+            Token::Newline => {
+                if !gap_from_removal
+                    && matches!(output.last(), Some(Token::Whitespace(_)))
+                    && next_non_layout_token_index(tokens, index + 1).is_some_and(|next| {
+                        !remove[next] && matches!(tokens[next], Token::Symbol('}'))
+                    })
+                {
+                    output.pop();
+                }
+                gap_from_removal = false;
+                output.push(Token::Newline);
+            }
+            token => {
+                gap_from_removal = false;
+                output.push(token);
+            }
+        }
+    }
+    output
+}
+
+/// Whether the `if` whose condition ends before `start` follows a statement
+/// or a label on its line.
+fn if_follows_statement_on_line(tokens: &[Token], start: usize) -> bool {
+    let Some(close) = previous_non_layout_token_index(tokens, start) else {
+        return false;
+    };
+    if !matches!(tokens[close], Token::Symbol(')')) {
+        return false;
+    }
+    let Some(header) = matching_open_paren_global(tokens, close)
+        .and_then(|open| previous_non_layout_token_index(tokens, open))
+    else {
+        return false;
+    };
+    tokens[..header]
+        .iter()
+        .rev()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+        .is_some_and(|token| matches!(token, Token::Symbol(';' | ':')))
+}
+
+fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
+    let (_, line_end) = line_bounds(tokens, open_index);
+    let mut rest = tokens[open_index + 1..line_end]
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    match (rest.next(), rest.next()) {
+        (Some(Token::Comment(CommentKind::Line, _)), None) => true,
+        (Some(Token::Comment(CommentKind::Block, text)), None) => !text.contains('\n'),
+        _ => false,
+    }
+}
+
+fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
+    let Some(previous) = previous_non_layout_token_index(tokens, open_index) else {
+        return false;
+    };
+    match tokens.get(previous) {
+        Some(Token::Word(word)) => word == "else",
+        Some(Token::Symbol(')')) => is_remove_braces_paren_header(tokens, previous),
+        _ => false,
+    }
+}
+
+fn is_remove_braces_paren_header(tokens: &[Token], close_paren: usize) -> bool {
+    let Some(open_paren) = matching_open_paren_global(tokens, close_paren) else {
+        return false;
+    };
+    previous_non_layout_token_index(tokens, open_paren).is_some_and(|header| {
+        match tokens.get(header) {
+            Some(Token::Word(word)) if matches!(word.as_str(), "if" | "for" | "while") => true,
+            Some(Token::Word(word)) if word == "constexpr" => {
+                previous_non_layout_token_index(tokens, header).is_some_and(
+                    |index| matches!(tokens.get(index), Some(Token::Word(word)) if word == "if"),
+                )
+            }
+            _ => false,
+        }
+    })
+}
+
+fn matching_open_paren_global(tokens: &[Token], close_paren: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for index in (0..=close_paren).rev() {
+        match tokens[index] {
+            Token::Symbol(')') => depth += 1,
+            Token::Symbol('(') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn mark_removed_brace(tokens: &[Token], brace_index: usize, remove: &mut [bool]) {
+    let (line_start, line_end) = line_bounds(tokens, brace_index);
+    let only_brace_on_line = (line_start..line_end)
+        .all(|index| index == brace_index || matches!(tokens[index], Token::Whitespace(_)));
+    if only_brace_on_line {
+        let end = if matches!(tokens.get(line_end), Some(Token::Newline)) {
+            line_end + 1
+        } else {
+            line_end
+        };
+        for slot in &mut remove[line_start..end] {
+            *slot = true;
+        }
+    } else {
+        remove[brace_index] = true;
+    }
+}
+
+fn line_bounds(tokens: &[Token], index: usize) -> (usize, usize) {
+    let start = (0..index)
+        .rev()
+        .find(|candidate| matches!(tokens[*candidate], Token::Newline))
+        .map_or(0, |newline| newline + 1);
+    let end = (index + 1..tokens.len())
+        .find(|candidate| matches!(tokens[*candidate], Token::Newline))
+        .unwrap_or(tokens.len());
+    (start, end)
+}
+
+fn removable_statement_brace_range(
+    tokens: &[Token],
+    open_index: usize,
+    line_end: usize,
+    allow_newlines: bool,
+) -> Option<(usize, usize, usize)> {
+    let first = next_statement_token(tokens, open_index + 1, line_end, allow_newlines)?;
+    let statement_start = if allow_newlines
+        && opening_brace_has_line_comment(tokens, open_index)
+        && matches!(tokens.get(first), Some(Token::Comment(_, _)))
+    {
+        next_statement_token(tokens, first + 1, line_end, true)?
+    } else {
+        first
+    };
+    match tokens.get(statement_start)? {
+        Token::Word(word) if language::is_header(word) => return None,
+        Token::Comment(_, _) | Token::Preprocessor(_) | Token::Symbol('{') | Token::Symbol('}') => {
+            return None;
+        }
+        _ => {}
+    }
+    let semicolon = find_statement_semicolon(tokens, statement_start, line_end)?;
+    let close_index = next_statement_token(tokens, semicolon + 1, line_end, allow_newlines)?;
+    if matches!(tokens.get(close_index), Some(Token::Symbol('}'))) {
+        Some((statement_start, semicolon, close_index))
+    } else {
+        None
+    }
+}
+
+fn find_statement_semicolon(tokens: &[Token], start: usize, line_end: usize) -> Option<usize> {
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().take(line_end).skip(start) {
+        match token {
+            Token::Symbol('{') | Token::Comment(_, _) | Token::Preprocessor(_) => return None,
+            Token::Symbol('(') => paren_depth += 1,
+            Token::Symbol(')') => paren_depth = paren_depth.saturating_sub(1),
+            Token::Symbol('[') => bracket_depth += 1,
+            Token::Symbol(']') => bracket_depth = bracket_depth.saturating_sub(1),
+            Token::Symbol(';') if paren_depth == 0 && bracket_depth == 0 => return Some(index),
+            _ => {}
+        }
+    }
+    None
+}
+
+pub(crate) fn following_operator_after_next_word(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+) -> Option<&str> {
+    let word_index = next_non_whitespace(tokens, start, end)?;
+    if !matches!(tokens.get(word_index), Some(Token::Word(_))) {
+        return None;
+    }
+    let operator_index = next_non_whitespace(tokens, word_index + 1, end)?;
+    match tokens.get(operator_index) {
+        Some(Token::Operator(operator)) => Some(operator.as_str()),
+        Some(Token::Symbol(':')) => Some(":"),
+        _ => None,
+    }
+}
+
+fn segment_follows_inferred_type(tokens: &[Token], brace_index: usize) -> bool {
+    let segment_start = tokens[..brace_index]
+        .iter()
+        .rposition(|token| matches!(token, Token::Symbol('{' | '}' | ';')))
+        .map_or(0, |index| index + 1);
+    let mut template_depth = 0usize;
+    for index in segment_start..brace_index {
+        match template_angle_role(tokens, index, brace_index, template_depth) {
+            TemplateAngle::Open => template_depth += 1,
+            TemplateAngle::Close(count) => {
+                template_depth = template_depth.saturating_sub(count);
+            }
+            TemplateAngle::None => {}
+        }
+        if template_depth > 0
+            || !matches!(tokens.get(index), Some(Token::Word(word)) if word == "auto")
+        {
+            continue;
+        }
+        let inside_decltype = previous_code_token(tokens, index, segment_start).is_some_and(|open| {
+            matches!(tokens.get(open), Some(Token::Symbol('(')))
+                && previous_code_token(tokens, open, segment_start)
+                    .is_some_and(|word| matches!(tokens.get(word), Some(Token::Word(word)) if word == "decltype"))
+        });
+        if !inside_decltype {
+            return true;
+        }
+    }
+    false
+}
+
+fn previous_code_token(tokens: &[Token], before: usize, start: usize) -> Option<usize> {
+    (start..before).rev().find(|index| {
+        !matches!(
+            tokens[*index],
+            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
+        )
+    })
+}
+
+fn next_statement_token(
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+    allow_newlines: bool,
+) -> Option<usize> {
+    for (index, token) in tokens.iter().enumerate().take(end).skip(start) {
+        match token {
+            Token::Whitespace(_) => {}
+            Token::Newline if allow_newlines => {}
+            Token::Newline => return None,
+            _ => return Some(index),
+        }
+    }
+    None
+}
+
+/// `Enum` when the `{` at `open_index` starts its line right after a line
+/// holding only an enum head, as `enum name`.
+fn enum_head_ends_previous_line(
+    tokens: &[Token],
+    open_index: usize,
+    line_start: usize,
+) -> Option<BraceType> {
+    if previous_non_whitespace(tokens, open_index, line_start).is_some() {
+        return None;
+    }
+    let mut index = line_start;
+    let previous = loop {
+        index = index.checked_sub(1)?;
+        match &tokens[index] {
+            Token::Whitespace(_) | Token::Newline => {}
+            _ => break index,
+        }
+    };
+    let head_start = (0..=previous)
+        .rev()
+        .find(|&index| {
+            matches!(
+                tokens[index],
+                Token::Symbol('{' | '}' | ';') | Token::Preprocessor(_)
+            )
+        })
+        .map_or(0, |index| index + 1);
+    // Comments before the head belong to no part of it.
+    let head_start = (head_start..=previous)
+        .find(|&index| {
+            !matches!(
+                tokens[index],
+                Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
+            )
+        })
+        .unwrap_or(previous);
+    let head = &tokens[head_start..=previous];
+    (head
+        .iter()
+        .any(|token| matches!(token, Token::Word(word) if word == "enum"))
+        && !head.iter().any(|token| {
+            matches!(token, Token::Symbol('(' | '='))
+                || matches!(token, Token::Operator(operator) if operator == "=")
+        }))
+    .then_some(BraceType::Enum)
+}
+
+fn initializer_brace_type(
+    tokens: &[Token],
+    open_index: usize,
+    line_start: usize,
+) -> Option<BraceType> {
+    let previous = previous_non_whitespace(tokens, open_index, line_start)?;
+    let segment_start = (line_start..open_index)
+        .rev()
+        .find(|index| matches!(tokens[*index], Token::Symbol('{' | '}' | ';')))
+        .map_or(line_start, |index| index + 1);
+    // A head split over lines, as `struct` above its name, starts earlier.
+    let head_start = if segment_start == line_start {
+        (0..line_start)
+            .rev()
+            .find(|&index| {
+                matches!(
+                    tokens[index],
+                    Token::Symbol('{' | '}' | ';' | '(' | ')' | '=' | ',') | Token::Preprocessor(_)
+                )
+            })
+            .map_or(0, |index| index + 1)
+    } else {
+        segment_start
+    };
+    let has_block_word = tokens[head_start..open_index].iter().any(|token| {
+        matches!(token, Token::Word(word) if language::BLOCK_WORDS.contains(&word.as_str()) || language::PRE_BLOCK_WORDS.contains(&word.as_str()))
+    });
+    // An `enum` among a function's parameters heads no body.
+    let mut paren_depth = 0usize;
+    if tokens[segment_start..open_index].iter().rev().any(|token| {
+        match token {
+            Token::Symbol(')') => paren_depth += 1,
+            Token::Symbol('(') => paren_depth = paren_depth.saturating_sub(1),
+            _ => {}
+        }
+        paren_depth == 0 && matches!(token, Token::Word(word) if word == "enum")
+    }) {
+        return Some(BraceType::Enum);
+    }
+    if tokens[segment_start..open_index]
+        .iter()
+        .any(|token| matches!(token, Token::Operator(operator) if operator == "->"))
+    {
+        return None;
+    }
+    match tokens.get(previous)? {
+        Token::Operator(operator) if operator == "=" => Some(BraceType::Array),
+        Token::Operator(operator) if operator == ">" && !has_block_word => {
+            Some(BraceType::Initializer)
+        }
+        Token::Symbol(',') | Token::Symbol('@') => Some(BraceType::Array),
+        Token::Symbol('(') if !has_block_word => Some(BraceType::Array),
+        Token::Symbol(')') if is_compound_literal_before_brace(tokens, previous, line_start) => {
+            Some(BraceType::CompoundLiteral)
+        }
+        Token::Symbol(']')
+            if is_new_array_initializer_before_brace(tokens, previous, line_start) =>
+        {
+            Some(BraceType::Array)
+        }
+        Token::Symbol(']') | Token::Number(_) if !has_block_word => Some(BraceType::Initializer),
+        Token::Word(word)
+            if !has_block_word
+                && !language::is_header(word)
+                && !is_asm_block_header(word)
+                && !language::PRE_COMMAND_QUALIFIERS.contains(&word.as_str()) =>
+        {
+            Some(BraceType::Initializer)
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn previous_non_whitespace(
+    tokens: &[Token],
+    before: usize,
+    line_start: usize,
+) -> Option<usize> {
+    (line_start..before)
+        .rev()
+        .find(|index| !matches!(tokens[*index], Token::Whitespace(_)))
+}
+
+/// Whether a value may start after `token`, so a parenthesized type after
+/// it is a cast.
+fn starts_value(token: &Token) -> bool {
+    match token {
+        Token::Symbol(symbol) => !matches!(symbol, ')' | ']'),
+        // After `*`, `&` or `^` the parentheses may be a declarator's.
+        Token::Operator(operator) => !matches!(operator.as_str(), "*" | "&" | "^"),
+        Token::Word(word) => word == language::RETURN,
+        _ => false,
+    }
+}
+
+fn is_compound_literal_before_brace(
+    tokens: &[Token],
+    close_paren: usize,
+    line_start: usize,
+) -> bool {
+    let Some(open_paren) = matching_open_paren(tokens, close_paren, line_start) else {
+        return false;
+    };
+    if close_paren == open_paren + 1 {
+        return false;
+    }
+    if has_top_level_comma(tokens, open_paren + 1, close_paren) {
+        return false;
+    }
+    let previous_index = previous_non_whitespace(tokens, open_paren, line_start);
+    let previous = previous_index.and_then(|index| tokens.get(index));
+    let mut depth = 0i32;
+    for token in &tokens[line_start..open_paren] {
+        match token {
+            Token::Symbol('(') => depth += 1,
+            Token::Symbol(')') => depth -= 1,
+            _ => {}
+        }
+    }
+    let nested_compound_context = matches!(
+        previous,
+        Some(Token::Symbol('(' | ',')) | Some(Token::Operator(_))
+    );
+    if depth != 0 && !nested_compound_context {
+        return false;
+    }
+    if let Some(Token::Word(word)) = previous {
+        return word == language::RETURN;
+    }
+    if matches!(previous, Some(Token::Symbol(']'))) {
+        return false;
+    }
+    // Only a cast that starts a value may stand before the cast:
+    // `(int *)(int[]){ … }`.
+    if depth == 0
+        && let Some(index) = previous_index
+        && matches!(previous, Some(Token::Symbol(')')))
+    {
+        return matching_open_paren(tokens, index, line_start).is_some_and(|open| {
+            index > open + 1
+                && !has_top_level_comma(tokens, open + 1, index)
+                && previous_non_whitespace(tokens, open, line_start)
+                    .and_then(|before| tokens.get(before))
+                    .is_none_or(starts_value)
+        });
+    }
+    if let Some(index) = previous_index
+        && operator_overload_name_ends_at(tokens, index, line_start)
+    {
+        return false;
+    }
+    true
+}
+
+fn operator_overload_name_ends_at(tokens: &[Token], end: usize, line_start: usize) -> bool {
+    let mut index = end;
+    let mut saw_symbol = false;
+    loop {
+        match tokens.get(index) {
+            Some(Token::Whitespace(_)) => {}
+            Some(Token::Operator(_)) | Some(Token::Symbol('[' | ']' | '(' | ')')) => {
+                saw_symbol = true
+            }
+            Some(Token::Word(word)) if word == "operator" => return saw_symbol,
+            _ => return false,
+        }
+        if index == line_start {
+            return false;
+        }
+        index -= 1;
+    }
+}
+
+fn has_top_level_comma(tokens: &[Token], start: usize, end: usize) -> bool {
+    let mut depth = 0usize;
+    for token in &tokens[start..end] {
+        match token {
+            Token::Symbol('(') => depth += 1,
+            Token::Symbol(')') => depth = depth.saturating_sub(1),
+            Token::Symbol(',') if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+fn is_new_array_initializer_before_brace(
+    tokens: &[Token],
+    close_bracket: usize,
+    line_start: usize,
+) -> bool {
+    tokens[line_start..close_bracket]
+        .iter()
+        .any(|token| matches!(token, Token::Word(word) if word == language::NEW))
+}
+
+fn matching_open_paren(tokens: &[Token], close_paren: usize, line_start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for index in (line_start..=close_paren).rev() {
+        match tokens.get(index)? {
+            Token::Symbol(')') => depth += 1,
+            Token::Symbol('(') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn format_one_line_block_tokens(
+    tokens: &[Token],
+    options: &FormatOptions,
+    brace_type: Option<BraceType>,
+    opening_body_gap: Option<&str>,
+    after_directive: bool,
+) -> String {
+    if is_semicolon_only_one_line_block_tokens(tokens) {
+        return tokens
+            .iter()
+            .map(token_text)
+            .collect::<String>()
+            .trimmed_end()
+            .to_string();
+    }
+    let adjusted_tokens = opening_body_gap.and_then(|gap| {
+        let first_body = next_non_whitespace(tokens, 1, tokens.len())?;
+        if matches!(tokens.get(first_body), Some(Token::Symbol('}'))) {
+            return None;
+        }
+        let mut adjusted = tokens.to_vec();
+        adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
+        Some(adjusted)
+    });
+    let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
+    let mut formatter = FormatEngine::new(options);
+    formatter.one_line_block_mode = true;
+    formatter.one_line_block_after_directive = after_directive;
+    // The roles of the block's own tokens tell operators apart.
+    formatter.tree = SourceTree::build(tokens);
+    formatter.syntax_roles = classify_syntax(tokens, &formatter.tree);
+    if let Some(brace_type) = brace_type {
+        formatter.layout.nesting.brace_type_stack.push(brace_type);
+    }
+    for (index, token) in tokens.iter().enumerate() {
+        let next = next_non_whitespace(tokens, index + 1, tokens.len())
+            .and_then(|next_index| tokens.get(next_index));
+        let next_is_adjacent = tokens
+            .get(index + 1)
+            .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
+        let following_operator =
+            following_operator_after_next_word(tokens, index + 1, tokens.len());
+        formatter.token_input.previous_input_was_adjacent = index > 0
+            && tokens
+                .get(index - 1)
+                .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
+        formatter.token_input.previous_input_whitespace = (index > 0)
+            .then(|| tokens.get(index - 1))
+            .flatten()
+            .and_then(|token| match token {
+                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
+                _ => None,
+            })
+            .filter(|_| !matches!(tokens.get(index.wrapping_sub(2)), Some(Token::Newline)));
+        formatter.token_input.next_input_whitespace =
+            tokens.get(index + 1).and_then(|token| match token {
+                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
+                _ => None,
+            });
+        formatter.token_input.token_begins_source_line = tokens[..index]
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));
+        let template_angle = template_angle_role(
+            tokens,
+            index,
+            tokens.len(),
+            formatter.layout.line_state.template_angle_depth,
+        );
+        formatter.push_token(
+            token,
+            TokenPushContext {
+                next,
+                next_is_adjacent,
+                following_operator,
+                template_angle,
+                token_index: index,
+                starts_initializer_designator: bracket_starts_initializer_designator(
+                    tokens,
+                    index,
+                    tokens.len(),
+                ),
+                inferred_definition_brace: false,
+                following_closer_width: 0,
+            },
+        );
+    }
+    formatter.current.trimmed_end().to_string()
+}
+
+fn token_begins_line(tokens: &[Token], index: usize) -> bool {
+    tokens[..index]
+        .iter()
+        .rev()
+        .take_while(|token| !matches!(token, Token::Newline))
+        .all(|token| matches!(token, Token::Whitespace(_)))
+}
+
+fn is_empty_one_line_block_tokens(tokens: &[Token]) -> bool {
+    let significant = significant_one_line_block_tokens(tokens);
+    matches!(
+        significant.as_slice(),
+        [Token::Symbol('{'), Token::Symbol('}')]
+    )
+}
+
+fn one_line_block_contains_case_label(tokens: &[Token]) -> bool {
+    tokens.iter().enumerate().any(|(index, token)| match token {
+        Token::Word(word) if word == "case" => true,
+        Token::Word(word) if word == "default" => tokens[index + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+            .is_some_and(|token| matches!(token, Token::Symbol(':'))),
+        _ => false,
+    })
+}
+
+fn is_semicolon_only_one_line_block_tokens(tokens: &[Token]) -> bool {
+    let significant = significant_one_line_block_tokens(tokens);
+    matches!(
+        significant.as_slice(),
+        [Token::Symbol('{'), Token::Symbol(';'), Token::Symbol('}')]
+    )
+}
+
+fn is_comment_only_one_line_block_tokens(tokens: &[Token]) -> bool {
+    let significant = significant_one_line_block_tokens(tokens);
+    matches!(
+        significant.as_slice(),
+        [Token::Symbol('{'), Token::Comment(_, _), Token::Symbol('}')]
+            | [
+                Token::Symbol('{'),
+                Token::Symbol(';'),
+                Token::Comment(_, _),
+                Token::Symbol('}')
+            ]
+    )
+}
+
+fn one_line_block_contains_lambda_body(tokens: &[Token]) -> bool {
+    one_line_block_contains_body_header(tokens, is_lambda_body_header)
+}
+
+fn one_line_block_contains_plain_lambda_body(tokens: &[Token]) -> bool {
+    one_line_block_contains_body_header(tokens, |head| {
+        is_lambda_body_header(head) && !head.contains("->")
+    })
+}
+
+fn one_line_block_contains_operator_body(tokens: &[Token]) -> bool {
+    one_line_block_contains_body_header(tokens, |head| {
+        head.trimmed_end().ends_with(')') && head.contains("operator")
+    })
+}
+
+fn one_line_block_contains_body_header(
+    tokens: &[Token],
+    matches_header: impl Fn(&str) -> bool,
+) -> bool {
+    tokens.iter().enumerate().any(|(index, token)| {
+        if !matches!(token, Token::Symbol('{')) || index == 0 {
+            return false;
+        }
+        let mut head = String::new();
+        for token in tokens[..index].iter().rev() {
+            if matches!(
+                token,
+                Token::Symbol(';') | Token::Symbol('{') | Token::Symbol('}')
+            ) {
+                break;
+            }
+            head.insert_str(0, &token_text(token));
+        }
+        matches_header(head.trimmed_end())
+    })
+}
+
+fn significant_one_line_block_tokens(tokens: &[Token]) -> Vec<&Token> {
+    tokens
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+        .collect::<Vec<_>>()
+}
+
+fn attach_closing_brace_mode(options: &FormatOptions) -> bool {
+    matches!(options.brace_style, BraceStyle::Pico | BraceStyle::Lisp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::formatter::lexer::tokenize;
+
+    #[test]
+    fn add_braces_keeps_braced_condition_interrupted_by_preprocessor() {
+        let tokens = tokenize(
+            "void run(){if(alphaCondition&&\n#if ENABLED\nbetaCondition\n#endif\nzetaCondition){call();}}\n",
+        );
+
+        assert_eq!(
+            add_marked_cross_line_statement_braces(tokens.clone(), true, false, 4).tokens,
+            tokens
+        );
+    }
+}
