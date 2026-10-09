@@ -1,3 +1,7 @@
+use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
+use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
@@ -11,6 +15,76 @@ pub(crate) struct CompoundLiteralState {
     pub(crate) arg_indent_spaces: Option<usize>,
     pub(crate) arg_paren_depth: Option<usize>,
     pub(crate) arg_brace_depth: Option<usize>,
+}
+
+impl FormatEngine<'_> {
+    /// Whether the parens opened at `open` hold, as an argument of their
+    /// own on a line after the `(`, a compound literal whose braces span
+    /// lines.
+    pub(crate) fn parens_hold_multiline_compound_literal(&self, open: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(parens) = groups.opened_at(open) else {
+            return false;
+        };
+        // Only a call's closed argument list counts: parens left open or
+        // holding statements are no call's arguments.
+        groups.get(parens).delimiter == Delimiter::Paren
+            && groups.get(parens).close.is_some()
+            && !groups
+                .members(parens)
+                .any(|member| matches!(tokens[member], Token::Symbol(';')))
+            && groups.members(parens).any(|brace| {
+                groups.opened_at(brace).is_some_and(|literal| {
+                    // The literal starts at its cast, before any line break
+                    // a breaking style puts ahead of its brace.
+                    let start = self
+                        .tree
+                        .previous_code_token(brace)
+                        .and_then(|cast| groups.closed_at(cast))
+                        .map_or(brace, |cast| groups.get(cast).open);
+                    // A name or a closing delimiter before the parens makes
+                    // them a call's or a function's, not a cast.
+                    let cast_follows_name = start != brace
+                        && self.tree.previous_code_token(start).is_some_and(|before| {
+                            matches!(&tokens[before], Token::Word(_) | Token::Symbol(')' | ']'))
+                        });
+                    self.tree.blocks.kind(literal) == Some(BlockKind::CompoundLiteral)
+                        && !cast_follows_name
+                        && tokens[open..start]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                        && groups.get(literal).close.is_some_and(|close| {
+                            tokens[brace..close]
+                                .iter()
+                                .any(|token| matches!(token, Token::Newline))
+                        })
+                })
+            })
+    }
+
+    /// The `(` of the parens holding the token at `index`, when they hold
+    /// a compound literal spanning lines. The literal and the arguments
+    /// after it stay with the call's other arguments.
+    pub(crate) fn multiline_literal_argument_parens(&self, index: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let open = groups.get(groups.enclosing(index)?).open;
+        self.parens_hold_multiline_compound_literal(open)
+            .then_some(open)
+    }
+
+    /// The `(` that ends its line and opens the parens holding the token at
+    /// `index`, when they hold a compound literal spanning lines. The
+    /// arguments of such a call stand a level past the line of its `(`,
+    /// where the literal's rows have room.
+    pub(crate) fn literal_argument_parens(&self, index: usize) -> Option<usize> {
+        let open = self.multiline_literal_argument_parens(index)?;
+        self.tree.tokens[open + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Newline))
+            .then_some(open)
+    }
 }
 
 pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {

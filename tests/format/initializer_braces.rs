@@ -2128,7 +2128,7 @@ fn multiline_compound_literal_keeps_run_in_designated_fields() {
             "void f(void)\n{\n  value = (struct Item) { .first = alpha,\n                          .second = beta\n                        };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n                            .second = beta\n                          };\n}\n",
+        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n        .second = beta\n    };\n}\n",
     );
 }
 
@@ -2150,7 +2150,7 @@ fn enclosed_array_elements_with_nested_brace_stay_one_line() {
             "void f(void)\n{\n  call (a,\n        (SampleRecord[2]) {\n          { MAX (0.0, p), { 1, 1, 1, 1 } },\n          { MIN (1.0, p), { 0, 0, 0, 1 } }\n        }, 2);\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    call (a,\n    (SampleRecord[2]) {\n        { MAX (0.0, p), { 1, 1, 1, 1 } },\n        { MIN (1.0, p), { 0, 0, 0, 1 } }\n    }, 2);\n}\n",
+        "void f(void)\n{\n    call (a,\n          (SampleRecord[2]) {\n              { MAX (0.0, p), { 1, 1, 1, 1 } },\n              { MIN (1.0, p), { 0, 0, 0, 1 } }\n          }, 2);\n}\n",
     );
 }
 
@@ -2461,7 +2461,7 @@ fn compound_literal_members_preserve_source_indent() {
 }
 
 #[test]
-fn nested_compound_literal_array_rows_stand_at_their_brace() {
+fn nested_compound_literal_array_rows_indent_past_their_brace_row() {
     let source = fixture!(
         "void helper(void)",
         "{",
@@ -2478,26 +2478,9 @@ fn nested_compound_literal_array_rows_stand_at_their_brace() {
         "}",
     );
 
-    // astyle stands the rows of a brace nested in a compound literal at the
-    // brace.
-    assert_eq!(
-        format_exact(source, &one_true_brace_c_options()),
-        fixture!(
-            "void helper(void)",
-            "{",
-            "    struct Packet *packet = (struct Packet *)buffer;",
-            "    *packet = (struct Packet) {",
-            "        .source = {",
-            "            .addr = {",
-            "            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,",
-            "            0, 0, 0, 0, 0, 0, 0, 0x0a",
-            "            }",
-            "        },",
-            "        .size = sizeof(buffer),",
-            "    };",
-            "}",
-        )
-    );
+    // The rows of a brace nested in a compound literal stand a level past
+    // the row that opens it, as in a declaration's initializer.
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
 }
 
 #[test]
@@ -2667,24 +2650,24 @@ fn one_line_compound_literal_call_argument_stays_inline() {
 }
 
 #[test]
-fn macro_call_compound_literal_argument_uses_body_indent() {
+fn macro_call_compound_literal_argument_stays_with_the_arguments() {
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  CALL_CHECKER (createSampleValue, get_record (data->record),\n                &(SampleItemCreateState) {\n                  .state = MODE,\n                  .value = out,\n                });\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    CALL_CHECKER (createSampleValue, get_record (data->record),\n    &(SampleItemCreateState) {\n        .state = MODE,\n        .value = out,\n    });\n}\n",
+        "void f(void)\n{\n    CALL_CHECKER (createSampleValue, get_record (data->record),\n                  &(SampleItemCreateState) {\n                      .state = MODE,\n                      .value = out,\n                  });\n}\n",
     );
 }
 
 #[test]
-fn nested_array_compound_literal_body_elements_use_body_indent() {
+fn nested_array_compound_literal_argument_rows_stay_with_the_arguments() {
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  call (a,\n        (float [4]) { 1, 1, 1, 1 },\n        (ColorId[4]) {\n    { 0, 0, 0, 0.75 },\n    { 0, 0, 0, 0.75 },\n  });\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    call (a,\n          (float [4]) { 1, 1, 1, 1 },\n    (ColorId[4]) {\n        { 0, 0, 0, 0.75 },\n        { 0, 0, 0, 0.75 },\n    });\n}\n",
+        "void f(void)\n{\n    call (a,\n          (float [4]) { 1, 1, 1, 1 },\n          (ColorId[4]) {\n              { 0, 0, 0, 0.75 },\n              { 0, 0, 0, 0.75 },\n          });\n}\n",
     );
 }
 
@@ -3373,7 +3356,7 @@ fn nested_designated_initializer_run_in_braces_expand() {
 }
 
 #[test]
-fn compound_literal_argument_body_uses_body_indent() {
+fn compound_literal_argument_rows_stay_with_the_arguments() {
     let mut options = FormatOptions::default();
     let args = [
         "--style=1tbs",
@@ -3391,12 +3374,13 @@ fn compound_literal_argument_body_uses_body_indent() {
     .map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
     let source = "void f(void)\n{\n    call(&worker,\n    &(struct Data) {\n        .id = (uint32_t)item->id,\n        .hash = item->hash,\n        .cookie = 0x42,\n        .status = 0,\n    });\n}\n";
+    let expected = "void f(void)\n{\n    call(&worker,\n         &(struct Data) {\n             .id = (uint32_t)item->id,\n             .hash = item->hash,\n             .cookie = 0x42,\n             .status = 0,\n         });\n}\n";
 
-    assert_eq!(format_exact(source, &options), source);
+    assert_eq!(format_exact(source, &options), expected);
 }
 
 #[test]
-fn nested_call_compound_literal_argument_body_uses_body_indent() {
+fn nested_call_compound_literal_arguments_stand_a_level_past_the_statement() {
     let mut options = FormatOptions::default();
     let args = [
         "--style=1tbs",
@@ -3419,7 +3403,7 @@ fn nested_call_compound_literal_argument_body_uses_body_indent() {
             "void f(void)\n{\n    assert_true(process_pending_item(\n    context.queue,\n    &(struct Data) {\n        .id = (uint32_t)item->id,\n        .hash = item->hash,\n        .cookie = 0x2ab,\n        .status = STATUS_FULL,\n    }));\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    assert_true(process_pending_item(\n                    context.queue,\n    &(struct Data) {\n        .id = (uint32_t)item->id,\n        .hash = item->hash,\n        .cookie = 0x2ab,\n        .status = STATUS_FULL,\n    }));\n}\n",
+        "void f(void)\n{\n    assert_true(process_pending_item(\n        context.queue,\n        &(struct Data) {\n            .id = (uint32_t)item->id,\n            .hash = item->hash,\n            .cookie = 0x2ab,\n            .status = STATUS_FULL,\n        }));\n}\n",
     );
 }
 
@@ -3574,13 +3558,13 @@ fn call_arguments_after_split_compound_literal_use_body_indent() {
 }
 
 #[test]
-fn split_compound_literal_call_argument_uses_body_indent() {
+fn split_compound_literal_call_argument_stays_with_the_arguments() {
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  call (arg,\n        &(const T) {\n          x, y\n        },\n        -1);\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    call (arg,\n    &(const T) {\n        x, y\n    },\n    -1);\n}\n",
+        "void f(void)\n{\n    call (arg,\n          &(const T) {\n              x, y\n          },\n          -1);\n}\n",
     );
 }
 #[test]
@@ -3590,10 +3574,11 @@ fn compound_literal_array_arg_operator_first_element_keeps_sibling_column() {
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 #[test]
-fn designated_init_compound_literal_array_body_indents_from_field() {
+fn designated_init_compound_literal_array_argument_indents_from_field() {
     let source = "void f(void)\n{\n    CALL (device,\n    &(CreateInfo) {\n        .sType = TYPE,\n        .pBindings = (Binding[1]) {\n            {\n                .binding = 0,\n                .count = n,\n            }\n        },\n    },\n    NULL);\n}\n";
+    let expected = "void f(void)\n{\n    CALL (device,\n          &(CreateInfo) {\n              .sType = TYPE,\n              .pBindings = (Binding[1]) {\n                  {\n                      .binding = 0,\n                      .count = n,\n                  }\n              },\n          },\n          NULL);\n}\n";
 
-    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    assert_eq!(format_exact(source, &FormatOptions::default()), expected);
 }
 
 #[test]

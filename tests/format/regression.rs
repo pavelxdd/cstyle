@@ -2087,9 +2087,9 @@ fn call_argument_after_switch_keeps_statement_indent() {
 }
 
 #[test]
-fn compound_literal_call_argument_uses_statement_indent() {
+fn compound_literal_call_arguments_stand_a_level_past_the_statement() {
     let input = "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
-    let expected = "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n";
+    let expected = "static void check_value(void)\n{\n    CHECK(run_case(\n        request,\n        sizeof(request),\n        (struct call_case) {\n            .first_active = true,\n            .second_busy = true,\n        },\n        &action\n          ) == RESULT_OK);\n}\n";
     check(input, TEST_SAMPLE_OPTIONS, expected);
     check(expected, TEST_SAMPLE_OPTIONS, expected);
 }
@@ -2104,11 +2104,11 @@ fn statement_after_subscripted_compound_literal_uses_block_indent() {
 }
 
 #[test]
-fn compound_literal_call_argument_reindents_from_argument_column() {
+fn compound_literal_call_arguments_reindent_from_argument_column() {
     check(
         "static void check_value(void)\n{\n    CHECK(run_case(\n               request,\n               sizeof(request),\n               (struct call_case) {\n                   .first_active = true,\n                   .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
         TEST_SAMPLE_OPTIONS,
-        "static void check_value(void)\n{\n    CHECK(run_case(\n              request,\n              sizeof(request),\n    (struct call_case) {\n        .first_active = true,\n        .second_busy = true,\n    },\n    &action\n          ) == RESULT_OK);\n}\n",
+        "static void check_value(void)\n{\n    CHECK(run_case(\n        request,\n        sizeof(request),\n        (struct call_case) {\n            .first_active = true,\n            .second_busy = true,\n        },\n        &action\n          ) == RESULT_OK);\n}\n",
     );
 }
 
@@ -2512,7 +2512,10 @@ fn closing_brace_after_braces_opened_in_both_directive_branches_finds_its_opener
 #[test]
 fn designator_rows_after_run_in_first_element_align_with_it() {
     let input = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n    x();\n}\n";
-    check(input, &["--style=kr"], input);
+    // A struct declaration closes its aggregate at the statement.
+    let expected = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n    };\n    x();\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -6217,9 +6220,9 @@ fn compound_literal_closing_brace_leaves_the_last_row() {
 }
 
 #[test]
-fn compound_literal_rows_align_under_a_run_in_first_element() {
+fn statement_compound_literal_rows_after_a_run_in_first_element_stand_a_level_in() {
     let input = "void f(void)\n{\n    q = (int[]){ 1, 2,\n        3 };\n    return (struct p){ .a = 1,\n        .b = 2 };\n    g((int[]){ 1,\n        2 }, 3);\n}\n";
-    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n                  3\n                };\n    return (struct p) { .a = 1,\n                        .b = 2\n                      };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
+    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n        3\n    };\n    return (struct p) { .a = 1,\n        .b = 2\n    };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -7417,4 +7420,145 @@ fn unnamed_pointer_or_reference_before_assignment_survives_name_alignment() {
         &["--align-pointer=name"],
         "Item * =\n    make();\n",
     );
+}
+
+#[test]
+fn fields_of_a_returned_compound_literal_share_one_column() {
+    check(
+        "struct s f(void)\n{\n    return (struct s) {\n        .a = 1,\n        .b = 2,\n        .c = 3,\n    };\n}\n",
+        &[],
+        "struct s f(void)\n{\n    return (struct s) {\n        .a = 1,\n        .b = 2,\n        .c = 3,\n    };\n}\n",
+    );
+}
+
+#[test]
+fn one_line_compound_literal_assigned_through_a_member_arrow_keeps_its_closing_gap() {
+    check(
+        "void f(void)\n{\n    a->b = (struct s) { .c = 1 };\n    a->b += (T) { 1, 2 };\n    a->b = { 1 };\n}\n",
+        &[],
+        "void f(void)\n{\n    a->b = (struct s) { .c = 1 };\n    a->b += (T) { 1, 2 };\n    a->b = { 1 };\n}\n",
+    );
+}
+
+#[test]
+fn group_opened_at_the_end_of_a_compound_literal_row_indents_its_rows() {
+    let source = "void f(void)\n{\n    y = (struct s) {\n        .addr = {\n            1, 2,\n            3, 4,\n        },\n        .c = {\n            .x = {\n                1,\n            },\n        },\n        [0] = {\n            5,\n        },\n    };\n}\n";
+    check(source, &[], source);
+    check(source, &["--style=kr", "--indent-switches"], source);
+}
+
+#[test]
+fn initializer_rows_in_a_control_block_indent_past_a_declarator_with_a_call_in_its_bound() {
+    let source = "void f(void)\n{\n    for (;;) {\n        char *argv[ARRAY_COUNT(cases[i].args) + 2] = {\n            const_cast(\"kvmemd\"),\n            NULL,\n        };\n    }\n    if (a &&\n        b(c)) {\n        x();\n    }\n}\n";
+    check(
+        source,
+        &[
+            "--style=1tbs",
+            "--pad-oper",
+            "--unpad-paren",
+            "--pad-header",
+            "--min-conditional-indent=0",
+        ],
+        source,
+    );
+}
+
+#[test]
+fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
+    let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
+    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2\n    };\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn call_arguments_holding_a_multiline_compound_literal_stand_a_level_past_the_statement() {
+    let input = "void m(void)\n{\n    struct udp_session *session = udp_session_create(\n        &(struct udp_session_config) {\n            .loop = loop,\n            .fd = fd,\n        },\n        other_arg);\n    int rc = udp_session_send(\n        session, &(struct msg) {\n            .len = 1,\n        });\n    session = make(\n        a, b,\n        &(struct msg) {\n            .len = 1,\n        });\n    int r = call(\n                a, b);\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &args, input);
+}
+
+#[test]
+fn compound_literal_argument_on_its_own_line_stays_with_the_arguments() {
+    let source = "void m(void)\n{\n    rc = udp_send(session,\n                  &(struct msg) {\n                      .len = 1,\n                      .flags = 0,\n                  },\n                  timeout);\n    udp_send(session,\n             (struct msg) { .len = 1 },\n             timeout);\n    CHECK(run(a,\n              (struct t) {\n                  .x = 1,\n              }) == 0);\n    f(a,\n      b, (struct t) {\n          .x = 1,\n      }, c);\n    udp_send(session, &(struct msg) {\n        .len = 1,\n    });\n}\n";
+    let args = [
+        "--style=1tbs",
+        "--pad-oper",
+        "--pad-comma",
+        "--unpad-paren",
+        "--align-pointer=name",
+        "--min-conditional-indent=0",
+    ];
+    check(source, &args, source);
+    let allman = "void m(void)\n{\n    rc = udp_send(session,\n                  &(struct msg)\n                  {\n                      .len = 1,\n                      .flags = 0,\n                  },\n                  timeout);\n    udp_send(session,\n             (struct msg) { .len = 1 },\n             timeout);\n    CHECK(run(a,\n              (struct t)\n              {\n                  .x = 1,\n              }) == 0);\n    f(a,\n      b, (struct t)\n      {\n          .x = 1,\n      }, c);\n    udp_send(session, &(struct msg)\n    {\n        .len = 1,\n    });\n}\n";
+    check(source, &["--style=allman"], allman);
+    check(allman, &["--style=allman"], allman);
+    let indented = "void m(void) {\n    rc = udp_send(session,\n            &(struct msg) {\n                .len = 1,\n                .flags = 0,\n            },\n            timeout);\n    udp_send(session,\n        (struct msg) { .len = 1 },\n        timeout);\n    CHECK(run(a,\n            (struct t) {\n                .x = 1,\n            }) == 0);\n    f(a,\n        b, (struct t) {\n            .x = 1,\n        }, c);\n    udp_send(session, &(struct msg) {\n        .len = 1,\n    });\n}\n";
+    check(source, &["--style=java", "--indent-after-parens"], indented);
+    check(
+        indented,
+        &["--style=java", "--indent-after-parens"],
+        indented,
+    );
+}
+
+#[test]
+fn unclosed_paren_before_a_compound_literal_leaves_the_code_after_it_in_place() {
+    // Parens the source never closes are no call's arguments, even when a
+    // compound literal spanning lines follows inside them.
+    let input =
+        "f(a,\n\nvoid g(void)\n{\n    y();\n}\n\nstruct s v = (struct s) {\n    .a = 1,\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let output = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format bytes"))
+        .expect("utf8");
+    assert!(output.contains("\n{\n    y();\n}\n"), "{output}");
+    assert!(
+        output.ends_with("\nstruct s v = (struct s) {\n    .a = 1,\n};\n"),
+        "{output}"
+    );
+}
+
+#[test]
+fn lambda_trailing_return_split_onto_its_own_line_keeps_its_one_line_body() {
+    // A `->` that starts its line follows the lambda's parameters above it,
+    // and the lambda's one-line body stays whole, as astyle keeps it.
+    let input = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string { return p.name; });\n}\n";
+    for style in ["--style=kr", "--style=allman", "--style=gnu"] {
+        check(input, &[style], input);
+    }
+}
+
+#[test]
+fn block_after_a_header_in_unclosed_parens_is_no_compound_literal_argument() {
+    // A `for` header's parens before a brace make no cast, so the braces
+    // inside parens the source leaves open hold no compound literal.
+    let input = "f(a,\n\tfor (int i = NALLOCS - 1; i >= 0; i--) {\n\t}\n\t    \"Incorrect number of allocations\");\n";
+    let expected = "f(a,\n  for (int i = NALLOCS - 1; i >= 0; i--)\n{\n}\n\"Incorrect number of allocations\");\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn lambda_with_a_kept_one_line_body_keeps_the_rest_of_its_line_in_breaking_styles() {
+    // Splitting the lambda's header off a body that closes on the line
+    // dropped the body and the code after it.
+    let input = "void f()\n{\n    run([](int p) {});\n    run([](int p) { /* c */ });\n    run([](int p) { ; });\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], input);
+    }
 }

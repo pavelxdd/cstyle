@@ -630,6 +630,15 @@ impl FormatEngine<'_> {
         if let Some(indent) = inline_brace_call_indent {
             spaces = indent + continuation_spaces;
         }
+        let literal_arguments = !has_next
+            && !self.options.indent_after_parens
+            && self
+                .current
+                .active_token()
+                .is_some_and(|open| self.parens_hold_multiline_compound_literal(open));
+        if literal_arguments {
+            spaces = line_indent_spaces + continuation_spaces;
+        }
         let statement_base_spaces = self.continuation_base_indent() * self.options.indent_width;
         let trailing_open_paren = !has_next && self.current.trimmed_end().ends_with('(');
         let trailing_first_paren = trailing_open_paren && self.layout.nesting.paren_depth == 1;
@@ -687,7 +696,7 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth == 1 {
             self.layout.nesting.trim_to_current_statement_continuation();
         }
-        if capped_over_max || (trailing_first_paren && over_max) {
+        if capped_over_max || (trailing_first_paren && over_max) || literal_arguments {
             self.layout
                 .nesting
                 .push_continuation_indent_spaces_raw(spaces);
