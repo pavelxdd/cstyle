@@ -3285,7 +3285,7 @@ fn reindented_comment_space_led_body_line_stays_consistent() {
             "enum e {\n\tA,\n        /*\n\t * line1\n         * line2\n\t */\n\tB,\n};\n",
             &options,
         ),
-        "enum e {\n    A,\n    /*\n    * line1\n     * line2\n     */\n    B,\n};\n",
+        "enum e {\n    A,\n    /*\n    * line1\n           * line2\n     */\n    B,\n};\n",
     );
 }
 
@@ -3356,8 +3356,9 @@ fn linux_style_keeps_block_comment_in_braceless_else_body_indent() {
 }
 
 #[test]
-fn linux_style_normalizes_mixed_block_comment_body_alignment() {
-    // Mixed tab- and space-led rows normalize to one comment-body column.
+fn linux_style_trims_mixed_block_comment_rows_as_astyle_does() {
+    // Rows trim as astyle trims them: a tab-led row starting left of the
+    // opener lowers the column the rows after it trim to.
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
 
@@ -3366,7 +3367,7 @@ fn linux_style_normalizes_mixed_block_comment_body_alignment() {
             "void helper(void)\n{\n        /*\n         * A\n\t * B\n\t * C\n         * D\n         */\n    call();\n}\n",
             &options,
         ),
-        "void helper(void)\n{\n    /*\n     * A\n     * B\n     * C\n     * D\n     */\n    call();\n}\n"
+        "void helper(void)\n{\n    /*\n     * A\n    * B\n     * C\n           * D\n           */\n    call();\n}\n"
     );
 }
 

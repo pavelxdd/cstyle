@@ -20,9 +20,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::syntax::language;
-use crate::formatter::text::columns::{
-    drop_leading_columns, leading_visual_width, visual_column_at, visual_width_from,
-};
+use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_unmatched_open_brace, is_comment_line, is_comment_only_line,
@@ -2724,6 +2722,19 @@ impl FormatEngine<'_> {
         // The column the comment takes after a run-in element brace, which
         // its rows follow.
         let mut run_in_column = None;
+        // astyle trims each row up to the opener's column, a column it lowers
+        // for the rows after one whose text starts left of it past a tab.
+        let mut row_trim = trim_amount;
+        let opener_tab_extra = self.current.active_comment().map_or(0, |opener| {
+            let tokens = &self.tree.tokens;
+            let chars: usize = tokens[..opener]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .map(token_char_len)
+                .sum();
+            trim_amount.saturating_sub(chars)
+        });
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
             if index == 0 && run_in_opener {
@@ -2779,7 +2790,8 @@ impl FormatEngine<'_> {
                 if line.trimmed().is_empty() {
                     String::new()
                 } else {
-                    let kept = drop_leading_columns(line, trim_amount, tab_width);
+                    let kept =
+                        astyle_comment_row_rest(line, &mut row_trim, opener_tab_extra, tab_width);
                     let trimmed_kept = kept.trimmed_start();
                     let is_last_line = lines.peek().is_none();
                     let decorative_closer = is_decorative_block_comment_closer(trimmed_kept);
@@ -2810,12 +2822,6 @@ impl FormatEngine<'_> {
                     } else {
                         None
                     };
-                    let star_shift = index > 1
-                        && self.token_input.token_begins_source_line
-                        && trim_amount > opener_output_column
-                        && kept.starts_with('*')
-                        && leading_visual_width(line, tab_width) < trim_amount
-                        && (!decorative_closer || (!is_last_line && index > 2));
                     if let Some(prefix) = closer_prefix {
                         format!("{}{}", prefix, trimmed_kept.trimmed_end())
                     } else if unindented_namespace_run_in_comment {
@@ -2865,8 +2871,6 @@ impl FormatEngine<'_> {
                             ),
                             kept.trimmed_end()
                         )
-                    } else if star_shift {
-                        format!("{opener_prefix} {}", kept.trimmed_end())
                     } else {
                         format!("{opener_prefix}{}", kept.trimmed_end())
                     }
@@ -3622,4 +3626,32 @@ pub(crate) fn text_follows_comment_close(line: &str) -> bool {
         let after = after.trimmed();
         !after.is_empty() && !after.starts_with("//")
     })
+}
+
+/// The rest of a comment row once astyle trims its indent up to `trim`
+/// columns: a tab crossing the column goes whole, and a row whose text starts
+/// left of the column after a tab lowers it for the rows after.
+fn astyle_comment_row_rest<'a>(
+    line: &'a str,
+    trim: &mut usize,
+    opener_tab_extra: usize,
+    tab_width: usize,
+) -> &'a str {
+    let bytes = line.as_bytes();
+    let mut tab_extra = 0usize;
+    let mut index = 0usize;
+    while index < bytes.len() && index + tab_extra < *trim {
+        match bytes[index] {
+            b'\t' => tab_extra += tab_width - 1 - (tab_extra + index) % tab_width,
+            b' ' => {}
+            _ => {
+                if index < tab_extra {
+                    *trim = index + opener_tab_extra;
+                }
+                break;
+            }
+        }
+        index += 1;
+    }
+    &line[index..]
 }

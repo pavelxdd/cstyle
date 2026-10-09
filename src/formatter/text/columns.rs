@@ -28,23 +28,6 @@ pub(crate) fn leading_visual_width(line: &str, tab_width: usize) -> usize {
     column
 }
 
-pub(crate) fn drop_leading_columns(line: &str, drop: usize, tab_width: usize) -> &str {
-    let mut column = 0;
-    let mut byte = 0;
-    for ch in line.chars() {
-        if column >= drop {
-            break;
-        }
-        match ch {
-            '\t' => column += tab_width - (column % tab_width),
-            ' ' => column += 1,
-            _ => break,
-        }
-        byte += ch.len_utf8();
-    }
-    &line[byte..]
-}
-
 pub(crate) fn visual_column_at(chars: &[char], index: usize, tab_width: usize) -> usize {
     let tab_width = tab_width.max(1);
     let mut column = 0;

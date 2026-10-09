@@ -7200,3 +7200,12 @@ fn removing_braces_keeps_a_bare_block_run_in_comment() {
         "void f(void)\n{\n    x();\n\n    { /* Server */\n        int a;\n        g(a);\n    }\n}\n",
     );
 }
+
+#[test]
+fn comment_rows_trim_as_astyle_trims_them_past_tabs() {
+    check(
+        "void f(void)\n{\n  if (size == 0)\n    {\n      /* 12 is sizeof.\n\t Use the values,\n\t the extra bytes\n\t allocated.  */\n      int extra = 1;\n    }\n}\n",
+        &["--style=allman"],
+        "void f(void)\n{\n    if (size == 0)\n    {\n        /* 12 is sizeof.\n        Use the values,\n         the extra bytes\n         allocated.  */\n        int extra = 1;\n    }\n}\n",
+    );
+}
