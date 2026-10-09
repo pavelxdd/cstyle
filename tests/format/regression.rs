@@ -7541,3 +7541,12 @@ fn lambda_trailing_return_split_onto_its_own_line_heads_a_body() {
     let expected = "void t()\n{\n    run(a,\n        [](const P &p)\n        -> std::string\n    {\n        return p.name;\n    });\n}\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn block_after_a_header_in_unclosed_parens_is_no_compound_literal_argument() {
+    // A `for` header's parens before a brace make no cast, so the braces
+    // inside parens the source leaves open hold no compound literal.
+    let input = "f(a,\n\tfor (int i = NALLOCS - 1; i >= 0; i--) {\n\t}\n\t    \"Incorrect number of allocations\");\n";
+    let expected = "f(a,\n  for (int i = NALLOCS - 1; i >= 0; i--)\n{\n}\n\"Incorrect number of allocations\");\n";
+    check(input, &["--style=kr"], expected);
+}

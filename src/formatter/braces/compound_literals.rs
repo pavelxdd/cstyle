@@ -43,7 +43,14 @@ impl FormatEngine<'_> {
                         .previous_code_token(brace)
                         .and_then(|cast| groups.closed_at(cast))
                         .map_or(brace, |cast| groups.get(cast).open);
+                    // A name or a closing delimiter before the parens makes
+                    // them a call's or a function's, not a cast.
+                    let cast_follows_name = start != brace
+                        && self.tree.previous_code_token(start).is_some_and(|before| {
+                            matches!(&tokens[before], Token::Word(_) | Token::Symbol(')' | ']'))
+                        });
                     self.tree.blocks.kind(literal) == Some(BlockKind::CompoundLiteral)
+                        && !cast_follows_name
                         && tokens[open..start]
                             .iter()
                             .any(|token| matches!(token, Token::Newline))
