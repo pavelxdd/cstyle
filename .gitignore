@@ -1,6 +1,7 @@
 /.agents/
 /.antigravitycli/
-/.claude/
+/.claude/*
+!/.claude/settings.json
 /.config/
 /AGENTS.md
 /CLAUDE.md
