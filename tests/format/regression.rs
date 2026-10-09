@@ -7146,3 +7146,12 @@ fn a_comment_after_an_open_paren_leaves_the_trailing_comment_its_gap() {
         "int f(void)\n{\n    if(/*c*/ n) return 1;  /* x */\n    f(/*c*/ n);  /* x */\n}\n",
     );
 }
+
+#[test]
+fn parens_in_a_comment_row_open_no_parameter_list() {
+    check(
+        "void f(void)\n{\n    /*\n     * x (i.e. y\n     */\n    if (a & b)\n        h(a * b);\n}\n",
+        &["--style=kr", "--align-pointer=type"],
+        "void f(void)\n{\n    /*\n     * x (i.e. y\n     */\n    if (a & b)\n        h(a * b);\n}\n",
+    );
+}

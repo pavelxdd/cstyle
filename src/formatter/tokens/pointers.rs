@@ -598,7 +598,7 @@ impl FormatEngine<'_> {
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
-            if !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
+            if is_comment_row(trimmed) || !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
                 continue;
             }
             let Some(open) = trimmed.find('(') else {
@@ -775,7 +775,7 @@ impl FormatEngine<'_> {
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return None;
             }
-            if !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
+            if is_comment_row(trimmed) || !has_unclosed_balanced_delimiter(trimmed, "(", ")") {
                 continue;
             }
             let open = trimmed.find('(')?;
@@ -1641,6 +1641,16 @@ fn strip_balanced_angles(segment: &str) -> String {
         }
     }
     result
+}
+
+/// Whether `line` holds only part of a comment, whose parens are prose.
+fn is_comment_row(line: &str) -> bool {
+    let text = line.trimmed_start();
+    text == "*"
+        || text.starts_with("* ")
+        || text.starts_with("*/")
+        || text.starts_with("/*")
+        || text.starts_with("//")
 }
 
 fn has_unclosed_balanced_delimiter(text: &str, open: &str, close: &str) -> bool {
