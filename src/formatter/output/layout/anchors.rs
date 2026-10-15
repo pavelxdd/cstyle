@@ -600,6 +600,11 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = block();
         } else if matches!(self.tree.tokens[first], Token::Symbol('{'))
             && sibling == Some(structural + self.options.indent_width)
+            && !self
+                .tree
+                .groups
+                .opened_at(first)
+                .is_some_and(|block| self.vtk_unindented_one_line_block(block, None))
         {
             // An indented block brace stands a level past its statement's.
             layout.exact_indent_spaces = sibling;
@@ -4597,6 +4602,27 @@ impl FormatEngine<'_> {
     /// them; so do the styles indenting such braces for a block kept on one
     /// line in a statement block.
     #[inline(never)]
+    /// Whether VTK keeps `block` at its statement when the block opens and
+    /// closes on `line` (the pending line when `None`): a one-line block in a
+    /// function's own block, as after a header.
+    fn vtk_unindented_one_line_block(&self, block: GroupId, line: Option<usize>) -> bool {
+        let groups = &self.tree.groups;
+        self.options.brace_style == BraceStyle::Vtk
+            && groups.get(block).close.is_some_and(|close| match line {
+                Some(line) => self.output.line_with_token(close) == Some(line),
+                None => self
+                    .output
+                    .pending_tokens()
+                    .is_some_and(|span| span.contains(close)),
+            })
+            && !groups.ancestors(block).skip(1).any(|id| {
+                matches!(
+                    self.tree.blocks.kind(id),
+                    Some(BlockKind::Control | BlockKind::Block)
+                )
+            })
+    }
+
     fn whitesmith_bare_block_brace_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         if !matches!(self.tree.tokens[first], Token::Symbol('{')) {
@@ -4609,6 +4635,7 @@ impl FormatEngine<'_> {
                 self.tree.blocks.kind(parent),
                 Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
             )
+            && !self.vtk_unindented_one_line_block(block, None)
             && self.should_indent_brace_line(BraceType::Command)
             && groups.get(block).close.is_some_and(|close| {
                 self.output
@@ -5810,17 +5837,24 @@ impl FormatEngine<'_> {
         let column =
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces();
         let is_brace = |index: usize| matches!(tokens[index], Token::Symbol('{'));
+        // A one-line block VTK keeps at its statement stands as a statement.
+        let sibling_brace = is_brace(sibling)
+            && !self
+                .tree
+                .groups
+                .opened_at(sibling)
+                .is_some_and(|block| self.vtk_unindented_one_line_block(block, Some(line)));
         let indented_braces = self.should_indent_brace_line(BraceType::Command);
         if is_brace(first) && indented_braces {
             // A brace after a statement stands a level in; after a block's
             // brace, at that brace.
-            return Some(if is_brace(sibling) {
+            return Some(if sibling_brace {
                 column
             } else {
                 column + self.options.indent_width
             });
         }
-        if is_brace(sibling) && indented_braces {
+        if sibling_brace && indented_braces {
             column.checked_sub(self.options.indent_width)
         } else {
             Some(column)

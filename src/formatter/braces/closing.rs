@@ -658,6 +658,10 @@ impl FormatEngine<'_> {
                 self.layout.nesting.last_closed_brace_header.as_deref(),
                 Some("if" | "for" | "switch" | "while" | "else" | "try" | "catch")
             )
+            // The statement after a statement block's closer breaks off it
+            // as after a header's block.
+            && !(self.options.break_one_line_statements
+                && self.layout.nesting.last_closed_brace_type == Some(BraceType::Command))
             && !source_attached_statement_after_closing;
         let source_attached_closing = self.options.brace_style == BraceStyle::None
             && self.token_input.token_begins_source_line

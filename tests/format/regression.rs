@@ -7840,10 +7840,12 @@ fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stand
             "void f() {\n    value=1;\n        { value=0; }\n    }\n",
             "void f() {\n    if (ready) {\n            { value=0; }\n        result=1;\n        }\n    }\n",
         ),
+        // VTK keeps a one-line block in a function's own block at its
+        // statement, as after a header.
         (
             "--style=vtk",
-            "void f()\n{\n        { value=0; }\n}\n",
-            "void f()\n{\n    value=1;\n        { value=0; }\n}\n",
+            "void f()\n{\n    { value=0; }\n}\n",
+            "void f()\n{\n    value=1;\n    { value=0; }\n}\n",
             "void f()\n{\n    if (ready)\n        {\n            { value=0; }\n        result=1;\n        }\n}\n",
         ),
     ] {
@@ -7993,8 +7995,10 @@ fn break_blocks_all_pads_a_closing_header_kept_on_its_brace_as_attached_styles_d
 }
 
 #[test]
-fn vtk_indents_a_kept_one_line_block_after_a_label_as_its_expanded_brace() {
-    // The block a label heads stands where its brace does once expanded.
+fn vtk_keeps_a_one_line_block_after_a_label_where_other_one_line_blocks_stand() {
+    // An expanded block a label heads takes the indented brace; a kept
+    // one-line block stays at its statement in a function's own block and
+    // takes the brace's level within another.
     let expanded = "void f()\n{\n    done: {\n        value=0;\n    }\n}\n";
     check(
         expanded,
@@ -8004,7 +8008,12 @@ fn vtk_indents_a_kept_one_line_block_after_a_label_as_its_expanded_brace() {
     check(
         "void f()\n{\n    done: { value=0; }\n}\n",
         &["--style=vtk", "-O"],
-        "void f()\n{\ndone:\n        { value=0; }\n}\n",
+        "void f()\n{\ndone:\n    { value=0; }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (x) {\n    done: { value=0; }\n    }\n}\n",
+        &["--style=vtk", "-O"],
+        "void f()\n{\n    if (x)\n        {\ndone:\n            { value=0; }\n        }\n}\n",
     );
 }
 
@@ -9209,4 +9218,50 @@ fn a_case_block_after_a_comment_led_label_closes_where_case_blocks_do() {
         "void f() {\n    switch (kind) {\n        case 1: {\n            value = 1;\n            break;\n            }\n        /*case 2*/ default: {\n            if (ready) {\n                start();\n                }\n            result = 2;\n            break;\n            }\n        }\n    }\n",
     );
     check(input, &[], input);
+}
+
+#[test]
+fn a_statement_after_a_plain_or_macro_block_closer_breaks_as_after_a_header_block() {
+    // Code after the closer of any statement block goes to its own line
+    // unless one-line statements are kept.
+    let input = "void f()\n{\n    {\n        value = 2;\n    } other();\n    { value = 3; } more();\n    MACRO(x) {\n        value = 4;\n    } after();\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    {\n        value = 2;\n    }\n    other();\n    {\n        value = 3;\n    }\n    more();\n    MACRO(x) {\n        value = 4;\n    }\n    after();\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-blocks"],
+        "void f()\n{\n    {\n        value = 2;\n    }\n    other();\n    { value = 3; }\n    more();\n    MACRO(x) {\n        value = 4;\n    }\n    after();\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n    {\n        value = 2;\n    } other();\n    {\n        value = 3;\n    } more();\n    MACRO(x) {\n        value = 4;\n    } after();\n}\n",
+    );
+}
+
+#[test]
+fn vtk_indents_a_bare_one_line_block_as_after_a_header() {
+    // VTK leaves a kept one-line block's brace unindented in a function's
+    // block and indents it within another, a header's or not; Whitesmith
+    // indents both.
+    let nested = "void f()\n{\n    if (z) {\n        { value = 5; }\n        if (x)\n        { value = 3; }\n    }\n    { value = 6; }\n}\n";
+    check(
+        nested,
+        &["--style=vtk", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (z)\n        {\n            { value = 5; }\n        if (x)\n            { value = 3; }\n        }\n    { value = 6; }\n}\n",
+    );
+    let input = "void f()\n{\n    if (x)\n    { value = 3; }\n    while (y)\n    { value = 4; }\n    { value = 5; }\n    {\n        value = 6;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (x)\n    { value = 3; }\n    while (y)\n    { value = 4; }\n    { value = 5; }\n        {\n        value = 6;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-blocks"],
+        "void f()\n    {\n    if (x)\n        { value = 3; }\n    while (y)\n        { value = 4; }\n        { value = 5; }\n        {\n        value = 6;\n        }\n    }\n",
+    );
 }
