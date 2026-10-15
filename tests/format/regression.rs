@@ -8559,3 +8559,15 @@ fn pico_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
         "void f()\n{   struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
     );
 }
+
+#[test]
+fn indent_after_parens_leaves_a_lambda_argument_opening_its_body_at_the_statement() {
+    // A row inside the call that opens a lambda body stands with the body
+    // and its closer, as it does when parens align.
+    let input = "void f()\n{\n    helper(first,\n           [](int value) {\n               return value;\n           });\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
+    );
+}

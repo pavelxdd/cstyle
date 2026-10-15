@@ -17,6 +17,7 @@ use crate::formatter::constructs::template_declarations::{
 use crate::formatter::continuation::call_arguments::assignment_call_value_column;
 use crate::formatter::continuation::operator_chains::nested_ternary_colon_sibling_indent_spaces;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineReplayLayout};
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
@@ -2938,10 +2939,20 @@ impl FormatEngine<'_> {
                         .any(|outer| groups.get(outer).delimiter == Delimiter::Paren)
             })
         });
+        // A row opening a lambda's body stands with the body, as when parens
+        // align.
+        let opens_lambda_body =
+            self.output.pending_tokens().is_some_and(|span| {
+                matches!(self.tree.tokens[span.last], Token::Symbol('{'))
+                    && self.tree.groups.opened_at(span.last).is_some_and(|group| {
+                        self.tree.blocks.kind(group) == Some(BlockKind::Lambda)
+                    })
+            });
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")
             && !compound_literal_row
+            && !opens_lambda_body
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
