@@ -8326,3 +8326,27 @@ fn a_product_continuing_an_expression_keeps_its_space_before_a_paren() {
     let input = "void f()\n{\n    return first +\n           second * (third - fourth);\n    value = first +\n            second * (third\n                      - fourth);\n}\n";
     check(input, &["--align-pointer=name"], input);
 }
+
+#[test]
+fn a_brace_after_a_header_comment_moves_before_it_after_a_directive_too() {
+    // The brace moves before the comment between it and its header
+    // wherever the header stands, a directive line before it included.
+    let input = "void f()\n{\n#ifdef FLAG\n    value=0;\n#endif\n    if (ready) /* why */ {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FLAG\n    value=0;\n#endif\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_no_directive_after_an_initializer_following_a_header_block() {
+    // An initializer closes no header block, so the directives after it
+    // stay where they stand, as they do with no header block before it.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    struct Item item = {\n        .value = 1,\n    };\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n\n    struct Item item = {\n        .value = 1,\n    };\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n}\n",
+    );
+}
