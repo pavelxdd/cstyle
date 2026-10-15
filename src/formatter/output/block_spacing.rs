@@ -4,7 +4,6 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::is_code_token;
-use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -36,12 +35,7 @@ impl FormatEngine<'_> {
         let previous_header_expects_body = self.block_spacing.header_expects_body;
         self.block_spacing.active_header = Some(word.to_string());
         self.block_spacing.header_expects_body = true;
-        // A closing header goes on with the statement its opening header
-        // started.
-        if !is_break_blocks_closing_header(word) {
-            self.block_spacing.header_follows_statement =
-                self.current.trimmed_end().ends_with_any(b";:");
-        }
+        self.block_spacing.header_follows_statement = self.header_chain_follows_statement();
 
         if self.previous_block_spacing_line_is_comment_only() {
             return;
@@ -320,7 +314,8 @@ impl FormatEngine<'_> {
         }
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
-        self.block_spacing.pending_one_line_block = brace_type == BraceType::Command;
+        self.block_spacing.pending_one_line_block =
+            brace_type == BraceType::Command && !self.block_spacing.header_follows_statement;
         self.clear_block_spacing_header();
     }
 
@@ -395,6 +390,7 @@ impl FormatEngine<'_> {
         if closed_command_header
             && (continues_header
                 || closed_header.is_some_and(|header| !matches!(header, "case" | "default")))
+            && !self.closes_one_line_block_after_statement()
         {
             if line_goes_on && !self.current_is_blank() {
                 self.block_spacing.pending_one_line_block = true;
@@ -403,6 +399,70 @@ impl FormatEngine<'_> {
             }
         }
         self.clear_block_spacing_header();
+    }
+
+    /// Whether the chain the header being pushed belongs to opened after a
+    /// statement on its output line, which leaves the line unpadded.
+    fn header_chain_follows_statement(&self) -> bool {
+        self.current
+            .active_token()
+            .is_some_and(|header| self.chain_follows_statement(header))
+    }
+
+    /// Whether the chain of the header at `header` opened after a statement
+    /// on its output line.
+    fn chain_follows_statement(&self, mut header: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        // An `else` goes on with the header whose block closed before it.
+        while matches!(&tokens[header], Token::Word(word) if word == "else") {
+            let Some(owner) = self
+                .tree
+                .previous_code_token(header)
+                .and_then(|close| groups.closed_at(close))
+                .and_then(|group| self.tree.blocks.owner(group))
+            else {
+                return false;
+            };
+            header = owner;
+        }
+        let Some(before) = self.tree.previous_code_token(header) else {
+            return false;
+        };
+        let on_current = |index: usize| {
+            self.current
+                .tokens()
+                .is_some_and(|span| span.first <= index)
+        };
+        matches!(tokens[before], Token::Symbol(';' | ':'))
+            && if on_current(header) {
+                on_current(before)
+            } else {
+                self.output
+                    .line_with_token(before)
+                    .is_some_and(|line| self.output.line_with_token(header) == Some(line))
+            }
+    }
+
+    /// Whether the `}` being pushed closes a block the source kept on one
+    /// line after a header that followed a statement on its line: astyle
+    /// pads no such block.
+    fn closes_one_line_block_after_statement(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .and_then(|close| groups.closed_at(close).map(|group| (group, close)))
+            .is_some_and(|(group, close)| {
+                let open = groups.get(group).open;
+                !self.tree.tokens[open..close]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+                    && self
+                        .tree
+                        .blocks
+                        .owner(group)
+                        .is_some_and(|header| self.chain_follows_statement(header))
+            })
     }
 
     pub(crate) fn observe_block_spacing_body_start(&mut self) {

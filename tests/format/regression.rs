@@ -7846,3 +7846,36 @@ fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stand
         check(after, &[style, "-O"], after_expected);
     }
 }
+
+#[test]
+fn break_blocks_leaves_a_one_line_block_after_a_statement_unpadded() {
+    // A header after a statement on its line pads nothing around a block the
+    // source kept on that line, through its `else`; a block written over
+    // lines still takes the blank after it.
+    let wrap = |body: &str| format!("void f()\n{{\n    first=1;\n    {body}\n    other=1;\n}}\n");
+    for options in [
+        &["--style=kr", "--break-blocks", "-O", "-o"][..],
+        &["--style=kr", "--break-blocks", "-o"][..],
+    ] {
+        let kept = options.contains(&"-O");
+        let one = wrap("value=1; if (ready) { value=0; }");
+        let one_expected = if kept {
+            one.clone()
+        } else {
+            wrap("value=1; if (ready) {\n        value=0;\n    }")
+        };
+        check(&one, options, &one_expected);
+        let chain = wrap("value=1; if (ready) { value=0; } else { result=0; }");
+        let chain_expected = if kept {
+            chain.clone()
+        } else {
+            wrap("value=1; if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }")
+        };
+        check(&chain, options, &chain_expected);
+    }
+    check(
+        &wrap("value=1; if (ready) {\n        value=0;\n    }"),
+        &["--style=kr", "--break-blocks", "-o"],
+        "void f()\n{\n    first=1;\n    value=1; if (ready) {\n        value=0;\n    }\n\n    other=1;\n}\n",
+    );
+}
