@@ -12,10 +12,8 @@ use crate::formatter::constructs::template_declarations::{
 use crate::formatter::continuation::{ContinuationIndent, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
+use crate::formatter::preprocessor::is_known_preprocessor_directive;
 use crate::formatter::preprocessor::layout::SplitElseLineStart;
-use crate::formatter::preprocessor::{
-    is_conditional_preprocessor, is_known_preprocessor_directive,
-};
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
@@ -81,7 +79,6 @@ impl FormatEngine<'_> {
             };
         let normal_indent = self.layout.indentation.line_indent(line_kind, self.options)
             + self.case_body_indent_extra(line_kind)
-            + self.case_preprocessor_body_indent_extra(line_kind, line)
             + split_else_extra
             + else_if_break_extra
             + self.member_init_continuation_extra(line_kind, line);
@@ -1144,21 +1141,6 @@ impl FormatEngine<'_> {
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
-        if line_start.starts_with('{')
-            && self.has_pending_case_label_brace()
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| {
-                    let previous = previous.trimmed_start();
-                    previous.starts_with('#')
-                        && !preprocessor_directive(previous)
-                            .is_some_and(is_conditional_preprocessor)
-                })
-        {
-            layout.exact_indent_spaces =
-                Some(self.current_line_indent_spaces() + self.options.indent_width);
-        }
         if let Some(spaces) = self.assignment_ternary_branch_after_colon_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
         }

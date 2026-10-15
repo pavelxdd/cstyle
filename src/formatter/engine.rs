@@ -1189,8 +1189,14 @@ impl<'a> FormatEngine<'a> {
         {
             return false;
         }
+        // The block after the directive stands in the case body, as a plain
+        // block there does.
+        let brace_levels = 1 + usize::from(matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        ));
         let case_body_spaces = columns::leading_visual_width(case_line, self.options.tab_width)
-            + self.options.indent_width * 2;
+            + brace_levels * self.options.indent_width;
         self.finish_line();
         self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), case_body_spaces);
         self.layout.previous = PreviousToken::None;
@@ -2173,6 +2179,7 @@ impl<'a> FormatEngine<'a> {
             .is_some();
         let case_label_with_comment =
             switch_cases::case_label_with_trailing_comment(self.current.trimmed());
+        let case_label_continues = self.current_case_label_continues();
         self.finish_line();
         if matches!(
             previous_before_line,
@@ -2194,6 +2201,16 @@ impl<'a> FormatEngine<'a> {
                 ContinuationIndent::Spaces(spaces.saturating_add_signed(shift))
             }
             (indent, _) => indent,
+        };
+        // The label's own column, wherever its style set it, anchors the
+        // rest of the label.
+        let indent = match self.output.len().checked_sub(1) {
+            Some(label) if case_label_continues => ContinuationIndent::Spaces(
+                self.output.lead_width(label, self.options.tab_width)
+                    + self.case_unindent_spaces()
+                    + 2 * self.options.indent_width,
+            ),
+            _ => indent,
         };
         if !clear_continuation_after_line {
             if let Some(spaces) = one_shot_indent {

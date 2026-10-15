@@ -565,6 +565,14 @@ impl SwitchCaseLineTransformer {
     /// due to the line, in order.
     fn scan_line(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
         let mut unindents = Vec::new();
+        // A directive between a label and a brace leaves the brace a plain
+        // block.
+        if is_preprocessor
+            && preprocessor_directive(scan.trimmed_start())
+                .is_some_and(|directive| !is_conditional_preprocessor(directive))
+        {
+            self.looking_for_case_brace = false;
+        }
         // Outside a switch's labels, a line that holds no switch and nothing
         // that opens or closes a literal, a comment, or a brace changes
         // nothing.
@@ -1088,7 +1096,6 @@ fn is_braced_switch_label_line(line: &str) -> bool {
 pub(crate) struct SwitchCaseLayoutState {
     body_brace_depths: Vec<usize>,
     pending_label_brace: bool,
-    preprocessor_brace_depths: Vec<usize>,
     unindent_brace_depths: Vec<usize>,
     closing_line_needs_unindent: bool,
     /// Switch body depth where a case block closed since the last label:
@@ -1525,18 +1532,6 @@ impl FormatEngine<'_> {
         {
             self.layout.switch_case_layout.body_brace_depths.pop();
         }
-        while self
-            .layout
-            .switch_case_layout
-            .preprocessor_brace_depths
-            .last()
-            .is_some_and(|depth| current + 1 < *depth)
-        {
-            self.layout
-                .switch_case_layout
-                .preprocessor_brace_depths
-                .pop();
-        }
     }
 
     pub(crate) fn direct_switch_body_indent_spaces(&self) -> Option<usize> {
@@ -1603,35 +1598,6 @@ impl FormatEngine<'_> {
                 .count(),
             LineKind::Label => 0,
         }
-    }
-
-    pub(crate) fn case_preprocessor_body_indent_extra(
-        &self,
-        line_kind: LineKind,
-        line: &LineView<'_>,
-    ) -> usize {
-        if line_kind != LineKind::Normal {
-            return 0;
-        }
-        if line.trimmed() == "}"
-            && !self.layout.switch_case_layout.closing_line_needs_unindent
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| {
-                    let trimmed = previous.trimmed_start();
-                    trimmed.starts_with("break;")
-                })
-        {
-            return 0;
-        }
-        let current = self.layout.nesting.brace_header_stack.len();
-        self.layout
-            .switch_case_layout
-            .preprocessor_brace_depths
-            .iter()
-            .filter(|depth| current + 1 >= **depth)
-            .count()
     }
 
     pub(crate) fn isolated_opening_brace_is_switch_label(&self) -> bool {
@@ -2506,18 +2472,19 @@ impl FormatEngine<'_> {
 
     pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind, line: &str) {
         // A statement before the first label stands in the case body too.
-        let statement_in_switch_body = line_kind == LineKind::Normal
+        let statement_in_switch_body = matches!(line_kind, LineKind::Normal | LineKind::Label)
             && !line.trimmed_start().starts_with_any(b"{}#/")
             && self.directly_in_switch_body();
         // Indented cases set a label in a case block at the block's brace,
-        // its body staying at the block's.
+        // its body staying at the block's; a label opening its own block
+        // is not in it yet.
         let label_in_indented_case_block = line_kind == LineKind::SwitchLabel
             && self.options.indent_cases
             && self
                 .layout
                 .frame_stack
                 .active_brace()
-                .is_some_and(|frame| frame.case_block);
+                .is_some_and(|frame| frame.case_block && frame.case_header_pending == 0);
         if (line_kind == LineKind::SwitchLabel || statement_in_switch_body)
             && !label_in_indented_case_block
         {
@@ -2529,6 +2496,15 @@ impl FormatEngine<'_> {
                     .push(current);
             }
         }
+    }
+
+    /// Whether the line follows a directive other than a conditional: a
+    /// brace there opens a plain block, not the block of a label before.
+    pub(crate) fn follows_plain_directive(&self) -> bool {
+        self.output.last_line_outside_comment().is_some_and(|line| {
+            preprocessor_directive(line.trimmed_start())
+                .is_some_and(|directive| !is_conditional_preprocessor(directive))
+        })
     }
 
     pub(crate) fn directly_in_switch_body(&self) -> bool {
@@ -2571,14 +2547,6 @@ impl FormatEngine<'_> {
             });
         if line_kind == LineKind::SwitchLabel || closer_led_label {
             layout.case_block_closed_depth = None;
-            // A label ends the case before it, and its directive's level.
-            while layout
-                .preprocessor_brace_depths
-                .last()
-                .is_some_and(|&depth| depth >= current)
-            {
-                layout.preprocessor_brace_depths.pop();
-            }
             let code = self.output.code_trimmed_of(line);
             if code.ends_with('{') {
                 // A brace kept on its label's line opens the case block
@@ -2602,32 +2570,18 @@ impl FormatEngine<'_> {
 
         if line_kind == LineKind::Normal && !line.trimmed().is_empty() {
             let trimmed = line.trimmed_start();
-            if self.layout.switch_case_layout.pending_label_brace && trimmed.starts_with('{') {
+            if self.layout.switch_case_layout.pending_label_brace
+                && trimmed.starts_with('{')
+                && !self.follows_plain_directive()
+            {
                 let current = self.layout.nesting.brace_header_stack.len();
                 self.layout
                     .switch_case_layout
                     .unindent_brace_depths
                     .push(current + 1);
-                if self.output.last_non_empty_scoped().is_some_and(|previous| {
-                    let previous = previous.trimmed_start();
-                    previous.starts_with('#')
-                        && !preprocessor_directive(previous)
-                            .is_some_and(is_conditional_preprocessor)
-                }) {
-                    self.layout
-                        .switch_case_layout
-                        .preprocessor_brace_depths
-                        .push(current);
-                }
                 self.layout.switch_case_layout.pending_label_brace = false;
             } else if !is_comment_line(trimmed) && !trimmed.starts_with('#') {
                 self.layout.switch_case_layout.pending_label_brace = false;
-            }
-            if trimmed.starts_with("break;") {
-                self.layout
-                    .switch_case_layout
-                    .preprocessor_brace_depths
-                    .pop();
             }
         }
     }

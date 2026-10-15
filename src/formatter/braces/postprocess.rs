@@ -576,8 +576,7 @@ pub(crate) fn horstmann_run_in_fill(
                     .max(options.indent_width.saturating_sub(1)),
             )
         }
-        IndentStyle::Tabs => "\t".to_string(),
-        IndentStyle::ForceTabs => {
+        IndentStyle::Tabs | IndentStyle::ForceTabs => {
             let tab_width = options.tab_width.max(1);
             let brace_column = leading_visual_width(brace_line, tab_width);
             let target_column = if switch_label {

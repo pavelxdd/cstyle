@@ -89,19 +89,30 @@ impl FormatEngine<'_> {
         (line.trimmed() == "}" && self.layout.nesting.last_closed_brace_type.is_none()).then_some(0)
     }
 
-    fn isolated_opening_brace_indent_from_output(&self) -> Option<usize> {
+    /// With `emitted`, a label's block reads as its rows stand after their
+    /// case unindent, as the output rows of the other shapes do.
+    fn isolated_opening_brace_indent_from_output(&self, emitted: bool) -> Option<usize> {
         if self.options.brace_style == BraceStyle::Horstmann {
             return None;
         }
+        let emitted_label_block = emitted
+            && self
+                .layout
+                .frame_stack
+                .last_closed_brace()
+                .is_some_and(|frame| frame.label_block);
+        let label_spaces = (self.layout.indentation.indent() * self.options.indent_width)
+            .saturating_sub(
+                usize::from(emitted_label_block)
+                    * self.layout.line_adjuster.last_line_case_unindent(),
+            );
         let tab_width = self.options.tab_width;
         if let Some(found) = self.output.innermost_open_brace_line() {
             let index = found?;
             let meta = self.output.brace_meta(index);
             return match meta.open_shape {
                 OpenBraceShape::Isolated => Some(self.output.lead_width(index, tab_width)),
-                OpenBraceShape::Label => {
-                    Some(self.layout.indentation.indent() * self.options.indent_width)
-                }
+                OpenBraceShape::Label => Some(label_spaces),
                 OpenBraceShape::Other => None,
             };
         }
@@ -136,9 +147,7 @@ impl FormatEngine<'_> {
             if meta.opens() > depth {
                 return match meta.open_shape {
                     OpenBraceShape::Isolated => Some(self.output.lead_width(index, tab_width)),
-                    OpenBraceShape::Label => {
-                        Some(self.layout.indentation.indent() * self.options.indent_width)
-                    }
+                    OpenBraceShape::Label => Some(label_spaces),
                     OpenBraceShape::Other => None,
                 };
             }
@@ -163,7 +172,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        self.isolated_opening_brace_indent_from_output()
+        self.isolated_opening_brace_indent_from_output(false)
     }
 
     /// `line` moved to its opening brace's line, when it is an isolated
@@ -175,7 +184,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let mut spaces = self.isolated_opening_brace_indent_from_output()?;
+        let mut spaces = self.isolated_opening_brace_indent_from_output(true)?;
         let structural_switch_indent = self
             .layout
             .frame_stack

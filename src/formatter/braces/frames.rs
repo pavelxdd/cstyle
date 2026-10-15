@@ -3,7 +3,6 @@ use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
@@ -11,7 +10,7 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_only_line, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, leading_identifier};
@@ -260,12 +259,6 @@ impl FormatEngine<'_> {
         } else {
             0
         };
-        let case_separated_by_preprocessor = case_block
-            && self.current.trimmed().is_empty()
-            && self.output.last_line_outside_comment().is_some_and(|line| {
-                preprocessor_directive(line.trimmed_start())
-                    .is_some_and(|directive| !is_conditional_preprocessor(directive))
-            });
         // A label's own block follows the label; a header after the label
         // owns the block it opens.
         let label_block = semantic_kind == BraceSemanticKind::Command
@@ -383,16 +376,14 @@ impl FormatEngine<'_> {
             (body, sibling)
         } else if let Some(owner) = case_owner_column {
             let case_indent = usize::from(self.options.indent_cases) * self.options.indent_width;
-            let preprocessor_indent =
-                usize::from(case_separated_by_preprocessor) * self.options.indent_width;
-            let body = owner + self.options.indent_width + case_indent + preprocessor_indent;
+            let body = owner + self.options.indent_width + case_indent;
             let sibling = if matches!(
                 self.options.brace_style,
                 BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
             ) {
                 body
             } else {
-                owner + case_indent + preprocessor_indent
+                owner + case_indent
             };
             (body, sibling)
         } else if semantic_kind == BraceSemanticKind::Command {

@@ -342,11 +342,7 @@ impl FormatEngine<'_> {
         } else {
             frame.body_indent_column
         };
-        Some(
-            target
-                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
-                    * self.options.indent_width,
-        )
+        Some(target)
     }
 
     pub(crate) fn closed_label_block_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
@@ -358,11 +354,7 @@ impl FormatEngine<'_> {
             .frame_stack
             .last_closed_brace()
             .filter(|frame| frame.label_block)?;
-        Some(
-            frame.sibling_indent_column
-                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
-                    * self.options.indent_width,
-        )
+        Some(frame.sibling_indent_column)
     }
 
     pub(crate) fn observe_emitted_label_body_indent(

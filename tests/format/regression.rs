@@ -9030,3 +9030,183 @@ fn a_ternary_choosing_between_messages_keeps_its_colon_spacing() {
     let input = "@implementation Item\n- (void)update {\n    value = ready ? [self first:1] : [self second:2];\n}\n@end\n";
     check(input, &[], input);
 }
+
+#[test]
+fn an_indented_label_before_the_first_case_stands_with_the_case_labels() {
+    // Statements before the first case stand in the case body, so an
+    // indented label there takes one level less, as one after a case does.
+    let input = "void f()\n{\n    switch (state) {\nretry:\n    case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-switches", "--indent-labels"],
+        "void f()\n{\n    switch (state) {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        case 2:\n            goto retry;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-labels"],
+        "void f()\n{\n    switch (state)\n        {\n            retry:\n            case 1:\n                value = 1;\n                break;\n            case 2:\n                goto retry;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--indent-labels"],
+        "void f()\n    {\n    switch (state)\n        {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        case 2:\n            goto retry;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_before_its_colon_goes_on_two_levels_past_the_label() {
+    // Every split case label continues at the same distance from its own
+    // column, the first one in a switch as the later ones.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST |\n        SECOND:\n        value = 1;\n        break;\n    case FIRST |\n        THIRD:\n        value = 2;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_label_block_in_an_unindented_case_block_nests_from_the_case_body() {
+    // The case block's unindent moves a label's block with the statements
+    // around it, its closer included.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST: {\nretry: {\n                value = 1;\n                goto retry;\n            }\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST:\n        {\nretry:\n            {\n                value = 1;\n                goto retry;\n            }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_into_its_block_in_an_unindented_case_block_keeps_its_block_shape() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        switch (mode) {\n        case FIRST |\n            SECOND: {\n            value = 1;\n            break;\n        }\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        switch (mode) {\n        case FIRST |\n                SECOND: {\n                value = 1;\n                break;\n            }\n        }\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST: {\n            switch (mode) {\n                case FIRST |\n                        SECOND: {\n                        value = 1;\n                        break;\n                    }\n            }\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST:\n        {\n            switch (mode)\n                {\n                case FIRST |\n                        SECOND:\n                    {\n                        value = 1;\n                        break;\n                    }\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_label_block_in_an_indented_case_block_nests_from_the_case_body_when_closers_attach() {
+    // Closers joining the rows before them leave the block a label opens in
+    // a case block one level past the case body, as in the other styles.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--indent-switches", "--indent-cases"],
+        "void f() {\n    switch (flags) {\n        case FIRST: {\nretry: {\n                    value = 1;\n                    goto retry; }\n                break; } } }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (flags)\n    {   case FIRST:\n            {   retry:\n                {   value = 1;\n                    goto retry; }\n                break; } } }\n",
+    );
+}
+
+#[test]
+fn a_run_in_statement_past_the_brace_level_reaches_its_column_with_tabs() {
+    // A statement before the first case stands in the case body: run into
+    // the switch brace it keeps that column, with spaces or tabs alike.
+    let input = "void f()\n{\n    switch (state) {\n        value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (state)\n    {       value = 0;\n        case 1:\n            break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann", "--indent=tab"],
+        "void f()\n{\tswitch (state)\n\t{\t\tvalue = 0;\n\t\tcase 1:\n\t\t\tbreak;\n\t}\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--indent=tab"],
+        "void f()\n{\tswitch (state)\n\t{\t\tvalue = 0;\n\t\tcase 1:\n\t\t\tbreak; } }\n",
+    );
+}
+
+#[test]
+fn a_brace_after_a_directive_under_a_case_label_opens_a_plain_block_in_the_case_body() {
+    // A directive between a case label and a brace leaves the brace a
+    // plain block among the case's statements, whatever the case options.
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n    {\n        push(state);\n    }\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-cases"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n        {\n            push(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (state) {\n        case 1:\n#line 46 \"input.l\"\n                {\n                pop(state);\n                }\n            break;\n        case 2: {\n            push(state);\n            }\n        break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-cases"],
+        "void f()\n{\n    switch (state)\n        {\n            case 1:\n#line 46 \"input.l\"\n                {\n                    pop(state);\n                }\n                break;\n            case 2:\n                {\n                    push(state);\n                }\n                break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn every_directive_but_a_conditional_parts_a_case_label_from_its_brace() {
+    // The kind of directive between a label and a brace does not change
+    // whose block the brace opens: only a conditional leaves it the label's.
+    let expected_plain = |directive: &str| {
+        format!(
+            "void f()\n{{\n    switch (state) {{\n    case 1:\n{directive}\n        {{\n            pop(state);\n        }}\n        break;\n    }}\n}}\n"
+        )
+    };
+    for directive in ["#pragma once", "#define LIMIT 4", "#line 46", "#error stop"] {
+        let input = format!(
+            "void f()\n{{\n    switch (state) {{\n    case 1:\n{directive}\n    {{\n        pop(state);\n    }}\n    break;\n    }}\n}}\n"
+        );
+        check(&input, &[], &expected_plain(directive));
+    }
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#ifdef TRACE\n    {\n        pop(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_case_block_after_a_comment_led_label_closes_where_case_blocks_do() {
+    // A comment leading the label leaves its block's closer where the
+    // closers of the other case blocks stand.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 1;\n        break;\n    }\n    /*case 2*/ default: {\n        if (ready) {\n            start();\n        }\n        result = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value = 1;\n            break;\n            }\n        /*case 2*/ default: {\n            if (ready) {\n                start();\n                }\n            result = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+    check(input, &[], input);
+}

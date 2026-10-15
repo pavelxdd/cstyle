@@ -1512,6 +1512,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn push_pre_brace_header(&mut self) -> Option<String> {
+        // A directive between a label and the brace leaves the brace a plain
+        // block among the case's statements.
+        let after_directive = self.current_is_blank() && self.follows_plain_directive();
         let header = self
             .layout
             .command_state
@@ -1520,6 +1523,9 @@ impl FormatEngine<'_> {
             .filter(|header| {
                 if !matches!(header.as_str(), "case" | "default") {
                     return true;
+                }
+                if after_directive {
+                    return false;
                 }
                 let current = self.current.trimmed();
                 is_case_label_start(current)
@@ -1548,7 +1554,15 @@ impl FormatEngine<'_> {
                 {
                     return None;
                 }
-                let header = self.layout.frame_stack.active_header()?.header.clone();
+                let header = self
+                    .layout
+                    .frame_stack
+                    .active_header()
+                    .filter(|header| {
+                        !after_directive || !matches!(header.header.as_str(), "case" | "default")
+                    })?
+                    .header
+                    .clone();
                 let line = self
                     .output
                     .scoped()
