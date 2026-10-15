@@ -564,15 +564,25 @@ impl SwitchCaseLineTransformer {
     /// Reads a line's switches, labels, and braces; returns the unindents
     /// due to the line, in order.
     fn scan_line(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
-        let mut unindents = Vec::new();
         // A directive between a label and a brace leaves the brace a plain
-        // block.
-        if is_preprocessor
-            && preprocessor_directive(scan.trimmed_start())
-                .is_some_and(|directive| !is_conditional_preprocessor(directive))
-        {
+        // block; a conditional leaves the label looking for its brace.
+        let directive = is_preprocessor
+            .then(|| preprocessor_directive(scan.trimmed_start()))
+            .flatten();
+        if directive.is_some_and(|directive| !is_conditional_preprocessor(directive)) {
             self.looking_for_case_brace = false;
         }
+        let keeps_looking =
+            self.looking_for_case_brace && directive.is_some_and(is_conditional_preprocessor);
+        let unindents = self.scan_line_code(scan, is_preprocessor);
+        if keeps_looking {
+            self.looking_for_case_brace = true;
+        }
+        unindents
+    }
+
+    fn scan_line_code(&mut self, scan: &str, is_preprocessor: bool) -> Vec<usize> {
+        let mut unindents = Vec::new();
         // Outside a switch's labels, a line that holds no switch and nothing
         // that opens or closes a literal, a comment, or a brace changes
         // nothing.

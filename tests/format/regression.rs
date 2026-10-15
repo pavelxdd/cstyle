@@ -9339,3 +9339,12 @@ fn a_brace_opening_an_alternative_branch_after_a_header_is_the_headers_block() {
         "void f()\n{\n    while (busy)\n        {\n            if (full)\n#if !defined OVERFLOW\n                fail();\n#else\n                {\n                    grow();\n                }\n#endif\n        }\n}\n",
     );
 }
+
+#[test]
+fn indenting_define_bodies_leaves_a_conditional_between_a_case_and_its_brace_transparent() {
+    // Only a define's body follows that option: the brace after a
+    // conditional still opens the case's block, its statements after it.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
