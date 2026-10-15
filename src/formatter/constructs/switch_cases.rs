@@ -2184,11 +2184,25 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn compound_case_label_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
-        if self.options.indent_cases {
+        let after_brace = line.trimmed_start().strip_prefix('}')?.trimmed_start();
+        if !(starts_header_word(after_brace, "case") || after_brace.starts_with("default")) {
             return None;
         }
-        let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();
-        if !(starts_header_word(after_brace, "case") || after_brace.starts_with("default:")) {
+        // A label kept after the closer of the case block before it stands
+        // with the labels, a level in where braces indent with their blocks.
+        if self.options.brace_style != BraceStyle::Ratliff {
+            let label_level = self
+                .layout
+                .indentation
+                .line_indent(LineKind::SwitchLabel, self.options)
+                + self.case_body_indent_extra(LineKind::SwitchLabel);
+            let brace_extra = usize::from(matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith | BraceStyle::Vtk
+            ));
+            return Some((label_level + brace_extra) * self.options.indent_width);
+        }
+        if self.options.indent_cases {
             return None;
         }
         if self.options.indent_switches {

@@ -5370,6 +5370,13 @@ impl FormatEngine<'_> {
         if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
+        // A label kept after the closer makes the line the label's.
+        if next_code_token(&self.tree.tokens, first + 1).is_some_and(|next| {
+            matches!(&self.tree.tokens[next], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+                && self.output.pending_tokens().is_some_and(|span| span.contains(next))
+        }) {
+            return None;
+        }
         let block = self.tree.groups.closed_at(first)?;
         if !matches!(
             self.tree.blocks.kind(block),

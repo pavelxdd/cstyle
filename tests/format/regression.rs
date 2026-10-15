@@ -8385,3 +8385,29 @@ fn whitesmith_keeps_a_statement_on_a_label_kept_after_a_case_closer() {
         "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            break;\n            } default: done();\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_label_kept_after_a_case_closer_stands_at_the_label_column() {
+    // The line stands with the labels, a level in where braces indent with
+    // their blocks.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--keep-one-line-statements",
+            "--indent-cases",
+        ],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            value=0;\n            break;\n    } case 2:\n        {\n            result=1;\n            break;\n    } default: done();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=vtk", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            break;\n            } case 2:\n            {\n            result=1;\n            break;\n            } default: done();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann", "--keep-one-line-statements"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0;\n            break;\n        } case 2:\n        {   result=1;\n            break;\n        } default: done();\n    }\n}\n",
+    );
+}
