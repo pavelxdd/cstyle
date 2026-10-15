@@ -256,10 +256,10 @@ fn function_head(
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {
             (operator, None)
         } else if let Some(id) = groups.closed_at(before_params) {
-            (
-                sole_word_in_group(tokens, groups, id)?,
-                Some(groups.get(id).open),
-            )
+            let Some(word) = sole_word_in_group(tokens, groups, id) else {
+                return macro_head_parameter_list(tokens, groups, blocks, head_ends, id, params);
+            };
+            (word, Some(groups.get(id).open))
         } else {
             (before_params, None)
         };
@@ -305,6 +305,28 @@ fn function_head(
         params,
         body,
     }))
+}
+
+/// `MACRO(type, name)(params) {`: a macro call standing for a function's
+/// name and return type, whose parameter list opens its body.
+fn macro_head_parameter_list(
+    tokens: &[Token],
+    groups: &Groups,
+    blocks: &Blocks,
+    head_ends: &mut HeadEndWalks,
+    call: GroupId,
+    params: GroupId,
+) -> Option<HeadMatch> {
+    let macro_name = previous_code_token(tokens, groups.get(call).open)?;
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+        return None;
+    }
+    match head_end(tokens, groups, head_ends, params, params)? {
+        HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
+            Some(HeadMatch::ParameterList)
+        }
+        _ => None,
+    }
 }
 
 /// The `operator` word of an overloaded operator name that ends at `last`:

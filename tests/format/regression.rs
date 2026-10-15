@@ -9384,3 +9384,29 @@ fn break_blocks_parts_a_case_block_from_the_statement_after_it_but_its_break() {
         "void f()\n{\n    switch (kind) {\n    case 1:\n        if (x) {\n            y();\n        }\n\n        break;\n\n    case 2:\n    {\n        y();\n    }\n    break;\n\n    case 3:\n    {\n        y();\n    }\n\n    z();\n    break;\n    }\n\n    while (x) {\n        y();\n    }\n\n    return;\n}\n",
     );
 }
+
+#[test]
+fn a_macro_built_function_heads_parameters_are_declarations() {
+    // `EXPORT(type, name)(params) {` heads a function body: its parameters
+    // declare pointers, which pad-oper leaves to the pointer options.
+    let input = "EXPORT(void, reset)(Item *item)\n{\n    clear(item);\n}\nEXPORT(int, count)(Item *item, char **names)\n{\n    return 0;\n}\n";
+    check(input, &["--pad-oper"], input);
+    check(
+        input,
+        &["--pad-oper", "--align-pointer=type"],
+        "EXPORT(void, reset)(Item* item)\n{\n    clear(item);\n}\nEXPORT(int, count)(Item* item, char** names)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_function_pointer_declarator_with_calling_conventions_holds_a_pointer() {
+    // Words before the star of a declarator group are its calling
+    // convention: the star declares, whatever case the name takes.
+    let input = "typedef BOOL (PASCAL FAR *LPFN_ACCEPT)(\n    int value,\n    int other);\n";
+    check(input, &["--pad-oper"], input);
+    check(
+        input,
+        &["--pad-oper", "--align-pointer=type"],
+        "typedef BOOL (PASCAL FAR* LPFN_ACCEPT)(\n    int value,\n    int other);\n",
+    );
+}

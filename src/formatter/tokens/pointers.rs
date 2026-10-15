@@ -423,9 +423,10 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
         {
-            // A constant-like name after the operator is an operand.
+            // A constant-like name after the operator is an operand, but in a
+            // declarator group, which only declares.
             if matches!(next, Some(Token::Word(word)) if is_macro_like_word(word)) {
-                return false;
+                return self.in_tree_pointer_declarator();
             }
             if self.looks_like_pointer_declaration_context() {
                 return true;
@@ -699,6 +700,16 @@ impl FormatEngine<'_> {
                 && BlockKind::is_declaration_scope(tree.blocks.kind(parent))
         });
         at_declaration_scope.then_some(false)
+    }
+
+    /// Whether the token being pushed lies in a declarator group such as
+    /// `(WINAPI *callback)`.
+    fn in_tree_pointer_declarator(&self) -> bool {
+        let tree = &self.tree;
+        self.current
+            .active_token()
+            .and_then(|token| tree.groups.enclosing(token))
+            .is_some_and(|group| tree.functions.is_declarator(group))
     }
 
     /// A line continuing parentheses opened on an earlier line inside a
