@@ -4007,7 +4007,7 @@ impl FormatEngine<'_> {
         if line.trimmed_start().starts_with('}')
             && let Some(spaces) = self.layout.joined_added_closer_spaces
         {
-            return Some(spaces);
+            return Some(spaces + self.case_unindent_spaces());
         }
         if line.trimmed() != "}" || self.should_indent_brace_line(BraceType::Command) {
             return None;

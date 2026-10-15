@@ -8451,3 +8451,13 @@ fn rows_of_a_comment_run_in_after_a_brace_keep_their_spaces_past_the_block_tabs(
         "void f()\n{\tif (ready)\n\t{\t/* first row of a comment\n\t\t    second row\n\t\t    third row */\n\t\tvalue = 0;\n\t}\n}\n",
     );
 }
+
+#[test]
+fn an_added_do_closer_holding_its_while_in_a_case_block_stands_at_its_brace() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        do\n            value=0;\n        while (ready);\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        do {\n            value=0;\n        } while (ready);\n    }\n    }\n}\n",
+    );
+}
