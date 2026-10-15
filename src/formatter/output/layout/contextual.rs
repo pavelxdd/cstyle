@@ -2084,8 +2084,16 @@ impl FormatEngine<'_> {
                         && line_is_control_body_header(trimmed)))
             {
                 // Headers chained after `else` on the line before, as in
-                // `} else for (x) {`, raise the body past this floor.
-                let base = if self.pending_block_header_follows_else() {
+                // `} else for (x) {`, raise the body past this floor; a
+                // brace the formatter added is no token of the tree.
+                let else_text = trimmed.strip_prefix('}').map_or(trimmed, str::trim_start);
+                let chained_header = else_text.strip_prefix("else").is_some_and(|rest| {
+                    let rest = rest.trim_start();
+                    ["for", "while", "switch", "do"]
+                        .into_iter()
+                        .any(|header| starts_header_word(rest, header))
+                });
+                let base = if chained_header || self.pending_block_header_follows_else() {
                     layout.indent * self.options.indent_width
                 } else {
                     0

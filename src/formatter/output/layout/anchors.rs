@@ -471,7 +471,10 @@ impl FormatEngine<'_> {
         }
         // The engine loses the level of an `if` chain that is the body of a
         // braceless header once the chain opens a braced block.
-        if self.inside_braced_chain_of_braceless_body(first)
+        // So does the engine lose the levels of headers run in on a line as
+        // braceless bodies, as in `if (x) a(); else do {`.
+        if (self.inside_braced_chain_of_braceless_body(first)
+            || self.closes_block_of_run_in_header_chain(first))
             && let Some(spaces) = self.closing_brace_indent(first)
         {
             layout.exact_indent_spaces = Some(spaces);
@@ -4279,6 +4282,14 @@ impl FormatEngine<'_> {
             if statements.starts_block_statement(open_line_first)
                 || statements.braceless_header(open_line_first).is_some()
             {
+                // Headers run in on the line as braceless bodies, as in
+                // `if (x) a(); else do {`, nest a level past each.
+                if let Some((_, levels)) = self
+                    .header_chain_before(open)
+                    .filter(|&(line, _)| line == open_line)
+                {
+                    extra += (levels - 1) * self.options.indent_width;
+                }
                 open_line
             } else if let Some(keyword) = self.header_keyword_before(open) {
                 if let Some(line) = self.line_led_by(keyword) {
@@ -4334,6 +4345,25 @@ impl FormatEngine<'_> {
             .groups
             .closed_at(first)
             .is_some_and(|group| self.group_in_braced_chain_of_braceless_body(group))
+    }
+
+    /// Whether the `}` at `first` closes the block of a header that is the
+    /// braceless body of another header on the line of its `{`, a line
+    /// that a statement starts.
+    fn closes_block_of_run_in_header_chain(&self, first: usize) -> bool {
+        let Some(group) = self.tree.groups.closed_at(first) else {
+            return false;
+        };
+        let open = self.tree.groups.get(group).open;
+        self.header_chain_before(open)
+            .is_some_and(|(line, levels)| {
+                levels > 1
+                    && self.output.line_with_token(open) == Some(line)
+                    && self
+                        .output
+                        .line_tokens(line)
+                        .is_some_and(|span| self.tree.statements.starts_block_statement(span.first))
+            })
     }
 
     /// Whether `group` is the block of an `else`, or of the `if` of an
@@ -4854,7 +4884,7 @@ impl FormatEngine<'_> {
             // an `else` too, closes at that body's level.
             let header = header?;
             let line = self
-                .line_led_by(header)
+                .line_led_by_header(header)
                 .filter(|&line| self.output.line_with_token(owner) == Some(line))?;
             return Some(
                 self.output.lead_width(line, self.options.tab_width)
@@ -5107,7 +5137,20 @@ impl FormatEngine<'_> {
             levels += 1;
             inner = outer;
         }
-        Some((self.line_led_by(inner)?, levels))
+        Some((self.line_led_by_header(inner)?, levels))
+    }
+
+    /// The line that the header keyword `token` leads, or that the `if` of
+    /// an `else` kept on its line leads.
+    fn line_led_by_header(&self, token: usize) -> Option<usize> {
+        self.line_led_by(token).or_else(|| {
+            let line = self
+                .tree
+                .statements
+                .if_of_else(token)
+                .and_then(|if_token| self.line_led_by(if_token))?;
+            (self.output.line_with_token(token) == Some(line)).then_some(line)
+        })
     }
 
     /// The control keyword whose condition closes right before the `{` at

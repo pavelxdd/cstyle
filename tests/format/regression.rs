@@ -9685,3 +9685,66 @@ fn run_in_styles_keep_the_source_gap_before_a_closer_on_its_statement_line() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_while_after_a_run_in_do_body_of_an_else_on_its_if_line_stands_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) helper(); else do {\n            first(); }\n        while (state); }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready) helper(); else do\n        {   first(); }\n        while (state); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn an_added_block_of_a_header_chained_after_else_indents_past_the_else_body() {
+    let input = "void f(void)\n{\n    if (a) {\n        b();\n    }\n    else for (; pre>0; pre--) *c=0; // note\n    g();\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        b();\n    } else for (; pre>0; pre--) {\n            *c=0;    // note\n        }\n    g();\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_block_of_a_do_run_in_after_an_else_on_its_if_line_closes_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready) helper(); else do\n    {\n        first();\n    }\n    while (state);\n    if (ready) helper(); else for (;;)\n    {\n        first();\n    }\n    g();\n}\n";
+    let attached = "void f()\n{\n    if (ready) helper(); else do {\n            first();\n        } while (state);\n    if (ready) helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n";
+    for (style, expected) in [
+        ("--style=kr", attached.to_string()),
+        ("--style=java", attached.replacen("()\n{", "() {", 1)),
+        (
+            "--style=allman",
+            "void f()\n{\n    if (ready) helper(); else do\n        {\n            first();\n        }\n        while (state);\n    if (ready) helper(); else for (;;)\n        {\n            first();\n        }\n    g();\n}\n".to_string(),
+        ),
+    ] {
+        check(input, &[style, "-o"], &expected);
+        check(&expected, &[style, "-o"], &expected);
+    }
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_an_if_line_ending_in_its_else_whole() {
+    // Its `else` stays on the kept line whether the body follows on that
+    // line or the next, as the line the style formats it into does.
+    let input = "void f()\n{\n    if (ready) helper(); else\n    {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else {\n        first();\n    }\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    if (ready) helper(); else {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else {\n        first();\n    }\n    g();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    if (ready) helper(); else\n    {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else\n    {\n        first();\n    }\n    g();\n}\n",
+        ),
+    ] {
+        check(input, &[style, "-o"], expected);
+        check(expected, &[style, "-o"], expected);
+    }
+}
