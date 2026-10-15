@@ -8,7 +8,6 @@ use crate::formatter::constructs::constructor_initializers::has_inline_construct
 use crate::formatter::constructs::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::typedefs::immediate_typedef_template_indent_spaces;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::continuation::call_arguments::callee_name_start_before_open;
@@ -931,7 +930,7 @@ impl FormatEngine<'_> {
             if previous_code.ends_with(',')
                 && previous_code.contains('[')
                 && !current.starts_with_any(b"#(){}")
-                && let Some(spaces) = objc_message_following_keyword_column(previous_code)
+                && let Some(spaces) = self.open_message_keyword_column(previous_code)
             {
                 return Some(spaces);
             }

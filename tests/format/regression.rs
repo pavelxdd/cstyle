@@ -8210,3 +8210,32 @@ fn max_code_length_continues_a_far_subscript_at_its_assigned_value() {
         "void f()\n{\n    long_type_name *variable = &container->items[index -\n                               offset_value];\n}\n",
     );
 }
+
+#[test]
+fn a_subscript_continued_after_a_comma_aligns_inside_its_bracket() {
+    // A subscript holds an index, not a message's keywords.
+    let input = "void f()\n{\n    value = table[LIMIT + 1,\n                  SIZE + 1];\n    table[LIMIT + 1,\n          SIZE + 1] = 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn indent_after_parens_continues_every_subscript_row_at_one_level() {
+    let input = "void f()\n{\n    unsigned char line[LIMIT + 1 +\n                       (2 * SIZE) + 1 +\n                       (2 * MAX) + 1];\n    value = table[LIMIT + 1\n                  + SIZE + 1\n                  + MAX + 1];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    unsigned char line[LIMIT + 1 +\n        (2 * SIZE) + 1 +\n        (2 * MAX) + 1];\n    value = table[LIMIT + 1\n            + SIZE + 1\n            + MAX + 1];\n}\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_continues_a_subscript_after_a_comma_as_a_call() {
+    // A `,` inside an open bracket ends no declarator, as one inside an
+    // open paren does not.
+    let input = "void f()\n{\n    value = table[LIMIT + 1,\n                  SIZE + 1];\n    value = helper(LIMIT + 1,\n                   SIZE + 1);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    value = table[LIMIT + 1,\n            SIZE + 1];\n    value = helper(LIMIT + 1,\n            SIZE + 1);\n}\n",
+    );
+}

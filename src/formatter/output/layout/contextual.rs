@@ -9,7 +9,6 @@ use crate::formatter::constructs::headers::{
 };
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::labels::else_after_candidate_label_indent_spaces;
-use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
 use crate::formatter::constructs::template_declarations::{
     is_template_declaration_head_line, template_continuation_indent_spaces,
@@ -3337,7 +3336,7 @@ impl FormatEngine<'_> {
             if previous_code.ends_with(',')
                 && previous_code.contains('[')
                 && !line_start.starts_with('[')
-                && let Some(spaces) = objc_message_following_keyword_column(previous_code)
+                && let Some(spaces) = self.open_message_keyword_column(previous_code)
             {
                 layout.exact_indent_spaces = Some(spaces);
             }

@@ -189,20 +189,21 @@ impl FormatEngine<'_> {
             )
     }
 
-    /// A line inside brackets whose `[` ends its line stands at the top of
-    /// astyle's continuation stack: a continuation level past the indent
-    /// before.
+    /// A line inside a subscript whose `[` ends its line, or any when parens
+    /// indent, stands at the top of astyle's continuation stack: a
+    /// continuation level past the indent before.
     pub(super) fn stacked_bracket_row_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let group = groups.enclosing(first)?;
         let open = groups.get(group).open;
         if groups.get(group).delimiter != Delimiter::Bracket
             || matches!(self.tree.tokens[first], Token::Symbol(']'))
-            || self
-                .output
-                .line_with_token(open)
-                .and_then(|line| self.output.line_tokens(line))
-                .is_none_or(|span| span.last != open)
+            || !self.options.indent_after_parens
+                && self
+                    .output
+                    .line_with_token(open)
+                    .and_then(|line| self.output.line_tokens(line))
+                    .is_none_or(|span| span.last != open)
             || self
                 .tree
                 .previous_code_token(open)
@@ -872,8 +873,8 @@ impl FormatEngine<'_> {
                     break;
                 }
                 match tokens[index] {
-                    Token::Symbol('(') => depth += 1,
-                    Token::Symbol(')') => depth -= 1,
+                    Token::Symbol('(' | '[') => depth += 1,
+                    Token::Symbol(')' | ']') => depth -= 1,
                     _ => {}
                 }
                 last = Some(index);

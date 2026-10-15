@@ -1,8 +1,9 @@
-use crate::config::{FormatOptions, ObjCColonPad};
+use crate::config::{FormatOptions, Mode, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
@@ -166,6 +167,35 @@ pub(crate) struct ObjCLineAlignment {
 }
 
 impl FormatEngine<'_> {
+    /// The column of the keyword after the receiver of the message `line`
+    /// leaves open, unless the line being laid out starts inside a
+    /// subscript, whose brackets hold an index.
+    pub(crate) fn open_message_keyword_column(&self, line: &str) -> Option<usize> {
+        if self.pending_line_in_subscript() {
+            return None;
+        }
+        objc_message_following_keyword_column(line)
+    }
+
+    fn pending_line_in_subscript(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups.enclosing(span.first).is_some_and(|group| {
+            groups.get(group).delimiter == Delimiter::Bracket
+                && self
+                    .tree
+                    .previous_code_token(groups.get(group).open)
+                    .is_some_and(|before| match &self.tree.tokens[before] {
+                        Token::Word(word) => word != "return",
+                        Token::Symbol(']') => true,
+                        Token::Symbol(')') => self.options.mode != Mode::ObjC,
+                        _ => false,
+                    })
+        })
+    }
+
     pub(crate) fn objc_dictionary_indent_spaces(
         &self,
         line: &LineView<'_>,
