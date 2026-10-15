@@ -577,8 +577,20 @@ impl FormatEngine<'_> {
                 ))
             })
             .is_some_and(|token| matches!(token, Token::Word(word) if matches!(word.as_str(), "struct" | "union")));
+        // A class head's continued rows, its base list, stand a level in.
+        let class_head = matches!(&tokens[start], Token::Word(word)
+            if matches!(word.as_str(), "class" | "struct" | "union"))
+            && (first..tokens.len())
+                .filter(|&token| is_code_token(&tokens[token]))
+                .take_while(|&token| !matches!(tokens[token], Token::Symbol(';')))
+                .find(|&token| matches!(tokens[token], Token::Symbol('{')))
+                .and_then(|brace| groups.opened_at(brace))
+                .is_some_and(|body| {
+                    groups.get(body).parent == groups.enclosing(first)
+                        && self.tree.blocks.kind(body) == Some(BlockKind::Aggregate)
+                });
         Some(
-            lead + usize::from(after_head_colon || after_header || record_led)
+            lead + usize::from(after_head_colon || after_header || record_led || class_head)
                 * self.options.indent_width,
         )
     }

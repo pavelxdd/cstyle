@@ -9348,3 +9348,15 @@ fn indenting_define_bodies_leaves_a_conditional_between_a_case_and_its_brace_tra
     check(input, &["--style=kr"], input);
     check(input, &["--style=kr", "--indent-preproc-define"], input);
 }
+
+#[test]
+fn a_class_heads_continued_base_list_indents_with_tabs() {
+    // A class head's continuation rows stand a level in, which tab indents
+    // write as a tab, at file scope or in a function.
+    let input = "class Derived : public Base,\n    private Other\n{\n};\nclass Third :\n    public Base\n{\n};\nvoid f()\n{\n    struct Local : Base,\n        Other {\n    };\n}\n";
+    check(
+        input,
+        &["--indent=tab"],
+        "class Derived : public Base,\n\tprivate Other\n{\n};\nclass Third :\n\tpublic Base\n{\n};\nvoid f()\n{\n\tstruct Local : Base,\n\t\tOther {\n\t};\n}\n",
+    );
+}
