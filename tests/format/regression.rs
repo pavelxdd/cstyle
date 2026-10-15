@@ -8418,3 +8418,20 @@ fn removing_braces_keeps_nested_initializer_braces_together() {
     let input = "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n        }\n    };\n}\n";
     check(input, &["--style=allman", "--remove-braces"], input);
 }
+
+#[test]
+fn whitesmith_closes_an_initializer_opened_after_another_on_its_line_at_its_rows() {
+    // Two braces opened on one line put the inner rows two levels in, and
+    // the inner closer stands with them.
+    let input = "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n            }\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n            }\n        };\n}\n",
+    );
+}

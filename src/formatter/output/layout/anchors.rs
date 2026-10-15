@@ -1309,12 +1309,17 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
-        // A group opened on a `}, {` row closes at that row.
-        let row_extra = if matches!(self.tree.tokens[span.first], Token::Symbol('}')) {
-            0
-        } else {
-            self.options.indent_width
-        };
+        // The group closes a level in for each brace its row leaves open
+        // through it: none on a `}, {` row, two after `= { {`.
+        let open_on_row = self.tree.tokens[span.first..=open].iter().fold(
+            0isize,
+            |open_count, token| match token {
+                Token::Symbol('{') => open_count + 1,
+                Token::Symbol('}') => open_count - 1,
+                _ => open_count,
+            },
+        );
+        let row_extra = open_on_row.max(0) as usize * self.options.indent_width;
         (span.first != open && span.last == open).then(|| {
             self.output.lead_width(line, self.options.tab_width)
                 + row_extra
