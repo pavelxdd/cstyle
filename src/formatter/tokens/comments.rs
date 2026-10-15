@@ -3152,9 +3152,16 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.comments.follows_added_one_line_block) {
             // Padding moves the comment as on any line; the four columns of
             // the added braces do not.
+            // A lone closer runs into its row, which keeps the gap.
+            let lone_closer = self
+                .current
+                .trimmed()
+                .chars()
+                .all(|ch| matches!(ch, '}' | ';' | ' '));
             let padded_gap = (!gap.is_empty()
                 && !gap.contains('\t')
                 && self.options.brace_style != BraceStyle::Lisp
+                && !lone_closer
                 && !self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| {
                 let target = self

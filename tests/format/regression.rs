@@ -8935,3 +8935,29 @@ fn a_structured_binding_reference_aligns_as_any_reference_declarator() {
         "void f()\n{\n    for (auto& [key, value] : items) {\n        total += value;\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_added_closer_run_into_its_row_keeps_the_comment_gap() {
+    let input = "void f()\n{\n    if (ready) value=0;   // note\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-one-line-headers", "--add-braces"],
+        "void f()\n{   if (ready)\n    {   value=0; }   // note\n}\n",
+    );
+}
+
+#[test]
+fn a_definition_with_parameter_declarations_breaks_and_attaches_its_return_type() {
+    // A definition declaring its parameters before its body is a function
+    // definition like any other.
+    let joined = "int helper(value, other)\nint value;\nchar *other;\n{\n    return value;\n}\n";
+    let broken = "int\nhelper(value, other)\nint value;\nchar *other;\n{\n    return value;\n}\n";
+    check(joined, &["--break-return-type"], broken);
+    check(broken, &["--attach-return-type"], joined);
+}
+
+#[test]
+fn break_blocks_keeps_a_label_after_a_case_closer_with_its_statements() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks", "-o"], input);
+}
