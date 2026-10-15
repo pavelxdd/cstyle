@@ -8027,3 +8027,45 @@ fn keeping_one_line_statements_leaves_an_else_switch_closer_at_its_column() {
     check(input, &["--style=kr"], expected);
     check(input, &["--style=kr", "-o"], expected);
 }
+
+#[test]
+fn a_block_comment_between_a_do_closer_and_its_while_stays_between_them() {
+    // Only a comment ending the line follows a broken one-line block's
+    // statements; one before the `while` keeps its place.
+    let input = "void f()\n{\n    do { value=0; } /* again */ while (ready);\n    x();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    do\n    {\n        value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   do\n    {   value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   do { value=0; } /* again */ while (ready);\n    x(); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // A comment between a kept one-line block and its closing header holds
+    // them on one line, as it does where the block's closer ran in.
+    let kept = "void f()\n{\n    do { value=0; } /* again */ while (ready);\n    if (ready) { value=0; } /* c */ else { result=0; }\n}\n";
+    check(kept, &["--keep-one-line-blocks"], kept);
+    check(
+        "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n}\n",
+        &["--style=pico"],
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+    );
+    check(
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+        &["--style=pico"],
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+    );
+}

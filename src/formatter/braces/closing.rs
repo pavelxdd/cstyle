@@ -416,6 +416,8 @@ impl FormatEngine<'_> {
                 Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
             )
             && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'))
+            // A comment code goes on after keeps its place.
+            && self.comment_after_closer_ends_line()
             // A closer run into the block's only body line already leads
             // the comment there.
             && !(matches!(
@@ -432,6 +434,21 @@ impl FormatEngine<'_> {
             closing_lambda_body,
             move_one_line_block_comment,
         );
+    }
+
+    /// Whether the comment after the `}` being pushed is the last token of
+    /// its source line.
+    fn comment_after_closer_ends_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let after = |from: usize| {
+            (from..tokens.len()).find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+        };
+        self.current
+            .active_token()
+            .and_then(|brace| after(brace + 1))
+            .is_none_or(|comment| {
+                after(comment + 1).is_none_or(|index| matches!(tokens[index], Token::Newline))
+            })
     }
 
     fn closes_statement_expression(&self, brace: usize) -> bool {

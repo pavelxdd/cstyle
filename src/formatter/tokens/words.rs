@@ -325,8 +325,17 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
         previous_non_ws_char: Option<char>,
     ) {
+        // A comment between the block and its closing header holds them
+        // on one line.
         if previous_non_ws_char == Some('}')
             && !self.one_line_block_mode
+            && self.current.active_token().is_some_and(|index| {
+                self.tree.tokens[..index]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_)))
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            })
             && (self.options.break_one_line_statements
                 || (self.options.brace_style == BraceStyle::Pico
                     && !(word == "while" && self.options.attach_closing_while)))
