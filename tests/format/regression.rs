@@ -7818,3 +7818,31 @@ fn breaking_one_line_headers_parts_a_header_from_the_statement_its_removed_brace
         broken,
     );
 }
+
+#[test]
+fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stands() {
+    // A one-line compound statement kept with its braces stands where the
+    // style puts those braces, first in the body or after a statement.
+    let first = "void f()\n{\n    { value=0; }\n}\n";
+    let after = "void f()\n{\n    value=1;\n    { value=0; }\n}\n";
+    for (style, first_expected, after_expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n        { value=0; }\n    }\n",
+            "void f()\n    {\n    value=1;\n        { value=0; }\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n        { value=0; }\n    }\n",
+            "void f() {\n    value=1;\n        { value=0; }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n        { value=0; }\n}\n",
+            "void f()\n{\n    value=1;\n        { value=0; }\n}\n",
+        ),
+    ] {
+        check(first, &[style, "-O"], first_expected);
+        check(after, &[style, "-O"], after_expected);
+    }
+}
