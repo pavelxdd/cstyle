@@ -751,7 +751,7 @@ impl FormatEngine<'_> {
         if comma == groups.get(group).open
             && !matches!(
                 self.options.brace_style,
-                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff | BraceStyle::Pico
+                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
             )
             && groups
                 .get(group)
@@ -1314,7 +1314,6 @@ impl FormatEngine<'_> {
             BraceStyle::Whitesmith | BraceStyle::Ratliff => (1, true),
             BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => (1, true),
             BraceStyle::Vtk => (2, true),
-            BraceStyle::Pico => return None,
             _ => (1, false),
         };
         if groups

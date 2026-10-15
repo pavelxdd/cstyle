@@ -8549,3 +8549,13 @@ fn breaking_else_ifs_keeps_unpadding_in_the_gap_before_a_comment() {
         "void f()\n{\n    if(ready) {\n        value=0;\n    } else\n        if(other) {  // second\n            value=1;\n        }\n}\n",
     );
 }
+
+#[test]
+fn pico_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
+    );
+}
