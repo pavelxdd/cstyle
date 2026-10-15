@@ -715,10 +715,15 @@ impl FormatEngine<'_> {
             && self.layout.indentation.indent() == base + delta
             && !self.braceless_body_continues(next)
         {
-            self.layout.indentation.exit_braceless_block();
-            // The braceless body held the else-if chain the brace ended.
-            if self.current_is_blank() && !self.closing_brace_precedes_else() {
-                self.unwind_else_if_break_depths();
+            if self.current.trimmed() == "}" {
+                // The line the brace begins keeps the body's level.
+                self.layout.exit_braceless_block_after_line = true;
+            } else {
+                self.layout.indentation.exit_braceless_block();
+                // The braceless body held the else-if chain the brace ended.
+                if self.current_is_blank() && !self.closing_brace_precedes_else() {
+                    self.unwind_else_if_break_depths();
+                }
             }
         }
         self.layout.previous = PreviousToken::Other;

@@ -7879,3 +7879,25 @@ fn break_blocks_leaves_a_one_line_block_after_a_statement_unpadded() {
         "void f()\n{\n    first=1;\n    value=1; if (ready) {\n        value=0;\n    }\n\n    other=1;\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_the_closer_of_an_else_header_block_leaves_its_column() {
+    let expected = "void f()\n{\n    if (ready) {\n        value = 1;\n    } else while (other) {\n            value = 0;\n        }\n    result = 1;\n    if (ready) {\n        value = 1;\n    } else switch (kind) {\n        case 1:\n            break;\n        }\n    result = 1;\n}\n";
+    for comment in ["", " // done", " /* done */"] {
+        let input = expected.replace("        }\n", &format!("        }}{comment}\n"));
+        for style in ["--style=java", "--style=kr"] {
+            check(
+                &input,
+                &[style],
+                &input.replace(
+                    "void f()\n{",
+                    if style == "--style=java" {
+                        "void f() {"
+                    } else {
+                        "void f()\n{"
+                    },
+                ),
+            );
+        }
+    }
+}

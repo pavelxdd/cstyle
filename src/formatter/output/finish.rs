@@ -58,6 +58,9 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.layout.unwind_else_if_after_line) {
             self.unwind_else_if_break_depths();
         }
+        if std::mem::take(&mut self.layout.exit_braceless_block_after_line) {
+            self.layout.indentation.exit_braceless_block();
+        }
     }
 
     fn publish_finished_line(&mut self) {
