@@ -7907,3 +7907,21 @@ fn a_comment_after_the_closer_of_an_else_header_block_leaves_its_column() {
         }
     }
 }
+
+#[test]
+fn pico_breaking_one_line_headers_keeps_a_label_with_its_header_and_block() {
+    // A label leads the line of the header after it as a statement does.
+    let options = ["--style=pico", "--break-one-line-headers"];
+    for line in [
+        "done: if (ready) { value=0; }",
+        "value=1; if (ready) { value=0; }",
+    ] {
+        let expected = format!("void f()\n{{   {line} }}\n");
+        check(
+            &format!("void f()\n{{\n    {line}\n}}\n"),
+            &options,
+            &expected,
+        );
+        check(&expected, &options, &expected);
+    }
+}

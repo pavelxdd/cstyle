@@ -615,17 +615,21 @@ impl FormatEngine<'_> {
                 _ => false,
             })
         };
-        // A case label before the header leads the line as a statement does.
-        let preceding_case_label = tokens[line_start..start]
-            .iter()
-            .find(|token| crate::formatter::structure::blocks::is_code_token(token))
-            .is_some_and(
-                |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
-            );
+        // A label before the header leads the line as a statement does.
+        let preceding_label = {
+            let mut code = tokens[line_start..start]
+                .iter()
+                .filter(|token| crate::formatter::structure::blocks::is_code_token(token));
+            match code.next() {
+                Some(Token::Word(word)) if word == "case" || word == "default" => true,
+                Some(Token::Word(_)) => matches!(code.next(), Some(Token::Symbol(':'))),
+                _ => false,
+            }
+        };
         let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
             && !self.in_broken_one_line_block(start)
             && (preceding_top_level_statement
-                || preceding_case_label
+                || preceding_label
                 || find_statement_semicolon(tokens, statement_start, line_end)
                     .and_then(|semicolon| {
                         next_statement_token(tokens, semicolon + 1, line_end, false)
