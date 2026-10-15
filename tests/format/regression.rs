@@ -7752,3 +7752,12 @@ fn break_blocks_pads_a_header_line_kept_with_other_statements() {
         &padded("if (ready) { value=0; } else { result=0; }"),
     );
 }
+
+#[test]
+fn max_code_length_leaves_a_kept_line_within_the_limit_whole() {
+    // The limit splits only lines longer than it; a header kept after a
+    // statement on a short line stays there as without the limit.
+    let input = "void f()\n{\n    if (ready) value=0; else result=0;\n    value=1; if (ready) result=0;\n}\n";
+    check(input, &["--style=kr", "-o"], input);
+    check(input, &["--style=kr", "-o", "--max-code-length=60"], input);
+}
