@@ -8582,3 +8582,11 @@ fn whitesmith_keeps_a_range_for_colon_inside_its_parens() {
         "void f()\n    {\n    for (auto &item : items)\n        {\n        total += item.value;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_block_closing_after_a_message_in_a_method_stands_at_its_header() {
+    // Only the method's own closer stands flush; a block inside it closes
+    // at its header after a message as after any statement.
+    let input = "@implementation Item\n- (void)update\n{\n    if (value) {\n        [self reset];\n    }\n}\n@end\n";
+    check(input, &["--style=kr"], input);
+}

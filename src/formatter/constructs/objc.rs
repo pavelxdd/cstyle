@@ -528,6 +528,17 @@ impl FormatEngine<'_> {
         if line_start != "}" {
             return None;
         }
+        // A block inside the method closes as any other.
+        let groups = &self.tree.groups;
+        if self
+            .output
+            .pending_tokens()
+            .filter(|span| matches!(self.tree.tokens[span.first], Token::Symbol('}')))
+            .and_then(|span| groups.closed_at(span.first))
+            .is_some_and(|block| groups.get(block).parent.is_some())
+        {
+            return None;
+        }
         let previous_index = (0..self.output.len())
             .rev()
             .find(|&index| !self.output.trimmed(index).is_empty())?;
