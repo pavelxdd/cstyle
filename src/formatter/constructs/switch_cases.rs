@@ -1761,7 +1761,11 @@ impl FormatEngine<'_> {
         {
             // An indented brace stands a level past its label.
             let brace_extra = usize::from(
-                self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
+                self.options.indent_braces
+                    || matches!(
+                        self.options.brace_style,
+                        BraceStyle::Whitesmith | BraceStyle::Vtk
+                    ),
             ) * self.options.indent_width;
             let statement_block = statement_block();
             return Some(Some(ActiveCaseLayout {

@@ -8697,3 +8697,45 @@ fn a_run_in_brace_after_a_one_line_switch_fills_as_anywhere() {
         "void f()\n{   switch (kind) { case 1: value=0; break; default: break; }\n    struct Item item =\n    {   .value = 1,\n        .name = \"x\", }; }\n",
     );
 }
+
+#[test]
+fn vtk_keeps_a_case_body_after_a_label_on_its_closer_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk", "-o"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            } case 2:\n            value=1;\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn indented_case_blocks_leave_the_statements_after_a_closer_label_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n            {   value=0; } case 2:\n            value=1;\n            break; } }\n",
+    );
+}
+
+#[test]
+fn an_indented_case_block_keeps_its_level_whatever_label_follows_its_closer() {
+    // A label run in after the closer moves neither the block's row nor
+    // its statements, whether a case or a default.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    case 3: {\n        value=2;\n    } default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n            {   value=0; } case 2:\n            value=1;\n            break;\n        case 3:\n            {   value=2; } default:\n            break; } }\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--indent-cases"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n            value=0; } case 2:\n        value=1;\n        break;\n    case 3: {\n            value=2; } default:\n        break; } }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0; } case 2:\n            value=1;\n            break;\n        case 3:\n        {   value=2; } default:\n            break; } }\n",
+    );
+}
