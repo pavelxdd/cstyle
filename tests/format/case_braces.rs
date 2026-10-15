@@ -1736,3 +1736,23 @@ fn pico_comment_after_a_case_brace_broken_off_keeps_a_tab_before_it_once() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn vtk_kept_one_line_case_block_with_indented_switches_stands_where_its_expanded_brace_would() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=vtk".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--indent-switches".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            { value=0; }\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

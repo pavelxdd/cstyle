@@ -4526,10 +4526,9 @@ impl FormatEngine<'_> {
                     .is_some_and(|span| span.contains(close))
             })
         {
-            return Some(
-                (self.layout.indentation.indent() + 1) * self.options.indent_width
-                    + self.case_unindent_spaces(),
-            );
+            let level =
+                self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal);
+            return Some((level + 1) * self.options.indent_width + self.case_unindent_spaces());
         }
         if self.options.brace_style != BraceStyle::Whitesmith
             || self.tree.blocks.kind(block) != Some(BlockKind::Block)
