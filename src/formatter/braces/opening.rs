@@ -2017,8 +2017,10 @@ impl FormatEngine<'_> {
         self.layout.command_state.observe_char('{');
         let line_already_has_line_comment =
             line[trailing_comment_split_limit(&line)..].contains("//");
-        let line_comment_starts_body =
-            brace_attached_before_trailing_comment && self.token_input.token_begins_source_line;
+        // The comment the brace's own line held opens the body.
+        let line_comment_starts_body = (brace_attached_before_trailing_comment
+            || attached_case_label_output_brace)
+            && self.token_input.token_begins_source_line;
         if let Some(Token::Comment(CommentKind::Line, comment)) = next
             && !line_already_has_line_comment
             && !line_comment_starts_body
@@ -2027,6 +2029,16 @@ impl FormatEngine<'_> {
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
                 line.push_str(&initializer_brace_line_comment_gap(self.options, &line));
+            } else if attached_case_label_output_brace
+                && !self.token_input.token_begins_source_line
+                && let Some(gap) = self
+                    .token_input
+                    .next_input_whitespace
+                    .as_deref()
+                    .filter(|gap| !gap.is_empty())
+            {
+                // A brace on its label's source line keeps the gap after it.
+                line.push_str(gap);
             } else {
                 line.push(' ');
             }
@@ -2300,13 +2312,8 @@ impl FormatEngine<'_> {
                 .next_input_whitespace
                 .clone()
                 .unwrap_or_default();
-            let gap = if before.contains('\t') || after.contains('\t') {
-                " ".to_owned()
-            } else {
-                format!("{before} {after}")
-            };
             let line = format!(
-                "{}{gap}{}",
+                "{}{before} {after}{}",
                 self.output[index].trimmed_end(),
                 comment.trimmed_end()
             );
@@ -2630,7 +2637,7 @@ impl FormatEngine<'_> {
             .next_input_whitespace
             .clone()
             .unwrap_or_default();
-        self.trim_current_end();
+        self.trim_current_end_horizontal_space();
         if let Some(&target) = self.layout.line_state.trailing_comment_columns.front()
             && !before_gap.contains('\t')
             && !after_gap.contains('\t')
