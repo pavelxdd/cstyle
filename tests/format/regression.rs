@@ -8590,3 +8590,13 @@ fn a_block_closing_after_a_message_in_a_method_stands_at_its_header() {
     let input = "@implementation Item\n- (void)update\n{\n    if (value) {\n        [self reset];\n    }\n}\n@end\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_declarator_starting_with_default_after_a_closer_is_no_label() {
+    let input = "extern struct Item {\n    int value;\n    char *name;\n} default_item;\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "extern struct Item\n{\n    int value;\n    char *name;\n} default_item;\n",
+    );
+}

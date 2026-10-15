@@ -1942,8 +1942,8 @@ impl FormatEngine<'_> {
             None
         } else if let Some(after_brace) = trimmed.strip_prefix('}') {
             let after_brace = after_brace.trimmed_start();
-            let closer_leads_label =
-                starts_header_word(after_brace, "case") || after_brace.starts_with("default");
+            let closer_leads_label = starts_header_word(after_brace, "case")
+                || starts_header_word(after_brace, "default");
             let mut closed = 0usize;
             (0..self.output.len()).rev().find_map(|index| {
                 let previous_trimmed = self.output.code_trimmed(index);
@@ -2185,7 +2185,8 @@ impl FormatEngine<'_> {
 
     pub(crate) fn compound_case_label_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
         let after_brace = line.trimmed_start().strip_prefix('}')?.trimmed_start();
-        if !(starts_header_word(after_brace, "case") || after_brace.starts_with("default")) {
+        if !(starts_header_word(after_brace, "case") || starts_header_word(after_brace, "default"))
+        {
             return None;
         }
         // A label kept after the closer of the case block before it stands
