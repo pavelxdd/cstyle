@@ -659,9 +659,11 @@ impl FormatEngine<'_> {
                 Some("if" | "for" | "switch" | "while" | "else" | "try" | "catch")
             )
             // The statement after a statement block's closer breaks off it
-            // as after a header's block.
+            // as after a header's block; a word heading the block makes it
+            // the word's, as a macro's, which the statement goes on from.
             && !(self.options.break_one_line_statements
-                && self.layout.nesting.last_closed_brace_type == Some(BraceType::Command))
+                && self.layout.nesting.last_closed_brace_type == Some(BraceType::Command)
+                && !self.closed_block_is_word_headed())
             && !source_attached_statement_after_closing;
         let source_attached_closing = self.options.brace_style == BraceStyle::None
             && self.token_input.token_begins_source_line
@@ -757,6 +759,20 @@ impl FormatEngine<'_> {
             }
         }
         self.layout.previous = PreviousToken::Other;
+    }
+
+    /// Whether the block the current `}` closes opened right after a word.
+    fn closed_block_is_word_headed(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(group).open)
+            })
+            .is_some_and(|before| matches!(tokens[before], Token::Word(_)))
     }
 
     fn braceless_body_continues(&self, next: Option<&Token>) -> bool {

@@ -3,6 +3,7 @@
 
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
+use crate::formatter::syntax::language::is_non_type_keyword;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum BlockKind {
@@ -367,11 +368,28 @@ fn statement_head(tokens: &[Token], groups: &Groups, open: usize) -> Vec<usize> 
         if matches!(tokens[previous], Token::Symbol(';' | '{' | '}')) {
             break;
         }
+        // A control header leading its line after a macro word standing
+        // without a semicolon starts a statement of its own.
+        if head.last().is_some_and(|&first| {
+            word_at(tokens, first).is_some_and(is_control_keyword) && begins_line(tokens, first)
+        }) && word_at(tokens, previous).is_some_and(|word| !is_non_type_keyword(word))
+        {
+            break;
+        }
         head.push(previous);
         index = previous;
     }
     head.reverse();
     head
+}
+
+/// Whether only whitespace stands before `index` on its source line.
+fn begins_line(tokens: &[Token], index: usize) -> bool {
+    tokens[..index]
+        .iter()
+        .rev()
+        .take_while(|token| !matches!(token, Token::Newline))
+        .all(|token| matches!(token, Token::Whitespace(_)))
 }
 
 /// The `)` of a parameter list followed only by function suffixes such as

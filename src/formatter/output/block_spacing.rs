@@ -362,6 +362,20 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the block the current `}` closes opened under a case label,
+    /// only directives between them.
+    fn closed_block_follows_case_label(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(|owner| {
+                matches!(&tokens[owner], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+            })
+    }
+
     pub(crate) fn observe_block_spacing_close_brace(&mut self, next: Option<&Token>) {
         if !self.options.break_blocks {
             return;
@@ -397,9 +411,11 @@ impl FormatEngine<'_> {
                 is_standard_break_blocks_opening_header(header)
                     || is_break_blocks_closing_header(header)
             });
-        // A case block's brace parts from a directive after it.
-        self.block_spacing.case_block_before_directive =
-            closed_header.is_some_and(|header| matches!(header, "case" | "default"));
+        // A case label's block parts from a directive after it, a directive
+        // between the label and the brace or not.
+        self.block_spacing.case_block_before_directive = closed_header
+            .is_some_and(|header| matches!(header, "case" | "default"))
+            || self.closed_block_follows_case_label();
         let depth = self.layout.nesting.brace_header_stack.len();
         let continues_header = self.block_spacing.header_continued_depths.last() == Some(&depth);
         if continues_header {

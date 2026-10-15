@@ -9265,3 +9265,54 @@ fn vtk_indents_a_bare_one_line_block_as_after_a_header() {
         "void f()\n    {\n    if (x)\n        { value = 3; }\n    while (y)\n        { value = 4; }\n        { value = 5; }\n        {\n        value = 6;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn an_element_block_after_a_directive_closes_like_the_ones_before_it() {
+    // Every element block of the list breaks its closer off its last value,
+    // a directive before it or not.
+    let input = "static Command commands[] = {\n\n    { name(\"first\"),\n      set_slot,\n      NULL },\n\n#if (CACHE)\n\n    { name(\"second\"),\n      set_slot,\n      NULL },\n\n#endif\n\n    { name(\"third\"),\n      set_slot,\n      NULL },\n\n      null_command\n};\n";
+    check(
+        input,
+        &[],
+        "static Command commands[] = {\n\n    {   name(\"first\"),\n        set_slot,\n        NULL\n    },\n\n#if (CACHE)\n\n    {   name(\"second\"),\n        set_slot,\n        NULL\n    },\n\n#endif\n\n    {   name(\"third\"),\n        set_slot,\n        NULL\n    },\n\n    null_command\n};\n",
+    );
+}
+
+#[test]
+fn a_statement_after_a_word_headed_block_stays_on_its_closer() {
+    // A word heading a block makes the block the word's, as a macro's: the
+    // statement after the closer goes on from it, the brace on the word's
+    // line or its own.
+    let input = "void f()\n{\n    Binder {\n        bind(first);\n    } _Binder;\n    Binder\n    {\n        bind(second);\n    } _Binder;\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    Binder\n    {\n        bind(first);\n    } _Binder;\n    Binder\n    {\n        bind(second);\n    } _Binder;\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_parts_a_case_labels_block_from_a_directive_after_it() {
+    // The block under a case label stays the label's past a directive
+    // between them: it parts from a directive after it as a case block
+    // does, where a plain block among the statements does not.
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n#line 50 \"out.c\"\n        break;\n    case 2:\n        run(state);\n        {\n            push(state);\n        }\n#line 60 \"out.c\"\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n\n#line 50 \"out.c\"\n        break;\n\n    case 2:\n        run(state);\n        {\n            push(state);\n        }\n#line 60 \"out.c\"\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_blocks_in_a_switch_after_a_statement_macro_stand_as_in_any_switch() {
+    // A macro line without a semicolon ends its own statement: the switch
+    // after it owns its body, whose blocks take the case body's columns.
+    let input = "void f()\n{\n  SETUP_BEGIN\n  switch (kind)\n    {\n    case FIRST:\n#line 37 \"input.y\"\n            { release(value); }\n        break;\n    case OTHER:\n        run(value);\n        { push(value); }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    SETUP_BEGIN\n    switch (kind)\n        {\n        case FIRST:\n#line 37 \"input.y\"\n                {\n                release(value);\n                }\n            break;\n        case OTHER:\n            run(value);\n                {\n                push(value);\n                }\n            break;\n        }\n    }\n",
+    );
+}
