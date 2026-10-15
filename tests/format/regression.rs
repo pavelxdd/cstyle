@@ -8110,3 +8110,11 @@ fn break_blocks_pads_a_kept_else_block_on_a_line_of_its_own() {
         "void f()\n{\n    if (ready)\n    { value=0; }\n    else\n    { result=0; }\n\n    x();\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_reads_a_while_after_a_comment_as_its_do_blocks_end() {
+    // The comment between them leaves the `while` closing the do block, so
+    // no blank line opens a block before it.
+    let input = "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n}\n";
+    check(input, &["--break-blocks"], input);
+}
