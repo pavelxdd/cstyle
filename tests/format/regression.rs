@@ -9633,3 +9633,37 @@ fn a_broken_while_closing_a_do_chained_after_else_stands_at_the_else_body() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn break_one_line_headers_keeps_a_run_in_if_line_whole_whatever_follows_its_else() {
+    // Run-in styles keep `if (x) a(); else ...` on its line, an `else`
+    // heading a block as much as an `else` with a statement.
+    let input = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n    case 1:\n        first();\n        break;\n    }\n    if (ready) helper(); else for (;;) {\n        first();\n    }\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break; }\n    if (ready) helper(); else for (;;) {\n            first(); }\n    g(); }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready) helper(); else other();\n    if (ready) helper(); else switch (state)\n        {   case 1:\n                first();\n                break; }\n    if (ready) helper(); else for (;;)\n        {   first(); }\n    g(); }\n",
+        ),
+    ] {
+        check(input, &[style, "--break-one-line-headers"], expected);
+        check(input, &[style], expected);
+    }
+}
+
+#[test]
+fn break_blocks_all_keeps_an_else_with_its_one_line_if() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--break-blocks=all",
+        ],
+        "void f()\n{\n    for (;;) {\n        if (ready) break;\n        else continue;\n    }\n}\n",
+    );
+}
