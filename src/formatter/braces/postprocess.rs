@@ -48,7 +48,14 @@ impl FormatEngine<'_> {
                 continue;
             }
             let next_line = self.output.remove(index + 1);
-            let fill = horstmann_run_in_fill(&self.output[index], &next_line, self.options);
+            // The tab pass leaves the fill before a comment alone, so it is
+            // written as the finished output indents.
+            let next_text = next_line.trimmed_start();
+            let fill = if next_text.starts_with("//") || next_text.starts_with("/*") {
+                horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
+            } else {
+                horstmann_run_in_fill(&self.output[index], &next_line, self.options)
+            };
             let merged = format!(
                 "{}{}{}",
                 self.output[index],

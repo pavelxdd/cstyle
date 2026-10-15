@@ -152,7 +152,9 @@ impl FormatEngine<'_> {
                 continue;
             }
             let comment_line = self.output.remove(index + 1);
-            let fill = horstmann_run_in_fill(&self.output[index], &comment_line, self.options);
+            // The tab pass leaves the fill before a comment alone.
+            let fill =
+                horstmann_run_in_fill(&self.output[index], &comment_line, &self.output_options());
             let merged = format!(
                 "{}{}{}",
                 self.output[index],

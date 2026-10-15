@@ -11,6 +11,7 @@ use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -1926,9 +1927,10 @@ impl FormatEngine<'_> {
             .map(|head| head.line_indent_spaces)
     }
 
-    /// The column of the paren or bracket enclosing the start of the line
-    /// being laid out, when output line `line` opened it.
-    fn pending_line_open_delimiter_column(&self, line: usize) -> Option<usize> {
+    /// The columns of the paren or bracket enclosing the start of the line
+    /// being laid out, when output line `line` opened it, and of the code
+    /// after it there, which the rows inside align with.
+    fn pending_line_open_delimiter_columns(&self, line: usize) -> Option<(usize, usize)> {
         let groups = &self.tree.groups;
         let group = groups.enclosing(self.output.pending_tokens()?.first)?;
         let open = groups.get(group).open;
@@ -1937,7 +1939,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        self.token_column(open)
+        let open_column = self.token_column(open)?;
+        let operand_column = next_code_token(&self.tree.tokens, open + 1)
+            .filter(|&next| self.output.line_with_token(next) == Some(line))
+            .and_then(|next| self.token_column(next))
+            .unwrap_or(open_column + 1);
+        Some((open_column, operand_column))
     }
 
     fn parenthesized_stream_indent_for_line(&self, line: usize) -> Option<usize> {
@@ -1945,13 +1952,12 @@ impl FormatEngine<'_> {
         if !stream.line_has_unmatched_open_paren {
             return None;
         }
-        let delimiter_column = self.pending_line_open_delimiter_column(line)?;
+        let (delimiter_column, paren_spaces) = self.pending_line_open_delimiter_columns(line)?;
         if stream.operator_output_column >= delimiter_column {
             return None;
         }
         let line_indent = stream.line_indent_spaces;
         let stream_spaces = stream.operator_output_column;
-        let paren_spaces = delimiter_column + 1;
         let starts_with_operator = stream.operator_output_column == line_indent;
         let spaces = if starts_with_operator
             || paren_spaces.saturating_sub(line_indent) <= self.options.max_continuation_indent

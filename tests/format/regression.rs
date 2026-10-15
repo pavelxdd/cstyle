@@ -8265,3 +8265,35 @@ fn a_return_type_holding_a_paren_group_or_attribute_is_neither_broken_nor_attach
         "__attribute__((malloc)) char *\nduplicate(const char *text);\n[[nodiscard]] int\nchecked(int value);\nstatic int other(int value);\n",
     );
 }
+
+#[test]
+fn a_comment_run_into_a_lone_brace_fills_with_a_tab_under_tab_indents() {
+    // Without a brace style, a comment after a lone `{` runs in at the
+    // block's body column, the fill written as the indent is.
+    let input = "void f()\n{\n    if (ready)\n    {   // note\n        value=0;\n    }\n    if (ready)\n    { /* note */\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--indent=tab=4"],
+        "void f()\n{\n\tif (ready)\n\t{\t// note\n\t\tvalue=0;\n\t}\n\tif (ready)\n\t{\t/* note */\n\t\tvalue=0;\n\t}\n}\n",
+    );
+    check(
+        input,
+        &["--indent=force-tab=4"],
+        "void f()\n{\n\tif (ready)\n\t{\t// note\n\t\tvalue=0;\n\t}\n\tif (ready)\n\t{\t/* note */\n\t\tvalue=0;\n\t}\n}\n",
+    );
+}
+
+#[test]
+fn a_leading_shift_aligns_with_the_first_operand_inside_a_padded_paren() {
+    let input = "void f()\n{\n    out << helper(first, (second\n                          << third));\n    mask = 1 << (((value & (size - 1))\n                  >> shift)\n                 + offset);\n}\n";
+    check(
+        input,
+        &["--pad-paren-in"],
+        "void f()\n{\n    out << helper( first, ( second\n                            << third ) );\n    mask = 1 << ( ( ( value & ( size - 1 ) )\n                    >> shift )\n                  + offset );\n}\n",
+    );
+    check(
+        input,
+        &["--pad-paren-out"],
+        "void f()\n{\n    out << helper (first, (second\n                           << third) );\n    mask = 1 << ( ( (value & (size - 1) )\n                    >> shift)\n                  + offset);\n}\n",
+    );
+}
