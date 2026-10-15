@@ -7674,6 +7674,12 @@ fn breaking_one_line_headers_keeps_blocks_on_lines_holding_other_statements() {
         &options,
         "void f()\n{\n    if (ready) {\n        value=0;\n    }\n}\n",
     );
+    // A statement broken off before the header leaves it alone on its line.
+    check(
+        "void f()\n{\n    if (ready) {value=1; if (other) {result=0; value=0;} count++; ready=0;}\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=1;\n        if (other) {\n            result=0;\n            value=0;\n        } count++;\n        ready=0;\n    }\n}\n",
+    );
 }
 
 #[test]

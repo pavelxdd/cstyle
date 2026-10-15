@@ -1409,8 +1409,9 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the header owning the block that opens at `open` shares its
-    /// source line with other statements: one ends right before the header,
-    /// or more than one ends outside the parens and blocks the line opens.
+    /// line with other statements: one kept on its output line ends right
+    /// before the header, or more than one ends outside the parens and
+    /// blocks its source line opens.
     fn header_block_shares_line_with_statements(&self, tokens: &[Token], open: usize) -> bool {
         let line_start = tokens[..open]
             .iter()
@@ -1427,10 +1428,17 @@ impl FormatEngine<'_> {
                     .previous_code_token(self.tree.groups.get(group).open)
             });
         }
+        // The statement must stay on the header's output line, not be
+        // broken off before it.
         let follows_statement = header
             .and_then(|header| self.tree.previous_code_token(header))
             .is_some_and(|before| {
-                before >= line_start && matches!(tokens[before], Token::Symbol(';' | ':'))
+                before >= line_start
+                    && matches!(tokens[before], Token::Symbol(';' | ':'))
+                    && self
+                        .current
+                        .tokens()
+                        .is_some_and(|span| span.first <= before)
             });
         if follows_statement {
             return true;

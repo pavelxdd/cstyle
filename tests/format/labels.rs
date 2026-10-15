@@ -652,3 +652,11 @@ fn a_label_first_in_an_indented_block_is_broken_from_its_statement() {
         );
     }
 }
+
+#[test]
+fn a_header_after_a_label_owns_the_block_it_opens() {
+    // `again: switch (c) {` opens the switch's block, not a block of the
+    // label: its case labels and body keep the switch's levels.
+    let input = "void f()\n{\n    while (x) {\nagain:  switch (c) {\n        case 1:\n            x();\n            break;\n        }\n    }\n}\n";
+    assert_eq!(format_args(input, &["--style=kr", "-o"]), input);
+}

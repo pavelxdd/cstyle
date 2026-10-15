@@ -266,8 +266,12 @@ impl FormatEngine<'_> {
                 preprocessor_directive(line.trimmed_start())
                     .is_some_and(|directive| !is_conditional_preprocessor(directive))
             });
-        let label_block =
-            semantic_kind == BraceSemanticKind::Command && case_header.is_none() && current_label();
+        // A label's own block follows the label; a header after the label
+        // owns the block it opens.
+        let label_block = semantic_kind == BraceSemanticKind::Command
+            && case_header.is_none()
+            && brace_header.is_none_or(|header| matches!(header.as_str(), "case" | "default"))
+            && current_label();
         let semantic_header = brace_header.and_then(|header| {
             self.layout
                 .frame_stack
