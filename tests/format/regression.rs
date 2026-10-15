@@ -8375,3 +8375,13 @@ fn a_label_kept_after_a_case_block_closer_opens_its_own_block() {
         "void f()\n{\n    switch (kind) {\n    case 1: {\n            value=0;\n            break;\n    } case 2: {\n            result=1;\n            break;\n    } default: done();\n    }\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_keeps_a_statement_on_a_label_kept_after_a_case_closer() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            break;\n            } default: done();\n        }\n    }\n",
+    );
+}

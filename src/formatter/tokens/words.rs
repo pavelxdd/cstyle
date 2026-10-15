@@ -50,7 +50,13 @@ impl FormatEngine<'_> {
             && self.current.trimmed_end().ends_with(':')
             && !self.current.trimmed_end().ends_with("::")
             && self.current.last_question().is_none()
-            && switch_cases::find_case_colon(self.current.trimmed_end()).is_none()
+            && switch_cases::find_case_colon(
+                self.current
+                    .trimmed()
+                    .trim_start_matches('}')
+                    .trimmed_start(),
+            )
+            .is_none()
             && !self.current.trimmed_start().starts_with('#')
             && self
                 .current
