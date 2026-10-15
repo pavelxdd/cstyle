@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::BraceType;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -368,6 +368,16 @@ impl FormatEngine<'_> {
         }
         // A comment or a statement kept after the brace ends its line first;
         // a header there pads as its own.
+        // A closing header a block comment keeps on the brace's line still
+        // takes the padding before it.
+        let comment_keeps_closing_header = matches!(next, Some(Token::Comment(CommentKind::Block, _)))
+            && self
+                .current
+                .active_token()
+                .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
+                .is_some_and(|index| {
+                    matches!(&self.tree.tokens[index], Token::Word(word) if is_break_blocks_closing_header(word))
+                });
         let line_goes_on = match next {
             Some(Token::Word(word)) => {
                 !(is_break_blocks_closing_header(word)
@@ -402,6 +412,12 @@ impl FormatEngine<'_> {
         {
             if line_goes_on && !self.current_is_blank() {
                 self.block_spacing.pending_one_line_block = true;
+                // Closers run into the line before take no padding there.
+                self.block_spacing.append_blank |= comment_keeps_closing_header
+                    && !matches!(
+                        self.options.brace_style,
+                        BraceStyle::Lisp | BraceStyle::Pico
+                    );
             } else {
                 self.block_spacing.append_blank = true;
             }
@@ -548,7 +564,20 @@ impl FormatEngine<'_> {
         // An empty block stays closed up to its closing header.
         let closed_empty_block = self.block_spacing.closed_empty_block;
         if let Some(after) = trimmed.strip_prefix('}') {
-            let next = leading_identifier(after.trimmed_start());
+            // The header may follow a comment after the brace.
+            let tokens = &self.tree.tokens;
+            let next = self
+                .output
+                .pending_tokens()
+                .filter(|span| matches!(tokens[span.first], Token::Symbol('}')))
+                .and_then(|span| {
+                    next_code_token(tokens, span.first + 1).filter(|&next| next <= span.last)
+                })
+                .and_then(|next| match &tokens[next] {
+                    Token::Word(word) => Some(word.as_str()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| leading_identifier(after.trimmed_start()));
             return self.options.break_closing_header_blocks
                 && !self.block_spacing.closed_empty_block
                 && is_break_blocks_closing_header(next);

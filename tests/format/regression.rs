@@ -8503,3 +8503,13 @@ fn indent_after_parens_continues_template_parameters_a_level_in() {
         "template <typename First,\n    typename Second>\nclass Pair\n{\n    First first;\n};\n",
     );
 }
+
+#[test]
+fn break_blocks_all_pads_a_closing_header_a_comment_parts_from_its_brace() {
+    let input = "void f()\n{\n    if (other) {\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks=all"],
+        "void f()\n{\n    if (other) {\n        value=1;\n\n    } /* last */ else {\n\n        value=2;\n    }\n}\n",
+    );
+}
