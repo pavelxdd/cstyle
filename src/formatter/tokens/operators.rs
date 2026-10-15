@@ -394,7 +394,14 @@ impl FormatEngine<'_> {
                 .is_some_and(|alias| alias.contains('='))
             && self.layout.line_state.template_angle_depth == 0
         {
-            self.emit_source_space();
+            if self.layout.previous == PreviousToken::OpenParen && self.options.pad_parens_inside {
+                self.pad_inside_paren_space();
+            } else if self.layout.previous == PreviousToken::OpenParen && self.options.unpad_parens
+            {
+                self.trim_current_end_horizontal_space();
+            } else {
+                self.emit_source_space();
+            }
             self.current.push_str(operator);
             self.emit_trailing_source_space();
             self.layout.command_state.observe_text(operator);

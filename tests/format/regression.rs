@@ -8625,3 +8625,43 @@ fn a_lambda_argument_opening_its_body_after_a_ternary_stands_at_the_statement() 
         "void f()\n{\n    result = ready ? first\n             : third;\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn an_alias_pointer_declarator_follows_the_inside_paren_options() {
+    let input = "using Callback = void (*)(int value);\nusing Handler = void (  &  )(int);\n";
+    check(
+        input,
+        &["--pad-paren-in"],
+        "using Callback = void ( * )( int value );\nusing Handler = void (  &  )( int );\n",
+    );
+    check(
+        input,
+        &["--pad-paren-in", "--unpad-paren"],
+        "using Callback = void ( * )( int value );\nusing Handler = void ( & )( int );\n",
+    );
+    check(
+        "using Callback = void ( * )(int value);\nusing Handler = void ( ^)(int);\n",
+        &["--unpad-paren"],
+        "using Callback = void (*)(int value);\nusing Handler = void (^)(int);\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_keeps_message_keywords_aligned_wherever_the_message_starts() {
+    let input = "@implementation Item\n- (void)update\n{\n    [self apply:value\n with:other];\n    result = [self apply:value\n with:other];\n}\n@end\n";
+    check(
+        input,
+        &["--indent-after-parens"],
+        "@implementation Item\n- (void)update\n{\n    [self apply:value\n          with:other];\n    result = [self apply:value\n                   with:other];\n}\n@end\n",
+    );
+}
+
+#[test]
+fn a_block_literal_brace_follows_the_style_at_file_scope_as_in_a_body() {
+    let input = "void (^handler)(int) = ^(int value) {\n    helper(value);\n};\nvoid f()\n{\n    void (^local)(int) = ^(int value) {\n        helper(value);\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void (^handler)(int) = ^(int value)\n{\n    helper(value);\n};\nvoid f()\n{\n    void (^local)(int) = ^(int value)\n    {\n        helper(value);\n    };\n}\n",
+    );
+}
