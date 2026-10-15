@@ -1946,9 +1946,13 @@ impl FormatEngine<'_> {
                 let code = self.output.code(index);
                 if previous_trimmed.starts_with("case ") || previous_trimmed.starts_with("default:")
                 {
-                    // Indented cases indent the brace closing a case block.
+                    // Indented cases indent the brace closing a case block,
+                    // and Ratliff closes a block at its body.
                     return Some(
-                        case_indent + usize::from(self.options.indent_cases) * indent_width,
+                        case_indent
+                            + (usize::from(self.options.indent_cases)
+                                + usize::from(self.options.brace_style == BraceStyle::Ratliff))
+                                * indent_width,
                     );
                 }
                 if previous_trimmed.starts_with('}') {

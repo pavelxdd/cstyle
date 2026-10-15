@@ -8141,3 +8141,13 @@ fn indented_labels_leave_a_run_in_brace_at_its_block() {
         "void f()\n{   if (ready)\n    {   again:\n        value=0;\n        goto again;\n    }\n}\n",
     );
 }
+
+#[test]
+fn ratliff_keeping_one_line_statements_leaves_a_commented_case_block_closer_at_its_body() {
+    // Ratliff closes a case block at its body, a comment after the closer
+    // and kept statements or not.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } // done\n    break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            } // done\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(input, &["--style=ratliff", "-o"], expected);
+}
