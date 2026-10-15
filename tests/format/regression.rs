@@ -8129,3 +8129,15 @@ fn lisp_break_blocks_keeps_an_else_with_its_if() {
         "void f() {\n    for (;;) {\n        if (ready) break;\n        else continue; }\n\n    x(); }\n",
     );
 }
+
+#[test]
+fn indented_labels_leave_a_run_in_brace_at_its_block() {
+    // The label run into a block's brace takes the brace's column with it,
+    // not the brace to the label's.
+    let input = "void f()\n{\n    if (ready) {\n    again:\n        value=0;\n        goto again;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann", "--indent-labels"],
+        "void f()\n{   if (ready)\n    {   again:\n        value=0;\n        goto again;\n    }\n}\n",
+    );
+}
