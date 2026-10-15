@@ -8492,3 +8492,14 @@ fn a_closer_kept_with_its_else_past_a_comment_stands_at_the_indented_brace() {
         "void f() {\n    if (other) {\n        value=1;\n        } /* last */ else {\n        value=2;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn indent_after_parens_continues_template_parameters_a_level_in() {
+    // A template's `<` continues as a paren does when parens indent.
+    let input = "template <typename First,\n          typename Second>\nclass Pair {\n    First first;\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    typename Second>\nclass Pair\n{\n    First first;\n};\n",
+    );
+}

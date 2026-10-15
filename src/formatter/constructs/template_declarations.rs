@@ -71,7 +71,12 @@ fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
     })
 }
 
-pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
+/// The indent of the line after a template head `line` leaves open: past
+/// the innermost `<`, or, when parens indent, a step in for each open `<`.
+pub(crate) fn template_continuation_indent_spaces(
+    line: &str,
+    angle_step: Option<usize>,
+) -> Option<usize> {
     let trimmed = line.trimmed_start();
     if !trimmed.starts_with("template") || angle_depth_delta(trimmed) <= 0 {
         return None;
@@ -89,6 +94,11 @@ pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
         } else {
             stack.pop();
         }
+    }
+    if let Some(step) = angle_step
+        && !stack.is_empty()
+    {
+        return Some(line.len() - trimmed.len() + stack.len() * step);
     }
     stack
         .into_iter()
@@ -213,14 +223,23 @@ impl FormatEngine<'_> {
         }
         let spaces = previous
             .and_then(|line| {
-                template_continuation_indent_spaces(line).or_else(|| {
-                    (source_column == 0)
-                        .then(|| leading_visual_width(line, self.options.tab_width))
-                        .filter(|&spaces| spaces > 0)
-                })
+                template_continuation_indent_spaces(line, self.template_angle_step()).or_else(
+                    || {
+                        (source_column == 0)
+                            .then(|| leading_visual_width(line, self.options.tab_width))
+                            .filter(|&spaces| spaces > 0)
+                    },
+                )
             })
             .unwrap_or(source_column);
         self.layout.continuation_indent.set_next_line_spaces(spaces);
+    }
+
+    /// The step each open `<` of a template head adds when parens indent.
+    pub(crate) fn template_angle_step(&self) -> Option<usize> {
+        self.options
+            .indent_after_parens
+            .then(|| self.options.continuation_indent * self.options.indent_width)
     }
 
     pub(crate) fn template_continuation_active(&self) -> bool {
@@ -279,7 +298,9 @@ impl FormatEngine<'_> {
         {
             self.layout.template_declaration.uses_source_indent = true;
             self.layout.template_declaration.angle_depth = angle_delta;
-            if let Some(spaces) = template_continuation_indent_spaces(line) {
+            if let Some(spaces) =
+                template_continuation_indent_spaces(line, self.template_angle_step())
+            {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
         } else if self.layout.template_declaration.uses_source_indent {
