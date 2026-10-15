@@ -8088,3 +8088,25 @@ fn run_in_styles_attaching_closing_while_keep_it_after_a_one_line_do_block() {
         "void f()\n{   if (ready) { value=0; }\n    else { result=0; }\n    do { value=0; } while (ready);\n    x(); }\n",
     );
 }
+
+#[test]
+fn break_blocks_leaves_a_kept_block_no_header_owns_unpadded() {
+    // Only a header's block is padded; a bare, label or case block is not.
+    let input = "void f()\n{\n    done: { value=0; }\n    value=0;\n    { value=1; }\n    value=2;\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        { value=0; }\n        break;\n    }\n    x();\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks", "--break-blocks"],
+        "void f()\n{\ndone:\n    { value=0; }\n    value=0;\n    { value=1; }\n    value=2;\n\n    switch (kind) {\n    case 1:\n    { value=0; }\n    break;\n\n    case 2:\n    { value=0; }\n    break;\n    }\n\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_kept_else_block_on_a_line_of_its_own() {
+    let input =
+        "void f()\n{\n    if (ready)\n    { value=0; }\n    else\n    { result=0; }\n    x();\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks", "--break-blocks"],
+        "void f()\n{\n    if (ready)\n    { value=0; }\n    else\n    { result=0; }\n\n    x();\n}\n",
+    );
+}

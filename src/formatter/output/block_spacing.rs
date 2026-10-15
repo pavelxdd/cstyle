@@ -314,8 +314,16 @@ impl FormatEngine<'_> {
         }
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
+        // Only a header's block is padded.
+        let header_block = self
+            .block_spacing
+            .active_header
+            .as_deref()
+            .is_some_and(|header| !matches!(header, "case" | "default"));
         self.block_spacing.pending_one_line_block =
-            brace_type == BraceType::Command && !self.block_spacing.header_follows_statement;
+            matches!(brace_type, BraceType::Command | BraceType::NonStatement)
+                && header_block
+                && !self.block_spacing.header_follows_statement;
         self.clear_block_spacing_header();
     }
 
