@@ -8927,7 +8927,8 @@ fn a_lambda_inside_a_lambda_body_breaks_its_brace_as_any_lambda() {
 
 #[test]
 fn a_structured_binding_reference_aligns_as_any_reference_declarator() {
-    let input = "void f()\n{\n    for (auto &[key, value] : items) {\n        total += value;\n    }\n}\n";
+    let input =
+        "void f()\n{\n    for (auto &[key, value] : items) {\n        total += value;\n    }\n}\n";
     check(
         input,
         &["--align-pointer=type"],
