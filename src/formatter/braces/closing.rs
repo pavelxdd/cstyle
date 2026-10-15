@@ -813,16 +813,16 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// Without a brace style, a closing header stays after a `}` that begins
-    /// its source line; after a `}` that follows code it takes a line of its
-    /// own unless one-line statements are kept.
+    /// Without a brace style, a closing header the source set after its `}`
+    /// stays there, whether or not the block before it is expanded; after a
+    /// `}` the formatter added it takes a line of its own unless one-line
+    /// statements are kept.
     fn closing_header_stays_on_brace_line(&self) -> bool {
         self.options.keeps_multi_statement_line()
-            || self.token_input.token_begins_source_line
-                && self
-                    .current
-                    .active_token()
-                    .is_some_and(|brace| matches!(self.tree.tokens[brace], Token::Symbol('}')))
+            || self
+                .current
+                .active_token()
+                .is_some_and(|brace| matches!(self.tree.tokens[brace], Token::Symbol('}')))
     }
 
     pub(super) fn should_attach_closing_header(&self, next: Option<&Token>) -> bool {

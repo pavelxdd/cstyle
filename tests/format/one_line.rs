@@ -341,7 +341,7 @@ fn break_one_line_headers_overrides_added_one_line_braces() {
 }
 
 #[test]
-fn break_one_line_headers_breaks_following_closing_header() {
+fn break_one_line_headers_keeps_a_closing_header_on_its_source_brace() {
     let mut options = FormatOptions::default();
     options.break_one_line_blocks = false;
     options.break_one_line_headers = true;
@@ -355,8 +355,7 @@ fn break_one_line_headers_breaks_following_closing_header() {
             "void run() {",
             "    if(alpha) {",
             "        one();",
-            "    }",
-            "    else {",
+            "    } else {",
             "        two();",
             "    }",
             "}",
@@ -459,7 +458,7 @@ fn allman_detaches_while_after_empty_do_body() {
 }
 
 #[test]
-fn default_style_generated_do_body_detaches_while() {
+fn default_style_keeps_while_on_an_expanded_do_body_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--mode=c".to_owned()]).expect("valid options");
 
@@ -484,8 +483,7 @@ fn default_style_generated_do_body_detaches_while() {
             "    } while (--count);",
             "    do {",
             "        call();",
-            "    }",
-            "    while (--count);",
+            "    } while (--count);",
             "}",
         )
     );
@@ -744,13 +742,13 @@ fn keep_one_line_statements_splits_members_when_struct_block_expands() {
 }
 
 #[test]
-fn default_style_breaks_else_when_one_line_block_expands() {
+fn default_style_keeps_else_on_an_expanded_one_line_block_brace() {
     assert_eq!(
         format_exact(
             "void f() {\n    if(x){y();}else{v();}\n}\n",
             &FormatOptions::default(),
         ),
-        "void f() {\n    if(x) {\n        y();\n    }\n    else {\n        v();\n    }\n}\n",
+        "void f() {\n    if(x) {\n        y();\n    } else {\n        v();\n    }\n}\n",
     );
 }
 

@@ -91,7 +91,7 @@ fn string_argument_after_split_else_case_call_aligns_to_call_open_paren() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(t){\n    switch(value){\n      case ONE: {\n        if(ok){\n          call(stderr,\n               \"text\\n\", value);\n        }\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(t) {\n            switch(value) {\n            case ONE: {\n                if(ok) {\n                    call(stderr,\n                         \"text\\n\", value);\n                }\n                break;\n            }\n            }\n        }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(t) {\n            switch(value) {\n            case ONE: {\n                if(ok) {\n                    call(stderr,\n                         \"text\\n\", value);\n                }\n                break;\n            }\n            }\n        }\n}\n",
     );
 }
 
@@ -154,7 +154,7 @@ fn preprocessor_branches_inside_split_else_branch_keep_nested_block_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if( a ){ first(); }else\n#endif\n\n  if( n ){\n    if( arg ){\n      set();\n    }else{\n      usage();\n      rc = 1;\n    }\n  }else\n\n  if( open ){\n    int mode = 0;\n    if( safe ) flags = READ;\n\n    for(i=1; i<count; i++){\n      const char *item = args[i];\n#ifndef OMIT_OPTION\n      if( option(item) ){\n        mode = 1;\n      }else\n#endif\n      if( item[0]=='-' ){\n        error();\n        rc = 1;\n        goto done;\n      }else if( name ){\n        extra();\n        rc = 1;\n        goto done;\n      }else{\n        name = item;\n      }\n    }\n\n    close_all();\n    handle = 0;\n\n    if( name || mode==HEX ){\n      if( fresh && name && !safe ){\n        if( prefix(name) ){\n          char *removed = uri(name);\n          check(removed);\n          delete(removed);\n          free(removed);\n        }else{\n          delete(name);\n        }\n      }\n#ifndef OMIT_OPTION\n      if( safe\n       && mode!=HEX\n       && name\n       && compare(name,\":temporary:\")!=0\n      ){\n        fail();\n      }\n#else\n      /* comment */\n#endif\n      if( name ){\n        new_name = copy(name);\n        check(new_name);\n      }else{\n        new_name = 0;\n      }\n      handle_name = new_name;\n      open_handle();\n      if( handle==0 ){\n        print();\n        free(new_name);\n      }else{\n        keep = new_name;\n      }\n    }\n  }\ndone:\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    }\n    else\n#endif\n\n        if( n ) {\n            if( arg ) {\n                set();\n            } else {\n                usage();\n                rc = 1;\n            }\n        } else\n\n            if( open ) {\n                int mode = 0;\n                if( safe ) flags = READ;\n\n                for(i=1; i<count; i++) {\n                    const char *item = args[i];\n#ifndef OMIT_OPTION\n                    if( option(item) ) {\n                        mode = 1;\n                    } else\n#endif\n                        if( item[0]=='-' ) {\n                            error();\n                            rc = 1;\n                            goto done;\n                        } else if( name ) {\n                            extra();\n                            rc = 1;\n                            goto done;\n                        } else {\n                            name = item;\n                        }\n                }\n\n                close_all();\n                handle = 0;\n\n                if( name || mode==HEX ) {\n                    if( fresh && name && !safe ) {\n                        if( prefix(name) ) {\n                            char *removed = uri(name);\n                            check(removed);\n                            delete(removed);\n                            free(removed);\n                        } else {\n                            delete(name);\n                        }\n                    }\n#ifndef OMIT_OPTION\n                    if( safe\n                            && mode!=HEX\n                            && name\n                            && compare(name,\":temporary:\")!=0\n                      ) {\n                        fail();\n                    }\n#else\n                    /* comment */\n#endif\n                    if( name ) {\n                        new_name = copy(name);\n                        check(new_name);\n                    } else {\n                        new_name = 0;\n                    }\n                    handle_name = new_name;\n                    open_handle();\n                    if( handle==0 ) {\n                        print();\n                        free(new_name);\n                    } else {\n                        keep = new_name;\n                    }\n                }\n            }\ndone:\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    } else\n#endif\n\n        if( n ) {\n            if( arg ) {\n                set();\n            } else {\n                usage();\n                rc = 1;\n            }\n        } else\n\n            if( open ) {\n                int mode = 0;\n                if( safe ) flags = READ;\n\n                for(i=1; i<count; i++) {\n                    const char *item = args[i];\n#ifndef OMIT_OPTION\n                    if( option(item) ) {\n                        mode = 1;\n                    } else\n#endif\n                        if( item[0]=='-' ) {\n                            error();\n                            rc = 1;\n                            goto done;\n                        } else if( name ) {\n                            extra();\n                            rc = 1;\n                            goto done;\n                        } else {\n                            name = item;\n                        }\n                }\n\n                close_all();\n                handle = 0;\n\n                if( name || mode==HEX ) {\n                    if( fresh && name && !safe ) {\n                        if( prefix(name) ) {\n                            char *removed = uri(name);\n                            check(removed);\n                            delete(removed);\n                            free(removed);\n                        } else {\n                            delete(name);\n                        }\n                    }\n#ifndef OMIT_OPTION\n                    if( safe\n                            && mode!=HEX\n                            && name\n                            && compare(name,\":temporary:\")!=0\n                      ) {\n                        fail();\n                    }\n#else\n                    /* comment */\n#endif\n                    if( name ) {\n                        new_name = copy(name);\n                        check(new_name);\n                    } else {\n                        new_name = 0;\n                    }\n                    handle_name = new_name;\n                    open_handle();\n                    if( handle==0 ) {\n                        print();\n                        free(new_name);\n                    } else {\n                        keep = new_name;\n                    }\n                }\n            }\ndone:\n}\n",
     );
 }
 
@@ -163,7 +163,7 @@ fn preprocessor_else_body_in_split_else_branch_keeps_branch_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if( a ){ first(); }else\n#endif\n\n  if( b ){\n#ifndef OMIT_CHECK\n    if( safe\n     && mode\n     && name\n    ){\n      fail();\n    }\n#else\n    /* comment */\n#endif\n    if( name ){\n      open();\n    }else{\n      close();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    }\n    else\n#endif\n\n        if( b ) {\n#ifndef OMIT_CHECK\n            if( safe\n                    && mode\n                    && name\n              ) {\n                fail();\n            }\n#else\n            /* comment */\n#endif\n            if( name ) {\n                open();\n            } else {\n                close();\n            }\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    } else\n#endif\n\n        if( b ) {\n#ifndef OMIT_CHECK\n            if( safe\n                    && mode\n                    && name\n              ) {\n                fail();\n            }\n#else\n            /* comment */\n#endif\n            if( name ) {\n                open();\n            } else {\n                close();\n            }\n        }\n}\n",
     );
 }
 
@@ -172,7 +172,7 @@ fn assignment_logical_continuation_in_deep_split_else_keeps_value_indent() {
     check(
         "void f(void){\n  if(a){x();}else\n\n  if(b){x();}else\n\n  if(c){x();}else\n\n  if( schema ){\n    int is_schema = same(name, \"one\")==0\n          || same(name, \"two\")==0\n          || same(name, \"three\")==0;\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n        if(b) {\n            x();\n        }\n        else\n\n            if(c) {\n                x();\n            }\n            else\n\n                if( schema ) {\n                    int is_schema = same(name, \"one\")==0\n                                    || same(name, \"two\")==0\n                                    || same(name, \"three\")==0;\n                    call();\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n        if(b) {\n            x();\n        } else\n\n            if(c) {\n                x();\n            } else\n\n                if( schema ) {\n                    int is_schema = same(name, \"one\")==0\n                                    || same(name, \"two\")==0\n                                    || same(name, \"three\")==0;\n                    call();\n                }\n}\n",
     );
 }
 
@@ -181,7 +181,7 @@ fn statement_after_assignment_logical_continuation_in_split_else_keeps_block_ind
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( schema ){\n    int is_schema = same(name, \"one\")==0\n                   || same(name, \"two\")==0;\n    if( is_schema ){\n      print(out,\n            \"text\",\n            name\n           );\n    }\n    int glob = find(name, '*') != 0 ||\n               find(name, '?') != 0;\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( schema ) {\n            int is_schema = same(name, \"one\")==0\n                            || same(name, \"two\")==0;\n            if( is_schema ) {\n                print(out,\n                      \"text\",\n                      name\n                     );\n            }\n            int glob = find(name, '*') != 0 ||\n                       find(name, '?') != 0;\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( schema ) {\n            int is_schema = same(name, \"one\")==0\n                            || same(name, \"two\")==0;\n            if( is_schema ) {\n                print(out,\n                      \"text\",\n                      name\n                     );\n            }\n            int glob = find(name, '*') != 0 ||\n                       find(name, '?') != 0;\n        }\n}\n",
     );
 }
 
@@ -190,7 +190,7 @@ fn conditional_preprocessor_block_after_split_else_keeps_chain_indent() {
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    y();\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    y();\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    y();\n                }\n}\n",
     );
 }
 
@@ -199,7 +199,7 @@ fn operator_continuation_in_conditional_preprocessor_split_else_keeps_chain_inde
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n      != OK ){\n      value = 0;\n    }else{\n      value = 1;\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n                            != OK ) {\n                        value = 0;\n                    } else {\n                        value = 1;\n                    }\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n                            != OK ) {\n                        value = 0;\n                    } else {\n                        value = 1;\n                    }\n                }\n}\n",
     );
 }
 
@@ -208,7 +208,7 @@ fn body_after_multiline_else_if_in_conditional_split_else_keeps_header_body_inde
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    if( one ){\n      first();\n    }else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n           || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n         ){\n      value = get(z);\n    }else if( same(z,\"debug\")==0 ){\n      debug = 1;\n    }else{\n      fail();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( one ) {\n                        first();\n                    } else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n                               || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n                             ) {\n                        value = get(z);\n                    } else if( same(z,\"debug\")==0 ) {\n                        debug = 1;\n                    } else {\n                        fail();\n                    }\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( one ) {\n                        first();\n                    } else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n                               || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n                             ) {\n                        value = get(z);\n                    } else if( same(z,\"debug\")==0 ) {\n                        debug = 1;\n                    } else {\n                        fail();\n                    }\n                }\n}\n",
     );
 }
 
@@ -549,7 +549,7 @@ fn else_if_after_guarded_braceless_else_keeps_enclosing_block_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( prompt ){\n    for(i=0; i<n; i++){\n      if( option ){\n        set();\n      }else\n#ifndef COLOR\n      if( color ){\n        on();\n      }else\n#endif\n      if( dash ){\n        no();\n      }else{\n        bad();\n      }\n    }else if( extra ){\n      fail();\n    }else{\n      save();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( prompt ) {\n            for(i=0; i<n; i++) {\n                if( option ) {\n                    set();\n                } else\n#ifndef COLOR\n                    if( color ) {\n                        on();\n                    } else\n#endif\n                        if( dash ) {\n                            no();\n                        } else {\n                            bad();\n                        }\n            } else if( extra ) {\n                fail();\n            } else {\n                save();\n            }\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( prompt ) {\n            for(i=0; i<n; i++) {\n                if( option ) {\n                    set();\n                } else\n#ifndef COLOR\n                    if( color ) {\n                        on();\n                    } else\n#endif\n                        if( dash ) {\n                            no();\n                        } else {\n                            bad();\n                        }\n            } else if( extra ) {\n                fail();\n            } else {\n                save();\n            }\n        }\n}\n",
     );
 }
 
@@ -558,7 +558,7 @@ fn continuation_after_split_else_endif_keeps_branch_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n#ifndef OMIT_BRANCH\n  if( r ){\n    call();\n  }else\n#endif\n\n  if( c=='s' &&\n      (same(arg, \"one\")==0 ||\n       same(arg, \"two\")==0)\n    ){\n    open(\n      arg, value\n    );\n  }else\n\n  if( next ){\n    next();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n#ifndef OMIT_BRANCH\n        if( r ) {\n            call();\n        } else\n#endif\n\n            if( c=='s' &&\n                    (same(arg, \"one\")==0 ||\n                     same(arg, \"two\")==0)\n              ) {\n                open(\n                    arg, value\n                );\n            } else\n\n                if( next ) {\n                    next();\n                }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n#ifndef OMIT_BRANCH\n        if( r ) {\n            call();\n        } else\n#endif\n\n            if( c=='s' &&\n                    (same(arg, \"one\")==0 ||\n                     same(arg, \"two\")==0)\n              ) {\n                open(\n                    arg, value\n                );\n            } else\n\n                if( next ) {\n                    next();\n                }\n}\n",
     );
 }
 
@@ -567,7 +567,7 @@ fn endif_before_else_if_in_split_else_body_keeps_enclosing_if_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( read ){\n    if( pipe ){\n#ifdef OMIT\n      error();\n#else\n      open();\n      if( ok ){\n        read_pipe();\n      }else{\n        fail();\n      }\n#endif\n    }else if( file ){\n      read_file();\n    }else{\n      none();\n    }\n    done();\n  }else\n\n  if( next ){\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( read ) {\n            if( pipe ) {\n#ifdef OMIT\n                error();\n#else\n                open();\n                if( ok ) {\n                    read_pipe();\n                } else {\n                    fail();\n                }\n#endif\n            } else if( file ) {\n                read_file();\n            } else {\n                none();\n            }\n            done();\n        } else\n\n            if( next ) {\n                call();\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( read ) {\n            if( pipe ) {\n#ifdef OMIT\n                error();\n#else\n                open();\n                if( ok ) {\n                    read_pipe();\n                } else {\n                    fail();\n                }\n#endif\n            } else if( file ) {\n                read_file();\n            } else {\n                none();\n            }\n            done();\n        } else\n\n            if( next ) {\n                call();\n            }\n}\n",
     );
 }
 
@@ -576,7 +576,7 @@ fn nested_condition_operator_in_split_else_aligns_to_inner_paren() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( c=='i' && (same(arg, \"one\")==0\n       || same(arg, \"two\")==0)\n  ){\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( c=='i' && (same(arg, \"one\")==0\n                       || same(arg, \"two\")==0)\n          ) {\n            call();\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( c=='i' && (same(arg, \"one\")==0\n                       || same(arg, \"two\")==0)\n          ) {\n            call();\n        }\n}\n",
     );
 }
 
@@ -696,25 +696,21 @@ fn else_if_body_after_switch_in_split_else_keeps_branch_indent() {
 #if FEATURE
     if( a0 ) {
         call0();
-    }
-    else
+    } else
 #endif
 
         if( a1 ) {
             call1();
-        }
-        else
+        } else
 
             if( a2 ) {
                 call2();
-            }
-            else
+            } else
 
 #if FEATURE
                 if( a3 ) {
                     call3();
-                }
-                else
+                } else
 #endif
 
                     if( b ) {
@@ -821,7 +817,7 @@ fn preprocessor_branch_initializer_rows_in_split_else_keep_row_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    static const struct {\n      const char *name;\n      int code;\n    } items[] = {\n      {\"one\",1},\n#ifdef FEATURE\n      {\"two\",2},\n#endif\n      {\"three\",3},\n    };\n    done();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                static const struct {\n                    const char *name;\n                    int code;\n                } items[] = {\n                    {\"one\",1},\n#ifdef FEATURE\n                    {\"two\",2},\n#endif\n                    {\"three\",3},\n                };\n                done();\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                static const struct {\n                    const char *name;\n                    int code;\n                } items[] = {\n                    {\"one\",1},\n#ifdef FEATURE\n                    {\"two\",2},\n#endif\n                    {\"three\",3},\n                };\n                done();\n            }\n}\n",
     );
 }
 
@@ -839,7 +835,7 @@ fn statement_after_multiline_condition_in_deep_split_else_keeps_branch_indent() 
     check(
         "void f(void){\n#if FEATURE\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#if FEATURE\n  if( a3 ){ call3(); }else\n#endif\n\n  if( b ){\n    if( value[0]=='-'\n     && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n     && n>=4\n    ){\n      x = 1;\n    }\n\n    /* comment */\n    if( same(cmd,\"help\")==0 ){\n      call();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( b ) {\n                        if( value[0]=='-'\n                                && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n                                && n>=4\n                          ) {\n                            x = 1;\n                        }\n\n                        /* comment */\n                        if( same(cmd,\"help\")==0 ) {\n                            call();\n                        }\n                    }\n}\n",
+        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( b ) {\n                        if( value[0]=='-'\n                                && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n                                && n>=4\n                          ) {\n                            x = 1;\n                        }\n\n                        /* comment */\n                        if( same(cmd,\"help\")==0 ) {\n                            call();\n                        }\n                    }\n}\n",
     );
 }
 
@@ -848,7 +844,7 @@ fn switch_cases_in_deep_split_else_keep_case_body_indent() {
     check(
         "void f(void){\n#if FEATURE\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#if FEATURE\n  if( a3 ){ call3(); }else\n#endif\n\n  if( b ){\n    if( bad ){\n      error();\n    }else{\n      switch(value){\n        case ONE: {\n          if( n!=2 ) break;\n          ok = 1;\n          break;\n        }\n        case TWO: {\n          int x;\n          if( n!=3 ) break;\n          x = value();\n          if( x ){\n            use(x);\n          }\n          ok = 2;\n          break;\n        }\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( b ) {\n                        if( bad ) {\n                            error();\n                        } else {\n                            switch(value) {\n                            case ONE: {\n                                if( n!=2 ) break;\n                                ok = 1;\n                                break;\n                            }\n                            case TWO: {\n                                int x;\n                                if( n!=3 ) break;\n                                x = value();\n                                if( x ) {\n                                    use(x);\n                                }\n                                ok = 2;\n                                break;\n                            }\n                            }\n                        }\n                    }\n}\n",
+        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( b ) {\n                        if( bad ) {\n                            error();\n                        } else {\n                            switch(value) {\n                            case ONE: {\n                                if( n!=2 ) break;\n                                ok = 1;\n                                break;\n                            }\n                            case TWO: {\n                                int x;\n                                if( n!=3 ) break;\n                                x = value();\n                                if( x ) {\n                                    use(x);\n                                }\n                                ok = 2;\n                                break;\n                            }\n                            }\n                        }\n                    }\n}\n",
     );
 }
 
@@ -857,7 +853,7 @@ fn local_struct_in_switch_case_after_split_else_keeps_case_body_indent() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n\n      /* comment */\n      case ONE: {\n        static const struct {\n          int id;\n          const char *name;\n        } items[] = {\n          {1, \"one\"},\n          {2, \"two\"},\n        };\n        done();\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n\n                /* comment */\n                case ONE: {\n                    static const struct {\n                        int id;\n                        const char *name;\n                    } items[] = {\n                        {1, \"one\"},\n                        {2, \"two\"},\n                    };\n                    done();\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n\n                /* comment */\n                case ONE: {\n                    static const struct {\n                        int id;\n                        const char *name;\n                    } items[] = {\n                        {1, \"one\"},\n                        {2, \"two\"},\n                    };\n                    done();\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -866,7 +862,7 @@ fn statement_after_multiline_call_in_case_after_split_else_keeps_block_indent() 
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        if( use ){\n          int jj;\n          if( jj>=count ){\n            print(err,\n                  \"Error: %s\\n\", text);\n            puts(\"one\", err);\n            for(jj=0; jj<count; jj++){\n              print(err, \" %s\", labels[jj]);\n            }\n            puts(\"\\n\", err);\n            rc = 1;\n            goto done;\n          }\n        }\n        break;\n      }\n    }\n  }\ndone:\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    if( use ) {\n                        int jj;\n                        if( jj>=count ) {\n                            print(err,\n                                  \"Error: %s\\n\", text);\n                            puts(\"one\", err);\n                            for(jj=0; jj<count; jj++) {\n                                print(err, \" %s\", labels[jj]);\n                            }\n                            puts(\"\\n\", err);\n                            rc = 1;\n                            goto done;\n                        }\n                    }\n                    break;\n                }\n                }\n            }\ndone:\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    if( use ) {\n                        int jj;\n                        if( jj>=count ) {\n                            print(err,\n                                  \"Error: %s\\n\", text);\n                            puts(\"one\", err);\n                            for(jj=0; jj<count; jj++) {\n                                print(err, \" %s\", labels[jj]);\n                            }\n                            puts(\"\\n\", err);\n                            rc = 1;\n                            goto done;\n                        }\n                    }\n                    break;\n                }\n                }\n            }\ndone:\n}\n",
     );
 }
 
@@ -875,7 +871,7 @@ fn commented_struct_members_in_switch_case_after_split_else_keep_case_body_inden
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        static const struct {\n          unsigned int mask;    /* Mask */\n          unsigned int show;  /* Display */\n          const char *name;   /* Name */\n        } items[] = {\n          { 1, 1, \"one\" },\n        };\n        unsigned int cur;\n        unsigned int next;\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        unsigned int mask;    /* Mask */\n                        unsigned int show;  /* Display */\n                        const char *name;   /* Name */\n                    } items[] = {\n                        { 1, 1, \"one\" },\n                    };\n                    unsigned int cur;\n                    unsigned int next;\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        unsigned int mask;    /* Mask */\n                        unsigned int show;  /* Display */\n                        const char *name;   /* Name */\n                    } items[] = {\n                        { 1, 1, \"one\" },\n                    };\n                    unsigned int cur;\n                    unsigned int next;\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -884,7 +880,7 @@ fn long_initializer_in_switch_case_after_split_else_keeps_case_body_indent() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        static const struct {\n          int id;\n        } items[] = {\n          {1},\n          {2},\n          {3},\n          {4},\n          {5},\n          {6},\n          {7},\n          {8},\n          {9},\n          {10},\n          {11},\n          {12},\n          {13},\n          {14},\n          {15},\n          {16},\n          {17},\n          {18},\n          {19},\n          {20},\n          {21},\n          {22},\n          {23},\n          {24},\n          {25},\n          {26},\n          {27},\n          {28},\n          {29},\n          {30},\n          {31},\n          {32},\n          {33},\n          {34},\n          {35},\n        };\n        for(i=0; i<n; i++){\n          if(i==0){\n            one();\n          }else if(i==1){\n            two();\n          }else{\n            three();\n          }\n        }\n        break;\n      }\n      /* next */\n      case TWO: {\n        if(flag){\n          call(arg,\n               value);\n          done();\n        }\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        int id;\n                    } items[] = {\n                        {1},\n                        {2},\n                        {3},\n                        {4},\n                        {5},\n                        {6},\n                        {7},\n                        {8},\n                        {9},\n                        {10},\n                        {11},\n                        {12},\n                        {13},\n                        {14},\n                        {15},\n                        {16},\n                        {17},\n                        {18},\n                        {19},\n                        {20},\n                        {21},\n                        {22},\n                        {23},\n                        {24},\n                        {25},\n                        {26},\n                        {27},\n                        {28},\n                        {29},\n                        {30},\n                        {31},\n                        {32},\n                        {33},\n                        {34},\n                        {35},\n                    };\n                    for(i=0; i<n; i++) {\n                        if(i==0) {\n                            one();\n                        } else if(i==1) {\n                            two();\n                        } else {\n                            three();\n                        }\n                    }\n                    break;\n                }\n                /* next */\n                case TWO: {\n                    if(flag) {\n                        call(arg,\n                             value);\n                        done();\n                    }\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        int id;\n                    } items[] = {\n                        {1},\n                        {2},\n                        {3},\n                        {4},\n                        {5},\n                        {6},\n                        {7},\n                        {8},\n                        {9},\n                        {10},\n                        {11},\n                        {12},\n                        {13},\n                        {14},\n                        {15},\n                        {16},\n                        {17},\n                        {18},\n                        {19},\n                        {20},\n                        {21},\n                        {22},\n                        {23},\n                        {24},\n                        {25},\n                        {26},\n                        {27},\n                        {28},\n                        {29},\n                        {30},\n                        {31},\n                        {32},\n                        {33},\n                        {34},\n                        {35},\n                    };\n                    for(i=0; i<n; i++) {\n                        if(i==0) {\n                            one();\n                        } else if(i==1) {\n                            two();\n                        } else {\n                            three();\n                        }\n                    }\n                    break;\n                }\n                /* next */\n                case TWO: {\n                    if(flag) {\n                        call(arg,\n                             value);\n                        done();\n                    }\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -893,14 +889,14 @@ fn long_preprocessor_split_else_chain_keeps_branch_indent() {
     let depth = 64;
     let mut input = String::from("void f(void){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -917,14 +913,14 @@ fn multiline_call_in_switch_case_after_long_split_else_keeps_call_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -947,14 +943,14 @@ fn long_split_else_preprocessor_case_keeps_post_while_statement_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -986,14 +982,14 @@ fn long_split_else_case_keeps_statement_after_braceless_break_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1016,14 +1012,14 @@ fn long_split_else_nested_case_call_keeps_following_statement_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1047,14 +1043,14 @@ fn call_argument_after_comma_in_case_after_long_split_else_aligns_to_call_paren(
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1077,14 +1073,14 @@ fn argument_after_string_literal_in_case_call_aligns_to_string_argument() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1107,14 +1103,14 @@ fn adjacent_string_call_in_case_after_long_split_else_keeps_string_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1137,14 +1133,14 @@ fn adjacent_string_call_over_max_in_case_after_long_split_else_uses_block_contin
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1166,14 +1162,14 @@ fn assigned_string_call_close_after_long_split_else_aligns_to_value_column() {
     let depth = 8;
     let mut input = String::from("void f(void){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1195,14 +1191,14 @@ fn call_argument_after_line_comment_string_in_long_split_else_aligns_to_call_par
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1223,14 +1219,14 @@ fn macro_string_call_argument_after_long_split_else_aligns_to_call_paren() {
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1251,14 +1247,14 @@ fn condition_sibling_operator_after_nested_group_in_long_split_else_keeps_group_
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1279,14 +1275,14 @@ fn call_close_after_string_in_case_after_long_split_else_aligns_to_call_paren() 
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1309,14 +1305,14 @@ fn statement_after_cast_call_in_case_after_long_split_else_keeps_case_body_inden
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1339,14 +1335,14 @@ fn block_comment_in_switch_case_after_long_split_else_keeps_case_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1367,14 +1363,14 @@ fn switch_case_after_long_split_else_keeps_case_indent_past_lookback() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1395,14 +1391,14 @@ fn deep_switch_case_after_long_split_else_keeps_case_body_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1460,7 +1456,7 @@ fn multiline_call_argument_after_string_in_deep_split_else_keeps_call_indent() {
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#ifndef OMIT_X\n  if( a3 ){ call3(); }else\n#endif\n\n  if( a4 ){\n    if( safe ){\n      print(out,\n            \"Cannot run command such as \\\"%s\\\" here\\n\",\n            arg[0]);\n      rc = 1;\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#ifndef OMIT_X\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( a4 ) {\n                        if( safe ) {\n                            print(out,\n                                  \"Cannot run command such as \\\"%s\\\" here\\n\",\n                                  arg[0]);\n                            rc = 1;\n                        }\n                    }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#ifndef OMIT_X\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( a4 ) {\n                        if( safe ) {\n                            print(out,\n                                  \"Cannot run command such as \\\"%s\\\" here\\n\",\n                                  arg[0]);\n                            rc = 1;\n                        }\n                    }\n}\n",
     );
 }
 
@@ -1469,7 +1465,7 @@ fn close_paren_after_adjacent_string_call_in_split_else_keeps_call_indent() {
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ first(); }else\n#endif\n\n  if( a1 ){ second(); }else\n\n  if( b ){\n    make(out,\n         \"alpha\\n\"\n         \"beta\\n\"\n        );\n    if( flag ){\n      call();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            second();\n        }\n        else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( flag ) {\n                    call();\n                }\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    } else\n#endif\n\n        if( a1 ) {\n            second();\n        } else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( flag ) {\n                    call();\n                }\n            }\n}\n",
     );
 }
 
@@ -1478,7 +1474,7 @@ fn statement_after_adjacent_string_call_sequence_in_split_else_keeps_block_inden
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ first(); }else\n#endif\n\n  if( a1 ){ second(); }else\n\n  if( b ){\n    make(out,\n         \"alpha\\n\"\n         \"beta\\n\"\n        );\n    if( expr ){\n      append(out,\n             \"gamma\\n\", sep);\n      sep = \"AND\";\n    }\n    if( flag ){\n      append(out, \"delta\", sep);\n    }\n    append(out, \"tail\");\n\n    /* comment */\n    if( debug ){\n      print();\n    }else{\n      run();\n    }\n    free(out);\n  }else\n\n  if( c ){\n    next();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            second();\n        }\n        else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( expr ) {\n                    append(out,\n                           \"gamma\\n\", sep);\n                    sep = \"AND\";\n                }\n                if( flag ) {\n                    append(out, \"delta\", sep);\n                }\n                append(out, \"tail\");\n\n                /* comment */\n                if( debug ) {\n                    print();\n                } else {\n                    run();\n                }\n                free(out);\n            } else\n\n                if( c ) {\n                    next();\n                }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    } else\n#endif\n\n        if( a1 ) {\n            second();\n        } else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( expr ) {\n                    append(out,\n                           \"gamma\\n\", sep);\n                    sep = \"AND\";\n                }\n                if( flag ) {\n                    append(out, \"delta\", sep);\n                }\n                append(out, \"tail\");\n\n                /* comment */\n                if( debug ) {\n                    print();\n                } else {\n                    run();\n                }\n                free(out);\n            } else\n\n                if( c ) {\n                    next();\n                }\n}\n",
     );
 }
 
@@ -1496,7 +1492,7 @@ fn block_comment_before_adjacent_string_call_in_split_else_uses_call_indent() {
     check(
         "void f(void){\n  if( a0 ){ one(); }else\n\n  if( a1 ){ one(); }else\n\n  if( a2 ){ one(); }else\n\n  if( a3 ){ one(); }else\n\n  if( b ){\n    value = call(\n      /* note */\n      \"alpha\"\n      , other);\n  }\n}\n",
         &[],
-        "void f(void) {\n    if( a0 ) {\n        one();\n    }\n    else\n\n        if( a1 ) {\n            one();\n        }\n        else\n\n            if( a2 ) {\n                one();\n            }\n            else\n\n                if( a3 ) {\n                    one();\n                }\n                else\n\n                    if( b ) {\n                        value = call(\n                                    /* note */\n                                    \"alpha\"\n                                    , other);\n                    }\n}\n",
+        "void f(void) {\n    if( a0 ) {\n        one();\n    } else\n\n        if( a1 ) {\n            one();\n        } else\n\n            if( a2 ) {\n                one();\n            } else\n\n                if( a3 ) {\n                    one();\n                } else\n\n                    if( b ) {\n                        value = call(\n                                    /* note */\n                                    \"alpha\"\n                                    , other);\n                    }\n}\n",
     );
 }
 
@@ -7681,31 +7677,37 @@ fn breaking_one_line_headers_keeps_blocks_on_lines_holding_other_statements() {
 }
 
 #[test]
-fn without_a_brace_style_a_closing_header_follows_a_brace_that_begins_its_line() {
-    // A `}` that begins its source line keeps the closing header after it;
-    // one that follows code leaves the header a line of its own unless
+fn without_a_brace_style_a_closing_header_stays_on_its_source_brace() {
+    // The source set the header against its `}`, so it stays there whether
+    // or not the block before it is expanded; a `}` the formatter adds has
+    // no source place and leaves the header a line of its own unless
     // one-line statements are kept.
-    let leading = "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n";
     let attached = "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }\n}\n";
-    check(leading, &[], attached);
-    check(leading, &["--break-one-line-headers"], attached);
-    let trailing =
-        "void f()\n{\n    if (ready) {\n        value=0; } else {\n        result=0;\n    }\n}\n";
+    for input in [
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n",
+        "void f()\n{\n    if (ready) {\n        value=0; } else {\n        result=0;\n    }\n}\n",
+        "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n}\n",
+    ] {
+        check(input, &[], attached);
+        check(input, &["--break-one-line-headers"], attached);
+        check(input, &["-o"], attached);
+    }
+    let do_while = "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n}\n";
     check(
-        trailing,
+        "void f()\n{\n    do { value=0; } while (ready);\n}\n",
         &[],
+        do_while,
+    );
+    check(
+        "void f()\n{\n    do {\n        value=0; } while (ready);\n}\n",
+        &[],
+        do_while,
+    );
+    let braceless = "void f()\n{\n    if (ready) value=0; else result=0;\n}\n";
+    check(
+        braceless,
+        &["--add-braces"],
         "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    else {\n        result=0;\n    }\n}\n",
     );
-    check(trailing, &["-o"], attached);
-    let do_while = "void f()\n{\n    do {\n        value=0; } while (ready);\n}\n";
-    check(
-        do_while,
-        &[],
-        "void f()\n{\n    do {\n        value=0;\n    }\n    while (ready);\n}\n",
-    );
-    check(
-        do_while,
-        &["-o"],
-        "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n}\n",
-    );
+    check(braceless, &["--add-braces", "-o"], attached);
 }

@@ -326,11 +326,9 @@ fn return_type_options_do_not_split_control_headers() {
             "run() {",
             "    if(ready) {",
             "        one();",
-            "    }",
-            "    else if(other()) {",
+            "    } else if(other()) {",
             "        two();",
-            "    }",
-            "    else call();",
+            "    } else call();",
             "}",
         )
     );
@@ -343,11 +341,9 @@ fn return_type_options_do_not_split_control_headers() {
             "void run() {",
             "    if(ready) {",
             "        one();",
-            "    }",
-            "    else if(other()) {",
+            "    } else if(other()) {",
             "        two();",
-            "    }",
-            "    else call();",
+            "    } else call();",
             "}",
         )
     );
@@ -1048,7 +1044,7 @@ fn break_return_type_decl_keeps_do_while_tail() {
 
     assert_eq!(
         format_exact("void f(){do{x++;}while(n<5);}\n", &options),
-        "void f() {\n    do {\n        x++;\n    }\n    while(n<5);\n}\n",
+        "void f() {\n    do {\n        x++;\n    } while(n<5);\n}\n",
     );
 }
 

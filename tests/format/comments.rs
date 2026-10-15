@@ -3420,7 +3420,7 @@ fn padding_a_statement_split_off_a_do_while_shrinks_the_line_comment_gap() {
             "void f()\n{\n    do { value=0; } while (ready); result=0;     // done\n}\n",
             &["-p"],
         ),
-        "void f()\n{\n    do {\n        value = 0;\n    }\n    while (ready);\n    result = 0;   // done\n}\n",
+        "void f()\n{\n    do {\n        value = 0;\n    } while (ready);\n    result = 0;   // done\n}\n",
     );
 }
 
