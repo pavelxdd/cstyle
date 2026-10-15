@@ -286,7 +286,10 @@ impl FormatEngine<'_> {
         if let Some(previous) = self.output.last_line_outside_comment()
             && previous.trimmed_start().starts_with('}')
         {
-            return Some(leading_visual_width(previous, self.options.tab_width));
+            return Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
         }
         Some(brace.body_indent_column)
     }

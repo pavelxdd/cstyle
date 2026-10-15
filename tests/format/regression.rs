@@ -9565,3 +9565,11 @@ fn statements_after_a_commented_row_past_a_case_block_stand_where_the_row_before
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn vtk_sets_an_initializer_brace_after_a_struct_closer_in_a_case_block_at_the_closer() {
+    let input = "void f(int op)\n{\n    if (op) {\n        static const struct {\n            int z;\n        } kw[] = {\n            { 1 },\n        };\n    }\n    switch (op) {\n    case 1: {\n        static const struct {\n            int z;\n        } kw[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(int op)\n{\n    if (op)\n        {\n        static const struct\n            {\n            int z;\n            } kw[] =\n            {\n                { 1 },\n            };\n        }\n    switch (op)\n        {\n        case 1:\n            {\n            static const struct\n                {\n                int z;\n                } kw[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
