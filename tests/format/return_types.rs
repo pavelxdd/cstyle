@@ -443,13 +443,13 @@ fn whitesmith_return_type_options_preserve_scope_operators() {
 }
 
 #[test]
-fn break_return_type_supports_leading_cpp_attribute() {
+fn break_return_type_leaves_a_head_led_by_a_cpp_attribute_whole() {
     let mut options = FormatOptions::default();
     options.break_return_type = true;
 
     assert_eq!(
         format_exact("[[nodiscard]] long long value(){return 1;}\n", &options),
-        fixture!("[[nodiscard]] long long", "value() {", "    return 1;", "}",)
+        fixture!("[[nodiscard]] long long value() {", "    return 1;", "}",)
     );
 }
 

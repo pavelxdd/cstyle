@@ -8247,3 +8247,21 @@ fn a_leading_shift_aligns_inside_the_innermost_paren_left_open() {
     let input = "void f()\n{\n    std::cout << helper(a, (b\n                            << c));\n    std::cout << helper(a) << (b\n                               << c);\n    m = 1 << (((p & (size - 1))\n               >> shift)\n              + OFFSET);\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_return_type_holding_a_paren_group_or_attribute_is_neither_broken_nor_attached() {
+    // A group in parens or a `[[...]]` attribute before the name reads as
+    // something other than a return type, at a head's start or on its line.
+    let broken = "__attribute__((malloc)) char *duplicate(const char *text);\n[[nodiscard]] int checked(int value);\ndecltype(value) helper(int value);\nEXPORT(api) int exported(int value);\nstatic int other(int value);\n";
+    check(
+        broken,
+        &["--style=kr", "--break-return-type-decl"],
+        "__attribute__((malloc)) char *duplicate(const char *text);\n[[nodiscard]] int checked(int value);\ndecltype(value) helper(int value);\nEXPORT(api) int exported(int value);\nstatic int\nother(int value);\n",
+    );
+    let attached = "__attribute__((malloc)) char *\nduplicate(const char *text);\n[[nodiscard]] int\nchecked(int value);\nstatic int\nother(int value);\n";
+    check(
+        attached,
+        &["--style=kr", "--attach-return-type-decl"],
+        "__attribute__((malloc)) char *\nduplicate(const char *text);\n[[nodiscard]] int\nchecked(int value);\nstatic int other(int value);\n",
+    );
+}

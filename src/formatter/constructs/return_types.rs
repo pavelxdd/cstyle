@@ -3,6 +3,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::functions::{FunctionHead, template_arguments_start};
 use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
@@ -248,6 +249,19 @@ impl FormatEngine<'_> {
             && !self.inside_extern_block(head.start)
             // A conditional inside the head keeps astyle from moving it.
             && !self.tree.has_directive_in(head.start..head.name_start)
+            && !self.return_type_holds_group(head)
+    }
+
+    /// Whether a group in parens or a `[[...]]` attribute stands before the
+    /// name of `head`, which then reads as no plain return type.
+    fn return_type_holds_group(&self, head: &FunctionHead) -> bool {
+        let tokens = &self.tree.tokens;
+        (head.start..head.name_start).any(|index| match tokens[index] {
+            Token::Symbol('(') => true,
+            Token::Symbol('[') => next_code_token(tokens, index + 1)
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('['))),
+            _ => false,
+        })
     }
 
     /// Whether `index` is in the block of an `extern "C"`, where astyle
