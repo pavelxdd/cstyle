@@ -3152,10 +3152,7 @@ impl FormatEngine<'_> {
             // the added braces do not.
             let padded_gap = (!gap.is_empty()
                 && !gap.contains('\t')
-                && !matches!(
-                    self.options.brace_style,
-                    BraceStyle::Pico | BraceStyle::Lisp
-                )
+                && self.options.brace_style != BraceStyle::Lisp
                 && !self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| {
                 let target = self

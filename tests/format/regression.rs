@@ -8350,3 +8350,15 @@ fn break_blocks_pads_no_directive_after_an_initializer_following_a_header_block(
         "void f()\n{\n    if (ready) {\n        value=0;\n    }\n\n    struct Item item = {\n        .value = 1,\n    };\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n}\n",
     );
 }
+
+#[test]
+fn pico_one_line_braces_added_before_a_comment_keep_the_unpadded_gap() {
+    // Unpadding moves the comment back to its column; the added braces do
+    // not, in pico as in the styles that keep the block on one line.
+    let input = "void f()\n{\n    value=1;\n    if (ready) value=0;   // note\n}\n";
+    check(
+        input,
+        &["--style=pico", "--unpad-paren", "--add-one-line-braces"],
+        "void f()\n{   value=1;\n    if(ready) { value=0; }    // note\n}\n",
+    );
+}
