@@ -8513,3 +8513,13 @@ fn break_blocks_all_pads_a_closing_header_a_comment_parts_from_its_brace() {
         "void f()\n{\n    if (other) {\n        value=1;\n\n    } /* last */ else {\n\n        value=2;\n    }\n}\n",
     );
 }
+
+#[test]
+fn lisp_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
+    );
+}

@@ -757,7 +757,6 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
-                    | BraceStyle::Lisp
             )
             && groups
                 .get(group)
@@ -1320,7 +1319,7 @@ impl FormatEngine<'_> {
             BraceStyle::Whitesmith | BraceStyle::Ratliff => (1, true),
             BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => (1, true),
             BraceStyle::Vtk => (2, true),
-            BraceStyle::Gnu | BraceStyle::Horstmann | BraceStyle::Pico | BraceStyle::Lisp => {
+            BraceStyle::Gnu | BraceStyle::Horstmann | BraceStyle::Pico => {
                 return None;
             }
             _ => (1, false),
