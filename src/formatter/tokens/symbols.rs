@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign}
 use crate::formatter::braces::classification::{
     code_ends_definition_header, is_class_like_brace_type,
 };
+use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::constructor_initializers::constructor_initializer_name_indent_from_line;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
@@ -894,8 +895,14 @@ impl FormatEngine<'_> {
             Token::StringLiteral(text) | Token::Comment(_, text) => text.contains('\n'),
             _ => false,
         };
+        // A brace the layout parted from the code before it leads the line
+        // of the block it broke.
+        let parted_brace_leads_line = || {
+            self.current.tokens().is_some_and(|span| span.first == open)
+                && !token_begins_line(&self.tree.tokens, open)
+        };
         matches!(self.tree.tokens[open], Token::Symbol('{'))
-            && !self.current.contains('{')
+            && (!self.current.contains('{') || parted_brace_leads_line())
             && !self.tree.tokens[open..index].iter().any(breaks_line)
             && groups
                 .get(group)
@@ -1036,7 +1043,8 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             } else if (self.options.brace_style == BraceStyle::Pico
                 && (self.token_input.token_line_opens_with_brace
-                    || self.output.last().is_some_and(|line| line.trimmed() == "{")))
+                    || self.output.last().is_some_and(|line| line.trimmed() == "{"))
+                && !self.statement_in_broken_one_line_block())
                 || self.attached_statement_expression_closer_follows()
             {
                 self.emit_trailing_source_space_or_ensure();

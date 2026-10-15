@@ -7925,3 +7925,14 @@ fn pico_breaking_one_line_headers_keeps_a_label_with_its_header_and_block() {
         check(&expected, &options, &expected);
     }
 }
+
+#[test]
+fn pico_breaking_one_line_headers_splits_the_statements_of_the_block_it_breaks() {
+    // The block a header's line no longer holds is a block like any other:
+    // its statements stand one per line, a label keeping the one after it.
+    let options = ["--style=pico", "--break-one-line-headers"];
+    let input = "void f()\n{\n    if (ready) { value=0; result=1; }\n    switch (kind) { case 1: value=0; break; default: break; }\n}\n";
+    let expected = "void f()\n{   if (ready)\n    {   value=0;\n        result=1; }\n    switch (kind)\n    {   case 1: value=0;\n            break;\n        default: break; } }\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

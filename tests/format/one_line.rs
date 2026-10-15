@@ -550,7 +550,7 @@ fn break_one_line_headers_recognizes_if_constexpr_body() {
 }
 
 #[test]
-fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
+fn break_one_line_headers_in_pico_splits_the_case_statements_of_the_switch_block_it_breaks() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Pico;
     options.break_one_line_blocks = false;
@@ -558,7 +558,8 @@ fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
     options.indent_switches = true;
     options.break_one_line_headers = true;
 
-    // Breaking a run-in switch header does not rewrite its case statements.
+    // The switch block a header's line no longer holds parts its
+    // statements as any block does, a label keeping the one after it.
     assert_eq!(
         format_exact(
             "void run(){\nswitch(value){case 1: one(); break;}\n}\n",
@@ -567,7 +568,8 @@ fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
         fixture!(
             "void run()",
             "{   switch(value)",
-            "    {   case 1: one(); break;} }",
+            "    {   case 1: one();",
+            "            break; } }",
         )
     );
 }

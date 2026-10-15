@@ -1502,8 +1502,6 @@ impl FormatEngine<'_> {
         let break_one_line_blocks = self.options.break_one_line_blocks
             || self.options.lisp_add_one_line_braces_breaks_blocks()
             || (self.options.break_one_line_headers
-                && !(self.options.brace_style == BraceStyle::Pico
-                    && self.layout.command_state.current_header.as_deref() == Some("switch"))
                 && self.layout.command_state.current_header.is_some()
                 // A block on a line of its own already leaves its header.
                 && !token_begins_line(tokens, start)
@@ -3403,7 +3401,7 @@ fn format_one_line_block_tokens(
     formatter.current.trimmed_end().to_string()
 }
 
-fn token_begins_line(tokens: &[Token], index: usize) -> bool {
+pub(crate) fn token_begins_line(tokens: &[Token], index: usize) -> bool {
     tokens[..index]
         .iter()
         .rev()
