@@ -1008,9 +1008,10 @@ impl FormatEngine<'_> {
                 Some(Token::Word(word))
                     if is_header(self.options, word) && !matches!(word.as_str(), "case" | "default")
             );
-            let keep_following_header = !self.options.break_one_line_headers
-                && self.options.keeps_multi_statement_line()
-                && following_header;
+            // Breaking one-line headers parts a header from its body, not from
+            // the statement before it.
+            let keep_following_header =
+                self.options.keeps_multi_statement_line() && following_header;
             // Styles that break blocks from their statements still break
             // this one.
             let keep_following_block = self.options.keeps_multi_statement_line()

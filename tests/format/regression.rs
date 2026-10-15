@@ -7767,3 +7767,54 @@ fn max_code_length_leaves_a_kept_line_within_the_limit_whole() {
     check(input, &["--style=kr", "-o"], input);
     check(input, &["--style=kr", "-o", "--max-code-length=60"], input);
 }
+
+#[test]
+fn breaking_one_line_headers_keeps_a_header_after_a_kept_statement() {
+    // The option parts a header from its body, not from the statement kept
+    // before it, so the output formats to itself.
+    let expected = "void f()\n{\n    value=1; if (ready) {\n        value=0;\n    }\n}\n";
+    for input in [
+        "void f()\n{\n    value=1; if (ready) { value=0; }\n}\n",
+        expected,
+    ] {
+        check(
+            input,
+            &["--style=stroustrup", "-o", "--break-one-line-headers"],
+            expected,
+        );
+    }
+}
+
+#[test]
+fn breaking_one_line_headers_parts_a_header_from_the_statement_its_removed_braces_held() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    while (ready) { value--; }\n}\n";
+    let broken = "void f()\n{\n    if (ready)\n        value=0;\n    else\n        result=0;\n    while (ready)\n        value--;\n}\n";
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--keep-one-line-blocks",
+            "--remove-braces",
+            "--break-one-line-headers",
+        ],
+        broken,
+    );
+    // Kept one-line statements keep a line that holds several of them.
+    check(
+        input,
+        &[
+            "--keep-one-line-blocks",
+            "--remove-braces",
+            "--break-one-line-headers",
+            "-o",
+        ],
+        "void f()\n{\n    if (ready)  value=0; else  result=0;\n    while (ready)\n        value--;\n}\n",
+    );
+    // An expanded block leaves its `else` a line of its own, as the
+    // statement it held ends its line.
+    check(
+        input,
+        &["--remove-braces", "--break-one-line-headers", "-o"],
+        broken,
+    );
+}

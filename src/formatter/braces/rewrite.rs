@@ -441,7 +441,12 @@ impl FormatEngine<'_> {
                 }
                 gap
             });
-        if self.options.break_one_line_blocks || block_starts_line {
+        // Breaking one-line headers parts the header from the statement its
+        // braces held, as from any body on its line.
+        let breaks_header = self.options.break_one_line_headers
+            && (self.options.break_one_line_statements
+                || !self.header_block_shares_line_with_statements(tokens, start, true));
+        if self.options.break_one_line_blocks || block_starts_line || breaks_header {
             self.finish_line();
             self.layout
                 .continuation_indent
@@ -1412,7 +1417,12 @@ impl FormatEngine<'_> {
     /// line with other statements: one kept on its output line ends right
     /// before the header, or more than one ends outside the parens and
     /// blocks its source line opens.
-    fn header_block_shares_line_with_statements(&self, tokens: &[Token], open: usize) -> bool {
+    fn header_block_shares_line_with_statements(
+        &self,
+        tokens: &[Token],
+        open: usize,
+        braces_removed: bool,
+    ) -> bool {
         let line_start = tokens[..open]
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
@@ -1428,23 +1438,40 @@ impl FormatEngine<'_> {
                     .previous_code_token(self.tree.groups.get(group).open)
             });
         }
+        // A closer removed with its block leaves the statement it held right
+        // before the header.
+        let mut before = header.and_then(|header| self.tree.previous_code_token(header));
+        if braces_removed
+            && let Some(close) = before.filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            && self.tree.groups.closed_at(close).is_some_and(|group| {
+                let block_open = self.tree.groups.get(group).open;
+                is_remove_braces_opening(tokens, block_open)
+                    && removable_statement_brace_range(tokens, block_open, close + 1, false)
+                        .is_some()
+            })
+        {
+            before = self.tree.previous_code_token(close);
+        }
         // The statement must stay on the header's output line, not be
         // broken off before it.
-        let follows_statement = header
-            .and_then(|header| self.tree.previous_code_token(header))
-            .is_some_and(|before| {
-                before >= line_start
-                    && matches!(tokens[before], Token::Symbol(';' | ':'))
-                    && self
-                        .current
-                        .tokens()
-                        .is_some_and(|span| span.first <= before)
-            });
+        let follows_statement = before.is_some_and(|before| {
+            before >= line_start
+                && matches!(tokens[before], Token::Symbol(';' | ':'))
+                && self
+                    .current
+                    .tokens()
+                    .is_some_and(|span| span.first <= before)
+        });
         if follows_statement {
             return true;
         }
+        // A removed opening brace leaves its statements on the line's own
+        // level, its closer still counted.
         let (mut parens, mut braces, mut statements) = (0isize, 0isize, 0usize);
-        for token in &tokens[line_start..line_end] {
+        for (index, token) in tokens.iter().enumerate().take(line_end).skip(line_start) {
+            if braces_removed && index == open {
+                continue;
+            }
             match token {
                 Token::Symbol('(') => parens += 1,
                 Token::Symbol(')') => parens -= 1,
@@ -1477,7 +1504,7 @@ impl FormatEngine<'_> {
                 // A block on a line of its own already leaves its header.
                 && !token_begins_line(tokens, start)
                 && (self.options.break_one_line_statements
-                    || !self.header_block_shares_line_with_statements(tokens, start)));
+                    || !self.header_block_shares_line_with_statements(tokens, start, false)));
         if self.options.break_one_line_headers
             && self.layout.command_state.current_header.is_some()
             && tokens[start + 1..close_index]
