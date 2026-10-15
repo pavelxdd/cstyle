@@ -901,6 +901,21 @@ impl FormatEngine<'_> {
         // level past the rows around them.
         let is_brace = |index: usize| matches!(tokens[index], Token::Symbol('{'));
         let mut brace_offset = 0;
+        let element_row_holds_values = || {
+            self.output
+                .line_with_token(element)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| !matches!(tokens[span.first], Token::Symbol('{' | '}')))
+        };
+        // A brace ending a row of values leaves the next brace row a level
+        // past those values, as after any row of values.
+        if is_brace(element)
+            && is_brace(first)
+            && self.should_indent_brace_line(BraceType::Initializer)
+            && element_row_holds_values()
+        {
+            return None;
+        }
         if is_brace(element) != is_brace(first)
             && self.should_indent_brace_line(BraceType::Initializer)
         {
@@ -1329,10 +1344,17 @@ impl FormatEngine<'_> {
             return None;
         }
         let (lead, levels, leading_closers) = self.brace_ending_row_levels(open)?;
-        // Indented braces close at the elements, the closers leading the
-        // row standing there already; others close a level out.
+        // Indented braces close at their elements: a level past a row of
+        // values, at a row its braces lead, since such a row stands as a
+        // brace line; others close a level out.
         let levels = if at_elements {
-            levels.saturating_sub(leading_closers)
+            if levels == 1 {
+                let line = self.output.line_with_token(open)?;
+                let first = self.output.line_tokens(line)?.first;
+                usize::from(!matches!(self.tree.tokens[first], Token::Symbol('{' | '}')))
+            } else {
+                levels.saturating_sub(leading_closers)
+            }
         } else {
             levels.saturating_sub(1)
         };

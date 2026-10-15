@@ -8665,3 +8665,35 @@ fn a_block_literal_brace_follows_the_style_at_file_scope_as_in_a_body() {
         "void (^handler)(int) = ^(int value)\n{\n    helper(value);\n};\nvoid f()\n{\n    void (^local)(int) = ^(int value)\n    {\n        helper(value);\n    };\n}\n",
     );
 }
+
+#[test]
+fn an_element_brace_after_a_comma_keeps_its_row_in_broken_brace_styles() {
+    // A row of values or of braces ending in an element's `{` keeps it; the
+    // styles that indent braces close it at its elements.
+    let input = "void f()\n{\n    Item items[] = {\n        1, {\n            7,\n            8\n        },\n        { 1, 2 }, {\n            3, 4\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    Item items[] =\n    {\n        1, {\n            7,\n            8\n        },\n        { 1, 2 }, {\n            3, 4\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    Item items[] =\n        {\n        1, {\n            7,\n            8\n            },\n            { 1, 2 }, {\n            3, 4\n            }\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    Item items[] = {\n        1, {\n            7,\n            8\n            },\n            { 1, 2 }, {\n            3, 4\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_run_in_brace_after_a_one_line_switch_fills_as_anywhere() {
+    let input = "void f()\n{\n    switch (kind) { case 1: value=0; break; default: break; }\n    struct Item item = {\n        .value = 1,\n        .name = \"x\",\n    };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind) { case 1: value=0; break; default: break; }\n    struct Item item =\n    {   .value = 1,\n        .name = \"x\", }; }\n",
+    );
+}

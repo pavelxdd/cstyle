@@ -2210,19 +2210,22 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
     ) {
         let brace_type = brace.brace_type;
-        // The next element's brace after a `}, ` keeps the row, in every
-        // style; the layout places that row like any other.
+        // An element's brace after a `,` keeps the row, in every style; the
+        // layout places that row like any other.
         let element_brace_after_closer = matches!(
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
         ) && matches!(next, Some(Token::Newline))
             && self.layout.previous == PreviousToken::Comma
-            && self.current.trimmed_start().starts_with('}')
             && self
                 .current
                 .active_token()
                 .and_then(|brace| self.tree.groups.enclosing(brace))
                 .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace);
+        if element_brace_after_closer && !self.current.trimmed_start().starts_with('}') {
+            self.attach_open_brace_to_current_line(brace, placement, next);
+            return;
+        }
         let source_attached_initializer_line = matches!(
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
