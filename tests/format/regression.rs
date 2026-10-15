@@ -8151,3 +8151,13 @@ fn ratliff_keeping_one_line_statements_leaves_a_commented_case_block_closer_at_i
     check(input, &["--style=ratliff"], expected);
     check(input, &["--style=ratliff", "-o"], expected);
 }
+
+#[test]
+fn ratliff_indented_switch_keeps_a_commented_case_block_closer_at_its_body() {
+    let input = "void f()\n{\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;} // one\n        default: {\n            break;}\n        } // done\n    x();\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;\n            } // one\n        default: {\n            break;\n            }\n        } // done\n    x();\n    }\n",
+    );
+}

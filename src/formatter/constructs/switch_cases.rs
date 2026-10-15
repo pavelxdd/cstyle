@@ -2048,7 +2048,14 @@ impl FormatEngine<'_> {
                     .indent()
                     .saturating_sub(usize::from(!self.options.indent_switches))
             } else {
-                self.layout.indentation.indent() + 1
+                // The closer stands past the case body, which Horstmann's
+                // brace run into the block's first line already reaches.
+                let case_body_levels = if self.options.brace_style == BraceStyle::Horstmann {
+                    0
+                } else {
+                    self.case_body_indent_extra(LineKind::Normal)
+                };
+                self.layout.indentation.indent() + case_body_levels + 1
             };
         Some(indent * self.options.indent_width)
     }
