@@ -25,11 +25,9 @@ pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -
     match options.brace_style {
         BraceStyle::Pico => {
             let run_in = run_in_horstmann_opening_braces(&output, options);
-            attach_lisp_closing_braces_aligning_parens(&run_in, options.line_break())
+            attach_lisp_closing_braces(&run_in, options.line_break())
         }
-        BraceStyle::Lisp => {
-            attach_lisp_closing_braces_aligning_parens(&output, options.line_break())
-        }
+        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
         BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
         _ => output,
     }
@@ -330,14 +328,6 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
 }
 
 fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
-    attach_closing_braces(output, line_break, false)
-}
-
-fn attach_lisp_closing_braces_aligning_parens(output: &str, line_break: &str) -> String {
-    attach_closing_braces(output, line_break, true)
-}
-
-fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> String {
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines: Vec<String> = Vec::new();
     // The columns rows of a paren a joined closer's line opens move by, and
@@ -379,16 +369,14 @@ fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> 
             }
             // astyle measures a paren the line leaves open from the joined
             // line's text at the closer's level.
-            if align_parens {
-                let (_, opens) = line_paren_imbalance(trimmed);
-                // A paren that ends the line takes an indent, not its column.
-                if opens.last().is_some_and(|&column| {
-                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
-                        .trim()
-                        .is_empty()
-                }) {
-                    paren_shift = Some((previous.trimmed_start().len(), opens.len()));
-                }
+            let (_, opens) = line_paren_imbalance(trimmed);
+            // A paren that ends the line takes an indent, not its column.
+            if opens.last().is_some_and(|&column| {
+                !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                    .trim()
+                    .is_empty()
+            }) {
+                paren_shift = Some((previous.trimmed_start().len(), opens.len()));
             }
             // The brace moves up a column and its comment follows it.
             let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
