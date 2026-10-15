@@ -720,18 +720,20 @@ fn continuation_indent_for_split(
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
-    // An array bound continues under its trailing operator.
+    // An array bound continues under its trailing operator; past the
+    // maximum at the value an assignment gives, else two levels in.
     if last_unmatched_open_delimiter(head)
         .is_some_and(|(open, at)| open == '[' && !head[..at].contains(']'))
         && let Some(column) = array_bound_operator_column(head)
     {
         return Some(ContinuationIndent::Spaces(
-            base_indent_width
-                + if column > max_continuation_indent {
-                    indent_width * 2
-                } else {
-                    column
-                },
+            if column > max_continuation_indent {
+                assignment_value_indent(head, base_indent_width)
+                    .filter(|&value| value - base_indent_width <= max_continuation_indent)
+                    .unwrap_or(base_indent_width + indent_width * 2)
+            } else {
+                base_indent_width + column
+            },
         ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();

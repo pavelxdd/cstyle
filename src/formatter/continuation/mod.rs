@@ -1714,15 +1714,19 @@ impl FormatEngine<'_> {
                 .unwrap_or_else(|| self.current_line_indent_spaces() + continuation);
             return Some(previous + continuation);
         }
-        // Past the maximum it continues two levels in, as a paren does.
-        Some(
-            self.current_line_indent_spaces()
-                + if column > self.options.max_continuation_indent {
-                    2 * self.options.indent_width
-                } else {
-                    column
-                },
-        )
+        // Past the maximum it continues at the value an assignment gives,
+        // else two levels in, as a paren does.
+        if column > self.options.max_continuation_indent {
+            let lead = self.current_line_indent_spaces();
+            return Some(
+                self.assignment_continuation_indent_spaces()
+                    .filter(|&value| {
+                        value.saturating_sub(lead) <= self.options.max_continuation_indent
+                    })
+                    .unwrap_or(lead + 2 * self.options.indent_width),
+            );
+        }
+        Some(self.current_line_indent_spaces() + column)
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {

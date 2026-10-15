@@ -2579,7 +2579,7 @@ impl FormatEngine<'_> {
     }
 }
 
-fn assignment_value_column(code: &str, tab_width: usize) -> Option<usize> {
+pub(crate) fn assignment_value_column(code: &str, tab_width: usize) -> Option<usize> {
     let (assignment, operator) = find_assignment_operator(code)?;
     let after_operator = assignment + operator.len();
     let value_start = code[after_operator..]

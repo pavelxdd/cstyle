@@ -8187,3 +8187,26 @@ fn ratliff_indented_cases_keep_a_closer_before_the_next_label_at_the_body() {
         "void f() {\n    switch (kind) {\n        case 1: {\n                value=0;\n                break;\n            } case 2: {\n                result=1;\n                break;\n            } default: done();\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_subscript_continued_past_the_maximum_aligns_to_its_assigned_value() {
+    // As a paren does, a bracket too far out for its operand leaves the
+    // continuation at the value the assignment gives, else two levels in.
+    let input = "void f()\n{\n    long_type_name *variable = &container->items[index -\n            offset_value];\n    variable_name = &container->items_with_long_name[index -\n            offset_value];\n    helper(container->items_with_a_long_name_here[index -\n            offset_value]);\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    long_type_name *variable = &container->items[index -\n                               offset_value];\n    variable_name = &container->items_with_long_name[index -\n                    offset_value];\n    helper(container->items_with_a_long_name_here[index -\n            offset_value]);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_a_far_subscript_at_its_assigned_value() {
+    let input =
+        "void f()\n{\n    long_type_name *variable = &container->items[index - offset_value];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--max-code-length=60"],
+        "void f()\n{\n    long_type_name *variable = &container->items[index -\n                               offset_value];\n}\n",
+    );
+}
