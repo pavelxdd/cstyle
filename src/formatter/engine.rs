@@ -805,8 +805,9 @@ impl<'a> FormatEngine<'a> {
         let after_following = following_index
             .and_then(|i| self.next_non_layout_token_index(1, tokens, i + 1))
             .map(|i| &tokens[i]);
-        // Only a removed brace leaves a gap at a line end; astyle drops the
-        // source's own trailing whitespace.
+        // Only a removed brace leaves a gap at a line end, and the closer
+        // joining the line adds its space; astyle drops the source's own
+        // trailing whitespace.
         if self.options.remove_braces
             && matches!(
                 self.options.brace_style,
@@ -822,10 +823,12 @@ impl<'a> FormatEngine<'a> {
                 {
                     previous.truncate(previous.trimmed_end().len());
                     previous.push_str(whitespace);
+                    previous.push(' ');
                 }
             } else {
                 self.trim_current_end_horizontal_space();
                 self.current.push_str(whitespace);
+                self.current.push(' ');
                 self.preserve_run_in_join_space = true;
             }
         }

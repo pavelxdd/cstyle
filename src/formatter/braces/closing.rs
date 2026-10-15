@@ -310,25 +310,9 @@ impl FormatEngine<'_> {
         ) && !self.token_input.token_begins_source_line
             && !whitespace_before_brace.is_empty()
         {
-            let current_ends_open = self.current.trimmed_end().ends_with('{');
-            let previous_ends_open = self
-                .output
-                .last()
-                .is_some_and(|line| line.trimmed_end().ends_with('{'));
-            let formatter_join_gap = if self.current_is_blank() {
-                !previous_ends_open
-            } else {
-                !current_ends_open
-            };
-            let gap_end = if formatter_join_gap {
-                whitespace_before_brace
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(index, _)| index)
-            } else {
-                whitespace_before_brace.len()
-            };
-            let source_gap = &whitespace_before_brace[..gap_end];
+            // The closer joins its line again after the brace style
+            // passes, past the whole source gap.
+            let source_gap = &whitespace_before_brace[..];
             if self.current_is_blank() {
                 if let Some(previous) = self.output.last_mut() {
                     previous.truncate(previous.trimmed_end().len());

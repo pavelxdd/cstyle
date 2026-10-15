@@ -364,7 +364,8 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
             && !previous.trimmed_end().ends_with('\\')
             && !line_ends_with_comment(previous)
         {
-            if !previous.trimmed_end().ends_with('{') {
+            // A gap the source left before the closer stays as written.
+            if !previous.trimmed_end().ends_with('{') && !previous.ends_with([' ', '\t']) {
                 previous.push(' ');
             }
             // astyle measures a paren the line leaves open from the joined

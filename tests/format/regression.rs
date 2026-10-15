@@ -9667,3 +9667,21 @@ fn break_blocks_all_keeps_an_else_with_its_one_line_if() {
         "void f()\n{\n    for (;;) {\n        if (ready) break;\n        else continue;\n    }\n}\n",
     );
 }
+
+#[test]
+fn run_in_styles_keep_the_source_gap_before_a_closer_on_its_statement_line() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\t}\n    if (ready) {\n        value=0; \t}\n    if (ready) {\n        value=0;\t\t}\n    if (ready) {\n        value=0;  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) {\n        value=0;\t}\n    if (ready) {\n        value=0; \t}\n    if (ready) {\n        value=0;\t\t}\n    if (ready) {\n        value=0;  } }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready)\n    {   value=0;\t}\n    if (ready)\n    {   value=0; \t}\n    if (ready)\n    {   value=0;\t\t}\n    if (ready)\n    {   value=0;  } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

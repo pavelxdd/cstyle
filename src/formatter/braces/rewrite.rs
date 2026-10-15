@@ -500,14 +500,17 @@ impl FormatEngine<'_> {
                     _ => None,
                 })
                 .collect::<String>();
+            // The closer joining the line adds its space past the gap.
             if self.current_is_blank() {
                 if let Some(previous) = self.output.last_mut() {
                     previous.truncate(previous.trimmed_end().len());
                     previous.push_str(&closing_gap);
+                    previous.push(' ');
                 }
             } else {
                 self.trim_current_end_horizontal_space();
                 self.current.push_str(&closing_gap);
+                self.current.push(' ');
                 self.preserve_run_in_join_space = true;
             }
         }
