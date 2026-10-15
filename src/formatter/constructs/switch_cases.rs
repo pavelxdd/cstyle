@@ -1936,8 +1936,8 @@ impl FormatEngine<'_> {
             Some(case_indent + indent_width)
         } else if trimmed.starts_with('}') && !case_layout.opens_block {
             None
-        } else if trimmed.starts_with('}') {
-            let after_brace = trimmed[1..].trimmed_start();
+        } else if let Some(after_brace) = trimmed.strip_prefix('}') {
+            let after_brace = after_brace.trimmed_start();
             let closer_leads_label =
                 starts_header_word(after_brace, "case") || after_brace.starts_with("default");
             let mut closed = 0usize;
