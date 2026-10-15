@@ -4505,7 +4505,7 @@ impl FormatEngine<'_> {
     /// Whitesmith indents the `{` of a nested compound statement one level
     /// past the statements of the block holding it, whose `{` stands at
     /// them; so do the styles indenting such braces for a block kept on one
-    /// line in a function body.
+    /// line in a statement block.
     #[inline(never)]
     fn whitesmith_bare_block_brace_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
@@ -4515,12 +4515,15 @@ impl FormatEngine<'_> {
         let block = groups.opened_at(first)?;
         let parent = groups.get(block).parent?;
         if self.tree.blocks.kind(block) == Some(BlockKind::Block)
-            && self.tree.blocks.kind(parent) == Some(BlockKind::FunctionBody)
+            && matches!(
+                self.tree.blocks.kind(parent),
+                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+            )
             && self.should_indent_brace_line(BraceType::Command)
             && groups.get(block).close.is_some_and(|close| {
-                !self.tree.tokens[first..close]
-                    .iter()
-                    .any(|token| matches!(token, Token::Newline))
+                self.output
+                    .pending_tokens()
+                    .is_some_and(|span| span.contains(close))
             })
         {
             return Some(

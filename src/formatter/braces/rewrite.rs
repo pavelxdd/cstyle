@@ -1746,6 +1746,7 @@ impl FormatEngine<'_> {
             source_separate_macro_block,
             opening_body_gap,
         );
+        self.current.record_token_range(start, close_index);
         if is_empty_block
             && (self.options.brace_style == BraceStyle::None
                 || is_attached_closing_header_style(self.options))

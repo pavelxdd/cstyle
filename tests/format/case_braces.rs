@@ -1617,3 +1617,22 @@ fn keeping_one_line_statements_keeps_a_one_line_case_block_on_its_label() {
         assert_eq!(format_exact(input, &options), input, "{style}");
     }
 }
+
+#[test]
+fn vtk_kept_one_line_case_block_stands_where_its_expanded_brace_would() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=vtk".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            { value=0; }\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}

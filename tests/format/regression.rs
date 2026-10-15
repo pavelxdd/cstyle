@@ -7825,25 +7825,31 @@ fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stand
     // style puts those braces, first in the body or after a statement.
     let first = "void f()\n{\n    { value=0; }\n}\n";
     let after = "void f()\n{\n    value=1;\n    { value=0; }\n}\n";
-    for (style, first_expected, after_expected) in [
+    let nested =
+        "void f()\n{\n    if (ready) {\n        { value=0; }\n        result=1;\n    }\n}\n";
+    for (style, first_expected, after_expected, nested_expected) in [
         (
             "--style=whitesmith",
             "void f()\n    {\n        { value=0; }\n    }\n",
             "void f()\n    {\n    value=1;\n        { value=0; }\n    }\n",
+            "void f()\n    {\n    if (ready)\n        {\n            { value=0; }\n        result=1;\n        }\n    }\n",
         ),
         (
             "--style=ratliff",
             "void f() {\n        { value=0; }\n    }\n",
             "void f() {\n    value=1;\n        { value=0; }\n    }\n",
+            "void f() {\n    if (ready) {\n            { value=0; }\n        result=1;\n        }\n    }\n",
         ),
         (
             "--style=vtk",
             "void f()\n{\n        { value=0; }\n}\n",
             "void f()\n{\n    value=1;\n        { value=0; }\n}\n",
+            "void f()\n{\n    if (ready)\n        {\n            { value=0; }\n        result=1;\n        }\n}\n",
         ),
     ] {
         check(first, &[style, "-O"], first_expected);
         check(after, &[style, "-O"], after_expected);
+        check(nested, &[style, "-O"], nested_expected);
     }
 }
 

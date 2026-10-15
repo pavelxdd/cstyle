@@ -159,6 +159,13 @@ impl CurrentLine {
         });
     }
 
+    /// Records that the code tokens from `first` through `last`, pushed as
+    /// one piece of text, are part of the line.
+    pub(crate) fn record_token_range(&mut self, first: usize, last: usize) {
+        self.record_token(first);
+        self.record_token(last);
+    }
+
     /// Adds the code tokens of a published line taken back into this one.
     pub(crate) fn restore_tokens(&mut self, span: Option<TokenSpan>) {
         if let Some(span) = span {
