@@ -7981,3 +7981,29 @@ fn whitesmith_kept_else_block_ends_the_braceless_bodies_around_it() {
     let input = "void f()\n    {\n    if (ready)\n        if (other)\n            { value=0; }\n        else\n            { result=0; }\n    switch (kind)\n        {\n        case 1:\n            value=0;\n            break;\n        }\n    x();\n    }\n";
     check(input, &["--style=whitesmith", "-O"], input);
 }
+
+#[test]
+fn break_blocks_all_pads_a_closing_header_kept_on_its_brace_as_attached_styles_do() {
+    // Without a brace style an `else` written after `}` stays on it; padding
+    // its block then separates the `} else` line, as in attached styles.
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    x();\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;\n\n    } else {\n        result=0;\n    }\n\n    x();\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+}
+
+#[test]
+fn vtk_indents_a_kept_one_line_block_after_a_label_as_its_expanded_brace() {
+    // The block a label heads stands where its brace does once expanded.
+    let expanded = "void f()\n{\n    done: {\n        value=0;\n    }\n}\n";
+    check(
+        expanded,
+        &["--style=vtk"],
+        "void f()\n{\ndone:\n        {\n        value=0;\n        }\n}\n",
+    );
+    check(
+        "void f()\n{\n    done: { value=0; }\n}\n",
+        &["--style=vtk", "-O"],
+        "void f()\n{\ndone:\n        { value=0; }\n}\n",
+    );
+}
