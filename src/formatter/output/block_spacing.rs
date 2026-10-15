@@ -421,9 +421,19 @@ impl FormatEngine<'_> {
         if continues_header {
             self.block_spacing.header_continued_depths.pop();
         }
+        // A case's block parts from what follows it, save the break that ends
+        // the case with it.
+        let case_block_ends_case = closed_header
+            .is_some_and(|header| matches!(header, "case" | "default"))
+            && self
+                .current
+                .active_token()
+                .and_then(|close| next_code_token(&self.tree.tokens, close + 1))
+                .is_none_or(
+                    |next| matches!(&self.tree.tokens[next], Token::Word(word) if word == "break"),
+                );
         if closed_command_header
-            && (continues_header
-                || closed_header.is_some_and(|header| !matches!(header, "case" | "default")))
+            && (continues_header || closed_header.is_some() && !case_block_ends_case)
             && !self.closes_one_line_block_after_statement()
         {
             if line_goes_on && !self.current_is_blank() {

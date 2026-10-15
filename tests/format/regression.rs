@@ -9372,3 +9372,15 @@ fn break_blocks_pads_an_attributed_header_block_like_any_header_block() {
         "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n\n    done();\n\n    if (ready) {\n        value = 2;\n    }\n\n    done();\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_parts_a_case_block_from_the_statement_after_it_but_its_break() {
+    // A case's block is a header's block: what follows it is padded, save
+    // the break that ends the case with it.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        if (x) {\n            y();\n        }\n        break;\n    case 2:\n    {\n        y();\n    }\n    break;\n    case 3:\n    {\n        y();\n    }\n    z();\n    break;\n    }\n    while (x) {\n        y();\n    }\n    return;\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        if (x) {\n            y();\n        }\n\n        break;\n\n    case 2:\n    {\n        y();\n    }\n    break;\n\n    case 3:\n    {\n        y();\n    }\n\n    z();\n    break;\n    }\n\n    while (x) {\n        y();\n    }\n\n    return;\n}\n",
+    );
+}
