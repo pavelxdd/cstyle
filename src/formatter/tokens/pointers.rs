@@ -41,6 +41,8 @@ pub(crate) struct PointerRunState {
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
     pub(crate) run_end: Option<(usize, usize, usize)>,
+    /// The last operator token pushed as a binary operator.
+    pub(crate) binary_operator: Option<usize>,
 }
 
 pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {

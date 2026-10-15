@@ -8318,3 +8318,11 @@ fn an_added_do_closer_holding_its_while_stands_at_its_brace() {
         "void f()\n    {\n    do\n        {\n        value=0;\n        } while (ready);\n    }\n",
     );
 }
+
+#[test]
+fn a_product_continuing_an_expression_keeps_its_space_before_a_paren() {
+    // A `*` read as multiplication leaves the paren after it alone when
+    // pointers align to their names.
+    let input = "void f()\n{\n    return first +\n           second * (third - fourth);\n    value = first +\n            second * (third\n                      - fourth);\n}\n";
+    check(input, &["--align-pointer=name"], input);
+}

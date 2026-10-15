@@ -1426,6 +1426,15 @@ impl FormatEngine<'_> {
         ) || trailing_word(&self.current) == "return"
     }
 
+    /// Whether the token being pushed comes right after an operator pushed
+    /// as a binary one, which ends no declarator type.
+    pub(crate) fn follows_binary_operator(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|index| self.tree.previous_code_token(index))
+            .is_some_and(|before| self.pointer_run.binary_operator == Some(before))
+    }
+
     /// Whether the token being pushed stands between brackets, where only
     /// expressions go.
     pub(crate) fn active_token_in_brackets(&self) -> bool {
@@ -1720,6 +1729,7 @@ impl FormatEngine<'_> {
     }
 
     fn push_binary_operator(&mut self, operator: &str) {
+        self.pointer_run.binary_operator = self.current.active_token();
         if matches!(operator, "<<" | ">>")
             && self.current.trimmed().is_empty()
             && self.stream_line_follows_multiline_braced_operand()

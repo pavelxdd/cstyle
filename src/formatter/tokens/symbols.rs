@@ -365,6 +365,7 @@ impl FormatEngine<'_> {
             && self.layout.previous == PreviousToken::Operator
             && self.options.pointer_align == PointerAlign::Name
             && self.current.trimmed_end().ends_with_any(b"*^")
+            && !self.follows_binary_operator()
             && self.looks_like_pointer_declaration_context()
             && !self.active_token_in_brackets()
         {
