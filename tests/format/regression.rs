@@ -8615,3 +8615,13 @@ fn an_objc_method_closer_after_a_message_stands_where_the_style_closes_bodies() 
         "@implementation Item\n- (int)total\n    {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n    }\n@end\n",
     );
 }
+
+#[test]
+fn a_lambda_argument_opening_its_body_after_a_ternary_stands_at_the_statement() {
+    let input = "void f()\n{\n    result = ready ? first\n             : third;\n    helper(first,\n           [](int value) {\n               return value;\n           });\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    result = ready ? first\n             : third;\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
+    );
+}

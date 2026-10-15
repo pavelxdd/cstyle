@@ -42,6 +42,19 @@ use crate::formatter::tokens::operators::{
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
 
 impl FormatEngine<'_> {
+    /// Whether the line being laid out ends opening a lambda's body, which
+    /// it then stands with.
+    fn pending_line_opens_lambda_body(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.last], Token::Symbol('{'))
+                && self
+                    .tree
+                    .groups
+                    .opened_at(span.last)
+                    .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+        })
+    }
+
     pub(crate) fn begin_contextual_line_layout(
         &mut self,
         line: &LineView<'_>,
@@ -2941,13 +2954,7 @@ impl FormatEngine<'_> {
         });
         // A row opening a lambda's body stands with the body, as when parens
         // align.
-        let opens_lambda_body =
-            self.output.pending_tokens().is_some_and(|span| {
-                matches!(self.tree.tokens[span.last], Token::Symbol('{'))
-                    && self.tree.groups.opened_at(span.last).is_some_and(|group| {
-                        self.tree.blocks.kind(group) == Some(BlockKind::Lambda)
-                    })
-            });
+        let opens_lambda_body = self.pending_line_opens_lambda_body();
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")
@@ -3340,10 +3347,12 @@ impl FormatEngine<'_> {
                     ) + self.case_unindent_spaces(),
                 );
             }
-            if let Some(spaces) = self.braceless_ternary_comma_sibling_indent_spaces(
-                previous_code,
-                layout.exact_indent_spaces,
-            ) {
+            if !self.pending_line_opens_lambda_body()
+                && let Some(spaces) = self.braceless_ternary_comma_sibling_indent_spaces(
+                    previous_code,
+                    layout.exact_indent_spaces,
+                )
+            {
                 layout.exact_indent_spaces = Some(spaces);
             }
             if previous_code.ends_with(',')
