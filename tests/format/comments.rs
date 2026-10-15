@@ -3328,6 +3328,113 @@ fn trailing_comment_after_split_multi_statement_line_keeps_compact_gap() {
     );
 }
 
+fn format_args(source: &str, args: &[&str]) -> String {
+    let mut options = FormatOptions::default();
+    let args: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    format_exact(source, &options)
+}
+
+#[test]
+fn padding_a_statement_split_off_its_line_shrinks_the_line_comment_gap() {
+    // Only the padding on the comment's own output line comes out of the
+    // gap; a block comment and a line comment move alike.
+    for (comment, gap) in [("// done", "        "), ("/* done */", "        ")] {
+        assert_eq!(
+            format_args(
+                &format!("void f()\n{{\n    value=0; result=0;          {comment}\n}}\n"),
+                &["-p"],
+            ),
+            format!("void f()\n{{\n    value = 0;\n    result = 0;{gap}{comment}\n}}\n"),
+        );
+    }
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value = ( 0 ); result = ( 1 );          // done\n}\n",
+            &["-U"],
+        ),
+        "void f()\n{\n    value = (0);\n    result = (1);            // done\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_multi_statement_line_kept_whole_shrinks_its_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;          // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0;      // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;  // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0; // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value = ( 0 ); result = ( 1 );          // done\n}\n",
+            &["-U", "-o"],
+        ),
+        "void f()\n{\n    value = (0); result = (1);              // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0;\tresult=0;     // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0;\tresult = 0; // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;     /* done */ // note\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0; /* done */ // note\n}\n",
+    );
+    // A block comment that code follows is no trailing comment to move.
+    let inline = "void f()\n{\n    value=0; /* done */ result=0;\n}\n";
+    assert_eq!(
+        format_args(inline, &["-p", "-o"]),
+        "void f()\n{\n    value = 0; /* done */ result = 0;\n}\n",
+    );
+}
+
+#[test]
+fn padding_moves_no_block_comment_that_code_follows_on_its_source_line() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;     /* done */ other=1;\n}\n",
+            &["-p"],
+        ),
+        "void f()\n{\n    value = 0;\n    result = 0;     /* done */ other = 1;\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_statement_split_off_a_do_while_shrinks_the_line_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    do { value=0; } while (ready); result=0;     // done\n}\n",
+            &["-p"],
+        ),
+        "void f()\n{\n    do {\n        value = 0;\n    }\n    while (ready);\n    result = 0;   // done\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_statement_broken_off_its_header_shrinks_the_line_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    if (ready) value=0;          // done\n}\n",
+            &["-p", "--break-one-line-headers"],
+        ),
+        "void f()\n{\n    if (ready)\n        value = 0;        // done\n}\n",
+    );
+}
+
 #[test]
 fn leading_block_comment_keeps_trailing_comment_gap() {
     let mut options = FormatOptions::default();

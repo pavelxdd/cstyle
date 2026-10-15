@@ -14,7 +14,8 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    find_byte, is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+    find_byte, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -501,7 +502,8 @@ fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
 }
 
 /// Whether the line starts with a goto label that a statement follows on
-/// the line, as `next: x(); }` where the style keeps one-line statements.
+/// the line, as `next: x(); }` or `next: if (x) {` where the style keeps
+/// one-line statements.
 fn leads_with_goto_label(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
@@ -522,17 +524,29 @@ fn leads_with_goto_label(line: &str) -> bool {
             leading_identifier(rest.trimmed_start()),
             "public" | "protected" | "private" | "virtual"
         )
-        && strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}")
-        // A bit-field width is a constant; a statement calls, assigns or
-        // jumps.
+        // A statement closes no paren opened before the label, as the rest
+        // of a range `for` header would.
+        && line_paren_imbalance(strip_trailing_comment(rest)).0 == 0
         && {
             let statement = rest.trimmed_start();
-            statement.starts_with(';')
-                || statement.contains_any_byte(b"(=")
-                || matches!(
-                    leading_identifier(statement),
-                    "return" | "break" | "continue" | "goto"
-                )
+            let opens_header = matches!(
+                leading_identifier(statement),
+                "if" | "while" | "for" | "switch" | "do" | "try"
+            );
+            // A statement ends on the line unless a header or an assignment
+            // goes on past it; a method parameter row does neither.
+            (opens_header
+                || statement.contains('=')
+                || strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}"))
+                // A bit-field width is a constant; a statement calls, assigns,
+                // jumps or opens a control header.
+                && (opens_header
+                    || statement.starts_with(';')
+                    || statement.contains_any_byte(b"(=")
+                    || matches!(
+                        leading_identifier(statement),
+                        "return" | "break" | "continue" | "goto"
+                    ))
         }
 }
 

@@ -7613,3 +7613,99 @@ fn attach_return_type_leaves_a_return_type_set_off_by_a_blank_line() {
         "int value;\n\nstatic int helper(void)\n{\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn a_c_variable_named_template_continues_its_statement_like_any_name() {
+    // `template` is no keyword in C: rows continuing its assignment align as
+    // for any other variable.
+    let input = "void f()\n{\n    template = value +\n        result;\n    template = \"head \"\n        \"tail\";\n}\n";
+    check(
+        input,
+        &["--mode=c"],
+        "void f()\n{\n    template = value +\n               result;\n    template = \"head \"\n               \"tail\";\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_statements_after_an_expanded_block() {
+    // Expanding a block breaks the statements inside it; the statements after
+    // its closer stay on the closer's line.
+    check(
+        "void f()\n{\n    if (ready) { value=0; } result=0; other=1;\n}\n",
+        &["-o"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } result=0; other=1;\n}\n",
+    );
+    check(
+        "void f()\n{\n    value=1; do { value=0; } while (ready); result=0; other=1;\n}\n",
+        &["--style=kr", "-o"],
+        "void f()\n{\n    value=1; do {\n        value=0;\n    } while (ready); result=0; other=1;\n}\n",
+    );
+}
+
+#[test]
+fn lisp_keeps_a_statement_before_a_header_whose_block_it_expands() {
+    check(
+        "void f()\n{\n    value=1; if (ready) { value=0; } result=0;\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    value=1; if (ready) {\n        value=0; } result=0; }\n",
+    );
+    check(
+        "void f()\n{\n    value=1; do { value=0; } while (ready); result=0;\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    value=1; do {\n        value=0; }\n    while (ready); result=0; }\n",
+    );
+}
+
+#[test]
+fn breaking_one_line_headers_keeps_blocks_on_lines_holding_other_statements() {
+    // With one-line statements and blocks kept, the block of a header that
+    // follows a statement, or shares its line with more than one statement,
+    // stays whole; a header alone on its line still breaks its block.
+    let options = ["--break-one-line-headers", "--keep-one-line-blocks", "-o"];
+    for kept in [
+        "void f()\n{\n    value=1; if (ready) { value=0; }\n}\n",
+        "void f()\n{\nlabel: if (ready) { value=0; }\n}\n",
+    ] {
+        check(kept, &options, kept);
+    }
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0; } else { result=0; }\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) { value=0; }\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn without_a_brace_style_a_closing_header_follows_a_brace_that_begins_its_line() {
+    // A `}` that begins its source line keeps the closing header after it;
+    // one that follows code leaves the header a line of its own unless
+    // one-line statements are kept.
+    let leading = "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n";
+    let attached = "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }\n}\n";
+    check(leading, &[], attached);
+    check(leading, &["--break-one-line-headers"], attached);
+    let trailing =
+        "void f()\n{\n    if (ready) {\n        value=0; } else {\n        result=0;\n    }\n}\n";
+    check(
+        trailing,
+        &[],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    else {\n        result=0;\n    }\n}\n",
+    );
+    check(trailing, &["-o"], attached);
+    let do_while = "void f()\n{\n    do {\n        value=0; } while (ready);\n}\n";
+    check(
+        do_while,
+        &[],
+        "void f()\n{\n    do {\n        value=0;\n    }\n    while (ready);\n}\n",
+    );
+    check(
+        do_while,
+        &["-o"],
+        "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n}\n",
+    );
+}

@@ -587,3 +587,39 @@ fn method_after_an_access_label_keeps_its_indent_below_a_directive() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+fn format_args(source: &str, args: &[&str]) -> String {
+    let mut options = FormatOptions::default();
+    let args: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    format_exact(source, &options)
+}
+
+#[test]
+fn a_goto_label_leads_its_line_whatever_statement_follows_it() {
+    // A kept statement after a label leaves the label at the label column,
+    // also when it opens a block or continues on the next line.
+    for (input, expected) in [
+        (
+            "void f()\n{\n    done: if (ready) {\n        value=0;\n    }\n}\n",
+            "void f()\n{\ndone: if (ready) {\n        value=0;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n    done: do {\n        value=0;\n    } while (ready);\n}\n",
+            "void f()\n{\ndone: do {\n        value=0;\n    } while (ready);\n}\n",
+        ),
+        (
+            "void f()\n{\n    done: result = helper(value,\n                          other);\n}\n",
+            "void f()\n{\ndone: result = helper(value,\n                          other);\n}\n",
+        ),
+    ] {
+        assert_eq!(format_args(input, &["-o"]), expected);
+    }
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    done: if (ready) { value=0; }\n}\n",
+            &["--style=lisp"],
+        ),
+        "void f() {\ndone: if (ready) {\n        value=0; } }\n",
+    );
+}

@@ -1008,11 +1008,7 @@ impl FormatEngine<'_> {
                 Some(Token::Word(word))
                     if is_header(self.options, word) && !matches!(word.as_str(), "case" | "default")
             );
-            let break_expanded_lisp_header = self.options.brace_style == BraceStyle::Lisp
-                && self.layout.line_state.is_one_line_block
-                && following_header;
-            let keep_following_header = !break_expanded_lisp_header
-                && !self.options.break_one_line_headers
+            let keep_following_header = !self.options.break_one_line_headers
                 && self.options.keeps_multi_statement_line()
                 && following_header;
             // Styles that break blocks from their statements still break
@@ -1044,14 +1040,11 @@ impl FormatEngine<'_> {
             {
                 self.emit_trailing_source_space_or_ensure();
                 self.schedule_block_spacing_semicolon();
-            } else if break_expanded_lisp_header
-                || self.statement_in_broken_one_line_block()
+            } else if self.statement_in_broken_one_line_block()
                 || (!keep_following_header
                     && !keep_following_block
                     && (self.options.break_one_line_statements
-                        || !self.layout.line_state.is_multi_statement_line
-                        || (self.layout.line_state.is_one_line_block
-                            && self.options.break_one_line_blocks)))
+                        || !self.layout.line_state.is_multi_statement_line))
             {
                 self.finish_line();
                 self.observe_block_spacing_semicolon();

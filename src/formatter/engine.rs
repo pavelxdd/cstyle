@@ -763,14 +763,17 @@ impl<'a> FormatEngine<'a> {
             let context = self.token_push_context(tokens, index, line, &line_columns);
             self.current
                 .set_active_token(is_code_token(&tokens[index]).then_some(index));
+            let comment = matches!(tokens[index], Token::Comment(..)).then_some(index);
             let block_comment =
-                matches!(tokens[index], Token::Comment(CommentKind::Block, _)).then_some(index);
+                comment.filter(|_| matches!(tokens[index], Token::Comment(CommentKind::Block, _)));
+            self.comments.pushed_comment = comment;
             self.current.set_active_comment(block_comment);
             self.output.set_active_comment(block_comment);
             self.preprocessor.active_directive =
                 matches!(tokens[index], Token::Preprocessor(_)).then_some(index);
             self.push_token(&tokens[index], context);
             self.current.set_active_token(None);
+            self.comments.pushed_comment = None;
             self.current.set_active_comment(None);
             self.output.set_active_comment(None);
             if let Some((colon_index, has_action)) = multiline_case_colon

@@ -3030,14 +3030,12 @@ impl FormatEngine<'_> {
             })
     }
 
-    /// Whether the current line starts with code its source line had a
-    /// control header before, the header now on a line of its own.
     /// How much wider the code on the current line came out than its
     /// source tokens, whitespace runs counted as written.
     fn current_segment_growth(&self) -> Option<isize> {
         let tokens = &self.tree.tokens;
         let first = self.current.tokens()?.first;
-        let comment = self.current.active_comment()?;
+        let comment = self.comments.pushed_comment?;
         if comment <= first || comment > tokens.len() {
             return None;
         }
@@ -3054,24 +3052,6 @@ impl FormatEngine<'_> {
         let source: usize = tokens[first..end].iter().map(token_char_len).sum();
         let code = self.current.trimmed().chars().count();
         Some(code as isize - source as isize)
-    }
-
-    /// Whether the current line starts with a statement its source line
-    /// had another statement before, now on a line of its own.
-    fn current_line_broke_off_statement(&self) -> bool {
-        let tokens = &self.tree.tokens;
-        let Some(first) = self.current.tokens().map(|span| span.first) else {
-            return false;
-        };
-        let line_start = tokens[..first]
-            .iter()
-            .rposition(|token| matches!(token, Token::Newline))
-            .map_or(0, |index| index + 1);
-        self.tree
-            .previous_code_token(first)
-            .is_some_and(|previous| {
-                previous >= line_start && matches!(tokens[previous], Token::Symbol(';'))
-            })
     }
 
     fn current_line_broke_off_closing_brace(&self) -> bool {
@@ -3104,6 +3084,8 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the current line starts with code its source line had a
+    /// control header before, the header now on a line of its own.
     fn current_line_broke_off_header(&self) -> bool {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
@@ -3127,6 +3109,19 @@ impl FormatEngine<'_> {
                 matches!(token, Token::Word(word)
                     if is_header(self.options, word) && !(breaks_else_if && word == "else"))
             })
+    }
+
+    /// Whether the comment being pushed is a block comment that code follows
+    /// on its source line: padding moves no such comment.
+    fn block_comment_precedes_code_on_its_line(&self, kind: CommentKind) -> bool {
+        kind == CommentKind::Block
+            && self.token_input.has_next_meaningful_token
+            && !self.token_input.next_token_is_line_comment
+            && !self
+                .token_input
+                .next_input_whitespace
+                .as_deref()
+                .is_some_and(|whitespace| whitespace.contains('\n'))
     }
 
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
@@ -3203,18 +3198,19 @@ impl FormatEngine<'_> {
                 if kind == CommentKind::Block && comment.contains("NOPAD") {
                     self.ensure_space();
                 }
-            } else if !gap.contains('\t') && self.current_line_broke_off_statement() {
-                // Padding the statement broken off takes from the gap.
+            } else if let Some(width) = self.do_while_closer_width() {
+                // A `while` broken off the `}` of its `do` body leaves the
+                // comment where the joined line had it.
+                self.current.push_str(&gap);
+                self.current.push_str(&" ".repeat(width));
+            } else if !gap.contains('\t') && !self.block_comment_precedes_code_on_its_line(kind) {
+                // Padding the code of the comment's output line takes from
+                // the gap.
                 let growth = self.current_segment_growth().unwrap_or(0);
                 let width = (gap.chars().count() as isize - growth).max(1) as usize;
                 self.current.push_str(&" ".repeat(width));
             } else {
                 self.current.push_str(&gap);
-                // A `while` broken off the `}` of its `do` body leaves the
-                // comment where the joined line had it.
-                if let Some(width) = self.do_while_closer_width() {
-                    self.current.push_str(&" ".repeat(width));
-                }
             }
             return;
         }
@@ -3347,16 +3343,7 @@ impl FormatEngine<'_> {
             self.current.push_str(&" ".repeat(width));
             return;
         }
-        // astyle moves no block comment that code follows on its line.
-        let code_follows = kind == CommentKind::Block
-            && self.token_input.has_next_meaningful_token
-            && !self.token_input.next_token_is_line_comment
-            && !self
-                .token_input
-                .next_input_whitespace
-                .as_deref()
-                .is_some_and(|whitespace| whitespace.contains('\n'));
-        if code_follows
+        if self.block_comment_precedes_code_on_its_line(kind)
             && target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
@@ -3573,6 +3560,8 @@ pub(crate) struct CommentState {
     pub(crate) closing_broken_added_block: bool,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
+    /// Source token index of the comment being pushed, of either kind.
+    pub(crate) pushed_comment: Option<usize>,
 }
 
 fn strip_block_comment_line(

@@ -813,6 +813,18 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Without a brace style, a closing header stays after a `}` that begins
+    /// its source line; after a `}` that follows code it takes a line of its
+    /// own unless one-line statements are kept.
+    fn closing_header_stays_on_brace_line(&self) -> bool {
+        self.options.keeps_multi_statement_line()
+            || self.token_input.token_begins_source_line
+                && self
+                    .current
+                    .active_token()
+                    .is_some_and(|brace| matches!(self.tree.tokens[brace], Token::Symbol('}')))
+    }
+
     pub(super) fn should_attach_closing_header(&self, next: Option<&Token>) -> bool {
         if matches!(next, Some(Token::Word(word)) if word == "while")
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
@@ -821,10 +833,7 @@ impl FormatEngine<'_> {
                 return true;
             }
             if self.options.brace_style == BraceStyle::None
-                && self.layout.line_state.is_one_line_block
-                && (self.options.break_one_line_headers
-                    || (self.options.break_one_line_blocks
-                        && self.options.break_one_line_statements))
+                && !self.closing_header_stays_on_brace_line()
             {
                 return false;
             }
@@ -838,14 +847,9 @@ impl FormatEngine<'_> {
         let next_is_closing_header =
             matches!(next, Some(Token::Word(word)) if is_attachable_closing_header(word));
         if self.options.brace_style == BraceStyle::None {
-            if self.layout.line_state.is_one_line_block
-                && (self.options.break_one_line_headers
-                    || (self.options.break_one_line_blocks
-                        && self.options.break_one_line_statements))
-            {
-                return false;
-            }
-            return next_is_closing_header && !self.options.break_closing_braces;
+            return next_is_closing_header
+                && !self.options.break_closing_braces
+                && self.closing_header_stays_on_brace_line();
         }
         is_attached_closing_header_style(self.options)
             && !self.options.break_closing_braces
