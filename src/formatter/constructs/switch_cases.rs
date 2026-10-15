@@ -2562,7 +2562,14 @@ impl FormatEngine<'_> {
             layout.case_block_closed_depth = Some(depth - 1);
         }
 
-        if line_kind == LineKind::SwitchLabel {
+        // A label kept after the closer of the case block before it opens
+        // its own case as one on its own line does.
+        let closer_led_label = line_kind == LineKind::Normal
+            && line.trimmed_start().strip_prefix('}').is_some_and(|rest| {
+                let rest = rest.trimmed_start();
+                starts_header_word(rest, "case") || starts_header_word(rest, "default")
+            });
+        if line_kind == LineKind::SwitchLabel || closer_led_label {
             layout.case_block_closed_depth = None;
             // A label ends the case before it, and its directive's level.
             while layout

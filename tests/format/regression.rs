@@ -8904,3 +8904,13 @@ fn an_else_broken_off_its_closer_leaves_the_comment_where_the_joined_line_had_it
         "void f()\n{\n    if (ready) { a = 1; }\n    else { b = 2; }   // note\n    if (ready) { a = 1; }\n    else { b = 2; }    // note\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_keeps_the_statements_of_a_case_block_after_a_closer_label_at_its_brace() {
+    let input = "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value = 0;\n            break;\n            } case 2:\n            {\n            size_t mib[3];\n            size_t miblen = 1;\n            helper(first,\n                   second);\n            break;\n            }\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        input,
+    );
+}
