@@ -895,7 +895,9 @@ impl FormatEngine<'_> {
                     .and_then(|brace| self.added_opener_overruns.get(&brace))
                     .copied()
                     .unwrap_or(0);
-                let prefix = self.broken_off_else_prefix_width();
+                let prefix = self
+                    .broken_off_else_prefix_width()
+                    .max(self.broken_else_if_prefix_width());
                 let target = self
                     .layout
                     .line_state

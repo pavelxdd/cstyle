@@ -8537,3 +8537,15 @@ fn an_element_brace_after_a_closer_keeps_its_row_in_broken_brace_styles() {
         "void f()\n    {\n    struct Item list[] = { {\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
     );
 }
+
+#[test]
+fn breaking_else_ifs_keeps_unpadding_in_the_gap_before_a_comment() {
+    // The `if` broken off its `else` measures its comment from the column
+    // it had after the `else`, so unpadding still widens the gap.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } else if (other) { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-elseifs", "--unpad-paren"],
+        "void f()\n{\n    if(ready) {\n        value=0;\n    } else\n        if(other) {  // second\n            value=1;\n        }\n}\n",
+    );
+}
