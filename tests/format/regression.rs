@@ -7936,3 +7936,42 @@ fn pico_breaking_one_line_headers_splits_the_statements_of_the_block_it_breaks()
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn a_case_block_closer_a_statement_follows_stands_where_it_would_alone() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let cases: [(&[&str], &str); 7] = [
+        (
+            &["--style=allman", "-o"],
+            "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        value=0;\n    } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n",
+        ),
+        (
+            &["--style=ratliff", "-o"],
+            "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            } break;\n        case 2:\n            result=1;\n            break;\n        }\n    }\n",
+        ),
+        (
+            &["--style=horstmann", "-o"],
+            "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n    }\n}\n",
+        ),
+        (
+            &["--style=vtk", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            } break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n",
+        ),
+        (
+            &["--style=allman", "-S", "-o"],
+            "void f()\n{\n    switch (kind)\n    {\n        case 1:\n        {\n            value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu", "-S", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n            case 1:\n            {\n                value=0;\n            } break;\n            case 2:\n                result=1;\n                break;\n        }\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

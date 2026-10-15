@@ -1,5 +1,7 @@
 use crate::config::{BraceStyle, FormatOptions};
-use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::constructs::headers::{
+    is_attachable_closing_header, line_is_control_body_header, starts_header_word,
+};
 use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_text};
@@ -2364,12 +2366,35 @@ impl FormatEngine<'_> {
                 })
     }
 
+    /// Whether the line being laid out starts with a closing brace and goes
+    /// on with a statement, which leaves the brace where it stands alone.
+    fn closing_brace_leads_statement_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(tokens[span.first], Token::Symbol('}'))
+                && (span.first + 1..=span.last)
+                    .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+                    .is_some_and(|next| match &tokens[next] {
+                        Token::Word(word) => {
+                            !is_attachable_closing_header(word)
+                                && !matches!(word.as_str(), "while" | "case" | "default")
+                        }
+                        token => !matches!(
+                            token,
+                            Token::Symbol(';' | ',' | ')' | '}')
+                                | Token::Comment(..)
+                                | Token::Newline
+                        ),
+                    })
+        })
+    }
+
     pub(crate) fn switch_case_frame_closing_indent_override(
         &self,
         line: &LineView<'_>,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        if line.trimmed() != "}" {
+        if line.trimmed() != "}" && !self.closing_brace_leads_statement_line() {
             return None;
         }
         let frame = self
