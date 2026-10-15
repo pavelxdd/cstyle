@@ -8523,3 +8523,17 @@ fn lisp_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
         "void f() {\n    struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
     );
 }
+
+#[test]
+fn an_element_brace_after_a_closer_keeps_its_row_in_broken_brace_styles() {
+    // Styles that break braces keep the next element's brace on the `}, `
+    // row, which stands where the closer before it does.
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=gnu"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item list[] = { {\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
+    );
+}

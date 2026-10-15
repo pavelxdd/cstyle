@@ -2208,11 +2208,24 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
     ) {
         let brace_type = brace.brace_type;
+        // The next element's brace after a `}, ` keeps the row, in every
+        // style; the layout places that row like any other.
+        let element_brace_after_closer = matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) && matches!(next, Some(Token::Newline))
+            && self.layout.previous == PreviousToken::Comma
+            && self.current.trimmed_start().starts_with('}')
+            && self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.groups.enclosing(brace))
+                .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace);
         let source_attached_initializer_line = matches!(
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
         ) && matches!(next, Some(Token::Newline))
-            && !matches!(
+            && (!matches!(
                 self.options.brace_style,
                 BraceStyle::Allman
                     | BraceStyle::Whitesmith
@@ -2220,7 +2233,7 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
-            );
+            ) || element_brace_after_closer);
         let gnu_macro_open_brace =
             self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
@@ -2251,7 +2264,7 @@ impl FormatEngine<'_> {
             }
             self.current.push('{');
             self.layout.command_state.observe_char('{');
-            if !matches!(next, Some(Token::Symbol('{' | '#'))) {
+            if !matches!(next, Some(Token::Symbol('{' | '#'))) && !element_brace_after_closer {
                 let body_indent = if source_attached_initializer_line {
                     self.current_line_indent_spaces() + self.options.indent_width
                 } else {
