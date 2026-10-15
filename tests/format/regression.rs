@@ -8239,3 +8239,11 @@ fn indent_after_parens_continues_a_subscript_after_a_comma_as_a_call() {
         "void f()\n{\n    value = table[LIMIT + 1,\n            SIZE + 1];\n    value = helper(LIMIT + 1,\n            SIZE + 1);\n}\n",
     );
 }
+
+#[test]
+fn a_leading_shift_aligns_inside_the_innermost_paren_left_open() {
+    // A shift row continues the paren still open at its line's start, not
+    // the first one its chain opened.
+    let input = "void f()\n{\n    std::cout << helper(a, (b\n                            << c));\n    std::cout << helper(a) << (b\n                               << c);\n    m = 1 << (((p & (size - 1))\n               >> shift)\n              + OFFSET);\n}\n";
+    check(input, &["--style=kr"], input);
+}

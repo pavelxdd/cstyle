@@ -1926,15 +1926,26 @@ impl FormatEngine<'_> {
             .map(|head| head.line_indent_spaces)
     }
 
+    /// The column of the paren or bracket enclosing the start of the line
+    /// being laid out, when output line `line` opened it.
+    fn pending_line_open_delimiter_column(&self, line: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(self.output.pending_tokens()?.first)?;
+        let open = groups.get(group).open;
+        if groups.get(group).delimiter == Delimiter::Brace
+            || self.output.line_with_token(open) != Some(line)
+        {
+            return None;
+        }
+        self.token_column(open)
+    }
+
     fn parenthesized_stream_indent_for_line(&self, line: usize) -> Option<usize> {
         let stream = self.layout.frame_stack.first_stream_on_output_line(line)?;
         if !stream.line_has_unmatched_open_paren {
             return None;
         }
-        let delimiter_column = self
-            .layout
-            .frame_stack
-            .first_delimiter_column_after_output_column(line, stream.operator_output_column)?;
+        let delimiter_column = self.pending_line_open_delimiter_column(line)?;
         if stream.operator_output_column >= delimiter_column {
             return None;
         }

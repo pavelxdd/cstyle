@@ -493,16 +493,6 @@ impl FrameStack {
             .max()
     }
 
-    pub(crate) fn first_delimiter_column_after_output_column(
-        &self,
-        line: usize,
-        column: usize,
-    ) -> Option<usize> {
-        self.delimiter_output_columns_on(line)
-            .filter(|&frame_column| frame_column > column)
-            .min()
-    }
-
     pub(crate) fn last_argument(&self) -> Option<&ArgumentFrame> {
         self.last_argument.as_ref()
     }
@@ -1242,10 +1232,6 @@ mod tests {
         });
         stack.pop_delimiter(3);
 
-        assert_eq!(
-            stack.first_delimiter_column_after_output_column(2, 0),
-            Some(5)
-        );
         assert_eq!(
             stack.last_delimiter_column_after_output_column(2, 0),
             Some(15)

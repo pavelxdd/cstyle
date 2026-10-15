@@ -2428,7 +2428,7 @@ impl FormatEngine<'_> {
 
     /// Visual column of the code token `token` on its output line, found
     /// by walking the line's token texts in order.
-    pub(super) fn token_column(&self, token: usize) -> Option<usize> {
+    pub(crate) fn token_column(&self, token: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let line = self.output.line_with_token(token)?;
         // A string continued over lines maps to the line it ends on and
