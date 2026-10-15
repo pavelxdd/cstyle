@@ -8362,3 +8362,16 @@ fn pico_one_line_braces_added_before_a_comment_keep_the_unpadded_gap() {
         "void f()\n{   value=1;\n    if(ready) { value=0; }    // note\n}\n",
     );
 }
+
+#[test]
+fn a_label_kept_after_a_case_block_closer_opens_its_own_block() {
+    // A label kept after the closer of the case block before it opens the
+    // block its line ends with, so the closer after that block stands as
+    // the one before it does.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements", "--indent-cases"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n            value=0;\n            break;\n    } case 2: {\n            result=1;\n            break;\n    } default: done();\n    }\n}\n",
+    );
+}

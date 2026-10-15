@@ -1745,6 +1745,14 @@ impl FormatEngine<'_> {
             return None;
         }
         let code = self.output.code(index);
+        // A block after a statement or a header kept on the label line is
+        // theirs, not the label's.
+        let statement_block = || {
+            code.strip_suffix('{').is_some_and(|head| {
+                let head = head.trimmed_end();
+                head.ends_with(';') || label_line_holds_braceless_header(head)
+            })
+        };
         // A label kept after the `}` closing the case block before it.
         let label = trimmed.trim_start_matches('}').trimmed_start();
         if (trimmed.starts_with('}')
@@ -1755,13 +1763,14 @@ impl FormatEngine<'_> {
             let brace_extra = usize::from(
                 self.options.indent_braces || self.options.brace_style == BraceStyle::Whitesmith,
             ) * self.options.indent_width;
+            let statement_block = statement_block();
             return Some(Some(ActiveCaseLayout {
                 indent_spaces: self
                     .output
                     .lead_width(index, tab_width)
                     .saturating_sub(brace_extra),
-                opens_block: false,
-                statement_block_open: false,
+                opens_block: code.ends_with('{') && !statement_block,
+                statement_block_open: statement_block,
             }));
         }
         if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
@@ -1770,12 +1779,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .any(|closing| *closing <= indent_spaces)
             {
-                // A block after a statement or a header kept on the label
-                // line is theirs, not the label's.
-                let statement_block = code.strip_suffix('{').is_some_and(|head| {
-                    let head = head.trimmed_end();
-                    head.ends_with(';') || label_line_holds_braceless_header(head)
-                });
+                let statement_block = statement_block();
                 return Some(Some(ActiveCaseLayout {
                     indent_spaces,
                     opens_block: code.ends_with('{') && !statement_block,
