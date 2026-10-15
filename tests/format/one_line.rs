@@ -1859,3 +1859,23 @@ fn label_between_a_braceless_header_and_its_body_leaves_the_body_level_under_kep
 
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn keep_one_line_blocks_keeps_a_tab_before_a_block_on_its_header_line() {
+    let mut options = FormatOptions::default();
+    options.break_one_line_blocks = false;
+    let input = "void f()\n{\n    if (ready)\t{ value=0; }\n    if (ready)   { value=0; }\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn keep_one_line_blocks_keeps_a_tab_before_an_initializer_once() {
+    let mut options = FormatOptions::default();
+    options.break_one_line_blocks = false;
+    let input = "void f()\n{\n    int list[] =\t{ 1, 2 };\n    struct Item item =\t{ 1 };\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+    options.pad_operators = true;
+    assert_eq!(format_exact(input, &options), input);
+}
