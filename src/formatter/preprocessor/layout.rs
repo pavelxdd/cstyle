@@ -632,6 +632,16 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // A brace giving the header before the group its body in this branch
+        // opens the header's block.
+        if self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.alternative_branch_body_header(span.first))
+            .is_some()
+        {
+            return None;
+        }
         let spaces = is_preprocessor_branch_body(line).then(|| {
             self.preprocessor.branch_stack.last().and_then(|branch| {
                 branch
@@ -1147,6 +1157,16 @@ impl FormatEngine<'_> {
                 frame.semantic_kind == BraceSemanticKind::Command
                     && frame.header.as_deref() == Some("else")
             })
+        {
+            return None;
+        }
+        // A brace giving the header before the group its body in this branch
+        // opens the header's block.
+        if self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.alternative_branch_body_header(span.first))
+            .is_some()
         {
             return None;
         }

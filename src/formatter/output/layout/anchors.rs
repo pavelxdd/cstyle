@@ -128,6 +128,11 @@ impl FormatEngine<'_> {
         })
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| self.braceless_body_indent(first))
+        .or_else(|| {
+            when(opens_brace, || {
+                self.alternative_branch_header_brace_indent(first)
+            })
+        })
         .or_else(|| when(is_word(token, "while"), || self.do_while_indent(first)))
         .or_else(|| {
             when(!closes_brace && (opens_brace || starts_statement), || {
@@ -5140,6 +5145,9 @@ impl FormatEngine<'_> {
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let header = self.tree.statements.braceless_header(first)?;
+        if self.alternative_branch_body_header(first).is_some() {
+            return None;
+        }
         // Added braces make the body a block; an empty statement, a
         // nested header, a statement over several lines or one after a
         // directive gets none.
@@ -5193,6 +5201,75 @@ impl FormatEngine<'_> {
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + levels * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
+    /// The header whose body the `{` at `first` opens in another branch of
+    /// a conditional group that starts right after the header: the brace
+    /// opens the header's block, not a statement of a braceless body.
+    pub(crate) fn alternative_branch_body_header(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !matches!(tokens[first], Token::Symbol('{')) {
+            return None;
+        }
+        let directive_of = |index: usize| match &tokens[index] {
+            Token::Preprocessor(directive) => preprocessor_directive(&directive.text),
+            _ => None,
+        };
+        // The directive the brace's branch starts at.
+        let branch = (0..first)
+            .rev()
+            .take_while(|&index| !is_code_token(&tokens[index]))
+            .find(|&index| matches!(tokens[index], Token::Preprocessor(_)))?;
+        if !matches!(
+            directive_of(branch),
+            Some("else" | "elif" | "elifdef" | "elifndef")
+        ) {
+            return None;
+        }
+        // Its group's `#if`, which must follow a header.
+        let mut depth = 0usize;
+        let opening = (0..branch).rev().find(|&index| match directive_of(index) {
+            Some("endif") => {
+                depth += 1;
+                false
+            }
+            Some("if" | "ifdef" | "ifndef") if depth > 0 => {
+                depth -= 1;
+                false
+            }
+            Some("if" | "ifdef" | "ifndef") => true,
+            _ => false,
+        })?;
+        let before = self.tree.previous_code_token(opening)?;
+        let header = match &tokens[before] {
+            Token::Word(word) if matches!(word.as_str(), "else" | "do") => before,
+            Token::Symbol(')') => {
+                let open = self
+                    .tree
+                    .groups
+                    .get(self.tree.groups.closed_at(before)?)
+                    .open;
+                self.tree.previous_code_token(open)?
+            }
+            _ => return None,
+        };
+        matches!(&tokens[header], Token::Word(word) if is_header(word)).then_some(header)
+    }
+
+    /// The `{` opening a header's block in another branch of a group right
+    /// after the header stands where the style breaks that header's brace.
+    fn alternative_branch_header_brace_indent(&self, first: usize) -> Option<usize> {
+        let header = self.alternative_branch_body_header(first)?;
+        let line = self.line_led_by(header)?;
+        let indented = matches!(
+            self.options.brace_style,
+            BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        );
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + usize::from(indented) * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
     }

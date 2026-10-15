@@ -9316,3 +9316,26 @@ fn whitesmith_blocks_in_a_switch_after_a_statement_macro_stand_as_in_any_switch(
         "void f()\n    {\n    SETUP_BEGIN\n    switch (kind)\n        {\n        case FIRST:\n#line 37 \"input.y\"\n                {\n                release(value);\n                }\n            break;\n        case OTHER:\n            run(value);\n                {\n                push(value);\n                }\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_brace_opening_an_alternative_branch_after_a_header_is_the_headers_block() {
+    // The other branch of a group right after a header gives the header its
+    // body: a brace there opens the header's block, not a statement of a
+    // braceless body.
+    let input = "void f()\n{\n  if (full)\n#if !defined OVERFLOW\n    fail();\n#else\n    {\n      grow();\n    }\n#endif\n  done();\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n    {\n        grow();\n    }\n#endif\n    done();\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n        {\n        grow();\n        }\n#endif\n    done();\n    }\n",
+    );
+    check(
+        "void f()\n{\n  while (busy)\n    {\n      if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n        {\n          grow();\n        }\n#endif\n    }\n}\n",
+        &["--style=gnu"],
+        "void f()\n{\n    while (busy)\n        {\n            if (full)\n#if !defined OVERFLOW\n                fail();\n#else\n                {\n                    grow();\n                }\n#endif\n        }\n}\n",
+    );
+}
