@@ -442,6 +442,8 @@ pub(crate) struct SwitchCaseLineTransformer {
     should_unindent_comment: bool,
     /// The last line kept a level of its unindent for a comment on it.
     comment_spared_level: bool,
+    /// The last line stands a level past a code line for a comment on it.
+    comment_kept_level: bool,
     in_continued_preprocessor: bool,
     in_block_comment: bool,
     in_quote: bool,
@@ -470,6 +472,7 @@ impl SwitchCaseLineTransformer {
             should_unindent_line: true,
             should_unindent_comment: false,
             comment_spared_level: false,
+            comment_kept_level: false,
             in_continued_preprocessor: false,
             in_block_comment: false,
             in_quote: false,
@@ -510,6 +513,7 @@ impl SwitchCaseLineTransformer {
         self.should_unindent_line = true;
         self.should_unindent_comment = false;
         self.comment_spared_level = false;
+        self.comment_kept_level = false;
         self.line_unindent = 0;
 
         if line.is_empty() && !self.empty_line_fill {
@@ -532,6 +536,7 @@ impl SwitchCaseLineTransformer {
 
         let unindent_depth = self.total_unindent_depth();
         self.comment_spared_level = self.should_unindent_comment && unindent_depth > 0;
+        self.comment_kept_level = self.comment_spared_level;
         if self.should_unindent_comment && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
         } else if self.should_unindent_comment && self.total_body_level_depth() > 0 {
@@ -539,6 +544,7 @@ impl SwitchCaseLineTransformer {
             // places comment rows itself.
             if !is_preprocessor && !starts_with_comment && !line.is_empty() {
                 line.insert_str(0, &" ".repeat(self.indent_width));
+                self.comment_kept_level = true;
             }
         } else if self.should_unindent_line && unindent_depth > 0 {
             self.line_unindent += self.unindent_line(&mut line, unindent_depth);
@@ -548,6 +554,10 @@ impl SwitchCaseLineTransformer {
 
     pub(crate) fn comment_spared_level(&self) -> bool {
         self.comment_spared_level
+    }
+
+    pub(crate) fn comment_kept_level(&self) -> bool {
+        self.comment_kept_level
     }
 
     /// The columns the last transformed line lost to case unindents.

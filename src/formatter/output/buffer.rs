@@ -382,6 +382,9 @@ pub(crate) struct OutputBuffer {
     verbatim: Vec<bool>,
     /// Continued lines of a directive that the formatter indented itself.
     indented_directive_continuation: Vec<bool>,
+    /// Lines that a comment on them left a level past a code line in a
+    /// case body.
+    comment_kept_case_level: Vec<bool>,
     /// Comments of the current line just taken, for the next pushed line.
     pending_comments: Option<LineComments>,
     /// Block comment token being pushed; lines pushed without a current line
@@ -848,6 +851,21 @@ impl OutputBuffer {
         }
     }
 
+    pub(crate) fn mark_comment_kept_case_level(&mut self, index: usize) {
+        if let Some(line) = self.comment_kept_case_level.get_mut(index) {
+            *line = true;
+        }
+    }
+
+    /// Whether a comment on line `index` left it a level past a code line
+    /// in a case body.
+    pub(crate) fn comment_kept_case_level(&self, index: usize) -> bool {
+        self.comment_kept_case_level
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+    }
+
     pub(crate) fn is_indented_directive_continuation(&self, index: usize) -> bool {
         self.indented_directive_continuation
             .get(index)
@@ -866,6 +884,7 @@ impl OutputBuffer {
         self.comments.reserve(lines);
         self.verbatim.reserve(lines);
         self.indented_directive_continuation.reserve(lines);
+        self.comment_kept_case_level.reserve(lines);
     }
 
     fn push_pending_sources(&mut self, blank: bool) {
@@ -877,6 +896,7 @@ impl OutputBuffer {
         }
         self.verbatim.push(false);
         self.indented_directive_continuation.push(false);
+        self.comment_kept_case_level.push(false);
         if blank {
             self.tokens.push(PackedSpan::NONE);
             self.comments
@@ -914,6 +934,7 @@ impl OutputBuffer {
         self.comments.pop();
         self.verbatim.pop();
         self.indented_directive_continuation.pop();
+        self.comment_kept_case_level.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -967,6 +988,7 @@ impl OutputBuffer {
         self.comments.remove(index);
         self.verbatim.remove(index);
         self.indented_directive_continuation.remove(index);
+        self.comment_kept_case_level.remove(index);
         self.last_non_empty_dirty.set(true);
         self.record_change(index);
         self.lines.remove(index)

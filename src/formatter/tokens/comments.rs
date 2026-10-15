@@ -1748,6 +1748,7 @@ impl FormatEngine<'_> {
                     .last_closed_brace()
                     .is_some_and(|frame| {
                         frame.semantic_kind == BraceSemanticKind::Command
+                            && !frame.case_block
                             && frame.header.as_deref().is_none_or(|header| {
                                 !matches!(header, "case" | "default" | "switch")
                             })
@@ -1786,7 +1787,12 @@ impl FormatEngine<'_> {
                         .frame_stack
                         .last_closed_brace()
                         .filter(|frame| frame.case_block)
-                        .and_then(|_| self.active_case_label_indent_spaces())
+                        .and_then(|_| {
+                            // A label that opened the block on its line is
+                            // the block's header.
+                            self.active_case_label_indent_spaces()
+                                .or_else(|| self.closed_block_header_lead())
+                        })
                         .map_or(0, |label| label + self.options.indent_width);
                     (self.layout.indentation.indent() * self.options.indent_width)
                         .max(previous_indent)

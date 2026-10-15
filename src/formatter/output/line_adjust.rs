@@ -93,6 +93,13 @@ impl LineAdjuster {
         self.case_processing_enabled && self.switch_case_transformer.comment_spared_level()
     }
 
+    /// Whether a comment on the last adjusted line left it a level past a
+    /// code line: a level spared of its case unindent, or one added at the
+    /// case body.
+    pub fn last_line_comment_kept_level(&self) -> bool {
+        self.case_processing_enabled && self.switch_case_transformer.comment_kept_level()
+    }
+
     /// The columns the last adjusted line lost to case unindents.
     pub fn last_line_case_unindent(&self) -> usize {
         self.last_line_case_unindent

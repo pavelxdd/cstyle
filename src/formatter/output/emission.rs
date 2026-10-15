@@ -176,7 +176,11 @@ impl FormatEngine<'_> {
         self.shift_run_in_brace_for_spared_level(&line);
         let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);
+        let index = self.output.len();
         self.publish_ready_line(line);
+        if self.layout.line_adjuster.last_line_comment_kept_level() {
+            self.output.mark_comment_kept_case_level(index);
+        }
     }
 
     /// astyle unindents a case block's lines as joined, where a comment

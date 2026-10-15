@@ -3710,6 +3710,16 @@ fn added_braces_set_the_statement_comment_an_indent_past_it() {
 }
 
 #[test]
+fn added_braces_close_after_a_multi_row_trailing_comment_as_written_braces_do() {
+    let written = "void f(void)\n{\n    if (a) {\n        value = 1; /* first\n                      second */\n    }\n    else\n        value = 2;\n}\n";
+    let added = "void f(void)\n{\n    if (a)\n        value = 1; /* first\n                      second */\n    else\n        value = 2;\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        value = 1; /* first\n                      second */\n    } else {\n        value = 2;\n    }\n}\n";
+    check(written, &["--style=1tbs"], expected);
+    check(added, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
 fn broken_one_line_function_body_comment_keeps_the_gap_before_its_brace() {
     let input = "int f(){return 0;}// tail\nint g(){return 0;} // tail\n";
     let expected = "int f() {\n    return 0;   // tail\n}\nint g() {\n    return 0;   // tail\n}\n";
@@ -9450,4 +9460,108 @@ fn attach_return_type_leaves_a_head_after_a_conditional_macro_split() {
         &["--style=1tbs", "--attach-return-type"],
         "#if defined(FAST)\nMACRO_NOINLINE\n#endif\nstatic bool\nfixup(Item *item)\n{\n    return true;\n}\nstatic bool plain(Item *item)\n{\n    return true;\n}\n",
     );
+}
+
+#[test]
+fn a_comment_after_a_case_block_stands_in_the_case_body_before_a_statement() {
+    let call = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n        break;\n    }\n    /* comment */\n    b();\n    default:\n        c();\n    }\n}\n";
+    let exit = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* comment */\n    break;\n    default:\n        c();\n    }\n}\n";
+    for (args, input, expected) in [
+        (&["--style=kr"][..], call, call.replace("    /* comment */", "        /* comment */")),
+        (&["--style=kr"][..], exit, exit.replace("    /* comment */", "        /* comment */")),
+        (
+            &["--style=allman", "-S"][..],
+            call,
+            "void f(int x)\n{\n    switch (x)\n    {\n        case 1:\n        {\n            a();\n            break;\n        }\n            /* comment */\n        b();\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=kr", "-S"][..],
+            call,
+            "void f(int x)\n{\n    switch (x) {\n        case 1: {\n            a();\n            break;\n        }\n            /* comment */\n        b();\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=lisp", "-S"][..],
+            exit,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n            a(); }\n            /* comment */\n        break;\n        default:\n            c(); } }\n".to_string(),
+        ),
+        (
+            &["--style=gnu"][..],
+            exit,
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n            /* comment */\n        break;\n        default:\n            c();\n        }\n}\n".to_string(),
+        ),
+        (
+            &["--style=whitesmith"][..],
+            call,
+            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            break;\n            }\n            /* comment */\n        b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
+        (
+            &["--style=horstmann"][..],
+            exit,
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n            /* comment */\n        break;\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=ratliff"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n            a();\n            break;\n            }\n            /* comment */\n        b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
+        (
+            &["--style=pico"][..],
+            exit,
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n            /* comment */\n        break;\n        default:\n            c(); } }\n".to_string(),
+        ),
+        (
+            &["--style=lisp"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n    case 1: {\n        a();\n        break; }\n        /* comment */\n    b();\n    default:\n        c(); } }\n".to_string(),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn a_row_of_comments_after_a_case_block_stands_at_the_next_label_as_comment_lines_do() {
+    let one_row = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* first */ /* second */\n    case 2:\n        b();\n    }\n}\n";
+    let two_rows = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* first */\n    /* second */\n    case 2:\n        b();\n    }\n}\n";
+    check(one_row, &["--style=kr"], one_row);
+    check(two_rows, &["--style=kr"], two_rows);
+}
+
+#[test]
+fn statements_after_a_commented_row_past_a_case_block_stand_where_the_row_before_it_would() {
+    let input = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n        b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+        ),
+        (
+            &["--style=allman"][..],
+            "void f(int x)\n{\n    switch (x)\n    {\n    case 1:\n    {\n        a();\n    }\n        b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+        ),
+        (
+            &["--style=whitesmith", "-S"][..],
+            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n    }\n",
+        ),
+        (
+            &["--style=gnu"][..],
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+        ),
+        (
+            &["--style=horstmann"][..],
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n    }\n}\n",
+        ),
+        (
+            &["--style=pico"][..],
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d(); } }\n",
+        ),
+        (
+            &["--style=vtk"][..],
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
 }

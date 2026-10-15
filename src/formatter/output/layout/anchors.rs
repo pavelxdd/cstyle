@@ -3637,6 +3637,11 @@ impl FormatEngine<'_> {
         {
             return;
         }
+        // Comments after a case block stand in the case body, where a
+        // statement after the block stands at its label.
+        if !case_labels && self.case_block_before(first).is_some() {
+            return;
+        }
         let statements = &self.tree.statements;
         // A continuation inside parentheses takes the comments inside them.
         let continues_parens = self.continues_parentheses_past_comments(first)
@@ -5870,22 +5875,7 @@ impl FormatEngine<'_> {
     /// stands at the label.
     #[inline(never)]
     fn statement_after_case_block_indent(&self, first: usize) -> Option<usize> {
-        let tokens = &self.tree.tokens;
-        let open = self.tree.statements.previous_sibling(first)?;
-        let colon = self.tree.previous_code_token(open)?;
-        if !matches!(tokens[open], Token::Symbol('{'))
-            || !matches!(tokens[colon], Token::Symbol(':'))
-        {
-            return None;
-        }
-        let label = (0..colon)
-            .rev()
-            .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
-            .find(|&index| self.tree.statements.starts_block_statement(index))?;
-        if !matches!(&tokens[label], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
-        {
-            return None;
-        }
+        let (label, open) = self.case_block_before(first)?;
         let line = self.output.line_with_token(label)?;
         if self.output.line_tokens(line)?.first != label
             || self
@@ -5901,6 +5891,25 @@ impl FormatEngine<'_> {
                 + self.case_unindent_spaces()
                 + usize::from(self.options.indent_cases) * self.options.indent_width,
         )
+    }
+
+    /// The `case` or `default` label and the brace of the case block that
+    /// directly precedes the statement starting at `first`.
+    fn case_block_before(&self, first: usize) -> Option<(usize, usize)> {
+        let tokens = &self.tree.tokens;
+        let open = self.tree.statements.previous_sibling(first)?;
+        let colon = self.tree.previous_code_token(open)?;
+        if !matches!(tokens[open], Token::Symbol('{'))
+            || !matches!(tokens[colon], Token::Symbol(':'))
+        {
+            return None;
+        }
+        let label = (0..colon)
+            .rev()
+            .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
+            .find(|&index| self.tree.statements.starts_block_statement(index))?;
+        matches!(&tokens[label], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+            .then_some((label, open))
     }
 
     /// Column of the statement starting at `first` after its previous
@@ -5921,8 +5930,13 @@ impl FormatEngine<'_> {
                 return None;
             }
         }
-        let column =
-            self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces();
+        // A comment that left its line a level past a code line in a case
+        // body does not move the statements after it.
+        let spared =
+            usize::from(self.output.comment_kept_case_level(line)) * self.options.indent_width;
+        let column = (self.output.lead_width(line, self.options.tab_width)
+            + self.case_unindent_spaces())
+        .saturating_sub(spared);
         let is_brace = |index: usize| matches!(tokens[index], Token::Symbol('{'));
         // A one-line block VTK keeps at its statement stands as a statement.
         let sibling_brace = is_brace(sibling)
