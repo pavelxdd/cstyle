@@ -1937,6 +1937,9 @@ impl FormatEngine<'_> {
         } else if trimmed.starts_with('}') && !case_layout.opens_block {
             None
         } else if trimmed.starts_with('}') {
+            let after_brace = trimmed[1..].trimmed_start();
+            let closer_leads_label =
+                starts_header_word(after_brace, "case") || after_brace.starts_with("default");
             let mut closed = 0usize;
             (0..self.output.len()).rev().find_map(|index| {
                 let previous_trimmed = self.output.code_trimmed(index);
@@ -1946,11 +1949,12 @@ impl FormatEngine<'_> {
                 let code = self.output.code(index);
                 if previous_trimmed.starts_with("case ") || previous_trimmed.starts_with("default:")
                 {
-                    // Indented cases indent the brace closing a case block,
-                    // and Ratliff closes a block at its body.
+                    // Ratliff closes a block at its body, and indented
+                    // cases indent the brace closing a case block, unless
+                    // the next label goes on after it.
                     return Some(
                         case_indent
-                            + (usize::from(self.options.indent_cases)
+                            + (usize::from(self.options.indent_cases && !closer_leads_label)
                                 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
                                 * indent_width,
                     );
@@ -2193,10 +2197,13 @@ impl FormatEngine<'_> {
                 .nearest_open_switch_indent_spaces()
                 .map(|switch| switch + self.options.indent_width + brace_extra);
         }
-        // The labels stand a level out from the switch body; the line
+        // The labels stand a level out from the switch body, and the line
+        // with them, unless Ratliff closes the block at its body; the line
         // adjuster takes the case blocks around the switch off them.
+        let label_level = usize::from(self.options.brace_style != BraceStyle::Ratliff);
         (self.layout.line_adjuster.total_case_unindent_depth() > 0).then_some(
-            self.layout.indentation.indent().saturating_sub(1) * self.options.indent_width,
+            self.layout.indentation.indent().saturating_sub(label_level)
+                * self.options.indent_width,
         )
     }
 

@@ -8161,3 +8161,29 @@ fn ratliff_indented_switch_keeps_a_commented_case_block_closer_at_its_body() {
         "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;\n            } // one\n        default: {\n            break;\n            }\n        } // done\n    x();\n    }\n",
     );
 }
+
+#[test]
+fn ratliff_case_block_closer_kept_before_the_next_label_stands_at_its_body() {
+    // Each closer a label follows on its line stands where Ratliff closes
+    // the block, at its body.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--keep-one-line-statements"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;\n            } case 2: {\n            result=1;\n            break;\n            } default: done();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_indented_cases_keep_a_closer_before_the_next_label_at_the_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=ratliff",
+            "--keep-one-line-statements",
+            "--indent-cases",
+        ],
+        "void f() {\n    switch (kind) {\n        case 1: {\n                value=0;\n                break;\n            } case 2: {\n                result=1;\n                break;\n            } default: done();\n        }\n    }\n",
+    );
+}
