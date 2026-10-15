@@ -2533,10 +2533,18 @@ impl FormatEngine<'_> {
             }
             let code = self.output.code_trimmed_of(line);
             if code.ends_with('{') {
+                // A brace kept on its label's line opens the case block
+                // once that line is laid out.
+                let entered = self
+                    .layout
+                    .nesting
+                    .brace_header_stack
+                    .last()
+                    .is_some_and(|header| matches!(header.as_deref(), Some("case" | "default")));
                 self.layout
                     .switch_case_layout
                     .unindent_brace_depths
-                    .push(self.layout.nesting.brace_header_stack.len());
+                    .push(self.layout.nesting.brace_header_stack.len() + usize::from(!entered));
                 self.layout.switch_case_layout.pending_label_brace = false;
             } else {
                 self.layout.switch_case_layout.pending_label_brace = true;

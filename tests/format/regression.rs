@@ -8017,3 +8017,13 @@ fn whitesmith_bare_block_after_a_labels_block_stands_at_the_statements() {
         "void f()\n    {\n    x();\nagain:\n        {\n        value=0;\n        }\n        {\n        value=0;\n        }\n    y();\n    }\n",
     );
 }
+
+#[test]
+fn keeping_one_line_statements_leaves_an_else_switch_closer_at_its_column() {
+    // A case brace kept on its label's line opens the case block as one
+    // joined to the label later does, which leaves the switch closer alone.
+    let input = "void f()\n{\n    if (ready) {\n        value=1;\n    }\n    else switch (kind) {\n        case 1: {\n            value=0;\n            break;} // one\n        default: {\n            break;}\n        } // done\n    x();\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n        case 1: {\n            value=0;\n            break;\n        } // one\n        default: {\n            break;\n        }\n        } // done\n    x();\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=kr", "-o"], expected);
+}
