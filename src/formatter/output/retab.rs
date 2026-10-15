@@ -10,7 +10,7 @@
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::visual_width_from;
@@ -294,11 +294,46 @@ impl FormatEngine<'_> {
             Some(Token::Whitespace(whitespace)) => whitespace.as_str(),
             _ => "",
         };
+        // A comment run in after code on its source line opens at a column
+        // its rows' whitespace reaches; only a tab past it indents a row.
+        let line_start = tokens[..comment]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let run_in = tokens[line_start..comment]
+            .iter()
+            .any(|token| !matches!(token, Token::Whitespace(_)));
+        let tab_width = self.options.tab_width.max(1);
+        let opener_column = run_in.then(|| {
+            let before: String = tokens[line_start..comment]
+                .iter()
+                .map(|token| token_text(token))
+                .collect();
+            visual_width_from(&before, 0, tab_width)
+        });
         text.split('\n').nth(index - opener).is_some_and(|row| {
             let whitespace = &row[..row.len() - row.trim_start_matches([' ', '\t']).len()];
-            whitespace
-                .strip_prefix(opener_whitespace)
-                .is_some_and(|relative| relative.contains('\t'))
+            let Some(opener_column) = opener_column else {
+                return whitespace
+                    .strip_prefix(opener_whitespace)
+                    .is_some_and(|relative| relative.contains('\t'));
+            };
+            let mut column = 0;
+            let past_opener = whitespace
+                .char_indices()
+                .find_map(|(at, ch)| {
+                    if column >= opener_column {
+                        return Some(at);
+                    }
+                    column = if ch == '\t' {
+                        (column / tab_width + 1) * tab_width
+                    } else {
+                        column + 1
+                    };
+                    None
+                })
+                .map_or("", |at| &whitespace[at..]);
+            past_opener.contains('\t')
         })
     }
 

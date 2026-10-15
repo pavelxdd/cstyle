@@ -8435,3 +8435,19 @@ fn whitesmith_closes_an_initializer_opened_after_another_on_its_line_at_its_rows
         "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n            }\n        };\n}\n",
     );
 }
+
+#[test]
+fn rows_of_a_comment_run_in_after_a_brace_keep_their_spaces_past_the_block_tabs() {
+    // The rows' tabs reach the block's level; the spaces after them align
+    // the text past the comment's opening and stay.
+    let input = "void f()\n{\n\tif (ready)\n\t{\t/* first row of a comment\n\t\t    second row\n\t\t    third row */\n\t\tvalue = 0;\n\t}\n}\n";
+    check(
+        input,
+        &[
+            "--style=horstmann",
+            "--indent=tab=4",
+            "--remove-comment-prefix",
+        ],
+        "void f()\n{\tif (ready)\n\t{\t/* first row of a comment\n\t\t    second row\n\t\t    third row */\n\t\tvalue = 0;\n\t}\n}\n",
+    );
+}
