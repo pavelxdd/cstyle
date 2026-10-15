@@ -8118,3 +8118,14 @@ fn break_blocks_reads_a_while_after_a_comment_as_its_do_blocks_end() {
     let input = "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n}\n";
     check(input, &["--break-blocks"], input);
 }
+
+#[test]
+fn lisp_break_blocks_keeps_an_else_with_its_if() {
+    // Breaking blocks pads around the if-else chain, not inside it.
+    let input = "void f() {\n    for (;;) {\n        if (ready) break;\n        else continue; }\n    x(); }\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks"],
+        "void f() {\n    for (;;) {\n        if (ready) break;\n        else continue; }\n\n    x(); }\n",
+    );
+}
