@@ -8461,3 +8461,12 @@ fn an_added_do_closer_holding_its_while_in_a_case_block_stands_at_its_brace() {
         "void f()\n{\n    switch (kind) {\n    case 1: {\n        do {\n            value=0;\n        } while (ready);\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn nested_initializers_opened_together_close_a_level_in() {
+    // After `= { {` the inner groups close a level past the row, so a
+    // `}, {` row and the rows after it keep their levels.
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+}

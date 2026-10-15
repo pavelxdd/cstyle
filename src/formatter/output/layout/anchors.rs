@@ -745,6 +745,29 @@ impl FormatEngine<'_> {
             return None;
         }
         let comma = self.tree.previous_code_token(first)?;
+        // The first row of a nested group whose `{` ends a row stands a
+        // level past the braces that row leaves open, where braces stay
+        // out of their elements.
+        if comma == groups.get(group).open
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Ratliff
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+                    | BraceStyle::Lisp
+            )
+            && groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            && self.opens_initializer_element(comma)
+            && let Some((lead, levels, _)) = self.brace_ending_row_levels(comma)
+        {
+            return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
+        }
         if groups.enclosing(comma) != Some(group) {
             return None;
         }
@@ -1291,12 +1314,16 @@ impl FormatEngine<'_> {
         let group = groups.closed_at(first)?;
         let open = groups.get(group).open;
         // VTK closes a nested group at its elements in code and in arrays
-        // of no aggregate keyword.
-        let depth = match self.options.brace_style {
-            BraceStyle::Whitesmith | BraceStyle::Ratliff => 1,
-            BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => 1,
-            BraceStyle::Vtk => 2,
-            _ => return None,
+        // of no aggregate keyword; styles that indent no braces close it a
+        // level out from its elements.
+        let (depth, at_elements) = match self.options.brace_style {
+            BraceStyle::Whitesmith | BraceStyle::Ratliff => (1, true),
+            BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => (1, true),
+            BraceStyle::Vtk => (2, true),
+            BraceStyle::Gnu | BraceStyle::Horstmann | BraceStyle::Pico | BraceStyle::Lisp => {
+                return None;
+            }
+            _ => (1, false),
         };
         if groups
             .ancestors(group)
@@ -1307,24 +1334,57 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        if !at_elements && !self.opens_initializer_element(open) {
+            return None;
+        }
+        let (lead, levels, leading_closers) = self.brace_ending_row_levels(open)?;
+        // Indented braces close at the elements, the closers leading the
+        // row standing there already; others close a level out.
+        let levels = if at_elements {
+            levels.saturating_sub(leading_closers)
+        } else {
+            levels.saturating_sub(1)
+        };
+        Some(lead + levels * self.options.indent_width + self.case_unindent_spaces())
+    }
+
+    /// Whether the `{` at `open` opens an element of the list around it,
+    /// after its `{` or a `,`.
+    fn opens_initializer_element(&self, open: usize) -> bool {
+        self.tree
+            .previous_code_token(open)
+            .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol('{' | ',')))
+    }
+
+    /// For a `{` at `open` that ends a row it does not start: the row's
+    /// lead, the braces the row leaves open through it past the closers
+    /// leading it, and those closers.
+    fn brace_ending_row_levels(&self, open: usize) -> Option<(usize, usize, usize)> {
+        let tokens = &self.tree.tokens;
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
-        // The group closes a level in for each brace its row leaves open
-        // through it: none on a `}, {` row, two after `= { {`.
-        let open_on_row = self.tree.tokens[span.first..=open].iter().fold(
-            0isize,
-            |open_count, token| match token {
-                Token::Symbol('{') => open_count + 1,
-                Token::Symbol('}') => open_count - 1,
-                _ => open_count,
-            },
-        );
-        let row_extra = open_on_row.max(0) as usize * self.options.indent_width;
-        (span.first != open && span.last == open).then(|| {
-            self.output.lead_width(line, self.options.tab_width)
-                + row_extra
-                + self.case_unindent_spaces()
-        })
+        if span.first == open || span.last != open {
+            return None;
+        }
+        let leading_closers = tokens[span.first..open]
+            .iter()
+            .take_while(|token| matches!(token, Token::Symbol('}') | Token::Whitespace(_)))
+            .filter(|token| matches!(token, Token::Symbol('}')))
+            .count();
+        let levels =
+            tokens[span.first..=open]
+                .iter()
+                .fold(0isize, |open_count, token| match token {
+                    Token::Symbol('{') => open_count + 1,
+                    Token::Symbol('}') => open_count - 1,
+                    _ => open_count,
+                })
+                + leading_closers as isize;
+        Some((
+            self.output.lead_width(line, self.options.tab_width),
+            levels.max(0) as usize,
+            leading_closers,
+        ))
     }
 
     /// A `}` closing an initializer whose `{` starts its own line stands at
