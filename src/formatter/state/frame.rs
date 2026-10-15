@@ -945,6 +945,52 @@ impl FrameStack {
         }
     }
 
+    /// Moves every frame on output line `line` or after down a line, for a
+    /// line published before the line those frames were opened on.
+    pub(crate) fn shift_output_lines_from(&mut self, line: usize) {
+        let shift = |value: &mut usize| {
+            if *value >= line {
+                *value += 1;
+            }
+        };
+        for entry in &mut self.delimiters {
+            shift(&mut entry.frame.opener_output_line);
+        }
+        for frame in self
+            .brackets
+            .iter_mut()
+            .chain(&mut self.line_closed_brackets)
+        {
+            shift(&mut frame.opener_output_line);
+        }
+        for frame in &mut self.closed_delimiter_frames {
+            shift(&mut frame.opener_output_line);
+        }
+        self.ternary_colon_output_lines.iter_mut().for_each(shift);
+        self.open_ternary_line_ends.iter_mut().for_each(shift);
+        for frame in &mut self.logical_frames {
+            shift(&mut frame.operator_output_line);
+        }
+        for frame in &mut self.stream_frames {
+            shift(&mut frame.operator_output_line);
+        }
+        for frame in &mut self.string_continuation_frames {
+            shift(&mut frame.output_line);
+        }
+        for frame in self
+            .brace_frames
+            .iter_mut()
+            .chain(&mut self.closed_brace_frames)
+        {
+            if let Some(close) = frame.close_output_line.as_mut() {
+                shift(close);
+            }
+        }
+        if let Some((call_line, _)) = self.line_closed_call_logical_operand_indent.as_mut() {
+            shift(call_line);
+        }
+    }
+
     /// Moves the frames opened on output line `line` to `new_line`, joined
     /// after text that ends at `start_column` on a line indented
     /// `new_indent`.

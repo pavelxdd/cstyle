@@ -448,7 +448,11 @@ impl FormatEngine<'_> {
         previous_code: &str,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
-        if !previous_code.ends_with(',') || !self.previous_statement_is_braceless_ternary() {
+        // Parens that indent after them align no argument.
+        if self.options.indent_after_parens
+            || !previous_code.ends_with(',')
+            || !self.previous_statement_is_braceless_ternary()
+        {
             return None;
         }
         let target = self.open_paren_column_of(previous_code)?

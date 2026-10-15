@@ -33,6 +33,20 @@ impl FormatEngine<'_> {
             || self.should_keep_empty_line_before_attached_definition_brace()
     }
 
+    /// Publishes an empty line ahead of the line being laid out, whose
+    /// frames move down with it.
+    pub(crate) fn push_empty_line_before_pending(&mut self) {
+        let line = self.output.len();
+        self.push_empty_line();
+        self.layout.frame_stack.shift_output_lines_from(line);
+        for frame in &mut self.inline_array.frames {
+            if frame.output_line >= line {
+                frame.output_line += 1;
+            }
+        }
+        self.layout.blank_lines_before_pending += 1;
+    }
+
     pub(crate) fn push_empty_line(&mut self) {
         self.flush_backslash_body_parts();
         self.clear_macro_interrupted_initializer_frames();

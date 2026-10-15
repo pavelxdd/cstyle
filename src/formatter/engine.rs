@@ -153,6 +153,9 @@ pub(crate) struct LayoutState {
     /// The column a closer the formatter added stood at before a closing
     /// header joined its line.
     pub(crate) joined_added_closer_spaces: Option<usize>,
+    /// Empty lines published while laying out the pending line, ahead of
+    /// it.
+    pub(crate) blank_lines_before_pending: usize,
     pub(crate) compound_literal: compound_literals::CompoundLiteralState,
     pub(crate) pending_braceless_block_bias: Option<usize>,
     pub(crate) inline_nested_header_braceless_bias: Option<usize>,
@@ -471,6 +474,7 @@ impl<'a> FormatEngine<'a> {
                 unwind_else_if_after_line: false,
                 exit_braceless_block_after_line: false,
                 joined_added_closer_spaces: None,
+                blank_lines_before_pending: 0,
                 compound_literal: compound_literals::CompoundLiteralState::default(),
                 pending_braceless_block_bias: None,
                 inline_nested_header_braceless_bias: None,

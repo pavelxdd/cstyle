@@ -8795,3 +8795,23 @@ fn break_blocks_pads_a_header_after_a_labelled_one_line_block_as_after_any_block
         "void f()\n{   done: if (ready) { value=0; }\n\n    switch (kind)\n    {   default:\n            break; } }\n",
     );
 }
+
+#[test]
+fn break_blocks_keeps_a_stream_continuation_aligned_after_the_blank_it_adds() {
+    let input = "void f()\n{\n    if (ready) {\n        value++;\n    }\n    std::cout << first\n              << second << std::endl;\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        value++;\n    }\n\n    std::cout << first\n              << second << std::endl;\n}\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_indents_a_lambda_argument_after_a_ternary_statement() {
+    let input = "void f()\n{\n    result = ready\n        ? value\n        : other;\n    sort(first, second,\n         [](int value)\n    {\n        return value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman", "--indent-after-parens"],
+        "void f()\n{\n    result = ready\n        ? value\n        : other;\n    sort(first, second,\n        [](int value)\n    {\n        return value;\n    });\n}\n",
+    );
+}

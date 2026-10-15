@@ -23,7 +23,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         self.insert_member_spacing_before_line(line);
         if self.take_block_spacing_blank(line) {
-            self.push_empty_line();
+            self.push_empty_line_before_pending();
         }
         if line_start.starts_with('|')
             && !line_start.starts_with("||")

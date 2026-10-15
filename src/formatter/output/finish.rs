@@ -137,6 +137,7 @@ impl FormatEngine<'_> {
     fn finish_ordinary_line(&mut self, line: &str) {
         if !line.is_empty() {
             let output_line_index = self.output.len();
+            self.layout.blank_lines_before_pending = 0;
             let code = line[..trailing_comment_split_limit(line)].trimmed_end();
             let code_ends_with_brace = code.ends_with('}');
             self.layout
@@ -152,9 +153,13 @@ impl FormatEngine<'_> {
                 && !(self.options.indent_preproc_block
                     && self.preprocessor.indented_block_stack.last() == Some(&true))
             {
-                if self.take_block_spacing_blank(line) {
-                    self.push_empty_line();
-                }
+                let output_line_index = if self.take_block_spacing_blank(line) {
+                    self.push_empty_line_before_pending();
+                    output_line_index + 1
+                } else {
+                    output_line_index
+                };
+                self.layout.blank_lines_before_pending = 0;
                 self.publish_unadjusted_line(line.to_string());
                 if let Some(output_indent) =
                     self.observe_operator_chain_output_line(output_line_index)
@@ -229,6 +234,8 @@ impl FormatEngine<'_> {
             } else {
                 self.finish_line_text(line);
             }
+            let output_line_index =
+                output_line_index + std::mem::take(&mut self.layout.blank_lines_before_pending);
             self.reset_continuation_after_output_line(line, output_line_index);
             self.reset_continuation_after_directive_rows(output_line_index);
             // A closing brace line that ends its declaration, as `} name;`,
