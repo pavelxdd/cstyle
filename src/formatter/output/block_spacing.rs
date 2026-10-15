@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -13,6 +14,9 @@ pub(crate) struct BlockSpacingState {
     prepend_blank: bool,
     active_header: Option<String>,
     header_expects_body: bool,
+    /// The active header follows a statement on its line, which leaves the
+    /// line unpadded.
+    header_follows_statement: bool,
     pending_semicolon: bool,
     pending_one_line_block: bool,
     closed_empty_block: bool,
@@ -32,6 +36,12 @@ impl FormatEngine<'_> {
         let previous_header_expects_body = self.block_spacing.header_expects_body;
         self.block_spacing.active_header = Some(word.to_string());
         self.block_spacing.header_expects_body = true;
+        // A closing header goes on with the statement its opening header
+        // started.
+        if !is_break_blocks_closing_header(word) {
+            self.block_spacing.header_follows_statement =
+                self.current.trimmed_end().ends_with_any(b";:");
+        }
 
         if self.previous_block_spacing_line_is_comment_only() {
             return;
@@ -267,14 +277,10 @@ impl FormatEngine<'_> {
             .active_header
             .as_deref()
             .is_some_and(|header| !matches!(header, "case" | "default"));
-        let line_is_broken = self.options.break_one_line_statements
-            || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks);
-        // A `do` loop's `while` ends the block its line closes.
-        let closes_do_loop = self.block_spacing.active_header.as_deref() == Some("while")
-            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
-        if header_appends
-            && (line_is_broken || closes_do_loop || !self.layout.line_state.is_multi_statement_line)
-        {
+        // A line that ends the header's statement takes the blank after it,
+        // with any statements kept on the line after that one, unless the
+        // header itself follows a statement there.
+        if header_appends && !self.block_spacing.header_follows_statement {
             self.block_spacing.append_blank = true;
         }
         self.clear_block_spacing_header();
@@ -353,10 +359,22 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn observe_block_spacing_close_brace(&mut self, comment_follows: bool) {
+    pub(crate) fn observe_block_spacing_close_brace(&mut self, next: Option<&Token>) {
         if !self.options.break_blocks {
             return;
         }
+        // A comment or a statement kept after the brace ends its line first;
+        // a header there pads as its own.
+        let line_goes_on = match next {
+            Some(Token::Word(word)) => {
+                !(is_break_blocks_closing_header(word)
+                    || word == "while"
+                    || is_break_blocks_opening_header(self.options, word))
+            }
+            Some(Token::Comment(..)) => true,
+            Some(Token::Symbol(';' | ',' | ')' | '}') | Token::Newline) | None => false,
+            Some(_) => true,
+        };
         let closed_header = self.layout.nesting.last_closed_brace_header.as_deref();
         // astyle reads an assembly block as no command block.
         let closed_command_header = self.layout.nesting.last_closed_brace_type
@@ -378,8 +396,7 @@ impl FormatEngine<'_> {
             && (continues_header
                 || closed_header.is_some_and(|header| !matches!(header, "case" | "default")))
         {
-            // A comment after the brace still ends its line.
-            if comment_follows && !self.current_is_blank() {
+            if line_goes_on && !self.current_is_blank() {
                 self.block_spacing.pending_one_line_block = true;
             } else {
                 self.block_spacing.append_blank = true;
@@ -551,6 +568,7 @@ impl FormatEngine<'_> {
     fn clear_block_spacing_header(&mut self) {
         self.block_spacing.active_header = None;
         self.block_spacing.header_expects_body = false;
+        self.block_spacing.header_follows_statement = false;
     }
 }
 

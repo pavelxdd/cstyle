@@ -415,7 +415,13 @@ impl FormatEngine<'_> {
                 self.layout.nesting.last_closed_brace_type,
                 Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
             )
-            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'));
+            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'))
+            // A closer run into the block's only body line already leads
+            // the comment there.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && self.one_line_block_comment_target() == self.output.len().checked_sub(1));
         if move_one_line_block_comment {
             self.move_one_line_block_comment_after_brace(next, &whitespace_before_brace);
         }
@@ -532,15 +538,7 @@ impl FormatEngine<'_> {
     ) {
         let mut moved_comment_tail = None;
         if let Some(Token::Comment(_, comment)) = next {
-            let target_index = self
-                .output
-                .iter()
-                .rposition(|line| self.output.code_trimmed_of(line).ends_with('{'))
-                .and_then(|open_index| {
-                    (open_index + 1..self.output.len())
-                        .find(|index| !self.output[*index].trimmed().is_empty())
-                })
-                .or_else(|| self.output.len().checked_sub(1));
+            let target_index = self.one_line_block_comment_target();
             // astyle puts the brace's indent less one after the space
             // that follows the block's first statement, a space at least
             // where another statement follows.
@@ -566,6 +564,19 @@ impl FormatEngine<'_> {
         if let Some(tail) = moved_comment_tail {
             self.output.push(tail);
         }
+    }
+
+    /// The output line a comment after an expanded one-line block moves to:
+    /// the block's first body line.
+    fn one_line_block_comment_target(&self) -> Option<usize> {
+        self.output
+            .iter()
+            .rposition(|line| self.output.code_trimmed_of(line).ends_with('{'))
+            .and_then(|open_index| {
+                (open_index + 1..self.output.len())
+                    .find(|index| !self.output[*index].trimmed().is_empty())
+            })
+            .or_else(|| self.output.len().checked_sub(1))
     }
 
     /// The source whitespace after the first statement of the block the
@@ -699,7 +710,7 @@ impl FormatEngine<'_> {
             self.layout.frame_stack.clear_logical_frames();
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
-        self.observe_block_spacing_close_brace(matches!(next, Some(Token::Comment(_, _))));
+        self.observe_block_spacing_close_brace(next);
         if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
             && self.layout.indentation.indent() == base + delta
             && !self.braceless_body_continues(next)

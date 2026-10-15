@@ -621,3 +621,34 @@ fn a_goto_label_leads_its_line_whatever_statement_follows_it() {
         "void f() {\ndone: if (ready) {\n        value=0; } }\n",
     );
 }
+
+#[test]
+fn a_label_first_in_an_indented_block_is_broken_from_its_statement() {
+    // A label right after a block's `{` starts a statement as anywhere else;
+    // it continues none.
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    done: value=0;\n}\n",
+            &["--style=whitesmith"]
+        ),
+        "void f()\n    {\ndone:\n    value=0;\n    }\n",
+    );
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (ready)\n        {\ndone:\n        value=0;\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    if (ready)\n        {\ndone:\n        value=0;\n        }\n}\n",
+        ),
+    ] {
+        assert_eq!(
+            format_args(
+                "void f()\n{\n    if (ready)\n    {\n        done: value=0;\n    }\n}\n",
+                &[style],
+            ),
+            expected,
+        );
+    }
+}

@@ -7711,3 +7711,44 @@ fn without_a_brace_style_a_closing_header_stays_on_its_source_brace() {
     );
     check(braceless, &["--add-braces", "-o"], attached);
 }
+
+#[test]
+fn a_comment_after_an_expanded_block_follows_the_closer_run_into_its_only_line() {
+    // The comment of an expanded block moves to the block's first body line;
+    // where the closer runs into that line, the comment follows the closer.
+    check(
+        "void f()\n{\n    if (ready) { value=0; } // done\n    if (ready) { value=0; result=1; } /* both */\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    if (ready) {\n        value=0; } // done\n    if (ready) {\n        value=0;    /* both */\n        result=1; } }\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_header_line_kept_with_other_statements() {
+    // A line a header starts takes blank lines around it with the statements
+    // kept after its body; a header after a statement on its line pads
+    // nothing.
+    let wrap = |body: &str| format!("void f()\n{{\n    first=1;\n    {body}\n    other=1;\n}}\n");
+    let padded =
+        |body: &str| format!("void f()\n{{\n    first=1;\n\n    {body}\n\n    other=1;\n}}\n");
+    let options = ["--style=kr", "--break-blocks", "-o"];
+    for body in [
+        "if (ready) value=0; result=0;",
+        "if (ready) value=0; else result=0;",
+    ] {
+        check(&wrap(body), &options, &padded(body));
+    }
+    check(
+        &wrap("if (ready) { value=0; } result=0;"),
+        &options,
+        &padded("if (ready) {\n        value=0;\n    } result=0;"),
+    );
+    let after_statement = wrap("x=1; if (ready) value=0;");
+    check(&after_statement, &options, &after_statement);
+    // A header whose blocks stay on its line pads as one on lines of its own.
+    check(
+        &wrap("if (ready) { value=0; } else { result=0; }"),
+        &["--style=kr", "--break-blocks", "-O", "-o"],
+        &padded("if (ready) { value=0; } else { result=0; }"),
+    );
+}

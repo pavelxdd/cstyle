@@ -1570,8 +1570,9 @@ impl FormatEngine<'_> {
             && !is_range_for
             && !access_label_candidate
             && (is_asm_operand_colon || self.current.first_assignment().is_none())
-            // A comment line before a statement leaves its column pending,
-            // which continues nothing.
+            // A comment line before a statement, or a line ending a statement
+            // or opening a block, leaves its column pending, which continues
+            // nothing.
             && (self
                 .layout
                 .continuation_indent
@@ -1581,6 +1582,12 @@ impl FormatEngine<'_> {
                     .output
                     .last_non_empty_index()
                     .is_some_and(|index| is_comment_only_line(self.output[index].trimmed_start()))
+                && !self
+                    .output
+                    .last_code_line_scoped()
+                    .is_some_and(|previous| {
+                        self.output.code_trimmed_of(previous).ends_with_any(b"{;}")
+                    })
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some());
         let is_label = !has_question
