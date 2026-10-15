@@ -1575,3 +1575,45 @@ fn block_after_a_label_kept_after_the_closing_brace_stands_at_the_case_blocks() 
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn keeping_one_line_blocks_parts_a_case_block_from_its_label_in_every_attached_style() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n    case 2: {\n        value=0;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1:\n    { value=0; }\n    case 2: {\n        value=0;\n    }\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=stroustrup",
+        "--style=linux",
+        "--style=mozilla",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--keep-one-line-blocks".to_owned()],
+        )
+        .expect("valid options");
+        let first = format_exact(input, &options);
+
+        assert_eq!(first, expected, "{style}");
+        assert_eq!(format_exact(&first, &options), first, "{style}");
+    }
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_one_line_case_block_on_its_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n    }\n}\n";
+    for style in ["--style=kr", "--style=stroustrup"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_owned(),
+                "--keep-one-line-blocks".to_owned(),
+                "--keep-one-line-statements".to_owned(),
+            ],
+        )
+        .expect("valid options");
+
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
+}

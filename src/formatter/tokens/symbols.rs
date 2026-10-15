@@ -1486,11 +1486,7 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = spaces;
             self.previous_was_newline = true;
         } else if is_label {
-            if self.options.brace_style == BraceStyle::OneTrueBrace
-                && matches!(next, Some(Token::Symbol('{')))
-            {
-                self.ensure_space();
-            } else if self.options.break_one_line_statements
+            if self.options.break_one_line_statements
                 && !self.one_line_block_mode
                 && !matches!(next, Some(Token::Comment(_, _)))
             {
