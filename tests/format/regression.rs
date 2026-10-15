@@ -8600,3 +8600,18 @@ fn a_declarator_starting_with_default_after_a_closer_is_no_label() {
         "extern struct Item\n{\n    int value;\n    char *name;\n} default_item;\n",
     );
 }
+
+#[test]
+fn an_objc_method_closer_after_a_message_stands_where_the_style_closes_bodies() {
+    let input = "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n}\n@end\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n    }\n@end\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "@implementation Item\n- (int)total\n    {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n    }\n@end\n",
+    );
+}

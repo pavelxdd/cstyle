@@ -1,4 +1,4 @@
-use crate::config::{FormatOptions, Mode, ObjCColonPad};
+use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
@@ -530,24 +530,49 @@ impl FormatEngine<'_> {
         }
         // A block inside the method closes as any other.
         let groups = &self.tree.groups;
-        if self
+        let body = self
             .output
             .pending_tokens()
             .filter(|span| matches!(self.tree.tokens[span.first], Token::Symbol('}')))
-            .and_then(|span| groups.closed_at(span.first))
-            .is_some_and(|block| groups.get(block).parent.is_some())
-        {
+            .and_then(|span| groups.closed_at(span.first));
+        if body.is_some_and(|block| groups.get(block).parent.is_some()) {
             return None;
         }
         let previous_index = (0..self.output.len())
             .rev()
             .find(|&index| !self.output.trimmed(index).is_empty())?;
-        (self.output.code(previous_index).ends_with("];")
+        if !(self.output.code(previous_index).ends_with("];")
             && (0..self.output.len())
                 .rev()
                 .take(16)
                 .any(|index| self.output.trimmed(index).starts_with("- (")))
-        .then_some(0)
+        {
+            return None;
+        }
+        // The body closes at its brace, or, attached, at its header; Ratliff
+        // closes it a level in.
+        let Some(open) = body.map(|block| groups.get(block).open) else {
+            return Some(0);
+        };
+        let line = self.output.line_with_token(open)?;
+        let attached = self
+            .output
+            .line_tokens(line)
+            .is_some_and(|span| span.first != open);
+        // An attached brace closes at the line its method header starts.
+        let header_line = if attached {
+            (0..=line).rev().take(16).find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                trimmed.starts_with("- (") || trimmed.starts_with("+ (")
+            })?
+        } else {
+            line
+        };
+        Some(
+            self.output.lead_width(header_line, self.options.tab_width)
+                + usize::from(attached && self.options.brace_style == BraceStyle::Ratliff)
+                    * self.options.indent_width,
+        )
     }
 
     pub(crate) fn output_ends_objc_method_header(&self) -> bool {
