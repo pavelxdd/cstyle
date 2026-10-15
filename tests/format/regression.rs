@@ -8297,3 +8297,24 @@ fn a_leading_shift_aligns_with_the_first_operand_inside_a_padded_paren() {
         "void f()\n{\n    out << helper (first, (second\n                           << third) );\n    mask = 1 << ( ( (value & (size - 1) )\n                    >> shift)\n                  + offset);\n}\n",
     );
 }
+
+#[test]
+fn an_added_do_closer_holding_its_while_stands_at_its_brace() {
+    // The braces add-braces puts around a do body stand where written ones
+    // would, the while attached to the closer included.
+    let input = "void f()\n{\n    do\n        value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--add-braces", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n            value=0;\n        } while (ready);\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--add-braces",
+            "--attach-closing-while",
+        ],
+        "void f()\n    {\n    do\n        {\n        value=0;\n        } while (ready);\n    }\n",
+    );
+}

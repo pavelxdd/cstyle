@@ -61,6 +61,7 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.layout.exit_braceless_block_after_line) {
             self.layout.indentation.exit_braceless_block();
         }
+        self.layout.joined_added_closer_spaces = None;
     }
 
     fn publish_finished_line(&mut self) {

@@ -931,6 +931,11 @@ impl FormatEngine<'_> {
 
     fn take_last_output_line_for_attach(&mut self) -> Option<String> {
         let (line, tokens) = self.output.pop_with_tokens()?;
+        // A closer the formatter added maps to no token the tree places.
+        if tokens.is_none() {
+            self.layout.joined_added_closer_spaces =
+                Some(leading_visual_width(&line, self.options.tab_width));
+        }
         self.current.restore_tokens(tokens);
         // The line adjuster sees the brace again with the header.
         if let Some((index, adjuster)) = self.adjuster_before_lone_brace.take()

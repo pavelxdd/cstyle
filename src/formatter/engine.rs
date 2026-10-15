@@ -150,6 +150,9 @@ pub(crate) struct LayoutState {
     /// A closing brace that begins a line still open ends its braceless
     /// body once that line ends.
     pub(crate) exit_braceless_block_after_line: bool,
+    /// The column a closer the formatter added stood at before a closing
+    /// header joined its line.
+    pub(crate) joined_added_closer_spaces: Option<usize>,
     pub(crate) compound_literal: compound_literals::CompoundLiteralState,
     pub(crate) pending_braceless_block_bias: Option<usize>,
     pub(crate) inline_nested_header_braceless_bias: Option<usize>,
@@ -467,6 +470,7 @@ impl<'a> FormatEngine<'a> {
                 else_if_break_depths: Vec::new(),
                 unwind_else_if_after_line: false,
                 exit_braceless_block_after_line: false,
+                joined_added_closer_spaces: None,
                 compound_literal: compound_literals::CompoundLiteralState::default(),
                 pending_braceless_block_bias: None,
                 inline_nested_header_braceless_bias: None,

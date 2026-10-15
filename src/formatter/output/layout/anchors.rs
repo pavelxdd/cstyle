@@ -3998,6 +3998,12 @@ impl FormatEngine<'_> {
     /// A brace added to close a control statement's body stands where the
     /// line holding the statement's header and its `{` starts.
     fn added_closing_brace_indent(&self, line: &LineView<'_>) -> Option<usize> {
+        // A closing header joined to such a closer stands where it stood.
+        if line.trimmed_start().starts_with('}')
+            && let Some(spaces) = self.layout.joined_added_closer_spaces
+        {
+            return Some(spaces);
+        }
         if line.trimmed() != "}" || self.should_indent_brace_line(BraceType::Command) {
             return None;
         }
