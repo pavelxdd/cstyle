@@ -4100,7 +4100,18 @@ impl FormatEngine<'_> {
         let is_else = |index: usize| matches!(&tokens[index], Token::Word(word) if word == "else");
         let else_token = if is_else(first) {
             first
-        } else if matches!(tokens[first], Token::Symbol('}')) {
+        } else if matches!(tokens[first], Token::Symbol('}'))
+            // Styles that part an else from its closer leave the closer a
+            // comment keeps there leading the line at its own column.
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::None
+                    | BraceStyle::Attach
+                    | BraceStyle::OneTrueBrace
+                    | BraceStyle::Lisp
+                    | BraceStyle::Pico
+            )
+        {
             let next = next_code_token(tokens, first + 1)?;
             let span = self.output.pending_tokens()?;
             (is_else(next) && span.contains(next)).then_some(next)?
@@ -4690,8 +4701,17 @@ impl FormatEngine<'_> {
             } else {
                 0
             };
-            // A dangling `else` stands by the line of its `if`.
-            let owner = if self.is_dangling_else(keyword) {
+            // A dangling `else`, or one a closer leads the line of, stands
+            // by the line of its `if`.
+            let after_closer = self
+                .tree
+                .previous_code_token(keyword)
+                .is_some_and(|before| {
+                    matches!(tokens[before], Token::Symbol('}'))
+                        && self.output.line_with_token(before)
+                            == self.output.line_with_token(keyword)
+                });
+            let owner = if self.is_dangling_else(keyword) || after_closer {
                 self.tree.statements.if_of_else(keyword)?
             } else {
                 keyword

@@ -8470,3 +8470,25 @@ fn nested_initializers_opened_together_close_a_level_in() {
     check(input, &[], input);
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_closer_kept_with_its_else_past_a_comment_stands_at_the_indented_brace() {
+    // Styles that indent braces part an else from its closer; the closer a
+    // comment keeps on the else's line still leads it at its own column.
+    let input = "void f()\n{\n    if (other) {\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (other)\n        {\n            value=1;\n        } /* last */ else\n        {\n            value=2;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if (other)\n        {\n        value=1;\n        } /* last */ else\n        {\n        value=2;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (other) {\n        value=1;\n        } /* last */ else {\n        value=2;\n        }\n    }\n",
+    );
+}
