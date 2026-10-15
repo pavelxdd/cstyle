@@ -1636,3 +1636,22 @@ fn vtk_kept_one_line_case_block_stands_where_its_expanded_brace_would() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn a_brace_on_its_case_labels_line_keeps_the_gap_before_it_in_attached_styles() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:  {\n        value=0;\n        break;\n    }\n    case 2:\t{\n        value=0;\n    }\n    case 3:\n    {\n        value=0;\n    }\n    }\n}\n";
+    let body = "    switch (kind) {\n    case 1:  {\n        value=0;\n        break;\n    }\n    case 2:\t{\n        value=0;\n    }\n    case 3: {\n        value=0;\n    }\n    }\n}\n";
+    for (style, head) in [
+        ("--style=kr", "void f()\n{\n"),
+        ("--style=stroustrup", "void f()\n{\n"),
+        ("--style=java", "void f() {\n"),
+        ("--style=google", "void f() {\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format!("{head}{body}");
+
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}

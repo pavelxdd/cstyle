@@ -1989,9 +1989,8 @@ impl FormatEngine<'_> {
     ) -> bool {
         let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
         self.republish_tokens(tokens);
-        // Unstyled, a brace on its label's source line keeps the gap before it.
-        let source_gap = (self.options.brace_style == BraceStyle::None
-            && !self.token_input.token_begins_source_line)
+        // A brace on its label's source line keeps the gap before it.
+        let source_gap = (!self.token_input.token_begins_source_line)
             .then(|| self.token_input.previous_input_whitespace.clone())
             .flatten()
             .filter(|gap| !gap.is_empty() && !gap.contains('\n'));
