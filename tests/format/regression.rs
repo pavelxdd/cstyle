@@ -8411,3 +8411,10 @@ fn a_label_kept_after_a_case_closer_stands_at_the_label_column() {
         "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0;\n            break;\n        } case 2:\n        {   result=1;\n            break;\n        } default: done();\n    }\n}\n",
     );
 }
+
+#[test]
+fn removing_braces_keeps_nested_initializer_braces_together() {
+    // Only statement braces go; an initializer's braces keep their line.
+    let input = "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n        }\n    };\n}\n";
+    check(input, &["--style=allman", "--remove-braces"], input);
+}

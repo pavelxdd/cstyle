@@ -2228,8 +2228,7 @@ impl FormatEngine<'_> {
                 .current
                 .trimmed_start()
                 .starts_with_any(b"<>|&+-*/%=!?:,.");
-        let source_attached_malformed_open_brace = !self.options.remove_braces
-            && brace.header.is_none()
+        let source_attached_malformed_open_brace = brace.header.is_none()
             && !self.current_is_blank()
             && !self.token_input.token_begins_source_line
             && self
