@@ -8961,3 +8961,21 @@ fn break_blocks_keeps_a_label_after_a_case_closer_with_its_statements() {
     let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks", "-o"], input);
 }
+
+#[test]
+fn rows_after_a_sign_led_first_element_stand_with_it() {
+    // A sign opening the list's first element is no operator continuing
+    // the rows after it.
+    let input = "void f()\n{\n    int list[] = {\n        -1, 2,\n        3, 4,\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_element_after_a_directive_breaks_its_closer_as_any_element() {
+    let input = "static Item items[] = {\n\n#if (HAVE_THING)\n\n    { name(\"second\"),\n      helper,\n      NULL },\n\n#endif\n\n    { name(\"third\"),\n      helper,\n      NULL },\n\n    null_item\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "static Item items[] = {\n\n#if (HAVE_THING)\n\n    {\n        name(\"second\"),\n        helper,\n        NULL\n    },\n\n#endif\n\n    {\n        name(\"third\"),\n        helper,\n        NULL\n    },\n\n    null_item\n};\n",
+    );
+}
