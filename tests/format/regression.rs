@@ -8914,3 +8914,23 @@ fn whitesmith_keeps_the_statements_of_a_case_block_after_a_closer_label_at_its_b
         input,
     );
 }
+
+#[test]
+fn a_lambda_inside_a_lambda_body_breaks_its_brace_as_any_lambda() {
+    let input = "void f()\n{\n    auto outer = [&](int value) {\n        auto inner = [value](int other) {\n            return value + other;\n        };\n        return inner(1);\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    auto outer = [&](int value)\n    {\n        auto inner = [value](int other)\n        {\n            return value + other;\n        };\n        return inner(1);\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_structured_binding_reference_aligns_as_any_reference_declarator() {
+    let input = "void f()\n{\n    for (auto &[key, value] : items) {\n        total += value;\n    }\n}\n";
+    check(
+        input,
+        &["--align-pointer=type"],
+        "void f()\n{\n    for (auto& [key, value] : items) {\n        total += value;\n    }\n}\n",
+    );
+}
