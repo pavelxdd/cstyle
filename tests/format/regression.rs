@@ -9573,3 +9573,63 @@ fn vtk_sets_an_initializer_brace_after_a_struct_closer_in_a_case_block_at_the_cl
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn an_else_switch_kept_on_its_if_line_indents_its_first_label_as_the_rest() {
+    let input = "void f(int x)\n{\n    if (a) b(); else switch (x) {\n    case 1:\n        c();\n        break;\n    }\n    g();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "-S", "-o"][..],
+            "void f(int x)\n{\n    if (a) b(); else switch (x) {\n            case 1:\n                c();\n                break;\n        }\n    g();\n}\n",
+        ),
+        (
+            &["--style=ratliff", "-o"][..],
+            "void f(int x) {\n    if (a) b(); else switch (x) {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n",
+        ),
+        (
+            &["--style=kr", "-o"][..],
+            "void f(int x)\n{\n    if (a) b(); else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_broken_while_closing_a_do_chained_after_else_stands_at_the_else_body() {
+    let input = "void f(int x)\n{\n    if (a) b(); else do {\n        c();\n    } while (x);\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n        {\n            c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(int x)\n    {\n    if (a) b();\n    else do\n            {\n            c();\n            }\n        while (x);\n    g();\n    }\n",
+        ),
+        (
+            "--style=gnu",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n            {\n                c();\n            }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f(int x) {\n    if (a) b();\n    else do {\n            c();\n            }\n        while (x);\n    g();\n    }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f(int x)\n{   if (a) b();\n    else do\n        {   c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=vtk",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n            {\n            c();\n            }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=stroustrup",
+            "void f(int x)\n{\n    if (a) b();\n    else do {\n            c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

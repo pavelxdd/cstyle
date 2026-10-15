@@ -1992,6 +1992,38 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the line being laid out starts the block of a loop or
+    /// `switch` header that is the braceless body of an `else`, as in
+    /// `else switch (x) {`.
+    fn pending_block_header_follows_else(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(open) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .map(|block| self.tree.groups.get(block).open)
+            .filter(|&open| matches!(tokens[open], Token::Symbol('{')))
+        else {
+            return false;
+        };
+        let Some(before) = self.tree.previous_code_token(open) else {
+            return false;
+        };
+        let keyword = self
+            .tree
+            .groups
+            .closed_at(before)
+            .and_then(|condition| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(condition).open)
+            })
+            .unwrap_or(before);
+        matches!(&tokens[keyword], Token::Word(word) if matches!(word.as_str(), "for" | "while" | "switch" | "do"))
+            && self.tree.statements.braceless_header(keyword).is_some_and(
+                |header| matches!(&tokens[header], Token::Word(word) if word == "else"),
+            )
+    }
+
     pub(crate) fn apply_header_label_and_switch_contextual_layout(
         &self,
         line: &LineView<'_>,
@@ -2053,14 +2085,7 @@ impl FormatEngine<'_> {
             {
                 // Headers chained after `else` on the line before, as in
                 // `} else for (x) {`, raise the body past this floor.
-                let else_text = trimmed.strip_prefix('}').map_or(trimmed, str::trim_start);
-                let chained_header = else_text.strip_prefix("else").is_some_and(|rest| {
-                    let rest = rest.trim_start();
-                    ["for", "while", "switch", "do"]
-                        .into_iter()
-                        .any(|header| starts_header_word(rest, header))
-                });
-                let base = if chained_header {
+                let base = if self.pending_block_header_follows_else() {
                     layout.indent * self.options.indent_width
                 } else {
                     0

@@ -4845,10 +4845,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let Some(line) = self.line_led_by(owner) else {
-            // A `do` run in as the braceless body of a header on its line
-            // closes at that body's level.
-            let header = self.tree.statements.braceless_header(owner)?;
+        let header = self.tree.statements.braceless_header(owner);
+        let header_on_line = header.is_some_and(|header| {
+            self.output.line_with_token(header) == self.output.line_with_token(owner)
+        });
+        let Some(line) = self.line_led_by(owner).filter(|_| !header_on_line) else {
+            // A `do` run in as the braceless body of a header on its line,
+            // an `else` too, closes at that body's level.
+            let header = header?;
             let line = self
                 .line_led_by(header)
                 .filter(|&line| self.output.line_with_token(owner) == Some(line))?;
