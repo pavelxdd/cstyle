@@ -7975,3 +7975,9 @@ fn a_case_block_closer_a_statement_follows_stands_where_it_would_alone() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn whitesmith_kept_else_block_ends_the_braceless_bodies_around_it() {
+    let input = "void f()\n    {\n    if (ready)\n        if (other)\n            { value=0; }\n        else\n            { result=0; }\n    switch (kind)\n        {\n        case 1:\n            value=0;\n            break;\n        }\n    x();\n    }\n";
+    check(input, &["--style=whitesmith", "-O"], input);
+}
