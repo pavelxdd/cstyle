@@ -8815,3 +8815,43 @@ fn indent_after_parens_indents_a_lambda_argument_after_a_ternary_statement() {
         "void f()\n{\n    result = ready\n        ? value\n        : other;\n    sort(first, second,\n        [](int value)\n    {\n        return value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn a_braceless_body_in_an_indented_macro_indents_with_tabs() {
+    let input = "#define CHECK(A) \\\n  do {                         \\\n    helper(A);                 \\\n    if(result)                 \\\n      goto done;               \\\n  } while(0)\n";
+    check(
+        input,
+        &["--indent=tab=4", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n\tdo {                         \\\n\t\thelper(A);                 \\\n\t\tif(result)                 \\\n\t\t\tgoto done;               \\\n\t} while(0)\n",
+    );
+    // A header whose condition spans rows opens its body once it closes.
+    check(
+        "#define LOOP(A) \\\n  if (a &&                  \\\n      b)                    \\\n    value = 1;              \\\n  else                      \\\n    value = 2\n",
+        &["--indent=tab=4", "--indent-preproc-define"],
+        "#define LOOP(A) \\\n\tif (a &&                  \\\n\t        b)                    \\\n\t\tvalue = 1;              \\\n\telse                      \\\n\t\tvalue = 2\n",
+    );
+}
+
+#[test]
+fn pad_oper_pads_a_product_after_any_sizeof_operand() {
+    let input = "void f()\n{\n    memmove(pool, pool, sizeof(pool[0])*count);\n    value = sizeof(item)*count;\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "void f()\n{\n    memmove(pool, pool, sizeof(pool[0]) * count);\n    value = sizeof(item) * count;\n}\n",
+    );
+}
+
+#[test]
+fn a_split_kept_case_statement_aligns_after_the_padding_inside_its_paren() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: snprintf(buffer, length, \"Unknown system error %d\", error);\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--max-code-length=60",
+            "--pad-paren-in",
+            "--keep-one-line-statements",
+        ],
+        "void f()\n{\n    switch ( kind ) {\n    case 1: snprintf( buffer, length, \"Unknown system error %d\",\n                          error );\n    }\n}\n",
+    );
+}

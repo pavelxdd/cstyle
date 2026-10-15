@@ -1007,11 +1007,22 @@ fn paren_continuation_indent(
     if columns.is_empty() {
         return None;
     }
+    // The rows align with the first character after the paren, past any
+    // padding inside it.
     columns
         .into_iter()
         .rev()
         .find(|column| *column < max_continuation_indent)
-        .map(|column| ContinuationIndent::Spaces(base_indent_width + column + 1))
+        .map(|column| {
+            let after = &head[column + 1..];
+            let rest = after.trim_start();
+            let padding = if rest.is_empty() {
+                0
+            } else {
+                after.len() - rest.len()
+            };
+            ContinuationIndent::Spaces(base_indent_width + column + 1 + padding)
+        })
         .or(Some(ContinuationIndent::Spaces(
             base_indent_width + indent_width * 2,
         )))

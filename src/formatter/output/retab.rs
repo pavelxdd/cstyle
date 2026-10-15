@@ -9,6 +9,7 @@
 
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
+use crate::formatter::constructs::headers::line_is_control_body_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
@@ -250,7 +251,14 @@ impl FormatEngine<'_> {
                     .strip_suffix('=')
                     .is_none_or(|before| before.ends_with_any(b"=!<>"))
             });
-            if depth <= 0 && (code.is_empty() || code.ends_with_any(b";}") || opens_block) {
+            // So does a control header for the body after it, once its
+            // parens close.
+            let opens_body = matches!(code.trimmed_start(), "do" | "else")
+                || code.ends_with(')')
+                    && line_is_control_body_header(self.row_code(statement.max(directive + 1)));
+            if depth <= 0
+                && (code.is_empty() || code.ends_with_any(b";}") || opens_block || opens_body)
+            {
                 statement = row + 1;
             }
         }
@@ -270,6 +278,13 @@ impl FormatEngine<'_> {
         } else {
             width
         }
+    }
+
+    /// The code of macro body row `row`, past its indent and before its
+    /// continuation backslash.
+    fn row_code(&self, row: usize) -> &str {
+        let code = self.output.code_before_comment(row).trimmed();
+        code.strip_suffix('\\').unwrap_or(code).trimmed()
     }
 
     /// Whether output line `index` continues a standalone comment that
