@@ -7599,3 +7599,17 @@ fn index_group_closing_row_takes_its_initializer_level() {
         check(&input, &[style, "--min-conditional-indent=0"], expected);
     }
 }
+
+#[test]
+fn attach_return_type_leaves_a_return_type_set_off_by_a_blank_line() {
+    // A blank line parts the lines, so neither is attached to the other and
+    // the blank line stays.
+    let input = "int value;\n\nstatic int\n\nhelper(void)\n{\n    return 0;\n}\n";
+    check(input, &["--style=1tbs", "--attach-return-type"], input);
+    let adjacent = "int value;\n\nstatic int\nhelper(void)\n{\n    return 0;\n}\n";
+    check(
+        adjacent,
+        &["--style=1tbs", "--attach-return-type"],
+        "int value;\n\nstatic int helper(void)\n{\n    return 0;\n}\n",
+    );
+}
