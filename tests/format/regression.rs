@@ -9360,3 +9360,15 @@ fn a_class_heads_continued_base_list_indents_with_tabs() {
         "class Derived : public Base,\n\tprivate Other\n{\n};\nclass Third :\n\tpublic Base\n{\n};\nvoid f()\n{\n\tstruct Local : Base,\n\t\tOther {\n\t};\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_an_attributed_header_block_like_any_header_block() {
+    // An attribute between a header and its brace leaves the block the
+    // header's: break-blocks parts it from the statement after.
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n    done();\n    if (ready) {\n        value = 2;\n    }\n    done();\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n\n    done();\n\n    if (ready) {\n        value = 2;\n    }\n\n    done();\n}\n",
+    );
+}
