@@ -42,6 +42,8 @@ impl FormatEngine<'_> {
         }
         if self.options.brace_style == BraceStyle::Whitesmith
             && !self.one_line_block_mode
+            // A colon inside parens, as a range-for's, ends no label.
+            && self.layout.nesting.paren_depth == 0
             && !self.current_line_has_class_initializer_colon
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active

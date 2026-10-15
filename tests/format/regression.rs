@@ -8571,3 +8571,14 @@ fn indent_after_parens_leaves_a_lambda_argument_opening_its_body_at_the_statemen
         "void f()\n{\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_keeps_a_range_for_colon_inside_its_parens() {
+    let input =
+        "void f()\n{\n    for (auto &item : items) {\n        total += item.value;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    for (auto &item : items)\n        {\n        total += item.value;\n        }\n    }\n",
+    );
+}
