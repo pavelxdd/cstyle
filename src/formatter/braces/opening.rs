@@ -961,8 +961,22 @@ impl FormatEngine<'_> {
                     self.current.push_str(&ws);
                 }
             }
-            // A comment written against its brace stays there.
-            _ => {}
+            // A comment written against its brace stays there, at its
+            // source column on a line that lost a `}` broken off before it.
+            _ => {
+                if self.closing_brace_broken_off_source_line()
+                    && is_break_blocks_closing_header(leading_identifier(
+                        self.current.trimmed_start(),
+                    ))
+                    && let Some(&target) = self.layout.line_state.trailing_comment_columns.front()
+                {
+                    self.trim_current_end();
+                    let code_len = self.current.trimmed().chars().count();
+                    if target > code_len {
+                        self.current.push_str(&" ".repeat(target - code_len));
+                    }
+                }
+            }
         }
         self.current.push_str(comment.trimmed_end());
         self.comments.skip_next_attached_comment = true;

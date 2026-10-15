@@ -1100,9 +1100,11 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|header| starts_header_word(open, header))
             {
-                open_spaces.max(frame.header_indent_column)
+                // The published opener took the case unindent the closer is
+                // about to take.
+                (open_spaces + self.case_unindent_spaces()).max(frame.header_indent_column)
             } else if let Some(header_spaces) = self.current_closing_multiline_header_indent() {
-                header_spaces.max(frame.header_indent_column)
+                (header_spaces + self.case_unindent_spaces()).max(frame.header_indent_column)
             } else {
                 frame.header_indent_column
             };
@@ -1502,9 +1504,14 @@ impl FormatEngine<'_> {
         let (open_spaces, _, _) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
+        // Ratliff closes a block at its body; the published opener took the
+        // case unindent the closer is about to take.
         let target = self
             .current_closing_multiline_header_indent()
-            .unwrap_or(open_spaces);
+            .unwrap_or(open_spaces)
+            + self.case_unindent_spaces()
+            + usize::from(self.options.brace_style == BraceStyle::Ratliff)
+                * self.options.indent_width;
         let current = current_spaces.unwrap_or(natural);
         (current_spaces.is_none() || current > target).then_some(target)
     }
