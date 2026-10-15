@@ -8007,3 +8007,13 @@ fn vtk_indents_a_kept_one_line_block_after_a_label_as_its_expanded_brace() {
         "void f()\n{\ndone:\n        { value=0; }\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_bare_block_after_a_labels_block_stands_at_the_statements() {
+    let input = "void f()\n{\n    x();\n    again: {\n        value=0;\n    }\n    {\n        value=0;\n    }\n    y();\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    x();\nagain:\n        {\n        value=0;\n        }\n        {\n        value=0;\n        }\n    y();\n    }\n",
+    );
+}

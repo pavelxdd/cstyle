@@ -559,6 +559,13 @@ impl FormatEngine<'_> {
                 .or_else(|| self.split_definition_brace_indent_spaces())
                 .or(previous_definition_brace_spaces)
                 .unwrap_or(frame.header_indent_column + self.options.indent_width),
+            // A bare block's brace stands a level past the statements it
+            // opens among, whatever line comes before it.
+            Some(frame)
+                if frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_none() =>
+            {
+                frame.header_indent_column + self.options.indent_width
+            }
             // A block after a statement in a switch body belongs to that
             // statement, not to the switch.
             _ => match self
