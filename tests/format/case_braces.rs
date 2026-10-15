@@ -1655,3 +1655,22 @@ fn a_brace_on_its_case_labels_line_keeps_the_gap_before_it_in_attached_styles() 
         assert_eq!(format_exact(&expected, &options), expected, "{style}");
     }
 }
+
+#[test]
+fn breaking_one_line_headers_leaves_a_kept_one_line_case_block_whole() {
+    // A case label heads no block: only a header's one-line block breaks.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    default: { value=1; }\n    }\n    if (ready) { value=0; }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1:\n    { value=0; }\n    break;\n    default:\n    { value=1; }\n    }\n    if (ready) {\n        value=0;\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--keep-one-line-blocks".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

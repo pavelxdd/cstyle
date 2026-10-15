@@ -1499,16 +1499,23 @@ impl FormatEngine<'_> {
             return None;
         }
         let close_index = self.matching_brace_on_current_line(start)?;
+        // A case label heads no block.
+        let follows_header = self
+            .layout
+            .command_state
+            .current_header
+            .as_deref()
+            .is_some_and(|header| !matches!(header, "case" | "default"));
         let break_one_line_blocks = self.options.break_one_line_blocks
             || self.options.lisp_add_one_line_braces_breaks_blocks()
             || (self.options.break_one_line_headers
-                && self.layout.command_state.current_header.is_some()
+                && follows_header
                 // A block on a line of its own already leaves its header.
                 && !token_begins_line(tokens, start)
                 && (self.options.break_one_line_statements
                     || !self.header_block_shares_line_with_statements(tokens, start, false)));
         if self.options.break_one_line_headers
-            && self.layout.command_state.current_header.is_some()
+            && follows_header
             && tokens[start + 1..close_index]
                 .iter()
                 .any(|token| matches!(token, Token::Word(word) if is_standard_add_braces_header(word) || word == "switch"))
