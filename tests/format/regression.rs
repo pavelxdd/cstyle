@@ -9011,3 +9011,22 @@ fn ratliff_closes_a_case_block_loop_deep_in_a_commented_else_chain_at_its_body()
         "void f() {\n    if( first ) {\n        switch( op ) {\n            case 1: {\n                for(i=0; i<count; i++) {\n                    visit(i);\n                    }\n                break;\n                }\n            }\n        }\n    else\n\n        /* second */\n        if( second ) {\n            switch( op ) {\n                case 1: {\n                    for(i=0; i<count; i++) {\n                        visit(i);\n                        }\n                    break;\n                    }\n                }\n            }\n        else\n\n            /* third */\n            if( third ) {\n                switch( op ) {\n                    case 1: {\n                        for(i=0; i<count; i++) {\n                            visit(i);\n                            }\n                        break;\n                        }\n                    }\n                }\n            else\n\n                /* fourth */\n                if( fourth ) {\n                    switch( op ) {\n                        case 1: {\n                            for(i=0; i<count; i++) {\n                                visit(i);\n                                }\n                            break;\n                            }\n                        }\n                    }\n                else\n\n                    /* fifth */\n                    if( fifth ) {\n                        switch( op ) {\n                            case 1: {\n                                for(i=0; i<count; i++) {\n                                    visit(i);\n                                    }\n                                break;\n                                }\n                            }\n                        }\n    }\n",
     );
 }
+
+#[test]
+fn a_ternary_inside_a_subscript_ends_with_its_statement() {
+    // Its colon closes it: no open ternary carries into the switch after.
+    let input = "static void g(int n)\n{\n  buff[flag ? 0 : size - 1] = 1;\n}\nvoid f()\n{\n  switch (opt) {\n      case Kint: {  /* signed */\n        pack(n);\n      }\n  }\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-cases"],
+        "static void g(int n)\n{\n    buff[flag ? 0 : size - 1] = 1;\n}\nvoid f()\n{\n    switch (opt)\n        {\n            case Kint:    /* signed */\n                {\n                    pack(n);\n                }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_ternary_choosing_between_messages_keeps_its_colon_spacing() {
+    // A selector colon inside a message leaves the `?` around it waiting
+    // for its own colon.
+    let input = "@implementation Item\n- (void)update {\n    value = ready ? [self first:1] : [self second:2];\n}\n@end\n";
+    check(input, &[], input);
+}

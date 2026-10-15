@@ -23,7 +23,9 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{is_comment_only_line, trailing_matching_parens};
+use crate::formatter::text::line_scan::{
+    is_comment_only_line, last_unmatched_open_delimiter, trailing_matching_parens,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1436,7 +1438,8 @@ impl FormatEngine<'_> {
         if is_objc_colon && colon_mode != ObjCColonPad::NoChange && next_is_close_paren {
             self.layout.objc.after_paren_pad = Some(false);
         }
-        if !is_label {
+        // A message's selector colon leaves the `?` around it waiting.
+        if !is_label && !is_objc_colon {
             self.layout.nesting.exit_question();
         }
         self.layout.previous = PreviousToken::Other;
@@ -1604,13 +1607,38 @@ impl FormatEngine<'_> {
             && !is_range_for
             && !aligned_continuation_colon
             && label_candidate;
+        // A `?` waiting inside the innermost open bracket or paren of the
+        // line, or in its statement outside them, takes the colon there,
+        // even inside or after a message's brackets.
+        let question_in_open_delimiter = has_question && {
+            let inside = match last_unmatched_open_delimiter(&self.current) {
+                Some((_, open)) => &self.current[open + 1..],
+                None => &self.current[self.current.statement_start()..],
+            };
+            let questions = inside.matches('?').count();
+            // Message selectors in closed brackets hold colons of their own.
+            let mut depth = 0usize;
+            let colons = inside
+                .replace("::", "")
+                .bytes()
+                .filter(|&byte| {
+                    match byte {
+                        b'[' => depth += 1,
+                        b']' => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                    byte == b':' && depth == 0
+                })
+                .count();
+            questions > colons
+        };
         let is_ternary = has_question
             && !is_label
             && !is_bit_field
             && !is_class_initializer
             && !is_class_base
             && !is_enum_underlying_type
-            && !is_objc_colon
+            && (!is_objc_colon || question_in_open_delimiter)
             && !is_objc_interface_colon
             && !aligned_continuation_colon;
         let in_objc_message = self.current.has_unclosed_bracket();
@@ -1646,7 +1674,7 @@ impl FormatEngine<'_> {
             asm_operand: is_asm_operand_colon,
             class_initializer: is_class_initializer,
             function_try_initializer,
-            objc_selector: is_objc_colon,
+            objc_selector: is_objc_colon && !is_ternary,
             objc_interface: is_objc_interface_colon,
             enum_underlying_type: is_enum_underlying_type,
             class_base: is_class_base,
