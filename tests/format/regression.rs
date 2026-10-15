@@ -8855,3 +8855,27 @@ fn a_split_kept_case_statement_aligns_after_the_padding_inside_its_paren() {
         "void f()\n{\n    switch ( kind ) {\n    case 1: snprintf( buffer, length, \"Unknown system error %d\",\n                          error );\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_argument_after_a_compound_literal_aligns_inside_its_call() {
+    // A literal's braces leave the call's parenthesis open: every argument
+    // row after one aligns inside it, as after any argument.
+    let input = "void f()\n{\n    helper((struct Item){ 1, 2 },\n           other);\n    helper((struct Item){ 1, 2 }, second,\n           other);\n    helper(first, (int[]){ 1, 2 }, second,\n           other);\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    helper((struct Item) { 1, 2 },\n           other);\n    helper((struct Item) { 1, 2 }, second,\n           other);\n    helper(first, (int[]) { 1, 2 }, second,\n           other);\n}\n",
+    );
+}
+
+#[test]
+fn a_block_broken_off_its_header_with_an_attribute_closes_under_its_line() {
+    // The attributed block becomes the header's body; its rows and closer
+    // follow the line it opens on.
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        [[likely]] {\n            value = 1;\n        }\n}\n",
+    );
+}
