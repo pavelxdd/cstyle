@@ -440,6 +440,16 @@ impl FormatEngine<'_> {
             );
             return layout;
         }
+        // An indented label heading a braceless body stands a level before
+        // the statement it labels there.
+        if layout.line_kind == LineKind::Label
+            && self.options.indent_labels
+            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && let Some(body) = self.braceless_body_indent(first)
+        {
+            layout.exact_indent_spaces = Some(body.saturating_sub(self.options.indent_width));
+            return layout;
+        }
         if layout.line_kind != LineKind::Normal || line.trimmed_start().starts_with('#') {
             return layout;
         }

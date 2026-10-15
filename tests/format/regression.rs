@@ -9410,3 +9410,44 @@ fn a_function_pointer_declarator_with_calling_conventions_holds_a_pointer() {
         "typedef BOOL (PASCAL FAR* LPFN_ACCEPT)(\n    int value,\n    int other);\n",
     );
 }
+
+#[test]
+fn break_return_type_splits_the_name_line_of_a_head_past_directives() {
+    // The return type before the name on its line breaks off, whatever
+    // directives stand in the head or between it and a macro before it.
+    let input = "#ifndef CORE\nMACRO_INIT\n#endif\n\nstatic void third(\n    int v\n){\n    use(v);\n}\nstatic\n#ifdef X\ninline\n#endif\nint first(void)\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-return-type"],
+        "#ifndef CORE\nMACRO_INIT\n#endif\n\nstatic void\nthird(\n    int v\n)\n{\n    use(v);\n}\nstatic\n#ifdef X\ninline\n#endif\nint\nfirst(void)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn an_indented_label_heading_a_braceless_body_stands_a_level_before_it() {
+    // The label is the header's body: it stands a level less than the
+    // statement it labels, as any indented label does.
+    let input = "void f()\n{\n    if (ready)\nretry:\n        value -= step;\n    done();\n}\n";
+    check(
+        input,
+        &["--indent-labels"],
+        "void f()\n{\n    if (ready)\n    retry:\n        value -= step;\n    done();\n}\n",
+    );
+    check(
+        "void f()\n{\n    while (busy) {\n        if (ready)\nretry:\n            value -= step;\n    }\n}\n",
+        &["--indent-labels"],
+        "void f()\n{\n    while (busy) {\n        if (ready)\n        retry:\n            value -= step;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn attach_return_type_leaves_a_head_after_a_conditional_macro_split() {
+    // A macro word left in a conditional before the head reads as the start
+    // of its statement: the head is not joined, while a plain one is.
+    let input = "#if defined(FAST)\nMACRO_NOINLINE\n#endif\nstatic bool\nfixup(Item *item) {\n    return true;\n}\nstatic bool\nplain(Item *item) {\n    return true;\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--attach-return-type"],
+        "#if defined(FAST)\nMACRO_NOINLINE\n#endif\nstatic bool\nfixup(Item *item)\n{\n    return true;\n}\nstatic bool plain(Item *item)\n{\n    return true;\n}\n",
+    );
+}

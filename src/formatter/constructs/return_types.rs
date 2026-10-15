@@ -247,9 +247,21 @@ impl FormatEngine<'_> {
         head.has_return_type()
             && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
             && !self.inside_extern_block(head.start)
-            // A conditional inside the head keeps astyle from moving it.
-            && !self.tree.has_directive_in(head.start..head.name_start)
             && !self.return_type_holds_group(head)
+    }
+
+    /// Whether `head` stands whole as a statement to attach its name to its
+    /// return type: a directive in it, or between it and a macro left
+    /// before it without a semicolon, keeps astyle from joining it.
+    fn head_joins_whole(&self, head: &FunctionHead) -> bool {
+        !self.tree.has_directive_in(head.start..head.name_start)
+            && self
+                .tree
+                .previous_code_token(head.start)
+                .is_none_or(|previous| {
+                    !matches!(self.tree.tokens[previous], Token::Word(_))
+                        || !self.tree.has_directive_in(previous..head.start)
+                })
     }
 
     /// Whether a group in parens or a `[[...]]` attribute stands before the
@@ -293,9 +305,9 @@ impl FormatEngine<'_> {
             .previous_code_token(head.start)
             .is_none_or(|previous| match &tokens[previous] {
                 Token::Symbol(';' | '{' | '}' | ':') => true,
-                // A macro left without a semicolon, with no directive
-                // between.
-                Token::Word(_) => !self.tree.has_directive_in(previous..head.start),
+                // A macro left without a semicolon, directives between or
+                // not.
+                Token::Word(_) => true,
                 // `template<class T>`
                 Token::Operator(operator) if operator == ">" => {
                     template_arguments_start(tokens, previous)
@@ -328,6 +340,7 @@ impl FormatEngine<'_> {
             self.options.attach_return_type,
             self.options.attach_return_type_decl,
         ) || !self.has_movable_return_type(head)
+            || !self.head_joins_whole(head)
             || !self.head_starts_statement(head)
             || self.parameters_hold_directive(head)
         {
