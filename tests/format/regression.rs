@@ -8069,3 +8069,22 @@ fn a_block_comment_between_a_do_closer_and_its_while_stays_between_them() {
         "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
     );
 }
+
+#[test]
+fn run_in_styles_attaching_closing_while_keep_it_after_a_one_line_do_block() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    do { value=0; } while (ready);\n    x();\n}\n";
+    check(
+        input,
+        &[
+            "--style=lisp",
+            "--attach-closing-while",
+            "--keep-one-line-blocks",
+        ],
+        "void f() {\n    if (ready) { value=0; }\n    else { result=0; }\n    do { value=0; } while (ready);\n    x(); }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   if (ready) { value=0; }\n    else { result=0; }\n    do { value=0; } while (ready);\n    x(); }\n",
+    );
+}

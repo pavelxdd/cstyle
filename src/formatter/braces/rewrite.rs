@@ -1805,6 +1805,14 @@ impl FormatEngine<'_> {
             Some(Token::Word(word))
                 if matches!(word.as_str(), "else" | "catch" | "@catch" | "__finally" | "__except" | "while")
         );
+        // The run-in styles attach a closing `while` even to a block kept on
+        // one line.
+        let run_in_attached_closing_while = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && self.options.attach_closing_while
+            && matches!(next, Some(Token::Word(word)) if word == "while")
+            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
         if !init_block_continues_expression
             && !empty_value_block_continues_expression
             && !lambda_block_continues_expression
@@ -1816,8 +1824,8 @@ impl FormatEngine<'_> {
                 && next_on_source_line
                 && !next_is_closing_header)
             && (!next_is_closing_header
-                || self.options.break_one_line_statements
-                || self.options.brace_style == BraceStyle::Lisp
+                || self.options.break_one_line_statements && !run_in_attached_closing_while
+                || self.options.brace_style == BraceStyle::Lisp && !run_in_attached_closing_while
                 || !self.should_attach_closing_header(next))
             && !matches!(next, Some(Token::Symbol(';' | ',')))
             && !matches!(next, Some(Token::Comment(_, _)))

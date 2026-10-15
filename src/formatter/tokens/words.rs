@@ -337,8 +337,14 @@ impl FormatEngine<'_> {
                     .is_some_and(|token| matches!(token, Token::Symbol('}')))
             })
             && (self.options.break_one_line_statements
-                || (self.options.brace_style == BraceStyle::Pico
-                    && !(word == "while" && self.options.attach_closing_while)))
+                || self.options.brace_style == BraceStyle::Pico)
+            // The run-in styles attach a closing `while` even to a block kept
+            // on one line.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && word == "while"
+                && self.options.attach_closing_while)
             && contains_one_line_block(self.current.trimmed())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
                 || (word == "while"
