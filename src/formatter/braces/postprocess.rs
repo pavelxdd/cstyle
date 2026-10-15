@@ -25,7 +25,7 @@ pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -
     match options.brace_style {
         BraceStyle::Pico => {
             let run_in = run_in_horstmann_opening_braces(&output, options);
-            attach_lisp_closing_braces(&run_in, options.line_break())
+            attach_lisp_closing_braces_aligning_parens(&run_in, options.line_break())
         }
         BraceStyle::Lisp => {
             attach_lisp_closing_braces_aligning_parens(&output, options.line_break())

@@ -8739,3 +8739,59 @@ fn an_indented_case_block_keeps_its_level_whatever_label_follows_its_closer() {
         "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0; } case 2:\n            value=1;\n            break;\n        case 3:\n        {   value=2; } default:\n            break; } }\n",
     );
 }
+
+#[test]
+fn ratliff_returns_a_value_row_after_an_element_brace_row_to_the_elements() {
+    let input = "void f()\n{\n    int table[][2] = {\n        { 1, 2 }, {\n            3, 4\n        },\n        5, {\n            6, 7\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    int table[][2] = {\n            { 1, 2 }, {\n            3, 4\n            },\n        5, {\n            6, 7\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn pico_aligns_a_paren_continuation_after_a_closer_run_into_the_row_before() {
+    // The rows of a paren the joined closer's line leaves open move with it.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   do\n    {   value++; } while (value < count &&\n                          ready); }\n",
+    );
+}
+
+#[test]
+fn a_condition_continued_after_an_indented_closer_aligns_inside_its_paren() {
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--attach-closing-while"],
+        "void f()\n    {\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n    }\n",
+    );
+}
+
+#[test]
+fn a_closer_keeping_the_next_element_brace_stands_at_its_own_brace_in_gnu_and_horstmann() {
+    let input = "void f()\n{\n    struct Item refs[2] = {\n        {\n            .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    struct Item refs[2] =\n    {\n        {\n            .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   struct Item refs[2] =\n    {   {   .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_header_after_a_labelled_one_line_block_as_after_any_block() {
+    let input = "void f()\n{\n    done: if (ready) { value=0; }\n    switch (kind) {\n    default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-blocks"],
+        "void f()\n{   done: if (ready) { value=0; }\n\n    switch (kind)\n    {   default:\n            break; } }\n",
+    );
+}

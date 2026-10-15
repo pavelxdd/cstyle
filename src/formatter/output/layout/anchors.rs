@@ -919,13 +919,14 @@ impl FormatEngine<'_> {
         if is_brace(element) != is_brace(first)
             && self.should_indent_brace_line(BraceType::Initializer)
         {
-            // Only a brace row that spans lines stands apart.
+            // Only a brace row that spans lines stands apart, the brace
+            // leading its row or ending a row of braces.
             let element_line = self.output.line_with_token(element);
             if !is_brace(element)
                 || !element_line.is_some_and(|line| {
                     self.output
                         .line_tokens(line)
-                        .is_some_and(|span| span.first == element)
+                        .is_some_and(|span| is_brace(span.first))
                 })
                 || groups
                     .opened_at(element)
@@ -1404,18 +1405,12 @@ impl FormatEngine<'_> {
     /// that line.
     #[inline(never)]
     fn initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
-        // VTK, GNU and Horstmann close some initializers their own way;
-        // VTK closes a nested row at its brace like a block.
+        // VTK closes only a nested row at its brace, like a block.
         if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
         let group = self.tree.groups.closed_at(first)?;
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Gnu | BraceStyle::Horstmann
-        ) || self.options.brace_style == BraceStyle::Vtk
-            && !self.vtk_nested_rows_like_blocks(group)
-        {
+        if self.options.brace_style == BraceStyle::Vtk && !self.vtk_nested_rows_like_blocks(group) {
             return None;
         }
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
