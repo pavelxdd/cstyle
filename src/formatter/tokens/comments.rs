@@ -2941,10 +2941,12 @@ impl FormatEngine<'_> {
 
     /// The source width from a `}` to the `while` that starts the current
     /// line after it on its source line.
-    fn do_while_closer_width(&self) -> Option<usize> {
+    /// The width of the `}` and the space after it that a closing header
+    /// leading the line followed on its source line.
+    fn closing_header_closer_width(&self) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let first = self.current.tokens()?.first;
-        if !matches!(&tokens[first], Token::Word(word) if word == "while") {
+        if !matches!(&tokens[first], Token::Word(word) if word == "while" || word == "else") {
             return None;
         }
         let close = self.tree.previous_code_token(first)?;
@@ -3197,11 +3199,15 @@ impl FormatEngine<'_> {
                 if kind == CommentKind::Block && comment.contains("NOPAD") {
                     self.ensure_space();
                 }
-            } else if let Some(width) = self.do_while_closer_width() {
-                // A `while` broken off the `}` of its `do` body leaves the
-                // comment where the joined line had it.
-                self.current.push_str(&gap);
-                self.current.push_str(&" ".repeat(width));
+            } else if let Some(width) = self.closing_header_closer_width()
+                && !gap.contains('\t')
+            {
+                // A `while` or `else` broken off the `}` before it leaves the
+                // comment where the joined line had it; padding the header
+                // takes from the gap.
+                let growth = self.current_segment_growth().unwrap_or(0);
+                let width = (gap.chars().count() as isize + width as isize - growth).max(1);
+                self.current.push_str(&" ".repeat(width as usize));
             } else if !gap.contains('\t') && !self.block_comment_precedes_code_on_its_line(kind) {
                 // Padding the code of the comment's output line takes from
                 // the gap.

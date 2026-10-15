@@ -1773,7 +1773,11 @@ impl FormatEngine<'_> {
         let after_operator = operator_start + operator.len();
         let rest = &code[after_operator..];
         let value = rest.trimmed_start();
-        if value.is_empty() || value.starts_with(':') && !value.starts_with("::") {
+        // An assignment a block on the line holds ended in it.
+        if value.is_empty()
+            || value.starts_with(':') && !value.starts_with("::")
+            || code.ends_with('}') && rest.contains(';')
+        {
             return None;
         }
         let value_offset = after_operator

@@ -8879,3 +8879,28 @@ fn a_block_broken_off_its_header_with_an_attribute_closes_under_its_line() {
         "void f()\n{\n    if (ready)\n        [[likely]] {\n            value = 1;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_kept_one_line_block_ends_its_assignment_before_a_trailing_comment() {
+    // The assignment inside the block ended with it; the statement after
+    // the commented line continues from its own columns.
+    let input = "void f()\n{\n    if (ready) { value=0; }   // note\n    value = table[first\n                  + second];\n}\n";
+    check(input, &["--keep-one-line-blocks"], input);
+    check(
+        "void f()\n{\n    if (ready) value=0;   // note\n    value = table[first\n                  + second];\n}\n",
+        &["--add-one-line-braces"],
+        input,
+    );
+}
+
+#[test]
+fn an_else_broken_off_its_closer_leaves_the_comment_where_the_joined_line_had_it() {
+    // As for a `while` broken off its `do` body, the closer and the space
+    // after it stay in the comment's gap; padding the else takes from it.
+    let input = "void f()\n{\n    if (ready) { a = 1; } else { b = 2; } // note\n    if (ready) { a = 1; }   else{ b = 2; } // note\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) { a = 1; }\n    else { b = 2; }   // note\n    if (ready) { a = 1; }\n    else { b = 2; }    // note\n}\n",
+    );
+}
