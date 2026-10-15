@@ -2842,7 +2842,13 @@ fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
 }
 
 fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
-    let Some(previous) = previous_non_layout_token_index(tokens, open_index) else {
+    // A comment between the header and its brace stays with the header.
+    let Some(previous) = (0..open_index).rev().find(|&index| {
+        !matches!(
+            tokens[index],
+            Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+        )
+    }) else {
         return false;
     };
     match tokens.get(previous) {
