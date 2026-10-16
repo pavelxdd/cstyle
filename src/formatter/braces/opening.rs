@@ -2317,12 +2317,24 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
     ) {
         let brace_type = brace.brace_type;
-        // An element's brace after a `,` keeps the row, in every style; the
-        // layout places that row like any other.
+        // An element's brace after a `,` keeps the row, in every style, with
+        // a comment ending the row; the layout places that row like any other.
+        let ends_row = matches!(next, Some(Token::Newline))
+            || matches!(next, Some(Token::Comment(..)))
+                && self.current.active_token().is_some_and(|brace| {
+                    self.tree.tokens[brace + 1..]
+                        .iter()
+                        .find(|token| match token {
+                            Token::Whitespace(_) => false,
+                            Token::Comment(_, text) => text.contains('\n'),
+                            _ => true,
+                        })
+                        .is_none_or(|token| matches!(token, Token::Newline))
+                });
         let element_brace_after_closer = matches!(
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-        ) && matches!(next, Some(Token::Newline))
+        ) && ends_row
             && self.layout.previous == PreviousToken::Comma
             && self
                 .current

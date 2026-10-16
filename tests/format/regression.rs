@@ -11718,3 +11718,18 @@ fn a_comment_between_a_split_return_type_and_its_name_leaves_the_name_unindented
     check(input, &["--style=kr"], input);
     check(input, &["--style=ratliff"], input);
 }
+
+#[test]
+fn an_element_brace_after_a_comma_keeps_its_row_with_a_comment_ending_it() {
+    let input = "void f()\n{\n    int table[][2] = {\n        5, { /* note */\n            6, 7\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =\n    {\n        5, { /* note */\n            6, 7\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   int table[][2] =\n    {   5, { /* note */\n            6, 7\n        }\n    };\n}\n",
+    );
+}
