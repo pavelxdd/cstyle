@@ -11423,3 +11423,24 @@ fn run_in_styles_align_constructor_members_after_an_access_label() {
         "class Item\n{\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {} };\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_function_brace_leaves_the_brace_a_function_body() {
+    let input = "void f()\n/* note */ {\n    if (x)\n    /* c */ {\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n/* note */\n{\n    if (x)\n        /* c */ {\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=java"],
+        "void f()\n/* note */ {\n    if (x)\n        /* c */ {\n        y();\n    }\n}\n",
+    );
+    let blank = "void f()\n/* note */ {\n    result = ((first + (second * 2))\n              - third) / (fourth\n\n                          + fifth);\n}\n";
+    check(
+        blank,
+        &["--style=gnu", "--delete-empty-lines"],
+        "void f()\n/* note */\n{\n    result = ((first + (second * 2))\n              - third) / (fourth\n                          + fifth);\n}\n",
+    );
+}

@@ -10,8 +10,8 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
-    unmatched_open_paren_column,
+    ContainsAnyByte, after_leading_comments, is_comment_only_line, trailing_comment_split_limit,
+    trailing_matching_parens, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
@@ -481,7 +481,9 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_ends_definition_header(&self) -> bool {
-        let source = if self.current_is_blank() {
+        // Comments alone before the brace leave the header on the line
+        // before.
+        let source = if after_leading_comments(self.current.trimmed_start()).is_empty() {
             match self.output.scoped().iter().rev().find(|line| {
                 let trimmed = line.trimmed_start();
                 !trimmed.is_empty() && !is_comment_only_line(trimmed)
