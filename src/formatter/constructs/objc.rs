@@ -460,6 +460,19 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// The column that sets the colon of the message row starting at token
+    /// `first` under the colons of its message.
+    pub(crate) fn objc_colon_aligned_row_spaces(&self, first: usize) -> Option<usize> {
+        let align = self.layout.objc.colon_align?;
+        let row = self.tree.tokens[first..]
+            .iter()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .map(token_text)
+            .collect::<String>();
+        let colon = objc_method_colon_position(&row)?;
+        align.checked_sub(colon)
+    }
+
     /// Sets the alignment of a message's rows from the line `line`, set
     /// at column `base`, that opens it.
     pub(crate) fn begin_objc_message_alignment(&mut self, line: &str, base: usize) {

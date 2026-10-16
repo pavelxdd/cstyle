@@ -12960,3 +12960,19 @@ fn adjacent_comments_leading_a_row_leave_it_where_one_comment_does() {
         &expected.replace("/* a */ /* b */", "/* a */"),
     );
 }
+
+#[test]
+fn a_message_row_a_comment_leads_stands_at_the_rows_of_its_message() {
+    let input = "- (void)run\n{\n    [object performWith:first\n     /* a */ andWith:second];\n    [object performWith:first\n                andWith:second];\n    [object performWith:first\n        /* a */ andWith:second\n        /* b */ orWith:third];\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "- (void)run\n{\n    [object performWith:first\n            /* a */ andWith:second];\n    [object performWith:first\n            andWith:second];\n    [object performWith:first\n            /* a */ andWith:second\n            /* b */ orWith:third];\n}\n",
+    );
+    // Aligned colons count the comment among the row's text.
+    check(
+        input,
+        &["--style=kr", "--align-method-colon"],
+        "- (void)run\n{\n    [object performWith:first\n        /* a */ andWith:second];\n    [object performWith:first\n                andWith:second];\n    [object performWith:first\n        /* a */ andWith:second\n         /* b */ orWith:third];\n}\n",
+    );
+}

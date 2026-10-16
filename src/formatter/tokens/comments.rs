@@ -1407,12 +1407,25 @@ impl FormatEngine<'_> {
         let mut brace_element_comment_indent = None;
         // A template head's parameters set the column of a comment leading
         // one of their rows.
-        let template_row_spaces = (self.template_continuation_active()
+        let head_row_spaces = (self.template_continuation_active()
             && self.token_input.token_begins_source_line
             && self.current.trimmed().is_empty())
         .then_some(self.layout.continuation_indent.next_line_indent_spaces)
-        .flatten();
-        if template_row_spaces.is_none()
+        .flatten()
+        // So do a message's colons or keywords, of a row a comment leads.
+        .or_else(|| {
+            (self.layout.objc.message_active
+                && self.token_input.token_begins_source_line
+                && self.current.trimmed().is_empty())
+            .then(|| {
+                self.current
+                    .active_comment()
+                    .and_then(|comment| self.objc_colon_aligned_row_spaces(comment))
+                    .or(self.layout.objc.message_align)
+            })
+            .flatten()
+        });
+        if head_row_spaces.is_none()
             && kind == CommentKind::Block
             && self.current.trimmed().is_empty()
             && !comment.contains('\n')
@@ -1528,7 +1541,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
             && class_base_comment_indent.is_none()
-            && let Some(spaces) = template_row_spaces
+            && let Some(spaces) = head_row_spaces
                 .or(label_line)
                 .or(constructor_member_comment_indent)
                 .or(brace_element_comment_indent)
@@ -1612,7 +1625,7 @@ impl FormatEngine<'_> {
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
             self.comments.comment_keeps_line_column =
-                label_line.is_some() || template_row_spaces.is_some();
+                label_line.is_some() || head_row_spaces.is_some();
             if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1
