@@ -12360,3 +12360,12 @@ fn a_case_label_a_comment_leads_continues_as_any() {
         "void f()\n{\n    switch (flags) {\n    /* note */ case FIRST |\n            THIRD:\n        value = 2;\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_body_closer_after_a_trailing_comment_stands_at_its_brace_past_a_conditional_head() {
+    check(
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    count = 1; // note\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n#ifdef FEATURE\n    {\n#endif\n    count = 1; // note\n    }\n",
+    );
+}

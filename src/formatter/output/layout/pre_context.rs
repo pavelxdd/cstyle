@@ -81,8 +81,10 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.split_else_comment_row_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
         }
+        // A closer stands at its brace whatever ended the statement before.
         if layout.exact_indent_spaces.is_some()
             && !self.in_aggregate_declaration_brace()
+            && !line.trimmed_start().starts_with('}')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let split = trailing_comment_split_limit(previous);
