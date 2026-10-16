@@ -3420,7 +3420,13 @@ impl FormatEngine<'_> {
         if comment <= first || comment > self.tree.tokens.len() {
             return None;
         }
-        self.source_growth(first, comment, self.current.trimmed())
+        // Comments a preindented line leads with stand before its tokens.
+        let code = if matches!(self.tree.tokens.get(first), Some(Token::Comment(..))) {
+            self.current.trimmed()
+        } else {
+            after_leading_comments(self.current.trimmed())
+        };
+        self.source_growth(first, comment, code)
     }
 
     /// How much wider an output row's code came out than its source tokens.

@@ -12246,3 +12246,12 @@ fn an_access_label_a_comment_trails_keeps_its_class_brace_alone() {
         "class Item\n{\npublic: /* note */\n    int value; };\n",
     );
 }
+
+#[test]
+fn statements_a_comment_leads_keep_the_gap_before_their_trailing_comment() {
+    check(
+        "void f()\n{\n    /* note */ value=0; result=1;          // both\n}\n",
+        &["--style=linux", "--keep-one-line-statements"],
+        "void f()\n{\n    /* note */ value=0; result=1;          // both\n}\n",
+    );
+}
