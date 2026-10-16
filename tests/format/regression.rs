@@ -12414,3 +12414,12 @@ fn a_list_a_comment_leads_keeps_its_first_element_on_the_brace_line() {
         "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
     );
 }
+
+#[test]
+fn a_header_body_line_a_comment_leads_is_no_comment_line_for_the_row_after() {
+    check(
+        "int table[] = {\n    1,\n};\nvoid f()\n{\n    if (ready) {\n        /* note */ int list[] = { 1,\n                       2 };\n    }\n}\n",
+        &["--style=google"],
+        "int table[] = {\n    1,\n};\nvoid f() {\n    if (ready) {\n        /* note */ int list[] = { 1,\n                                  2\n                                };\n    }\n}\n",
+    );
+}

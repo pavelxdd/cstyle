@@ -13,9 +13,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments, is_comment_line,
-    is_comment_only_line, line_brace_imbalance, preprocessor_directive,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+    is_bare_comment_line, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    preprocessor_directive, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -848,7 +848,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let comment = self.output.last_line_outside_comment()?;
-        if !comment.trimmed_start().starts_with("/*") {
+        if !comment.trimmed_start().starts_with("/*")
+            || !is_bare_comment_line(comment.trimmed_start())
+        {
             return None;
         }
         let scoped = self.output.scoped();
