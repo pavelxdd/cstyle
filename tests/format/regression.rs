@@ -10555,3 +10555,13 @@ fn a_one_line_block_after_a_comment_leading_its_line_leaves_no_level_to_the_next
     check(input, &["--add-one-line-braces"], expected);
     check(expected, &["--add-one-line-braces"], expected);
 }
+
+#[test]
+fn tab_indents_fill_an_element_brace_run_in_to_rows_below_with_a_tab() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        {  1,  2 },\n        {5,\n         6}\n    };\n}\n";
+    let expected = "void f()\n{\n\tstatic const struct Item items[] = {\n\t\t{  1,  2 },\n\t\t{\t5,\n\t\t\t6\n\t\t}\n\t};\n}\n";
+    for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+        check(input, &[indent], expected);
+        check(expected, &[indent], expected);
+    }
+}

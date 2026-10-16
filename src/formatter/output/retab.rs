@@ -122,7 +122,8 @@ impl FormatEngine<'_> {
                         && !rest.trimmed_start().starts_with("//")
                         && (self.starts_with_block_brace(index)
                             || self.output.line_tokens(index).is_none()
-                            || rest.trimmed_start().starts_with('{')) =>
+                            || rest.trimmed_start().starts_with('{')
+                            || self.brace_runs_in_to_rows_below(index)) =>
                 {
                     let body = rest.trimmed_start();
                     let target = width + 1 + (rest.len() - body.len());
@@ -150,6 +151,17 @@ impl FormatEngine<'_> {
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 )
             })
+    }
+
+    /// Whether output line `index` leads with a brace whose elements go on
+    /// in rows below it: its fill runs the first element in like a block's.
+    fn brace_runs_in_to_rows_below(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .line_tokens(index)
+            .and_then(|span| groups.opened_at(span.first))
+            .and_then(|group| groups.get(group).close)
+            .is_some_and(|close| self.output.line_with_token(close) != Some(index))
     }
 
     /// Columns of output line `index`'s indent, `width` wide, that tabs
