@@ -17,7 +17,8 @@ use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
-    let trimmed = line.trimmed();
+    // A comment after the brace takes no part in the head.
+    let trimmed = line[..trailing_comment_split_limit(line)].trimmed();
     let Some(head) = trimmed.strip_suffix('{') else {
         return false;
     };

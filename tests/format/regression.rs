@@ -13154,3 +13154,9 @@ fn a_qualified_definition_head_takes_its_brace_before_a_trailing_comment() {
         "class Item {\n  public:\n    int value() const { /* note */\n        return value_;\n    }\n    int other() { // note\n        return value_;\n    }\n};\nint g() const { /* note */\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn a_lambda_argument_row_with_a_comment_after_its_brace_stands_as_without_it() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n    [](const Item &first, const Item &second) { /* note */\n        return first.value < second.value;\n    });\n}\n";
+    check(input, &["--style=kr"], input);
+}

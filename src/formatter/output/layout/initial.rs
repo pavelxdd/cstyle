@@ -279,7 +279,7 @@ impl FormatEngine<'_> {
                 spaces = None;
             }
         }
-        let opens_lambda_block = line.trimmed_end().ends_with('{') && line_opens_lambda_block(line);
+        let opens_lambda_block = line_opens_lambda_block(line);
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
