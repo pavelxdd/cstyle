@@ -455,11 +455,17 @@ impl FormatEngine<'_> {
         }
         // A row set to follow the comment follows it where it moved, unless
         // its code closed the delimiters the comment stood in.
+        let moved_width = leading_visual_width(&trimmed, self.options.tab_width);
         let continuation = &mut self.layout.continuation_indent;
         if continuation.next_line_indent_spaces == Some(placed_width) {
-            continuation.next_line_indent_spaces = (!closes_delimiters
-                || self.layout.nesting.paren_depth > 0)
-                .then(|| leading_visual_width(&trimmed, self.options.tab_width));
+            continuation.next_line_indent_spaces =
+                (!closes_delimiters || self.layout.nesting.paren_depth > 0).then_some(moved_width);
+        }
+        if continuation.next_input_line_continuation_indent
+            == Some(ContinuationIndent::Spaces(placed_width))
+        {
+            continuation.next_input_line_continuation_indent =
+                Some(ContinuationIndent::Spaces(moved_width));
         }
         // Code after the comment that ends a statement or opens a block
         // leaves no column for the next line.

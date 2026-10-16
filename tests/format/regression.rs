@@ -13240,3 +13240,9 @@ fn a_list_in_a_case_block_keeps_its_columns_where_its_line_stands() {
         "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            static const char *names[] = { \"first\", \"second\",\n                                           /* note */\n                                           \"third\", \"fourth\"\n                                         };\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_led_row_after_a_comment_line_in_a_continuation_stays_in_it() {
+    let input = "void f()\n{\n    /* note */ return first ||\n                      /* note */\n                      /* c */ second;\n}\n";
+    check(input, &["--style=kr"], input);
+}
