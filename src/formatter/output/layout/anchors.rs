@@ -880,9 +880,12 @@ impl FormatEngine<'_> {
             && let Some(line) = self.output.line_with_token(element)
             && self.output.line_tokens(line)?.first == element
         {
+            // At file scope only: within a block the rows already stand at
+            // the indented brace.
+            let file_scope_vtk =
+                self.options.brace_style == BraceStyle::Vtk && groups.get(group).parent.is_none();
             let vtk_levels = |brace_alone: bool| {
-                usize::from(self.options.brace_style == BraceStyle::Vtk && brace_alone)
-                    * self.options.indent_width
+                usize::from(file_scope_vtk && brace_alone) * self.options.indent_width
             };
             let before_alone = self.output.line_tokens(line)?.last == element;
             // An element spanning source lines has its brace broken off.

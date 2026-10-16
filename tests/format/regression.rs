@@ -9900,6 +9900,12 @@ fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
 
 #[test]
 fn vtk_sets_one_line_element_rows_at_the_rows_and_broken_element_braces_past_them() {
+    // Within a block the rows stand at the indented brace, as the broken
+    // elements' braces do.
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        { name(\"a\"), NULL, first,\n          0, 0 },\n        { name(\"b\"), NULL, second, 0, 0 },\n        { name(\"c\"), NULL,\n          third, 0, 0 },\n    };\n}\n";
+    let expected = "void f()\n{\n    static const struct Item items[] =\n        {\n            {\n            name(\"a\"), NULL, first,\n            0, 0\n            },\n            { name(\"b\"), NULL, second, 0, 0 },\n            {\n            name(\"c\"), NULL,\n            third, 0, 0\n            },\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
     for (input, expected) in [
         (
             "static Item items[] = {\n    { name(\"a\"), NULL, first,\n      0, 0 },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n    { name(\"d\"), NULL,\n      fourth, 0, 0 },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
