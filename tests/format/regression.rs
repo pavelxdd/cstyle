@@ -10169,6 +10169,26 @@ fn a_case_label_line_holding_a_statement_label_stands_with_the_case_labels() {
     }
 }
 
+// A declarator after a nested body's closer stands at the member it
+// declares, wherever the style sets the closer.
+#[test]
+fn a_declarator_after_a_nested_body_closer_stands_at_its_member() {
+    let input = "struct histindex {\n\tstruct record {\n\t\tunsigned int ptr, cnt;\n\t\tstruct record *next;\n\t} **records, /* an occurrence */\n\t  **line_map; /* map */\n\tint other;\n};\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "struct histindex\n    {\n    struct record\n        {\n        unsigned int ptr, cnt;\n        struct record *next;\n        } **records, /* an occurrence */\n    **line_map; /* map */\n    int other;\n    };\n",
+        ),
+        (
+            "--style=ratliff",
+            "struct histindex {\n    struct record {\n        unsigned int ptr, cnt;\n        struct record *next;\n        } **records, /* an occurrence */\n    **line_map; /* map */\n    int other;\n    };\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

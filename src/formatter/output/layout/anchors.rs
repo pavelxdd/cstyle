@@ -2005,6 +2005,23 @@ impl FormatEngine<'_> {
             let line = self.output.line_with_token(start)?;
             return Some(self.output.lead_width(line, self.options.tab_width));
         }
+        // A declarator after a nested body's closer stands at the member it
+        // declares, wherever the style sets the closer.
+        if let Some(comma_line) = self.output.line_with_token(comma)
+            && self.output.line_tokens(comma_line).is_some_and(|span| {
+                span.first > start
+                    && matches!(tokens[span.first], Token::Symbol('}'))
+                    && groups
+                        .closed_at(span.first)
+                        .is_some_and(|nested| groups.get(nested).parent == Some(body))
+            })
+            && let Some(member_line) = self.output.line_with_token(start)
+        {
+            return Some(
+                self.output.lead_width(member_line, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
+        }
         // A declarator row after a row that continues the declaration
         // stands at that row.
         if let Some(comma_line) = self.output.line_with_token(comma)
