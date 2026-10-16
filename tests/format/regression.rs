@@ -11496,3 +11496,13 @@ fn a_comment_leading_the_first_case_label_leaves_it_at_the_case_column() {
         "void f()\n{\n    switch (kind) {\n        /* note */ case 1:\n            value = 1;\n            break;\n        default:\n            break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn unpadding_a_header_broken_off_a_statement_widens_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    a(); while (x) { /* note */\n        first();\n    }\n    if (ready) helper(); else switch (state) { /* note */\n    case 1:\n        first();\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=linux", "--unpad-paren"],
+        "void f()\n{\n    a();\n    while(x) {  /* note */\n        first();\n    }\n    if(ready) helper();\n    else switch(state) {  /* note */\n        case 1:\n            first();\n            break;\n        }\n}\n",
+    );
+}

@@ -910,7 +910,7 @@ impl FormatEngine<'_> {
                     .copied()
                     .unwrap_or(0);
                 let prefix = self
-                    .broken_off_else_prefix_width()
+                    .broken_off_prefix_width()
                     .max(self.broken_else_if_prefix_width());
                 let target = self
                     .layout
@@ -2781,11 +2781,9 @@ impl FormatEngine<'_> {
         self.comments.skip_next_attached_comment = true;
     }
 
-    /// The source width of what a broken else-if moved off the line its
-    /// brace is on, before the `if`.
-    /// Width of the `else` an `else switch`-like line left on the line
-    /// before, which the comment's source column counts.
-    fn broken_off_else_prefix_width(&self) -> usize {
+    /// Width of the code before the line on its source line, which the
+    /// comment's source column counts.
+    fn broken_off_prefix_width(&self) -> usize {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
             return 0;
@@ -2801,15 +2799,19 @@ impl FormatEngine<'_> {
         else {
             return 0;
         };
-        if !tokens[code_start..first].iter().all(|token| {
-            matches!(token, Token::Whitespace(_))
-                || matches!(token, Token::Word(word) if word == "else")
-        }) {
+        // A closer broken off before the line leaves the comment its source
+        // column.
+        if tokens[code_start..first]
+            .iter()
+            .any(|token| matches!(token, Token::Symbol('}')))
+        {
             return 0;
         }
         tokens[code_start..first].iter().map(token_char_len).sum()
     }
 
+    /// The source width of what a broken else-if moved off the line its
+    /// brace is on, before the `if`.
     fn broken_else_if_prefix_width(&self) -> usize {
         if !self.current.trimmed_start().starts_with("if")
             || !self
