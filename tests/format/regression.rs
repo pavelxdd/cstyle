@@ -10631,3 +10631,21 @@ fn a_braceless_body_of_a_header_an_else_keeps_on_a_statement_line_nests_from_its
     check(input, &["--style=allman", "-o"], expected);
     check(expected, &["--style=allman", "-o"], expected);
 }
+
+#[test]
+fn break_blocks_pads_after_a_one_line_block_on_a_line_a_comment_leads() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other();\n    while (ready)\n        /* note */\n        helper();\n}\n";
+    let expected = "void f()\n{   if (ready)\n        /* note */ { helper(); }\n\n    else\n        /* note */ { other(); }\n\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+    let args = [
+        "--style=horstmann",
+        "--break-blocks=all",
+        "--add-one-line-braces",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n        /* note */ other();\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n    { helper(); }\n    else\n        /* note */ { other(); }\n\n    value = 1;\n}\n";
+    let args = ["--style=kr", "--break-blocks", "--add-one-line-braces"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

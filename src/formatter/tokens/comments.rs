@@ -478,6 +478,7 @@ impl FormatEngine<'_> {
             let code_follows_comment = trimmed
                 .split_once("*/")
                 .is_some_and(|(_, after)| !after.trimmed().is_empty());
+            let code_ends_statement = trimmed.trimmed_end().ends_with(';');
             if let Some((head, tail, spaces)) = self.split_comment_led_line(&trimmed) {
                 self.push_raw_comment_output_line(head);
                 let level = self.layout.indentation.indent();
@@ -506,6 +507,11 @@ impl FormatEngine<'_> {
             }
             if let Some(spaces) = next_indent {
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            }
+            // Code after the comment ends its line for block padding as on
+            // any line.
+            if code_follows_comment {
+                self.observe_finished_block_spacing_line(code_ends_statement);
             }
             // A call the code after the comment closes ends the statement
             // as on any line.

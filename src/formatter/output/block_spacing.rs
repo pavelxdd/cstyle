@@ -285,7 +285,7 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
-    pub(super) fn observe_finished_block_spacing_line(&mut self, ends_statement: bool) {
+    pub(crate) fn observe_finished_block_spacing_line(&mut self, ends_statement: bool) {
         if !self.options.break_blocks {
             return;
         }
