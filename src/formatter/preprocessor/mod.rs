@@ -1184,12 +1184,8 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        if let Some(case_label_column) = self.active_case_label_indent_spaces() {
-            return PreprocessorLineIndent::Exact {
-                structural_level: self.layout.indentation.indent() + 1,
-                spaces: case_label_column + self.options.indent_width,
-            };
-        }
+        // A directive continuing a conditional stands at the one that opened
+        // it, past the case label's body it may have left.
         if let Some(indent) = self
             .layout
             .indentation
@@ -1203,6 +1199,12 @@ impl FormatEngine<'_> {
                 };
             }
             return PreprocessorLineIndent::Level(indent.level);
+        }
+        if let Some(case_label_column) = self.active_case_label_indent_spaces() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: self.layout.indentation.indent() + 1,
+                spaces: case_label_column + self.options.indent_width,
+            };
         }
         if let Some(spaces) = self.preprocessor_continuation_spaces() {
             PreprocessorLineIndent::Exact {

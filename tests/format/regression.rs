@@ -12658,3 +12658,13 @@ fn a_statement_a_comment_leads_after_a_run_in_case_block_closer_stands_as_a_comm
         "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; }\n        /* note */\n    break;\n    case 2: {\n        value=0; }\n        /* note */ break; } }\n",
     );
 }
+
+#[test]
+fn an_indented_conditional_closes_at_its_opening_in_a_case_body() {
+    let input = "void f()\n{\n    switch (k) {\n    case 2:\n        int other[] = {\n            1, 2\n#ifdef FEATURE\n        };\n#endif\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=linux", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (k) {\n    case 2:\n        int other[] = {\n            1, 2\n            #ifdef FEATURE\n        };\n            #endif\n        break;\n    }\n}\n",
+    );
+}
