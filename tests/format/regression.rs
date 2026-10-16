@@ -9748,3 +9748,13 @@ fn keeping_one_line_statements_keeps_an_if_line_ending_in_its_else_whole() {
         check(expected, &[style, "-o"], expected);
     }
 }
+
+#[test]
+fn a_one_line_block_removed_from_a_header_run_in_after_an_else_nests_past_both() {
+    let input = "void f()\n{\n    if (ready) helper(); else for (;;)\n    {   first(); }\n    if (ready) helper(); else while (ready)\n    {\n        first();\n    }\n    g();\n}\n";
+    let expected = "void f()\n{\n    if (ready) helper();\n    else for (;;)\n            first();\n    if (ready) helper();\n    else while (ready)\n            first();\n    g();\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style, "--remove-braces"], expected);
+        check(expected, &[style, "--remove-braces"], expected);
+    }
+}

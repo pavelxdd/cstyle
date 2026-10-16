@@ -2086,21 +2086,18 @@ impl FormatEngine<'_> {
                 // Headers chained after `else` on the line before, as in
                 // `} else for (x) {`, raise the body past this floor; a
                 // brace the formatter added is no token of the tree.
-                let else_text = trimmed.strip_prefix('}').map_or(trimmed, str::trim_start);
-                let chained_header = else_text.strip_prefix("else").is_some_and(|rest| {
-                    let rest = rest.trim_start();
-                    ["for", "while", "switch", "do"]
-                        .into_iter()
-                        .any(|header| starts_header_word(rest, header))
-                });
-                let base = if chained_header || self.pending_block_header_follows_else() {
+                let chained_header = else_chained_header(trimmed);
+                let base = if chained_header.is_some() || self.pending_block_header_follows_else() {
                     layout.indent * self.options.indent_width
                 } else {
                     0
                 };
+                // A loop's body nests past the `else` body the loop is.
+                let loop_level =
+                    usize::from(chained_header.is_some_and(|header| header != "switch"));
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(base).max(
                     leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
+                        + (1 + loop_level) * self.options.indent_width
                         + self.layout.line_adjuster.next_line_case_unindent_depth()
                             * self.options.indent_width,
                 ));
@@ -2128,9 +2125,14 @@ impl FormatEngine<'_> {
                                 || starts_header_word(trimmed, "if")
                         })
             {
+                // A loop chained after `else` nests its body past both.
+                let chained = usize::from(
+                    else_chained_header(self.output.code_trimmed_of(header).trimmed_start())
+                        .is_some_and(|header| header != "switch"),
+                );
                 layout.exact_indent_spaces = Some(layout.exact_indent_spaces.unwrap_or(0).max(
                     leading_visual_width(header, self.options.tab_width)
-                        + self.options.indent_width
+                        + (1 + chained) * self.options.indent_width
                         + self.layout.line_adjuster.next_line_case_unindent_depth()
                             * self.options.indent_width,
                 ));
@@ -3617,4 +3619,14 @@ impl FormatEngine<'_> {
 fn first_element_index(code: &str, open: usize) -> usize {
     let rest = &code[open + 1..];
     open + 1 + rest.len() - rest.trimmed_start().len()
+}
+
+/// The loop or `switch` header that the code line `trimmed` chains after
+/// its `else`, past a leading `}`, as in `} else for (x) {`.
+fn else_chained_header(trimmed: &str) -> Option<&'static str> {
+    let else_text = trimmed.strip_prefix('}').map_or(trimmed, str::trim_start);
+    let rest = else_text.strip_prefix("else")?.trim_start();
+    ["for", "while", "switch", "do"]
+        .into_iter()
+        .find(|header| starts_header_word(rest, header))
 }
