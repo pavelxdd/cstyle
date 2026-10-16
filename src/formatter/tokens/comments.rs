@@ -453,11 +453,13 @@ impl FormatEngine<'_> {
                 }
             }
         }
-        // A row set to follow the comment follows it where it moved.
+        // A row set to follow the comment follows it where it moved, unless
+        // its code closed the delimiters the comment stood in.
         let continuation = &mut self.layout.continuation_indent;
         if continuation.next_line_indent_spaces == Some(placed_width) {
-            continuation.next_line_indent_spaces =
-                Some(leading_visual_width(&trimmed, self.options.tab_width));
+            continuation.next_line_indent_spaces = (!closes_delimiters
+                || self.layout.nesting.paren_depth > 0)
+                .then(|| leading_visual_width(&trimmed, self.options.tab_width));
         }
         // Code after the comment that ends a statement or opens a block
         // leaves no column for the next line.
@@ -532,19 +534,6 @@ impl FormatEngine<'_> {
                 if labels::line_kind(&code, &self.options.access_labels) == LineKind::Normal {
                     self.record_preprocessor_branch_body_indent(&code, spaces);
                 }
-            }
-            // A call the code after the comment closes ends the statement
-            // as on any line.
-            if code_follows_comment
-                && let Some(spaces) = self
-                    .layout
-                    .continuation_indent
-                    .clear_continuation_after_line
-                    .take()
-            {
-                self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-                self.layout.nesting.clear_continuation_indents();
             }
         }
         self.reset_after_finished_line();
@@ -1612,16 +1601,6 @@ impl FormatEngine<'_> {
                 && delimiter.opener_output_line < output_len
             {
                 delimiter.continuation_indent_column = Some(spaces);
-            }
-            if self
-                .output
-                .last_non_empty_scoped()
-                .and_then(|line| self.open_paren_column_of(line.trimmed_end()))
-                .is_some()
-            {
-                self.layout
-                    .continuation_indent
-                    .clear_continuation_after_line = Some(spaces);
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
             self.comments.comment_keeps_line_column =

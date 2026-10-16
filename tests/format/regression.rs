@@ -12976,3 +12976,11 @@ fn a_message_row_a_comment_leads_stands_at_the_rows_of_its_message() {
         "- (void)run\n{\n    [object performWith:first\n        /* a */ andWith:second];\n    [object performWith:first\n                andWith:second];\n    [object performWith:first\n        /* a */ andWith:second\n         /* b */ orWith:third];\n}\n",
     );
 }
+
+#[test]
+fn a_definition_body_after_a_parameter_row_a_comment_leads_stands_at_the_definition() {
+    let input = "static void apply(int (*handler)(int value,\n                                 /* note */ int other), int value)\n{\n    handler(value, 0);\n}\n";
+    for style in ["--style=kr", "--style=mozilla", "--style=allman"] {
+        check(input, &[style], input);
+    }
+}
