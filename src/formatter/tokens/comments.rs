@@ -1544,11 +1544,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trimmed_start().starts_with("@interface"));
         // A control header's condition continues where its lines do, past
         // the minimum conditional indent.
-        let in_header_condition = self
-            .layout
-            .frame_stack
-            .active_delimiter()
-            .is_some_and(|frame| frame.role == ParenRole::Header);
+        let in_header_condition = self.layout.frame_stack.in_header_condition();
         let header_condition_row_indent = in_header_condition
             .then(|| {
                 self.output

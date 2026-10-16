@@ -2770,9 +2770,20 @@ impl FormatEngine<'_> {
         } else {
             let open = groups.get(group).open;
             let content = self.token_column(next_code_token(tokens, open + 1)?)?;
-            let condition = self.tree.previous_code_token(open).is_some_and(|keyword| {
-                matches!(&tokens[keyword], Token::Word(word)
-                    if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+            // The parens may nest in a control header's condition.
+            let condition = std::iter::successors(Some(group), |&inner| {
+                groups
+                    .get(inner)
+                    .parent
+                    .filter(|&outer| groups.get(outer).delimiter == Delimiter::Paren)
+            })
+            .any(|paren| {
+                self.tree
+                    .previous_code_token(groups.get(paren).open)
+                    .is_some_and(|keyword| {
+                        matches!(&tokens[keyword], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                    })
             });
             match self.control_condition_header_indent().filter(|_| condition) {
                 Some(header) => content.max(header + min_conditional_indent_spaces(self.options)),

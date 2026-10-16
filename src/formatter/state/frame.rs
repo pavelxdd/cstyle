@@ -1179,6 +1179,13 @@ impl FrameStack {
         }
     }
 
+    /// Whether a control header's condition holds the open delimiters.
+    pub(crate) fn in_header_condition(&self) -> bool {
+        self.delimiters
+            .iter()
+            .any(|entry| entry.frame.role == ParenRole::Header)
+    }
+
     pub(crate) fn enclosing_delimiter(&self) -> Option<&DelimiterFrame> {
         self.delimiters
             .len()

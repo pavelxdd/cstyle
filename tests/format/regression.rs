@@ -13200,3 +13200,9 @@ fn a_comment_line_before_a_class_base_colon_leaves_the_clause_as_without_it() {
         "struct Item\n    /* note */\n    : public Base,\n      private Other\n{\n};\n",
     );
 }
+
+#[test]
+fn a_comment_line_in_nested_parens_of_a_condition_stands_at_the_condition_rows() {
+    let input = "void f(void)\n{\n    if((a ? b :\n            /* note */\n            c) != -1) {\n    }\n    if( (first &&\n            /* note */\n            (second || third))\n      ) {\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
