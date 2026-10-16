@@ -23,9 +23,7 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{
-    is_comment_only_line, last_unmatched_open_delimiter, trailing_matching_parens,
-};
+use crate::formatter::text::line_scan::{is_comment_only_line, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1611,25 +1609,25 @@ impl FormatEngine<'_> {
         // line, or in its statement outside them, takes the colon there,
         // even inside or after a message's brackets.
         let question_in_open_delimiter = has_question && {
-            let inside = match last_unmatched_open_delimiter(&self.current) {
+            let inside = match self.current.last_unmatched_open_delimiter() {
                 Some((_, open)) => &self.current[open + 1..],
                 None => &self.current[self.current.statement_start()..],
             };
-            let questions = inside.matches('?').count();
-            // Message selectors in closed brackets hold colons of their own.
-            let mut depth = 0usize;
-            let colons = inside
-                .replace("::", "")
-                .bytes()
-                .filter(|&byte| {
-                    match byte {
-                        b'[' => depth += 1,
-                        b']' => depth = depth.saturating_sub(1),
-                        _ => {}
-                    }
-                    byte == b':' && depth == 0
-                })
-                .count();
+            // Message selectors in closed brackets hold colons of their own,
+            // and `::` is no colon.
+            let bytes = inside.as_bytes();
+            let (mut questions, mut colons, mut depth, mut index) = (0usize, 0usize, 0usize, 0);
+            while index < bytes.len() {
+                match bytes[index] {
+                    b'?' => questions += 1,
+                    b'[' => depth += 1,
+                    b']' => depth = depth.saturating_sub(1),
+                    b':' if bytes.get(index + 1) == Some(&b':') => index += 1,
+                    b':' if depth == 0 => colons += 1,
+                    _ => {}
+                }
+                index += 1;
+            }
             questions > colons
         };
         let is_ternary = has_question
