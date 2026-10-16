@@ -1798,6 +1798,7 @@ impl FormatEngine<'_> {
         indents: &CommentIndents,
     ) {
         let CommentIndents {
+            standalone_line_comment,
             function_try_initializer: function_try_initializer_comment,
             open_paren: open_paren_comment_indent,
             line_continuation: line_comment_continuation_indent,
@@ -1892,6 +1893,14 @@ impl FormatEngine<'_> {
             {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+            } else if standalone_line_comment
+                && line_comment_continuation_indent.is_some()
+                && let Some(line) = self.output.last()
+            {
+                // A comment line within a statement leaves the statement
+                // going on at its own column.
+                let spaces = leading_visual_width(line, self.options.tab_width);
+                self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else if let Some(indent) = line_comment_continuation_indent {
                 self.set_next_continuation_indent(indent);
             }

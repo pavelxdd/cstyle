@@ -12810,3 +12810,9 @@ fn a_template_parameter_a_comment_leads_aligns_with_the_parameters() {
     let input = "template <typename First,\n          /* c */ typename Second>\nclass Other {};\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_subscript_continued_past_a_line_comment_keeps_its_column() {
+    let input = "void f()\n{\n    value = table[first +\n                  // note\n                  second];\n    if (table[first +\n              // note\n              second] && other) {\n        value = 0;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
