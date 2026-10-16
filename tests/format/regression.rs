@@ -11599,3 +11599,23 @@ fn a_function_brace_after_a_directive_closing_its_header_opens_a_function_body()
         "#ifdef FEATURE\nvoid f()\n#endif\n    {\n        {\n        value=0;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_block_comment_after_a_case_brace_on_its_own_line_opens_the_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        { /* note */\n            value=0;\n        }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        /* note */\n        value=0;\n    }\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n        /* note */\n        value=0; }\n    break; } }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            /* note */\n            value=0;\n            }\n        break;\n        }\n    }\n",
+    );
+}

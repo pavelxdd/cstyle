@@ -2159,6 +2159,7 @@ impl FormatEngine<'_> {
             line.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
         } else if attached_case_label_output_brace
+            && !self.token_input.token_begins_source_line
             && let Some(Token::Comment(CommentKind::Block, comment)) = next
             && !comment.contains('\n')
         {
