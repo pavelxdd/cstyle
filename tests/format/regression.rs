@@ -12481,3 +12481,22 @@ fn a_header_after_code_closing_a_block_comment_breaks_its_block() {
         "void f() {\n    value = 0;\n    /* first\n       second */ value = 1;\n\n    if (ready) {\n        value = 0;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_statement_broken_off_a_block_closer_keeps_the_gap_before_its_comment() {
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } value=1;    /* note */\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    value=1;    /* note */\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } value=1;    /* note */\n}\n",
+        &["--style=kr", "--pad-oper"],
+        "void f()\n{\n    if (ready) {\n        value = 0;\n    }\n    value = 1;  /* note */\n}\n",
+    );
+    check(
+        "void f()\n{\n    while (ready) {\n        value=0;\n    } other(1); // note\n}\n",
+        &["--style=gnu"],
+        "void f()\n{\n    while (ready)\n        {\n            value=0;\n        }\n    other(1); // note\n}\n",
+    );
+}

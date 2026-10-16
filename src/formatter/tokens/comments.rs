@@ -3543,6 +3543,23 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the current line starts with code its source line had a
+    /// block's closer before, other than a closer the code goes on from.
+    fn current_line_broke_off_block_closer(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        (line_start..first)
+            .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+            .is_some_and(|index| matches!(tokens[index], Token::Symbol('}')))
+            && !self.current_line_broke_off_closing_brace()
+    }
+
+    /// Whether the current line starts with code its source line had a
     /// control header before, the header now on a line of its own.
     fn current_line_broke_off_header(&self) -> bool {
         let tokens = &self.tree.tokens;
@@ -3912,12 +3929,12 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        // A statement broken off its header's line keeps the gap before its
-        // comment.
+        // A statement broken off its header's line, or off a block's
+        // closer, keeps the gap before its comment.
         if target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
-            && self.current_line_broke_off_header()
+            && (self.current_line_broke_off_header() || self.current_line_broke_off_block_closer())
         {
             // Padding the statement takes from the gap as on any line; a
             // closer added before a closing header gave the gap its columns.
