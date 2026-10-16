@@ -12584,3 +12584,18 @@ fn a_comment_after_a_brace_broken_off_a_line_a_comment_leads_keeps_its_gap() {
         "void f()\n{\n    if (ready) {\n        value=0;\n        /* note */\n    }\n    value = 1; // second\n}\n",
     );
 }
+
+#[test]
+fn a_brace_row_after_a_brace_row_a_comment_leads_stands_at_the_brace_rows() {
+    let input = "void f()\n{\n    struct Item items[] = {\n        /* note */ { .value = 1, .name = \"a\" },\n        { .value = 2, .name = \"b\" },\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    struct Item items[] = {\n        /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item items[] =\n        {\n        /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+    );
+}

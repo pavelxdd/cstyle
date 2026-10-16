@@ -889,6 +889,9 @@ impl FormatEngine<'_> {
             && matches!(tokens[element], Token::Symbol('{'))
             && let Some(line) = self.output.line_with_token(element)
             && self.output.line_tokens(line)?.first == element
+            // A comment leading that row stands at the comments' column.
+            && !(self.output.trimmed(line).starts_with("/*")
+                && self.should_indent_brace_line(BraceType::Initializer))
         {
             // At file scope only: within a block the rows already stand at
             // the indented brace.
@@ -1005,12 +1008,20 @@ impl FormatEngine<'_> {
             return Some(self.token_column(element)? + self.case_unindent_spaces());
         }
         // The row may follow a comment on its line.
-        let text = self.output.as_slice()[line].trimmed_start();
-        let text = text
+        let line_text = self.output.as_slice()[line].trimmed_start();
+        let text = line_text
             .strip_prefix("/*")
             .and_then(|rest| rest.split_once("*/"))
-            .map_or(text, |(_, rest)| rest.trimmed_start());
+            .map_or(line_text, |(_, rest)| rest.trimmed_start());
         if !text.starts_with(&*token_text(&tokens[row])) {
+            return None;
+        }
+        // A comment leading a brace row stands at the comments' column, off
+        // the column of indented brace rows.
+        if text.len() != line_text.len()
+            && is_brace(row)
+            && self.should_indent_brace_line(BraceType::Initializer)
+        {
             return None;
         }
         // A `}, {` row closes the row before it on the element's line.
