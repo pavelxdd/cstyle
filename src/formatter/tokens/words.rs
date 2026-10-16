@@ -10,6 +10,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
@@ -389,7 +390,10 @@ impl FormatEngine<'_> {
             && contains_one_line_block(self.current.trimmed())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
                 || (word == "while"
-                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")))
+                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                    // An empty block keeps the `while` its style attaches.
+                    && !(self.closes_empty_block_before_word()
+                        && self.attaches_closing_while(true))))
         {
             self.finish_line();
         }
@@ -514,6 +518,22 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Word;
         self.previous_was_newline = false;
+    }
+
+    /// Whether the `}` before the word being pushed closes a block holding
+    /// no code.
+    fn closes_empty_block_before_word(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|index| self.tree.previous_code_token(index))
+            .filter(|&close| matches!(tokens[close], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|group| {
+                let open = self.tree.groups.get(group).open;
+                let close = self.tree.groups.get(group).close.unwrap_or(open);
+                !tokens[open + 1..close].iter().any(is_code_token)
+            })
     }
 
     fn update_word_state(&mut self, word: &str, next: Option<&Token>) {

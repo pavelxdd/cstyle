@@ -11282,3 +11282,18 @@ fn a_declaration_after_a_define_ending_in_a_closer_continues_its_declarator_row(
         "#define CHECK(v) \\\n    do { \\\n        h(v); \\\n    } while (0)\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n",
     );
 }
+
+#[test]
+fn padding_options_reach_the_while_of_an_empty_do_block() {
+    let input = "void f()\n{\n    do {} while(x);\n    do {} while ( x );\n    next();\n}\n";
+    check(
+        input,
+        &["--unpad-paren"],
+        "void f()\n{\n    do {} while(x);\n    do {} while(x);\n    next();\n}\n",
+    );
+    check(
+        input,
+        &["--pad-header"],
+        "void f()\n{\n    do {} while (x);\n    do {} while ( x );\n    next();\n}\n",
+    );
+}

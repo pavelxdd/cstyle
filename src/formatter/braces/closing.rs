@@ -907,7 +907,7 @@ impl FormatEngine<'_> {
 
     /// Whether a do-while's `while` joins the `}` before it; without a brace
     /// style only one the source set there stays.
-    pub(super) fn attaches_closing_while(&self, source_attached: bool) -> bool {
+    pub(crate) fn attaches_closing_while(&self, source_attached: bool) -> bool {
         if self.options.attach_closing_while {
             return true;
         }

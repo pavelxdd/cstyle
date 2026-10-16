@@ -1827,27 +1827,16 @@ impl FormatEngine<'_> {
             && let Some(while_index) = next_non_whitespace(tokens, close_index + 1, line_end)
             && matches!(tokens.get(while_index), Some(Token::Word(word)) if word == "while")
             && self.attaches_closing_while(true)
-            && let Some(semi_index) = (while_index..line_end)
-                .find(|index| matches!(tokens.get(*index), Some(Token::Symbol(';'))))
+            && (while_index..line_end)
+                .any(|index| matches!(tokens.get(index), Some(Token::Symbol(';'))))
         {
-            for token in &tokens[close_index + 1..=semi_index] {
-                self.current.push_str(&token_text(token));
-            }
+            // The `while` and its condition go on after the block as after
+            // any closer the style attaches it to.
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.command_state.previous_command_char = Some(';');
-            self.layout.command_state.previous_non_ws_char = Some(';');
-            let trailing = next_non_whitespace(tokens, semi_index + 1, line_end)
-                .and_then(|index| tokens.get(index));
-            let statement_follows = self.options.keeps_multi_statement_line()
-                && trailing.is_some_and(|token| !matches!(token, Token::Newline));
-            if statement_follows && !matches!(trailing, Some(Token::Comment(_, _))) {
-                self.set_input_whitespace(tokens, semi_index, 0);
-                self.emit_trailing_source_space_or_ensure();
-            } else if !matches!(trailing, Some(Token::Comment(_, _))) {
-                self.finish_line();
-            }
-            return Some(semi_index + 1);
+            self.set_input_whitespace(tokens, close_index, 0);
+            self.emit_trailing_source_space_or_ensure();
+            return Some(close_index + 1);
         }
         self.layout.command_state.current_header = None;
         self.layout.command_state.preprocessor_after_header = false;
