@@ -787,7 +787,16 @@ impl FormatEngine<'_> {
         {
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
-        if groups.enclosing(comma) != Some(group) {
+        // An element opening a preprocessor branch after an element that
+        // ends the branch before it is a row of the same list.
+        let branch_row = matches!(tokens[comma], Token::Symbol('}'))
+            && groups
+                .closed_at(comma)
+                .is_some_and(|nested| groups.get(nested).parent == Some(group))
+            && tokens[comma..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)));
+        if !branch_row && groups.enclosing(comma) != Some(group) {
             return None;
         }
         // A value after a designator's `=` at a line end stays at the
@@ -798,7 +807,7 @@ impl FormatEngine<'_> {
                 self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
             });
         }
-        if !matches!(tokens[comma], Token::Symbol(',')) {
+        if !branch_row && !matches!(tokens[comma], Token::Symbol(',')) {
             return None;
         }
         // The engine places continuation rows from the row's own layout;
@@ -854,9 +863,12 @@ impl FormatEngine<'_> {
         // So does a row after a nested VTK group closed at its elements.
         // Whitesmith and Ratliff indent such a `}` on its own line past the
         // rows, which the engine would follow.
-        let after_block_like_close = self
-            .tree
-            .previous_code_token(comma)
+        let row_end = if branch_row {
+            Some(comma)
+        } else {
+            self.tree.previous_code_token(comma)
+        };
+        let after_block_like_close = row_end
             .and_then(|close| groups.closed_at(close).map(|nested| (close, nested)))
             .is_some_and(|(close, nested)| match self.options.brace_style {
                 BraceStyle::Vtk => self.vtk_nested_rows_like_blocks(nested),

@@ -1424,6 +1424,7 @@ impl FormatEngine<'_> {
             false,
             None,
         );
+        self.current.record_token_range(start, close_index);
         if brace_type == BraceType::CompoundLiteral {
             self.layout.compound_literal.just_closed = true;
         }

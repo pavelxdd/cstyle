@@ -9899,6 +9899,45 @@ fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
 }
 
 #[test]
+fn an_element_opening_a_preprocessor_branch_after_one_without_a_comma_stands_with_the_rows() {
+    let file_scope =
+        "struct Item items[] = {\n#if A\n    {1, 2}\n#else\n    {3, 4},\n    {5, 6}\n#endif\n};\n";
+    let block = "void f()\n{\n    static const struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {5, 6},\n        {7, 8}\n#endif\n    };\n}\n";
+    for (style, input, expected) in [
+        ("vtk", file_scope, file_scope),
+        (
+            "whitesmith",
+            file_scope,
+            "struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
+        ),
+        (
+            "ratliff",
+            file_scope,
+            "struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
+        ),
+        (
+            "vtk",
+            block,
+            "void f()\n{\n    static const struct Item items[] =\n        {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n}\n",
+        ),
+        (
+            "whitesmith",
+            block,
+            "void f()\n    {\n    static const struct Item items[] =\n        {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n    }\n",
+        ),
+        (
+            "ratliff",
+            block,
+            "void f() {\n    static const struct Item items[] = {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n    }\n",
+        ),
+    ] {
+        let style = format!("--style={style}");
+        check(input, &[&style], expected);
+        check(expected, &[&style], expected);
+    }
+}
+
+#[test]
 fn vtk_sets_one_line_element_rows_at_the_rows_and_broken_element_braces_past_them() {
     // Within a block the rows stand at the indented brace, as the broken
     // elements' braces do.
