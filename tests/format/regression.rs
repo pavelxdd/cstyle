@@ -10835,3 +10835,20 @@ fn whitesmith_sets_the_brace_of_a_declarator_an_attribute_leads_a_level_past_its
         "static const Item\nfirst =\n    {\n    1,\n    2\n    },\n__attribute__ ((deprecated))\nsecond =\n    {\n    3,\n    4\n    };\n",
     );
 }
+
+#[test]
+fn breaking_one_line_headers_parts_a_comment_leading_a_body_line_from_its_statement() {
+    let input = "void f() {\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other();\n    x = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        /* note */\n        helper();\n    else\n        /* note */\n        other();\n    x = 1;\n}\n",
+    );
+}
+
+#[test]
+fn an_else_body_a_comment_leads_after_a_conditional_stays_on_its_line() {
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n#ifdef A\n        /* note */ other();\n#else\n        /* note */ third();\n#endif\n    x = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--break-one-line-headers"], input);
+}

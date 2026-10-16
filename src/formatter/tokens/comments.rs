@@ -24,9 +24,10 @@ use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_unmatched_open_brace, holds_code_after_leading_comments, is_comment_line,
-    is_comment_only_line, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_brace_content_offset,
+    ContainsAnyByte, after_leading_comments, has_unmatched_open_brace,
+    holds_code_after_leading_comments, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -512,6 +513,11 @@ impl FormatEngine<'_> {
             // any line.
             if code_follows_comment {
                 self.observe_finished_block_spacing_line(code_ends_statement);
+                // The code sets the body column of a conditional's branch.
+                let last = self.output.len() - 1;
+                let spaces = self.output.lead_width(last, self.options.tab_width);
+                let code = after_leading_comments(&self.output[last]).to_string();
+                self.record_preprocessor_branch_body_indent(&code, spaces);
             }
             // A call the code after the comment closes ends the statement
             // as on any line.

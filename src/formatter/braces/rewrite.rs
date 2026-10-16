@@ -560,12 +560,28 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        // A line holding only comments holds no header to break off, as
-        // after directives that split the header from its body.
-        if !split_else_after_preprocessor
+        // After directives that split a header from its body, the body
+        // starts on the line a comment leads: no header stands there to
+        // break off.
+        if (split_else_after_preprocessor || self.layout.command_state.preprocessor_after_header)
             && !self.current_is_blank()
             && after_leading_comments(&self.current).trimmed().is_empty()
         {
+            if split_else_after_preprocessor {
+                self.preprocessor.split_else.pending_body = false;
+                self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
+                self.preprocessor.split_else.body_braceless = true;
+            } else {
+                let body_indent = self
+                    .layout
+                    .indentation
+                    .indent()
+                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
+                    + 1;
+                self.layout.pending_braceless_block_bias = Some(body_indent);
+            }
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
             return false;
         }
         let header = self.layout.command_state.current_header.as_deref();
