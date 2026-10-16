@@ -1619,9 +1619,13 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let (open_spaces, _, _) = self
+        let (open_spaces, _, open) = self
             .output
             .current_closing_brace_open(self.options.tab_width)?;
+        // A comment leading the opener's line set its column.
+        if open.starts_with("/*") {
+            return None;
+        }
         let natural = indent * self.options.indent_width;
         (open_spaces > natural).then(|| {
             self.current_closing_multiline_header_indent()

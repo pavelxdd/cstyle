@@ -12749,3 +12749,13 @@ fn a_member_after_a_directive_in_a_case_block_type_stands_at_the_members() {
         "void f()\n{\n    switch (state)\n    {\n    case 1:\n    {\n#ifdef FEATURE\n        static const struct\n        {\n#endif\n            int value;\n        } items[] =\n        {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_closer_after_a_directive_of_a_brace_a_comment_leads_stands_at_the_header() {
+    let input = "int f(void)\n{\n    for (i = 0; i < n; i++)\n    /* c */ {\n        g();\n#if A\n        h();\n#endif\n    }\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "int f(void)\n{\n    for (i = 0; i < n; i++)\n        /* c */ {\n        g();\n#if A\n        h();\n#endif\n    }\n    return 0;\n}\n",
+    );
+}
