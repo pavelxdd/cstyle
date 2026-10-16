@@ -11571,3 +11571,18 @@ fn unpadding_the_row_an_added_closer_joins_widens_the_gap_before_its_comment() {
         "void f()\n{   if(ready) { helper(state); }   /* note */\n    if(ready) { helper(state) + 1; }   /* note */\n}\n",
     );
 }
+
+#[test]
+fn the_condition_rows_of_a_while_on_an_indented_closer_align_after_its_paren() {
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=vtk", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n            value++;\n        } while (value < count &&\n                 ready);\n}\n",
+    );
+}
