@@ -12628,3 +12628,18 @@ fn a_statement_a_comment_leads_after_a_label_block_in_a_case_stands_in_the_body(
         "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n            {\nretry:\n                {\n                value = 1;\n                goto retry;\n                }\n            /* note */ break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_split_off_a_closer_after_a_bare_block_stands_at_the_body() {
+    let input = "void f()\n{\n    { value=0; }\n    /* note */ }\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n        {\n        value=0;\n        }\n    /* note */\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n        {\n        value=0;\n        }\n    /* note */\n    }\n",
+    );
+}

@@ -6444,7 +6444,14 @@ impl FormatEngine<'_> {
             }
             let line = self.output.line_with_token(statement)?;
             if self.output.line_tokens(line)?.first == statement {
-                return Some(self.output.lead_width(line, self.options.tab_width));
+                // A bare block's brace the style indents stands past the body.
+                let indented_brace = matches!(tokens[statement], Token::Symbol('{'))
+                    && self.should_indent_brace_line(BraceType::Command);
+                return Some(
+                    self.output
+                        .lead_width(line, self.options.tab_width)
+                        .saturating_sub(usize::from(indented_brace) * self.options.indent_width),
+                );
             }
             return self.token_column(statement);
         }
