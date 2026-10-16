@@ -10219,6 +10219,16 @@ fn ratliff_closes_blocks_of_a_split_else_chain_after_a_comment_at_their_headers(
     check(expected, &["--style=ratliff"], expected);
 }
 
+// Ratliff sets a compound literal's closer a level in after a nested one's,
+// as after any row.
+#[test]
+fn ratliff_sets_a_compound_literal_closer_after_a_nested_one_a_level_in() {
+    let input = "void f(void) {\n  for (;;) {\n    (*ci)[i++] = (uv_cpu_info_t) {\n      .model = p,\n      .cpu_times = (struct times) {\n        .user = 10,\n        .irq  = 10,\n      },\n    };\n  }\n  x = (struct T) {\n    .a = 1,\n    .b = 2,\n  };\n}\n";
+    let expected = "void f(void) {\n    for (;;) {\n        (*ci)[i++] = (uv_cpu_info_t) {\n            .model = p,\n            .cpu_times = (struct times) {\n                .user = 10,\n                .irq  = 10,\n                },\n            };\n        }\n    x = (struct T) {\n        .a = 1,\n        .b = 2,\n        };\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

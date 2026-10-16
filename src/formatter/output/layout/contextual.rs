@@ -239,7 +239,9 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.compound_closing_brace_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
         }
+        // Ratliff sets its closers a level in.
         if line.trimmed_start().starts_with("};")
+            && self.options.brace_style != BraceStyle::Ratliff
             && self
                 .output
                 .last_line_outside_comment()
