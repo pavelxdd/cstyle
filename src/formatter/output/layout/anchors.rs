@@ -6290,12 +6290,15 @@ impl FormatEngine<'_> {
         let block = groups.closed_at(first)?;
         let open = groups.get(block).open;
         if self.tree.previous_code_token(first) != Some(open) {
+            // A switch run in after an `else` owns its body as any does.
+            let is_switch =
+                |keyword: usize| matches!(&tokens[keyword], Token::Word(word) if word == "switch");
             if !matches!(
                 self.tree.blocks.kind(block),
                 Some(BlockKind::Control | BlockKind::Block | BlockKind::FunctionBody)
-            ) || self.tree.blocks.owner(block).is_some_and(
-                |owner| matches!(&tokens[owner], Token::Word(word) if word == "switch"),
-            ) {
+            ) || self.tree.blocks.owner(block).is_some_and(is_switch)
+                || self.header_keyword_before(open).is_some_and(is_switch)
+            {
                 return None;
             }
             let statement = next_code_token(tokens, open + 1)?;

@@ -11740,3 +11740,13 @@ fn a_one_line_initializer_after_a_blank_line_after_its_assignment_stays_on_its_l
     check(input, &["--style=kr"], input);
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn a_comment_ending_a_switch_run_in_after_an_else_stays_in_its_case_body() {
+    let input = "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n    case 1:\n        // first\n        break;\n    case 2:\n        value = 2;\n        // note\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n        case 1:\n            // first\n            break;\n        case 2:\n            value = 2;\n            // note\n        }\n}\n",
+    );
+}
