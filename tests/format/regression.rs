@@ -13189,3 +13189,14 @@ fn a_comment_line_between_declarators_stands_at_the_declarator_after_it() {
     let input = "void f()\n{\n    int g = 1,\n        /* note */\n        h = 2;\n    int a = 1,\n#ifdef FEATURE\n        /* note */\n        b = 2,\n#endif\n        c = 3;\n}\nint x = 1,\n    /* note */\n    y = 2;\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_line_before_a_class_base_colon_leaves_the_clause_as_without_it() {
+    let input = "struct Item\n    /* note */\n    : public Base,\n      private Other {\n};\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "struct Item\n    /* note */\n    : public Base,\n      private Other\n{\n};\n",
+    );
+}
