@@ -22,9 +22,8 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, is_bare_comment_line, is_comment_line, is_comment_only_line,
-    line_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    advance_quoted_literal, is_bare_comment_line, is_comment_only_line, line_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;

@@ -29,8 +29,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    code_holds_word, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_columns,
+    code_holds_word, has_unmatched_open_brace, is_bare_comment_line, is_comment_line,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -3317,7 +3318,9 @@ impl FormatEngine<'_> {
                 .rev()
                 .skip_while(|line| line.as_str() != previous.as_str())
                 .skip(1)
-                .find(|line| !line.trimmed().is_empty() && !is_comment_line(line.trimmed_start()))
+                .find(|line| {
+                    !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed_start())
+                })
         {
             let code = self.output.code_trimmed_of(before_comment);
             if code.ends_with(',') && self.open_paren_column_of(code).is_some() {

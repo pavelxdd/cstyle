@@ -12768,4 +12768,9 @@ fn an_argument_after_a_comment_line_in_a_call_a_comment_leads_aligns_with_the_pa
         &["--style=allman"],
         "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n                      // note\n                      [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
     );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n                      // note\n    [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
 }
