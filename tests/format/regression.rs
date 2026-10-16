@@ -12441,3 +12441,11 @@ fn a_case_block_closer_after_a_body_line_a_comment_leads_keeps_the_block_column(
         "void f()\n{\n    switch (state) {\n    case 1: {\n            /* note */ first();\n        }\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_led_line_in_a_ratliff_block_stands_at_the_block_brace_column() {
+    let input = "void f()\n{\n    {\n#ifdef FEATURE\n    retry:\n#endif\n        /* note */ value = 1;\n    }\n}\n";
+    let expected = "void f() {\n        {\n#ifdef FEATURE\nretry:\n#endif\n        /* note */ value = 1;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(input, &["--style=banner"], expected);
+}

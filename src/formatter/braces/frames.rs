@@ -584,6 +584,9 @@ impl FormatEngine<'_> {
                             frame.semantic_kind,
                             BraceSemanticKind::Array | BraceSemanticKind::Initializer
                         )
+                    // A block's own brace line stands at its body.
+                    || self.options.brace_style == BraceStyle::Ratliff
+                        && frame.semantic_kind == BraceSemanticKind::Command
             });
         // Ratliff closes the aggregate a declaration defines at its body:
         // an initializer opened on that line nests from the declaration.
