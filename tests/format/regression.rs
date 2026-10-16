@@ -11062,3 +11062,13 @@ fn break_blocks_pads_after_a_comment_led_block_of_an_else_a_conditional_splits()
         "void f()\n{\n    if (a) {\n        void *r;\n#if T\n\n        if (b) {\n            r = c;\n        } else\n#endif\n            /*if( !b )*/ {\n            r = d;\n        }\n\n        *n = r->k;\n        k = r->a;\n    } else {\n        k = 0;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_switch_closer_a_comment_follows_stands_under_its_brace_after_case_blocks() {
+    let input = "void f(int e)\n{\n    switch (e) {\n      case 1: {\n        x();\n        break;\n      }\n    } /* end */\n    z();\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(int e)\n{\n    switch (e)\n    {\n    case 1:\n    {\n        x();\n        break;\n    }\n    } /* end */\n    z();\n}\n",
+    );
+}
