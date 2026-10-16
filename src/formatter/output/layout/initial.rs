@@ -795,7 +795,7 @@ impl FormatEngine<'_> {
                     .next()
                     .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_digit())
                 && !previous_code.ends_with_any(b"{(,=:")
-                && !line_is_control_body_header(previous_code.trimmed_start())
+                && !line_is_control_body_header(labels::after_user_label(previous_code))
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2
                 && self

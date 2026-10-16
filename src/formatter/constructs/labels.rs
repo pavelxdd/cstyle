@@ -542,6 +542,27 @@ fn leads_with_goto_label(line: &str) -> bool {
         }
 }
 
+/// `line` past a user label that leads it, as `done:` in `done: if (x)`.
+pub(crate) fn after_user_label(line: &str) -> &str {
+    let trimmed = line.trimmed_start();
+    let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {
+        return trimmed;
+    };
+    let (label, rest) = (&trimmed[..colon], &trimmed[colon + 1..]);
+    if label.is_empty()
+        || rest.starts_with(':')
+        || matches!(
+            label,
+            "case" | "default" | "public" | "protected" | "private"
+        )
+        || label.contains(|ch: char| !is_identifier_continue(ch))
+        || !label.starts_with(is_identifier_start)
+    {
+        return trimmed;
+    }
+    rest.trimmed_start()
+}
+
 pub(crate) fn is_attached_user_label(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {

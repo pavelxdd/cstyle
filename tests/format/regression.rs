@@ -10615,3 +10615,11 @@ fn break_blocks_pads_after_a_kept_one_line_block_that_continues_a_header_block()
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_braceless_body_after_a_label_heading_its_header_stands_past_the_header() {
+    let input = "void f()\n{\n    switch (kind) {\n    default: {\n        break;\n    }\n    }\n    done: if (ready) { value=0; }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    default: {\n        break; } }\ndone: if (ready)\n        value=0;  }\n";
+    check(input, &["--style=lisp", "--remove-braces"], expected);
+    check(expected, &["--style=lisp", "--remove-braces"], expected);
+}
