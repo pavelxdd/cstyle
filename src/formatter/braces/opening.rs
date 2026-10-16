@@ -29,8 +29,9 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, leads_with_operator, line_comment_split_limit,
-    preprocessor_directive, reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_line, is_comment_only_line, leads_with_operator,
+    line_comment_split_limit, preprocessor_directive, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -2310,6 +2311,23 @@ impl FormatEngine<'_> {
                     .next_input_whitespace
                     .as_deref()
                     .is_some_and(|whitespace| whitespace.contains('\n'));
+            // A comment leading the line set its column before the lambda
+            // showed; the line stands where the lambda's would.
+            if line_opens_lambda_body
+                && self.current_is_preindented
+                && is_comment_line(&self.current)
+                && let Some(spaces) = lambda.header_indent
+            {
+                let prefix = self
+                    .options
+                    .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces);
+                let code = self.current.trimmed_start().to_string();
+                self.clear_current();
+                self.current.push_str(&prefix);
+                self.current.push_str(&code);
+                self.current_is_preindented = true;
+                self.comments.comment_keeps_line_column = true;
+            }
             self.emit_opening_brace_space(brace_type);
             self.current.push('{');
             self.layout.command_state.observe_char('{');

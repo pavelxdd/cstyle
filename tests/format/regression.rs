@@ -12553,3 +12553,19 @@ fn a_comment_before_a_compound_literal_closer_stands_at_its_body() {
     let input = "void f()\n{\n    value = (struct Item) {\n        .value = 1,\n        .other = 2\n        // note\n    };\n    call((struct Item) {\n        .other = 2\n        // note\n    });\n    return (struct Item) {\n        1,\n        2\n        // note\n    };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_lambda_argument_a_comment_leads_stands_as_one_past_a_comma() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n              /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n    /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
+    let past_directive = "void f()\n{\n#ifdef FEATURE\n    std::sort(items.begin(), items.end(),\n#endif\n              /* note */ [](const Item &first, const Item &second) {\n                  return first.value < second.value;\n              });\n}\n";
+    check(
+        past_directive,
+        &["--style=linux"],
+        "void f()\n{\n#ifdef FEATURE\n    std::sort(items.begin(), items.end(),\n#endif\n    /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
