@@ -4964,13 +4964,14 @@ impl FormatEngine<'_> {
             && let Some(keyword) = self.tree.previous_code_token(first)
             && matches!(&tokens[keyword], Token::Word(word) if word == "else")
         {
-            // VTK leaves a one-line block outside other blocks at its header.
+            // VTK leaves a block kept on one line outside other blocks at
+            // its header.
             let vtk_one_line_block = self.options.brace_style == BraceStyle::Vtk
                 && self.tree.groups.opened_at(first).is_some_and(|group| {
                     self.tree.groups.get(group).close.is_some_and(|close| {
-                        !tokens[first..close]
-                            .iter()
-                            .any(|token| matches!(token, Token::Newline))
+                        self.output
+                            .pending_tokens()
+                            .is_some_and(|span| span.first <= close && close <= span.last)
                     }) && !self.tree.groups.ancestors(group).skip(1).any(|id| {
                         matches!(
                             self.tree.blocks.kind(id),

@@ -12605,3 +12605,12 @@ fn a_nested_element_a_comment_leads_closes_at_its_row_in_a_case_block() {
     let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            /* note */ {\n                SECOND, 2\n            },\n        };\n        break;\n    }\n    }\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_vtk_else_block_broken_past_a_directive_indents_its_brace() {
+    check(
+        "void f()\n{\n    if (other)\n        { value=0; }\n    else\n#ifdef FEATURE\n        { result=0; }\n#endif\n}\n",
+        &["--style=vtk"],
+        "void f()\n{\n    if (other)\n        {\n        value=0;\n        }\n    else\n#ifdef FEATURE\n        {\n        result=0;\n        }\n#endif\n}\n",
+    );
+}
