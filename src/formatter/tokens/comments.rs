@@ -3154,8 +3154,12 @@ impl FormatEngine<'_> {
             .clone()
             .unwrap_or_default();
         // Braces added around the statement before move its comment no
-        // further.
-        if std::mem::take(&mut self.comments.follows_added_one_line_block) {
+        // further; a comment within the statement leaves that to the one
+        // after the added closer.
+        if self.comments.follows_added_one_line_block
+            && self.current.trimmed_end().ends_with('}')
+            && std::mem::take(&mut self.comments.follows_added_one_line_block)
+        {
             // Padding moves the comment as on any line; the four columns of
             // the added braces do not.
             // A lone closer runs into its row, which keeps the gap.
@@ -3170,22 +3174,34 @@ impl FormatEngine<'_> {
                 && !gap.contains('\t')
                 && (self.options.brace_style != BraceStyle::Lisp || self.current.contains('{'))
                 && !lone_closer
-                && !self.layout.line_state.trailing_comment_columns.is_empty())
-            .then(|| {
-                let target = self
-                    .layout
-                    .line_state
-                    .trailing_comment_columns
-                    .pop_front()
-                    .unwrap_or_default();
-                let out_indent = self
-                    .current
-                    .chars()
-                    .take_while(|ch| ch.is_whitespace())
-                    .count();
-                let code_len = (self.current_char_len() - out_indent).saturating_sub(4);
-                target.saturating_sub(code_len).max(1)
-            });
+                // A comment within the statement leaves the column of the
+                // one after it unknown; the gap stays.
+                && self.layout.line_state.trailing_comment_columns.len() == 1)
+                .then(|| {
+                    let target = self
+                        .layout
+                        .line_state
+                        .trailing_comment_columns
+                        .pop_front()
+                        .unwrap_or_default();
+                    let out_indent = self
+                        .current
+                        .chars()
+                        .take_while(|ch| ch.is_whitespace())
+                        .count();
+                    // The added braces' columns, as far as the row holds them:
+                    // the closer and the gap after it, and the opener with the
+                    // fill after it; a run-in brace joins the row later.
+                    let opener = self.current.rfind('{').map_or(0, |open| {
+                        1 + self.current[open + 1..]
+                            .bytes()
+                            .take_while(|&byte| byte == b' ')
+                            .count()
+                    });
+                    let added = opener + 2;
+                    let code_len = (self.current_char_len() - out_indent).saturating_sub(added);
+                    target.saturating_sub(code_len).max(1)
+                });
             if gap.is_empty() {
                 self.ensure_space();
             } else if let Some(width) = padded_gap {

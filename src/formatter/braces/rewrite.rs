@@ -2999,6 +2999,8 @@ fn find_statement_semicolon(tokens: &[Token], start: usize, line_end: usize) -> 
     let mut bracket_depth = 0usize;
     for (index, token) in tokens.iter().enumerate().take(line_end).skip(start) {
         match token {
+            // A block comment within the statement's line is part of it.
+            Token::Comment(CommentKind::Block, text) if !text.contains('\n') => {}
             Token::Symbol('{') | Token::Comment(_, _) | Token::Preprocessor(_) => return None,
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => paren_depth = paren_depth.saturating_sub(1),

@@ -9971,3 +9971,33 @@ fn added_braces_close_a_body_its_else_follows_on_the_line_before_the_else() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn added_braces_wrap_a_statement_holding_a_block_comment() {
+    let input = "void f(void)\n{\n    if (ready)\n        helper(opt, /* detailed */ 0, result);\n    if (ready) helper(opt, /* detailed */ 0);\n    if (r != 0)\n        r = g(file, 85 /* F_X */);  /* tail */\n    if (n > m) return -1 /* bad */;\n    if (z) *oz++ = 0 /* back */;\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=1tbs"][..],
+            "void f(void)\n{\n    if (ready) {\n        helper(opt, /* detailed */ 0, result);\n    }\n    if (ready) {\n        helper(opt, /* detailed */ 0);\n    }\n    if (r != 0) {\n        r = g(file, 85 /* F_X */);    /* tail */\n    }\n    if (n > m) {\n        return -1 /* bad */;\n    }\n    if (z) {\n        *oz++ = 0 /* back */;\n    }\n}\n",
+        ),
+        (
+            &["--add-one-line-braces"][..],
+            "void f(void)\n{\n    if (ready)\n    { helper(opt, /* detailed */ 0, result); }\n    if (ready) { helper(opt, /* detailed */ 0); }\n    if (r != 0)\n    { r = g(file, 85 /* F_X */); }  /* tail */\n    if (n > m) { return -1 /* bad */; }\n    if (z) { *oz++ = 0 /* back */; }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_comment_after_an_added_run_in_block_keeps_its_column() {
+    let input = "void f(void)\n{\n    if (r != 0)\n        r = g(file, 85);  /* tail */\n    if (r) x = 1;  /* t2 */\n}\n";
+    let expected = "void f(void)\n{   if (r != 0)\n    {   r = g(file, 85); }  /* tail */\n    if (r) { x = 1; }  /* t2 */\n}\n";
+    check(input, &["--style=pico", "--add-one-line-braces"], expected);
+    check(
+        expected,
+        &["--style=pico", "--add-one-line-braces"],
+        expected,
+    );
+}
