@@ -1082,21 +1082,15 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// A comment line among a class's bases stands at them, and one before
-    /// its body's brace, on the brace's line or not, at the head, as one
-    /// before an initializer's brace broken from its `=`.
+    /// A comment among a class's bases stands at them, and one before its
+    /// body's brace, on the brace's line or not, at the head, as one before
+    /// an initializer's brace broken from its `=`.
     fn class_base_comment_position(
         &self,
         kind: CommentKind,
         comment: &str,
         index: usize,
     ) -> Option<ClassBaseComment> {
-        let ends_line = !self.token_input.has_next_meaningful_token
-            || self
-                .token_input
-                .next_input_whitespace
-                .as_deref()
-                .is_some_and(|whitespace| whitespace.contains('\n'));
         let tokens = &self.tree.tokens;
         let brace_follows = || {
             index
@@ -1112,7 +1106,6 @@ impl FormatEngine<'_> {
         let before_body = (self.layout.in_class_base_clause || after_assignment) && brace_follows();
         if !(self.layout.in_class_base_clause || before_body)
             || !self.current.trimmed().is_empty()
-            || !ends_line && !before_body
             || comment.contains('\n')
             || self.layout.nesting.paren_depth != 0
             // A line comment at column one stays there.

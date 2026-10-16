@@ -12294,3 +12294,27 @@ fn a_label_a_comment_leads_after_a_directive_stands_at_the_label_column() {
         "void f()\n{\n    switch (state) {\n#ifdef X\n#endif\n/* note */ retry:\n    case 1:\n        value = 1;\n    }\n}\n",
     );
 }
+
+#[test]
+fn base_class_rows_after_the_first_stand_at_its_column() {
+    check(
+        "struct Item\n    : public Base,\n      private Middle,\n      private Other {\n};\n",
+        &["--style=kr"],
+        "struct Item\n    : public Base,\n      private Middle,\n      private Other {\n};\n",
+    );
+}
+
+#[test]
+fn a_base_class_row_a_comment_leads_stands_at_the_rows() {
+    let input = "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other {\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other {\n};\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other\n    {\n    };\n",
+    );
+}

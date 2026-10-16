@@ -1044,11 +1044,7 @@ impl FormatEngine<'_> {
         if layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with_any(b",{}")
             && self.output.last_line_outside_comment().is_some()
-            && let Some(previous) = self.output.scoped().iter().rev().find(|line| {
-                let trimmed = line.trimmed_start();
-                !trimmed.is_empty() && !is_bare_comment_line(trimmed)
-            })
-            && let Some(spaces) = self.colon_led_row_indent_spaces(previous)
+            && let Some(spaces) = self.colon_led_rows_column()
         {
             layout.exact_indent_spaces = Some(spaces);
         }
@@ -1070,6 +1066,40 @@ impl FormatEngine<'_> {
                     && self.output.directive_of_continuation(index).is_none()
             })
             .map(|index| self.output[index].as_str())
+    }
+
+    /// The column of the rows a `:`-led row that a comma continues leads,
+    /// for the line after the rows so far: the rows of a class's bases go
+    /// on at it past each other.
+    fn colon_led_rows_column(&self) -> Option<usize> {
+        let mut rows = self.output.scoped().iter().rev().filter(|line| {
+            let trimmed = line.trimmed_start();
+            !trimmed.is_empty() && !is_bare_comment_line(trimmed)
+        });
+        let previous = rows.next()?;
+        if let Some(spaces) = self.colon_led_row_indent_spaces(previous) {
+            return Some(spaces);
+        }
+        if !self.output.code_trimmed_of(previous).ends_with(',') {
+            return None;
+        }
+        while let Some(row) = rows.next() {
+            if let Some(spaces) = self.colon_led_row_indent_spaces(row) {
+                // Only a class's head leads its bases' rows with the colon.
+                let head = rows.next().map(|line| self.output.code_trimmed_of(line));
+                return head
+                    .is_some_and(|head| {
+                        ["class", "struct", "union"]
+                            .iter()
+                            .any(|keyword| starts_header_word(head.trimmed_start(), keyword))
+                    })
+                    .then_some(spaces);
+            }
+            if !self.output.code_trimmed_of(row).ends_with(',') {
+                return None;
+            }
+        }
+        None
     }
 
     /// The column of the rows after `previous`, a `:`-led row that a comma
