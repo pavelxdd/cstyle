@@ -12423,3 +12423,12 @@ fn a_header_body_line_a_comment_leads_is_no_comment_line_for_the_row_after() {
         "int table[] = {\n    1,\n};\nvoid f() {\n    if (ready) {\n        /* note */ int list[] = { 1,\n                                  2\n                                };\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_head_in_the_other_branch_after_a_brace_stays_a_head() {
+    check(
+        "#ifdef WIDE\nint wide_main(int argc) {\n#else\nint main(int argc) {\n#endif\n    return 0;\n}\n",
+        &["--style=kr", "--break-return-type"],
+        "#ifdef WIDE\nint\nwide_main(int argc)\n{\n#else\nint\nmain(int argc)\n{\n#endif\n    return 0;\n}\n",
+    );
+}

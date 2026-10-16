@@ -30,7 +30,7 @@ use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, is_comment_only_line, leads_with_operator, line_comment_split_limit,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    preprocessor_directive, reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -317,11 +317,13 @@ impl FormatEngine<'_> {
             return None;
         }
         self.output.last_line_outside_comment()?;
-        // Directives between the brace and the line set no column.
+        // Directives between the brace and the line set no column, but for
+        // a branch other than the brace's.
         let opening_brace = self.output.scoped_range().rev().find(|&index| {
             let trimmed = self.output.trimmed(index);
             !trimmed.is_empty()
-                && !trimmed.starts_with('#')
+                && (!trimmed.starts_with('#')
+                    || matches!(preprocessor_directive(trimmed), Some("else" | "elif")))
                 && self.output.directive_of_continuation(index).is_none()
         })?;
         let opening_brace = &self.output[opening_brace];
