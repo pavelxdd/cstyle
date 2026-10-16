@@ -12699,3 +12699,13 @@ fn a_comment_in_an_empty_switch_body_stands_past_its_labels() {
         "void f()\n    {\n    switch (op)\n        {\n            /* c */\n        }\n    switch (op)\n        {\n            /* c */\n        }\n    }\n",
     );
 }
+
+#[test]
+fn an_if_constexpr_else_split_by_a_directive_closes_at_its_block() {
+    let input = "void f()\n{\n    if constexpr (sizeof(Item) > 4) {\n        value = 1;\n#ifdef FEATURE\n    } else {\n#endif\n        value = 2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if constexpr (sizeof(Item) > 4)\n        {\n        value = 1;\n#ifdef FEATURE\n        }\n    else\n        {\n#endif\n        value = 2;\n        }\n    }\n",
+    );
+}

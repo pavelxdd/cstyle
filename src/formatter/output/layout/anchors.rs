@@ -4362,11 +4362,20 @@ impl FormatEngine<'_> {
                     .previous_code_token(open)
                     .and_then(|close| self.tree.groups.closed_at(close))
                     .is_none_or(|condition| {
-                        self.tree
-                            .previous_code_token(self.tree.groups.get(condition).open)
+                        self.condition_keyword(self.tree.groups.get(condition).open)
                             != Some(if_token)
                     })
             })
+    }
+
+    /// The keyword before the parens opening at `open`, past a `constexpr`
+    /// after an `if`.
+    fn condition_keyword(&self, open: usize) -> Option<usize> {
+        let before = self.tree.previous_code_token(open)?;
+        if matches!(&self.tree.tokens[before], Token::Word(word) if word == "constexpr") {
+            return self.tree.previous_code_token(before);
+        }
+        Some(before)
     }
 
     /// The statements and the `}` of the block of a dangling `else` stand
