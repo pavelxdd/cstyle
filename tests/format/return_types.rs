@@ -1114,3 +1114,25 @@ fn comment_row_in_a_trailing_paren_keeps_its_level_when_the_return_type_attaches
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn break_return_type_breaks_a_head_a_comment_leads_as_any() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--break-return-type".to_owned(),
+            "--break-return-type-decl".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "/* note */ void f()\n{\n    value = 1;\n}\n/* note */ int *helper(int value);\n",
+            &options,
+        ),
+        "/* note */ void\nf()\n{\n    value = 1;\n}\n/* note */ int *\nhelper(int value);\n",
+    );
+}
