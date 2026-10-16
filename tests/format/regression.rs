@@ -12163,3 +12163,12 @@ fn a_comment_after_a_parameter_declaration_body_brace_opens_the_body() {
         "int helper(value)\nint value;\n{\n    /* note */\n    return value;\n}\n",
     );
 }
+
+#[test]
+fn an_enum_opening_the_file_breaks_its_brace_as_anywhere() {
+    check(
+        "enum Kind {\n    First,\n    Second\n};\nenum Other {\n    Third\n};\n",
+        &["--style=allman"],
+        "enum Kind\n{\n    First,\n    Second\n};\nenum Other\n{\n    Third\n};\n",
+    );
+}
