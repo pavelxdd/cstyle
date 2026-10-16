@@ -9931,3 +9931,21 @@ fn breaking_one_line_headers_breaks_an_else_header_once_added_braces_take_the_st
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn an_else_after_an_added_one_line_block_starts_its_line_as_after_a_written_one() {
+    let input = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n    if (ready) helper();\n    else\n        other();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "--add-one-line-braces"][..],
+            "void f()\n{\n    if (ready) { helper(); }\n    else { other(); }\n    if (ready) { helper(); }\n    else do {\n            first();\n        } while (state);\n    if (ready) { helper(); }\n    else\n    { other(); }\n}\n",
+        ),
+        (
+            &["--style=java", "--add-one-line-braces", "--break-blocks"][..],
+            "void f() {\n    if (ready) { helper(); }\n    else { other(); }\n\n    if (ready) { helper(); }\n    else do {\n            first();\n        } while (state);\n\n    if (ready) { helper(); }\n    else\n    { other(); }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

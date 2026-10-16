@@ -293,7 +293,9 @@ impl FormatEngine<'_> {
                 self.comments.follows_added_one_line_block = true;
             } else if (next_is_else
                 && attach_closing_header
-                && (nested_header_level.is_none() || !self.options.break_one_line_statements))
+                // Breaking one-line statements parts an else from the
+                // one-line block before it, as from a written one.
+                && !self.options.break_one_line_statements)
                 || keep_following_statement
             {
                 self.ensure_space();
