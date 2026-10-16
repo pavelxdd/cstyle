@@ -2830,25 +2830,6 @@ impl FormatEngine<'_> {
         if plain {
             return contextual;
         }
-        if line.trimmed() == "{"
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|line| preprocessor_directive(line.trimmed_start()) == Some("endif"))
-        {
-            layout.exact_indent_spaces = Some(
-                self.layout
-                    .frame_stack
-                    .active_brace()
-                    .filter(|frame| {
-                        frame.semantic_kind == BraceSemanticKind::Command && frame.header.is_some()
-                    })
-                    .map_or(
-                        layout.normal_indent.max(layout.indent) * self.options.indent_width,
-                        |frame| frame.sibling_indent_column,
-                    ),
-            );
-        }
         if let Some(spaces) = self.ratliff_closing_brace_indent_spaces(line, layout.normal_indent) {
             layout.exact_indent_spaces = Some(spaces);
         }

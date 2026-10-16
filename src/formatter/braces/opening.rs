@@ -509,7 +509,14 @@ impl FormatEngine<'_> {
             );
         }
         let previous_code = self.output.code_trimmed_of(previous);
-        if is_namespace_or_module_block_header(previous_code) && !self.options.indent_namespaces {
+        if (is_namespace_or_module_block_header(previous_code)
+            || self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Namespace))
+            && !self.options.indent_namespaces
+        {
             return None;
         }
         let previous_is_header_continuation = previous_code.ends_with(')')

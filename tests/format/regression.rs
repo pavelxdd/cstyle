@@ -10422,3 +10422,36 @@ fn a_comment_after_an_added_run_in_block_keeps_its_column() {
         expected,
     );
 }
+
+#[test]
+fn whitesmith_braces_after_a_directive_stand_where_their_owner_puts_them() {
+    for group in ["#ifdef A\n#endif\n", "#if A\n#else\n#endif\n"] {
+        let input = format!("void helper()\n{{\n{group}    {{\n        value++;\n    }}\n}}\n");
+        let expected = format!(
+            "void helper()\n    {{\n{group}        {{\n        value++;\n        }}\n    }}\n"
+        );
+        check(&input, &["--style=whitesmith"], &expected);
+        check(&expected, &["--style=whitesmith"], &expected);
+    }
+    for (input, expected) in [
+        (
+            "struct Item\n#ifdef A\n    : Base\n#endif\n{\n    int value;\n};\n",
+            "struct Item\n#ifdef A\n    : Base\n#endif\n    {\n    int value;\n    };\n",
+        ),
+        (
+            "class Item\n{\npublic:\n    void helper()\n#ifdef A\n#endif\n    {\n        value++;\n    }\n};\n",
+            "class Item\n    {\n    public:\n        void helper()\n#ifdef A\n#endif\n            {\n            value++;\n            }\n    };\n",
+        ),
+        (
+            "namespace demo\n#ifdef A\n#endif\n{\nint value;\n}\n",
+            "namespace demo\n#ifdef A\n#endif\n{\nint value;\n}\n",
+        ),
+        (
+            "namespace demo\n#define X\n{\nint value;\n}\n",
+            "namespace demo\n#define X\n{\nint value;\n}\n",
+        ),
+    ] {
+        check(input, &["--style=whitesmith"], expected);
+        check(expected, &["--style=whitesmith"], expected);
+    }
+}
