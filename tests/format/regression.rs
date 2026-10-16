@@ -11796,3 +11796,10 @@ fn a_comment_leading_a_switch_line_leaves_the_comment_after_its_brace_as_without
         "void f()\n{\n    /* note */ switch (kind) {\n        /* dispatch on kind\n                        ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_one_line_initializer_after_a_conditional_after_its_assignment_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item item =\n    { 1, 2 };\n    struct Item next =\n#ifdef FEATURE\n    { 3, 4 };\n#endif\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+}

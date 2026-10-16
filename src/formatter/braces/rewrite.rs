@@ -1178,11 +1178,22 @@ impl FormatEngine<'_> {
     }
 
     fn previous_output_code_ends_assignment(&self) -> bool {
-        // Blank lines between the `=` and the brace leave the assignment.
-        self.output.last_non_empty_scoped().is_some_and(|line| {
-            let code = self.output.code_trimmed_of(line);
-            code.ends_with('=')
-        })
+        // Blank lines and directives between the `=` and the brace leave
+        // the assignment.
+        self.output
+            .scoped_range()
+            .rev()
+            .find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
+            })
+            .is_some_and(|index| {
+                self.output
+                    .code_trimmed_of(&self.output[index])
+                    .ends_with('=')
+            })
     }
 
     fn current_or_previous_is_lambda_capture_header(&self) -> bool {
