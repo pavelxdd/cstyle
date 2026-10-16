@@ -1472,3 +1472,18 @@ fn objc_attached_autoreleasepool_is_a_command_block() {
         "void run()\n{\n    @autoreleasepool\n    {\n        id value=alpha;\n        call();\n    }\n}\n",
     );
 }
+
+// Keyword lines of a message align with the keyword after its receiver when
+// indenting after parens would leave them short of it, whatever the
+// receiver's length.
+#[test]
+fn indenting_after_parens_aligns_message_keyword_lines_with_the_first_keyword() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-after-parens".to_owned()])
+        .expect("valid options");
+    let source = "@implementation Item\n- (void)update\n{\n    [abc apply:value\n           with:other];\n    [helper apply:value\n           with:other];\n    [helperObject apply:value with:other\n           more:other];\n}\n@end\n";
+    let expected = "@implementation Item\n- (void)update\n{\n    [abc apply:value\n         with:other];\n    [helper apply:value\n            with:other];\n    [helperObject apply:value with:other\n                  more:other];\n}\n@end\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
