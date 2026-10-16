@@ -10001,6 +10001,63 @@ fn pico_runs_a_statement_into_a_brace_added_after_a_comment_leading_its_line() {
     check(expected, &["-j", "--style=pico"], expected);
 }
 
+// A macro call standing for a header's condition ends the header for added
+// braces as it does for breaking one-line headers.
+#[test]
+fn added_braces_wrap_the_body_of_a_header_whose_condition_is_a_macro_call() {
+    let input = "void f()\n{\n    if EQ(\"\") return 0;\n    else if EQ(\"a\") value = 1;\n    if EQ(\"b\")\n        value = 2;\n    value = 3;\n    while MORE(x)\n        value = 4;\n}\n";
+    for (args, expected) in [
+        (
+            &["-j"][..],
+            "void f()\n{\n    if EQ(\"\") {\n        return 0;\n    }\n    else if EQ(\"a\") {\n        value = 1;\n    }\n    if EQ(\"b\") {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x) {\n        value = 4;\n    }\n}\n",
+        ),
+        (
+            &["--style=kr", "-j"][..],
+            "void f()\n{\n    if EQ(\"\") {\n        return 0;\n    } else if EQ(\"a\") {\n        value = 1;\n    }\n    if EQ(\"b\") {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x) {\n        value = 4;\n    }\n}\n",
+        ),
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    if EQ(\"\")\n    {\n        return 0;\n    }\n    else if EQ(\"a\")\n    {\n        value = 1;\n    }\n    if EQ(\"b\")\n    {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x)\n    {\n        value = 4;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+// Loop headers take a macro call for their condition as `if` does.
+#[test]
+fn loop_headers_take_a_macro_call_for_their_condition() {
+    let input = "void f()\n{\n    while MORE(x) value = 5;\n    for EACH(x) value = 4;\n    value = 6;\n}\n";
+    for (args, expected) in [
+        (
+            &["-j"][..],
+            "void f()\n{\n    while MORE(x) {\n        value = 5;\n    }\n    for EACH(x) {\n        value = 4;\n    }\n    value = 6;\n}\n",
+        ),
+        (
+            &["-xb"][..],
+            "void f()\n{\n    while MORE(x)\n        value = 5;\n    for EACH(x)\n        value = 4;\n    value = 6;\n}\n",
+        ),
+        (
+            &["-J"][..],
+            "void f()\n{\n    while MORE(x) { value = 5; }\n    for EACH(x) { value = 4; }\n    value = 6;\n}\n",
+        ),
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    while MORE(x)\n    {\n        value = 5;\n    }\n    for EACH(x)\n    {\n        value = 4;\n    }\n    value = 6;\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let next_line = "void f()\n{\n    while MORE(x)\n        value = 4;\n}\n";
+    check(
+        next_line,
+        &["-J"],
+        "void f()\n{\n    while MORE(x)\n    { value = 4; }\n}\n",
+    );
+}
+
 #[test]
 fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
     let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";

@@ -995,8 +995,17 @@ impl FormatEngine<'_> {
                         .previous_code_token(self.tree.groups.get(group).open)
                 })
                 .is_none_or(|keyword| {
-                    matches!(&tokens[keyword], Token::Word(word)
-                        if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                    let is_header = |index: usize| {
+                        matches!(&tokens[index], Token::Word(word)
+                            if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                    };
+                    // A macro call may stand for the condition.
+                    is_header(keyword)
+                        || matches!(tokens[keyword], Token::Word(_))
+                            && self
+                                .tree
+                                .previous_code_token(keyword)
+                                .is_some_and(is_header)
                 }),
             _ => true,
         }
@@ -2627,6 +2636,10 @@ fn header_condition_open_paren(
     if header == "if"
         && matches!(tokens.get(open_paren), Some(Token::Word(word)) if word == "constexpr")
     {
+        open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
+    }
+    // A macro call may stand for the condition.
+    if matches!(tokens.get(open_paren), Some(Token::Word(_))) {
         open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
     }
     matches!(tokens.get(open_paren), Some(Token::Symbol('('))).then_some(open_paren)

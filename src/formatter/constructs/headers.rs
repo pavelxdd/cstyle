@@ -1475,9 +1475,10 @@ impl FormatEngine<'_> {
             return false;
         }
         if matches!(word, "for" | "while" | "switch") {
+            // A macro may stand for the parenthesized condition.
             return matches!(
                 next,
-                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _))
+                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _) | Token::Word(_))
             );
         }
         if word == "catch" {
