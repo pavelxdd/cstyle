@@ -1440,13 +1440,26 @@ impl FormatEngine<'_> {
             && class_base_comment_indent.is_none()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
-            let previous_code = self.output.code_trimmed_of(previous);
-            // A directive continues no statement into the comment.
+            // Directives between the rows leave the row before them.
             let after_directive = self
                 .output
                 .last_non_empty_index()
                 .is_some_and(|index| self.output.is_directive_line(index));
-            if previous_code.ends_with(',') && !after_directive {
+            let previous = if after_directive {
+                self.previous_code_line_past_comments_and_directives()
+                    .unwrap_or(previous)
+            } else {
+                previous
+            };
+            let previous_code = self.output.code_trimmed_of(previous);
+            if previous_code.ends_with(',')
+                && (!after_directive
+                    || self
+                        .layout
+                        .continuation_indent
+                        .next_line_indent_spaces
+                        .is_some())
+            {
                 // The rows published lost the case unindent the comment is
                 // yet to.
                 brace_element_comment_indent = unmatched_open_brace_content_offset(previous_code)
@@ -1454,6 +1467,10 @@ impl FormatEngine<'_> {
                         visual_width_from(&previous[..offset], 0, self.options.tab_width)
                             + self.case_unindent_spaces()
                     });
+                // Else it stands where the row after it goes on, as the row
+                // before set it.
+                brace_element_comment_indent = brace_element_comment_indent
+                    .or(self.layout.continuation_indent.next_line_indent_spaces);
                 let spaces = brace_element_comment_indent.unwrap_or_else(|| {
                     leading_visual_width(previous, self.options.tab_width)
                         + self.case_unindent_spaces()
