@@ -346,24 +346,49 @@ impl FormatEngine<'_> {
     /// block closed, which astyle reads as more of that header; a directive
     /// or comment between the blocks ends the header.
     fn brace_continues_header_block(&self) -> bool {
-        let follows_close_brace = self.current.active_token().is_some_and(|brace| {
-            self.tree.tokens[..brace]
+        let tokens = &self.tree.tokens;
+        let Some(close) = self.current.active_token().and_then(|brace| {
+            tokens[..brace]
                 .iter()
-                .rev()
-                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-                .is_some_and(|token| matches!(token, Token::Symbol('}')))
-        });
-        follows_close_brace
-            && self
-                .layout
-                .nesting
-                .last_closed_brace_header
-                .as_deref()
-                .is_some_and(|header| {
-                    !matches!(header, "case" | "default")
-                        && (is_standard_break_blocks_opening_header(header)
-                            || is_break_blocks_closing_header(header))
-                })
+                .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .filter(|&close| matches!(tokens[close], Token::Symbol('}')))
+        }) else {
+            return false;
+        };
+        let pads_header = |header: &str| {
+            !matches!(header, "case" | "default")
+                && (is_standard_break_blocks_opening_header(header)
+                    || is_break_blocks_closing_header(header))
+        };
+        if self
+            .layout
+            .nesting
+            .last_closed_brace_header
+            .as_deref()
+            .is_some_and(pads_header)
+        {
+            return true;
+        }
+        // A block kept on its header's line closes no block the engine
+        // tracks; its owner names the header, and a bare block after a
+        // header's block carries that header on.
+        let mut close = close;
+        loop {
+            let Some(group) = self.tree.groups.closed_at(close) else {
+                return false;
+            };
+            let open = self.tree.groups.get(group).open;
+            if let Some(owner) = self.tree.blocks.owner(group).filter(|&owner| owner != open) {
+                return matches!(&tokens[owner], Token::Word(word) if pads_header(word));
+            }
+            match tokens[..open]
+                .iter()
+                .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+            {
+                Some(before) if matches!(tokens[before], Token::Symbol('}')) => close = before,
+                _ => return false,
+            }
+        }
     }
 
     pub(crate) fn observe_block_spacing_inline_close_brace(&mut self) {

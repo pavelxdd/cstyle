@@ -10946,3 +10946,23 @@ fn padding_the_row_a_closer_joins_narrows_the_gap_before_its_comment() {
         "void f()\n{   if (a)\n    {   if (b)\n        {   x = 1; } } // note\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_after_a_kept_block_continuing_a_kept_header_block() {
+    let input = "void f()\n{\n    if (ready) { value=0; }\n    { value = 0; }\n    other();\n}\n";
+    check(
+        input,
+        &["--style=java", "--break-blocks", "--keep-one-line-blocks"],
+        "void f() {\n    if (ready) { value=0; }\n\n    { value = 0; }\n\n    other();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_carries_a_header_block_through_bare_blocks_after_it() {
+    let input = "void f()\n{\n    while (ready) { value=0; }\n    { value = 0; }\n    { value = 1; }\n    other();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--keep-one-line-blocks"],
+        "void f()\n{\n    while (ready) { value=0; }\n\n    { value = 0; }\n\n    { value = 1; }\n\n    other();\n}\n",
+    );
+}
