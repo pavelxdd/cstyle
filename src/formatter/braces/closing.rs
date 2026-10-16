@@ -402,6 +402,7 @@ impl FormatEngine<'_> {
             self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
         // Breaking one-line headers breaks the one-line blocks they open.
         let move_one_line_block_comment = (self.options.break_one_line_blocks
+            || self.options.lisp_add_one_line_braces_breaks_blocks()
             || self.comments.closing_broken_added_block
             || self.options.break_one_line_headers
                 && self
@@ -420,12 +421,16 @@ impl FormatEngine<'_> {
             && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'))
             // A comment code goes on after keeps its place.
             && self.comment_after_closer_ends_line()
-            // A closer run into the block's only body line already leads
-            // the comment there.
+            // A closer run into the line the comment would move to already
+            // leads the comment there.
             && !(matches!(
                 self.options.brace_style,
                 BraceStyle::Pico | BraceStyle::Lisp
-            ) && self.one_line_block_comment_target() == self.output.len().checked_sub(1));
+            ) && self.one_line_block_comment_target().is_some_and(|target| {
+                self.output
+                    .get(target + 1)
+                    .is_none_or(|line| line.trimmed_start().starts_with('}'))
+            }));
         if move_one_line_block_comment {
             self.move_one_line_block_comment_after_brace(next, &whitespace_before_brace);
         }
@@ -593,6 +598,24 @@ impl FormatEngine<'_> {
     /// The output line a comment after an expanded one-line block moves to:
     /// the block's first body line.
     fn one_line_block_comment_target(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        // The block's own brace, past the braces added inside it; the
+        // comment follows the first statement after it.
+        let block_open_line = self
+            .current
+            .active_token()
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| {
+                self.output
+                    .line_with_token(self.tree.groups.get(group).open)
+            });
+        if let Some(open_index) = block_open_line
+            && let Some(statement) = (open_index + 1..self.output.len())
+                .find(|&index| self.output.code_trimmed(index).ends_with(';'))
+        {
+            return Some(statement);
+        }
         self.output
             .iter()
             .rposition(|line| self.output.code_trimmed_of(line).ends_with('{'))

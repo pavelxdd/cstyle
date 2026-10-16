@@ -11352,3 +11352,21 @@ fn a_comment_leading_a_label_line_leaves_it_a_label() {
         "void f()\n{\n/* note */ done: value=0;\n/* note */ again:\n    next();\n    if (x) {\n/* note */ stop: y();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_an_expanded_block_follows_its_first_statement_when_braces_are_added() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; } /* note */\n}\n";
+    check(
+        input,
+        &["--style=java", "--add-braces"],
+        "void f() {\n    for (;;) {\n        if (ready) {\n            break;    /* note */\n        } else {\n            continue;\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn lisp_moves_a_comment_after_an_expanded_block_only_off_rows_no_closer_joins() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; } /* note */\n    for (;;) { a(); b(); } /* note */\n    if (x) { a(); } /* note */\n}\n";
+    let expected = "void f() {\n    for (;;) {\n        if (ready) {\n            break; }\n        else {\n            continue; } } /* note */\n    for (;;) {\n        a();    /* note */\n        b(); }\n    if (x) {\n        a(); } /* note */\n}\n";
+    check(input, &["--style=lisp", "--add-braces"], expected);
+    check(input, &["--style=lisp", "--add-one-line-braces"], expected);
+}
