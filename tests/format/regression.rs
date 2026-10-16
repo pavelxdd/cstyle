@@ -13160,3 +13160,20 @@ fn a_lambda_argument_row_with_a_comment_after_its_brace_stands_as_without_it() {
     let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n    [](const Item &first, const Item &second) { /* note */\n        return first.value < second.value;\n    });\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn indented_brace_styles_set_a_brace_row_a_comment_leads_with_the_brace_rows() {
+    // astyle sets the comment at the plain rows' column; the row stands
+    // where it would without the comment.
+    let input = "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {3,\n     4},\n    {5,\n     6}\n};\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
+    );
+}
