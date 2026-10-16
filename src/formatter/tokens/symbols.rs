@@ -1347,6 +1347,11 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.bracket_depth() == 0
             && !matches!(next, Some(Token::Symbol(':')));
         self.layout.command_state.case_label_colon_emitted = case_label_colon;
+        // A case label comments lead breaks its statement off as any does.
+        if case_label_colon && !is_label {
+            self.statement_after_label_pending =
+                self.options.break_one_line_statements && !self.one_line_block_mode;
+        }
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
         let colon_mode = self.options.pad_method_colon;
