@@ -12759,3 +12759,13 @@ fn a_closer_after_a_directive_of_a_brace_a_comment_leads_stands_at_the_header() 
         "int f(void)\n{\n    for (i = 0; i < n; i++)\n        /* c */ {\n        g();\n#if A\n        h();\n#endif\n    }\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn an_argument_after_a_comment_line_in_a_call_a_comment_leads_aligns_with_the_paren() {
+    let input = "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n              // note\n              [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n                      // note\n                      [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
