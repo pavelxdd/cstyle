@@ -187,6 +187,15 @@ impl FormatEngine<'_> {
             self.output_objc_method_header_indent_spaces()
                 .or_else(|| self.split_definition_header_indent_spaces())
                 .unwrap_or(current_line_indent)
+        } else if class_base && !self.current_is_blank() {
+            // A class's body opens a level past its head, whatever row of
+            // its bases the brace ends.
+            (self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
+                + self.case_body_indent_extra(LineKind::Normal))
+                * self.options.indent_width
         } else {
             current_line_indent
         };
@@ -537,10 +546,12 @@ impl FormatEngine<'_> {
         {
             return;
         }
+        // A class's brace on a row of its bases keeps the head's columns.
         if self.layout.frame_stack.active_brace().is_some_and(|frame| {
             code != "{"
-                && ((frame.semantic_kind == BraceSemanticKind::Definition
-                    && frame.sibling_indent_column < sibling)
+                && (frame.class_base
+                    || (frame.semantic_kind == BraceSemanticKind::Definition
+                        && frame.sibling_indent_column < sibling)
                     || (frame.semantic_kind == BraceSemanticKind::Lambda
                         && frame.sibling_indent_column != sibling)
                     || (frame.semantic_kind == BraceSemanticKind::Command

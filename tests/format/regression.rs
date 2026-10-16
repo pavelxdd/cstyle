@@ -12317,4 +12317,19 @@ fn a_base_class_row_a_comment_leads_stands_at_the_rows() {
         &["--style=whitesmith"],
         "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other\n    {\n    };\n",
     );
+    // The brace broken off the row stands at the class.
+    check(
+        "class Derived\n    : public Base,\n      /* c */ private Other {\n};\n",
+        &["--style=kr"],
+        "class Derived\n    : public Base,\n      /* c */ private Other\n{\n};\n",
+    );
+}
+
+#[test]
+fn a_class_body_after_rows_of_bases_stands_a_level_past_the_head() {
+    check(
+        "class Derived : public Base,\n                private Other {\npublic:\n    /* note */\n    int value;\n};\n",
+        &["--style=stroustrup"],
+        "class Derived : public Base,\n    private Other {\npublic:\n    /* note */\n    int value;\n};\n",
+    );
 }

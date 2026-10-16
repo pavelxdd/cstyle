@@ -1360,12 +1360,21 @@ impl FormatEngine<'_> {
             self.clear_current();
             self.current.push_str(&prefix);
             self.current_is_preindented = true;
+            let ends_line = !self.token_input.has_next_meaningful_token
+                || self
+                    .token_input
+                    .next_input_whitespace
+                    .as_deref()
+                    .is_some_and(|whitespace| whitespace.contains('\n'));
             let continuation = &mut self.layout.continuation_indent;
             continuation.input_line_continuation_indent = Some(ContinuationIndent::Spaces(spaces));
-            if !before_body {
+            if !before_body && ends_line {
                 continuation.next_input_line_continuation_indent = continuation
                     .next_line_indent_spaces
                     .map(ContinuationIndent::Spaces);
+            } else if !before_body {
+                // The row the comment leads takes the column.
+                continuation.next_line_indent_spaces = None;
             }
         }
         if let Some(spaces) = constructor_member_comment_indent {
