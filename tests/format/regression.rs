@@ -11993,3 +11993,13 @@ fn a_comment_leading_an_access_label_line_leaves_the_label_at_its_column() {
         "class Item\n{\npublic:\n    int value;\n    Item() : value(0) {}\n/* note */ private:\n    int other;\n};\n",
     );
 }
+
+#[test]
+fn a_case_block_brace_attaches_to_a_comment_led_label_as_to_any() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1: // first\n    {\n        value=0;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    /* note */ case 1: { // first\n        value=0;\n    }\n    }\n}\n",
+    );
+}

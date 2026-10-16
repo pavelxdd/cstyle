@@ -80,7 +80,7 @@ fn is_semicolonless_call_line(line: &str) -> bool {
 fn attach_case_label_brace_to_line(line: &str, access_labels: &[String]) -> Option<String> {
     let comment_start = trailing_comment_split_limit(line);
     let code = line[..comment_start].trimmed_end();
-    let trimmed = code.trimmed();
+    let trimmed = line_scan::after_leading_comments(code).trimmed();
     if !trimmed.ends_with(':')
         || !labels::is_label_start(trimmed.trim_end_matches(':'), access_labels)
     {
@@ -3220,7 +3220,8 @@ impl FormatEngine<'_> {
         }
         let after_case_label = self.output.last().is_some_and(|line| {
             let code = &self.output.code_of(line);
-            let trimmed = code.trimmed();
+            // Comments leading the label's line leave it a label.
+            let trimmed = line_scan::after_leading_comments(code).trimmed();
             trimmed.ends_with(':')
                 && labels::is_label_start(
                     trimmed.trim_end_matches(':'),
