@@ -10987,3 +10987,13 @@ fn a_space_pico_sets_in_an_element_row_a_brace_runs_into_takes_from_its_comment_
         "static const Node dummy = {\n    {   {NULL}, EMPTY,     /* value */\n        DEADKEY, 0, {NULL}\n    }  /* key */\n};\n",
     );
 }
+
+#[test]
+fn breaking_one_line_headers_leaves_a_comment_inside_a_condition_directives_split() {
+    let input = "void f()\n{\n    if (rc == -1) {\n        if (err != BUSY\n#if (WIN)\n            /* note */\n            && err != AGAIN\n#endif\n            )\n        {\n            {\n            }\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--break-one-line-headers"],
+        "void f()\n{\n    if (rc == -1) {\n        if (err != BUSY\n#if (WIN)\n                /* note */\n                && err != AGAIN\n#endif\n           ) {\n            {\n            }\n        }\n    }\n}\n",
+    );
+}

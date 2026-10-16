@@ -560,6 +560,23 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        let header = self.layout.command_state.current_header.as_deref();
+        if !split_else_after_preprocessor {
+            let Some(header) = header else {
+                return false;
+            };
+            if !(is_standard_add_braces_header(header) || header == "switch")
+                || is_defer_header(header)
+            {
+                return false;
+            }
+        }
+        if matches!(header, Some("if" | "for" | "while" | "switch"))
+            && (self.layout.command_state.previous_command_char != Some(')')
+                || self.layout.nesting.paren_depth > 0)
+        {
+            return false;
+        }
         // After directives that split a header from its body, the body
         // starts on the line a comment leads: no header stands there to
         // break off.
@@ -582,23 +599,6 @@ impl FormatEngine<'_> {
             }
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            return false;
-        }
-        let header = self.layout.command_state.current_header.as_deref();
-        if !split_else_after_preprocessor {
-            let Some(header) = header else {
-                return false;
-            };
-            if !(is_standard_add_braces_header(header) || header == "switch")
-                || is_defer_header(header)
-            {
-                return false;
-            }
-        }
-        if matches!(header, Some("if" | "for" | "while" | "switch"))
-            && (self.layout.command_state.previous_command_char != Some(')')
-                || self.layout.nesting.paren_depth > 0)
-        {
             return false;
         }
         let Some(statement_start) = next_non_whitespace(tokens, start, line_end) else {
