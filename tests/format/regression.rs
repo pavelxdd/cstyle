@@ -9758,3 +9758,48 @@ fn a_one_line_block_removed_from_a_header_run_in_after_an_else_nests_past_both()
         check(expected, &[style, "--remove-braces"], expected);
     }
 }
+
+#[test]
+fn a_switch_chained_after_an_else_kept_past_a_removed_block_lays_out_at_the_else_body() {
+    let input = "void f(int x)\n{\n    if (a) { b(); } else switch (x) {\n    case 1:\n        c();\n        break;\n    }\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f(int x)\n{\n    if (a)\n        b();   else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a)\n        b();   else switch (x)\n        {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(int x)\n    {\n    if (a)\n        b();   else switch (x)\n            {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n",
+        ),
+    ] {
+        check(input, &[style, "--remove-braces", "-o"], expected);
+        check(expected, &[style, "--remove-braces", "-o"], expected);
+    }
+}
+
+#[test]
+fn a_header_chained_after_an_else_on_its_ifs_body_line_nests_from_the_if() {
+    let input = "void f(int x)\n{\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    if (a)\n        b(); else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n";
+    for (args, expected) in [
+        (&["--style=kr", "-o"][..], input.to_string()),
+        (
+            &["--style=allman", "-o"][..],
+            "void f(int x)\n{\n    if (a)\n        b(); else for (;;)\n        {\n            c();\n        }\n    if (a)\n        b(); else switch (x)\n        {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n".to_string(),
+        ),
+        (
+            &["--style=whitesmith", "-o"][..],
+            "void f(int x)\n    {\n    if (a)\n        b(); else for (;;)\n            {\n            c();\n            }\n    if (a)\n        b(); else switch (x)\n            {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n".to_string(),
+        ),
+        (
+            &["--style=kr", "-o", "-S"][..],
+            "void f(int x)\n{\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    if (a)\n        b(); else switch (x) {\n            case 1:\n                c();\n                break;\n        }\n    g();\n}\n".to_string(),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}

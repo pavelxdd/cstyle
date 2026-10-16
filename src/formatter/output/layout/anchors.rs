@@ -481,17 +481,19 @@ impl FormatEngine<'_> {
             return layout;
         }
         // The statements of such a block, and of blocks within an `else`
-        // when else-if chains break, keep the column of the first one.
-        if layout.exact_indent_spaces.is_none()
-            && self.tree.statements.starts_block_statement(first)
+        // when else-if chains break, keep the column of the first one, as
+        // do those of a block whose header the engine places a level deep.
+        if self.tree.statements.starts_block_statement(first)
             && self.tree.groups.enclosing(first).is_some_and(|group| {
-                self.group_in_braced_chain_of_braceless_body(group)
-                    || self.options.break_else_ifs
-                        && self
-                            .tree
-                            .groups
-                            .ancestors(group)
-                            .any(|id| self.block_of_else(id))
+                layout.exact_indent_spaces.is_none()
+                    && (self.group_in_braced_chain_of_braceless_body(group)
+                        || self.options.break_else_ifs
+                            && self
+                                .tree
+                                .groups
+                                .ancestors(group)
+                                .any(|id| self.block_of_else(id)))
+                    || self.block_of_run_in_header_chain(group)
             })
             && let Some(spaces) = self
                 .sibling_statement_column(first)
@@ -3575,6 +3577,9 @@ impl FormatEngine<'_> {
                     .previous_code_token(self.tree.groups.get(condition).open)
             })
             .filter(|&keyword| matches!(&tokens[keyword], Token::Word(word) if word == "switch"))
+            // A switch run in after an `else` heads its body, not the
+            // statement that starts its line.
+            .or_else(|| self.header_keyword_before(open))
             .or_else(|| self.tree.blocks.owner(body))?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "switch") {
             return None;
@@ -3594,15 +3599,19 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = if brace_leads {
-            brace_line
+        // A switch run in after an `else` stands a level past the line of
+        // the chain's outermost header.
+        let (line, chained) = if brace_leads {
+            (brace_line, 0)
+        } else if let Some((line, levels)) = self.header_chain_before(open) {
+            (line, levels - 1)
         } else {
-            self.line_led_by(owner)?
+            (self.line_led_by(owner)?, 0)
         };
         let switch_level = usize::from(self.options.indent_switches && !whitesmith);
         Some(
             self.output.lead_width(line, self.options.tab_width)
-                + (switch_level + self.layout.line_adjuster.pending_case_unindent())
+                + (chained + switch_level + self.layout.line_adjuster.pending_case_unindent())
                     * self.options.indent_width,
         )
     }
@@ -4283,14 +4292,15 @@ impl FormatEngine<'_> {
                 || statements.braceless_header(open_line_first).is_some()
             {
                 // Headers run in on the line as braceless bodies, as in
-                // `if (x) a(); else do {`, nest a level past each.
-                if let Some((_, levels)) = self
-                    .header_chain_before(open)
-                    .filter(|&(line, _)| line == open_line)
-                {
-                    extra += (levels - 1) * self.options.indent_width;
+                // `if (x) a(); else do {`, nest a level past each, from the
+                // line of the outermost.
+                match self.header_chain_before(open) {
+                    Some((line, levels)) if levels > 1 => {
+                        extra += (levels - 1) * self.options.indent_width;
+                        line
+                    }
+                    _ => open_line,
                 }
-                open_line
             } else if let Some(keyword) = self.header_keyword_before(open) {
                 if let Some(line) = self.line_led_by(keyword) {
                     // `else while (x) {` nests two headers on one line.
@@ -4351,19 +4361,28 @@ impl FormatEngine<'_> {
     /// braceless body of another header on the line of its `{`, a line
     /// that a statement starts.
     fn closes_block_of_run_in_header_chain(&self, first: usize) -> bool {
-        let Some(group) = self.tree.groups.closed_at(first) else {
-            return false;
-        };
+        self.tree
+            .groups
+            .closed_at(first)
+            .is_some_and(|group| self.block_of_run_in_header_chain(group))
+    }
+
+    /// Whether `group` is the block of a header that is the braceless body
+    /// of another header on its line, a line that a statement starts.
+    fn block_of_run_in_header_chain(&self, group: GroupId) -> bool {
         let open = self.tree.groups.get(group).open;
+        let statements = &self.tree.statements;
         self.header_chain_before(open)
-            .is_some_and(|(line, levels)| {
-                levels > 1
-                    && self.output.line_with_token(open) == Some(line)
-                    && self
-                        .output
-                        .line_tokens(line)
-                        .is_some_and(|span| self.tree.statements.starts_block_statement(span.first))
-            })
+            .is_some_and(|(_, levels)| levels > 1)
+            && self
+                .tree
+                .previous_code_token(open)
+                .and_then(|header_end| self.output.line_with_token(header_end))
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| {
+                    statements.starts_block_statement(span.first)
+                        || statements.braceless_header(span.first).is_some()
+                })
     }
 
     /// Whether `group` is the block of an `else`, or of the `if` of an
@@ -5144,12 +5163,19 @@ impl FormatEngine<'_> {
     /// an `else` kept on its line leads.
     fn line_led_by_header(&self, token: usize) -> Option<usize> {
         self.line_led_by(token).or_else(|| {
-            let line = self
-                .tree
-                .statements
-                .if_of_else(token)
-                .and_then(|if_token| self.line_led_by(if_token))?;
-            (self.output.line_with_token(token) == Some(line)).then_some(line)
+            let if_token = self.tree.statements.if_of_else(token)?;
+            let line = self.line_led_by(if_token)?;
+            let else_line = self.output.line_with_token(token)?;
+            // An `else` on the line of its `if`'s body, braced or not,
+            // stands at the `if` as well.
+            let first = self.output.line_tokens(else_line)?.first;
+            let statements = &self.tree.statements;
+            (else_line == line
+                || statements.braceless_header(first) == Some(if_token)
+                || statements
+                    .block_opening(first)
+                    .is_some_and(|open| self.header_keyword_before(open) == Some(if_token)))
+            .then_some(line)
         })
     }
 

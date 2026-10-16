@@ -1060,9 +1060,27 @@ impl FormatEngine<'_> {
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         // The tail of a continued condition closes parens it never opened.
         let closes_outer_paren = || code.matches(')').count() > code.matches('(').count();
+        // A statement the line ends before its `{` leaves the brace to
+        // what follows it.
+        let ends_statement = || {
+            let mut depth = 0usize;
+            code.bytes().any(|byte| match byte {
+                b'(' => {
+                    depth += 1;
+                    false
+                }
+                b')' => {
+                    depth = depth.saturating_sub(1);
+                    false
+                }
+                b';' => depth == 0,
+                _ => false,
+            })
+        };
         (code.ends_with('{')
             && line_starts_call_expression(code.trimmed_start())
             && !closes_outer_paren()
+            && !ends_statement()
             && previous_indent < normal_indent * self.options.indent_width)
             .then_some(previous_indent + self.options.indent_width)
     }

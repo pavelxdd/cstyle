@@ -1566,11 +1566,10 @@ impl FormatEngine<'_> {
         let mut frame = self.layout.frame_stack.active_brace()?;
         // The head of a block a pushed `{` breaks off stands in the block
         // around it.
-        if frame.header.is_none()
-            && self
-                .current
-                .active_token()
-                .is_some_and(|index| matches!(self.tree.tokens[index], Token::Symbol('{')))
+        if self
+            .current
+            .active_token()
+            .is_some_and(|index| matches!(self.tree.tokens[index], Token::Symbol('{')))
         {
             frame = self.layout.frame_stack.enclosing_brace()?;
         }
