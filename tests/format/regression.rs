@@ -10531,3 +10531,11 @@ fn indented_brace_styles_close_an_element_list_nested_in_a_compound_literal_at_i
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn ratliff_sets_a_compound_literal_closer_its_line_shares_with_a_nested_one_a_level_in() {
+    let input = "void helper(void *arg)\n{\n    value = (struct Item) {\n        .u.obj = {\n            .first = 1,\n        } };\n}\n";
+    let expected = "void helper(void *arg) {\n    value = (struct Item) {\n        .u.obj = {\n            .first = 1,\n            }\n        };\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

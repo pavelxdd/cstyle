@@ -913,7 +913,9 @@ impl FormatEngine<'_> {
                 self.current.replace(previous);
                 self.current.restore_tokens(tokens);
             }
-        } else if self.token_input.token_begins_source_line {
+        } else if self.token_input.token_begins_source_line || self.current_is_blank() {
+            // A closer a finished row leaves on a line of its own stands
+            // like one that leads its source line.
             if !self.current_is_blank() {
                 self.finish_line();
             }
