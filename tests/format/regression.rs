@@ -11152,3 +11152,25 @@ fn ratliff_keeps_a_block_after_a_directive_in_a_case_at_its_brace_after_an_else_
         "void f() {\n    if (ready)\n        value=0;\n    else\n        value=2;\n    switch (state) {\n        case 1:\n#line 46 \"input.l\"\n                {\n                pop(state);\n                }\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_nested_switch_body_after_an_element_table_stands_a_level_past_its_label() {
+    let input = "static const struct Item items[] = {\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "static const struct Item items[] = {\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_nested_switch_body_after_a_table_in_a_case_block_stands_a_level_past_its_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 2:\n    {\n        static const struct Item other[] = {\n            { 1 },\n        };\n        switch (other) {\n        case 2:\n            value = 2;\n            break;\n        }\n    }\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        case 2:\n        {\n            static const struct Item other[] = {\n                { 1 },\n            };\n            switch (other) {\n                case 2:\n                    value = 2;\n                    break;\n            }\n        }\n    }\n}\n",
+    );
+}

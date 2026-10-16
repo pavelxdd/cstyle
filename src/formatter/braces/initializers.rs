@@ -1418,11 +1418,7 @@ impl FormatEngine<'_> {
         if reference.is_some_and(|width| width + case_unindent_spaces == current_spaces) {
             return None;
         }
-        let aggregate_member = self.in_aggregate_declaration_brace()
-            || self.output.scoped_range().rev().take(16).any(|index| {
-                let code = self.output.code_before_comment_trimmed(index);
-                code.trimmed_start().starts_with("static const struct") && code.ends_with('{')
-            });
+        let aggregate_member = self.in_aggregate_declaration_brace();
         aggregate_member.then_some(current_spaces + case_unindent_spaces)
     }
 
