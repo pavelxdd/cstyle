@@ -3823,7 +3823,9 @@ impl FormatEngine<'_> {
                             self.tree.blocks.kind(parent) == Some(BlockKind::Initializer)
                         })
                         && self.output.line_with_token(open).is_some_and(|line| {
-                            self.output.line_tokens(line).is_some_and(|span| span.last == open)
+                            self.output
+                                .line_tokens(line)
+                                .is_some_and(|span| span.last == open)
                         }))
         });
         let is_else = matches!(&tokens[first], Token::Word(word) if word == "else");

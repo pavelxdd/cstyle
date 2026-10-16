@@ -11,7 +11,9 @@ use crate::formatter::constructs::template_declarations::{
     is_template_declaration_head_line, template_continuation_indent_spaces,
     template_declaration_line_complete,
 };
-use crate::formatter::continuation::{ContinuationIndent, operator_chains};
+use crate::formatter::continuation::{
+    ContinuationIndent, operator_chains, splits_aggregate_declaration_name,
+};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::is_known_preprocessor_directive;
@@ -1040,6 +1042,26 @@ impl FormatEngine<'_> {
                     + self.case_unindent_spaces(),
             );
         }
+        // A declarator split from its aggregate type goes on past comment
+        // lines as from the type's line.
+        if layout.line_kind == LineKind::Normal
+            && self.layout.indentation.statement_depth() == 0
+            && self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| is_bare_comment_line(self.output.trimmed(index)))
+            && !line.trimmed_start().starts_with_any(b"{}")
+            && !line_starts_call(line.trimmed_start())
+            && let Some(previous) = self.previous_code_line_past_comments_and_directives()
+            && let previous_code = self.output.code_trimmed_of(previous)
+            // A head with bases opens its body next.
+            && !previous_code.contains(':')
+            && splits_aggregate_declaration_name(previous_code)
+        {
+            layout.exact_indent_spaces = Some(
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
+            );
+        }
         // Comments between the rows take no part in their columns.
         if layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with_any(b",{}")
@@ -1671,4 +1693,13 @@ impl FormatEngine<'_> {
             case_unindent_closing_line,
         })
     }
+}
+
+/// Whether `line` starts with a name its call or declaration parentheses
+/// follow.
+fn line_starts_call(line: &str) -> bool {
+    let name_end = line
+        .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .unwrap_or(line.len());
+    name_end > 0 && line[name_end..].trimmed_start().starts_with('(')
 }

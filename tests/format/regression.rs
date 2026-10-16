@@ -12387,3 +12387,12 @@ fn a_comment_before_the_first_row_of_a_nested_element_stands_at_the_row() {
         "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            // note\n            .value = 2,\n        }\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_declarator_split_from_its_type_continues_past_a_comment_line() {
+    check(
+        "void f()\n{\n    static const struct Item\n        // note\n        first = {\n        1, 2\n    };\n}\n",
+        &["--style=linux"],
+        "void f()\n{\n    static const struct Item\n        // note\n        first = {\n        1, 2\n    };\n}\n",
+    );
+}

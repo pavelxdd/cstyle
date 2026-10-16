@@ -1625,26 +1625,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.current.trimmed_end();
-        if line.trimmed_start().starts_with_any(b"/*")
-            || ["//", "/*", "*/"]
-                .iter()
-                .any(|marker| line.contains(marker))
-            || line.ends_with_any(b";{}=")
-            || line.contains_any_byte(b"([)],")
-            || self.next_line.leads_with_class_base
+        if self.next_line.leads_with_class_base
+            || !splits_aggregate_declaration_name(self.current.trimmed_end())
         {
             return None;
         }
-        let words = line
-            .split(|ch: char| !is_identifier_continue(ch))
-            .filter(|word| !word.is_empty())
-            .collect::<Vec<_>>();
-        let aggregate_index = words
-            .iter()
-            .position(|word| matches!(*word, "struct" | "union"))?;
-        (words.len() > aggregate_index + 1)
-            .then_some(self.current_line_indent_spaces() + self.options.indent_width)
+        Some(self.current_line_indent_spaces() + self.options.indent_width)
     }
 
     fn run_in_enum_assignment_continuation_spaces(&self) -> Option<usize> {
@@ -2184,4 +2170,26 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
         MinConditionalIndent::Two => options.indent_width * 2,
         MinConditionalIndent::OneHalf => options.indent_width / 2,
     }
+}
+
+/// Whether `line` names a struct or union type its declarators continue on
+/// the next line after, as `static const struct Item`.
+pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
+    if line.trimmed_start().starts_with_any(b"/*")
+        || ["//", "/*", "*/"]
+            .iter()
+            .any(|marker| line.contains(marker))
+        || line.ends_with_any(b";{}=")
+        || line.contains_any_byte(b"([)],")
+    {
+        return false;
+    }
+    let words = line
+        .split(|ch: char| !is_identifier_continue(ch))
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    words
+        .iter()
+        .position(|word| matches!(*word, "struct" | "union"))
+        .is_some_and(|aggregate| words.len() > aggregate + 1)
 }
