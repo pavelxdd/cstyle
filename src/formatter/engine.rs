@@ -1289,12 +1289,31 @@ impl<'a> FormatEngine<'a> {
         if has_semicolon {
             let mut statement_count = 0usize;
             let mut paren_depth = 0i32;
+            // A header after a statement starts another.
+            let mut after_statement = false;
             for token in tokens {
                 match token {
                     Token::Symbol('(') => paren_depth += 1,
                     Token::Symbol(')') => paren_depth -= 1,
-                    Token::Symbol(';') if paren_depth <= 0 => statement_count += 1,
+                    Token::Symbol(';') if paren_depth <= 0 => {
+                        statement_count += 1;
+                        after_statement = true;
+                        continue;
+                    }
+                    Token::Word(word)
+                        if after_statement
+                            && paren_depth <= 0
+                            && crate::formatter::constructs::headers::is_header(
+                                self.options,
+                                word,
+                            ) =>
+                    {
+                        statement_count += 1;
+                    }
                     _ => {}
+                }
+                if is_code_token(token) {
+                    after_statement = false;
                 }
             }
             if statement_count > 1 {

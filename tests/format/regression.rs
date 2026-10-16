@@ -10093,6 +10093,18 @@ fn a_bare_block_brace_after_a_comment_stays_after_it() {
     );
 }
 
+// A header broken off the statement before it on its source line keeps the
+// gap before its comment, as a statement broken off another does.
+#[test]
+fn a_header_broken_off_a_statement_keeps_its_comment_gap() {
+    let input = "void f()\n{\n    first(); second(); // note\n    if (a)\n        x(); else // note\n    value = 1; while (a) // note\n        x();\n}\n";
+    let expected = "void f()\n{\n    first();\n    second(); // note\n    if (a)\n        x();\n    else // note\n        value = 1;\n    while (a) // note\n        x();\n}\n";
+    for args in [&[][..], &["--style=kr"][..], &["--style=allman"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
 #[test]
 fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
     let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";
