@@ -12507,3 +12507,9 @@ fn an_interface_line_a_comment_leads_sets_no_continuation_for_its_members() {
     check(input, &["--style=kr"], input);
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn a_message_argument_after_a_trailing_block_comment_aligns_its_colon() {
+    let input = "- (void)update:(int)value {\n    [self apply:value /* note */\n          with:other];\n}\n";
+    check(input, &["--style=java"], input);
+}

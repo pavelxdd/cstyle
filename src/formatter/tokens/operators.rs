@@ -12,10 +12,10 @@ use crate::formatter::syntax::language::{
 };
 use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
+use crate::formatter::text::line_scan::{has_hash_outside_literals, trailing_comment_split_limit};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -315,7 +315,11 @@ pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
 }
 
 pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
-    let head = head.trimmed_end();
+    let mut head = head.trimmed_end();
+    // A comment's close is no operator; the code before it may end in one.
+    if head.ends_with("*/") {
+        head = &head[..trailing_comment_split_limit(head)];
+    }
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
         .any(|operator| head.ends_with(operator))
