@@ -11854,3 +11854,14 @@ fn a_member_after_a_conditional_member_after_an_access_label_stands_at_the_membe
         "class Item {\n  public:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n",
     );
 }
+
+#[test]
+fn a_template_head_a_comment_leads_aligns_its_parameters_past_the_comment() {
+    let input = "/* note */ template <typename First,\n                     typename Second>\nclass Pair\n{\n};\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "/* note */ template <typename First,\n                     typename Second>\nclass Pair\n    {\n    };\n",
+    );
+}

@@ -1,8 +1,8 @@
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
 use crate::formatter::text::line_scan::{
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    after_leading_comments, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -285,6 +285,23 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_template_declaration_line(&mut self, line: &LineView<'_>) {
+        // Comments leading the line keep the columns of the head after them.
+        let code = after_leading_comments(line);
+        let masked;
+        let line = if code.len() < line.trimmed_start().len() && !code.is_empty() {
+            masked = format!(
+                "{}{code}",
+                " ".repeat(visual_width_from(
+                    &line[..line.len() - code.len()],
+                    0,
+                    self.options.tab_width
+                ))
+            );
+            LineView::new(&masked)
+        } else {
+            line.clone()
+        };
+        let line = &line;
         let trimmed = line.trimmed();
         let starts_template = trimmed.starts_with("template");
         if !starts_template && !self.layout.template_declaration.uses_source_indent {
