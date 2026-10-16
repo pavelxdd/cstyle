@@ -16,7 +16,7 @@ use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, after_leading_comments, is_comment_line, last_unmatched_open_delimiter,
+    ContainsAnyByte, is_comment_line, last_unmatched_open_delimiter, leads_with_operator,
     trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
@@ -350,7 +350,7 @@ impl FormatEngine<'_> {
         // does a comment leading the line.
         let previous_starts_operator = self.output.comment_start_index(previous_index)
             == previous_index
-            && after_leading_comments(previous_trimmed).starts_with_any(b"<>|&+-*/%=!?:,.");
+            && leads_with_operator(previous_trimmed, b"<>|&+-*/%=!?:,.");
         if current_starts_operator && previous_starts_operator {
             if self.preprocessor.split_else.extra_indent
                 && (current.starts_with("&&") || current.starts_with("||"))

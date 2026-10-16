@@ -129,6 +129,13 @@ pub(crate) fn after_leading_comments(line: &str) -> &str {
     rest
 }
 
+/// Whether `text` leads with one of `operators` past the block comments
+/// that lead it: a comment's `/` is no operator.
+pub(crate) fn leads_with_operator(text: &str, operators: &[u8]) -> bool {
+    let rest = after_leading_comments(text);
+    !rest.starts_with("//") && !rest.starts_with("/*") && rest.starts_with_any(operators)
+}
+
 /// Whether `line` holds code after the block comments that lead it.
 pub(crate) fn holds_code_after_leading_comments(line: &str) -> bool {
     let rest = after_leading_comments(line);

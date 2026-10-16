@@ -12228,3 +12228,12 @@ fn a_comment_led_row_closing_a_paren_stands_where_the_row_would() {
         "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_declarator_continues_no_operator_into_its_brace() {
+    check(
+        "static const struct Item\n    /* note */ first = {\n        1, 2\n    },\n    second = {\n        3, 4\n    };\n",
+        &["--style=vtk"],
+        "static const struct Item\n    /* note */ first =\n{\n    1, 2\n},\nsecond =\n{\n    3, 4\n};\n",
+    );
+}

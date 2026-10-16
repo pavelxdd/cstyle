@@ -29,7 +29,7 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, line_comment_split_limit,
+    ContainsAnyByte, is_comment_only_line, leads_with_operator, line_comment_split_limit,
     reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
@@ -290,7 +290,7 @@ impl FormatEngine<'_> {
             })
             || !(head_ends_binary_operator(previous_code)
                 || previous_code.ends_with("->")
-                || previous_code.trimmed_start().starts_with_any(b"<>|&+-*/%=!?.~"))
+                || leads_with_operator(previous_code, b"<>|&+-*/%=!?.~"))
         {
             return None;
         }
