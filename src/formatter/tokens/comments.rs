@@ -2341,6 +2341,23 @@ impl FormatEngine<'_> {
         if kind != CommentKind::Block || !self.current.trimmed().is_empty() {
             return None;
         }
+        // A comment in a switch body holding no label stands a level past
+        // where the labels would.
+        if self.directly_in_switch_body()
+            && let Some(comment) = self.current.active_comment()
+            && let Some(close) = next_code_token(&self.tree.tokens, comment + 1)
+            && let Some(body) = self.tree.groups.closed_at(close)
+            && self.tree.previous_code_token(comment) == Some(self.tree.groups.get(body).open)
+        {
+            return Some(
+                (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::SwitchLabel, self.options)
+                    + 1)
+                    * self.options.indent_width,
+            );
+        }
         // A conditional opening before the comment inside braces leaves it
         // in the context of the line before; at file scope it may open a
         // preprocessor block.

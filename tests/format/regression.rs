@@ -12678,3 +12678,24 @@ fn a_continuation_a_comment_leads_after_a_head_a_comment_leads_aligns_with_its_v
         "void f() {\n    /* note */ return first ||\n                      /* c */ second;\n    /* note */ value = first &&\n                       /* c */ second;\n}\n",
     );
 }
+
+#[test]
+fn a_comment_in_an_empty_switch_body_stands_past_its_labels() {
+    let input =
+        "void f()\n{\n    switch (op) {\n    /* c */\n    }\n    switch (op) {\n    /* c */ }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n        /* c */\n    }\n    switch (op) {\n        /* c */\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman", "--indent-switches"],
+        "void f()\n{\n    switch (op)\n    {\n            /* c */\n    }\n    switch (op)\n    {\n            /* c */\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (op)\n        {\n            /* c */\n        }\n    switch (op)\n        {\n            /* c */\n        }\n    }\n",
+    );
+}

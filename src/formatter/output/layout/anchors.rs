@@ -6462,6 +6462,29 @@ impl FormatEngine<'_> {
         if self.output.line_tokens(line)?.first != open {
             return None;
         }
+        // A switch holding no label leaves the comments on lines of their
+        // own a level past where the labels would stand; styles indenting
+        // the brace set the labels at it. Horstmann and Pico run the first
+        // comment into the brace's line.
+        if self.output.trimmed(line) == "{"
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Horstmann
+            )
+            && self.header_keyword_before(open).is_some_and(
+                |keyword| matches!(&tokens[keyword], Token::Word(word) if word == "switch"),
+            )
+        {
+            let indented_labels = self.options.indent_switches
+                && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Vtk
+                );
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + (usize::from(indented_labels) + 1) * self.options.indent_width,
+            );
+        }
         let offset = if self.should_indent_brace_line(BraceType::Command) {
             0
         } else {
