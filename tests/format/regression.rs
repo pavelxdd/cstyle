@@ -11733,3 +11733,10 @@ fn an_element_brace_after_a_comma_keeps_its_row_with_a_comment_ending_it() {
         "void f()\n{   int table[][2] =\n    {   5, { /* note */\n            6, 7\n        }\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_one_line_initializer_after_a_blank_line_after_its_assignment_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item other =\n\n    { 3, 4 };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}

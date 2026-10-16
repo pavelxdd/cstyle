@@ -1178,7 +1178,8 @@ impl FormatEngine<'_> {
     }
 
     fn previous_output_code_ends_assignment(&self) -> bool {
-        self.output.last().is_some_and(|line| {
+        // Blank lines between the `=` and the brace leave the assignment.
+        self.output.last_non_empty_scoped().is_some_and(|line| {
             let code = self.output.code_trimmed_of(line);
             code.ends_with('=')
         })
