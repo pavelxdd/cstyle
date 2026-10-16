@@ -11234,3 +11234,24 @@ fn ratliff_sets_broken_element_rows_of_a_table_in_a_case_body_as_outside_a_switc
         "void f() {\n    switch (op) {\n        default: {\n            int table[][2] = {\n                    { FIRST,  1 },\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n            }\n        case 2:\n            int other[][2] = {\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_case_label_line_leaves_the_label_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        value = 1;\n    /* fall through */ case 2:\n        value = 2;\n        break;\n    /* other */ default:\n        break;\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        case 1:\n            value = 1;\n        /* fall through */ case 2:\n            value = 2;\n            break;\n        /* other */ default:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn gnu_sets_the_case_block_brace_of_a_comment_led_label_under_the_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 1;\n        break;\n    }\n    /*case 2*/ default: {\n        if (ready) {\n            start();\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value = 1;\n            break;\n        }\n        /*case 2*/ default:\n        {\n            if (ready)\n                {\n                    start();\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}

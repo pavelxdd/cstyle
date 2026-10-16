@@ -1439,7 +1439,7 @@ impl<'a> FormatEngine<'a> {
                     .layout
                     .previous_before_comment
                     .unwrap_or(self.layout.previous);
-                self.push_comment(*kind, comment);
+                self.push_comment(*kind, comment, context.token_index);
                 if self.layout.previous == PreviousToken::Other {
                     self.layout.previous_before_comment = Some(before);
                 }

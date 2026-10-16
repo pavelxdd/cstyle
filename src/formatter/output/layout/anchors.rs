@@ -3641,7 +3641,7 @@ impl FormatEngine<'_> {
 
     /// Column of the case label before the one at `first` in the same
     /// switch body, from the line it leads.
-    fn sibling_case_label_column(&self, first: usize) -> Option<usize> {
+    pub(crate) fn sibling_case_label_column(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let is_label = |index: usize| matches!(&tokens[index], Token::Word(word) if matches!(word.as_str(), "case" | "default"));

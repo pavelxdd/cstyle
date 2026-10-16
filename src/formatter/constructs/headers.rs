@@ -1361,7 +1361,14 @@ impl FormatEngine<'_> {
                         * self.options.indent_width
                 }) + self.options.indent_width
             });
-        let line_indent_spaces = attached_closing_indent
+        // A label after the comments leading its line stands where it would
+        // without them; the comments took its output column.
+        let comment_led_label_indent = (matches!(word, "case" | "default")
+            && !self.current_is_blank()
+            && after_leading_comments(&self.current).trimmed().is_empty())
+        .then(|| self.continuation_base_indent() * self.options.indent_width);
+        let line_indent_spaces = comment_led_label_indent
+            .or(attached_closing_indent)
             .or(closed_if_indent)
             .or(open_if_indent)
             .or(inline_header_indent)

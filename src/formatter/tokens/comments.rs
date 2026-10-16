@@ -806,7 +806,7 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn push_comment(&mut self, kind: CommentKind, comment: &str) {
+    pub(crate) fn push_comment(&mut self, kind: CommentKind, comment: &str, index: usize) {
         let line_comment_starts_reordered_brace_body =
             kind == CommentKind::Line && self.comments.line_comment_starts_reordered_brace_body;
         if line_comment_starts_reordered_brace_body {
@@ -817,7 +817,7 @@ impl FormatEngine<'_> {
         } else {
             None
         };
-        let indents = self.comment_indents(kind, comment);
+        let indents = self.comment_indents(kind, comment, index);
         let CommentIndents {
             definition_header: definition_header_comment_indent,
             block_continuation: block_comment_continuation_indent,
@@ -921,7 +921,7 @@ impl FormatEngine<'_> {
         self.push_positioned_comment(kind, comment, &indents);
     }
 
-    fn comment_indents(&self, kind: CommentKind, comment: &str) -> CommentIndents {
+    fn comment_indents(&self, kind: CommentKind, comment: &str, index: usize) -> CommentIndents {
         let function_try_initializer_comment = self.options.break_one_line_statements
             && self
                 .layout
@@ -978,7 +978,7 @@ impl FormatEngine<'_> {
         let ternary_branch_comment_indent_spaces =
             self.ternary_branch_line_comment_indent_spaces(kind, standalone_line_comment);
         let switch_label_block_comment_indent =
-            self.switch_label_block_comment_indent_spaces(kind, comment);
+            self.switch_label_block_comment_indent_spaces(kind, comment, index);
         let case_block_comment_indent =
             self.case_block_comment_indent_spaces(kind, switch_label_block_comment_indent);
         let definition_header_comment_indent = self.definition_header_comment_indent_spaces();
@@ -1716,17 +1716,42 @@ impl FormatEngine<'_> {
         &self,
         kind: CommentKind,
         comment: &str,
+        index: usize,
     ) -> Option<usize> {
+        // A comment leading a label's line stands where the label would.
+        let tokens = &self.tree.tokens;
+        let is_this_comment =
+            matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment);
+        let label = is_this_comment
+            .then(|| {
+                (index + 1..tokens.len()).find(|&at| {
+                    !matches!(
+                        tokens[at],
+                        Token::Whitespace(_) | Token::Comment(CommentKind::Block, _)
+                    )
+                })
+            })
+            .flatten()
+            .filter(|&at| matches!(&tokens[at], Token::Word(word) if word == "case" || word == "default"));
+        if kind == CommentKind::Block
+            && self.current.trimmed().is_empty()
+            && let Some(column) = label.and_then(|label| self.sibling_case_label_column(label))
+        {
+            return Some(column.saturating_sub(
+                self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
+            ));
+        }
         (kind == CommentKind::Block
             && self.current.trimmed().is_empty()
-            && comment.lines().any(|line| {
-                let trimmed = line
-                    .trimmed_start()
-                    .strip_prefix("/*")
-                    .unwrap_or(line.trimmed_start())
-                    .trimmed_start();
-                trimmed.starts_with("case ") || trimmed.starts_with("default:")
-            })
+            && (label.is_some()
+                || comment.lines().any(|line| {
+                    let trimmed = line
+                        .trimmed_start()
+                        .strip_prefix("/*")
+                        .unwrap_or(line.trimmed_start())
+                        .trimmed_start();
+                    trimmed.starts_with("case ") || trimmed.starts_with("default:")
+                }))
             && self
                 .layout
                 .nesting
