@@ -688,10 +688,15 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces =
                     Some(self.layout.indentation.indent() * self.options.indent_width);
             }
+            // A comment leading the line before leads it with no operator.
+            let previous_operator_led = {
+                let trimmed = previous_code.trimmed_start();
+                !trimmed.starts_with("/*")
+                    && !trimmed.starts_with("//")
+                    && trimmed.starts_with_any(b"<>|&+-*/%=!?:,.")
+            };
             if !plain
-                && previous_code
-                    .trimmed_start()
-                    .starts_with_any(b"<>|&+-*/%=!?:,.")
+                && previous_operator_led
                 && previous_code.ends_with('{')
                 && self.current_inline_array_column().is_none()
                 && line
@@ -706,9 +711,7 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.scoped_ternary_continuation_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             }
-            if previous_code
-                .trimmed_start()
-                .starts_with_any(b"<>|&+-*/%=!?:,.")
+            if previous_operator_led
                 && line
                     .trimmed_start()
                     .chars()

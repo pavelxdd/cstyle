@@ -11952,3 +11952,9 @@ fn breaking_return_types_breaks_a_definition_a_conditional_parts_from_its_body()
         "#ifdef FEATURE\nvoid\nf()\n#endif\n{\n    run();\n}\n",
     );
 }
+
+#[test]
+fn a_class_brace_a_comment_leads_opens_its_body_as_any() {
+    let input = "class Item\n/* note */ {\npublic:\n    Item();\n};\n";
+    check(input, &[], input);
+}
