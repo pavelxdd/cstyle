@@ -411,21 +411,7 @@ impl FormatEngine<'_> {
             let base = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
             });
-            if self.options.align_method_colon {
-                if let Some(colon) = objc_method_colon_position(line) {
-                    self.layout.objc.colon_align = Some(base + colon);
-                    self.layout.objc.message_pending_align = false;
-                } else if !self.layout.objc.message_active {
-                    self.layout.objc.message_pending_align = false;
-                }
-            } else {
-                self.layout.objc.message_pending_align = false;
-                self.layout.objc.message_align =
-                    objc_message_following_keyword_column(line).map(|column| base + column);
-                if !self.layout.objc.message_active {
-                    self.layout.objc.message_align = None;
-                }
-            }
+            self.begin_objc_message_alignment(line, base);
         } else if let Some(align) = self.layout.objc.message_align
             && !line_start.starts_with_any(b"{}")
         {
@@ -470,6 +456,26 @@ impl FormatEngine<'_> {
             indent_level,
             exact_indent_spaces,
             restore_message_align,
+        }
+    }
+
+    /// Sets the alignment of a message's rows from the line `line`, set
+    /// at column `base`, that opens it.
+    pub(crate) fn begin_objc_message_alignment(&mut self, line: &str, base: usize) {
+        if self.options.align_method_colon {
+            if let Some(colon) = objc_method_colon_position(line) {
+                self.layout.objc.colon_align = Some(base + colon);
+                self.layout.objc.message_pending_align = false;
+            } else if !self.layout.objc.message_active {
+                self.layout.objc.message_pending_align = false;
+            }
+        } else {
+            self.layout.objc.message_pending_align = false;
+            self.layout.objc.message_align =
+                objc_message_following_keyword_column(line).map(|column| base + column);
+            if !self.layout.objc.message_active {
+                self.layout.objc.message_align = None;
+            }
         }
     }
 

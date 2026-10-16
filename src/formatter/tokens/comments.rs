@@ -517,6 +517,14 @@ impl FormatEngine<'_> {
             // any line.
             if code_follows_comment {
                 self.observe_finished_block_spacing_line(code_ends_statement);
+                // A message the code opens aligns its rows past the comment.
+                if self.layout.objc.message_pending_align {
+                    let last = self.output.len() - 1;
+                    let base = self.output.lead_width(last, self.options.tab_width)
+                        + self.layout.line_adjuster.last_line_case_unindent();
+                    let line = self.output[last].trimmed_start().to_string();
+                    self.begin_objc_message_alignment(&line, base);
+                }
                 // The code sets the body column of a conditional's branch.
                 let last = self.output.len() - 1;
                 let spaces = self.output.lead_width(last, self.options.tab_width);

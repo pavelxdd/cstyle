@@ -11761,3 +11761,13 @@ fn an_operator_led_row_in_parentheses_after_a_blank_line_aligns_in_them() {
         "void f()\n{\n    out << helper(first, (second\n\n                          << third));\n}\n",
     );
 }
+
+#[test]
+fn a_message_a_comment_leads_aligns_its_rows_past_the_comment() {
+    let input = "- (void)update\n{\n    /* note */ [self apply:value\n           with:other];\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "- (void)update\n{\n    /* note */ [self apply:value\n                     with:other];\n}\n",
+    );
+}
