@@ -475,6 +475,7 @@ impl FormatEngine<'_> {
             output_line: self.output.len().saturating_sub(1),
             aggregate_assignment: control_paren_indent.is_some(),
             leveled_literal: false,
+            line_lead: None,
         });
         self.layout
             .continuation_indent
@@ -505,6 +506,7 @@ impl FormatEngine<'_> {
             output_line: self.output.len().saturating_sub(1),
             aggregate_assignment: false,
             leveled_literal: false,
+            line_lead: None,
         });
         self.update_current_brace_indent_columns(
             opening_indent + self.options.indent_width,
@@ -541,6 +543,7 @@ impl FormatEngine<'_> {
             output_line: self.output.len(),
             aggregate_assignment: true,
             leveled_literal: false,
+            line_lead: None,
         });
         self.update_current_brace_indent_columns(opening_indent + 1, opening_indent);
         self.layout.previous = PreviousToken::Other;
@@ -752,6 +755,7 @@ impl FormatEngine<'_> {
             output_line: self.output.len(),
             aggregate_assignment: aggregate_assign,
             leveled_literal,
+            line_lead: (!self.current_is_preindented).then_some(base_indent),
         });
         if self.current.trimmed() == "{" {
             self.update_current_brace_indent_columns(column + self.options.indent_width, column);
@@ -997,6 +1001,28 @@ impl FormatEngine<'_> {
         self.layout.compound_literal.just_closed = closing_compound_literal;
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
+    }
+
+    /// A list's columns move with the line holding its brace when the line
+    /// publishes at another lead than it was laid out with.
+    pub(crate) fn shift_inline_arrays_to_published_line(&mut self, published: usize) {
+        if self.output.len() <= published {
+            return;
+        }
+        let lead = self.output.lead_width(published, self.options.tab_width)
+            + self.layout.line_adjuster.last_line_case_unindent();
+        for frame in &mut self.inline_array.frames {
+            if frame.output_line != published {
+                continue;
+            }
+            if let Some(laid_out) = frame.line_lead.take()
+                && laid_out != lead
+            {
+                let shift = |column: usize| (column + lead).saturating_sub(laid_out);
+                frame.body_column = shift(frame.body_column);
+                frame.brace_column = shift(frame.brace_column);
+            }
+        }
     }
 
     pub(crate) fn current_inline_array_column(&self) -> Option<usize> {
@@ -1601,6 +1627,8 @@ pub(crate) struct InlineArrayFrame {
     /// A compound literal whose rows run in after its brace, which stands
     /// them a level past its statement and closes on a line of its own.
     pub(crate) leveled_literal: bool,
+    /// The lead the brace's line was laid out with, until it publishes.
+    pub(crate) line_lead: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

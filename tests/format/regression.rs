@@ -13230,3 +13230,13 @@ fn a_comment_line_among_the_rows_of_a_run_in_list_stands_at_the_rows() {
     let input = "void f()\n{\n    int b[] = {{1, 2},\n        /* note */\n        3,\n        4, {5},\n        6\n    };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_list_in_a_case_block_keeps_its_columns_where_its_line_stands() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        static const char *names[] = { \"first\", \"second\",\n                                       /* note */\n                                       \"third\", \"fourth\"\n                                     };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            static const char *names[] = { \"first\", \"second\",\n                                           /* note */\n                                           \"third\", \"fourth\"\n                                         };\n            break;\n            }\n        }\n    }\n",
+    );
+}

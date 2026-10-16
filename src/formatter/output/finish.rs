@@ -45,6 +45,7 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.current_is_verbatim) && self.output.len() > published {
             self.output.mark_last_verbatim();
         }
+        self.shift_inline_arrays_to_published_line(published);
         // The code length may have split the line over several.
         if first.is_some()
             && let Some(line) = (published..self.output.len())
