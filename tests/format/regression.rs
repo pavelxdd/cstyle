@@ -12369,3 +12369,12 @@ fn a_body_closer_after_a_trailing_comment_stands_at_its_brace_past_a_conditional
         "void f()\n#ifdef FEATURE\n    {\n#endif\n    count = 1; // note\n    }\n",
     );
 }
+
+#[test]
+fn an_else_a_comment_leads_stands_at_its_if() {
+    check(
+        "void f()\n{\n    if (ready)\n        if (other)\n#ifdef FEATURE\n            { value=0; }\n#endif\n        /* note */ else\n            { result=0; }\n}\n",
+        &["--style=1tbs"],
+        "void f()\n{\n    if (ready)\n        if (other)\n#ifdef FEATURE\n        {\n            value=0;\n        }\n#endif\n        /* note */ else {\n            result=0;\n        }\n}\n",
+    );
+}

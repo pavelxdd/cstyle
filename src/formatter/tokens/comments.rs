@@ -454,12 +454,9 @@ impl FormatEngine<'_> {
                 let code = self.output.code_trimmed_of(line);
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             });
-            // A label the comment leads stands at the labels' column.
-            let leads_label = labels::line_kind(
-                after_leading_comments(&trimmed),
-                &self.options.access_labels,
-            ) == LineKind::Label;
-            if !follows_switch && !leads_label {
+            // A label or an `else` the comment leads keeps its column.
+            let keeps_column = std::mem::take(&mut self.comments.comment_keeps_line_column);
+            if !follows_switch && !keeps_column {
                 if let Some(spaces) = self.split_else_preprocessor_branch_body_indent_spaces() {
                     let prefix = self
                         .options
@@ -854,6 +851,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn push_comment(&mut self, kind: CommentKind, comment: &str, index: usize) {
+        if self.current.trimmed().is_empty() {
+            self.comments.comment_keeps_line_column = false;
+        }
         let line_comment_starts_reordered_brace_body =
             kind == CommentKind::Line && self.comments.line_comment_starts_reordered_brace_body;
         if line_comment_starts_reordered_brace_body {
@@ -1061,7 +1061,10 @@ impl FormatEngine<'_> {
         let label_line = (kind == CommentKind::Block
             && self.current.trimmed().is_empty()
             && matches!(self.tree.tokens.get(index), Some(Token::Comment(_, text)) if text == comment))
-        .then(|| self.user_label_after_comment_indent_spaces(index))
+        .then(|| {
+            self.user_label_after_comment_indent_spaces(index)
+                .or_else(|| self.else_after_comment_indent_spaces(index))
+        })
         .flatten();
         CommentIndents {
             standalone_line_comment,
@@ -1619,6 +1622,7 @@ impl FormatEngine<'_> {
                     .clear_continuation_after_line = Some(spaces);
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
+            self.comments.comment_keeps_line_column = label_line.is_some();
             if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1
@@ -2127,6 +2131,24 @@ impl FormatEngine<'_> {
             })
         })
         .flatten()
+    }
+
+    /// The column of the `if` of the `else` the comment at `index` leads on
+    /// its line.
+    fn else_after_comment_indent_spaces(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let next = (index.checked_add(1)?..tokens.len()).find(|&at| {
+            !matches!(
+                tokens[at],
+                Token::Whitespace(_) | Token::Comment(CommentKind::Block, _)
+            )
+        })?;
+        if !matches!(&tokens[next], Token::Word(word) if word == "else") {
+            return None;
+        }
+        let if_token = self.tree.statements.if_of_else(next)?;
+        let line = self.output.line_with_token(if_token)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// The label column, when the comment at `index` leads a statement
@@ -4116,6 +4138,9 @@ pub(crate) struct CommentState {
     pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
+    /// The comment line was placed at the column of the label or `else` it
+    /// leads.
+    pub(crate) comment_keeps_line_column: bool,
     /// The next comment leads the rest of an opening brace's line into the
     /// body.
     pub(crate) comment_opens_brace_body: bool,
