@@ -2351,7 +2351,19 @@ impl FormatEngine<'_> {
         // A comment split off an initializer's closer stands at the row
         // before it.
         // After an element's closer, it stands at the body of the list.
-        let previous_element_row_indent = previous_line
+        // Directives between the rows stand at no row.
+        let previous_row = leads_closer
+            .then(|| {
+                self.output.scoped_range().rev().find(|&index| {
+                    let trimmed = self.output.trimmed(index);
+                    !trimmed.is_empty()
+                        && !trimmed.starts_with('#')
+                        && self.output.directive_of_continuation(index).is_none()
+                })
+            })
+            .flatten()
+            .map(|index| &self.output[index]);
+        let previous_element_row_indent = previous_row
             .filter(|line| {
                 let code = self.output.code_trimmed_of(line);
                 leads_closer

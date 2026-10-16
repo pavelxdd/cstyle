@@ -11958,3 +11958,13 @@ fn a_class_brace_a_comment_leads_opens_its_body_as_any() {
     let input = "class Item\n/* note */ {\npublic:\n    Item();\n};\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_after_a_conditional_stands_at_its_rows() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4}\n#endif\n    /* note */ };\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4}\n#endif\n        /* note */\n    };\n}\n",
+    );
+}
