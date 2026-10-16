@@ -10107,6 +10107,21 @@ fn a_brace_after_a_comment_leading_its_line_after_an_else_holds_the_else_body() 
     }
 }
 
+// A comment row inside brackets stands at the row it precedes, as inside
+// parentheses.
+#[test]
+fn a_comment_row_inside_brackets_stands_at_the_row_after_it() {
+    let input = "static char name[\n    /* note */\n#ifdef FEATURE\n    LIMIT +\n#endif\n    1];\nvoid f()\n{\n    value = table[\n                /* note */\n                index];\n    int name[\n        /* note */\n        COUNT];\n}\n";
+    check(input, &[], input);
+    // A message's keyword row is no label.
+    let message = "@implementation Item\n- (void)update {\n    [self apply:value\n     /* note */\n           with:other];\n}\n@end\n";
+    check(
+        message,
+        &[],
+        "@implementation Item\n- (void)update {\n    [self apply:value\n          /* note */\n          with:other];\n}\n@end\n",
+    );
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

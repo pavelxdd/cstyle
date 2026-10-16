@@ -3731,12 +3731,14 @@ impl FormatEngine<'_> {
                     && (matches!(&tokens[previous], Token::Operator(operator) if operator == "=")
                         || matches!(&tokens[previous], Token::Word(word) if word == "return"))
             });
-        // A line inside parentheses: comments before it share its level of
-        // the continuation.
-        let in_parens = groups
-            .enclosing(first)
-            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
-            && !matches!(tokens[first], Token::Symbol(')' | '['))
+        // A line inside parentheses or brackets: comments before it share
+        // its level of the continuation.
+        let in_parens = groups.enclosing(first).is_some_and(|group| {
+            matches!(
+                groups.get(group).delimiter,
+                Delimiter::Paren | Delimiter::Bracket
+            )
+        }) && !matches!(tokens[first], Token::Symbol(')' | '['))
             && !tokens[first..]
                 .iter()
                 .take_while(|token| !matches!(token, Token::Newline))
@@ -3809,6 +3811,7 @@ impl FormatEngine<'_> {
             Token::Symbol('{' | '}') => return,
             _ if !is_case_label
                 && !member_continuation
+                && !in_parens
                 && label_column.is_none()
                 && next_code_token(tokens, first + 1)
                     .is_some_and(|next| matches!(tokens[next], Token::Symbol(':'))) =>
