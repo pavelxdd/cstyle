@@ -1997,9 +1997,10 @@ impl FormatEngine<'_> {
                     .is_some_and(|frame| {
                         frame.semantic_kind == BraceSemanticKind::Command
                             && !frame.case_block
-                            && frame.header.as_deref().is_none_or(|header| {
-                                !matches!(header, "case" | "default" | "switch")
-                            })
+                            && frame
+                                .header
+                                .as_deref()
+                                .is_none_or(|header| !matches!(header, "case" | "default"))
                     })
                     && let Some(spaces) = self.closed_block_header_lead()
                 {
