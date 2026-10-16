@@ -11022,3 +11022,23 @@ fn vtk_closes_a_block_a_conditional_splits_in_a_case_block_under_its_brace() {
         "void f(int i)\n{\n    switch (i)\n        {\n        case 1:\n            {\n            if (a)\n                {\n                x();\n#if B\n                }\n            else if (c)\n                {\n                y();\n#endif\n                }\n            else\n                {\n                z();\n                }\n            break;\n            }\n        }\n}\n",
     );
 }
+
+#[test]
+fn vtk_indents_an_assigned_brace_row_in_a_block_its_braces_indent() {
+    let input = "Metrics g =\n    {0, a + b};\nvoid f()\n{\n    {\n        Metrics m =\n            {0, 1};\n    }\n    switch (x) {\n    case 1:\n        Metrics n =\n            {0, 1};\n        break;\n    }\n    while (x) {\n        if (y) {\n            Metrics k =\n                {0, 1};\n        }\n    }\n    Metrics other = {\n        0, a + b\n    };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "Metrics g =\n{0, a + b};\nvoid f()\n{\n        {\n        Metrics m =\n            {0, 1};\n        }\n    switch (x)\n        {\n        case 1:\n            Metrics n =\n                {0, 1};\n            break;\n        }\n    while (x)\n        {\n        if (y)\n            {\n            Metrics k =\n                {0, 1};\n            }\n        }\n    Metrics other =\n        {\n        0, a + b\n        };\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_indents_an_assigned_brace_row_from_a_statement_after_a_case_label() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1:\n        Metrics n =\n            {0, 1};\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            Metrics n =\n                {0, 1};\n            break;\n        }\n    }\n",
+    );
+}

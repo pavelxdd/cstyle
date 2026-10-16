@@ -274,7 +274,7 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| {
-            when(opens_brace && (whitesmith || ratliff), || {
+            when(opens_brace && (whitesmith || ratliff || vtk), || {
                 self.indented_assigned_brace_row_indent(first)
             })
         })
@@ -1895,15 +1895,35 @@ impl FormatEngine<'_> {
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
-    /// Whitesmith and ratliff indent an initializer `{` starting its line
-    /// after an `=` that ends the line before, elements following it or not.
+    /// Whitesmith and ratliff, and vtk within a block, indent an initializer
+    /// `{` starting its line after an `=` that ends the line before,
+    /// elements following it or not.
     #[inline(never)]
     fn indented_assigned_brace_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        if !matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Ratliff
-        ) || !matches!(tokens[first], Token::Symbol('{'))
+        // Vtk indents the braces of blocks within a function body only.
+        let indents_braces = match self.options.brace_style {
+            BraceStyle::Whitesmith | BraceStyle::Ratliff => true,
+            BraceStyle::Vtk => {
+                let groups = &self.tree.groups;
+                groups
+                    .enclosing(first)
+                    .and_then(|group| {
+                        groups
+                            .ancestors(group)
+                            .find(|&id| groups.get(id).delimiter == Delimiter::Brace)
+                    })
+                    .is_some_and(|block| {
+                        matches!(
+                            self.tree.blocks.kind(block),
+                            Some(BlockKind::Control | BlockKind::Block)
+                        )
+                    })
+            }
+            _ => false,
+        };
+        if !indents_braces
+            || !matches!(tokens[first], Token::Symbol('{'))
             || !self
                 .tree
                 .groups
@@ -1920,9 +1940,12 @@ impl FormatEngine<'_> {
         if self.output.line_tokens(assign_line)?.last != assign {
             return None;
         }
-        // The brace stands a level past the statement's first line.
+        // The brace stands a level past the statement's first line, which
+        // a label before the statement does not lead.
         let mut start = assign;
-        while let Some(before) = self.tree.previous_code_token(start) {
+        while !self.tree.statements.starts_block_statement(start)
+            && let Some(before) = self.tree.previous_code_token(start)
+        {
             // Past parens, a struct body the declaration defines and the
             // initializers of declarators before.
             if let Some(group) = self.tree.groups.closed_at(before)
