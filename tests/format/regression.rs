@@ -10199,6 +10199,16 @@ fn an_else_brace_after_a_comment_in_a_directive_split_chain_opens_at_the_else() 
     check(expected, &["--style=1tbs"], expected);
 }
 
+// Ratliff closes a block after headers that conditional branches open
+// alike at the block's own header.
+#[test]
+fn ratliff_closes_a_block_after_branch_alternative_openers_at_its_header() {
+    let input = "void f(void) {\n  for (;;) {\n    for (;;) {\n#ifdef X\n      if (c == 1) {\n#else\n      if (c == 2) {\n#endif\n      }\n    }\n    if (e) {\n    }\n  }\n}\n";
+    let expected = "void f(void) {\n    for (;;) {\n        for (;;) {\n#ifdef X\n            if (c == 1) {\n#else\n            if (c == 2) {\n#endif\n                }\n            }\n        if (e) {\n            }\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

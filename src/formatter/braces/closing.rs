@@ -1098,9 +1098,30 @@ impl FormatEngine<'_> {
         if line.trimmed() != "}" || self.options.brace_style != BraceStyle::Ratliff {
             return None;
         }
-        let (open_spaces, _, open) = self
+        // The tree pairs the closer with its opener across conditional
+        // branches that open alike; the output's brace count does not.
+        let tree_open_line = self
             .output
-            .current_closing_brace_open(self.options.tab_width)?;
+            .pending_tokens()
+            .map(|span| span.first)
+            .filter(|&close| matches!(self.tree.tokens.get(close), Some(Token::Symbol('}'))))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| {
+                self.output
+                    .line_with_token(self.tree.groups.get(group).open)
+            });
+        let (open_spaces, open) = match tree_open_line {
+            Some(index) => (
+                self.output.lead_width(index, self.options.tab_width),
+                self.output.code_trimmed(index),
+            ),
+            None => {
+                let (spaces, _, open) = self
+                    .output
+                    .current_closing_brace_open(self.options.tab_width)?;
+                (spaces, open)
+            }
+        };
         if !self.options.indent_namespaces && is_namespace_or_module_block_header(open) {
             return None;
         }
