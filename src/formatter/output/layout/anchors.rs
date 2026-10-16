@@ -1659,11 +1659,7 @@ impl FormatEngine<'_> {
     fn first_statement_after_case_label_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        if matches!(tokens[first], Token::Symbol('{' | '}'))
-            || self.layout.line_adjuster.total_case_unindent_depth() > 0
-            || self.layout.line_adjuster.next_line_case_unindent_depth() > 0
-            || self.layout.line_adjuster.pending_case_unindent() > 0
-        {
+        if matches!(tokens[first], Token::Symbol('{' | '}')) {
             return None;
         }
         let colon = self.tree.previous_code_token(first)?;
@@ -1698,7 +1694,11 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (1 + self.layout.line_adjuster.pending_case_unindent())
+                    * self.options.indent_width,
+        )
     }
 
     /// A statement after a labeled statement, which links to no sibling,

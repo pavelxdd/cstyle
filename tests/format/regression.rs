@@ -12846,3 +12846,19 @@ fn comments_before_a_declarator_after_a_closed_initializer_share_its_column() {
         "static const struct Item\n    first =\n    {\n    1, 2\n    },\n/* note */\n// note\nsecond =\n    {\n    3, 4\n    };\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_case_label_of_a_switch_in_a_case_block_leaves_it_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}

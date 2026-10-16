@@ -1961,9 +1961,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && let Some(column) = label.and_then(|label| self.sibling_case_label_column(label))
         {
-            return Some(column.saturating_sub(
-                self.layout.line_adjuster.pending_case_unindent() * self.options.indent_width,
-            ));
+            return Some(column);
         }
         (kind == CommentKind::Block
             && self.current.trimmed().is_empty()
