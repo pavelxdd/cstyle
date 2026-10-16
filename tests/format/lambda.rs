@@ -1321,3 +1321,17 @@ fn pico_inline_trailing_return_lambda_preserves_brace_spacing() {
         "int main() { auto f=[x=1](int y)->int{ return x+y; }; }\n",
     );
 }
+
+#[test]
+fn one_line_lambda_body_after_its_parameters_breaks_whatever_their_count() {
+    for parameters in ["()", "(int value)", "(int first, int second)"] {
+        let source = format!("void f()\n{{\n    call([]{parameters} {{ return 1; }});\n}}\n");
+        let expected =
+            format!("void f()\n{{\n    call([]{parameters} {{\n        return 1;\n    }});\n}}\n");
+        assert_eq!(
+            format_exact(&source, &FormatOptions::default()),
+            expected,
+            "{parameters}"
+        );
+    }
+}
