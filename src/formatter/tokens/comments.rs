@@ -799,11 +799,12 @@ impl FormatEngine<'_> {
     }
 
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
-        // A conditional opening after the label leaves the comment in its
-        // body.
+        // Comments or a conditional opening after the label leave the
+        // comment in its body.
         let line = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
             !trimmed.is_empty()
+                && (!is_comment_only_line(trimmed) || holds_code_after_leading_comments(trimmed))
                 && !matches!(
                     preprocessor_directive(trimmed),
                     Some("if" | "ifdef" | "ifndef")

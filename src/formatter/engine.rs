@@ -1647,7 +1647,7 @@ impl<'a> FormatEngine<'a> {
     /// The current line's code before its trailing comment, trimmed.
     /// Whether the current line holds comments and, before them, nothing
     /// or a label unless `comments_only`.
-    fn current_holds_comments_after_label(&self, comments_only: bool) -> bool {
+    pub(crate) fn current_holds_comments_after_label(&self, comments_only: bool) -> bool {
         if !self.current.holds_comment_opener() {
             return false;
         }

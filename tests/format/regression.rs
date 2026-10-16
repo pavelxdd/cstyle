@@ -11666,3 +11666,28 @@ fn a_kept_label_line_with_a_comment_after_the_label_stands_at_the_label_column()
         "void f() {\n    value = 1;\nagain: value = 2;\nretry: /* c */ value = 2; }\n",
     );
 }
+
+#[test]
+fn a_comment_led_statement_after_comments_after_a_case_label_stands_in_its_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: break;\n    case 2:\n        // line\n        /* note */ break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--keep-one-line-statements"],
+        "void f() {\n    switch (op) {\n        case 1: break;\n        case 2:\n            // line\n            /* note */ break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_kept_one_line_block_after_a_comment_after_a_case_label_takes_a_line_of_its_own() {
+    let input = "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op) {\n    case 3: { value = 0; }\n    case 4: /* a */ { value = 0; }\n    case 5: /* a */ {\n        value = 0;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op) {\n    case 3:\n    { value = 0; }\n    case 4: /* a */\n    { value = 0; }\n    case 5: { /* a */\n        value = 0;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op)\n    {\n    case 3:\n    { value = 0; }\n    case 4: /* a */\n    { value = 0; }\n    case 5: /* a */\n    {\n        value = 0;\n    }\n    }\n}\n",
+    );
+}

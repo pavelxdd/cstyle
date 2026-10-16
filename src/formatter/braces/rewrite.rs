@@ -1756,7 +1756,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if self.previous_was_newline || source_separate_macro_block {
+        // A block kept on its line stands as a statement after a label.
+        if self.previous_was_newline
+            || source_separate_macro_block
+            || std::mem::take(&mut self.statement_after_label_pending)
+                && self.current_holds_comments_after_label(false)
+        {
             self.finish_line();
         }
         // A statement other than a label in a switch stands in a case body.
