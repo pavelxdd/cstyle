@@ -2380,6 +2380,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     owned_tokens: Vec<Token>,
     attach_added_braces: bool,
     attach_closing_brace: bool,
+    keep_one_line_blocks: bool,
     comment_gap: usize,
 ) -> AddedBraces {
     let tokens = owned_tokens.as_slice();
@@ -2416,6 +2417,15 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             continue;
         };
         if open_insert >= close_insert {
+            continue;
+        }
+        // A statement a comment leads on its line takes braces on that line,
+        // which a kept one-line block keeps there.
+        if keep_one_line_blocks
+            && tokens[line_bounds(tokens, open_insert).0..open_insert]
+                .iter()
+                .any(|token| matches!(token, Token::Comment(..)))
+        {
             continue;
         }
         if attach_added_braces
@@ -3605,7 +3615,7 @@ mod tests {
         );
 
         assert_eq!(
-            add_marked_cross_line_statement_braces(tokens.clone(), true, false, 4).tokens,
+            add_marked_cross_line_statement_braces(tokens.clone(), true, false, false, 4).tokens,
             tokens
         );
     }

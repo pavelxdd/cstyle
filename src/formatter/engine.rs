@@ -633,6 +633,7 @@ impl<'a> FormatEngine<'a> {
                     self.options.brace_style,
                     BraceStyle::Pico | BraceStyle::Lisp
                 ),
+                !self.options.break_one_line_blocks,
                 self.options.indent_width,
             );
             self.added_closing_braces = added.closers;

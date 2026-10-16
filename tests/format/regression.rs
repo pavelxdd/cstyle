@@ -9993,10 +9993,9 @@ fn added_braces_open_after_all_comments_leading_the_statement_line() {
 // Pico gives a block added after a comment leading the statement's line the
 // run-in shape of its other added blocks.
 #[test]
-fn pico_runs_a_statement_into_a_brace_added_after_a_comment_leading_its_line() {
+fn pico_keeps_a_block_added_after_a_comment_leading_its_line_on_that_line() {
     let input = "void f()\n{\n    if (b)\n        /* c */ x();\n    if (b)\n        x();\n}\n";
-    let expected =
-        "void f()\n{   if (b)\n        /* c */\n    {   x(); }\n    if (b)\n    {   x(); } }\n";
+    let expected = "void f()\n{   if (b)\n        /* c */ { x(); }\n    if (b)\n    {   x(); } }\n";
     check(input, &["-j", "--style=pico"], expected);
     check(expected, &["-j", "--style=pico"], expected);
 }
@@ -10648,4 +10647,26 @@ fn break_blocks_pads_after_a_one_line_block_on_a_line_a_comment_leads() {
     let args = ["--style=kr", "--break-blocks", "--add-one-line-braces"];
     check(input, &args, expected);
     check(expected, &args, expected);
+}
+
+#[test]
+fn kept_one_line_blocks_take_braces_added_after_a_comment_leading_the_statement_line() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other(); // tail\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+        (
+            &["--style=allman", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+        (
+            &["--style=pico", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{   if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
 }
