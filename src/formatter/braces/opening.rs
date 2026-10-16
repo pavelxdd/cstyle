@@ -1446,8 +1446,25 @@ impl FormatEngine<'_> {
             });
         let else_body_brace = brace_header == Some("else") || else_keyword.is_some();
         // That body opens at the level of the else's line, which a chain
-        // nested in an outer `else` sets past the indentation.
+        // nested in an outer `else` by a comment sets past the indentation.
+        let nested_by_comment = |keyword: usize| {
+            let tokens = &self.tree.tokens;
+            self.tree
+                .statements
+                .if_of_else(keyword)
+                .and_then(|if_keyword| {
+                    let before = self.tree.previous_code_token(if_keyword)?;
+                    Some((before, if_keyword))
+                })
+                .is_some_and(|(before, if_keyword)| {
+                    matches!(&tokens[before], Token::Word(word) if word == "else")
+                        && tokens[before..if_keyword]
+                            .iter()
+                            .any(|token| matches!(token, Token::Comment(..)))
+                })
+        };
         let else_line_level = else_keyword
+            .filter(|&keyword| nested_by_comment(keyword))
             .filter(|&keyword| {
                 let between = &self.tree.tokens[keyword + 1..];
                 let between = &between[..between

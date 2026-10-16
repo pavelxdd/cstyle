@@ -10189,6 +10189,16 @@ fn a_declarator_after_a_nested_body_closer_stands_at_its_member() {
     }
 }
 
+// The brace added after an else and a comment opens at the else's own level
+// in an else chain a directive split.
+#[test]
+fn an_else_brace_after_a_comment_in_a_directive_split_chain_opens_at_the_else() {
+    let input = "int f(void)\n{\n#ifdef FEATURE\n  if(*value == 1) {\n    first();\n  }\n  else\n#endif\n    if(*value == 2) {\n      second();\n    }\n    else {\n      if(end) {\n        third();\n      }\n      else\n        /* note */\n        size = 4;\n    }\n  return 0;\n}\n";
+    let expected = "int f(void)\n{\n#ifdef FEATURE\n    if(*value == 1) {\n        first();\n    } else\n#endif\n        if(*value == 2) {\n            second();\n        } else {\n            if(end) {\n                third();\n            } else\n                /* note */\n            {\n                size = 4;\n            }\n        }\n    return 0;\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]
