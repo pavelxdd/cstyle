@@ -11895,3 +11895,13 @@ fn a_one_line_initializer_after_a_commented_assignment_keeps_its_line() {
         "void f()\n{\n    struct Item item = /* note */\n    { 1, 2 };\n}\n",
     );
 }
+
+#[test]
+fn a_template_head_a_comment_leads_realigns_its_parameters_past_the_comment() {
+    let input = "template <typename First,\n     typename Second>\nclass Pair\n{\n};\n/* note */ template <typename First,\n     typename Second>\nclass Other\n{\n};\n/* note */ template <typename First,\n          typename Second>\nclass Last\n{\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "template <typename First,\n          typename Second>\nclass Pair\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Other\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Last\n{\n};\n",
+    );
+}

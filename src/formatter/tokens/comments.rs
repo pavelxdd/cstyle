@@ -517,6 +517,9 @@ impl FormatEngine<'_> {
             // any line.
             if code_follows_comment {
                 self.observe_finished_block_spacing_line(code_ends_statement);
+                // A template head after the comment opens its parameters.
+                let published = self.output[self.output.len() - 1].clone();
+                self.observe_template_declaration_line(&LineView::new(&published));
                 // A message the code opens aligns its rows past the comment.
                 if self.layout.objc.message_pending_align {
                     let last = self.output.len() - 1;
