@@ -179,8 +179,9 @@ pub(crate) fn access_label_body_indent_spaces(
     }
     let modifier_indent_applies =
         matches!(enclosing_brace, Some(BraceType::Class | BraceType::Struct));
+    // A label half a level in leaves the members the rest of the level.
     let delta = if options.indent_modifiers && !options.indent_classes && modifier_indent_applies {
-        options.indent_width / 2
+        options.indent_width - options.indent_width / 2
     } else {
         options.indent_width
     };

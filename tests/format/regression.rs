@@ -10725,3 +10725,23 @@ fn horstmann_runs_an_access_label_in_at_its_column_whatever_the_gap() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn indented_access_labels_leave_the_members_at_the_class_level_with_an_odd_indent() {
+    let input =
+        "class Widget\n{\npublic:\n    int a;\n    void run()\n    {\n        a = 1;\n    }\n};\n";
+    for (indent, expected) in [
+        (
+            "--indent=spaces=3",
+            "class Widget\n{\n public:\n   int a;\n   void run()\n   {\n      a = 1;\n   }\n};\n",
+        ),
+        (
+            "--indent=spaces=5",
+            "class Widget\n{\n  public:\n     int a;\n     void run()\n     {\n          a = 1;\n     }\n};\n",
+        ),
+    ] {
+        let args = ["--style=allman", "--indent-modifiers", indent];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
