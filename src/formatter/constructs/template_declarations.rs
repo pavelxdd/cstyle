@@ -87,17 +87,17 @@ pub(crate) fn template_continuation_indent_spaces(
         return template_continuation_indent_spaces(&masked, angle_step);
     }
     let trimmed = line.trimmed_start();
-    if !trimmed.starts_with("template") || angle_depth_delta(trimmed) <= 0 {
+    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+    if !trimmed.starts_with("template") || angle_depth_delta(code) <= 0 {
         return None;
     }
-    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
     if (code.ends_with("||") || code.ends_with("&&"))
         && let Some(open) = unmatched_open_paren_column(code)
     {
         return Some(open + 1);
     }
     let mut stack = Vec::new();
-    for (column, ch) in angle_chars(line) {
+    for (column, ch) in angle_chars(code) {
         if ch == '<' {
             stack.push(column);
         } else {
@@ -294,8 +294,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_template_declaration_line(&mut self, line: &LineView<'_>) {
-        // Comments leading the line keep the columns of the head after them.
-        let code = after_leading_comments(line);
+        // Comments leading the line keep the columns of the head after them;
+        // a comment after its code takes no part in it.
+        let line = LineView::new(&line[..trailing_comment_split_limit(line)]);
+        let code = after_leading_comments(&line);
         let masked;
         let line = if code.len() < line.trimmed_start().len() && !code.is_empty() {
             masked = format!(

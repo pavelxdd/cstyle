@@ -12888,3 +12888,13 @@ fn a_comment_leading_the_first_case_label_of_indented_switch_braces_leaves_it_at
         "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n}\n",
     );
 }
+
+#[test]
+fn comments_in_a_template_head_over_lines_leave_its_rows_and_its_end_as_without_them() {
+    let expected = "template <typename First,\n          typename Second> /* note */\nclass Pair\n{\n    First first;\n};\n";
+    check(expected, &["--style=gnu"], expected);
+    let line_comment = expected.replace("/* note */", "// note");
+    check(&line_comment, &["--style=gnu"], &line_comment);
+    let angle_comment = "template <typename First, /* a < b */\n          typename Second>\nclass Pair\n{\n    First first;\n};\n";
+    check(angle_comment, &["--style=gnu"], angle_comment);
+}
