@@ -6363,6 +6363,39 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         let block = groups.closed_at(first)?;
         let open = groups.get(block).open;
+        // An initializer's closer leaves the comments before it at its body:
+        // a level past its statement for each brace from the outermost in.
+        if self.tree.blocks.kind(block) == Some(BlockKind::Initializer) {
+            // Elements run on from the brace line align the comments with
+            // them instead.
+            let element = next_code_token(tokens, open + 1).filter(|&element| element != first)?;
+            let element_line = self.output.line_with_token(element)?;
+            if self.output.line_tokens(element_line)?.first != element {
+                return None;
+            }
+            let mut outermost = open;
+            let mut levels = 1;
+            while let Some(parent) = groups
+                .enclosing(outermost)
+                .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            {
+                outermost = groups.get(parent).open;
+                levels += 1;
+            }
+            let start = groups
+                .members_before(groups.enclosing(outermost), outermost)
+                .filter(|&index| is_code_token(&tokens[index]))
+                .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}' | ':')))
+                .last()?;
+            let line = self.output.line_with_token(start)?;
+            if self.output.line_tokens(line)?.first != start {
+                return None;
+            }
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + levels * self.options.indent_width,
+            );
+        }
         if self.tree.previous_code_token(first) != Some(open) {
             // A switch run in after an `else` owns its body as any does.
             let is_switch =

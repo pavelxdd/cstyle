@@ -12513,3 +12513,12 @@ fn a_message_argument_after_a_trailing_block_comment_aligns_its_colon() {
     let input = "- (void)update:(int)value {\n    [self apply:value /* note */\n          with:other];\n}\n";
     check(input, &["--style=java"], input);
 }
+
+#[test]
+fn a_comment_before_a_nested_element_closer_stands_at_its_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n            // note\n        }, {\n            .value = 2,\n            /* note */\n        }\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=mozilla"], input);
+    let after_label = "void f()\n{\n    switch (kind) {\n    case 1:\n        int list[] = { {\n                1,\n                // note\n            }\n        };\n    }\n}\n";
+    check(after_label, &["--style=kr"], after_label);
+}
