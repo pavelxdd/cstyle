@@ -13246,3 +13246,9 @@ fn a_comment_led_row_after_a_comment_line_in_a_continuation_stays_in_it() {
     let input = "void f()\n{\n    /* note */ return first ||\n                      /* note */\n                      /* c */ second;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_line_in_a_subscript_continued_in_a_condition_stands_at_its_rows() {
+    let input = "void f()\n{\n    if (table[first +\n              /* note */\n              second] && other) {\n        value=0;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

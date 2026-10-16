@@ -2580,10 +2580,17 @@ impl FormatEngine<'_> {
                 && previous_indent <= body_indent)
                 .then_some(previous_indent)
         });
+        // After an operator ending its line, the comment stands where the
+        // row after it continues.
         let previous_operator_indent = previous_line.and_then(|line| {
             let head = line.trimmed_end();
             (head_ends_binary_operator(head) || head_ends_assignment_operator(head))
-                .then(|| self.layout.nesting.current_continuation_indent_spaces())
+                .then(|| {
+                    self.layout
+                        .continuation_indent
+                        .next_line_indent_spaces
+                        .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
+                })
                 .flatten()
         });
         let previous_opening_body_indent = previous_line.and_then(|line| {
