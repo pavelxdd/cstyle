@@ -12276,3 +12276,12 @@ fn a_comment_before_a_broken_initializer_brace_stands_at_the_statement() {
         "void f()\n{\n    struct Item item =\n    // note\n    {\n        1, 2\n    };\n    struct Item other =\n    /* note */\n    {\n        1, 2\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_comment_before_a_nested_braceless_else_stands_at_the_else() {
+    check(
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n    // note\n        else\n            result=0;\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        // note\n        else\n            result=0;\n}\n",
+    );
+}
