@@ -454,7 +454,12 @@ impl FormatEngine<'_> {
                 let code = self.output.code_trimmed_of(line);
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             });
-            if !follows_switch {
+            // A label the comment leads stands at the labels' column.
+            let leads_label = labels::line_kind(
+                after_leading_comments(&trimmed),
+                &self.options.access_labels,
+            ) == LineKind::Label;
+            if !follows_switch && !leads_label {
                 if let Some(spaces) = self.split_else_preprocessor_branch_body_indent_spaces() {
                     let prefix = self
                         .options

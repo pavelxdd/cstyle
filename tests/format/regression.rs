@@ -12285,3 +12285,12 @@ fn a_comment_before_a_nested_braceless_else_stands_at_the_else() {
         "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        // note\n        else\n            result=0;\n}\n",
     );
 }
+
+#[test]
+fn a_label_a_comment_leads_after_a_directive_stands_at_the_label_column() {
+    check(
+        "void f()\n{\n    switch (state) {\n#ifdef X\n#endif\n    /* note */ retry:\n    case 1:\n        value = 1;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n#ifdef X\n#endif\n/* note */ retry:\n    case 1:\n        value = 1;\n    }\n}\n",
+    );
+}
