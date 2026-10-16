@@ -12522,3 +12522,9 @@ fn a_comment_before_a_nested_element_closer_stands_at_its_rows() {
     let after_label = "void f()\n{\n    switch (kind) {\n    case 1:\n        int list[] = { {\n                1,\n                // note\n            }\n        };\n    }\n}\n";
     check(after_label, &["--style=kr"], after_label);
 }
+
+#[test]
+fn a_comment_before_the_closer_of_a_list_of_nested_elements_stands_at_its_body() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n        // note\n    };\n    int table[][2] = { { 1, 2 },\n        { 3, 4 },\n        // note\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}

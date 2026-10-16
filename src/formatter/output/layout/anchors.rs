@@ -6366,11 +6366,13 @@ impl FormatEngine<'_> {
         // An initializer's closer leaves the comments before it at its body:
         // a level past its statement for each brace from the outermost in.
         if self.tree.blocks.kind(block) == Some(BlockKind::Initializer) {
-            // Elements run on from the brace line align the comments with
+            // Values run on from the brace line align the comments with
             // them instead.
             let element = next_code_token(tokens, open + 1).filter(|&element| element != first)?;
             let element_line = self.output.line_with_token(element)?;
-            if self.output.line_tokens(element_line)?.first != element {
+            if self.output.line_tokens(element_line)?.first != element
+                && !matches!(tokens[element], Token::Symbol('{'))
+            {
                 return None;
             }
             let mut outermost = open;
