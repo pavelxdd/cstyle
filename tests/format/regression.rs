@@ -9898,6 +9898,16 @@ fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
     }
 }
 
+// Pico keeps a bare one-line block whole as it keeps a header's, the way
+// styles keeping one-line blocks do.
+#[test]
+fn pico_keeps_a_bare_one_line_block_as_it_keeps_a_headers() {
+    let input = "void f()\n{\n    value = 1;\n    { value = 0; }\n    if (ready) { value = 2; }\n    { value = 3; } more();\n}\n";
+    let expected = "void f()\n{   value = 1;\n    { value = 0; }\n    if (ready) { value = 2; }\n    { value = 3; } more(); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
 #[test]
 fn an_element_opening_a_preprocessor_branch_after_one_without_a_comma_stands_with_the_rows() {
     let file_scope =
