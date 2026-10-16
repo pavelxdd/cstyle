@@ -842,6 +842,8 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trimmed().is_empty())
             && self.output.iter().any(|line| !line.trimmed().is_empty())
             && !self.previous_code_ends_statement()
+            // A stream's row aligns in its chain past the blank line.
+            && self.stream_after_closed_or_inline_row_indent_spaces(line).is_none()
             // A row within parentheses aligns in them past the blank line.
             && !self.output.pending_tokens().is_some_and(|span| {
                 self.tree.groups.enclosing(span.first).is_some_and(|group| {

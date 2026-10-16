@@ -11905,3 +11905,9 @@ fn a_template_head_a_comment_leads_realigns_its_parameters_past_the_comment() {
         "template <typename First,\n          typename Second>\nclass Pair\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Other\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Last\n{\n};\n",
     );
 }
+
+#[test]
+fn a_stream_row_after_a_blank_line_aligns_in_its_chain() {
+    let input = "void f()\n{\n    std::cout << first\n\n              << second << std::endl;\n}\n";
+    check(input, &["--style=kr"], input);
+}
