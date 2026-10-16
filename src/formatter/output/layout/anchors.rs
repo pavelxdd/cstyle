@@ -6330,7 +6330,10 @@ impl FormatEngine<'_> {
         }
         let width = self.options.indent_width;
         let brace_line = self.output.line_with_token(open)?;
-        let anchor = if self.output.line_tokens(brace_line)?.first == open {
+        // A comment leading the brace's line leaves the brace no line of its own.
+        let anchor = if self.output.line_tokens(brace_line)?.first == open
+            && self.output.trimmed(brace_line).starts_with('{')
+        {
             BodyAnchor::BraceLine(self.output.lead_width(brace_line, self.options.tab_width))
         } else {
             let mut header = self.tree.blocks.owner(block);

@@ -10084,6 +10084,29 @@ fn an_else_broken_off_an_added_closer_keeps_its_comment_column() {
     );
 }
 
+// A brace after a comment that leads its line takes the body of its header,
+// as a brace leading a line after that comment does.
+#[test]
+fn a_brace_after_a_comment_leading_its_line_after_an_else_holds_the_else_body() {
+    let input = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        /* note */{\n        y();\n    }\n    z();\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, input);
+    }
+    // An else in an `if` a comment after an outer `else` nests closes its
+    // block at its own line.
+    let nested = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n    /* c */\n    if (b) {\n        y();\n    } else\n\n    /* error */{\n        z();\n    }\n    w();\n}\n";
+    let attached = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        /* c */\n        if (b) {\n            y();\n        } else\n\n            /* error */{\n            z();\n        }\n    w();\n}\n";
+    let broken = "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else\n\n        /* c */\n        if (b)\n        {\n            y();\n        }\n        else\n\n            /* error */\n        {\n            z();\n        }\n    w();\n}\n";
+    for (args, expected) in [
+        (&[][..], attached),
+        (&["--style=kr"][..], attached),
+        (&["--style=allman"][..], broken),
+    ] {
+        check(nested, args, expected);
+        check(expected, args, expected);
+    }
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

@@ -1437,14 +1437,45 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
         // A brace after an `else` and a comment is the else's own body.
-        let else_body_brace = brace_header == Some("else")
-            || self
-                .current
-                .active_token()
-                .and_then(|brace| self.tree.previous_code_token(brace))
-                .is_some_and(|previous| {
-                    matches!(&self.tree.tokens[previous], Token::Word(word) if word == "else")
-                });
+        let else_keyword = self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .filter(|&previous| {
+                matches!(&self.tree.tokens[previous], Token::Word(word) if word == "else")
+            });
+        let else_body_brace = brace_header == Some("else") || else_keyword.is_some();
+        // That body opens at the level of the else's line, which a chain
+        // nested in an outer `else` sets past the indentation.
+        let else_line_level = else_keyword
+            .filter(|&keyword| {
+                let between = &self.tree.tokens[keyword + 1..];
+                let between = &between[..between
+                    .iter()
+                    .position(|token| matches!(token, Token::Symbol('{')))
+                    .unwrap_or(0)];
+                between
+                    .iter()
+                    .any(|token| matches!(token, Token::Comment(..)))
+                    && !between
+                        .iter()
+                        .any(|token| matches!(token, Token::Preprocessor(_)))
+            })
+            .and_then(|keyword| self.output.line_with_token(keyword))
+            .map(|line| {
+                self.output.lead_width(line, self.options.tab_width) / self.options.indent_width
+            });
+        if let Some(level) = else_line_level
+            && brace_type == BraceType::Command
+        {
+            self.layout.pending_braceless_block_bias = None;
+            let delta = level.saturating_sub(
+                self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal),
+            );
+            if delta > 0 {
+                self.layout.indentation.enter_braceless_block(delta);
+            }
+        }
         if let Some(level) = self.layout.pending_braceless_block_bias.take()
             && brace_type == BraceType::Command
             && !else_body_brace
