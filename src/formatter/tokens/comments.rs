@@ -181,6 +181,9 @@ impl FormatEngine<'_> {
         if self.take_block_spacing_blank(&line) {
             self.push_empty_line();
         }
+        if !line.trimmed().is_empty() {
+            self.preprocessor.last_output_was_preprocessor = false;
+        }
         // A file scope block astyle indents sets each of its rows at the
         // block's level.
         let line = if self.preprocessor.group_blocks.contains(&true) && !line.trimmed().is_empty() {

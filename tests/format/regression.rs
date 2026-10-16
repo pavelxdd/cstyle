@@ -12537,3 +12537,13 @@ fn a_lambda_argument_past_a_directive_stands_as_one_past_a_comma() {
         "void f()\n{\n    std::sort(items.begin(), items.end(),\n#ifdef FEATURE\n    [](const Item &first, const Item &second) {\n#endif\n        return first.value < second.value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn a_header_after_a_brace_a_comment_leads_past_a_directive_gets_no_blank_line() {
+    let input = "void f()\n{\n#if FEATURE\n    if( ready ) {\n        run();\n    } else\n#endif\n        /*if( other )*/{\n        if( value==0 ) {\n            run();\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=java", "--break-blocks"],
+        "void f() {\n#if FEATURE\n\n    if( ready ) {\n        run();\n    } else\n#endif\n        /*if( other )*/{\n        if( value==0 ) {\n            run();\n        }\n    }\n}\n",
+    );
+}
