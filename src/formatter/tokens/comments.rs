@@ -452,6 +452,7 @@ impl FormatEngine<'_> {
             });
         let line = self.take_current();
         let mut trimmed = line.trimmed_end().to_string();
+        let placed_width = leading_visual_width(&trimmed, self.options.tab_width);
         if trimmed.trimmed_start().starts_with("/*") {
             let follows_switch = self.output.last_non_empty_scoped().is_some_and(|line| {
                 let code = self.output.code_trimmed_of(line);
@@ -481,6 +482,12 @@ impl FormatEngine<'_> {
                     trimmed = format!("{prefix}{}", trimmed.trimmed_start());
                 }
             }
+        }
+        // A row set to follow the comment follows it where it moved.
+        let continuation = &mut self.layout.continuation_indent;
+        if continuation.next_line_indent_spaces == Some(placed_width) {
+            continuation.next_line_indent_spaces =
+                Some(leading_visual_width(&trimmed, self.options.tab_width));
         }
         // Code after the comment that ends a statement or opens a block
         // leaves no column for the next line.

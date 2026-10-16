@@ -12836,3 +12836,13 @@ fn a_case_label_a_comment_leads_after_a_user_label_stands_at_the_labels() {
         "void f()\n{\n    switch (state) {\nretry:\n    /* note */ case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n",
     );
 }
+
+#[test]
+fn comments_before_a_declarator_after_a_closed_initializer_share_its_column() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    },\n    /* note */\n    // note\n    second = {\n        3, 4\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item\n    first =\n    {\n    1, 2\n    },\n/* note */\n// note\nsecond =\n    {\n    3, 4\n    };\n",
+    );
+}
