@@ -10966,3 +10966,24 @@ fn break_blocks_carries_a_header_block_through_bare_blocks_after_it() {
         "void f()\n{\n    while (ready) { value=0; }\n\n    { value = 0; }\n\n    { value = 1; }\n\n    other();\n}\n",
     );
 }
+
+#[test]
+fn a_space_pico_sets_in_an_element_row_a_brace_runs_into_takes_from_its_comment_gap() {
+    let narrow = "static const Node dummy = {\n  {{NULL}, EMPTY,  /* value */\n   DEADKEY, 0, {NULL}}  /* key */\n};\n";
+    let wide = "static const Node dummy = {\n  {{NULL}, EMPTY,     /* value */\n   DEADKEY, 0, {NULL}}  /* key */\n};\n";
+    check(
+        narrow,
+        &["--style=pico"],
+        "static const Node dummy = {\n    {   {NULL }, EMPTY, /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+    );
+    check(
+        wide,
+        &["--style=pico"],
+        "static const Node dummy = {\n    {   {NULL }, EMPTY,    /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+    );
+    check(
+        wide,
+        &["--style=kr"],
+        "static const Node dummy = {\n    {   {NULL}, EMPTY,     /* value */\n        DEADKEY, 0, {NULL}\n    }  /* key */\n};\n",
+    );
+}

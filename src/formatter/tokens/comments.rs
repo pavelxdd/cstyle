@@ -3491,14 +3491,37 @@ impl FormatEngine<'_> {
             self.current.push_str(&gap);
             return;
         }
-        // A row a brace runs into keeps its gap; padding a row moves its
-        // comment no further.
+        // A row a brace runs into keeps its gap but for what padding its
+        // code took; the fill after the brace is no padding.
         if kind == CommentKind::Block
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             && self.current.trimmed_start().starts_with('{')
             && self.comment_follows_open_source_line_brace()
         {
-            self.current.push_str(&gap);
+            let padding = (!gap.contains('\t'))
+                .then(|| {
+                    let first = self.current.tokens()?.first;
+                    if !matches!(self.tree.tokens.get(first), Some(Token::Symbol('{'))) {
+                        return None;
+                    }
+                    let source_fill = match self.tree.tokens.get(first + 1) {
+                        Some(Token::Whitespace(space)) => space.chars().count(),
+                        _ => 0,
+                    };
+                    let fill = self.current.trimmed_start()[1..]
+                        .chars()
+                        .take_while(|ch| *ch == ' ')
+                        .count();
+                    Some(self.current_segment_growth()? - fill as isize + source_fill as isize)
+                })
+                .flatten()
+                .unwrap_or(0);
+            let width = (gap.chars().count() as isize - padding).max(1) as usize;
+            if padding == 0 {
+                self.current.push_str(&gap);
+            } else {
+                self.current.push_str(&" ".repeat(width));
+            }
             return;
         }
         // A statement broken off its header's line keeps the gap before its
