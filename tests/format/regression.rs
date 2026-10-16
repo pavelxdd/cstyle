@@ -12649,3 +12649,12 @@ fn a_declarator_split_from_an_aggregate_type_a_comment_leads_continues() {
     let input = "void f()\n{\n    /* note */ static const struct Item\n        first = 1;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_statement_a_comment_leads_after_a_run_in_case_block_closer_stands_as_a_comment_line() {
+    check(
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0; }\n    /* note */\n    break;\n    case 2: {\n        value=0; }\n    /* note */ break; }\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; }\n        /* note */\n    break;\n    case 2: {\n        value=0; }\n        /* note */ break; } }\n",
+    );
+}
