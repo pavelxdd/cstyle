@@ -546,7 +546,11 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
         } else if let Some(column) = closing_frame_indent {
-            self.layout.continuation_indent.set_next_line_spaces(column);
+            // The frame holds the column as published, which case unindents
+            // already moved.
+            self.layout
+                .continuation_indent
+                .set_next_line_spaces(column + self.case_unindent_spaces());
         }
     }
 

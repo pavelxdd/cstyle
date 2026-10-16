@@ -11012,3 +11012,13 @@ fn pico_attaching_closing_while_attaches_a_while_on_its_own_source_line_as_other
         "void f() {\n    do {\n        value=0; } while (ready);\n    do {\n        value=1; } while (ready); }\n",
     );
 }
+
+#[test]
+fn vtk_closes_a_block_a_conditional_splits_in_a_case_block_under_its_brace() {
+    let input = "void f(int i)\n{\n    switch (i) {\n    case 1: {\n        if (a) {\n            x();\n#if B\n        } else if (c) {\n            y();\n#endif\n        } else {\n            z();\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(int i)\n{\n    switch (i)\n        {\n        case 1:\n            {\n            if (a)\n                {\n                x();\n#if B\n                }\n            else if (c)\n                {\n                y();\n#endif\n                }\n            else\n                {\n                z();\n                }\n            break;\n            }\n        }\n}\n",
+    );
+}
