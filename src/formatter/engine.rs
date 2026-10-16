@@ -32,7 +32,7 @@ use crate::formatter::state::{
     CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState, next_line,
 };
 use crate::formatter::structure::SourceTree;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::syntax::language::{
     is_numeric_variable_word, is_type_like_pointer_word, is_unpad_kept_type_word,
 };
@@ -861,8 +861,17 @@ impl<'a> FormatEngine<'a> {
             matches!(following, Some(Token::Word(word)) if word == "else");
         self.next_line.leads_with_open_paren = matches!(following, Some(Token::Symbol('(')));
         self.next_line.leads_with_comment = matches!(following, Some(Token::Comment(..)));
+        // Comments before the next line's code leave its shape to the code.
+        let (code_following, code_after_following) =
+            if matches!(following, Some(Token::Comment(..))) {
+                let first = next_code_token(tokens, index + 1);
+                let second = first.and_then(|first| next_code_token(tokens, first + 1));
+                (first.map(|i| &tokens[i]), second.map(|i| &tokens[i]))
+            } else {
+                (following, after_following)
+            };
         self.next_line.word_followed_by_open_paren = matches!(
-            (following, after_following),
+            (code_following, code_after_following),
             (Some(Token::Word(_)), Some(Token::Symbol('(')))
         );
         self.next_line.leads_with_noexcept = matches!(

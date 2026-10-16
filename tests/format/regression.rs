@@ -11711,3 +11711,10 @@ fn a_comment_split_off_an_initializer_closer_stands_at_the_row_before_it() {
         "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n        /* note */\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_comment_between_a_split_return_type_and_its_name_leaves_the_name_unindented() {
+    let input = "static struct Item *\n// note\nmake(int value);\nstatic struct Item *\n/* note */\nmake(int value);\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=ratliff"], input);
+}
