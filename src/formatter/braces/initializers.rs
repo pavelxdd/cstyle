@@ -876,10 +876,16 @@ impl FormatEngine<'_> {
         if forced_break {
             self.layout.compound_literal.forced_break_depths.pop();
         }
+        // Run-in closers stay after a block comment their line holds.
+        let run_in_after_comment = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && self.current.trimmed_end().ends_with("*/");
         // An inner closer the line holds stands among the rows of the brace
         // it closes into.
         let finished_inner_closer = !forced_break
             && !broken_enum_row
+            && !run_in_after_comment
             && !self.token_input.token_begins_source_line
             && self.output.len() > open_output_len
             && self.current.trimmed_start().starts_with('}')
@@ -919,11 +925,6 @@ impl FormatEngine<'_> {
             self.previous_was_newline = false;
             return;
         }
-        // Run-in closers stay after a block comment their line holds.
-        let run_in_after_comment = matches!(
-            self.options.brace_style,
-            BraceStyle::Pico | BraceStyle::Lisp
-        ) && self.current.trimmed_end().ends_with("*/");
         let parameterized_lambda_initializer_close = self.current_is_blank()
             && self.output.last().is_some_and(|line| line.trimmed() == "}")
             && self.output.get(open_output_len).is_some_and(|line| {

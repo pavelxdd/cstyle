@@ -12918,3 +12918,18 @@ fn a_run_in_closer_of_an_enclosing_list_stays_after_the_comment_leading_its_line
         "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n        /* c */\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_run_in_closer_of_an_enclosing_list_stays_after_a_comment_trailing_its_row() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, other /* c */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }, other /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, other /* c */\n    };\n}\n",
+    );
+}
