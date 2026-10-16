@@ -413,7 +413,8 @@ impl FormatEngine<'_> {
             });
             self.begin_objc_message_alignment(line, base);
         } else if let Some(align) = self.layout.objc.message_align
-            && !line_start.starts_with_any(b"{}")
+            // A closer stands at its bracket, not at the message's rows.
+            && !line_start.starts_with_any(b"{}]")
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)

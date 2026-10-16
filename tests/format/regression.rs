@@ -12009,5 +12009,19 @@ fn indenting_define_bodies_leaves_a_case_block_after_a_conditional_a_case_block(
     let input = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {   // own\n        break;\n    }\n    }\n}\n";
     let expected = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {\n        // own\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=mozilla"], expected);
-    check(input, &["--style=mozilla", "--indent-preproc-define"], expected);
+    check(
+        input,
+        &["--style=mozilla", "--indent-preproc-define"],
+        expected,
+    );
+}
+
+#[test]
+fn a_message_closer_alone_on_its_line_stands_at_its_bracket() {
+    let input = "void f()\n{\n    return [self.other countWith:1\n                         and:2\n           ];\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    return [self.other countWith:1\n            and:2\n           ];\n}\n",
+    );
 }
