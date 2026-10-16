@@ -5342,24 +5342,31 @@ impl FormatEngine<'_> {
             chained += 1;
         }
         let header = outer;
+        let else_before = self
+            .tree
+            .previous_code_token(header)
+            .filter(|&previous| matches!(&tokens[previous], Token::Word(word) if word == "else"));
         // A dangling `else` stands by the line of its `if`.
+        let mut else_line_off_its_if = false;
         let line = if matches!(&tokens[header], Token::Word(word) if word == "else")
             && self.is_dangling_else(header)
             && let Some(if_token) = self.tree.statements.if_of_else(header)
         {
             self.line_led_by(if_token)?
+        } else if let Some(line) = self.line_led_by(header) {
+            line
         } else {
-            self.line_led_by(header)?
+            // A header an `else` keeps after the statement of its `if`
+            // nests from that `if`'s line.
+            let if_token = self.tree.statements.if_of_else(else_before?)?;
+            else_line_off_its_if = true;
+            self.line_led_by(if_token)?
         };
         // `else while (x)` nests two headers on one line; `else if` is one.
         let nested = !matches!(&tokens[header], Token::Word(word) if word == "if")
-            && self
-                .tree
-                .previous_code_token(header)
-                .is_some_and(|previous| {
-                    matches!(&tokens[previous], Token::Word(word) if word == "else")
-                        && self.output.line_with_token(previous) == Some(line)
-                });
+            && else_before.is_some_and(|previous| {
+                else_line_off_its_if || self.output.line_with_token(previous) == Some(line)
+            });
         let levels = 1 + chained + usize::from(nested);
         Some(
             self.output.lead_width(line, self.options.tab_width)

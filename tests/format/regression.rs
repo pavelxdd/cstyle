@@ -10623,3 +10623,11 @@ fn a_braceless_body_after_a_label_heading_its_header_stands_past_the_header() {
     check(input, &["--style=lisp", "--remove-braces"], expected);
     check(expected, &["--style=lisp", "--remove-braces"], expected);
 }
+
+#[test]
+fn a_braceless_body_of_a_header_an_else_keeps_on_a_statement_line_nests_from_its_if() {
+    let input = "void f()\n{\n    if (ready) helper(); else for (;;)\n        first();\n    if (ready)\n        helper(); else for (;;)\n        first();\n    if (ready)\n        helper(); else while (x) for (;;)\n        first();\n    if (ready)\n        helper(); else if (x)\n        first();\n}\n";
+    let expected = "void f()\n{\n    if (ready) helper(); else for (;;)\n            first();\n    if (ready)\n        helper(); else for (;;)\n            first();\n    if (ready)\n        helper(); else while (x) for (;;)\n                first();\n    if (ready)\n        helper(); else if (x)\n        first();\n}\n";
+    check(input, &["--style=allman", "-o"], expected);
+    check(expected, &["--style=allman", "-o"], expected);
+}
