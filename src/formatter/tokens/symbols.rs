@@ -1039,6 +1039,12 @@ impl FormatEngine<'_> {
             if matches!(next, Some(Token::Comment(_, _))) {
                 self.emit_trailing_source_space();
                 self.schedule_block_spacing_semicolon();
+            } else if matches!(next, Some(Token::Symbol('\\')))
+                && self.options.keeps_multi_statement_line()
+            {
+                // A line splice kept with the statements before it stays at
+                // the end of the line it continues.
+                self.emit_trailing_source_space();
             } else if matches!(next, Some(Token::Symbol(';'))) {
                 self.trim_current_end();
             } else if matches!(next, Some(Token::Operator(operator)) if is_leading_continuation_operator(operator))

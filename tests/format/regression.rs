@@ -11370,3 +11370,14 @@ fn lisp_moves_a_comment_after_an_expanded_block_only_off_rows_no_closer_joins() 
     check(input, &["--style=lisp", "--add-braces"], expected);
     check(input, &["--style=lisp", "--add-one-line-braces"], expected);
 }
+
+#[test]
+fn a_line_splice_after_a_statement_stays_on_its_line_when_statements_are_kept() {
+    let input = "void f()\n{\n    fail();    \\\n    next();\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    fail();    \\\n    next(); }\n",
+    );
+}
