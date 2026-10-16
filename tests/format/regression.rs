@@ -10787,3 +10787,9 @@ fn break_blocks_pads_around_a_header_a_comment_leads_on_its_line() {
     check(input, &["--style=linux", "--break-blocks"], expected);
     check(expected, &["--style=linux", "--break-blocks"], expected);
 }
+
+#[test]
+fn breaking_one_line_headers_leaves_a_comment_led_body_line_of_a_header_directives_split() {
+    let input = "void f()\n{\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n}\n";
+    check(input, &["--style=kr", "--break-one-line-headers"], input);
+}

@@ -26,8 +26,8 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, is_comment_line,
-    line_ends_with_comment, preprocessor_directive, unmatched_open_paren_column,
+    ContainsAnyByte, after_leading_comments, has_hash_outside_literals, has_unmatched_open_brace,
+    is_comment_line, line_ends_with_comment, preprocessor_directive, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -554,6 +554,14 @@ impl FormatEngine<'_> {
             && self.preprocessor.split_else.trigger_output_len != Some(self.output.len());
         if !split_else_after_preprocessor && !self.options.break_one_line_headers
             || self.line_comment_before(tokens, line_start, start)
+        {
+            return false;
+        }
+        // A line holding only comments holds no header to break off, as
+        // after directives that split the header from its body.
+        if !split_else_after_preprocessor
+            && !self.current_is_blank()
+            && after_leading_comments(&self.current).trimmed().is_empty()
         {
             return false;
         }
