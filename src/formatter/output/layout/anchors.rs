@@ -870,7 +870,9 @@ impl FormatEngine<'_> {
                 }
                 _ => false,
             });
-        // A brace row after a brace row starting its line stands at it.
+        // A brace row after a brace row starting its line stands at it;
+        // VTK indents the brace of an element broken off its row a level
+        // past the rows.
         if !after_comment
             && matches!(tokens[first], Token::Symbol('{'))
             && let Some(element) = open_of_row_before(tokens, groups, group, comma)
@@ -878,8 +880,24 @@ impl FormatEngine<'_> {
             && let Some(line) = self.output.line_with_token(element)
             && self.output.line_tokens(line)?.first == element
         {
+            let vtk_levels = |brace_alone: bool| {
+                usize::from(self.options.brace_style == BraceStyle::Vtk && brace_alone)
+                    * self.options.indent_width
+            };
+            let before_alone = self.output.line_tokens(line)?.last == element;
+            // An element spanning source lines has its brace broken off.
+            let alone = groups
+                .opened_at(first)
+                .and_then(|row| groups.get(row).close)
+                .is_some_and(|close| {
+                    tokens[first..close]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline))
+                });
             return Some(
-                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces(),
+                (self.output.lead_width(line, self.options.tab_width) + vtk_levels(alone))
+                    .saturating_sub(vtk_levels(before_alone))
+                    + self.case_unindent_spaces(),
             );
         }
         if !after_comment
