@@ -2950,20 +2950,11 @@ impl FormatEngine<'_> {
     /// the closing header leading the current line: the source line placed
     /// the header's comment past them.
     fn added_closer_width_before_closing_header(&self) -> usize {
-        let tokens = &self.tree.tokens;
-        // Only a comment ending its source line keeps that column.
-        let ends_line = self.comments.pushed_comment.is_some_and(|comment| {
-            tokens[comment + 1..]
-                .iter()
-                .find(|token| !matches!(token, Token::Whitespace(_)))
-                .is_none_or(|token| matches!(token, Token::Newline))
+        let follows_added_closer = self.current.tokens().is_some_and(|span| {
+            self.tree
+                .previous_code_token(span.first)
+                .is_some_and(|before| self.comments.added_block_semicolon == Some(before))
         });
-        let follows_added_closer = ends_line
-            && self.current.tokens().is_some_and(|span| {
-                self.tree
-                    .previous_code_token(span.first)
-                    .is_some_and(|before| self.comments.added_block_semicolon == Some(before))
-            });
         if follows_added_closer {
             self.closing_header_closer_width().unwrap_or(0)
         } else {
@@ -2982,10 +2973,21 @@ impl FormatEngine<'_> {
             return None;
         }
         let close = self.tree.previous_code_token(first)?;
-        // A closer added after a statement stands right past its `;`.
+        // A closer added after a statement stands right past its `;`; only a
+        // comment ending its source line keeps its column past it.
+        let comment_ends_line = || {
+            self.comments.pushed_comment.is_some_and(|comment| {
+                tokens[comment + 1..]
+                    .iter()
+                    .find(|token| !matches!(token, Token::Whitespace(_)))
+                    .is_none_or(|token| matches!(token, Token::Newline))
+            })
+        };
         let (start, added) = match tokens[close] {
             Token::Symbol('}') => (close, 0),
-            Token::Symbol(';') if self.comments.added_block_semicolon == Some(close) => {
+            Token::Symbol(';')
+                if self.comments.added_block_semicolon == Some(close) && comment_ends_line() =>
+            {
                 (close + 1, 1)
             }
             _ => return None,

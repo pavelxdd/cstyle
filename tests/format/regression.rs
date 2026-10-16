@@ -10076,6 +10076,12 @@ fn an_else_broken_off_an_added_closer_keeps_its_comment_column() {
         check(input, args, expected);
         check(expected, args, expected);
     }
+    // A comment that code follows on its line keeps its gap.
+    check(
+        "void f()\n{\n    if (a) x(); else /* note */ y();\n}\n",
+        &["--style=allman", "-j"],
+        "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else /* note */\n    {\n        y();\n    }\n}\n",
+    );
 }
 
 // A bare block's brace after a comment stays where the source set it: only a
