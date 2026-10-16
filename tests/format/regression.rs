@@ -10490,3 +10490,44 @@ fn ratliff_closes_a_block_at_the_opener_of_the_last_branch_that_opens_it() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn indented_brace_styles_close_an_element_list_nested_in_a_compound_literal_at_its_elements() {
+    let shallow = "void helper()\n{\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = 2,\n        },\n    };\n}\n";
+    let deep = "void helper()\n{\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n            },\n        },\n    };\n}\n";
+    for (input, style, expected) in [
+        (
+            shallow,
+            "--style=whitesmith",
+            "void helper()\n    {\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n    }\n",
+        ),
+        (
+            shallow,
+            "--style=vtk",
+            "void helper()\n{\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n}\n",
+        ),
+        (
+            shallow,
+            "--style=ratliff",
+            "void helper() {\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n    }\n",
+        ),
+        (
+            deep,
+            "--style=whitesmith",
+            "void helper()\n    {\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n    }\n",
+        ),
+        (
+            deep,
+            "--style=vtk",
+            "void helper()\n{\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n}\n",
+        ),
+        (
+            deep,
+            "--style=ratliff",
+            "void helper() {\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

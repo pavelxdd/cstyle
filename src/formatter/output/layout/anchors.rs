@@ -1240,11 +1240,12 @@ impl FormatEngine<'_> {
     /// in code, or in an array of no aggregate keyword.
     fn vtk_nested_rows_like_blocks(&self, group: GroupId) -> bool {
         let groups = &self.tree.groups;
-        groups
-            .get(group)
-            .parent
-            .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
-            && (self.in_code(groups.get(group).open) || self.vtk_array_outer(group).is_some())
+        groups.get(group).parent.is_some_and(|parent| {
+            matches!(
+                self.tree.blocks.kind(parent),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        }) && (self.in_code(groups.get(group).open) || self.vtk_array_outer(group).is_some())
     }
 
     /// The outermost initializer around `group` when it is the assigned
@@ -1393,7 +1394,12 @@ impl FormatEngine<'_> {
         if groups
             .ancestors(group)
             .take(depth + 1)
-            .filter(|&id| self.tree.blocks.kind(id) == Some(BlockKind::Initializer))
+            .filter(|&id| {
+                matches!(
+                    self.tree.blocks.kind(id),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
             .count()
             != depth + 1
         {
