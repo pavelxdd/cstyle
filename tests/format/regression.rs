@@ -11072,3 +11072,13 @@ fn a_switch_closer_a_comment_follows_stands_under_its_brace_after_case_blocks() 
         "void f(int e)\n{\n    switch (e)\n    {\n    case 1:\n    {\n        x();\n        break;\n    }\n    } /* end */\n    z();\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_before_an_else_a_comment_leads_once_its_closer_is_removed() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } else if (other) { // second\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--remove-braces", "--break-blocks=all"],
+        "void f()\n{\n    if (ready)\n        value=0;\n\n    else if (other)   // second\n        value=1;\n\n    /* last */ else\n        value=2;\n}\n",
+    );
+}
