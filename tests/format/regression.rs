@@ -12136,3 +12136,12 @@ fn a_case_label_continued_past_a_comment_or_directive_stays_a_case_label() {
         "void f()\n{\n    switch (flags) {\n    case FIRST |\n            // note\n            SECOND:\n        value = 1;\n        break;\n    case FIRST |\n            /* note */\n            THIRD:\n        break;\n    case FIRST |\n#ifdef FEATURE\n            FOURTH:\n#endif\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_constructor_head_keeps_its_initializer_spacing() {
+    check(
+        "/* note */ Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n{\n}\n",
+        &["--style=kr"],
+        "/* note */ Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n{\n}\n",
+    );
+}

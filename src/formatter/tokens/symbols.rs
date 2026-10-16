@@ -25,7 +25,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    after_leading_comments, is_comment_only_line, trailing_matching_parens,
+    after_leading_comments, is_bare_comment_line, is_comment_only_line, trailing_matching_parens,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
@@ -1880,14 +1880,7 @@ impl FormatEngine<'_> {
         }
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
-            !trimmed.is_empty()
-                && !trimmed.starts_with('#')
-                && !trimmed.starts_with("//")
-                && !trimmed.starts_with("/*")
-                && (!trimmed.starts_with('*')
-                    || trimmed
-                        .split_once("*/")
-                        .is_some_and(|(_, suffix)| !suffix.trimmed().is_empty()))
+            !trimmed.is_empty() && !trimmed.starts_with('#') && !is_bare_comment_line(trimmed)
         }) else {
             return false;
         };

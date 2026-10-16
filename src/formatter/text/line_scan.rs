@@ -135,9 +135,20 @@ pub(crate) fn holds_code_after_leading_comments(line: &str) -> bool {
     !rest.is_empty() && !rest.starts_with("/*") && !rest.starts_with("//")
 }
 
-/// Whether `line`, trimmed, holds comments and no code.
+/// Whether `line`, trimmed, holds comments and no code: the rows of a block
+/// comment over lines hold none either.
 pub(crate) fn is_bare_comment_line(line: &str) -> bool {
-    is_comment_only_line(line) && !holds_code_after_leading_comments(line)
+    if line.starts_with("//") {
+        return true;
+    }
+    if line.starts_with("/*") {
+        return !holds_code_after_leading_comments(line);
+    }
+    // A row of a block comment over lines may close it before code.
+    is_comment_only_line(line)
+        && line
+            .split_once("*/")
+            .is_none_or(|(_, after)| !holds_code_after_leading_comments(after))
 }
 
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
