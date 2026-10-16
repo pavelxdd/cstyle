@@ -11885,3 +11885,13 @@ fn a_comment_after_an_element_closer_leaves_the_closer_where_it_stands_without_i
         "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n    }, /* note */\n    second = {\n        3, 4\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_one_line_initializer_after_a_commented_assignment_keeps_its_line() {
+    let input = "void f()\n{\n    struct Item item = /* note */\n        { 1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    struct Item item = /* note */\n    { 1, 2 };\n}\n",
+    );
+}
