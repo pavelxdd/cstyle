@@ -481,14 +481,17 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_ends_definition_header(&self) -> bool {
-        // Comments alone before the brace leave the header on the line
-        // before.
+        // Comments and directives alone before the brace leave the header on
+        // the line before them.
         let source = if after_leading_comments(self.current.trimmed_start()).is_empty() {
-            match self.output.scoped().iter().rev().find(|line| {
-                let trimmed = line.trimmed_start();
-                !trimmed.is_empty() && !is_comment_only_line(trimmed)
+            match self.output.scoped_range().rev().find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !is_comment_only_line(trimmed)
+                    && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
             }) {
-                Some(line) => self.output.code_of(line),
+                Some(index) => self.output.code_of(&self.output[index]),
                 None => return false,
             }
         } else {

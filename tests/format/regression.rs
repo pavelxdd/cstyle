@@ -11586,3 +11586,16 @@ fn the_condition_rows_of_a_while_on_an_indented_closer_align_after_its_paren() {
         "void f()\n{\n    do\n        {\n            value++;\n        } while (value < count &&\n                 ready);\n}\n",
     );
 }
+
+#[test]
+fn a_function_brace_after_a_directive_closing_its_header_opens_a_function_body() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    { value=0; }\n}\n";
+    let expected = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    {\n        value=0;\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+    check(
+        input,
+        &["--style=ratliff"],
+        "#ifdef FEATURE\nvoid f()\n#endif\n    {\n        {\n        value=0;\n        }\n    }\n",
+    );
+}
