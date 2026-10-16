@@ -12,7 +12,7 @@ use crate::formatter::continuation::max_length::lambda_parameter_continuation_in
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::buffer::OutputBuffer;
-use crate::formatter::state::frame::{ColonRole, LogicalOperator};
+use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
@@ -1526,7 +1526,22 @@ impl FormatEngine<'_> {
             }
         }
         let current_prefix_len = line.len() - line.trimmed_start().len();
-        let prefix_len = if current_prefix_len == 0 {
+        // A closer that styles indent leaves the declaration where the line
+        // that opened its initializer stands.
+        let closed_initializer = line
+            .trimmed_start()
+            .starts_with('}')
+            .then(|| self.layout.frame_stack.last_closed_brace())
+            .flatten()
+            .filter(|frame| {
+                matches!(
+                    frame.semantic_kind,
+                    BraceSemanticKind::Initializer | BraceSemanticKind::Array
+                )
+            });
+        let prefix_len = if let Some(frame) = closed_initializer {
+            frame.header_indent_column
+        } else if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {
             current_prefix_len

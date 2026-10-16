@@ -10799,3 +10799,39 @@ fn adding_braces_leaves_no_body_indent_after_a_comment_led_body_of_a_header_dire
     let input = "void f()\n{\n#ifdef D\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n#endif\n    if (q) {\n        value = 1;\n    }\n}\n";
     check(input, &["--style=kr", "--add-braces"], input);
 }
+
+#[test]
+fn indented_conditionals_close_a_case_block_group_at_the_column_of_its_opening_directive() {
+    let input = "void f()\n{\nswitch (state) {\ncase 2:\n#ifdef TRACE\n{\n    push(state);\n}\n#endif\nbreak;\n}\n}\n";
+    let expected = "void f()\n    {\n    switch (state)\n        {\n        case 2:\n            #ifdef TRACE\n            {\n            push(state);\n            }\n            #endif\n        break;\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn a_comment_between_declarators_stands_at_the_declarator_after_an_indented_initializer_closer() {
+    let input = "static const Item\n    first = {\n        1,\n        2\n    },\n    /* note */\n    second = {\n        3,\n        4\n    };\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "static const Item\nfirst = {\n    1,\n    2\n    },\n/* note */\nsecond = {\n    3,\n    4\n    };\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const Item\nfirst =\n    {\n    1,\n    2\n    },\n/* note */\nsecond =\n    {\n    3,\n    4\n    };\n",
+    );
+}
+
+#[test]
+fn whitesmith_sets_the_brace_of_a_declarator_an_attribute_leads_a_level_past_its_declaration() {
+    let input = "static const Item\n    first = {\n        1,\n        2\n    },\n    __attribute__ ((deprecated))\n    second = {\n        3,\n        4\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const Item\nfirst =\n    {\n    1,\n    2\n    },\n__attribute__ ((deprecated))\nsecond =\n    {\n    3,\n    4\n    };\n",
+    );
+}

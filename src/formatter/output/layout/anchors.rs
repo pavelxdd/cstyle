@@ -1923,10 +1923,14 @@ impl FormatEngine<'_> {
         // The brace stands a level past the statement's first line.
         let mut start = assign;
         while let Some(before) = self.tree.previous_code_token(start) {
-            // Past parens and a struct body the declaration defines.
+            // Past parens, a struct body the declaration defines and the
+            // initializers of declarators before.
             if let Some(group) = self.tree.groups.closed_at(before)
                 && (self.tree.groups.get(group).delimiter != Delimiter::Brace
-                    || self.tree.blocks.kind(group) == Some(BlockKind::Aggregate))
+                    || matches!(
+                        self.tree.blocks.kind(group),
+                        Some(BlockKind::Aggregate | BlockKind::Initializer)
+                    ))
             {
                 start = self.tree.groups.get(group).open;
                 continue;
