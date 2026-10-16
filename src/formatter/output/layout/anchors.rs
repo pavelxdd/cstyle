@@ -5102,8 +5102,11 @@ impl FormatEngine<'_> {
         }
         let mut start = first;
         while let Some(before) = self.tree.previous_code_token(start) {
+            // Past parens and a struct or enum body the return type defines.
             if let Some(closed) = groups.closed_at(before) {
-                if groups.get(closed).delimiter == Delimiter::Brace {
+                if groups.get(closed).delimiter == Delimiter::Brace
+                    && self.tree.blocks.kind(closed) != Some(BlockKind::Aggregate)
+                {
                     break;
                 }
                 start = groups.get(closed).open;

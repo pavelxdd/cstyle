@@ -11082,3 +11082,13 @@ fn break_blocks_pads_before_an_else_a_comment_leads_once_its_closer_is_removed()
         "void f()\n{\n    if (ready)\n        value=0;\n\n    else if (other)   // second\n        value=1;\n\n    /* last */ else\n        value=2;\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_sets_the_body_brace_of_a_function_returning_a_defined_enum_at_its_header() {
+    let input = "#include <x.h>\n\nstatic enum {\n\tFIRST,\n\tSECOND\n} config(struct repository *r)\n{\n\tconst char *str = NULL;\n\treturn FIRST;\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "#include <x.h>\n\nstatic enum\n    {\n    FIRST,\n    SECOND\n    } config(struct repository *r)\n    {\n    const char *str = NULL;\n    return FIRST;\n    }\n",
+    );
+}
