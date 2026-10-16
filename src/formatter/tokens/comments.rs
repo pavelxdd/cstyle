@@ -3437,7 +3437,7 @@ impl FormatEngine<'_> {
                 .command_state
                 .current_header
                 .as_deref()
-                .is_some_and(is_standard_add_braces_header)
+                .is_some_and(|header| is_standard_add_braces_header(header) || header == "switch")
     }
 
     fn enum_value_comment_continuation_indent_spaces(&self) -> Option<usize> {

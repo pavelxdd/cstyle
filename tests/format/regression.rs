@@ -12784,3 +12784,14 @@ fn a_comment_after_a_nested_switch_in_a_case_stands_at_the_switch() {
         "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            switch (op)\n                {\n                }\n            /* c */\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_switch_brace_a_comment_leads_stays_off_the_header_as_any_header_brace() {
+    let input =
+        "void f(void)\n{\n    switch (op)\n    /* c */ {\n    case A:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(void)\n{\n    switch (op)\n        /* c */ {\n    case A:\n        break;\n    }\n}\n",
+    );
+}

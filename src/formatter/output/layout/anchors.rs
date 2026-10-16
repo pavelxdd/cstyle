@@ -3739,8 +3739,10 @@ impl FormatEngine<'_> {
         }
         let brace_line = self.output.line_with_token(open)?;
         // Indented switch braces take their labels after layout, except a
-        // brace on its own line, whose column the labels share.
-        let brace_leads = self.output.line_tokens(brace_line)?.first == open;
+        // brace on its own line, whose column the labels share; a comment
+        // leading the brace's line sets no column for them.
+        let brace_leads = self.output.line_tokens(brace_line)?.first == open
+            && self.output.trimmed(brace_line).starts_with('{');
         // Whitesmith labels share the column of the indented brace.
         let whitesmith = self.options.brace_style == BraceStyle::Whitesmith && brace_leads;
         if self.should_indent_brace_line(BraceType::Command)
