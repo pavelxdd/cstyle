@@ -707,15 +707,15 @@ fn head_end(
     };
     while let Some(next) = next_code_token(tokens, index) {
         // A directive ends what the tree can see of the head, unless the
-        // conditionals before its body only close around the head.
+        // conditionals before its body only close or open around it, with
+        // no other branch.
         if tokens[index..next]
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)))
         {
             let closes_conditionals = tokens[index..next].iter().all(|token| match token {
-                Token::Preprocessor(directive) => {
-                    preprocessor_directive(&directive.text).is_some_and(|name| name == "endif")
-                }
+                Token::Preprocessor(directive) => preprocessor_directive(&directive.text)
+                    .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef")),
                 _ => true,
             });
             if closes_conditionals

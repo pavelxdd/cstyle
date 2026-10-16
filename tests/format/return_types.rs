@@ -1136,3 +1136,21 @@ fn break_return_type_breaks_a_head_a_comment_leads_as_any() {
         "/* note */ void\nf()\n{\n    value = 1;\n}\n/* note */ int *\nhelper(int value);\n",
     );
 }
+
+#[test]
+fn break_return_type_breaks_a_head_conditionals_part_from_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-return-type".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "#ifdef FEATURE\nvoid f()\n#endif\n#ifdef FEATURE\n{\n#endif\n    value = 0;\n}\nint g(int a)\n#if A\n{\n#endif\n    return a;\n}\n",
+            &options,
+        ),
+        "#ifdef FEATURE\nvoid\nf()\n#endif\n#ifdef FEATURE\n{\n#endif\n    value = 0;\n}\nint\ng(int a)\n#if A\n{\n#endif\n    return a;\n}\n",
+    );
+}
