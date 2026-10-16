@@ -10665,6 +10665,15 @@ fn kept_one_line_blocks_take_braces_added_after_a_comment_leading_the_statement_
             &["--style=pico", "--add-braces", "--keep-one-line-blocks"][..],
             "void f()\n{   if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
         ),
+        // Breaking one-line headers breaks the block it adds there.
+        (
+            &[
+                "--style=1tbs",
+                "--keep-one-line-blocks",
+                "--break-one-line-headers",
+            ][..],
+            "void f()\n{\n    if (ready)\n        /* note */ {\n        helper();\n    } else\n        /* note */ {\n        other();    // tail\n    }\n}\n",
+        ),
     ] {
         check(input, args, expected);
         check(expected, args, expected);
