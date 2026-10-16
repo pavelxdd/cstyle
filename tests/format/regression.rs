@@ -12396,3 +12396,12 @@ fn a_declarator_split_from_its_type_continues_past_a_comment_line() {
         "void f()\n{\n    static const struct Item\n        // note\n        first = {\n        1, 2\n    };\n}\n",
     );
 }
+
+#[test]
+fn elements_of_a_list_a_comment_leads_align_to_its_first_element() {
+    check(
+        "void f()\n{\n    /* note */ int list[] = { 1,\n        2\n    };\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
+    );
+}

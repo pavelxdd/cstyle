@@ -647,6 +647,12 @@ impl FormatEngine<'_> {
             && brace_type == BraceType::Enum
             && !nested
             && !break_first;
+        // A line a comment preindented carries its own indent.
+        let text_start = if self.current_is_preindented {
+            0
+        } else {
+            base_indent
+        };
         let brace_column = if enum_block_level {
             base_indent
         } else if nested {
@@ -656,7 +662,7 @@ impl FormatEngine<'_> {
                 base_indent
             }
         } else {
-            base_indent + self.current_char_len() - 1
+            text_start + self.current_char_len() - 1
         };
         if !break_first {
             self.emit_trailing_source_space();
@@ -675,14 +681,16 @@ impl FormatEngine<'_> {
                 || self.options.pad_first_paren_outside)
                 && !self.current.ends_with_any(b" \t")
                 && matches!(
-                    self.tree.tokens.get(token_index + 1),
+                    token_index
+                        .checked_add(1)
+                        .and_then(|next| self.tree.tokens.get(next)),
                     Some(Token::Symbol('('))
                 );
             // The elements align to the brace's tab-expanded column; its
             // closer counts each tab as one column. They align to a first
             // element comments lead.
-            let column = base_indent
-                + self.current_visual_width_from(base_indent)
+            let column = text_start
+                + self.current_visual_width_from(text_start)
                 + usize::from(padded_paren);
             column
                 + leading_comments_width(
