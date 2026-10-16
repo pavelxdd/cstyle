@@ -12933,3 +12933,30 @@ fn a_run_in_closer_of_an_enclosing_list_stays_after_a_comment_trailing_its_row()
         "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, other /* c */\n    };\n}\n",
     );
 }
+
+#[test]
+fn adjacent_comments_leading_a_list_closer_stand_at_the_elements() {
+    let input = "void f()\n{\n    int list[] = {\n        1,\n    /* c */ /* d */ };\n    struct Item more[] = { {\n            .value = 1,\n        }\n    /* c */ /* d */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   int list[] =\n    {   1,\n        /* c */ /* d */ };\n    struct Item more[] = { {\n            .value = 1, }\n        /* c */ /* d */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    int list[] = {\n        1,\n        /* c */ /* d */\n    };\n    struct Item more[] = { {\n            .value = 1,\n        }\n        /* c */ /* d */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn adjacent_comments_leading_a_row_leave_it_where_one_comment_does() {
+    let input = "void f()\n{\n    value = first +\n        /* a */ /* b */ second;\n    call(first,\n         /* a */ /* b */ second);\n    if (ready)\n        /* a */ /* b */ run();\n    if (ready &&\n        /* a */ /* b */ other)\n        run();\n}\nint x = 1 +\n    /* a */ /* b */ 2;\n";
+    let expected = "void f()\n{\n    value = first +\n            /* a */ /* b */ second;\n    call(first,\n         /* a */ /* b */ second);\n    if (ready)\n        /* a */ /* b */ run();\n    if (ready &&\n            /* a */ /* b */ other)\n        run();\n}\nint x = 1 +\n        /* a */ /* b */ 2;\n";
+    check(input, &[], expected);
+    check(
+        &input.replace("/* a */ /* b */", "/* a */"),
+        &[],
+        &expected.replace("/* a */ /* b */", "/* a */"),
+    );
+}

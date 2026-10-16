@@ -153,10 +153,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn adjust_and_publish_line(&mut self, line: String) {
         // A line the tree anchors keeps its place.
-        let line = match self.comment_led_statement_line(&line) {
-            Some(anchored) => anchored,
-            None => self.align_adjacent_block_comments_before_adjustment(line),
-        };
+        let line = self.comment_led_statement_line(&line).unwrap_or(line);
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
         // The line before keeps its buffer.

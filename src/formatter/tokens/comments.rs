@@ -214,36 +214,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn align_adjacent_block_comments_before_adjustment(&self, line: String) -> String {
-        let trimmed = line.trimmed_start();
-        let adjacent = trimmed
-            .strip_prefix("/*")
-            .and_then(|rest| rest.split_once("*/"))
-            .is_some_and(|(_, after)| after.trimmed_start().starts_with("/*"));
-        if !adjacent {
-            return line;
-        }
-        let target = self
-            .layout
-            .nesting
-            .current_continuation_indent_spaces()
-            .or_else(|| self.control_header_comment_indent_spaces(CommentKind::Block))
-            .or_else(|| self.active_body_comment_indent_spaces())
-            .unwrap_or_else(|| {
-                (self
-                    .layout
-                    .indentation
-                    .line_indent(LineKind::Normal, self.options)
-                    + self.case_body_indent_extra(LineKind::Normal))
-                    * self.options.indent_width
-            });
-        if leading_visual_width(&line, self.options.tab_width) > target {
-            format!("{}{}", " ".repeat(target), trimmed)
-        } else {
-            line
-        }
-    }
-
     pub(crate) fn observe_raw_output_comment_frame(&mut self, line: &str) {
         let output_spaces = leading_visual_width(line, self.options.tab_width);
         self.observe_output_comment_frame(line, output_spaces, false);
