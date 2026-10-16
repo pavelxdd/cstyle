@@ -2327,6 +2327,7 @@ impl FormatEngine<'_> {
         });
         // A comment split off an initializer's closer stands at the row
         // before it.
+        // After an element's closer, it stands at the body of the list.
         let previous_element_row_indent = previous_line
             .filter(|line| {
                 let code = self.output.code_trimmed_of(line);
@@ -2334,11 +2335,20 @@ impl FormatEngine<'_> {
                     && self.in_initializer_brace()
                     && !code.is_empty()
                     && !code.ends_with_any(b"{;")
-                    && !code.trimmed_start().starts_with('}')
             })
-            .map(|line| {
-                leading_visual_width(line, self.options.tab_width) + self.case_unindent_spaces()
-            });
+            .and_then(|line| {
+                if self
+                    .output
+                    .code_trimmed_of(line)
+                    .trimmed_start()
+                    .starts_with('}')
+                {
+                    self.active_body_comment_indent_spaces()
+                } else {
+                    Some(leading_visual_width(line, self.options.tab_width))
+                }
+            })
+            .map(|spaces| spaces + self.case_unindent_spaces());
         previous_statement_indent
             .or(previous_operator_indent)
             .or(previous_opening_body_indent)

@@ -11771,3 +11771,18 @@ fn a_message_a_comment_leads_aligns_its_rows_past_the_comment() {
         "- (void)update\n{\n    /* note */ [self apply:value\n                     with:other];\n}\n",
     );
 }
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_after_an_element_stands_at_the_list_body() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2\n            },\n        /* note */ };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2\n            },\n            /* note */\n        };\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (op)\n        {\n        default:\n            {\n            int table[][2] =\n                {\n                    { FIRST, 1 },\n                    {\n                    SECOND, 2\n                    },\n                /* note */\n                };\n            break;\n            }\n        }\n    }\n",
+    );
+}
