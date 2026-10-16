@@ -10149,6 +10149,26 @@ fn pico_joins_a_closer_taking_the_joining_space_out_of_its_comment_gap() {
     }
 }
 
+// A case label line stands where case labels do though a statement label
+// follows it on the line.
+#[test]
+fn a_case_label_line_holding_a_statement_label_stands_with_the_case_labels() {
+    let input = "void f()\n{\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n        y();\n    }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void f()\n{   switch (k)\n    {   case 1:\n            goto again;\n        case 2: again:\n            x();\n            break;\n        case 3: other:\n            {   y(); } } }\n",
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n        y(); } } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]
