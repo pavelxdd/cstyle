@@ -11875,3 +11875,13 @@ fn the_statement_after_a_comment_led_case_label_breaks_off_the_comments_after_it
         "void f()\n{\n    switch (kind) {\n    case 1:\n        value = 1;\n    /* fall through */ case 2:\n        /* note */\n        value = 2;\n        break;\n    /* other */ default: /* c */\n        value = 3;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_an_element_closer_leaves_the_closer_where_it_stands_without_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        }, /* note */\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n    }, /* note */\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}

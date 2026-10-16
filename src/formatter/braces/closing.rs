@@ -18,6 +18,7 @@ use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -57,7 +58,9 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
-        if !line.trimmed_start().starts_with("}, ") {
+        // A comment after the closer leaves it the closer of its own row.
+        let code = line[..trailing_comment_split_limit(line)].trimmed();
+        if !code.starts_with("}, ") {
             return None;
         }
         let mut closed_blocks = 0usize;
