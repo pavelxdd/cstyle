@@ -12196,3 +12196,12 @@ fn a_bare_block_run_in_on_its_own_row_stays_off_the_body_brace() {
         "int table[][2] =\n{   /* first */\n    {   1, 2 } };\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_line_starts_no_operator_chain() {
+    check(
+        "void f()\n{\n    /* note */ out << helper(first, (second\n                         << third));\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ out << helper(first, (second\n                                     << third));\n}\n",
+    );
+}
