@@ -9855,3 +9855,28 @@ fn break_else_ifs_leaves_a_kept_one_line_statement_chain_whole() {
         "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready)\n        value=0;   else if (other)\n        result=0;   else\n        result=1;\n}\n",
     );
 }
+
+#[test]
+fn breaking_one_line_headers_keeps_a_closing_header_with_what_goes_on_after_it() {
+    // Kept one-line statements keep `else` and `while` on the statement's
+    // line while code goes on after them there; a brace the style breaks
+    // off leaves the `else` ending the line, which parts it.
+    let input = "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b(); else {\n        c();\n    }\n    if (a)\n        b(); else for (;;) {\n        c();\n    }\n    do\n        b(); while (x);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b(); else {\n        c();\n    }\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    do\n        b(); while (x);\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b();\n    else\n    {\n        c();\n    }\n    if (a)\n        b(); else for (;;)\n        {\n            c();\n        }\n    do\n        b(); while (x);\n}\n",
+        ),
+    ] {
+        check(input, &[style, "-o", "--break-one-line-headers"], expected);
+        check(
+            expected,
+            &[style, "-o", "--break-one-line-headers"],
+            expected,
+        );
+    }
+}

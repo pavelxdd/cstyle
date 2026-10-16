@@ -2855,6 +2855,14 @@ fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
     }
 }
 
+/// Whether removing braces takes away the `{` at `open_index` and the `}`
+/// of its single-statement block.
+pub(crate) fn removes_braces_of_block(tokens: &[Token], open_index: usize) -> bool {
+    matches!(tokens.get(open_index), Some(Token::Symbol('{')))
+        && is_remove_braces_opening(tokens, open_index)
+        && removable_statement_brace_range(tokens, open_index, tokens.len(), true).is_some()
+}
+
 fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
     // A comment between the header and its brace stays with the header.
     let Some(previous) = (0..open_index).rev().find(|&index| {
