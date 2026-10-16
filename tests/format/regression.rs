@@ -11132,3 +11132,13 @@ fn break_blocks_pads_before_a_formatted_define_after_a_block() {
         "void f()\n{\n    if (ready) {\n        first();\n    }\n\n#define CHECK(A) \\\n    do {           \\\n        x(A);        \\\n    } while (0)\n    CHECK(value);\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_no_statement_after_an_initializer_following_a_header_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    }\n    struct Item list[] = {\n        1, 2\n    };\n    helper(1);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    }\n\n    struct Item list[] = {\n        1, 2\n    };\n    helper(1);\n}\n",
+    );
+}
