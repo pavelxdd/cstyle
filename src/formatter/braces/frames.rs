@@ -54,6 +54,13 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
 
 /// Whether `prefix`, the text before a label, is the brace closing the case
 /// before.
+/// Whether the trimmed `line` holds code, past the comments leading it.
+fn holds_code(line: &str) -> bool {
+    !line.is_empty()
+        && (!is_comment_only_line(line)
+            || line.starts_with("/*") && holds_code_after_leading_comments(line))
+}
+
 /// Whether a label after `prefix` stands at the labels' column: after the
 /// brace closing the case before, or after comments alone.
 fn brace_led(prefix: &str) -> bool {
@@ -202,7 +209,7 @@ impl FormatEngine<'_> {
                     .rev()
                     .find(|line| {
                         let trimmed = line.trimmed_start();
-                        !trimmed.is_empty() && !is_comment_only_line(trimmed)
+                        holds_code(trimmed)
                     })
                     .map(String::as_str)
                     .unwrap_or_default()
@@ -227,7 +234,7 @@ impl FormatEngine<'_> {
                     return false;
                 }
                 let current = self.current.trimmed_start();
-                if holds_code_after_leading_comments(current) {
+                if holds_code(current) {
                     // A statement kept after the label owns no brace.
                     return case_label_token_offset(current, header).is_some()
                         && !if self.current.holds_comment_opener() {
@@ -246,9 +253,7 @@ impl FormatEngine<'_> {
                         .rev()
                         .find(|line| {
                             let trimmed = line.trimmed_start();
-                            !trimmed.is_empty()
-                                && !trimmed.starts_with('#')
-                                && !is_comment_only_line(trimmed)
+                            !trimmed.starts_with('#') && holds_code(trimmed)
                         })
                         .is_some_and(|line| case_label_token_offset(line, header).is_some())
             });

@@ -11324,3 +11324,11 @@ fn a_parameter_paren_split_off_a_long_file_scope_header_stands_where_it_would_on
         expected,
     );
 }
+
+#[test]
+fn whitesmith_sets_a_comment_led_label_brace_on_its_own_line_as_a_case_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    /* other */ default:\n    {\n        if (x)\n            y();\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            break;\n        /* other */ default:\n            {\n            if (x)\n                y();\n            value = 2;\n            break;\n            }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
