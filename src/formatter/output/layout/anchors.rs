@@ -6368,8 +6368,15 @@ impl FormatEngine<'_> {
         let block = groups.closed_at(first)?;
         let open = groups.get(block).open;
         // An initializer's closer leaves the comments before it at its body:
-        // a level past its statement for each brace from the outermost in.
-        if self.tree.blocks.kind(block) == Some(BlockKind::Initializer) {
+        // a level past its statement for each brace from the outermost in,
+        // past the parens of a call it is an argument to.
+        let is_list = |group| {
+            matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        if is_list(block) {
             // Values run on from the brace line align the comments with
             // them instead.
             let element = next_code_token(tokens, open + 1).filter(|&element| element != first)?;
@@ -6381,12 +6388,13 @@ impl FormatEngine<'_> {
             }
             let mut outermost = open;
             let mut levels = 1;
-            while let Some(parent) = groups
-                .enclosing(outermost)
-                .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer))
-            {
+            while let Some(parent) = groups.enclosing(outermost) {
+                if is_list(parent) {
+                    levels += 1;
+                } else if groups.get(parent).delimiter != Delimiter::Paren {
+                    break;
+                }
                 outermost = groups.get(parent).open;
-                levels += 1;
             }
             let start = groups
                 .members_before(groups.enclosing(outermost), outermost)

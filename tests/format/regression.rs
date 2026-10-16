@@ -12547,3 +12547,9 @@ fn a_header_after_a_brace_a_comment_leads_past_a_directive_gets_no_blank_line() 
         "void f() {\n#if FEATURE\n\n    if( ready ) {\n        run();\n    } else\n#endif\n        /*if( other )*/{\n        if( value==0 ) {\n            run();\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_before_a_compound_literal_closer_stands_at_its_body() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .value = 1,\n        .other = 2\n        // note\n    };\n    call((struct Item) {\n        .other = 2\n        // note\n    });\n    return (struct Item) {\n        1,\n        2\n        // note\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
