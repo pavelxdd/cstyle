@@ -12719,3 +12719,17 @@ fn a_case_label_continued_past_a_trailing_block_comment_continues() {
         "void f()\n{\n    switch (flags) {\n    case FIRST | /* note */\n            SECOND:\n        value = 1;\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_macro_header_a_comment_leads_indents_its_body() {
+    check(
+        "#define CHECK(A) \\\n      do {           \\\n        /* note */ if (A)       \\\n          fail();    \\\n      } while (0)\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n    do {           \\\n        /* note */ if (A)       \\\n            fail();    \\\n    } while (0)\n",
+    );
+    check(
+        "#define CHECK(A) \\\n      switch (A) {           \\\n        /* note */ case 1:       \\\n          fail();    \\\n          break;    \\\n      }\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n    switch (A) {           \\\n    /* note */ case 1:       \\\n        fail();    \\\n        break;    \\\n    }\n",
+    );
+}
