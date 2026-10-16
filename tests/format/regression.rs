@@ -12154,3 +12154,12 @@ fn a_comment_among_call_arguments_after_a_nested_call_stands_at_the_arguments() 
         "void f()\n{\n    observe(items.begin(), notice,\n            // note\n            other);\n    observe(items.begin(), notice,\n            // note\n    [](int x) {\n        call(x);\n    });\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_parameter_declaration_body_brace_opens_the_body() {
+    check(
+        "int helper(value)\nint value;\n{ /* note */\n    return value;\n}\n",
+        &["--style=kr"],
+        "int helper(value)\nint value;\n{\n    /* note */\n    return value;\n}\n",
+    );
+}

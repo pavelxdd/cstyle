@@ -1083,6 +1083,19 @@ impl FormatEngine<'_> {
         true
     }
 
+    /// Whether the brace at `brace` opens a function body after the
+    /// declarations of its parameters.
+    fn brace_follows_parameter_declarations(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree.groups.opened_at(brace).is_some_and(|block| {
+            self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody)
+                && self
+                    .tree
+                    .previous_code_token(brace)
+                    .is_some_and(|previous| matches!(tokens[previous], Token::Symbol(';')))
+        })
+    }
+
     pub(crate) fn push_open_brace(
         &mut self,
         next: Option<&Token>,
@@ -1101,7 +1114,7 @@ impl FormatEngine<'_> {
         let brace_type = self.classify_pushed_open_brace(
             brace_header.as_deref(),
             next,
-            inferred_definition_brace,
+            inferred_definition_brace || self.brace_follows_parameter_declarations(token_index),
         );
         let lambda = self.open_brace_lambda_context();
         self.prepare_continuation_for_open_brace(brace_header.as_deref(), brace_type);
