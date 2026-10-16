@@ -844,11 +844,16 @@ impl FormatEngine<'_> {
             && !self.previous_code_ends_statement()
             // A stream's row aligns in its chain past the blank line.
             && self.stream_after_closed_or_inline_row_indent_spaces(line).is_none()
-            // A row within parentheses aligns in them past the blank line.
+            // A row within parentheses or a list aligns in them past the
+            // blank line.
             && !self.output.pending_tokens().is_some_and(|span| {
-                self.tree.groups.enclosing(span.first).is_some_and(|group| {
-                    let group = self.tree.groups.get(group);
-                    group.delimiter == Delimiter::Paren
+                self.tree.groups.enclosing(span.first).is_some_and(|id| {
+                    let group = self.tree.groups.get(id);
+                    let list = matches!(
+                        self.tree.blocks.kind(id),
+                        Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                    );
+                    (group.delimiter == Delimiter::Paren || list)
                         && self.output.line_with_token(group.open).is_some_and(|line| {
                             !self.output.trimmed(line).starts_with('#')
                         })

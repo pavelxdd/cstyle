@@ -11936,3 +11936,9 @@ fn an_element_brace_after_a_comment_alone_opens_its_row_as_one_leading_it() {
         "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
     );
 }
+
+#[test]
+fn a_designated_row_after_a_blank_line_aligns_in_its_list() {
+    let input = "void f()\n{\n    return (struct Item) {\n        .value = 1,\n\n        .other = 2\n    };\n}\n";
+    check(input, &["--style=stroustrup"], input);
+}
