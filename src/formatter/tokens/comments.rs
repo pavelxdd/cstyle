@@ -1978,6 +1978,16 @@ impl FormatEngine<'_> {
                     .iter()
                     .any(|header| header.as_deref() == Some("switch")))
             .then(|| {
+                // After a label's block the comment stands where the label's
+                // statement does, off the label's own column.
+                if let Some(frame) = self
+                    .layout
+                    .frame_stack
+                    .last_closed_brace()
+                    .filter(|frame| frame.label_block)
+                {
+                    return frame.header_indent_column;
+                }
                 // After a control block in the case body the comment stands
                 // at the block's header, wherever the style put its `}`.
                 if self

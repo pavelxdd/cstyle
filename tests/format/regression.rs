@@ -12614,3 +12614,17 @@ fn a_vtk_else_block_broken_past_a_directive_indents_its_brace() {
         "void f()\n{\n    if (other)\n        {\n        value=0;\n        }\n    else\n#ifdef FEATURE\n        {\n        result=0;\n        }\n#endif\n}\n",
     );
 }
+
+#[test]
+fn a_statement_a_comment_leads_after_a_label_block_in_a_case_stands_in_the_body() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n    retry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+    );
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n    retry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n            {\nretry:\n                {\n                value = 1;\n                goto retry;\n                }\n            /* note */ break;\n            }\n        }\n    }\n",
+    );
+}
