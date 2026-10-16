@@ -2017,11 +2017,23 @@ impl FormatEngine<'_> {
         let after = code(colon + 1);
         if !matches!(tokens[colon], Token::Symbol(':'))
             || after.is_some_and(|after| matches!(tokens[after], Token::Symbol(':')))
-            || !self.tree.statements.starts_block_statement(word)
             || !labels::is_label_start(label, &self.options.access_labels)
-            || labels::is_access_label_start(label, &self.options.access_labels)
             || matches!(label.as_str(), "case" | "default")
         {
+            return None;
+        }
+        // An access label stands where its class sets the labels.
+        if labels::is_access_label_start(label, &self.options.access_labels) {
+            let indent = labels::class_scope_indent(
+                LineKind::Label,
+                &format!("{label}:"),
+                self.layout.nesting.brace_type_stack.last().copied(),
+                self.layout.indentation.indent(),
+                self.options,
+            )?;
+            return Some(indent.columns(self.options.indent_width));
+        }
+        if !self.tree.statements.starts_block_statement(word) {
             return None;
         }
         let indent = self

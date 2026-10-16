@@ -11978,3 +11978,18 @@ fn deleting_empty_lines_keeps_those_of_an_enum_list_as_of_an_array() {
         "void f()\n{\n    enum Kind {\n\n        First,\n\n        Third\n    };\n    if (ready) {\n        run();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_an_access_label_line_leaves_the_label_at_its_column() {
+    let input = "class Item {\npublic:\n    int value;\n    Item() : value(0) {}\n    /* note */ private:\n    int other;\n};\n";
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n    int value;\n    Item() : value(0) {}\n  /* note */ private:\n    int other;\n};\n",
+    );
+    check(
+        input,
+        &["--style=mozilla"],
+        "class Item\n{\npublic:\n    int value;\n    Item() : value(0) {}\n/* note */ private:\n    int other;\n};\n",
+    );
+}
