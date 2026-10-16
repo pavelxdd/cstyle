@@ -330,6 +330,15 @@ impl FormatEngine<'_> {
         mut exact_indent_spaces: Option<usize>,
     ) -> ObjCLineAlignment {
         let line_start = line.trimmed_start();
+        // A directive within a message leaves its alignment to the rows
+        // after it.
+        if line_start.starts_with('#') && self.layout.objc.message_active {
+            return ObjCLineAlignment {
+                indent_level,
+                exact_indent_spaces,
+                restore_message_align: None,
+            };
+        }
         if self
             .layout
             .previous_pre_adjust_line

@@ -19,6 +19,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::buffer::{LineFilter, LookBack};
 use crate::formatter::output::line_adjust::macro_call_starts_with;
+use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -26,8 +27,8 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, is_comment_only_line, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit, unmatched_open_paren_columns,
+    has_unmatched_open_brace, is_comment_only_line, preprocessor_directive,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -682,7 +683,10 @@ impl FormatEngine<'_> {
         }
         let width = self.options.indent_width;
         let natural = exact_indent_spaces.unwrap_or(indent * width);
-        let previous_index = self.output.last_non_empty_index();
+        let previous_index = self.output.last_non_empty_index().map(|index| {
+            self.statement_line_before_conditionals(index)
+                .unwrap_or(index)
+        });
         let previous_is_preprocessor =
             previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
         if let Some(spaces) =
@@ -732,6 +736,27 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         None
+    }
+
+    /// The line, within an open paren or bracket, that the conditional
+    /// directives ending at output line `index` interrupt.
+    fn statement_line_before_conditionals(&self, index: usize) -> Option<usize> {
+        let is_conditional = |index: usize| {
+            preprocessor_directive(self.output.trimmed(index))
+                .is_some_and(is_conditional_preprocessor)
+                || self.output.directive_of_continuation(index).is_some()
+        };
+        if !is_conditional(index) {
+            return None;
+        }
+        let start = self.output.scoped_range().start;
+        let code = (start..index).rev().find(|&candidate| {
+            !self.output.trimmed(candidate).is_empty() && !is_conditional(candidate)
+        })?;
+        let head = self.output.code_trimmed_of(&self.output[code]);
+        let opens = head.matches(['(', '[']).count();
+        let closes = head.matches([')', ']']).count();
+        (!self.output.trimmed(code).starts_with('#') && opens > closes).then_some(code)
     }
 
     /// Whether output line `index` starts the braceless body of a control

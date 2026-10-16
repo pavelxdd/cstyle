@@ -11691,3 +11691,13 @@ fn a_kept_one_line_block_after_a_comment_after_a_case_label_takes_a_line_of_its_
         "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op)\n    {\n    case 3:\n    { value = 0; }\n    case 4: /* a */\n    { value = 0; }\n    case 5: /* a */\n    {\n        value = 0;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_message_row_after_a_conditional_aligns_as_after_the_row_before_it() {
+    let input = "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                                   and:2];\n#endif\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                   and:2];\n#endif\n}\n",
+    );
+}
