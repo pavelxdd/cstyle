@@ -2721,11 +2721,18 @@ fn add_braces_insertion_range(
     } else {
         statement_line_end
     };
-    Some((
-        header_end,
-        line_bounds(tokens, statement_start).0,
-        close_insert,
-    ))
+    // A comment leading the statement's line stays before the brace, as a
+    // comment line does.
+    let line_start = line_bounds(tokens, statement_start).0;
+    let open_insert = if tokens[line_start..statement_start]
+        .iter()
+        .any(|token| matches!(token, Token::Comment(..)))
+    {
+        statement_start
+    } else {
+        line_start
+    };
+    Some((header_end, open_insert, close_insert))
 }
 
 fn next_add_braces_statement_token(tokens: &[Token], start: usize) -> Option<usize> {

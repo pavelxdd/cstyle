@@ -9898,6 +9898,74 @@ fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
     }
 }
 
+// An added brace goes right before its statement, after a comment the
+// statement's line starts with, as after a comment line.
+#[test]
+fn added_braces_open_after_a_comment_leading_the_statement_line() {
+    let input =
+        "void f()\n{\n    if (b)\n        /* c */ x();\n    else\n        /* d */ y();\n}\n";
+    let cases: [(&[&str], &str); 10] = [
+        (
+            &["-j"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    }\n    else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=kr"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    } else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=allman"],
+            "void f()\n{\n    if (b)\n        /* c */\n    {\n        x();\n    }\n    else\n        /* d */\n    {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=gnu"],
+            "void f()\n{\n    if (b)\n        /* c */\n        {\n            x();\n        }\n    else\n        /* d */\n        {\n            y();\n        }\n}\n",
+        ),
+        (
+            &["-j", "--style=whitesmith"],
+            "void f()\n    {\n    if (b)\n        /* c */\n        {\n        x();\n        }\n    else\n        /* d */\n        {\n        y();\n        }\n    }\n",
+        ),
+        (
+            &["-j", "--style=lisp"],
+            "void f() {\n    if (b)\n        /* c */ {\n        x(); }\n    else\n        /* d */ {\n        y(); } }\n",
+        ),
+        (
+            &["-j", "--style=horstmann"],
+            "void f()\n{   if (b)\n        /* c */\n    {   x();\n    }\n    else\n        /* d */\n    {   y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=ratliff"],
+            "void f() {\n    if (b)\n        /* c */ {\n        x();\n        }\n    else\n        /* d */ {\n        y();\n        }\n    }\n",
+        ),
+        (
+            &["-j", "--style=vtk"],
+            "void f()\n{\n    if (b)\n        /* c */\n        {\n        x();\n        }\n    else\n        /* d */\n        {\n        y();\n        }\n}\n",
+        ),
+        (
+            &["-j", "--style=1tbs"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    } else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    // A written brace there closes at its header as well.
+    let written = "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    }\n}\n";
+    check(written, &["--style=kr"], written);
+}
+
+// Pico gives a block added after a comment leading the statement's line the
+// run-in shape of its other added blocks.
+#[test]
+fn pico_runs_a_statement_into_a_brace_added_after_a_comment_leading_its_line() {
+    let input = "void f()\n{\n    if (b)\n        /* c */ x();\n    if (b)\n        x();\n}\n";
+    let expected =
+        "void f()\n{   if (b)\n        /* c */\n    {   x(); }\n    if (b)\n    {   x(); } }\n";
+    check(input, &["-j", "--style=pico"], expected);
+    check(expected, &["-j", "--style=pico"], expected);
+}
+
 #[test]
 fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
     let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";

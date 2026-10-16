@@ -207,7 +207,8 @@ fn compute_line_brace_meta(
             (scanned.0, scanned.1.as_slice())
         }
     };
-    let open_shape = if trimmed == "{" {
+    // A brace after a comment leading its line stands past the line's lead.
+    let open_shape = if trimmed == "{" && line_start.starts_with('{') {
         OpenBraceShape::Isolated
     } else if code.ends_with('{')
         && trimmed.split_once(':').is_some_and(|(label, _)| {
