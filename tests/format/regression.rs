@@ -11312,3 +11312,15 @@ fn a_case_block_after_a_comment_led_label_stands_as_after_a_plain_label() {
         "void f() {\n    switch (kind) {\n        case 1:\n            break;\n        /* other */ default: {\n            value = 2;\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_parameter_paren_split_off_a_long_file_scope_header_stands_where_it_would_on_its_own_line() {
+    let input = "Decl(jint,first_very_long_function_name_component_that_goes_past_the_limit_of_eighty_xyz_abc)(\n    int a, int b\n) {\n    return 1;\n}\n";
+    let expected = "Decl(jint,\n     first_very_long_function_name_component_that_goes_past_the_limit_of_eighty_xyz_abc)\n(\n    int a, int b\n) {\n    return 1;\n}\n";
+    check(input, &["--style=google", "--max-code-length=80"], expected);
+    check(
+        expected,
+        &["--style=google", "--max-code-length=80"],
+        expected,
+    );
+}

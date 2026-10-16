@@ -26,6 +26,11 @@ pub(crate) struct MaxLengthConstructorReplay {
 }
 
 impl MaxLengthConstructorReplay {
+    /// Whether the replayed line holds a constructor initializer list.
+    pub(crate) fn has_constructor_initializer(&self) -> bool {
+        self.has_constructor_initializer
+    }
+
     fn head_enters_constructor_initializer(&self, head: &str) -> bool {
         self.has_constructor_initializer
             && head.match_indices(')').any(|(close, _)| {

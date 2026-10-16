@@ -21,8 +21,9 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, trailing_comment_split_limit,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, last_unmatched_open_delimiter, line_paren_imbalance,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
@@ -301,6 +302,18 @@ impl FormatEngine<'_> {
                 next_indent,
                 following_indent,
             );
+            // A split past the closer of every paren the line opened
+            // continues the statement itself.
+            if !constructor_replay.has_constructor_initializer()
+                && line_paren_imbalance(split.head.as_str()).0 > 0
+                && unmatched_open_paren_columns(&line[..line.len() - split.tail.len()]).is_empty()
+            {
+                following_indent = ContinuationIndent::Spaces(
+                    return_value_indent(line, base_indent_width)
+                        .or_else(|| assignment_value_indent(line, base_indent_width))
+                        .unwrap_or(base_indent_width),
+                );
+            }
             if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
                 following_indent = ContinuationIndent::Spaces(spaces);
             }
