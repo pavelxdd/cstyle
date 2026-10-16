@@ -11829,3 +11829,13 @@ fn comments_after_a_case_block_stand_in_the_case_body() {
         "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value=0;\n            break;\n        }\n        default:\n        {\n            break;\n        }\n            // note\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_constructor_initializer_stands_at_its_members() {
+    let input = "Item::Item(int value)\n    : value(value), other(0)\n/* note */ {\n}\nItem::Item(int value)\n    : value(value),\n      other(0)\n  // note\n{\n}\nItem::Item(int value)\n    : value(value),\n// between\n      other(0)\n{\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "Item::Item(int value)\n    : value(value), other(0)\n      /* note */\n{\n}\nItem::Item(int value)\n    : value(value),\n      other(0)\n      // note\n{\n}\nItem::Item(int value)\n    : value(value),\n// between\n      other(0)\n{\n}\n",
+    );
+}

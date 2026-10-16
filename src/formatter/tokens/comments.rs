@@ -1243,6 +1243,22 @@ impl FormatEngine<'_> {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
         }
+        // A comment among a constructor's initializers stands at its members.
+        let constructor_member_comment_indent = (self.current.trimmed().is_empty()
+            && !comment.contains('\n')
+            // A line comment at column one stays there.
+            && (kind != CommentKind::Line
+                || !self.layout.line_state.column1_line_comment
+                || self.options.indent_col1_comments)
+            && self.layout.nesting.paren_depth == 0
+            && self.layout.frame_stack.active_constructor_initializer().is_some())
+        .then(|| self.constructor_initializer_base_indent_spaces())
+        .flatten();
+        if let Some(spaces) = constructor_member_comment_indent {
+            self.clear_current();
+            self.current.push_str(&" ".repeat(spaces));
+            self.current_is_preindented = true;
+        }
         if kind == CommentKind::Line
             && self.current.trimmed().is_empty()
             && let Some(spaces) = self.enum_value_comment_continuation_indent_spaces()
@@ -1389,6 +1405,7 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
             && let Some(spaces) = label_line
+                .or(constructor_member_comment_indent)
                 .or(brace_element_comment_indent)
                 .or(case_label_comment_indent)
                 .or(control_header_comment_indent)
@@ -1485,9 +1502,12 @@ impl FormatEngine<'_> {
                 self.current.push_str(&prefix);
                 self.current_is_preindented = true;
             }
-            // The label a comment leads sets no column for the line after.
-            self.layout.continuation_indent.next_line_indent_spaces =
-                (!follows_objc_interface && label_line.is_none()).then_some(spaces);
+            // The label a comment leads sets no column for the line after,
+            // nor do a constructor's members.
+            self.layout.continuation_indent.next_line_indent_spaces = (!follows_objc_interface
+                && label_line.is_none()
+                && constructor_member_comment_indent.is_none())
+            .then_some(spaces);
             if kind == CommentKind::Block
                 && !follows_objc_interface
                 && (!self.token_input.has_next_meaningful_token
