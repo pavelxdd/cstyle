@@ -1428,7 +1428,15 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
         let mut brace_element_comment_indent = None;
-        if kind == CommentKind::Block
+        // A template head's parameters set the column of a comment leading
+        // one of their rows.
+        let template_row_spaces = (self.template_continuation_active()
+            && self.token_input.token_begins_source_line
+            && self.current.trimmed().is_empty())
+        .then_some(self.layout.continuation_indent.next_line_indent_spaces)
+        .flatten();
+        if template_row_spaces.is_none()
+            && kind == CommentKind::Block
             && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && class_base_comment_indent.is_none()
@@ -1543,7 +1551,8 @@ impl FormatEngine<'_> {
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
             && class_base_comment_indent.is_none()
-            && let Some(spaces) = label_line
+            && let Some(spaces) = template_row_spaces
+                .or(label_line)
                 .or(constructor_member_comment_indent)
                 .or(brace_element_comment_indent)
                 .or(case_label_comment_indent)
@@ -1625,7 +1634,8 @@ impl FormatEngine<'_> {
                     .clear_continuation_after_line = Some(spaces);
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
-            self.comments.comment_keeps_line_column = label_line.is_some();
+            self.comments.comment_keeps_line_column =
+                label_line.is_some() || template_row_spaces.is_some();
             if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1

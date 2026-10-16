@@ -12804,3 +12804,9 @@ fn a_comment_after_code_broken_off_a_leading_comment_keeps_its_gap() {
         "struct S {\n    int x;\n    /* c */\n} s, t;/* e */\n",
     );
 }
+
+#[test]
+fn a_template_parameter_a_comment_leads_aligns_with_the_parameters() {
+    let input = "template <typename First,\n          /* c */ typename Second>\nclass Other {};\n";
+    check(input, &["--style=kr"], input);
+}
