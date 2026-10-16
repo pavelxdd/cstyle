@@ -2169,7 +2169,10 @@ impl<'a> FormatEngine<'a> {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
             self.previous_was_newline = true;
-        } else if self.next_line.leads_with_else {
+        } else if self.next_line.leads_with_else
+            // A backslash continues the line only past its own break.
+            || self.current.trimmed_end().ends_with('\\')
+        {
             // A body without `;`, as a macro call, still ends before `else`.
             self.finish_line();
             self.previous_was_newline = true;

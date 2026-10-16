@@ -12172,3 +12172,12 @@ fn an_enum_opening_the_file_breaks_its_brace_as_anywhere() {
         "enum Kind\n{\n    First,\n    Second\n};\nenum Other\n{\n    Third\n};\n",
     );
 }
+
+#[test]
+fn a_line_a_backslash_continues_keeps_its_break() {
+    check(
+        "void f()\n{\n    if (ready) \\\n        fail();\n    else \\\n        done();\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) \\\n        fail();\n    else \\\n        done();\n}\n",
+    );
+}
