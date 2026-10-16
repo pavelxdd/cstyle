@@ -919,6 +919,11 @@ impl FormatEngine<'_> {
             self.previous_was_newline = false;
             return;
         }
+        // Run-in closers stay after a block comment their line holds.
+        let run_in_after_comment = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && self.current.trimmed_end().ends_with("*/");
         let parameterized_lambda_initializer_close = self.current_is_blank()
             && self.output.last().is_some_and(|line| line.trimmed() == "}")
             && self.output.get(open_output_len).is_some_and(|line| {
@@ -945,6 +950,7 @@ impl FormatEngine<'_> {
             }
         } else if self.output.len() > open_output_len
             && !self.current_is_blank()
+            && !run_in_after_comment
             && (closing_line_opened_literal
                 || aggregate_assign
                 || objc_dictionary
@@ -980,6 +986,9 @@ impl FormatEngine<'_> {
             self.current.push_str(&gap);
         } else {
             self.trim_current_end_horizontal_space();
+            if run_in_after_comment {
+                self.ensure_space();
+            }
         }
         self.mark_closed_brace_output_position();
         self.current.push('}');

@@ -12898,3 +12898,23 @@ fn comments_in_a_template_head_over_lines_leave_its_rows_and_its_end_as_without_
     let angle_comment = "template <typename First, /* a < b */\n          typename Second>\nclass Pair\n{\n    First first;\n};\n";
     check(angle_comment, &["--style=gnu"], angle_comment);
 }
+
+#[test]
+fn a_run_in_closer_of_an_enclosing_list_stays_after_the_comment_leading_its_line() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n    /* c */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }\n        /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1, }\n        /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n        /* c */\n    };\n}\n",
+    );
+}
