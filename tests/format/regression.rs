@@ -12085,3 +12085,27 @@ fn a_stream_chain_a_comment_leads_aligns_at_its_operator() {
         "void f()\n{\n    /* note */ std::cout << first\n                         << second;\n    /* note */ std::cout << \"first\"\n                         \"second\";\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_broken_off_brace_keeps_its_column_past_another_comment() {
+    check(
+        "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else { /* note */\n        result=0;\n    }\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        first();\n    } /* c */ else   /* note */\n    {\n        result=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_opening_brace_leads_what_follows_it_on_its_line() {
+    let input = "void f() { /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready) { /* a */ /* b */\n        first();\n    }\n    do { /* a */ value = 1;\n    } while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready) {\n        /* a */ /* b */\n        first();\n    }\n    do {\n        /* a */ value = 1;\n    } while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready)\n    {\n        /* a */ /* b */\n        first();\n    }\n    do\n    {\n        /* a */ value = 1;\n    }\n    while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n",
+    );
+}

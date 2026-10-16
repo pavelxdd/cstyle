@@ -180,6 +180,22 @@ struct OpenBraceComments<'t> {
     next_is_trailing: bool,
 }
 
+/// Whether the block comment after the brace at `brace` leads more of its
+/// source line than a line comment: it opens the body with what follows it.
+fn brace_comment_leads_line(tokens: &[Token], brace: usize) -> bool {
+    // A brace a rewrite made has no index in the source.
+    let Some(rest) = brace.checked_add(1).and_then(|start| tokens.get(start..)) else {
+        return false;
+    };
+    let mut rest = rest
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    matches!(rest.next(), Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n'))
+        && rest.next().is_some_and(|token| {
+            !matches!(token, Token::Newline | Token::Comment(CommentKind::Line, _))
+        })
+}
+
 impl<'t> OpenBraceComments<'t> {
     fn from_next(next: Option<&'t Token>, current_is_blank: bool) -> Self {
         let line = match next {
@@ -1133,7 +1149,21 @@ impl FormatEngine<'_> {
             );
             return;
         }
-        let comments = OpenBraceComments::from_next(next, self.current_is_blank());
+        // A comment leading the rest of the brace's line opens the body.
+        let comment_leads_body = !matches!(
+            brace_type,
+            BraceType::Array
+                | BraceType::Initializer
+                | BraceType::CompoundLiteral
+                | BraceType::Enum
+                | BraceType::DeferArray
+        ) && brace_comment_leads_line(&self.tree.tokens, token_index);
+        self.comments.comment_opens_brace_body = comment_leads_body;
+        let comments = if comment_leads_body {
+            OpenBraceComments::from_next(None, self.current_is_blank())
+        } else {
+            OpenBraceComments::from_next(next, self.current_is_blank())
+        };
         if self.try_open_brace_before_trailing_comment(&mut brace, &comments) {
             return;
         }

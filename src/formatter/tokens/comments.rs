@@ -854,6 +854,13 @@ impl FormatEngine<'_> {
         } else {
             None
         };
+        // The comments then lead their row; none trails the brace's code.
+        if std::mem::take(&mut self.comments.comment_opens_brace_body) {
+            if !self.current_is_blank() {
+                self.finish_line();
+            }
+            self.layout.line_state.trailing_comment_columns.clear();
+        }
         let indents = self.comment_indents(kind, comment, index);
         let CommentIndents {
             definition_header: definition_header_comment_indent,
@@ -3718,6 +3725,8 @@ impl FormatEngine<'_> {
                 || self.layout.line_state.trailing_comment_columns.len() > 1)
             && self.current.holds_close_brace()
         {
+            // The comments after this one keep their own columns.
+            self.layout.line_state.trailing_comment_columns.pop_front();
             if gap.is_empty() {
                 self.ensure_space();
             } else {
@@ -4068,6 +4077,9 @@ pub(crate) struct CommentState {
     pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
+    /// The next comment leads the rest of an opening brace's line into the
+    /// body.
+    pub(crate) comment_opens_brace_body: bool,
     pub(crate) follows_added_one_line_block: bool,
     /// The `;` of the last statement braces were added around on its line:
     /// their closer stands right after it.
