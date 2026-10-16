@@ -1,7 +1,7 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::BlockKind;
-use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
@@ -22,11 +22,22 @@ impl FormatEngine<'_> {
     /// own on a line after the `(`, a compound literal whose braces span
     /// lines.
     pub(crate) fn parens_hold_multiline_compound_literal(&self, open: usize) -> bool {
-        let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let Some(parens) = groups.opened_at(open) else {
             return false;
         };
+        self.multiline_literal_parens.get_or_init(|| {
+            groups
+                .ids()
+                .map(|id| self.group_holds_multiline_compound_literal(id))
+                .collect()
+        })[parens.index()]
+    }
+
+    fn group_holds_multiline_compound_literal(&self, parens: GroupId) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let open = groups.get(parens).open;
         // Only a call's closed argument list counts: parens left open or
         // holding statements are no call's arguments.
         groups.get(parens).delimiter == Delimiter::Paren

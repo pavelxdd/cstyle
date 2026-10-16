@@ -249,6 +249,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// Which groups of the tree are parens holding a compound literal that
+    /// spans lines.
+    pub(crate) multiline_literal_parens: std::cell::OnceCell<Vec<bool>>,
     /// The last chain of subscripts read for an initializer designator.
     designator_chain_cache: std::cell::RefCell<Option<DesignatorChain>>,
     /// Each matched `[` of the tree with its `]`, in token order.
@@ -447,6 +450,7 @@ impl<'a> FormatEngine<'a> {
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
+            multiline_literal_parens: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
