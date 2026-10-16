@@ -12826,3 +12826,13 @@ fn an_initializer_a_comment_line_parts_from_its_assignment_stays_on_one_line() {
         "void f()\n{\n    struct Item other =\n    // note\n    { 3, 4 };\n}\n",
     );
 }
+
+#[test]
+fn a_case_label_a_comment_leads_after_a_user_label_stands_at_the_labels() {
+    let input = "void f()\n{\n    switch (state) {\n    retry:\n    /* note */ case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n";
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n    switch (state) {\nretry:\n    /* note */ case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n",
+    );
+}

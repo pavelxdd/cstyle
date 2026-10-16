@@ -2233,23 +2233,26 @@ impl FormatEngine<'_> {
     }
 
     fn user_label_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {
-        (kind == CommentKind::Block && self.current.trimmed().is_empty())
+        // A case label after the comment stands with the labels instead.
+        (kind == CommentKind::Block
+            && self.current.trimmed().is_empty()
+            && !self.comment_precedes_switch_label())
+        .then(|| {
+            let line = self.output.last_non_empty_scoped()?;
+            let code = self.output.code_of(line).trimmed();
+            let label = code.strip_suffix(':')?.trimmed_end();
+            (labels::line_kind(code, &self.options.access_labels) == LineKind::Label
+                && !labels::is_access_label_start(label, &self.options.access_labels))
             .then(|| {
-                let line = self.output.last_non_empty_scoped()?;
-                let code = self.output.code_of(line).trimmed();
-                let label = code.strip_suffix(':')?.trimmed_end();
-                (labels::line_kind(code, &self.options.access_labels) == LineKind::Label
-                    && !labels::is_access_label_start(label, &self.options.access_labels))
-                .then(|| {
-                    (self
-                        .layout
-                        .indentation
-                        .line_indent(LineKind::Normal, self.options)
-                        + self.case_body_indent_extra(LineKind::Normal))
-                        * self.options.indent_width
-                })
+                (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
+                    + self.case_body_indent_extra(LineKind::Normal))
+                    * self.options.indent_width
             })
-            .flatten()
+        })
+        .flatten()
     }
 
     fn control_header_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {
