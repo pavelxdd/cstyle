@@ -1628,7 +1628,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.next_line.leads_with_class_base
-            || !splits_aggregate_declaration_name(self.current.trimmed_end())
+            || !splits_aggregate_declaration_name(self.current_code_before_trailing_comment())
         {
             return None;
         }

@@ -13212,3 +13212,9 @@ fn a_string_row_after_a_comment_line_in_a_case_block_stands_at_the_comment() {
     let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        static const char *names[] = { \"first\", \"second\",\n                                       /* note */\n                                       \"third\", \"fourth\"\n                                     };\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_continues_past_a_trailing_comment() {
+    let input = "void f()\n{\n    static struct foo /* note */\n        bar[3];\n}\nstatic struct foo /* note */\n    bar[3];\n";
+    check(input, &["--style=kr"], input);
+}
