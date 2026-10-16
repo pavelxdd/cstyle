@@ -1572,7 +1572,10 @@ impl FormatEngine<'_> {
             && !is_enum_underlying_type
             && self.is_bit_field_colon(match next {
                 // A member split at its colon has its width on the next line.
-                None | Some(Token::Newline) => next_code_token(&self.tree.tokens, token_index + 1)
+                // A token a rewrite made has no index in the source.
+                None | Some(Token::Newline) => token_index
+                    .checked_add(1)
+                    .and_then(|start| next_code_token(&self.tree.tokens, start))
                     .map(|index| &self.tree.tokens[index]),
                 _ => next,
             });
