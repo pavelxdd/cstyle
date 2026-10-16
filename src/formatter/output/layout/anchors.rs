@@ -2180,7 +2180,15 @@ impl FormatEngine<'_> {
         let open = groups.get(body).open;
         let mut member = semicolon;
         while let Some(before) = self.tree.previous_code_token(member) {
+            // An access label before the member ends it as a `;` does.
+            let access_label_colon = matches!(tokens[before], Token::Symbol(':'))
+                && self.tree.previous_code_token(before).is_some_and(|word| {
+                    matches!(&tokens[word], Token::Word(word)
+                        if labels::is_access_label_start(word, &self.options.access_labels)
+                            || matches!(word.as_str(), "slots" | "Q_SLOTS"))
+                });
             if before == open
+                || access_label_colon
                 || matches!(tokens[before], Token::Symbol(';'))
                     && groups.enclosing(before) == Some(body)
             {

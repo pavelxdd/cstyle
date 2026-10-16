@@ -11839,3 +11839,18 @@ fn a_comment_after_a_constructor_initializer_stands_at_its_members() {
         "Item::Item(int value)\n    : value(value), other(0)\n      /* note */\n{\n}\nItem::Item(int value)\n    : value(value),\n      other(0)\n      // note\n{\n}\nItem::Item(int value)\n    : value(value),\n// between\n      other(0)\n{\n}\n",
     );
 }
+
+#[test]
+fn a_member_after_a_conditional_member_after_an_access_label_stands_at_the_members() {
+    let input = "class Item {\npublic:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "class Item\n{\npublic:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n",
+    );
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n",
+    );
+}
