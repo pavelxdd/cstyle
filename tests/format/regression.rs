@@ -10910,3 +10910,39 @@ fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_
         "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n#pragma once\n        {\n            push(state);\n        }\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn lisp_padding_narrows_the_gap_before_a_comment_after_added_braces() {
+    let input = "void f()\n{\n    if (ready) value=1;   // note\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--add-braces", "--pad-oper"],
+        "void f() {\n    if (ready) {\n        value = 1; } // note\n}\n",
+    );
+}
+
+#[test]
+fn padding_the_row_a_closer_joins_narrows_the_gap_before_its_comment() {
+    let lone = "void f()\n{\n    if (ready) {\n        value=a+b+c+d;\n    }        // note\n}\n";
+    let nested = "void f()\n{\n    if (a) {\n        if (b) {\n            x=1; } }   // note\n}\n";
+    check(
+        lone,
+        &["--style=lisp", "--pad-oper"],
+        "void f() {\n    if (ready) {\n        value = a + b + c + d; } // note\n}\n",
+    );
+    check(
+        nested,
+        &["--style=lisp", "--pad-oper"],
+        "void f() {\n    if (a) {\n        if (b) {\n            x = 1; } } // note\n}\n",
+    );
+    check(
+        lone,
+        &["--style=pico", "--pad-oper"],
+        "void f()\n{   if (ready)\n    {   value = a + b + c + d; } // note\n}\n",
+    );
+    check(
+        nested,
+        &["--style=pico", "--pad-oper"],
+        "void f()\n{   if (a)\n    {   if (b)\n        {   x = 1; } } // note\n}\n",
+    );
+}

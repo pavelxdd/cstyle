@@ -3090,16 +3090,42 @@ impl FormatEngine<'_> {
     /// How much wider the code on the current line came out than its
     /// source tokens, whitespace runs counted as written.
     fn current_segment_growth(&self) -> Option<isize> {
-        let tokens = &self.tree.tokens;
         let first = self.current.tokens()?.first;
         let comment = self.comments.pushed_comment?;
-        if comment <= first || comment > tokens.len() {
+        if comment <= first || comment > self.tree.tokens.len() {
             return None;
         }
-        let mut end = comment;
+        self.source_growth(first, comment, self.current.trimmed())
+    }
+
+    /// How much wider an output row's code came out than its source tokens.
+    fn output_row_growth(&self, row: usize) -> Option<isize> {
+        let span = self.output.line_tokens(row)?;
+        let tokens = &self.tree.tokens;
+        let code = self.output[row].trimmed();
+        // A brace run into the row from the line before brings its fill,
+        // which no padding made.
+        let run_in =
+            matches!(tokens.get(span.first), Some(Token::Symbol('{'))) && code.starts_with('{');
+        let (first, code) = match tokens[span.first..=span.last.min(tokens.len() - 1)]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+        {
+            Some(offset) if run_in => (span.first + offset + 1, code[1..].trim_start()),
+            _ => (span.first, code),
+        };
+        self.source_growth(first, span.last + 1, code)
+    }
+
+    fn source_growth(&self, first: usize, end: usize, code: &str) -> Option<isize> {
+        let tokens = &self.tree.tokens;
+        let mut end = end.min(tokens.len());
         while end > first && matches!(tokens[end - 1], Token::Whitespace(_)) {
             end -= 1;
         }
+        let first = (first..end)
+            .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+            .unwrap_or(end);
         if tokens[first..end]
             .iter()
             .any(|token| matches!(token, Token::Newline | Token::Comment(..)))
@@ -3107,8 +3133,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let source: usize = tokens[first..end].iter().map(token_char_len).sum();
-        let code = self.current.trimmed().chars().count();
-        Some(code as isize - source as isize)
+        Some(code.chars().count() as isize - source as isize)
     }
 
     fn current_line_broke_off_closing_brace(&self) -> bool {
@@ -3201,6 +3226,51 @@ impl FormatEngine<'_> {
                 self.current.pop();
             }
         }
+        // Padding the row a bare closer joins takes from the gap before the
+        // closer's comment, as on the row itself; the join takes a column.
+        if bare_closer
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            )
+            && self.current.trimmed_start().starts_with('}')
+            && let Some(row) = self.joined_code_row()
+            && let Some(growth) = self.output_row_growth(row)
+        {
+            let code_end = self.current.trimmed_end().len();
+            let gap = self.current.len() - code_end;
+            if gap > 1 && self.current[code_end..].bytes().all(|byte| byte == b' ') {
+                let width = (gap as isize - 1 - growth).max(1) as usize + 1;
+                self.current.truncate(code_end);
+                self.current.push_str(&" ".repeat(width));
+            }
+        }
+    }
+
+    /// The output row of code a closer leading the next row joins, past
+    /// bare closer rows that join it first.
+    fn joined_code_row(&self) -> Option<usize> {
+        let mut row = self.output.len().checked_sub(1)?;
+        while self.closer_joins_row(row) {
+            let bare = self.output[row]
+                .trimmed()
+                .chars()
+                .all(|ch| matches!(ch, '}' | ';' | ' '));
+            if !bare {
+                return Some(row);
+            }
+            row = row.checked_sub(1)?;
+        }
+        None
+    }
+
+    /// Whether a closer leading the next row joins output row `row`.
+    fn closer_joins_row(&self, row: usize) -> bool {
+        let line = &self.output[row];
+        !line.trimmed().is_empty()
+            && preprocessor_directive(line.trimmed_start()).is_none()
+            && !line.trimmed_end().ends_with('\\')
+            && !line_ends_with_comment(line)
     }
 
     fn pad_comment_gap(&mut self, kind: CommentKind, comment: &str) {
@@ -3283,11 +3353,7 @@ impl FormatEngine<'_> {
                     BraceStyle::Pico | BraceStyle::Lisp
                 ) && gap.len() > 1
                     && gap.bytes().all(|byte| byte == b' ')
-                    && self
-                        .current
-                        .trimmed()
-                        .chars()
-                        .all(|ch| matches!(ch, '}' | ';' | ' '))
+                    && lone_closer
                 {
                     self.current.push(' ');
                 }
