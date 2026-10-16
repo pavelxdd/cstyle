@@ -2057,7 +2057,9 @@ impl FormatEngine<'_> {
     }
 
     fn definition_header_comment_indent_spaces(&self) -> Option<usize> {
+        // A comment inside parentheses follows no complete header.
         (!self.preprocessor.last_output_was_preprocessor
+            && self.layout.nesting.paren_depth == 0
             && !self.layout.line_adjuster.is_in_macro_block()
             && self
                 .layout

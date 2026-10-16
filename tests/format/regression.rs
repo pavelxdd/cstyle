@@ -12145,3 +12145,12 @@ fn a_comment_leading_a_constructor_head_keeps_its_initializer_spacing() {
         "/* note */ Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n{\n}\n",
     );
 }
+
+#[test]
+fn a_comment_among_call_arguments_after_a_nested_call_stands_at_the_arguments() {
+    check(
+        "void f()\n{\n    observe(items.begin(), notice,\n            // note\n            other);\n    observe(items.begin(), notice,\n            // note\n            [](int x) {\n        call(x);\n    });\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    observe(items.begin(), notice,\n            // note\n            other);\n    observe(items.begin(), notice,\n            // note\n    [](int x) {\n        call(x);\n    });\n}\n",
+    );
+}
