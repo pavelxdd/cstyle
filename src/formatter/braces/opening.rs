@@ -2151,10 +2151,13 @@ impl FormatEngine<'_> {
             && attached_block_comment.is_some()
             && self.token_input.token_followed_by_final_line_comment
             && self.options.brace_style == BraceStyle::None;
-        let reorder_allowed = matches!(
-            brace_type,
-            BraceType::Command | BraceType::Definition | BraceType::Struct | BraceType::Union
-        );
+        // A bare block's brace keeps its place after a comment; a header's
+        // moves before the comment trailing its header.
+        let reorder_allowed = match brace_type {
+            BraceType::Command => brace.header.is_some(),
+            BraceType::Definition | BraceType::Struct | BraceType::Union => true,
+            _ => false,
+        };
         if reorder_allowed
             && let Some(reordered) = self.reorder_brace_before_current_block_comment()
         {
@@ -2893,6 +2896,8 @@ impl FormatEngine<'_> {
             || self.layout.command_state.previous_command_char == Some('{')
             || self.layout.command_state.previous_command_char == Some(',')
             || init_after_declarator
+            // A brace set against a comment stays against it.
+            || self.current.trimmed_end().ends_with("*/")
         {
             self.emit_source_space();
         } else {

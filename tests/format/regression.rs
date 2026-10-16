@@ -10058,6 +10058,21 @@ fn loop_headers_take_a_macro_call_for_their_condition() {
     );
 }
 
+// A bare block's brace after a comment stays where the source set it: only a
+// header's brace moves before a comment trailing the header.
+#[test]
+fn a_bare_block_brace_after_a_comment_stays_after_it() {
+    let input = "void f()\n{\n    if (a)\n        /* note */{\n        y();\n    }\n    x = 1; /* c */ {\n        y();\n    }\n    x = 1; /* c */{\n        y();\n    }\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, input);
+    }
+    check(
+        "void f()\n{\n    if (a) /* c */ {\n        y();\n    }\n}\n",
+        &[],
+        "void f()\n{\n    if (a) { /* c */\n        y();\n    }\n}\n",
+    );
+}
+
 #[test]
 fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
     let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";
