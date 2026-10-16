@@ -10702,3 +10702,26 @@ fn tab_indents_set_an_indented_directive_among_arguments_as_the_argument_rows() 
         check(expected, &["--indent-preproc-cond", indent], expected);
     }
 }
+
+#[test]
+fn horstmann_runs_an_access_label_in_at_its_column_whatever_the_gap() {
+    let input = "class Widget : public Base\n{\npublic:\n    int a;\nprivate:\n    int b;\n};\n";
+    for (indent, expected) in [
+        (
+            "--indent=spaces=2",
+            "class Widget : public Base\n{public:\n  int a;\n private:\n  int b;\n};\n",
+        ),
+        (
+            "--indent=tab=2",
+            "class Widget : public Base\n{public:\n\tint a;\n private:\n\tint b;\n};\n",
+        ),
+        (
+            "--indent=force-tab=2",
+            "class Widget : public Base\n{public:\n\tint a;\n private:\n\tint b;\n};\n",
+        ),
+    ] {
+        let args = ["--style=horstmann", "--indent-modifiers", indent];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}

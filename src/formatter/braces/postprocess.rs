@@ -537,13 +537,13 @@ pub(crate) fn horstmann_run_in_fill(
     options: &FormatOptions,
 ) -> String {
     let switch_label = switch_cases::find_case_colon(next_line.trimmed_start()).is_some();
-    if !matches!(options.indent_style, IndentStyle::ForceTabs)
-        && labels::is_access_label(next_line, &options.access_labels)
-    {
+    // An access label runs in at its own column, right after the brace
+    // when that is where it stands.
+    if labels::is_access_label(next_line, &options.access_labels) {
         let tab_width = options.tab_width.max(1);
         let brace_column = leading_visual_width(brace_line, tab_width);
         let target_column = leading_visual_width(next_line, tab_width);
-        if options.indent_style == IndentStyle::Tabs {
+        if options.indent_style != IndentStyle::Spaces {
             let mut fill = String::new();
             let mut column = brace_column + 1;
             while column < target_column {
@@ -555,13 +555,9 @@ pub(crate) fn horstmann_run_in_fill(
                 column = next_stop;
             }
             fill.push_str(&" ".repeat(target_column.saturating_sub(column)));
-            return if fill.is_empty() {
-                " ".to_string()
-            } else {
-                fill
-            };
+            return fill;
         }
-        return " ".repeat(target_column.saturating_sub(brace_column + 1).max(1));
+        return " ".repeat(target_column.saturating_sub(brace_column + 1));
     }
     match options.indent_style {
         IndentStyle::Spaces => {
