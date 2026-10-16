@@ -10997,3 +10997,18 @@ fn breaking_one_line_headers_leaves_a_comment_inside_a_condition_directives_spli
         "void f()\n{\n    if (rc == -1) {\n        if (err != BUSY\n#if (WIN)\n                /* note */\n                && err != AGAIN\n#endif\n           ) {\n            {\n            }\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn pico_attaching_closing_while_attaches_a_while_on_its_own_source_line_as_other_styles_do() {
+    let input = "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n    do\n    {\n        value=1;\n    }\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   do\n    {   value=0; } while (ready);\n    do\n    {   value=1; } while (ready); }\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--attach-closing-while"],
+        "void f() {\n    do {\n        value=0; } while (ready);\n    do {\n        value=1; } while (ready); }\n",
+    );
+}
