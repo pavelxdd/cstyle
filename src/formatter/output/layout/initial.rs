@@ -1062,7 +1062,8 @@ impl FormatEngine<'_> {
                 leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
             );
         }
-        // Comments between the rows take no part in their columns.
+        // Comments and directives between the rows take no part in their
+        // columns.
         if layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with_any(b",{}")
             && self.output.last_line_outside_comment().is_some()
@@ -1094,10 +1095,18 @@ impl FormatEngine<'_> {
     /// for the line after the rows so far: the rows of a class's bases go
     /// on at it past each other.
     fn colon_led_rows_column(&self) -> Option<usize> {
-        let mut rows = self.output.scoped().iter().rev().filter(|line| {
-            let trimmed = line.trimmed_start();
-            !trimmed.is_empty() && !is_bare_comment_line(trimmed)
-        });
+        let mut rows = self
+            .output
+            .scoped_range()
+            .rev()
+            .filter(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !is_bare_comment_line(trimmed)
+                    && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
+            })
+            .map(|index| self.output[index].as_str());
         let previous = rows.next()?;
         if let Some(spaces) = self.colon_led_row_indent_spaces(previous) {
             return Some(spaces);

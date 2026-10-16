@@ -756,7 +756,8 @@ impl FormatEngine<'_> {
         let head = self.output.code_trimmed_of(&self.output[code]);
         let opens = head.matches(['(', '[']).count();
         let closes = head.matches([')', ']']).count();
-        (!self.output.trimmed(code).starts_with('#') && opens > closes).then_some(code)
+        (!self.output.trimmed(code).starts_with('#') && (opens > closes || head.ends_with(',')))
+            .then_some(code)
     }
 
     /// Whether output line `index` starts the braceless body of a control

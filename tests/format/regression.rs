@@ -12984,3 +12984,29 @@ fn a_definition_body_after_a_parameter_row_a_comment_leads_stands_at_the_definit
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn an_initializer_row_after_a_directive_keeps_its_column_with_the_body_brace_attached() {
+    let input = "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other)\n{\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other) {\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other) {}\n",
+    );
+}
+
+#[test]
+fn an_initializer_row_between_directives_keeps_the_column_of_the_rows() {
+    let input = "Item::Item(int value, int other)\n    : value_(value),\n#ifdef FEATURE\n      extra_(0),\n#endif\n      other_(other) {\n}\n";
+    check(input, &["--style=java"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n    : value_(value),\n#ifdef FEATURE\n      extra_(0),\n#endif\n      other_(other) {}\n",
+    );
+}
