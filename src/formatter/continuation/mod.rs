@@ -334,7 +334,7 @@ impl FormatEngine<'_> {
     }
 
     fn current_ends_with_pointer_declarator(&self) -> bool {
-        let trimmed = self.current.trimmed_end();
+        let trimmed = self.current_code_before_trailing_comment();
         if trimmed.ends_with("||") {
             return false;
         }
@@ -1520,7 +1520,8 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.current.trimmed_end();
+        // A comment after the row takes no part in it.
+        let line = self.current_code_before_trailing_comment();
         if !line.ends_with(',') || line.contains('=') {
             return None;
         }

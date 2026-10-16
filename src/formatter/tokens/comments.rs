@@ -959,8 +959,23 @@ impl FormatEngine<'_> {
             return;
         }
 
+        // A comment after a comma ending its line leaves the line ending
+        // with the comma.
+        let previous_before = self.layout.previous;
+        let trails_code = kind == CommentKind::Block
+            && previous_before == PreviousToken::Comma
+            && !self.current_is_blank()
+            && (!self.token_input.has_next_meaningful_token
+                || self
+                    .token_input
+                    .next_input_whitespace
+                    .as_deref()
+                    .is_some_and(|whitespace| whitespace.contains('\n')));
         self.position_comment_start(kind, comment, &indents);
         self.push_positioned_comment(kind, comment, &indents);
+        if trails_code && !self.current_is_blank() {
+            self.layout.previous = previous_before;
+        }
     }
 
     fn comment_indents(&self, kind: CommentKind, comment: &str, index: usize) -> CommentIndents {

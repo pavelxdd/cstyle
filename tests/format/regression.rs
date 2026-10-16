@@ -13218,3 +13218,9 @@ fn a_declarator_split_from_its_aggregate_type_continues_past_a_trailing_comment(
     let input = "void f()\n{\n    static struct foo /* note */\n        bar[3];\n}\nstatic struct foo /* note */\n    bar[3];\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn pointer_declarator_rows_after_a_trailing_comment_stay_at_the_first_declarator() {
+    let input = "struct Item {\n    robj *a, /* note */\n         *b,\n         *c;\n};\nvoid f()\n{\n    robj *a, /* note */\n         *b;\n}\n";
+    check(input, &["--style=kr"], input);
+}
