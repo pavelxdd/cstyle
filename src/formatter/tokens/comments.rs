@@ -1980,7 +1980,14 @@ impl FormatEngine<'_> {
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("switch")))
-        .then(|| self.layout.indentation.indent().saturating_sub(1) * self.options.indent_width)
+        .then(|| {
+            (self
+                .layout
+                .indentation
+                .line_indent(LineKind::SwitchLabel, self.options)
+                + self.case_body_indent_extra(LineKind::SwitchLabel))
+                * self.options.indent_width
+        })
     }
 
     fn case_block_comment_indent_spaces(

@@ -12862,3 +12862,29 @@ fn a_comment_leading_a_case_label_of_a_switch_in_a_case_block_leaves_it_at_the_c
         "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_the_first_case_label_of_indented_switch_braces_leaves_it_at_the_case_column() {
+    let first = "void f()\n{\n    switch (kind) {\n    /* note */ case 2:\n        value = 2;\n        break;\n    }\n}\n";
+    let nested = "void f()\n{\n    switch (kind) {\n    case 1:\n        switch (other) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n}\n";
+    check(
+        first,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n    }\n",
+    );
+    check(
+        first,
+        &["--style=vtk", "--indent-switches"],
+        "void f()\n{\n    switch (kind)\n        {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n}\n",
+    );
+    check(
+        nested,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1:\n            switch (other) {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n    }\n",
+    );
+    check(
+        nested,
+        &["--style=vtk", "--indent-switches"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n}\n",
+    );
+}
