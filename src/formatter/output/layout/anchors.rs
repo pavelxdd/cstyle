@@ -742,7 +742,12 @@ impl FormatEngine<'_> {
                 .saturating_sub(self.options.indent_width)
         } else {
             let mut start = line;
-            while start > 0 {
+            while start > 0
+                && !self
+                    .output
+                    .line_tokens(start)
+                    .is_some_and(|span| self.tree.statements.starts_block_statement(span.first))
+            {
                 let code = self.output.code(start - 1).trimmed_end();
                 if code.is_empty()
                     || self.output.line_tokens(start - 1).is_none()

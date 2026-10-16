@@ -11224,3 +11224,13 @@ fn lisp_pads_after_a_commented_else_if_a_closer_joins_as_after_a_commented_else(
         "void f() {\n    if (ready) {\n        value=0; } /* c */ else if (other) {\n\n        result=0; } /* d */ else {\n\n        result=1; } }\n",
     );
 }
+
+#[test]
+fn ratliff_sets_broken_element_rows_of_a_table_in_a_case_body_as_outside_a_switch() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST,  1 },\n            {\n                SECOND, 2|\n                4\n            },\n        };\n        break;\n    }\n    case 2:\n        int other[][2] = {\n            {\n                SECOND, 2|\n                4\n            },\n        };\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        default: {\n            int table[][2] = {\n                    { FIRST,  1 },\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n            }\n        case 2:\n            int other[][2] = {\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n        }\n    }\n",
+    );
+}

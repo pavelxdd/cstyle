@@ -327,8 +327,17 @@ impl FormatEngine<'_> {
                         BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
                     ) && self.should_indent_brace_line(frame.brace_type)
             });
+        // The brace stands at its output column, which the case unindent
+        // already moved; a type's members take it back as members.
+        let case_unindent =
+            self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
+        let row_case_unindent = if self.in_aggregate_declaration_brace() {
+            0
+        } else {
+            case_unindent
+        };
         Some(if self.options.brace_style == BraceStyle::Whitesmith {
-            opening_indent + class_body_extra * self.options.indent_width
+            opening_indent + class_body_extra * self.options.indent_width + row_case_unindent
         } else if self.options.indent_braces
             || vtk_indented_brace
             || self.layout.indentation.current_block_indent_increment() == Some(0)
@@ -337,11 +346,9 @@ impl FormatEngine<'_> {
                     Some(BraceType::Namespace | BraceType::Extern)
                 )
         {
-            opening_indent
+            opening_indent + row_case_unindent
         } else {
-            opening_indent
-                + (1 + class_body_extra) * self.options.indent_width
-                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
+            opening_indent + (1 + class_body_extra) * self.options.indent_width + case_unindent
         })
     }
 
