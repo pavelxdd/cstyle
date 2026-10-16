@@ -4452,3 +4452,14 @@ fn whitesmith_array_brace_after_a_struct_closer_stands_at_the_closer() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn an_initializer_a_directive_splits_from_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    struct Item item =\n#endif\n    { 1, 2 };\n}\n";
+    for style in ["kr", "allman", "gnu"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
+}
