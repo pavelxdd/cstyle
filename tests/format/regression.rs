@@ -12255,3 +12255,24 @@ fn statements_a_comment_leads_keep_the_gap_before_their_trailing_comment() {
         "void f()\n{\n    /* note */ value=0; result=1;          // both\n}\n",
     );
 }
+
+#[test]
+fn a_comment_before_a_broken_initializer_brace_stands_at_the_statement() {
+    let input = "void f()\n{\n    struct Item item =\n        // note\n    {\n        1, 2\n    };\n    struct Item other =\n        /* note */\n    {\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    struct Item item =\n    // note\n    {\n        1, 2\n    };\n    struct Item other =\n    /* note */\n    {\n        1, 2\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item item =\n    // note\n        {\n        1, 2\n        };\n    struct Item other =\n    /* note */\n        {\n        1, 2\n        };\n    }\n",
+    );
+    // GNU's broken brace leaves the comment at the statement as well.
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    struct Item item =\n    // note\n    {\n        1, 2\n    };\n    struct Item other =\n    /* note */\n    {\n        1, 2\n    };\n}\n",
+    );
+}

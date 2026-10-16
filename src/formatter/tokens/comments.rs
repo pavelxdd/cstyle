@@ -1078,7 +1078,8 @@ impl FormatEngine<'_> {
     }
 
     /// A comment line among a class's bases stands at them, and one before
-    /// its body's brace, on the brace's line or not, at the head.
+    /// its body's brace, on the brace's line or not, at the head, as one
+    /// before an initializer's brace broken from its `=`.
     fn class_base_comment_position(
         &self,
         kind: CommentKind,
@@ -1092,12 +1093,19 @@ impl FormatEngine<'_> {
                 .as_deref()
                 .is_some_and(|whitespace| whitespace.contains('\n'));
         let tokens = &self.tree.tokens;
-        let before_body = self.layout.in_class_base_clause
-            && index
+        let brace_follows = || {
+            index
                 .checked_add(1)
                 .and_then(|start| next_code_token(tokens, start))
-                .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')));
-        if !self.layout.in_class_base_clause
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
+        };
+        // An initializer's brace broken from its `=` opens at the statement.
+        let after_assignment = !self.layout.in_class_base_clause
+            && self.tree.previous_code_token(index).is_some_and(
+                |previous| matches!(&tokens[previous], Token::Operator(operator) if operator == "="),
+            );
+        let before_body = (self.layout.in_class_base_clause || after_assignment) && brace_follows();
+        if !(self.layout.in_class_base_clause || before_body)
             || !self.current.trimmed().is_empty()
             || !ends_line && !before_body
             || comment.contains('\n')
