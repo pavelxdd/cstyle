@@ -10132,6 +10132,23 @@ fn a_run_in_bare_block_brace_keeps_its_code_beside_a_one_line_block() {
     check(expected, &[], expected);
 }
 
+// A closer pico joins onto the row before takes the space joining it out of
+// the gap before its comment, whatever follows the closer, and parts a
+// comment set against it.
+#[test]
+fn pico_joins_a_closer_taking_the_joining_space_out_of_its_comment_gap() {
+    for (gap, output_gap) in [("", " "), ("  ", " "), ("     ", "    ")] {
+        let input = format!(
+            "int t[][2] = {{\n    {{ 1,\n      2\n    }},{gap}/* c */\n    {{ 3,\n      4\n    }}{gap}/* d */\n}};\nstruct S {{\n    int a;\n}} s, t;{gap}/* e */\n"
+        );
+        let expected = format!(
+            "int t[][2] = {{\n    {{   1,\n        2 }},{output_gap}/* c */\n    {{   3,\n        4 }}{output_gap}/* d */\n}};\nstruct S\n{{   int a; }} s, t;{output_gap}/* e */\n"
+        );
+        check(&input, &["--style=pico"], &expected);
+        check(&expected, &["--style=pico"], &expected);
+    }
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

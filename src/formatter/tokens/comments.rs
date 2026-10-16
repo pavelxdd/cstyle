@@ -3168,6 +3168,28 @@ impl FormatEngine<'_> {
     }
 
     fn pad_before_trailing_comment(&mut self, kind: CommentKind, comment: &str) {
+        // A closer row that began its source line joins the row before it,
+        // taking the joining space out of the gap before its comment. The
+        // join takes it from a bare closer's gap itself.
+        let joined_closer_row = self.run_in_closer_row() == Some(true);
+        let bare_closer = self
+            .current
+            .trimmed()
+            .chars()
+            .all(|ch| matches!(ch, '}' | ';' | ' '));
+        self.pad_comment_gap(kind, comment);
+        if joined_closer_row {
+            let code_end = self.current.trimmed_end().len();
+            let gap = &self.current[code_end..];
+            if gap.is_empty() {
+                self.current.push(' ');
+            } else if !bare_closer && gap.len() > 1 && gap.bytes().all(|byte| byte == b' ') {
+                self.current.pop();
+            }
+        }
+    }
+
+    fn pad_comment_gap(&mut self, kind: CommentKind, comment: &str) {
         let had_formatter_space = (self.current.ends_with(' ') || self.current.ends_with('\t'))
             && matches!(
                 self.current.trimmed_end().chars().next_back(),
