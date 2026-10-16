@@ -11480,3 +11480,19 @@ fn a_statement_broken_off_its_label_keeps_the_gap_before_its_comment() {
         "void f()\n{\ndone:\n    value = 0; /* note */\nagain:\n    value = 0; // note\n}\nclass Item\n{\npublic:\n    int value; /* note */\n};\n",
     );
 }
+
+#[test]
+fn a_comment_leading_the_first_case_label_leaves_it_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1:\n        value = 1;\n        break;\n    default:\n        break;\n    }\n}\n";
+    check(input, &["--style=1tbs"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    /* note */ case 1:\n        value = 1;\n        break;\n    default:\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=1tbs", "--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        /* note */ case 1:\n            value = 1;\n            break;\n        default:\n            break;\n    }\n}\n",
+    );
+}
