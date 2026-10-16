@@ -642,8 +642,9 @@ impl FormatEngine<'_> {
                 && starts_string_literal_token(previous_code.trimmed_start())
                 && self.paren_closes_of(previous_code) == 0
         {
+            // The row published lost the case unindent the line is yet to.
             return Some(SplitElseCallLineLayout {
-                indent_spaces: previous_spaces,
+                indent_spaces: previous_spaces + self.case_unindent_spaces(),
                 clear_continuation_after_line: None,
             });
         }

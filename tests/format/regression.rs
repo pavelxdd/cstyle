@@ -13206,3 +13206,9 @@ fn a_comment_line_in_nested_parens_of_a_condition_stands_at_the_condition_rows()
     let input = "void f(void)\n{\n    if((a ? b :\n            /* note */\n            c) != -1) {\n    }\n    if( (first &&\n            /* note */\n            (second || third))\n      ) {\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_string_row_after_a_comment_line_in_a_case_block_stands_at_the_comment() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        static const char *names[] = { \"first\", \"second\",\n                                       /* note */\n                                       \"third\", \"fourth\"\n                                     };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
