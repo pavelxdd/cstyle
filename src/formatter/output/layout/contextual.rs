@@ -180,6 +180,8 @@ impl FormatEngine<'_> {
                 && previous_code.ends_with(',')
                 && previous_code.contains('(')
                 && !previous_code.contains('{')
+                // A call the row before left open holds the line.
+                && self.open_paren_column_of(previous_code).is_none()
             {
                 *spaces = column;
             } else if *spaces > previous_indent

@@ -13133,3 +13133,14 @@ fn deleting_empty_lines_keeps_those_of_a_type_body_in_a_function() {
         "void f()\n{\n    if (ready) {\n        struct {\n            int value;\n\n        } item;\n        run();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_call_argument_row_in_a_compound_literal_stays_at_its_paren() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .y = call(first,\n                  second),\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    value = (struct Item)\n    {\n        .y = call(first,\n                  second),\n    };\n}\n",
+    );
+}
