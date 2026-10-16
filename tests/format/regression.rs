@@ -12816,3 +12816,13 @@ fn a_subscript_continued_past_a_line_comment_keeps_its_column() {
     let input = "void f()\n{\n    value = table[first +\n                  // note\n                  second];\n    if (table[first +\n              // note\n              second] && other) {\n        value = 0;\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn an_initializer_a_comment_line_parts_from_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n    struct Item other =\n        // note\n        { 3, 4 };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    struct Item other =\n    // note\n    { 3, 4 };\n}\n",
+    );
+}

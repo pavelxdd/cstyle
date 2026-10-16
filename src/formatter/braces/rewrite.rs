@@ -26,7 +26,8 @@ use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, templat
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_hash_outside_literals, has_unmatched_open_brace,
-    is_comment_line, line_ends_with_comment, preprocessor_directive, unmatched_open_paren_column,
+    is_bare_comment_line, is_comment_line, line_ends_with_comment, preprocessor_directive,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -1178,8 +1179,8 @@ impl FormatEngine<'_> {
     }
 
     fn previous_output_code_ends_assignment(&self) -> bool {
-        // Blank lines and directives between the `=` and the brace leave
-        // the assignment.
+        // Blank lines, comment lines and directives between the `=` and the
+        // brace leave the assignment.
         self.output
             .scoped_range()
             .rev()
@@ -1187,6 +1188,7 @@ impl FormatEngine<'_> {
                 let trimmed = self.output.trimmed(index);
                 !trimmed.is_empty()
                     && !trimmed.starts_with('#')
+                    && !is_bare_comment_line(trimmed)
                     && self.output.directive_of_continuation(index).is_none()
             })
             .is_some_and(|index| {
