@@ -12449,3 +12449,12 @@ fn a_comment_led_line_in_a_ratliff_block_stands_at_the_block_brace_column() {
     check(input, &["--style=ratliff"], expected);
     check(input, &["--style=banner"], expected);
 }
+
+#[test]
+fn a_ratliff_closer_after_alternative_braces_of_a_header_stands_at_the_body() {
+    check(
+        "void f()\n{\n    if (ready)\n#ifdef A\n    {\n#else\n    {\n#endif\n        value = 1;\n    }\n}\n",
+        &["--style=ratliff"],
+        "void f() {\n    if (ready)\n#ifdef A\n        {\n#else\n        {\n#endif\n        value = 1;\n        }\n    }\n",
+    );
+}

@@ -1142,25 +1142,35 @@ impl FormatEngine<'_> {
         // The tree pairs the closer with its opener across conditional
         // branches that open alike; the output's brace count does not. The
         // last branch that opens the block in its own way places it.
-        let tree_group = self
+        let closed_group = self
             .output
             .pending_tokens()
             .map(|span| span.first)
             .filter(|&close| matches!(self.tree.tokens.get(close), Some(Token::Symbol('}'))))
-            .and_then(|close| self.tree.groups.closed_at(close))
-            .map(|group| {
-                self.tree
-                    .groups
-                    .last_branch_alternative(group)
-                    .unwrap_or(group)
-            });
+            .and_then(|close| self.tree.groups.closed_at(close));
+        let tree_group = closed_group.map(|group| {
+            self.tree
+                .groups
+                .last_branch_alternative(group)
+                .unwrap_or(group)
+        });
         let tree_open_line = tree_group.and_then(|group| {
             self.output
                 .line_with_token(self.tree.groups.get(group).open)
         });
         // The line the block's header leads, or an `else` after a closer.
+        // An alternative brace with no header of its own opens the block of
+        // the header its first branch does.
         let tree_header_spaces = tree_group
-            .and_then(|group| Some((group, self.tree.blocks.owner(group)?)))
+            .and_then(|group| {
+                let owner = self
+                    .tree
+                    .blocks
+                    .owner(group)
+                    .filter(|&owner| !matches!(self.tree.tokens[owner], Token::Symbol('{')))
+                    .or_else(|| self.tree.blocks.owner(closed_group?))?;
+                Some((group, owner))
+            })
             .map(|(group, owner)| {
                 // An `else if` block belongs to its `if`.
                 let owner = next_code_token(&self.tree.tokens, owner + 1)
