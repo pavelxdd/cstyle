@@ -90,6 +90,27 @@ fn attach_case_label_brace_to_line(line: &str, access_labels: &[String]) -> Opti
     Some(attach_brace_in_comment_gap(code, &line[code.len()..]))
 }
 
+/// Whether `code` ends a parameter list, past the qualifiers after it.
+fn ends_parameter_list(code: &str) -> bool {
+    let mut code = code.trimmed_end();
+    loop {
+        let stripped = [
+            "const", "volatile", "noexcept", "override", "final", "&&", "&",
+        ]
+        .iter()
+        .find_map(|qualifier| {
+            code.strip_suffix(qualifier).filter(|rest| {
+                qualifier.starts_with('&')
+                    || !rest.ends_with(|ch: char| ch.is_ascii_alphanumeric() || ch == '_')
+            })
+        });
+        match stripped {
+            Some(rest) => code = rest.trimmed_end(),
+            None => return code.ends_with(')'),
+        }
+    }
+}
+
 fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
     let line_comment_start = line_comment_split_limit(line);
     let comment_start = if line_comment_start < line.len() {
@@ -3459,7 +3480,7 @@ impl FormatEngine<'_> {
                 return matches!(
                     self.options.brace_style,
                     BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
-                ) && (trimmed.ends_with(')') || objc_method_header)
+                ) && (ends_parameter_list(trimmed) || objc_method_header)
                     && (is_single_trailing_block_comment(comment) || comment.starts_with("//"));
             }
             let last_word = trimmed

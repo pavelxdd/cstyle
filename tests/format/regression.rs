@@ -13144,3 +13144,13 @@ fn a_call_argument_row_in_a_compound_literal_stays_at_its_paren() {
         "void f()\n{\n    value = (struct Item)\n    {\n        .y = call(first,\n                  second),\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_qualified_definition_head_takes_its_brace_before_a_trailing_comment() {
+    let input = "class Item {\n  public:\n    int value() const /* note */\n    {\n        return value_;\n    }\n    int other() // note\n    {\n        return value_;\n    }\n};\nint g() const /* note */\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n    int value() const { /* note */\n        return value_;\n    }\n    int other() { // note\n        return value_;\n    }\n};\nint g() const { /* note */\n    return 0;\n}\n",
+    );
+}
