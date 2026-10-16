@@ -3650,8 +3650,9 @@ impl FormatEngine<'_> {
             return;
         }
         // Comments after a case block stand in the case body, where a
-        // statement after the block stands at its label.
-        if !case_labels && self.case_block_before(first).is_some() {
+        // statement after the block stands at its label; indented cases
+        // keep the statement in the body too.
+        if !case_labels && !self.options.indent_cases && self.case_block_before(first).is_some() {
             return;
         }
         let statements = &self.tree.statements;

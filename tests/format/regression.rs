@@ -9514,6 +9514,12 @@ fn a_comment_after_a_case_block_stands_in_the_case_body_before_a_statement() {
             call,
             "void f(int x) {\n    switch (x) {\n    case 1: {\n        a();\n        break; }\n        /* comment */\n    b();\n    default:\n        c(); } }\n".to_string(),
         ),
+        // Indented cases keep the statement in the case body with it.
+        (
+            &["--style=ratliff", "-K"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n                a();\n                break;\n                }\n            /* comment */\n            b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
     ] {
         check(input, args, &expected);
         check(&expected, args, &expected);
