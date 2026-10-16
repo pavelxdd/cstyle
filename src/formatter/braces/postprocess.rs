@@ -8,8 +8,8 @@ use crate::formatter::lexer::{self, Token};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_ends_with_comment, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit,
+    ContainsAnyByte, is_bare_comment_line, line_ends_with_comment, line_paren_imbalance,
+    preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -462,15 +462,19 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             input[..brace_at]
                 .iter()
                 .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| line.trimmed_end().ends_with_any(b"=,({"))
+                .find(|line| !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed()))
+                .is_some_and(|line| {
+                    line[..trailing_comment_split_limit(line)]
+                        .trimmed_end()
+                        .ends_with_any(b"=,({")
+                })
         };
         let runs_in = |brace: &str, at: usize| {
             !raw_lines[at - 1]
                 && brace.trimmed() == "{"
                 && input.get(at).is_some_and(|next| {
                     !next.trimmed().is_empty()
-                        && (next.trimmed() != "{" || opens_aggregate(at - 1))
+                        && (!next.trimmed_start().starts_with('{') || opens_aggregate(at - 1))
                         && !next.trimmed_start().starts_with('#')
                         && !next.trimmed_start().starts_with('}')
                         && !next.starts_with("//")

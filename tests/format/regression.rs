@@ -12181,3 +12181,18 @@ fn a_line_a_backslash_continues_keeps_its_break() {
         "void f()\n{\n    if (ready) \\\n        fail();\n    else \\\n        done();\n}\n",
     );
 }
+
+#[test]
+fn a_bare_block_run_in_on_its_own_row_stays_off_the_body_brace() {
+    check(
+        "void g()\n{\n    {   value = 1; } }\n",
+        &["--style=pico"],
+        "void g()\n{\n    {   value = 1; } }\n",
+    );
+    // An aggregate's brace runs into a nested one past comment rows.
+    check(
+        "int table[][2] =\n{\n    /* first */\n    {\n        1, 2\n    }\n};\n",
+        &["--style=pico"],
+        "int table[][2] =\n{   /* first */\n    {   1, 2 } };\n",
+    );
+}
