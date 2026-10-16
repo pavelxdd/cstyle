@@ -1901,11 +1901,17 @@ impl FormatEngine<'_> {
     #[inline(never)]
     fn indented_assigned_brace_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        // Vtk indents the braces of blocks within a function body only.
+        // Vtk indents the braces of blocks within a function body, and at
+        // its top level a brace its elements leave alone on its line.
         let indents_braces = match self.options.brace_style {
             BraceStyle::Whitesmith | BraceStyle::Ratliff => true,
             BraceStyle::Vtk => {
                 let groups = &self.tree.groups;
+                let lone = next_code_token(tokens, first + 1).is_some_and(|next| {
+                    tokens[first + 1..next]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline))
+                });
                 groups
                     .enclosing(first)
                     .and_then(|group| {
@@ -1913,11 +1919,10 @@ impl FormatEngine<'_> {
                             .ancestors(group)
                             .find(|&id| groups.get(id).delimiter == Delimiter::Brace)
                     })
-                    .is_some_and(|block| {
-                        matches!(
-                            self.tree.blocks.kind(block),
-                            Some(BlockKind::Control | BlockKind::Block)
-                        )
+                    .is_some_and(|block| match self.tree.blocks.kind(block) {
+                        Some(BlockKind::Control | BlockKind::Block) => true,
+                        Some(BlockKind::FunctionBody) => lone,
+                        _ => false,
                     })
             }
             _ => false,
@@ -1940,30 +1945,10 @@ impl FormatEngine<'_> {
         if self.output.line_tokens(assign_line)?.last != assign {
             return None;
         }
-        // The brace stands a level past the statement's first line, which
-        // a label before the statement does not lead.
-        let mut start = assign;
-        while !self.tree.statements.starts_block_statement(start)
-            && let Some(before) = self.tree.previous_code_token(start)
-        {
-            // Past parens, a struct body the declaration defines and the
-            // initializers of declarators before.
-            if let Some(group) = self.tree.groups.closed_at(before)
-                && (self.tree.groups.get(group).delimiter != Delimiter::Brace
-                    || matches!(
-                        self.tree.blocks.kind(group),
-                        Some(BlockKind::Aggregate | BlockKind::Initializer)
-                    ))
-            {
-                start = self.tree.groups.get(group).open;
-                continue;
-            }
-            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
-                break;
-            }
-            start = before;
-        }
-        let line = self.output.line_with_token(start)?;
+        // The brace stands a level past the statement's first line.
+        let line = self
+            .output
+            .line_with_token(self.declaration_start(assign))?;
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + self.options.indent_width
@@ -2375,7 +2360,7 @@ impl FormatEngine<'_> {
     }
 
     /// A declarator after the `,` that follows an initialized declarator
-    /// starting its line stands at that declarator.
+    /// starting its line stands at the declaration's first line.
     #[inline(never)]
     fn declarator_after_initializer_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
@@ -2401,8 +2386,37 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let line = self.line_led_by(name)?;
+        self.line_led_by(name)?;
+        let line = self.output.line_with_token(self.declaration_start(name))?;
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// The first token of the declaration holding the token `from`: past
+    /// parens, a struct body it defines and the initializers of declarators
+    /// before, and after a label before the statement.
+    fn declaration_start(&self, from: usize) -> usize {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut start = from;
+        while !self.tree.statements.starts_block_statement(start)
+            && let Some(before) = self.tree.previous_code_token(start)
+        {
+            if let Some(group) = groups.closed_at(before)
+                && (groups.get(group).delimiter != Delimiter::Brace
+                    || matches!(
+                        self.tree.blocks.kind(group),
+                        Some(BlockKind::Aggregate | BlockKind::Initializer)
+                    ))
+            {
+                start = groups.get(group).open;
+                continue;
+            }
+            if matches!(tokens[before], Token::Symbol(';' | '{' | '}')) {
+                break;
+            }
+            start = before;
+        }
+        start
     }
 
     /// Styles that indent braces put the `{` of a later declarator's

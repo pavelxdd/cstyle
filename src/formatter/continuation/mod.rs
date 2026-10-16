@@ -1526,8 +1526,8 @@ impl FormatEngine<'_> {
             }
         }
         let current_prefix_len = line.len() - line.trimmed_start().len();
-        // A closer that styles indent leaves the declaration where the line
-        // that opened its initializer stands.
+        // A closer that styles indent leaves the declaration at the level of
+        // its statement.
         let closed_initializer = line
             .trimmed_start()
             .starts_with('}')
@@ -1539,8 +1539,8 @@ impl FormatEngine<'_> {
                     BraceSemanticKind::Initializer | BraceSemanticKind::Array
                 )
             });
-        let prefix_len = if let Some(frame) = closed_initializer {
-            frame.header_indent_column
+        let prefix_len = if closed_initializer.is_some() {
+            self.continuation_base_indent() * self.options.indent_width
         } else if current_prefix_len == 0 {
             self.current_line_indent_spaces()
         } else {

@@ -11092,3 +11092,33 @@ fn whitesmith_sets_the_body_brace_of_a_function_returning_a_defined_enum_at_its_
         "#include <x.h>\n\nstatic enum\n    {\n    FIRST,\n    SECOND\n    } config(struct repository *r)\n    {\n    const char *str = NULL;\n    return FIRST;\n    }\n",
     );
 }
+
+#[test]
+fn a_declarator_after_an_initializer_stands_at_its_declaration_in_a_function() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n    },\n    __attribute__((unused))\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_between_declarators_stands_at_a_continued_declaration() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    },\n    /* note */\n    second = {\n        3, 4\n    };\n";
+    check(
+        input,
+        &[],
+        "static const struct Item\n    first = {\n    1, 2\n},\n/* note */\nsecond = {\n    3, 4\n};\n",
+    );
+}
+
+#[test]
+fn vtk_sets_a_lone_brace_of_a_continued_declarator_a_level_past_its_declaration() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    static const struct Item\n        first =\n        {\n        1, 2\n        },\n    second =\n        {\n        3, 4\n        };\n}\n",
+    );
+}
