@@ -12432,3 +12432,12 @@ fn a_head_in_the_other_branch_after_a_brace_stays_a_head() {
         "#ifdef WIDE\nint\nwide_main(int argc)\n{\n#else\nint\nmain(int argc)\n{\n#endif\n    return 0;\n}\n",
     );
 }
+
+#[test]
+fn a_case_block_closer_after_a_body_line_a_comment_leads_keeps_the_block_column() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        /* note */ first();\n    }\n    break;\n    }\n}\n",
+        &["--style=stroustrup", "--indent-cases"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n            /* note */ first();\n        }\n        break;\n    }\n}\n",
+    );
+}

@@ -2,8 +2,8 @@ use crate::formatter::lexer::{Token, line_comments, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_byte, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit,
+    ContainsAnyByte, find_byte, is_bare_comment_line, line_brace_imbalance, line_paren_imbalance,
+    preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
@@ -530,13 +530,7 @@ impl LineFilter {
 
 /// Whether trimmed `text` is a comment line or a block comment row.
 fn is_comment_row(text: &str) -> bool {
-    text.starts_with("//")
-        || text.starts_with("/*")
-        || text.starts_with("*/")
-        || text == "*"
-        || text.starts_with("* ")
-        || text.starts_with("*\t")
-        || text.starts_with("**")
+    is_bare_comment_line(text) || text.starts_with("**")
 }
 
 /// An entry of [`OpenBraceLines`]: a line with `{`s still open, and how
