@@ -403,7 +403,9 @@ impl FormatEngine<'_> {
         let bare_question_line = trimmed == "?";
         let bare_leading_operator_line =
             is_leading_continuation_operator(trimmed) || matches!(trimmed, "*" | "&" | "^");
-        self.layout.indentation.statement_depth() > 0
+        // A case label goes on to its colon, past any comment ending a line.
+        self.current_case_label_continues()
+            || self.layout.indentation.statement_depth() > 0
             || (self.next_line.leads_with_assignment
                 && self.layout.indentation.statement_depth() == 0
                 && !self.current.trimmed().is_empty())

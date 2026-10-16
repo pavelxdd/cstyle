@@ -12709,3 +12709,13 @@ fn an_if_constexpr_else_split_by_a_directive_closes_at_its_block() {
         "void f()\n    {\n    if constexpr (sizeof(Item) > 4)\n        {\n        value = 1;\n#ifdef FEATURE\n        }\n    else\n        {\n#endif\n        value = 2;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_case_label_continued_past_a_trailing_block_comment_continues() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST | /* note */\n        SECOND:\n        value = 1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST | /* note */\n            SECOND:\n        value = 1;\n        break;\n    }\n}\n",
+    );
+}
