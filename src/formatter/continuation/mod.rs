@@ -1,6 +1,7 @@
 //! Indentation of continuation lines and maximum-length line splitting.
 
 use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
@@ -844,7 +845,7 @@ impl FormatEngine<'_> {
     /// Whether the line is a case label continued before its colon, which
     /// goes on two levels past the label whatever the continuation indent.
     pub(crate) fn current_case_label_continues(&self) -> bool {
-        let current = self.current.trimmed_start();
+        let current = after_leading_comments(self.current.trimmed_start());
         (current.starts_with("case ") || current.starts_with("case("))
             && find_case_colon(current).is_none()
             && self.layout.nesting.paren_depth == 0

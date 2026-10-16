@@ -12351,3 +12351,12 @@ fn class_members_after_a_conditional_opening_the_body_stand_in_the_body() {
         "class Pair\n    {\n#if A\n        int x;\n#endif\n        int y;\n    };\n",
     );
 }
+
+#[test]
+fn a_case_label_a_comment_leads_continues_as_any() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    /* note */ case FIRST |\n        THIRD:\n        value = 2;\n        break;\n    }\n}\n",
+        &["--style=mozilla"],
+        "void f()\n{\n    switch (flags) {\n    /* note */ case FIRST |\n            THIRD:\n        value = 2;\n        break;\n    }\n}\n",
+    );
+}
