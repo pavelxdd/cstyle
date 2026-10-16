@@ -12109,3 +12109,12 @@ fn a_comment_after_an_opening_brace_leads_what_follows_it_on_its_line() {
         "void f()\n{\n    /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready)\n    {\n        /* a */ /* b */\n        first();\n    }\n    do\n    {\n        /* a */ value = 1;\n    }\n    while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n",
     );
 }
+
+#[test]
+fn elements_after_a_comment_leading_the_first_align_to_the_first() {
+    check(
+        "enum Kind { /* a */ First,\n    Second };\nint list[] = { /* a */ 1,\n    2 };\n",
+        &["--style=kr"],
+        "enum Kind { /* a */ First,\n                    Second\n          };\nint list[] = { /* a */ 1,\n                       2\n             };\n",
+    );
+}

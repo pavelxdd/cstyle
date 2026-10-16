@@ -6,7 +6,7 @@ use crate::formatter::constructs::headers::is_braceless_header_line;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::index_hash::IndexSet;
-use crate::formatter::lexer::{Token, next_non_whitespace};
+use crate::formatter::lexer::{CommentKind, Token, next_non_whitespace};
 use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
@@ -679,8 +679,18 @@ impl FormatEngine<'_> {
                     Some(Token::Symbol('('))
                 );
             // The elements align to the brace's tab-expanded column; its
-            // closer counts each tab as one column.
-            base_indent + self.current_visual_width_from(base_indent) + usize::from(padded_paren)
+            // closer counts each tab as one column. They align to a first
+            // element comments lead.
+            let column = base_indent
+                + self.current_visual_width_from(base_indent)
+                + usize::from(padded_paren);
+            column
+                + leading_comments_width(
+                    &self.tree.tokens,
+                    token_index,
+                    column,
+                    self.options.tab_width,
+                )
         };
         // A compound literal stands the rows after its brace's line a level
         // past its statement, where its `}` closes. One among a call's
@@ -1595,4 +1605,46 @@ pub(crate) fn initializer_brace_line_comment_gap(
     let brace_column = leading_visual_width(brace_line, options.tab_width);
     let target = brace_column + options.indent_width;
     horstmann_run_in_fill(brace_line, &" ".repeat(target), options)
+}
+
+/// The width of the block comments, with the space after each, before the
+/// first element on the line of the brace at `brace`, from `column`.
+fn leading_comments_width(
+    tokens: &[Token],
+    brace: usize,
+    column: usize,
+    tab_width: usize,
+) -> usize {
+    let Some(rest) = brace.checked_add(1).and_then(|start| tokens.get(start..)) else {
+        return 0;
+    };
+    let mut rest = rest.iter();
+    // The space after the brace is already on the line.
+    let mut next = rest.next();
+    if matches!(next, Some(Token::Whitespace(_))) {
+        next = rest.next();
+    }
+    let mut led = String::new();
+    while let Some(Token::Comment(CommentKind::Block, comment)) = next {
+        if comment.contains('\n') {
+            return 0;
+        }
+        led.push_str(comment);
+        next = rest.next();
+        if let Some(Token::Whitespace(space)) = next {
+            led.push_str(space);
+            next = rest.next();
+        }
+    }
+    let element_follows = next.is_some_and(|token| {
+        !matches!(
+            token,
+            Token::Newline | Token::Comment(..) | Token::Preprocessor(_)
+        )
+    });
+    if element_follows && !led.is_empty() {
+        visual_width_from(&led, column, tab_width)
+    } else {
+        0
+    }
 }
