@@ -11968,3 +11968,13 @@ fn a_comment_split_off_an_initializer_closer_after_a_conditional_stands_at_its_r
         "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4}\n#endif\n        /* note */\n    };\n}\n",
     );
 }
+
+#[test]
+fn deleting_empty_lines_keeps_those_of_an_enum_list_as_of_an_array() {
+    let input = "void f()\n{\n    enum Kind {\n\n        First,\n\n        Third\n    };\n    if (ready) {\n\n        run();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    enum Kind {\n\n        First,\n\n        Third\n    };\n    if (ready) {\n        run();\n    }\n}\n",
+    );
+}

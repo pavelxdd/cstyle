@@ -93,7 +93,8 @@ impl FormatEngine<'_> {
     }
 
     fn in_empty_line_protected_context(&self) -> bool {
-        // astyle keeps the empty lines of an array, in functions too.
+        // astyle keeps the empty lines of an array or an enum's list, in
+        // functions too.
         if matches!(
             self.layout.nesting.brace_type_stack.last(),
             Some(
@@ -101,6 +102,7 @@ impl FormatEngine<'_> {
                     | BraceType::DeferArray
                     | BraceType::Initializer
                     | BraceType::CompoundLiteral
+                    | BraceType::Enum
             )
         ) {
             return true;
