@@ -11042,3 +11042,13 @@ fn whitesmith_indents_an_assigned_brace_row_from_a_statement_after_a_case_label(
         "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            Metrics n =\n                {0, 1};\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn kept_switch_labels_ending_in_a_user_label_end_their_line() {
+    let input = "void f(int p) {\n  switch (p) {\n    case 1: one:\n      x();\n    case 2: case 3:\n      x();\n    default: dflt:\n      x();\n  }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f(int p)\n{\n    switch (p) {\n    case 1: one:\n        x();\n    case 2: case 3:\n        x();\n    default: dflt:\n        x();\n    }\n}\n",
+    );
+}

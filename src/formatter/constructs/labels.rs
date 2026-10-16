@@ -471,7 +471,13 @@ impl FormatEngine<'_> {
 }
 
 pub(crate) fn is_label_start(line: &str, access_labels: &[String]) -> bool {
-    is_case_label_start(line) || line == "default" || is_plain_label_start(line, access_labels)
+    is_case_label_start(line)
+        || line == "default"
+        || is_plain_label_start(line, access_labels)
+        || line
+            .strip_prefix("default")
+            .and_then(|rest| rest.trimmed_start().strip_prefix(':'))
+            .is_some_and(|rest| is_label_start(rest.trimmed_start(), access_labels))
 }
 
 pub(crate) fn is_access_label_start(line: &str, access_labels: &[String]) -> bool {
