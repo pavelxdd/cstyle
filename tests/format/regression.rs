@@ -10474,3 +10474,19 @@ fn a_directive_comment_before_a_block_is_no_operator_for_the_closers_after_it() 
         check(&expected, &["--style=whitesmith"], &expected);
     }
 }
+
+#[test]
+fn ratliff_closes_a_block_after_alike_branches_at_the_header_it_shares_a_line_with() {
+    let input = "void helper(int value)\n{\n    if (value != 0) do {\n#ifdef A\n        value--;\n#else\n        value -= 2;\n#endif\n    } while (value > 0);\n}\n";
+    let expected = "void helper(int value) {\n    if (value != 0) do {\n#ifdef A\n            value--;\n#else\n            value -= 2;\n#endif\n            }\n        while (value > 0);\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn ratliff_closes_a_block_at_the_opener_of_the_last_branch_that_opens_it() {
+    let input = "void helper(Item *item)\n{\n#ifndef A\n  assert( item!=0 );\n  {\n#else\n  if( item ){\n#endif\n    item->value = 0;\n  }\n}\n";
+    let expected = "void helper(Item *item) {\n#ifndef A\n    assert( item!=0 );\n        {\n#else\n    if( item ) {\n#endif\n        item->value = 0;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

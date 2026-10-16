@@ -13,6 +13,8 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::groups::GroupId;
+use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
@@ -1103,28 +1105,42 @@ impl FormatEngine<'_> {
             return None;
         }
         // The tree pairs the closer with its opener across conditional
-        // branches that open alike; the output's brace count does not.
+        // branches that open alike; the output's brace count does not. The
+        // last branch that opens the block in its own way places it.
         let tree_group = self
             .output
             .pending_tokens()
             .map(|span| span.first)
             .filter(|&close| matches!(self.tree.tokens.get(close), Some(Token::Symbol('}'))))
-            .and_then(|close| self.tree.groups.closed_at(close));
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .map(|group| {
+                self.tree
+                    .groups
+                    .last_branch_alternative(group)
+                    .unwrap_or(group)
+            });
         let tree_open_line = tree_group.and_then(|group| {
             self.output
                 .line_with_token(self.tree.groups.get(group).open)
         });
         // The line the block's header leads, or an `else` after a closer.
         let tree_header_spaces = tree_group
-            .and_then(|group| self.tree.blocks.owner(group))
-            .map(|owner| {
+            .and_then(|group| Some((group, self.tree.blocks.owner(group)?)))
+            .map(|(group, owner)| {
                 // An `else if` block belongs to its `if`.
-                next_code_token(&self.tree.tokens, owner + 1)
+                let owner = next_code_token(&self.tree.tokens, owner + 1)
                     .filter(|_| matches!(&self.tree.tokens[owner], Token::Word(word) if word == "else"))
                     .filter(|&next| matches!(&self.tree.tokens[next], Token::Word(word) if word == "if"))
-                    .unwrap_or(owner)
+                    .unwrap_or(owner);
+                (group, owner)
             })
-            .and_then(|owner| {
+            // A header nested after the statement's own on its line places
+            // the block itself.
+            .filter(|&(group, owner)| {
+                self.block_header_token(group)
+                    .is_none_or(|header| header == owner)
+            })
+            .and_then(|(_, owner)| {
                 let line = self.output.line_with_token(owner)?;
                 let first = self.output.line_tokens(line)?.first;
                 let lead = self.output.lead_width(line, self.options.tab_width);
@@ -1190,6 +1206,22 @@ impl FormatEngine<'_> {
                 + self.options.indent_width
                 + case_unindent,
         )
+    }
+
+    /// The header keyword right before the brace group `group`, past its
+    /// condition's parens.
+    fn block_header_token(&self, group: GroupId) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let mut before = self
+            .tree
+            .previous_code_token(self.tree.groups.get(group).open)?;
+        if matches!(tokens[before], Token::Symbol(')')) {
+            let paren = self.tree.groups.closed_at(before)?;
+            before = self
+                .tree
+                .previous_code_token(self.tree.groups.get(paren).open)?;
+        }
+        matches!(&tokens[before], Token::Word(word) if language::is_header(word)).then_some(before)
     }
 
     pub(crate) fn same_line_nested_header_closing_brace_indent_floor(
