@@ -12569,3 +12569,18 @@ fn a_lambda_argument_a_comment_leads_stands_as_one_past_a_comma() {
         "void f()\n{\n#ifdef FEATURE\n    std::sort(items.begin(), items.end(),\n#endif\n    /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_brace_broken_off_a_line_a_comment_leads_keeps_its_gap() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    /* note */ } else if (other) { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        value=0;\n        /* note */\n    }\n    else if (other)     // second\n    {\n        value=1;\n    }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    /* note */ } value = 1; // second\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n        /* note */\n    }\n    value = 1; // second\n}\n",
+    );
+}

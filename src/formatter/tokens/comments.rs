@@ -3557,7 +3557,7 @@ impl FormatEngine<'_> {
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |index| index + 1);
         (line_start..first)
-            .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+            .find(|&index| is_code_token(&tokens[index]))
             .is_some_and(|index| matches!(tokens[index], Token::Symbol('}')))
             && !self.current_line_broke_off_closing_brace()
     }

@@ -2931,8 +2931,10 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |newline| newline + 1);
-        let Some(code_start) = (line_start..first).find(|&index| is_code_token(&tokens[index]))
-        else {
+        // A comment leading the source line went off with the code after it.
+        let Some(code_start) = (line_start..first).find(|&index| {
+            is_code_token(&tokens[index]) || matches!(tokens[index], Token::Comment(..))
+        }) else {
             return 0;
         };
         // A closing header keeps the columns of the closer broken off before
