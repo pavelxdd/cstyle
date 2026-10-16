@@ -10768,3 +10768,13 @@ fn an_attached_return_type_ending_in_a_pointer_keeps_the_pointer_alignment() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn break_blocks_pads_around_a_header_a_comment_leads_on_its_line() {
+    let input =
+        "void f()\n{\n    value = 1;\n    /* c */ if (x)\n        a();\n    value = 2;\n}\n";
+    let expected =
+        "void f()\n{\n    value = 1;\n\n    /* c */ if (x)\n        a();\n\n    value = 2;\n}\n";
+    check(input, &["--style=linux", "--break-blocks"], expected);
+    check(expected, &["--style=linux", "--break-blocks"], expected);
+}

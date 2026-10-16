@@ -13,9 +13,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, holds_code_after_leading_comments, is_comment_line, is_comment_only_line,
-    line_brace_imbalance, preprocessor_directive, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments, is_comment_line,
+    is_comment_only_line, line_brace_imbalance, preprocessor_directive,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1455,7 +1455,8 @@ impl FormatEngine<'_> {
             return false;
         }
         if word == "if" {
-            let before = current.trimmed();
+            // Comments leading the line hold no code before the header.
+            let before = after_leading_comments(current).trimmed();
             let before = before.strip_prefix('}').map_or(before, str::trim_start);
             // A statement or a label may precede it on its line.
             let follows_statement = before.ends_with(';')
