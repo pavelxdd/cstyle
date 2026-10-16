@@ -10573,3 +10573,11 @@ fn vtk_sets_a_branch_row_after_a_broken_element_at_the_aggregate_rows() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_header_after_a_statement_its_line_ends_nests_in_no_header_before_it() {
+    let input = "void f()\n{\n    if (ready) helper(); else if (x) {\n        first();\n    }\n    if (ready) helper(); else while (x) {\n        first();\n    }\n    for (;;) if (x) {\n        first();\n    }\n}\n";
+    let expected = "void f() {\n    if (ready) helper(); else if (x) {\n        first(); }\n    if (ready) helper(); else while (x) {\n            first(); }\n    for (;;) if (x) {\n            first(); } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}

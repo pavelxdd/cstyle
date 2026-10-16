@@ -79,16 +79,33 @@ pub(crate) fn line_is_control_body_header(line: &str) -> bool {
 
 pub(crate) fn same_line_nested_header_extra(line: &str) -> usize {
     let code = line.trimmed_end().trim_end_matches('{').trimmed_end();
-    let else_header = code.starts_with("else while")
-        || code.starts_with("else for")
-        || code.starts_with("else do")
-        || code.starts_with("else switch");
     // Only a second header counts; candidates bound the headers from above.
-    if nested_header_word_candidates(code) + usize::from(else_header) <= 1 {
+    if nested_header_word_candidates(code) + usize::from(code.contains("else")) <= 1 {
         return 0;
     }
-    // Words in literals and comments are no headers.
-    let count = tokenize(code)
+    // Words in literals and comments are no headers, and a statement the
+    // line ends leaves the headers before it behind, unless a `do` there
+    // still waits for its `while`.
+    let tokens = tokenize(code);
+    let mut depth = 0usize;
+    let mut tail_start = 0;
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Symbol('(') => depth += 1,
+            Token::Symbol(')') => depth = depth.saturating_sub(1),
+            Token::Symbol(';') if depth == 0 => tail_start = index + 1,
+            Token::Word(word) if word == "do" => break,
+            _ => {}
+        }
+    }
+    let mut words = tokens[tail_start..].iter().filter_map(|token| match token {
+        Token::Word(word) => Some(word.as_str()),
+        Token::Whitespace(_) | Token::Comment(..) => None,
+        _ => Some(""),
+    });
+    let else_header = words.next() == Some("else")
+        && matches!(words.next(), Some("while" | "for" | "do" | "switch"));
+    let count = tokens[tail_start..]
         .iter()
         .filter(|token| {
             matches!(token, Token::Word(word)
