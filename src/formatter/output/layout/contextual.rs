@@ -44,7 +44,7 @@ use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_id
 impl FormatEngine<'_> {
     /// Whether the line being laid out ends opening a lambda's body, which
     /// it then stands with.
-    fn pending_line_opens_lambda_body(&self) -> bool {
+    pub(crate) fn pending_line_opens_lambda_body(&self) -> bool {
         self.output.pending_tokens().is_some_and(|span| {
             matches!(self.tree.tokens[span.last], Token::Symbol('{'))
                 && self

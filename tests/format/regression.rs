@@ -12528,3 +12528,12 @@ fn a_comment_before_the_closer_of_a_list_of_nested_elements_stands_at_its_body()
     let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n        // note\n    };\n    int table[][2] = { { 1, 2 },\n        { 3, 4 },\n        // note\n    };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_lambda_argument_past_a_directive_stands_as_one_past_a_comma() {
+    check(
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n#ifdef FEATURE\n              [](const Item &first, const Item &second) {\n#endif\n        return first.value < second.value;\n    });\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n#ifdef FEATURE\n    [](const Item &first, const Item &second) {\n#endif\n        return first.value < second.value;\n    });\n}\n",
+    );
+}

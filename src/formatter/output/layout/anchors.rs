@@ -2785,6 +2785,10 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A lambda opening its body on the line stands as past any comma.
+        if self.pending_line_opens_lambda_body() {
+            return None;
+        }
         let comment =
             (previous + 1..first).find(|&index| !matches!(tokens[index], Token::Whitespace(_)))?;
         let directive =
