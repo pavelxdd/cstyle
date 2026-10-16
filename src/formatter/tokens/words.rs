@@ -12,7 +12,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
@@ -94,11 +94,7 @@ impl FormatEngine<'_> {
             )
             .is_none()
             && !self.current.trimmed_start().starts_with('#')
-            && self
-                .current
-                .trimmed_end()
-                .trim_end_matches(':')
-                .trimmed_end()
+            && after_leading_comments(self.current.trimmed_end().trim_end_matches(':').trimmed_end())
                 .contains(|ch: char| {
                     !(ch.is_ascii_alphanumeric() || ch == '_' || ch.is_whitespace())
                 })

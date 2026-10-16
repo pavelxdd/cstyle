@@ -11332,3 +11332,23 @@ fn whitesmith_sets_a_comment_led_label_brace_on_its_own_line_as_a_case_block() {
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn a_comment_leading_a_label_line_leaves_it_a_label() {
+    let input = "void f()\n{\n    /* note */ done: value=0;\n    /* note */ again:\n    next();\n    if (x) {\n        /* note */ stop: y();\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n/* note */ done:\n    value=0;\n/* note */ again:\n    next();\n    if (x) {\n/* note */ stop:\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-labels"],
+        "void f()\n{\n/* note */ done:\n    value=0;\n/* note */ again:\n    next();\n    if (x) {\n    /* note */ stop:\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n/* note */ done: value=0;\n/* note */ again:\n    next();\n    if (x) {\n/* note */ stop: y();\n    }\n}\n",
+    );
+}

@@ -82,6 +82,8 @@ struct CommentIndents {
     control_header: Option<usize>,
     block_continuation: Option<usize>,
     lambda_parameter: Option<usize>,
+    /// The label column, for a comment leading a statement label's line.
+    label_line: Option<usize>,
 }
 
 /// How an own-line multi-line block comment is reindented, decided from its
@@ -1000,6 +1002,11 @@ impl FormatEngine<'_> {
                 self.standalone_block_comment_indent_spaces(kind, definition_header_comment_indent)
             });
         let lambda_parameter_comment_indent = self.lambda_parameter_comment_indent_spaces(kind);
+        let label_line = (kind == CommentKind::Block
+            && self.current.trimmed().is_empty()
+            && matches!(self.tree.tokens.get(index), Some(Token::Comment(_, text)) if text == comment))
+        .then(|| self.user_label_after_comment_indent_spaces(index))
+        .flatten();
         CommentIndents {
             standalone_line_comment,
             function_try_initializer: function_try_initializer_comment,
@@ -1014,6 +1021,7 @@ impl FormatEngine<'_> {
             control_header: control_header_comment_indent,
             block_continuation: block_comment_continuation_indent,
             lambda_parameter: lambda_parameter_comment_indent,
+            label_line,
         }
     }
 
@@ -1036,6 +1044,7 @@ impl FormatEngine<'_> {
             control_header: control_header_comment_indent,
             block_continuation: block_comment_continuation_indent,
             lambda_parameter: lambda_parameter_comment_indent,
+            label_line,
             ..
         } = *indents;
         if kind == CommentKind::Block
@@ -1352,7 +1361,8 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
-            && let Some(spaces) = brace_element_comment_indent
+            && let Some(spaces) = label_line
+                .or(brace_element_comment_indent)
                 .or(case_label_comment_indent)
                 .or(control_header_comment_indent)
                 .or(user_label_comment_indent)
@@ -1432,7 +1442,7 @@ impl FormatEngine<'_> {
                     .clear_continuation_after_line = Some(spaces);
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
-            if current_indent != spaces {
+            if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1
                 } else {
@@ -1934,6 +1944,42 @@ impl FormatEngine<'_> {
             })
         })
         .flatten()
+    }
+
+    /// The label column, when the comment at `index` leads a statement
+    /// label's line.
+    fn user_label_after_comment_indent_spaces(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let code = |from: usize| {
+            (from..tokens.len()).find(|&at| {
+                !matches!(
+                    tokens[at],
+                    Token::Whitespace(_) | Token::Comment(CommentKind::Block, _)
+                )
+            })
+        };
+        let word = code(index.checked_add(1)?)?;
+        let Token::Word(label) = &tokens[word] else {
+            return None;
+        };
+        let colon = code(word + 1)?;
+        let after = code(colon + 1);
+        if !matches!(tokens[colon], Token::Symbol(':'))
+            || after.is_some_and(|after| matches!(tokens[after], Token::Symbol(':')))
+            || !self.tree.statements.starts_block_statement(word)
+            || !labels::is_label_start(label, &self.options.access_labels)
+            || labels::is_access_label_start(label, &self.options.access_labels)
+            || matches!(label.as_str(), "case" | "default")
+        {
+            return None;
+        }
+        let indent = self
+            .layout
+            .indentation
+            .line_indent(LineKind::Label, self.options);
+        let extra =
+            usize::from(self.options.indent_labels) * self.case_body_indent_extra(LineKind::Normal);
+        Some((indent + extra) * self.options.indent_width)
     }
 
     fn user_label_comment_indent_spaces(&self, kind: CommentKind) -> Option<usize> {

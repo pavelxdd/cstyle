@@ -6,6 +6,7 @@ use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::constructor_initializers::constructor_initializer_name_indent_from_line;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::frame::{
@@ -23,7 +24,9 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{is_comment_only_line, trailing_matching_parens};
+use crate::formatter::text::line_scan::{
+    after_leading_comments, is_comment_only_line, trailing_matching_parens,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -1569,6 +1572,16 @@ impl FormatEngine<'_> {
             .trimmed()
             .trim_start_matches('}')
             .trimmed();
+        // A statement label after comments leading the line is still one.
+        let after_comments = after_leading_comments(label_text);
+        let label_text = if after_comments.len() < label_text.len()
+            && !switch_cases::is_case_label_start(after_comments)
+            && !switch_cases::is_default_label_start(after_comments)
+        {
+            after_comments
+        } else {
+            label_text
+        };
         let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
