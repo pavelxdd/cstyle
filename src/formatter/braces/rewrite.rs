@@ -1008,6 +1008,17 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // Kept one-line statements keep an `else if` after a statement on
+        // their line.
+        if self.options.keeps_multi_statement_line()
+            && self
+                .current
+                .trimmed_end()
+                .strip_suffix("else")
+                .is_some_and(|before| before.trimmed_end().ends_with(';'))
+        {
+            return false;
+        }
         if !self.current_is_blank() {
             self.finish_line();
         }

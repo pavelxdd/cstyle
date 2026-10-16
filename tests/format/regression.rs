@@ -9652,6 +9652,14 @@ fn break_one_line_headers_keeps_a_run_in_if_line_whole_whatever_follows_its_else
         check(input, &[style, "--break-one-line-headers"], expected);
         check(input, &[style], expected);
     }
+    // So do kept one-line statements in any style.
+    let kept = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break;\n        }\n    if (ready) helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n";
+    check(
+        input,
+        &["--style=kr", "-o", "--break-one-line-headers"],
+        kept,
+    );
+    check(input, &["--style=kr", "-o"], kept);
 }
 
 #[test]
@@ -9825,4 +9833,19 @@ fn a_comment_after_an_added_one_line_block_keeps_its_column_through_unpadding_in
         ];
         check(input, &args, expected);
     }
+}
+
+#[test]
+fn break_else_ifs_leaves_a_kept_one_line_statement_chain_whole() {
+    let input = "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready) { value=0; } else if (other) { result=0; } else { result=1; }\n}\n";
+    check(
+        input,
+        &["--style=kr", "-o", "--break-elseifs"],
+        "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready) {\n        value=0;\n    } else\n        if (other) {\n            result=0;\n        } else {\n            result=1;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "-o", "--break-elseifs", "--remove-braces"],
+        "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready)\n        value=0;   else if (other)\n        result=0;   else\n        result=1;\n}\n",
+    );
 }
