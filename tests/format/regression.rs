@@ -3928,10 +3928,11 @@ fn comment_after_a_case_block_takes_the_label_level_only_before_a_label() {
 }
 
 #[test]
-fn comment_trailing_a_switch_brace_stands_in_the_case_bodies() {
+fn comment_trailing_a_switch_brace_stands_at_the_case_labels() {
     let input = "int f(int c)\n{\n  switch( c ){  /* a\n          ** b */\n    case 1:\n      return 1;\n  }\n}\n";
-    let expected = "int f(int c)\n{\n    switch( c ) {\n        /* a\n                ** b */\n    case 1:\n        return 1;\n    }\n}\n";
+    let expected = "int f(int c)\n{\n    switch( c ) {\n    /* a\n            ** b */\n    case 1:\n        return 1;\n    }\n}\n";
     check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -11793,7 +11794,7 @@ fn a_comment_leading_a_switch_line_leaves_the_comment_after_its_brace_as_without
     check(
         input,
         &["--style=kr"],
-        "void f()\n{\n    /* note */ switch (kind) {\n        /* dispatch on kind\n                        ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
+        "void f()\n{\n    /* note */ switch (kind) {\n    /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
     );
 }
 
@@ -13019,4 +13020,33 @@ fn a_header_after_a_directive_takes_its_brace_before_its_comment_as_anywhere() {
         &["--style=kr"],
         "void f()\n{\n#ifdef FEATURE\n    run();\n#endif\n    if (ready) { /* why */\n        value=0;\n    }\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
     );
+}
+
+#[test]
+fn a_comment_over_lines_trailing_a_switch_brace_stands_where_one_on_its_own_line_does() {
+    // astyle sets it a level deeper on a first pass and moves it on the
+    // next; the comment stands at the labels at once.
+    let input = "int f(int kind)\n{\n  switch( kind ){  /* Switch on the class of the first byte\n                   ** of the token. */\n    case 1: {\n      return 1;\n    }\n  }\n  return 0;\n}\n";
+    let cases: [(&[&str], &str); 4] = [
+        (
+            &["--style=kr"],
+            "int f(int kind)\n{\n    switch( kind ) {\n    /* Switch on the class of the first byte\n                     ** of the token. */\n    case 1: {\n        return 1;\n    }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-switches"],
+            "int f(int kind)\n{\n    switch( kind ) {\n        /* Switch on the class of the first byte\n                         ** of the token. */\n        case 1: {\n            return 1;\n        }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=allman"],
+            "int f(int kind)\n{\n    switch( kind )\n    {\n    /* Switch on the class of the first byte\n                     ** of the token. */\n    case 1:\n    {\n        return 1;\n    }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=gnu"],
+            "int f(int kind)\n{\n    switch( kind )\n        {\n        /* Switch on the class of the first byte\n                         ** of the token. */\n        case 1:\n        {\n            return 1;\n        }\n        }\n    return 0;\n}\n",
+        ),
+    ];
+    for (options, expected) in cases {
+        check(input, options, expected);
+        check(expected, options, expected);
+    }
 }

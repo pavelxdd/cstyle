@@ -720,11 +720,20 @@ impl FormatEngine<'_> {
     /// its source line.
     pub(crate) fn output_comment_trailed_code(&self, line: usize) -> bool {
         self.output.comment_token(line).is_some_and(|comment| {
-            self.tree.tokens[..comment]
+            let tokens = &self.tree.tokens;
+            tokens[..comment]
                 .iter()
-                .rev()
-                .find(|token| !matches!(token, Token::Whitespace(_)))
-                .is_some_and(|token| !matches!(token, Token::Newline))
+                .rposition(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|before| {
+                    !matches!(tokens[before], Token::Newline)
+                        // A switch body's brace, whose line the comment
+                        // leaves, holds none of it.
+                        && !self.tree.groups.opened_at(before).is_some_and(|body| {
+                            self.tree.blocks.owner(body).is_some_and(|owner| {
+                                matches!(&tokens[owner], Token::Word(word) if word == "switch")
+                            })
+                        })
+                })
         })
     }
 
@@ -2937,15 +2946,10 @@ impl FormatEngine<'_> {
                 code.trimmed_start().starts_with("switch") && code.ends_with('{')
             }
         {
-            // A comment that trailed the brace stands in the case bodies.
-            let levels = if self.token_input.token_begins_source_line {
-                usize::from(self.comment_precedes_switch_statement())
-                    * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff))
-            } else {
-                1 + usize::from(
-                    self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
-                )
-            };
+            // A comment that trailed the brace stands where one on a line of
+            // its own does.
+            let levels = usize::from(self.comment_precedes_switch_statement())
+                * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff));
             " ".repeat(
                 leading_visual_width(previous, self.options.tab_width)
                     + levels * self.options.indent_width,
