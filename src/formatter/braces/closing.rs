@@ -889,19 +889,7 @@ impl FormatEngine<'_> {
         if matches!(next, Some(Token::Word(word)) if word == "while")
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
         {
-            if self.options.attach_closing_while {
-                return true;
-            }
-            if self.options.brace_style == BraceStyle::None
-                && !self.closing_header_stays_on_brace_line()
-            {
-                return false;
-            }
-            return (is_attached_closing_header_style(self.options)
-                || self.options.brace_style == BraceStyle::None)
-                && !self.options.break_closing_braces
-                && !self.options.indent_braces
-                && !self.options.indent_blocks;
+            return self.attaches_closing_while(self.closing_header_stays_on_brace_line());
         }
 
         let next_is_closing_header =
@@ -915,6 +903,22 @@ impl FormatEngine<'_> {
             && !self.options.break_closing_braces
             && !self.options.indent_braces
             && next_is_closing_header
+    }
+
+    /// Whether a do-while's `while` joins the `}` before it; without a brace
+    /// style only one the source set there stays.
+    pub(super) fn attaches_closing_while(&self, source_attached: bool) -> bool {
+        if self.options.attach_closing_while {
+            return true;
+        }
+        if self.options.brace_style == BraceStyle::None && !source_attached {
+            return false;
+        }
+        (is_attached_closing_header_style(self.options)
+            || self.options.brace_style == BraceStyle::None)
+            && !self.options.break_closing_braces
+            && !self.options.indent_braces
+            && !self.options.indent_blocks
     }
 
     pub(crate) fn try_attach_leading_closing_header(&mut self, word: &str) -> bool {

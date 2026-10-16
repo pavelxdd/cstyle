@@ -2,7 +2,6 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
 };
-use crate::formatter::braces::closing::is_attached_closing_header_style;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
 use crate::formatter::constructs::assembly::is_asm_block_header;
@@ -1819,12 +1818,15 @@ impl FormatEngine<'_> {
             opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
+        let closes_do = self.layout.command_state.current_header.as_deref() == Some("do");
+        if closes_do {
+            self.layout.nesting.last_closed_brace_header = Some("do".to_string());
+        }
         if is_empty_block
-            && (self.options.brace_style == BraceStyle::None
-                || is_attached_closing_header_style(self.options))
-            && self.layout.command_state.current_header.as_deref() == Some("do")
+            && closes_do
             && let Some(while_index) = next_non_whitespace(tokens, close_index + 1, line_end)
             && matches!(tokens.get(while_index), Some(Token::Word(word)) if word == "while")
+            && self.attaches_closing_while(true)
             && let Some(semi_index) = (while_index..line_end)
                 .find(|index| matches!(tokens.get(*index), Some(Token::Symbol(';'))))
         {
@@ -1837,13 +1839,15 @@ impl FormatEngine<'_> {
             self.layout.command_state.previous_non_ws_char = Some(';');
             let trailing = next_non_whitespace(tokens, semi_index + 1, line_end)
                 .and_then(|index| tokens.get(index));
-            if !matches!(trailing, Some(Token::Comment(_, _))) {
+            let statement_follows = self.options.keeps_multi_statement_line()
+                && trailing.is_some_and(|token| !matches!(token, Token::Newline));
+            if statement_follows && !matches!(trailing, Some(Token::Comment(_, _))) {
+                self.set_input_whitespace(tokens, semi_index, 0);
+                self.emit_trailing_source_space_or_ensure();
+            } else if !matches!(trailing, Some(Token::Comment(_, _))) {
                 self.finish_line();
             }
             return Some(semi_index + 1);
-        }
-        if self.layout.command_state.current_header.as_deref() == Some("do") {
-            self.layout.nesting.last_closed_brace_header = Some("do".to_string());
         }
         self.layout.command_state.current_header = None;
         self.layout.command_state.preprocessor_after_header = false;
@@ -1882,8 +1886,11 @@ impl FormatEngine<'_> {
             && !aggregate_trailing_declarator
             && !((word_headed_block
                 || self.options.brace_style == BraceStyle::Pico
+                // A block ends its statement, so the code after it on the
+                // line is another.
                 || self.options.keeps_multi_statement_line()
-                    && self.layout.line_state.is_multi_statement_line)
+                    && (self.layout.line_state.is_multi_statement_line
+                        || brace_type == BraceType::Command))
                 && next_on_source_line
                 && !next_is_closing_header)
             && (!next_is_closing_header

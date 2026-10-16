@@ -11174,3 +11174,28 @@ fn a_nested_switch_body_after_a_table_in_a_case_block_stands_a_level_past_its_la
         "void f()\n{\n    switch (kind) {\n        case 2:\n        {\n            static const struct Item other[] = {\n                { 1 },\n            };\n            switch (other) {\n                case 2:\n                    value = 2;\n                    break;\n            }\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn keeping_one_line_statements_keeps_a_statement_after_an_empty_block_on_its_line() {
+    let input = "void f()\n{\n    if (ready) {} next();\n    while (busy()) {} next();\n    {} next();\n    switch (x) {} next();\n    do {} while (x); next();\n    if (a) {} else {} next();\n    for (;;) {} for (;;) {}\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        "void f()\n{\n    if (ready) {} next();\n    while (busy()) {} next();\n    {} next();\n    switch (x) {} next();\n    do {}\n    while (x); next();\n    if (a) {}\n    else {} next();\n    for (;;) {} for (;;) {}\n}\n",
+    );
+}
+
+#[test]
+fn styles_breaking_closing_braces_break_the_while_off_an_empty_do_block() {
+    let input = "void f()\n{\n    do {} while (x);\n    next();\n}\n";
+    let broken = "void f()\n{\n    do {}\n    while (x);\n    next();\n}\n";
+    check(input, &["--style=stroustrup"], broken);
+    check(input, &["--break-closing-braces"], broken);
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    do {}\n    while (x);\n    next();\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
