@@ -13224,3 +13224,9 @@ fn pointer_declarator_rows_after_a_trailing_comment_stay_at_the_first_declarator
     let input = "struct Item {\n    robj *a, /* note */\n         *b,\n         *c;\n};\nvoid f()\n{\n    robj *a, /* note */\n         *b;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_line_among_the_rows_of_a_run_in_list_stands_at_the_rows() {
+    let input = "void f()\n{\n    int b[] = {{1, 2},\n        /* note */\n        3,\n        4, {5},\n        6\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}

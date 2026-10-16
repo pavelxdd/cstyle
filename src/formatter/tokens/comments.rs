@@ -1477,11 +1477,13 @@ impl FormatEngine<'_> {
             {
                 // The rows published lost the case unindent the comment is
                 // yet to.
-                brace_element_comment_indent = unmatched_open_brace_content_offset(previous_code)
-                    .map(|offset| {
+                // A list's rows stand at its column.
+                brace_element_comment_indent = self.current_inline_array_column().or_else(|| {
+                    unmatched_open_brace_content_offset(previous_code).map(|offset| {
                         visual_width_from(&previous[..offset], 0, self.options.tab_width)
                             + self.case_unindent_spaces()
-                    });
+                    })
+                });
                 // Else it stands where the row after it goes on, as the row
                 // before set it.
                 brace_element_comment_indent = brace_element_comment_indent
