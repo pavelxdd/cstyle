@@ -11465,3 +11465,18 @@ fn a_statement_after_a_comment_led_label_in_a_directive_stands_in_its_block() {
         "void f()\n{\n    if (ready) {\n#ifdef FEATURE\n/* note */ retry:\n#endif\n        value = 1;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_statement_broken_off_its_label_keeps_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    done: value=0;   /* note */\n    again: value=0; // note\n}\nclass Item\n{\n    public: int value; /* note */\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\ndone:\n    value=0;   /* note */\nagain:\n    value=0; // note\n}\nclass Item\n{\npublic:\n    int value; /* note */\n};\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--pad-oper"],
+        "void f()\n{\ndone:\n    value = 0; /* note */\nagain:\n    value = 0; // note\n}\nclass Item\n{\npublic:\n    int value; /* note */\n};\n",
+    );
+}

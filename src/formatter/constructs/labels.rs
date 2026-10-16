@@ -4,7 +4,7 @@ use crate::formatter::constructs::headers::{is_header, starts_header_word};
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::raw_strings;
+use crate::formatter::lexer::{Token, raw_strings};
 use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::BraceType;
@@ -468,6 +468,16 @@ impl FormatEngine<'_> {
         };
         self.output.lead_width(before, tab_width) + extra
     }
+}
+
+/// Whether `tokens`, after a word, go on with the single colon ending a
+/// label.
+pub(crate) fn starts_label(tokens: &[Token]) -> bool {
+    let mut code = tokens
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)));
+    matches!(code.next(), Some(Token::Symbol(':')))
+        && !matches!(code.next(), Some(Token::Symbol(':')))
 }
 
 pub(crate) fn is_label_start(line: &str, access_labels: &[String]) -> bool {

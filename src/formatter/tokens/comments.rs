@@ -3261,12 +3261,15 @@ impl FormatEngine<'_> {
                 .iter()
                 .take_while(|token| !matches!(token, Token::Newline))
                 .any(|token| matches!(token, Token::Symbol('{')));
+        // A label broken off the line leaves the gap as a header does.
         tokens[line_start..first]
             .iter()
-            .find(|token| !matches!(token, Token::Whitespace(_)))
-            .is_some_and(|token| {
-                matches!(token, Token::Word(word)
-                    if is_header(self.options, word) && !(breaks_else_if && word == "else"))
+            .position(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|offset| {
+                let index = line_start + offset;
+                matches!(&tokens[index], Token::Word(word)
+                    if is_header(self.options, word) && !(breaks_else_if && word == "else")
+                        || labels::starts_label(&tokens[index + 1..first]))
             })
     }
 

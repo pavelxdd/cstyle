@@ -1315,7 +1315,7 @@ impl<'a> FormatEngine<'a> {
                             && (crate::formatter::constructs::headers::is_header(
                                 self.options,
                                 word,
-                            ) || starts_label(&tokens[index + 1..])) =>
+                            ) || labels::starts_label(&tokens[index + 1..])) =>
                     {
                         statement_count += 1;
                     }
@@ -2525,14 +2525,4 @@ fn shared_whitespace(whitespace: &str) -> std::borrow::Cow<'static, str> {
     } else {
         std::borrow::Cow::Owned(whitespace.to_owned())
     }
-}
-
-/// Whether `tokens`, after a word, go on with the single colon ending a
-/// label.
-fn starts_label(tokens: &[Token]) -> bool {
-    let mut code = tokens
-        .iter()
-        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)));
-    matches!(code.next(), Some(Token::Symbol(':')))
-        && !matches!(code.next(), Some(Token::Symbol(':')))
 }
