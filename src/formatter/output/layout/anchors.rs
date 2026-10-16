@@ -5095,7 +5095,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        Some(self.token_column(do_token)? + self.case_unindent_spaces())
+        // A `do` leading its line stands at the line, past comments before
+        // it there.
+        let column = if first == do_token {
+            self.output.lead_width(line, self.options.tab_width)
+        } else {
+            self.token_column(do_token)?
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
     /// VTK keeps the braces of a file-scope function with K&R parameter

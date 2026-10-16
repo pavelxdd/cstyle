@@ -11444,3 +11444,14 @@ fn a_comment_leading_a_function_brace_leaves_the_brace_a_function_body() {
         "void f()\n/* note */\n{\n    result = ((first + (second * 2))\n              - third) / (fourth\n                          + fifth);\n}\n",
     );
 }
+
+#[test]
+fn the_while_of_a_do_a_comment_leads_stands_at_the_do_line() {
+    let input = "void f()\n{\n    /* note */ do {\n        value=0;\n    } while (ready);\n    /* note */ do\n        value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ do\n    {\n        value=0;\n    }\n    while (ready);\n    /* note */ do\n        value=0;\n    while (ready);\n}\n",
+    );
+    check(input, &["--style=kr"], input);
+}
