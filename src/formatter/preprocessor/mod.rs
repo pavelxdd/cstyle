@@ -761,6 +761,9 @@ impl FormatEngine<'_> {
             && !continued_define_contains_directive
             && opaque_literal_line_ranges.is_empty()
         {
+            if self.take_block_spacing_blank(parts[0]) {
+                self.push_empty_line();
+            }
             self.push_multiline_define(&parts);
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;

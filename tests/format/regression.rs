@@ -11122,3 +11122,13 @@ fn vtk_sets_a_lone_brace_of_a_continued_declarator_a_level_past_its_declaration(
         "void f()\n{\n    static const struct Item\n        first =\n        {\n        1, 2\n        },\n    second =\n        {\n        3, 4\n        };\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_before_a_formatted_define_after_a_block() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    }\n#define CHECK(A) \\\n      do {           \\\n        x(A);        \\\n      } while (0)\n    CHECK(value);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--indent-preproc-define"],
+        "void f()\n{\n    if (ready) {\n        first();\n    }\n\n#define CHECK(A) \\\n    do {           \\\n        x(A);        \\\n    } while (0)\n    CHECK(value);\n}\n",
+    );
+}
