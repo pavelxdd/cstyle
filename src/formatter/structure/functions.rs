@@ -706,11 +706,25 @@ fn head_end(
         Some(knr_semicolon.map_or(HeadEnd::Unterminated, |_| HeadEnd::Found(None)))
     };
     while let Some(next) = next_code_token(tokens, index) {
-        // A directive ends what the tree can see of the head.
+        // A directive ends what the tree can see of the head, unless the
+        // conditionals before its body only close around the head.
         if tokens[index..next]
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)))
         {
+            let closes_conditionals = tokens[index..next].iter().all(|token| match token {
+                Token::Preprocessor(directive) => {
+                    preprocessor_directive(&directive.text).is_some_and(|name| name == "endif")
+                }
+                _ => true,
+            });
+            if closes_conditionals
+                && tokens[next] == Token::Symbol('{')
+                && groups.enclosing(next) == level
+                && knr_semicolon.is_none()
+            {
+                return Some(HeadEnd::Found(groups.opened_at(next)));
+            }
             return unterminated(knr_semicolon);
         }
         if groups.enclosing(next) != level {

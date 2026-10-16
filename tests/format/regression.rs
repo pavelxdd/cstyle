@@ -11942,3 +11942,13 @@ fn a_designated_row_after_a_blank_line_aligns_in_its_list() {
     let input = "void f()\n{\n    return (struct Item) {\n        .value = 1,\n\n        .other = 2\n    };\n}\n";
     check(input, &["--style=stroustrup"], input);
 }
+
+#[test]
+fn breaking_return_types_breaks_a_definition_a_conditional_parts_from_its_body() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    run();\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--break-return-type"],
+        "#ifdef FEATURE\nvoid\nf()\n#endif\n{\n    run();\n}\n",
+    );
+}
