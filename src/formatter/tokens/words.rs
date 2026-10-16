@@ -385,9 +385,12 @@ impl FormatEngine<'_> {
                 && self.options.attach_closing_while)
             && contains_one_line_block(self.current.trimmed())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
+                // An empty block keeps the closing header its style attaches.
+                && !(self.closes_empty_block_before_word()
+                    && self.options.brace_style != BraceStyle::Lisp
+                    && self.attaches_closing_header(word, true))
                 || (word == "while"
                     && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
-                    // An empty block keeps the `while` its style attaches.
                     && !(self.closes_empty_block_before_word()
                         && self.attaches_closing_while(true))))
         {

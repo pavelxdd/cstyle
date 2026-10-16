@@ -3202,8 +3202,7 @@ fn force_tab_x_braceless_else_comment_uses_structural_tabs() {
         ),
         fixture!(
             "void f() {",
-            "\tif(a) {}",
-            "\telse",
+            "\tif(a) {} else",
             "\t\t/* note */",
             "\t\tif(b) {}",
             "}",
@@ -3225,8 +3224,7 @@ fn tab_indent_braceless_else_comment_uses_body_tabs() {
         ),
         fixture!(
             "void f() {",
-            "\tif(a) {}",
-            "\telse",
+            "\tif(a) {} else",
             "\t\t/* note */",
             "\t\tif(b) {}",
             "}",

@@ -2317,12 +2317,7 @@ fn pads_non_empty_for_header_semicolons_by_default() {
 
     assert_eq!(
         actual,
-        fixture!(
-            "void f() {",
-            "    for(i=0; i<n; i++) {}",
-            "    for(;;) {}",
-            "}",
-        )
+        fixture!("void f() {", "    for(i=0; i<n; i++) {} for(;;) {}", "}",)
     );
 }
 

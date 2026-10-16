@@ -1896,7 +1896,16 @@ impl FormatEngine<'_> {
         ) && self.options.attach_closing_while
             && matches!(next, Some(Token::Word(word)) if word == "while")
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
+        // An empty block ends no line: the code after it stays there, and a
+        // closing header too where the style attaches it.
+        let empty_block_keeps_line = is_empty_block
+            && brace_type == BraceType::Command
+            && next_on_source_line
+            && (!next_is_closing_header
+                || self.options.brace_style != BraceStyle::Lisp
+                    && matches!(next, Some(Token::Word(word)) if self.attaches_closing_header(word, true)));
         if !init_block_continues_expression
+            && !empty_block_keeps_line
             && !empty_value_block_continues_expression
             && !lambda_block_continues_expression
             && !aggregate_trailing_declarator

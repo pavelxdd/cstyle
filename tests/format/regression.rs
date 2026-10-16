@@ -13050,3 +13050,26 @@ fn a_comment_over_lines_trailing_a_switch_brace_stands_where_one_on_its_own_line
         check(expected, options, expected);
     }
 }
+
+#[test]
+fn an_empty_block_keeps_the_code_after_it_on_its_line() {
+    let input =
+        "void f()\n{\n    if (ready) {} else { value = 1; }\n    while (busy()) {} next();\n}\n";
+    let attached = "void f()\n{\n    if (ready) {} else {\n        value = 1;\n    }\n    while (busy()) {} next();\n}\n";
+    check(input, &[], attached);
+    check(input, &["--style=kr"], attached);
+    // A style breaking closing headers off their `}` breaks the `else`.
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready) {}\n    else\n    {\n        value = 1;\n    }\n    while (busy()) {} next();\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {} // note\n    else { value = 1; }\n    while (busy()) {} /* c */ next();\n    for (;;) {} next();\n    do {} while (busy()); next();\n    if (ready) {} else if (other) {} else {}\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {} // note\n    else {\n        value = 1;\n    }\n    while (busy()) {} /* c */ next();\n    for (;;) {} next();\n    do {} while (busy());\n    next();\n    if (ready) {} else if (other) {} else {}\n}\n",
+    );
+    // A source that parts them keeps them parted.
+    let parted = "void f()\n{\n    if (ready) {}\n    else {\n        value = 1;\n    }\n    while (busy()) {}\n    next();\n}\n";
+    check(parted, &["--style=kr"], parted);
+}

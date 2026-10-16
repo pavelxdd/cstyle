@@ -2425,7 +2425,8 @@ impl FormatEngine<'_> {
                         + levels * self.options.indent_width,
                 );
             }
-            if trimmed.starts_with("} else") {
+            // So does a braceless `else` after a block kept on its line.
+            if trimmed.starts_with("} else") || trimmed.ends_with("} else") {
                 // `else while (x) {` nests two headers on one line.
                 let levels = 1 + usize::from(self.line_nests_header_after_else(line));
                 return Some(

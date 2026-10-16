@@ -918,17 +918,20 @@ impl FormatEngine<'_> {
             return self.attaches_closing_while(self.closing_header_stays_on_brace_line());
         }
 
-        let next_is_closing_header =
-            matches!(next, Some(Token::Word(word)) if is_attachable_closing_header(word));
-        if self.options.brace_style == BraceStyle::None {
-            return next_is_closing_header
-                && !self.options.break_closing_braces
-                && self.closing_header_stays_on_brace_line();
+        matches!(next, Some(Token::Word(word))
+            if self.attaches_closing_header(word, self.closing_header_stays_on_brace_line()))
+    }
+
+    /// Whether the closing header `word` joins the `}` before it; without a
+    /// brace style only one the source set there stays.
+    pub(crate) fn attaches_closing_header(&self, word: &str, source_attached: bool) -> bool {
+        if !is_attachable_closing_header(word) || self.options.break_closing_braces {
+            return false;
         }
-        is_attached_closing_header_style(self.options)
-            && !self.options.break_closing_braces
-            && !self.options.indent_braces
-            && next_is_closing_header
+        if self.options.brace_style == BraceStyle::None {
+            return source_attached;
+        }
+        is_attached_closing_header_style(self.options) && !self.options.indent_braces
     }
 
     /// Whether a do-while's `while` joins the `}` before it; without a brace
