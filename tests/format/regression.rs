@@ -11803,3 +11803,29 @@ fn a_one_line_initializer_after_a_conditional_after_its_assignment_stays_on_its_
     check(input, &[], input);
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn comments_after_a_case_block_stand_in_the_case_body() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    }\n    // after block\n    second();\n    // after statement\n    third();\n    /* block */\n    break;\n    default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (state)\n    {\n    case 1:\n    {\n        first();\n    }\n        // after block\n    second();\n        // after statement\n    third();\n        /* block */\n    break;\n    default:\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    }\n        // after block\n    second();\n        // after statement\n    third();\n        /* block */\n    break;\n    default:\n        break;\n    }\n}\n",
+    );
+    let closing = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    }\n    default: {\n        break;\n    }\n    // note\n    }\n}\n";
+    check(
+        closing,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        value=0;\n        break;\n    }\n    default:\n    {\n        break;\n    }\n        // note\n    }\n}\n",
+    );
+    check(
+        closing,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value=0;\n            break;\n        }\n        default:\n        {\n            break;\n        }\n            // note\n        }\n}\n",
+    );
+}

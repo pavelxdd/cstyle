@@ -3781,9 +3781,13 @@ impl FormatEngine<'_> {
         // Comments after a case block stand in the case body, where a
         // statement after the block stands at its label; indented cases
         // keep the statement in the body too.
-        if !case_labels && !self.options.indent_cases && self.case_block_before(first).is_some() {
-            return;
-        }
+        let after_case_block_column = (!case_labels && !self.options.indent_cases)
+            .then(|| self.case_label_of_block_before(first))
+            .flatten()
+            .and_then(|label| self.line_led_by(label))
+            .map(|line| {
+                self.output.lead_width(line, self.options.tab_width) + self.options.indent_width
+            });
         let statements = &self.tree.statements;
         // A continuation inside parentheses takes the comments inside them.
         let continues_parens = self.continues_parentheses_past_comments(first)
@@ -3875,8 +3879,8 @@ impl FormatEngine<'_> {
             (self.output.lead_width(line, self.options.tab_width) > rows).then_some(rows)
         })
         .flatten();
-        let block_body_column = self
-            .block_comment_column(first)
+        let block_body_column = after_case_block_column
+            .or_else(|| self.block_comment_column(first))
             .or(split_chain_column)
             .or(label_column)
             .or(vtk_brace_row_column);
@@ -6122,6 +6126,44 @@ impl FormatEngine<'_> {
                 + self.case_unindent_spaces()
                 + usize::from(self.options.indent_cases) * self.options.indent_width,
         )
+    }
+
+    /// The label of the case whose block the statement starting at `first`
+    /// follows, past the statements after the block.
+    fn case_label_of_block_before(&self, first: usize) -> Option<usize> {
+        let statements = &self.tree.statements;
+        let tokens = &self.tree.tokens;
+        // The closer of a switch body right after a case block follows it.
+        if matches!(tokens[first], Token::Symbol('}'))
+            && let Some(previous) = self.tree.previous_code_token(first)
+            && matches!(tokens[previous], Token::Symbol('}'))
+            && let Some(block) = self.tree.groups.closed_at(previous)
+        {
+            let open = self.tree.groups.get(block).open;
+            let colon = self.tree.previous_code_token(open)?;
+            if !matches!(tokens[colon], Token::Symbol(':')) {
+                return None;
+            }
+            let label = (0..colon)
+                .rev()
+                .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
+                .find(|&index| statements.starts_block_statement(index))?;
+            return matches!(&tokens[label], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+                .then_some(label);
+        }
+        let mut statement = first;
+        for _ in 0..64 {
+            if let Some((label, _)) = self.case_block_before(statement) {
+                return Some(label);
+            }
+            let previous = statements.previous_sibling(statement)?;
+            if matches!(&self.tree.tokens[previous], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+            {
+                return None;
+            }
+            statement = previous;
+        }
+        None
     }
 
     /// The `case` or `default` label and the brace of the case block that
