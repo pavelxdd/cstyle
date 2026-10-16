@@ -10684,3 +10684,21 @@ fn a_member_split_off_its_return_type_after_an_indented_access_label_stands_at_t
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn tab_indents_set_an_indented_directive_among_arguments_as_the_argument_rows() {
+    let input = "void f()\n{\n    result = helper(first,\n#ifdef FEATURE\n                    second,\n#endif\n                    third);\n}\n";
+    for (indent, expected) in [
+        (
+            "--indent=tab=4",
+            "void f()\n{\n\tresult = helper(first,\n\t                #ifdef FEATURE\n\t                second,\n\t                #endif\n\t                third);\n}\n",
+        ),
+        (
+            "--indent=force-tab=4",
+            "void f()\n{\n\tresult = helper(first,\n\t\t\t\t\t#ifdef FEATURE\n\t\t\t\t\tsecond,\n\t\t\t\t\t#endif\n\t\t\t\t\tthird);\n}\n",
+        ),
+    ] {
+        check(input, &["--indent-preproc-cond", indent], expected);
+        check(expected, &["--indent-preproc-cond", indent], expected);
+    }
+}

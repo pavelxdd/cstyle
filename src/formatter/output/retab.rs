@@ -140,6 +140,32 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the directive on output line `index` stands among the
+    /// arguments of parens or brackets opened above it, past a control
+    /// header's condition, whose directives keep structural tabs.
+    fn directive_among_arguments(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        (index + 1..self.output.len())
+            .find_map(|row| self.output.line_tokens(row))
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|group| {
+                let group = groups.get(group);
+                matches!(group.delimiter, Delimiter::Paren | Delimiter::Bracket)
+                    && self
+                        .output
+                        .line_with_token(group.open)
+                        .is_some_and(|line| line < index)
+                    && !self
+                        .tree
+                        .previous_code_token(group.open)
+                        .is_some_and(|before| {
+                            matches!(&tokens[before], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                        })
+            })
+    }
+
     fn starts_with_block_brace(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
         self.output
@@ -228,7 +254,14 @@ impl FormatEngine<'_> {
             return self.token_statement_indent_width(next.first, index);
         }
         if text.starts_with('#') {
-            return None;
+            // A directive among a statement's arguments aligns as their rows
+            // do.
+            if !self.directive_among_arguments(index) {
+                return None;
+            }
+            let next =
+                (index + 1..self.output.len()).find_map(|next| self.output.line_tokens(next))?;
+            return self.token_statement_indent_width(next.first, index);
         }
         if let Some(directive) = self.output.directive_of_continuation(index) {
             return Some(self.macro_row_statement_width(directive, index));
