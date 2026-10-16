@@ -78,9 +78,12 @@ impl FormatEngine<'_> {
                 .indent()
                 .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
                 + 1;
-            self.layout
-                .continuation_indent
-                .set_next_line_level(body_indent);
+            // A comment leading the body's line already set its indent.
+            if self.current_is_blank() {
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(body_indent);
+            }
             self.layout.pending_braceless_block_bias = Some(body_indent);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;

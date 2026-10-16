@@ -10793,3 +10793,9 @@ fn breaking_one_line_headers_leaves_a_comment_led_body_line_of_a_header_directiv
     let input = "void f()\n{\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n}\n";
     check(input, &["--style=kr", "--break-one-line-headers"], input);
 }
+
+#[test]
+fn adding_braces_leaves_no_body_indent_after_a_comment_led_body_of_a_header_directives_split() {
+    let input = "void f()\n{\n#ifdef D\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n#endif\n    if (q) {\n        value = 1;\n    }\n}\n";
+    check(input, &["--style=kr", "--add-braces"], input);
+}
