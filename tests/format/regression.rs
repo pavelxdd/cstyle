@@ -12333,3 +12333,12 @@ fn a_class_body_after_rows_of_bases_stands_a_level_past_the_head() {
         "class Derived : public Base,\n    private Other {\npublic:\n    /* note */\n    int value;\n};\n",
     );
 }
+
+#[test]
+fn a_declaration_a_comment_leads_keeps_its_pointer_declarator() {
+    check(
+        "void f()\n{\n    /* note */ Item *item = new Item(value);\n    /* note */ int *list = other;\n}\n",
+        &["--pad-oper"],
+        "void f()\n{\n    /* note */ Item *item = new Item(value);\n    /* note */ int *list = other;\n}\n",
+    );
+}

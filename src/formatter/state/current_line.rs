@@ -1,6 +1,6 @@
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::visual_width_from;
-use crate::formatter::text::line_scan::DelimiterScan;
+use crate::formatter::text::line_scan::{DelimiterScan, after_leading_comments};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::AssignmentChainScan;
 use std::cell::{Cell, RefCell};
@@ -308,14 +308,20 @@ impl CurrentLine {
 
     /// Where the declaration the line ends in starts: past the last `,`,
     /// `;`, `{` or `}` outside parentheses and angles, or past the open
-    /// parenthesis the line ends inside.
+    /// parenthesis the line ends inside, and past the comments leading it.
     pub(crate) fn declaration_segment_start(&self) -> usize {
         let mut scan = self.declaration_segment.borrow_mut();
         if scan.scanned > self.text.len() {
             *scan = DeclarationSegmentScan::default();
         }
-        scan.advance(&self.text.as_bytes()[..self.stable_len()]);
-        scan.start
+        let stable = self.stable_len();
+        scan.advance(&self.text.as_bytes()[..stable]);
+        let rest = &self.text[scan.start.min(stable)..stable];
+        if rest.trimmed_start().starts_with("/*") {
+            stable - after_leading_comments(rest).len()
+        } else {
+            scan.start
+        }
     }
 
     /// `is_pointer_declaration_segment` of the text of
