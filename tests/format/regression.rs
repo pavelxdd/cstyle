@@ -7397,6 +7397,23 @@ fn block_comment_in_column_one_takes_the_indent_of_the_code_after_it() {
 }
 
 #[test]
+fn row_of_adjacent_block_comments_after_a_header_stands_in_its_body() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n        x();\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+// Attaching styles leave a brace off a row of block comments however many
+// the row holds, as off a row of one.
+#[test]
+fn attached_braces_stay_off_a_row_of_adjacent_block_comments_after_a_header() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n        x();\n}\n";
+    check(input, &["--style=kr"], input);
+    let added = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n}\n";
+    check(input, &["--style=kr", "-j"], added);
+    check(added, &["--style=kr", "-j"], added);
+}
+
+#[test]
 fn row_of_adjacent_block_comments_in_an_indented_case_stays_in_its_body() {
     check(
         "void f(int e)\n{\n  switch (e) {\n    case 1:\n      x();\n      /* else */ /* FALLTHROUGH */\n    case 2:\n      y();\n  }\n}\n",
@@ -9953,6 +9970,24 @@ fn added_braces_open_after_a_comment_leading_the_statement_line() {
     // A written brace there closes at its header as well.
     let written = "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    }\n}\n";
     check(written, &["--style=kr"], written);
+}
+
+// An added brace goes after every comment leading the statement's line, in
+// attached styles as in broken ones.
+#[test]
+fn added_braces_open_after_all_comments_leading_the_statement_line() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */ x();\n}\n";
+    let attached =
+        "void f()\n{\n    while (b)\n        /* c */ /* d */ {\n        x();\n    }\n}\n";
+    let broken =
+        "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n}\n";
+    for (args, expected) in [
+        (&["-j", "--style=kr"][..], attached),
+        (&["-j", "--style=allman"][..], broken),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
 }
 
 // Pico gives a block added after a comment leading the statement's line the

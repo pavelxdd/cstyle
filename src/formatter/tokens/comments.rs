@@ -210,6 +210,7 @@ impl FormatEngine<'_> {
             .layout
             .nesting
             .current_continuation_indent_spaces()
+            .or_else(|| self.control_header_comment_indent_spaces(CommentKind::Block))
             .or_else(|| self.active_body_comment_indent_spaces())
             .unwrap_or_else(|| {
                 (self
