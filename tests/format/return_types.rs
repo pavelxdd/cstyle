@@ -1154,3 +1154,16 @@ fn break_return_type_breaks_a_head_conditionals_part_from_its_body() {
         "#ifdef FEATURE\nvoid\nf()\n#endif\n#ifdef FEATURE\n{\n#endif\n    value = 0;\n}\nint\ng(int a)\n#if A\n{\n#endif\n    return a;\n}\n",
     );
 }
+
+#[test]
+fn a_definition_head_before_a_directive_breaks_its_return_type_whatever_declarations_do() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    value = 0;\n}\n";
+    let expected = "#ifdef FEATURE\nvoid\nf()\n#endif\n{\n    value = 0;\n}\n";
+    for extra in [None, Some("--attach-return-type-decl")] {
+        let mut options = FormatOptions::default();
+        let mut args = vec!["--style=kr".to_owned(), "--break-return-type".to_owned()];
+        args.extend(extra.map(str::to_owned));
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected);
+    }
+}
