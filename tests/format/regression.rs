@@ -11052,3 +11052,13 @@ fn kept_switch_labels_ending_in_a_user_label_end_their_line() {
         "void f(int p)\n{\n    switch (p) {\n    case 1: one:\n        x();\n    case 2: case 3:\n        x();\n    default: dflt:\n        x();\n    }\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_after_a_comment_led_block_of_an_else_a_conditional_splits() {
+    let input = "void f()\n{\n    if (a) {\n        void *r;\n#if T\n        if (b) {\n            r = c;\n        } else\n#endif\n        /*if( !b )*/ {\n            r = d;\n        }\n        *n = r->k;\n        k = r->a;\n    } else {\n        k = 0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    if (a) {\n        void *r;\n#if T\n\n        if (b) {\n            r = c;\n        } else\n#endif\n            /*if( !b )*/ {\n            r = d;\n        }\n\n        *n = r->k;\n        k = r->a;\n    } else {\n        k = 0;\n    }\n}\n",
+    );
+}

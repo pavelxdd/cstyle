@@ -583,6 +583,10 @@ impl FormatEngine<'_> {
         if (split_else_after_preprocessor || self.layout.command_state.preprocessor_after_header)
             && !self.current_is_blank()
             && after_leading_comments(&self.current).trimmed().is_empty()
+            && !matches!(
+                next_non_whitespace(tokens, start, line_end).and_then(|index| tokens.get(index)),
+                Some(Token::Symbol('{'))
+            )
         {
             if split_else_after_preprocessor {
                 self.preprocessor.split_else.pending_body = false;
