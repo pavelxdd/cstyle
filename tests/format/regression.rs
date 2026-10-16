@@ -9898,6 +9898,14 @@ fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
     }
 }
 
+#[test]
+fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
+    let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";
+    let expected = "void f()\n{\n    if (c == 1) {\n        add(out, \"\\\\\\\"\");\n    }\n    else {\n        add(out, \"x\");\n    }\n}\n";
+    check(input, &["--add-braces"], expected);
+    check(expected, &["--add-braces"], expected);
+}
+
 // Pico keeps a bare one-line block whole as it keeps a header's, the way
 // styles keeping one-line blocks do.
 #[test]
