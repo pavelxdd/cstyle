@@ -1648,7 +1648,9 @@ impl FormatEngine<'_> {
             self.layout.frame_stack.active_brace()
         }?;
         let natural = indent * self.options.indent_width;
+        // Only a header's body is one a directive interrupts.
         if frame.semantic_kind != BraceSemanticKind::Command
+            || frame.header.is_none()
             || frame.sibling_indent_column < natural
         {
             return None;

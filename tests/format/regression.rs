@@ -11142,3 +11142,13 @@ fn break_blocks_pads_no_statement_after_an_initializer_following_a_header_block(
         "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    }\n\n    struct Item list[] = {\n        1, 2\n    };\n    helper(1);\n}\n",
     );
 }
+
+#[test]
+fn ratliff_keeps_a_block_after_a_directive_in_a_case_at_its_brace_after_an_else_chain() {
+    let input = "void f()\n{\n    if (ready)\n        value=0;\n    else\n        value=2;\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (ready)\n        value=0;\n    else\n        value=2;\n    switch (state) {\n        case 1:\n#line 46 \"input.l\"\n                {\n                pop(state);\n                }\n            break;\n        }\n    }\n",
+    );
+}
