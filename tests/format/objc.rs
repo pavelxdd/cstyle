@@ -1487,3 +1487,14 @@ fn indenting_after_parens_aligns_message_keyword_lines_with_the_first_keyword() 
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn objc_interface_member_a_comment_leads_stays_at_the_members() {
+    assert_eq!(
+        format_exact(
+            "@interface Item : NSObject\n/* note */ @property (nonatomic) int value;\n@end\n",
+            &FormatOptions::default(),
+        ),
+        "@interface Item : NSObject\n/* note */ @property (nonatomic) int value;\n@end\n",
+    );
+}

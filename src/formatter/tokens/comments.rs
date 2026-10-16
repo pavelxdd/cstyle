@@ -1489,10 +1489,18 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces = Some(previous_indent);
             }
         }
-        let follows_objc_interface = self
-            .output
-            .last_non_empty_scoped()
-            .is_some_and(|line| line.trimmed_start().starts_with("@interface"));
+        // A comment line after an interface's head stands a level in; one
+        // leading a member stays with the members.
+        let follows_objc_interface = (!self.token_input.has_next_meaningful_token
+            || self
+                .token_input
+                .next_input_whitespace
+                .as_deref()
+                .is_some_and(|whitespace| whitespace.contains('\n')))
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| line.trimmed_start().starts_with("@interface"));
         // A control header's condition continues where its lines do, past
         // the minimum conditional indent.
         let in_header_condition = self
