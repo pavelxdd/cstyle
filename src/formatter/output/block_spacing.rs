@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
+use crate::formatter::text::line_scan::{holds_code_after_leading_comments, is_bare_comment_line};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -685,7 +686,16 @@ impl FormatEngine<'_> {
             .is_some_and(|index| {
                 let start = self.output.comment_start_index(index);
                 let line = self.output.trimmed(start);
-                line.starts_with("//") || line.starts_with("/*")
+                // Code after the comment's close makes the line no comment.
+                let holds_no_code = if start == index {
+                    is_bare_comment_line(line)
+                } else {
+                    self.output
+                        .trimmed(index)
+                        .split_once("*/")
+                        .is_none_or(|(_, after)| !holds_code_after_leading_comments(after))
+                };
+                (line.starts_with("//") || line.starts_with("/*")) && holds_no_code
             })
     }
 
@@ -703,8 +713,12 @@ impl FormatEngine<'_> {
                                 let rest = trimmed[close + 2..].trimmed();
                                 rest.is_empty() || rest.starts_with("//") || rest.starts_with("/*")
                             })
-                    // The last row of a block comment that opened a line.
+                    // The last row of a block comment that opened a line,
+                    // with no code after its close.
                     || !trimmed.is_empty()
+                        && trimmed
+                            .split_once("*/")
+                            .is_none_or(|(_, after)| !holds_code_after_leading_comments(after))
                         && self.output.last_non_empty_index().is_some_and(|index| {
                             let start = self.output.comment_start_index(index);
                             start != index && self.output.trimmed(start).starts_with("/*")

@@ -12458,3 +12458,26 @@ fn a_ratliff_closer_after_alternative_braces_of_a_header_stands_at_the_body() {
         "void f() {\n    if (ready)\n#ifdef A\n        {\n#else\n        {\n#endif\n        value = 1;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_header_after_directives_after_a_comment_led_brace_line_breaks_its_block() {
+    check(
+        "/* note */ void f()\n{\n#ifdef FEATURE\n    if (ready) {\n        value = 0;\n    }\n#endif\n}\n",
+        &["--style=java", "--break-blocks=all"],
+        "/* note */ void f() {\n#ifdef FEATURE\n\n    if (ready) {\n        value = 0;\n    }\n\n#endif\n}\n",
+    );
+    check(
+        "/* first\n   second */ void f()\n{\n#ifdef FEATURE\n    if (ready) {\n        value = 0;\n    }\n#endif\n}\n",
+        &["--style=java", "--break-blocks=all"],
+        "/* first\n   second */ void f() {\n#ifdef FEATURE\n\n    if (ready) {\n        value = 0;\n    }\n\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn a_header_after_code_closing_a_block_comment_breaks_its_block() {
+    check(
+        "void f()\n{\n    value = 0;\n    /* first\n       second */ value = 1;\n    if (ready) {\n        value = 0;\n    }\n}\n",
+        &["--style=java", "--break-blocks"],
+        "void f() {\n    value = 0;\n    /* first\n       second */ value = 1;\n\n    if (ready) {\n        value = 0;\n    }\n}\n",
+    );
+}
