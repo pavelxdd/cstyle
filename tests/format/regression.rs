@@ -9914,3 +9914,11 @@ fn vtk_sets_one_line_element_rows_at_the_rows_and_broken_element_braces_past_the
         check(expected, &["--style=vtk"], expected);
     }
 }
+
+#[test]
+fn a_label_block_after_a_bare_block_closes_where_label_blocks_do() {
+    let input = "void f()\n{\n    { value=0; }\n    done: {\n        value=0;\n    }\n}\n";
+    let expected = "void f() {\n        {\n        value=0;\n        }\ndone: {\n        value=0;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

@@ -4285,6 +4285,14 @@ impl FormatEngine<'_> {
         let open_line = self.output.line_with_token(open)?;
         let statements = &self.tree.statements;
         let open_line_first = self.output.line_tokens(open_line)?.first;
+        // A label leading the line stands off the block's level.
+        if open_line_first != open
+            && matches!(tokens[open_line_first], Token::Word(_))
+            && next_code_token(tokens, open_line_first + 1)
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol(':')))
+        {
+            return None;
+        }
         // Code after the `{` on its line makes no block layout to follow.
         if open_line_first != open
             && next_code_token(tokens, open + 1)
