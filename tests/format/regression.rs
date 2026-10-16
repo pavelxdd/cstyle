@@ -12795,3 +12795,12 @@ fn a_switch_brace_a_comment_leads_stays_off_the_header_as_any_header_brace() {
         "void f(void)\n{\n    switch (op)\n        /* c */ {\n    case A:\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_code_broken_off_a_leading_comment_keeps_its_gap() {
+    check(
+        "struct S {\n    int x;\n/* c */ } s, t;/* e */\n",
+        &["--style=kr"],
+        "struct S {\n    int x;\n    /* c */\n} s, t;/* e */\n",
+    );
+}

@@ -3573,6 +3573,34 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// The width of the comments, and the space after them, that alone led
+    /// the source line of the current line's code and were broken off it.
+    fn broken_off_leading_comments_width(&self) -> usize {
+        let tokens = &self.tree.tokens;
+        if self.current.trimmed_start().starts_with("/*") {
+            return 0;
+        }
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return 0;
+        };
+        let line_start = tokens[..first]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |index| index + 1);
+        let Some(start) =
+            (line_start..first).find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+        else {
+            return 0;
+        };
+        if !tokens[start..first]
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+        {
+            return 0;
+        }
+        tokens[start..first].iter().map(token_char_len).sum()
+    }
+
     /// Whether the current line starts with code its source line had a
     /// block's closer before, other than a closer the code goes on from.
     fn current_line_broke_off_block_closer(&self) -> bool {
@@ -3873,9 +3901,12 @@ impl FormatEngine<'_> {
             }
             return;
         }
+        // Comments that led the source line and stand on a line of their own
+        // now take no columns from it.
         let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
-            .flatten();
+            .flatten()
+            .map(|column| column.saturating_sub(self.broken_off_leading_comments_width()));
         // A closer after code on its source line runs back into that line,
         // which keeps the gap before its comment.
         if !gap.is_empty() && self.run_in_closer_row() == Some(false) {
