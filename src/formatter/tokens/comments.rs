@@ -799,7 +799,16 @@ impl FormatEngine<'_> {
     }
 
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
-        let line = self.output.last_non_empty_scoped()?;
+        // A conditional opening after the label leaves the comment in its
+        // body.
+        let line = self.output.scoped().iter().rev().find(|line| {
+            let trimmed = line.trimmed_start();
+            !trimmed.is_empty()
+                && !matches!(
+                    preprocessor_directive(trimmed),
+                    Some("if" | "ifdef" | "ifndef")
+                )
+        })?;
         let code = self.output.code_trimmed_of(line);
         let candidate = code
             .trimmed_start()

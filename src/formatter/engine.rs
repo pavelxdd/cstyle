@@ -41,7 +41,7 @@ use crate::formatter::syntax::{
     template_openers,
 };
 use crate::formatter::text::columns;
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
 };
@@ -347,6 +347,9 @@ pub(crate) struct FormatEngine<'a> {
     /// How far splitting a statement off its case label moved the
     /// statement's columns.
     pub(crate) label_split_shift: Option<(usize, isize)>,
+    /// A label broke its line before comments; the statement after them
+    /// starts a line of its own.
+    pub(crate) statement_after_label_pending: bool,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
     /// The current line is a comment row astyle writes as it stands.
@@ -501,6 +504,7 @@ impl<'a> FormatEngine<'a> {
             joined_closer_padding_lines: Vec::new(),
             brace_frame_awaits_line: false,
             label_split_shift: None,
+            statement_after_label_pending: false,
             disabled_formatting: None,
             current_is_preindented: false,
             current_is_verbatim: false,
@@ -1430,6 +1434,18 @@ impl<'a> FormatEngine<'a> {
 
         self.track_extern_c_guard(token);
 
+        // A directive ends the label's reach; a brace attaches to the label.
+        if self.statement_after_label_pending
+            && (is_code_token(token) || matches!(token, Token::Preprocessor(_)))
+        {
+            self.statement_after_label_pending = false;
+            if !matches!(token, Token::Preprocessor(_) | Token::RawLine(_))
+                && self.current_holds_comments_after_label(matches!(token, Token::Symbol('{')))
+            {
+                self.finish_line();
+            }
+        }
+
         match token {
             Token::Word(word) => self.push_word(word, next),
             Token::Number(number) => self.push_literal(number, None),
@@ -1629,6 +1645,17 @@ impl<'a> FormatEngine<'a> {
     }
 
     /// The current line's code before its trailing comment, trimmed.
+    /// Whether the current line holds comments and, before them, nothing
+    /// or a label unless `comments_only`.
+    fn current_holds_comments_after_label(&self, comments_only: bool) -> bool {
+        if !self.current.holds_comment_opener() {
+            return false;
+        }
+        let code = self.current_code_before_trailing_comment();
+        after_leading_comments(code.trimmed_start()).is_empty()
+            || !comments_only && code.ends_with(':')
+    }
+
     pub(crate) fn current_code_before_trailing_comment(&self) -> &str {
         let current = self.current.trimmed_end();
         if self.current.holds_comment_opener() {

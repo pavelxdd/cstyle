@@ -1505,10 +1505,10 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = spaces;
             self.previous_was_newline = true;
         } else if is_label {
-            if self.options.break_one_line_statements
-                && !self.one_line_block_mode
-                && !matches!(next, Some(Token::Comment(_, _)))
-            {
+            let breaks_statement =
+                self.options.break_one_line_statements && !self.one_line_block_mode;
+            self.statement_after_label_pending = breaks_statement;
+            if breaks_statement && !matches!(next, Some(Token::Comment(_, _))) {
                 self.finish_line();
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = None;

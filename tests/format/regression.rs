@@ -11619,3 +11619,50 @@ fn a_block_comment_after_a_case_brace_on_its_own_line_opens_the_block() {
         "void f() {\n    switch (kind) {\n        case 1: {\n            /* note */\n            value=0;\n            }\n        break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn the_statement_after_a_label_breaks_off_the_comments_after_the_label() {
+    let input = "void f()\n{\n    switch (op) {\n    default:\n        /* note */ break;\n    case 1: /* note */ break;\n    case 2:\n        // line\n        /* note */ break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */ value = 1;\n}\nclass Item {\npublic:\n    /* note */ int value;\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    default:\n        /* note */\n        break;\n    case 1: /* note */\n        break;\n    case 2:\n        // line\n        /* note */\n        break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */\n    value = 1;\n}\nclass Item\n{\npublic:\n    /* note */\n    int value;\n};\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (op) {\n    default:\n        /* note */ break;\n    case 1: /* note */ break;\n    case 2:\n        // line\n        /* note */ break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */ value = 1;\n}\nclass Item\n{\npublic:\n    /* note */ int value;\n};\n",
+    );
+}
+
+#[test]
+fn a_brace_or_a_directive_after_the_comments_after_a_label_ends_its_reach() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: /* a */ /* b */ break;\n    case 2: // line\n        break;\n    case 3: /* a */ { value = 0; }\n    case 4:\n        /* a */ { value = 0; }\n    case 5: /* a */\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\nagain: /* c */ value = 2; /* d */\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case 1: /* a */ /* b */\n        break;\n    case 2: // line\n        break;\n    case 3: { /* a */\n        value = 0;\n    }\n    case 4:\n        /* a */\n    {\n        value = 0;\n    }\n    case 5: /* a */\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\nagain: /* c */\n    value = 2; /* d */\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_led_statement_after_a_conditional_after_a_case_label_stands_in_its_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case 5:\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        case 5:\n#if X\n            /* b */ value = 1;\n#endif\n            break;\n        }\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_kept_label_line_with_a_comment_after_the_label_stands_at_the_label_column() {
+    let input = "void f()\n{\n    value = 1;\nagain: value = 2;\nretry: /* c */ value = 2;\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    value = 1;\nagain: value = 2;\nretry: /* c */ value = 2; }\n",
+    );
+}

@@ -11,8 +11,8 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
     find_byte, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column,
@@ -531,34 +531,38 @@ fn leads_with_goto_label(line: &str) -> bool {
         )
         && !label.starts_with(|ch: char| ch.is_ascii_digit())
         && rest.starts_with_any(b" \t;")
-        && !rest.trimmed_start().starts_with_any(b"{:/")
+        // Comments after the label leave the statement after them.
+        && leads_statement_after_label(after_leading_comments(rest))
+}
+
+fn leads_statement_after_label(rest: &str) -> bool {
+    !rest.starts_with_any(b"{:/")
         // A statement follows; message arguments and base lists do not.
         && !rest.contains_any_byte(b"][")
         && !matches!(
-            leading_identifier(rest.trimmed_start()),
+            leading_identifier(rest),
             "public" | "protected" | "private" | "virtual"
         )
         // A statement closes no paren opened before the label, as the rest
         // of a range `for` header would.
         && line_paren_imbalance(strip_trailing_comment(rest)).0 == 0
         && {
-            let statement = rest.trimmed_start();
             let opens_header = matches!(
-                leading_identifier(statement),
+                leading_identifier(rest),
                 "if" | "while" | "for" | "switch" | "do" | "try"
             );
             // A statement ends on the line unless a header or an assignment
             // goes on past it; a method parameter row does neither.
             (opens_header
-                || statement.contains('=')
+                || rest.contains('=')
                 || strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}"))
                 // A bit-field width is a constant; a statement calls, assigns,
                 // jumps or opens a control header.
                 && (opens_header
-                    || statement.starts_with(';')
-                    || statement.contains_any_byte(b"(=")
+                    || rest.starts_with(';')
+                    || rest.contains_any_byte(b"(=")
                     || matches!(
-                        leading_identifier(statement),
+                        leading_identifier(rest),
                         "return" | "break" | "continue" | "goto"
                     ))
         }
