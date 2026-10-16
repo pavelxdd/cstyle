@@ -689,9 +689,8 @@ impl FormatEngine<'_> {
             // The elements align to the brace's tab-expanded column; its
             // closer counts each tab as one column. They align to a first
             // element comments lead.
-            let column = text_start
-                + self.current_visual_width_from(text_start)
-                + usize::from(padded_paren);
+            let column =
+                text_start + self.current_visual_width_from(text_start) + usize::from(padded_paren);
             column
                 + leading_comments_width(
                     &self.tree.tokens,

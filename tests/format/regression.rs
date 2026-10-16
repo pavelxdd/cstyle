@@ -12405,3 +12405,12 @@ fn elements_of_a_list_a_comment_leads_align_to_its_first_element() {
         "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
     );
 }
+
+#[test]
+fn a_list_a_comment_leads_keeps_its_first_element_on_the_brace_line() {
+    check(
+        "void f()\n{\n    /* note */ int list[] = { 1,\n        2\n    };\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
+    );
+}

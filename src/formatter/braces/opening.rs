@@ -1869,18 +1869,16 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
             );
-        let operator_led_broken_brace = matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Whitesmith
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Horstmann
-                | BraceStyle::Pico
-        ) && self
-            .current
-            .trimmed_start()
-            .starts_with_any(b"<>|&+-*/%=!?:,.");
+        let operator_led_broken_brace =
+            matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+            ) && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
         // An enum brace that starts its source line stays broken.
         let source_broken_enum =
             brace_type == BraceType::Enum && self.token_input.token_begins_source_line;
@@ -2426,10 +2424,7 @@ impl FormatEngine<'_> {
         let gnu_macro_open_brace =
             self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
-            && self
-                .current
-                .trimmed_start()
-                .starts_with_any(b"<>|&+-*/%=!?:,.");
+            && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
         let source_attached_malformed_open_brace = brace.header.is_none()
             && !self.current_is_blank()
             && !self.token_input.token_begins_source_line
