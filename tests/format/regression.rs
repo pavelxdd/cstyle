@@ -13123,3 +13123,13 @@ fn indented_conditionals_after_a_label_in_a_case_block_stand_at_the_label_body()
         "void f()\n{\n    switch (op) {\n    case FIRST: {\n        run();\n        #ifdef FEATURE\n        case SECOND:\n            #endif\n            apply(value);\n            break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn deleting_empty_lines_keeps_those_of_a_type_body_in_a_function() {
+    let input = "void f()\n{\n    if (ready) {\n        struct {\n            int value;\n\n        } item;\n\n        run();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    if (ready) {\n        struct {\n            int value;\n\n        } item;\n        run();\n    }\n}\n",
+    );
+}
