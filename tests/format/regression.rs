@@ -12668,3 +12668,13 @@ fn an_indented_conditional_closes_at_its_opening_in_a_case_body() {
         "void f()\n{\n    switch (k) {\n    case 2:\n        int other[] = {\n            1, 2\n            #ifdef FEATURE\n        };\n            #endif\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_continuation_a_comment_leads_after_a_head_a_comment_leads_aligns_with_its_value() {
+    let input = "void f()\n{\n    /* note */ return first ||\n              /* c */ second;\n    /* note */ value = first &&\n        /* c */ second;\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    /* note */ return first ||\n                      /* c */ second;\n    /* note */ value = first &&\n                       /* c */ second;\n}\n",
+    );
+}

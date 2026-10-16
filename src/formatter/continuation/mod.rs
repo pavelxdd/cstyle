@@ -1804,7 +1804,12 @@ impl FormatEngine<'_> {
                 .char_indices()
                 .find(|(_, ch)| !ch.is_whitespace())
                 .map_or(1, |(index, _)| index);
-        let base = self.continuation_base_indent() * self.options.indent_width;
+        // A line a comment preindented holds its indent in its text.
+        let base = if self.current_is_preindented {
+            0
+        } else {
+            self.continuation_base_indent() * self.options.indent_width
+        };
         Some(base + visual_width_from(&code[..value_offset], base, self.options.tab_width))
     }
 
@@ -1851,7 +1856,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn return_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trimmed_end();
-        let trimmed = line.trimmed_start();
+        let trimmed = after_leading_comments(line);
         let after_return = trimmed.strip_prefix("return")?;
         if after_return
             .chars()
@@ -1861,7 +1866,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let base = self.continuation_base_indent() * self.options.indent_width;
+        // A line a comment preindented holds its indent in its text.
+        let base = if self.current_is_preindented {
+            0
+        } else {
+            self.continuation_base_indent() * self.options.indent_width
+        };
         let gap = after_return.len() - after_return.trimmed_start().len();
         // A tab between `return` and its value still sets the value's column.
         if !after_return.trimmed_start().is_empty()
@@ -1879,7 +1889,12 @@ impl FormatEngine<'_> {
             );
         }
         if after_return.is_empty() || after_return.contains('\t') {
-            return Some(base + self.options.continuation_indent * self.options.indent_width);
+            let lead = if self.current_is_preindented {
+                leading_visual_width(line, self.options.tab_width)
+            } else {
+                base
+            };
+            return Some(lead + self.options.continuation_indent * self.options.indent_width);
         }
         Some(base + (line.len() - trimmed.len()) + return_value_column_offset(trimmed))
     }
