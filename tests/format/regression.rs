@@ -11911,3 +11911,13 @@ fn a_stream_row_after_a_blank_line_aligns_in_its_chain() {
     let input = "void f()\n{\n    std::cout << first\n\n              << second << std::endl;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_after_blocks_broken_off_one_line_follows_the_block_it_ends() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; } /* note */\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;    /* note */\n    }\n}\n",
+    );
+}
