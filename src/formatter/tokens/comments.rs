@@ -3164,9 +3164,11 @@ impl FormatEngine<'_> {
                 .trimmed()
                 .chars()
                 .all(|ch| matches!(ch, '}' | ';' | ' '));
+            // A lisp closer run into its statement's row keeps the gap; a
+            // block kept on its header's line pads as in any style.
             let padded_gap = (!gap.is_empty()
                 && !gap.contains('\t')
-                && self.options.brace_style != BraceStyle::Lisp
+                && (self.options.brace_style != BraceStyle::Lisp || self.current.contains('{'))
                 && !lone_closer
                 && !self.layout.line_state.trailing_comment_columns.is_empty())
             .then(|| {

@@ -9803,3 +9803,26 @@ fn a_header_chained_after_an_else_on_its_ifs_body_line_nests_from_the_if() {
         check(&expected, args, &expected);
     }
 }
+
+#[test]
+fn a_comment_after_an_added_one_line_block_keeps_its_column_through_unpadding_in_lisp() {
+    let input = "void f()\n{\n    if (ready) value=0;   // note\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    if(ready) { value=0; }    // note\n}\n",
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    if(ready) { value=0; }    // note\n}\n",
+        ),
+    ] {
+        let args = [
+            style,
+            "--keep-one-line-blocks",
+            "--add-braces",
+            "--unpad-paren",
+        ];
+        check(input, &args, expected);
+    }
+}
