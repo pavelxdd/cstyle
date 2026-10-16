@@ -31,6 +31,11 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return;
         }
+        // A closing header goes on with the statement a `;` before it on
+        // the line ended: that `;` ends no header's statement.
+        if is_break_blocks_closing_header(word) {
+            self.block_spacing.pending_semicolon = false;
+        }
         let previous_header = self.block_spacing.active_header.take();
         let previous_header_expects_body = self.block_spacing.header_expects_body;
         self.block_spacing.active_header = Some(word.to_string());

@@ -10581,3 +10581,24 @@ fn a_header_after_a_statement_its_line_ends_nests_in_no_header_before_it() {
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
+
+// Breaking blocks pads around a statement, never inside it: a header an
+// `else` kept on a statement line heads runs straight into its block, as
+// it does on a line of its own.
+#[test]
+fn break_blocks_pads_no_line_between_a_header_after_a_kept_else_and_its_block() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n    if (ready)\n        helper(); else for (;;) {\n        first();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=pico", "--break-blocks"][..],
+            "void f()\n{   if (ready) helper(); else do\n        {   first(); }\n        while (state);\n\n    if (ready)\n        helper(); else for (;;)\n        {   first(); } }\n",
+        ),
+        (
+            &["--style=lisp", "--break-blocks=all"][..],
+            "void f() {\n    if (ready) helper(); else do {\n            first(); }\n        while (state);\n\n    if (ready)\n        helper(); else for (;;) {\n            first(); } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
