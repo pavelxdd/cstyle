@@ -5344,7 +5344,7 @@ impl FormatEngine<'_> {
 
     /// The control keyword whose condition closes right before the `{` at
     /// `open`, as in `if (x) {`.
-    fn header_keyword_before(&self, open: usize) -> Option<usize> {
+    pub(crate) fn header_keyword_before(&self, open: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let close = self.tree.previous_code_token(open)?;
         let condition = groups.closed_at(close)?;

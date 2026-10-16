@@ -2133,6 +2133,38 @@ impl FormatEngine<'_> {
                 .is_some_and(|token| matches!(token, Token::Symbol('}')))
     }
 
+    /// Whether output line `line`, ending with a brace, opens the body of a
+    /// header other than `if` that follows an `else` on it.
+    fn line_nests_header_after_else(&self, line: &str) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(index) = self
+            .output
+            .scoped_range()
+            .rev()
+            .find(|&index| std::ptr::eq(self.output[index].as_str(), line))
+        else {
+            return false;
+        };
+        self.output
+            .line_tokens(index)
+            .and_then(|span| {
+                (span.first..=span.last.min(tokens.len().saturating_sub(1)))
+                    .rev()
+                    .find(|&token| matches!(tokens[token], Token::Symbol('{')))
+            })
+            .and_then(|open| self.header_keyword_before(open))
+            .is_some_and(|keyword| {
+                !matches!(&tokens[keyword], Token::Word(word) if word == "if")
+                    && self
+                        .tree
+                        .previous_code_token(keyword)
+                        .is_some_and(|previous| {
+                            matches!(&tokens[previous], Token::Word(word) if word == "else")
+                                && self.output.line_with_token(previous) == Some(index)
+                        })
+            })
+    }
+
     fn standalone_block_comment_indent_spaces(
         &self,
         kind: CommentKind,
@@ -2204,9 +2236,11 @@ impl FormatEngine<'_> {
                 );
             }
             if trimmed.starts_with("} else") {
+                // `else while (x) {` nests two headers on one line.
+                let levels = 1 + usize::from(self.line_nests_header_after_else(line));
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
-                        + self.options.indent_width
+                        + levels * self.options.indent_width
                         + self.case_unindent_spaces(),
                 );
             }

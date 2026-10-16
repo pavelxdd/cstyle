@@ -12025,3 +12025,17 @@ fn a_message_closer_alone_on_its_line_stands_at_its_bracket() {
         "void f()\n{\n    return [self.other countWith:1\n            and:2\n           ];\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_the_body_of_a_header_after_else_stands_in_that_body() {
+    check(
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else while (other) {\n        /* note */ value=0;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else while (other) {\n            /* note */ value=0;\n        }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else for (;;) {\n        /* note */\n        value=0;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else for (;;) {\n            /* note */\n            value=0;\n        }\n}\n",
+    );
+}
