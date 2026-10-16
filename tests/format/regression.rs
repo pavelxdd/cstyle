@@ -13073,3 +13073,21 @@ fn an_empty_block_keeps_the_code_after_it_on_its_line() {
     let parted = "void f()\n{\n    if (ready) {}\n    else {\n        value = 1;\n    }\n    while (busy()) {}\n    next();\n}\n";
     check(parted, &["--style=kr"], parted);
 }
+
+#[test]
+fn a_list_row_a_comment_leads_in_a_case_block_stands_at_the_rows() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n        int other[] = { 1,\n                        /* e */ 2\n                      };\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2|\n                /* note */ 4\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_run_in_switch_brace_before_a_case_block_holding_a_table_stays_at_the_switch() {
+    // astyle sets the brace at column one here, though not when the case
+    // block holds no table.
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2|\n                /* note */ 4\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (op)\n    {   default:\n        {   int table[][2] =\n            {   { FIRST, 1 },\n                {   SECOND, 2|\n                    /* note */ 4\n                },\n            };\n            break;\n        }\n    }\n}\n",
+    );
+}

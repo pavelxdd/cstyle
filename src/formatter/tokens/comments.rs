@@ -790,6 +790,16 @@ impl FormatEngine<'_> {
             frame.body_indent_column
                 + usize::from(self.case_body_indent_extra(LineKind::Normal) > 0)
                     * self.options.indent_width
+        } else if matches!(
+            frame.semantic_kind,
+            BraceSemanticKind::Array
+                | BraceSemanticKind::Initializer
+                | BraceSemanticKind::CompoundLiteral
+                | BraceSemanticKind::DeferArray
+        ) {
+            // A list's rows take their columns from published lines, which
+            // lost the case unindent the comment is yet to.
+            frame.body_indent_column + self.case_unindent_spaces()
         } else {
             frame.body_indent_column
         };
@@ -1437,12 +1447,17 @@ impl FormatEngine<'_> {
                 .last_non_empty_index()
                 .is_some_and(|index| self.output.is_directive_line(index));
             if previous_code.ends_with(',') && !after_directive {
+                // The rows published lost the case unindent the comment is
+                // yet to.
                 brace_element_comment_indent = unmatched_open_brace_content_offset(previous_code)
                     .map(|offset| {
                         visual_width_from(&previous[..offset], 0, self.options.tab_width)
+                            + self.case_unindent_spaces()
                     });
-                let spaces = brace_element_comment_indent
-                    .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width));
+                let spaces = brace_element_comment_indent.unwrap_or_else(|| {
+                    leading_visual_width(previous, self.options.tab_width)
+                        + self.case_unindent_spaces()
+                });
                 let structural_level = self
                     .layout
                     .indentation
