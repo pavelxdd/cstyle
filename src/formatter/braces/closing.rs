@@ -1100,15 +1100,38 @@ impl FormatEngine<'_> {
         }
         // The tree pairs the closer with its opener across conditional
         // branches that open alike; the output's brace count does not.
-        let tree_open_line = self
+        let tree_group = self
             .output
             .pending_tokens()
             .map(|span| span.first)
             .filter(|&close| matches!(self.tree.tokens.get(close), Some(Token::Symbol('}'))))
-            .and_then(|close| self.tree.groups.closed_at(close))
-            .and_then(|group| {
-                self.output
-                    .line_with_token(self.tree.groups.get(group).open)
+            .and_then(|close| self.tree.groups.closed_at(close));
+        let tree_open_line = tree_group.and_then(|group| {
+            self.output
+                .line_with_token(self.tree.groups.get(group).open)
+        });
+        // The line the block's header leads, or an `else` after a closer.
+        let tree_header_spaces = tree_group
+            .and_then(|group| self.tree.blocks.owner(group))
+            .map(|owner| {
+                // An `else if` block belongs to its `if`.
+                next_code_token(&self.tree.tokens, owner + 1)
+                    .filter(|_| matches!(&self.tree.tokens[owner], Token::Word(word) if word == "else"))
+                    .filter(|&next| matches!(&self.tree.tokens[next], Token::Word(word) if word == "if"))
+                    .unwrap_or(owner)
+            })
+            .and_then(|owner| {
+                let line = self.output.line_with_token(owner)?;
+                let first = self.output.line_tokens(line)?.first;
+                let lead = self.output.lead_width(line, self.options.tab_width);
+                if first == owner {
+                    return Some(lead);
+                }
+                // A closer stands a level in from the header it shares its
+                // line with.
+                (matches!(self.tree.tokens[first], Token::Symbol('}'))
+                    && next_code_token(&self.tree.tokens, first + 1) == Some(owner))
+                .then(|| lead.saturating_sub(self.options.indent_width))
             });
         let (open_spaces, open) = match tree_open_line {
             Some(index) => (
@@ -1131,7 +1154,11 @@ impl FormatEngine<'_> {
         if let Some(frame) = semantic_frame {
             // An `else` or the header leading its line stands where layout
             // put it, past levels the engine lost.
-            let header = if starts_header_word(open, "else")
+            let header = if let Some(spaces) = tree_header_spaces {
+                // The published header took the case unindent the closer is
+                // about to take.
+                spaces + self.case_unindent_spaces()
+            } else if starts_header_word(open, "else")
                 || frame
                     .header
                     .as_deref()

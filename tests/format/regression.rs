@@ -10209,6 +10209,16 @@ fn ratliff_closes_a_block_after_branch_alternative_openers_at_its_header() {
     check(expected, &["--style=ratliff"], expected);
 }
 
+// Ratliff closes a block at the line its header leads, though a comment
+// before an else chain a directive splits leaves the engine a level off.
+#[test]
+fn ratliff_closes_blocks_of_a_split_else_chain_after_a_comment_at_their_headers() {
+    let input = "void f(void)\n{\n#ifndef A\n  if( ready ){\n  }else\n#endif\n  {\n    if( other ){\n    }\n    /* note */\n#ifndef C\n    if( more ){\n    }else\n#endif\n    {\n      helper();\n    }\n  }\n}\n";
+    let expected = "void f(void) {\n#ifndef A\n    if( ready ) {\n        }\n    else\n#endif\n        {\n        if( other ) {\n            }\n        /* note */\n#ifndef C\n        if( more ) {\n            }\n        else\n#endif\n            {\n            helper();\n            }\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]
