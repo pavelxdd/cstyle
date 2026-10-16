@@ -9880,3 +9880,20 @@ fn breaking_one_line_headers_keeps_a_closing_header_with_what_goes_on_after_it()
         );
     }
 }
+
+#[test]
+fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
+    // The closer cannot join a row a comment ends, so the gap before it
+    // goes with it.
+    let input = "static void f(int *p){ g(p); /*none*/ }\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "static void f(int *p) {\n    g(p); /*none*/\n}\n",
+        ),
+        ("--style=pico", "static void f(int *p) { g(p); /*none*/ }\n"),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

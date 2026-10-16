@@ -15,7 +15,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_brace_imbalance, preprocessor_directive,
+    ContainsAnyByte, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -311,14 +311,17 @@ impl FormatEngine<'_> {
             && !whitespace_before_brace.is_empty()
         {
             // The closer joins its line again after the brace style
-            // passes, past the whole source gap.
+            // passes, past the whole source gap; a line a comment ends
+            // takes no closer and keeps no gap.
             let source_gap = &whitespace_before_brace[..];
             if self.current_is_blank() {
-                if let Some(previous) = self.output.last_mut() {
+                if let Some(previous) = self.output.last_mut()
+                    && !line_ends_with_comment(previous)
+                {
                     previous.truncate(previous.trimmed_end().len());
                     previous.push_str(source_gap);
                 }
-            } else {
+            } else if !line_ends_with_comment(self.current.trimmed_end()) {
                 self.trim_current_end_horizontal_space();
                 self.current.push_str(source_gap);
                 self.preserve_run_in_join_space = true;
