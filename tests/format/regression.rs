@@ -11398,3 +11398,28 @@ fn breaking_return_types_breaks_a_definition_a_comment_leads() {
         "/* note */ void\nf()\n{\n    run();\n}\n",
     );
 }
+
+#[test]
+fn a_constructor_member_after_a_directive_aligns_with_the_members_before_it() {
+    let input = "class Item {\npublic:\n    Item(int value, int other)\n#ifdef FEATURE\n        : value_(value),\n#endif\n          other_(other) {}\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n#ifdef FEATURE\n        : value_(value),\n#endif\n          other_(other) {}\n};\n",
+    );
+}
+
+#[test]
+fn run_in_styles_align_constructor_members_after_an_access_label() {
+    let input = "class Item {\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {}\n};\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {}\n};\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {} };\n",
+    );
+}

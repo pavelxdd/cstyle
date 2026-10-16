@@ -9,6 +9,7 @@
 use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::starts_header_word;
+use crate::formatter::constructs::labels;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::{CommentKind, Token, token_text};
@@ -1975,9 +1976,15 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         let body = groups.enclosing(first)?;
         let comma = self.tree.previous_code_token(first)?;
+        // A constructor's member initializers declare nothing.
         if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate)
             || !matches!(tokens[comma], Token::Symbol(','))
             || groups.enclosing(comma) != Some(body)
+            || self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_some()
         {
             return None;
         }
@@ -2008,7 +2015,15 @@ impl FormatEngine<'_> {
                 start = look.start;
                 break;
             }
+            // An access label ends the members before it.
+            let ends_access_label = matches!(tokens[before], Token::Symbol(':'))
+                && groups.enclosing(before) == Some(body)
+                && self.tree.previous_code_token(before).is_some_and(|word| {
+                    matches!(&tokens[word], Token::Word(word)
+                        if labels::is_access_label_start(word, &self.options.access_labels))
+                });
             if before == open
+                || ends_access_label
                 || matches!(tokens[before], Token::Symbol(';'))
                     && groups.enclosing(before) == Some(body)
             {

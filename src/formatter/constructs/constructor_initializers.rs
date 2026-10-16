@@ -3,7 +3,6 @@ use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
@@ -502,7 +501,15 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with_any(b"#:,{}") {
             return None;
         }
-        let previous = &self.output[self.output.last_lines_where(LineFilter::NoLineComment)[0]?];
+        // Directives between the members leave the member before them.
+        let previous_index = self.output.scoped_range().rev().find(|&index| {
+            let head = self.output.trimmed(index);
+            !head.is_empty()
+                && !head.starts_with("//")
+                && !head.starts_with('#')
+                && self.output.directive_of_continuation(index).is_none()
+        })?;
+        let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
             return None;
