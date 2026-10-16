@@ -2706,10 +2706,24 @@ fn add_braces_insertion_range(
         return None;
     }
     let (_, statement_line_end) = line_bounds(tokens, semicolon);
+    // Code going on after the statement on its line, as an `else`, stays
+    // past the added closer.
+    let close_insert = if tokens[semicolon + 1..statement_line_end]
+        .iter()
+        .any(|token| {
+            !matches!(
+                token,
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        }) {
+        semicolon + 1
+    } else {
+        statement_line_end
+    };
     Some((
         header_end,
         line_bounds(tokens, statement_start).0,
-        statement_line_end,
+        close_insert,
     ))
 }
 

@@ -9949,3 +9949,25 @@ fn an_else_after_an_added_one_line_block_starts_its_line_as_after_a_written_one(
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn added_braces_close_a_body_its_else_follows_on_the_line_before_the_else() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) {\n        first();\n    }\n    if (ready)\n        helper(); else other();\n    if (ready)\n        helper(); else while (more) next();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=1tbs"][..],
+            "void f()\n{\n    if (ready) {\n        helper();\n    } else for (;;) {\n            first();\n        }\n    if (ready) {\n        helper();\n    } else {\n        other();\n    }\n    if (ready) {\n        helper();\n    } else while (more) {\n            next();\n        }\n}\n",
+        ),
+        (
+            &["--style=allman", "--add-braces"][..],
+            "void f()\n{\n    if (ready)\n    {\n        helper();\n    }\n    else for (;;)\n        {\n            first();\n        }\n    if (ready)\n    {\n        helper();\n    }\n    else\n    {\n        other();\n    }\n    if (ready)\n    {\n        helper();\n    }\n    else while (more)\n        {\n            next();\n        }\n}\n",
+        ),
+        (
+            &["--style=lisp", "--add-braces"][..],
+            "void f() {\n    if (ready) {\n        helper(); }\n    else for (;;) {\n            first(); }\n    if (ready) {\n        helper(); }\n    else {\n        other(); }\n    if (ready) {\n        helper(); }\n    else while (more) {\n            next(); } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
