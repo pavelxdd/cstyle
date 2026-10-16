@@ -11786,3 +11786,13 @@ fn a_comment_split_off_an_initializer_closer_after_an_element_stands_at_the_list
         "void f()\n    {\n    switch (op)\n        {\n        default:\n            {\n            int table[][2] =\n                {\n                    { FIRST, 1 },\n                    {\n                    SECOND, 2\n                    },\n                /* note */\n                };\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_switch_line_leaves_the_comment_after_its_brace_as_without_it() {
+    let input = "void f()\n{\n    /* note */ switch (kind) {  /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ switch (kind) {\n        /* dispatch on kind\n                        ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
+    );
+}
