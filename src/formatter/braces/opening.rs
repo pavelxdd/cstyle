@@ -316,7 +316,15 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let opening_brace = self.output.last_line_outside_comment()?;
+        self.output.last_line_outside_comment()?;
+        // Directives between the brace and the line set no column.
+        let opening_brace = self.output.scoped_range().rev().find(|&index| {
+            let trimmed = self.output.trimmed(index);
+            !trimmed.is_empty()
+                && !trimmed.starts_with('#')
+                && self.output.directive_of_continuation(index).is_none()
+        })?;
+        let opening_brace = &self.output[opening_brace];
         if self.output.code_of(opening_brace).trimmed() != "{" {
             return None;
         }

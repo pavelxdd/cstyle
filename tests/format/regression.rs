@@ -12342,3 +12342,12 @@ fn a_declaration_a_comment_leads_keeps_its_pointer_declarator() {
         "void f()\n{\n    /* note */ Item *item = new Item(value);\n    /* note */ int *list = other;\n}\n",
     );
 }
+
+#[test]
+fn class_members_after_a_conditional_opening_the_body_stand_in_the_body() {
+    check(
+        "class Pair {\n#if A\n    int x;\n#endif\n    int y;\n};\n",
+        &["--style=whitesmith"],
+        "class Pair\n    {\n#if A\n        int x;\n#endif\n        int y;\n    };\n",
+    );
+}
