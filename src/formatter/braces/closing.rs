@@ -223,7 +223,11 @@ impl FormatEngine<'_> {
         let before_open = (0..index).rev().find(|&row| {
             self.output.comment_start_index(row) == row && !self.output.code_trimmed(row).is_empty()
         })?;
-        let code = self.output.code_trimmed(before_open);
+        // A directive continues no expression into the brace.
+        if self.output.brace_meta(before_open).code_starts_with_hash {
+            return None;
+        }
+        let code = self.output.code_before_comment_trimmed(before_open);
         (head_ends_binary_operator(code) || code.ends_with("->"))
             .then(|| leading_visual_width(&self.output[index], self.options.tab_width))
     }

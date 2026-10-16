@@ -10455,3 +10455,22 @@ fn whitesmith_braces_after_a_directive_stand_where_their_owner_puts_them() {
         check(expected, &["--style=whitesmith"], expected);
     }
 }
+
+#[test]
+fn a_directive_comment_before_a_block_is_no_operator_for_the_closers_after_it() {
+    for directive in ["#else /* first */\n", "#endif /* first */\n"] {
+        let tail = if directive.starts_with("#else") {
+            "#endif\n"
+        } else {
+            ""
+        };
+        let input = format!(
+            "#ifdef A\n#else\nvoid helper(int value)\n#endif\n{{\n#ifdef B\n{directive}    {{\n    }}\n{tail}}}\n"
+        );
+        let expected = format!(
+            "#ifdef A\n#else\nvoid helper(int value)\n#endif\n    {{\n#ifdef B\n{directive}        {{\n        }}\n{tail}    }}\n"
+        );
+        check(&input, &["--style=whitesmith"], &expected);
+        check(&expected, &["--style=whitesmith"], &expected);
+    }
+}
