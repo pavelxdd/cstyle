@@ -12127,3 +12127,12 @@ fn a_comment_leading_a_definition_head_leaves_its_broken_brace_alone() {
         "/* note */ void f()\n/* note */\n{\n    value = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_case_label_continued_past_a_comment_or_directive_stays_a_case_label() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n         // note\n         SECOND:\n        value = 1;\n        break;\n    case FIRST |\n         /* note */\n         THIRD:\n        break;\n    case FIRST |\n#ifdef FEATURE\n         FOURTH:\n#endif\n        break;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n            // note\n            SECOND:\n        value = 1;\n        break;\n    case FIRST |\n            /* note */\n            THIRD:\n        break;\n    case FIRST |\n#ifdef FEATURE\n            FOURTH:\n#endif\n        break;\n    }\n}\n",
+    );
+}

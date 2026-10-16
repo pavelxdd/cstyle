@@ -4,7 +4,9 @@ use crate::formatter::constructs::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
 use crate::formatter::constructs::labels;
-use crate::formatter::constructs::switch_cases::case_label_with_trailing_comment;
+use crate::formatter::constructs::switch_cases::{
+    case_label_with_trailing_comment, find_case_colon,
+};
 use crate::formatter::constructs::template_declarations::{
     is_template_declaration_head_line, template_continuation_indent_spaces,
     template_declaration_line_complete,
@@ -65,7 +67,7 @@ impl FormatEngine<'_> {
                             line,
                         )
                         .is_some(),
-                previous_line: self.output.last_line_outside_comment().map(String::as_str),
+                previous_line: self.previous_code_line_past_comments_and_directives(),
             },
         );
         self.layout.run_in_state.adjuster_observed_line_count += 1;
@@ -1019,6 +1021,25 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces =
                 Some(leading_visual_width(previous, self.options.tab_width));
         }
+        // A case label goes on past comment and directive lines as from its
+        // own line.
+        if self.output.last_non_empty_index().is_some_and(|index| {
+            let trimmed = self.output.trimmed(index);
+            is_bare_comment_line(trimmed)
+                || trimmed.starts_with('#')
+                || self.output.directive_of_continuation(index).is_some()
+        }) && let Some(previous) = self.previous_code_line_past_comments_and_directives()
+            && let code = self.output.code_trimmed_of(previous).trimmed_start()
+            && (code.starts_with("case ") || code.starts_with("case("))
+            && find_case_colon(code).is_none()
+            && unmatched_open_paren_column(code).is_none()
+        {
+            layout.exact_indent_spaces = Some(
+                leading_visual_width(previous, self.options.tab_width)
+                    + 2 * self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        }
         // Comments between the rows take no part in their columns.
         if layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with_any(b",{}")
@@ -1032,6 +1053,23 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
         }
         layout
+    }
+
+    /// The last code line before the current one, past comment and directive
+    /// lines, which leave the statement they interrupt going on.
+    pub(crate) fn previous_code_line_past_comments_and_directives(&self) -> Option<&str> {
+        self.output.last_line_outside_comment()?;
+        self.output
+            .scoped_range()
+            .rev()
+            .find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !is_bare_comment_line(trimmed)
+                    && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
+            })
+            .map(|index| self.output[index].as_str())
     }
 
     /// The column of the rows after `previous`, a `:`-led row that a comma

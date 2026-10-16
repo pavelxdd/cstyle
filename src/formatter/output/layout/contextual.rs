@@ -919,9 +919,8 @@ impl FormatEngine<'_> {
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some()
                 || self
-                    .output
-                    .last_line_outside_comment()
-                    .is_some_and(|previous| labels::ends_with_binary_operator(previous))
+                    .previous_code_line_past_comments_and_directives()
+                    .is_some_and(labels::ends_with_binary_operator)
         }) {
             layout.exact_indent_spaces = Some(spaces);
         }

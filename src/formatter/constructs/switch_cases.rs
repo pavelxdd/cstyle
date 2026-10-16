@@ -1911,9 +1911,8 @@ impl FormatEngine<'_> {
         if self.layout.line_adjuster.switch_depth() == 0
             || trimmed.starts_with('#')
             || self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| labels::ends_with_binary_operator(previous))
+                .previous_code_line_past_comments_and_directives()
+                .is_some_and(labels::ends_with_binary_operator)
             || trimmed.starts_with("case ")
             || trimmed.starts_with("default")
             || trimmed.starts_with("} while")

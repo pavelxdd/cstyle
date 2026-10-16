@@ -6292,10 +6292,21 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let statements = &self.tree.statements;
+        // A word an operator continues to, as the last of a case label
+        // `case A |\n B:`, labels nothing.
         if !matches!(&tokens[first], Token::Word(word) if !matches!(word.as_str(), "case" | "default"))
             || !next_code_token(tokens, first + 1)
                 .is_some_and(|colon| matches!(tokens[colon], Token::Symbol(':')))
             || statements.braceless_header(first).is_some()
+            || self
+                .tree
+                .previous_code_token(first)
+                .is_some_and(|previous| {
+                    matches!(
+                        tokens[previous],
+                        Token::Operator(_) | Token::Symbol(',' | '(' | '[' | '?')
+                    )
+                })
         {
             return None;
         }
