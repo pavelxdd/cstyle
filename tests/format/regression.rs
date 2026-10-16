@@ -12643,3 +12643,9 @@ fn a_comment_split_off_a_closer_after_a_bare_block_stands_at_the_body() {
         "void f()\n    {\n        {\n        value=0;\n        }\n    /* note */\n    }\n",
     );
 }
+
+#[test]
+fn a_declarator_split_from_an_aggregate_type_a_comment_leads_continues() {
+    let input = "void f()\n{\n    /* note */ static const struct Item\n        first = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+}

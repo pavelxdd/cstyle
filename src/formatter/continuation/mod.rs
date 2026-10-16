@@ -2175,6 +2175,8 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
 /// Whether `line` names a struct or union type its declarators continue on
 /// the next line after, as `static const struct Item`.
 pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
+    // A comment leading the type leaves the declaration it leads.
+    let line = after_leading_comments(line);
     if line.trimmed_start().starts_with_any(b"/*")
         || ["//", "/*", "*/"]
             .iter()
