@@ -13010,3 +13010,13 @@ fn an_initializer_row_between_directives_keeps_the_column_of_the_rows() {
         "Item::Item(int value, int other)\n    : value_(value),\n#ifdef FEATURE\n      extra_(0),\n#endif\n      other_(other) {}\n",
     );
 }
+
+#[test]
+fn a_header_after_a_directive_takes_its_brace_before_its_comment_as_anywhere() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    run();\n#endif\n    if (ready) /* why */ {\n        value=0;\n    }\n    if (ready) /* why */ {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FEATURE\n    run();\n#endif\n    if (ready) { /* why */\n        value=0;\n    }\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}
