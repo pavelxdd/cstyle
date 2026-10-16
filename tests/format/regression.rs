@@ -11255,3 +11255,20 @@ fn gnu_sets_the_case_block_brace_of_a_comment_led_label_under_the_label() {
         "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value = 1;\n            break;\n        }\n        /*case 2*/ default:\n        {\n            if (ready)\n                {\n                    start();\n                }\n            break;\n        }\n        }\n}\n",
     );
 }
+
+#[test]
+fn keeping_one_line_statements_keeps_a_label_after_a_statement_on_its_line() {
+    let input = "void f()\n{\n    value = 1; again:\n    next();\n    if (ready) {\n        a(); stop:\n        b();\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+}
+
+#[test]
+fn a_kept_line_ending_in_a_label_stays_at_the_column_of_its_first_statement() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: one:\n        value = 1;\n        break;\n    case 2: value = 2; two:\n        break;\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--keep-one-line-statements", "--indent-labels"],
+        input,
+    );
+}

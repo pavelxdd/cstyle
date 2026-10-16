@@ -1519,7 +1519,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let last = self.tree.previous_code_token(first)?;
-        if matches!(tokens[last], Token::Symbol(',' | ';' | '{' | '}')) {
+        // The statement a label ends its line before is a statement of its
+        // own.
+        if matches!(tokens[last], Token::Symbol(',' | ';' | '{' | '}'))
+            || matches!(tokens[last], Token::Symbol(':'))
+                && self.tree.statements.starts_block_statement(first)
+        {
             return None;
         }
         let group = groups.enclosing(first);

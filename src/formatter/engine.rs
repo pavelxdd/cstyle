@@ -1298,9 +1298,9 @@ impl<'a> FormatEngine<'a> {
         if has_semicolon {
             let mut statement_count = 0usize;
             let mut paren_depth = 0i32;
-            // A header after a statement starts another.
+            // A header or a label after a statement starts another.
             let mut after_statement = false;
-            for token in tokens {
+            for (index, token) in tokens.iter().enumerate() {
                 match token {
                     Token::Symbol('(') => paren_depth += 1,
                     Token::Symbol(')') => paren_depth -= 1,
@@ -1312,10 +1312,10 @@ impl<'a> FormatEngine<'a> {
                     Token::Word(word)
                         if after_statement
                             && paren_depth <= 0
-                            && crate::formatter::constructs::headers::is_header(
+                            && (crate::formatter::constructs::headers::is_header(
                                 self.options,
                                 word,
-                            ) =>
+                            ) || starts_label(&tokens[index + 1..])) =>
                     {
                         statement_count += 1;
                     }
@@ -2525,4 +2525,14 @@ fn shared_whitespace(whitespace: &str) -> std::borrow::Cow<'static, str> {
     } else {
         std::borrow::Cow::Owned(whitespace.to_owned())
     }
+}
+
+/// Whether `tokens`, after a word, go on with the single colon ending a
+/// label.
+fn starts_label(tokens: &[Token]) -> bool {
+    let mut code = tokens
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)));
+    matches!(code.next(), Some(Token::Symbol(':')))
+        && !matches!(code.next(), Some(Token::Symbol(':')))
 }
