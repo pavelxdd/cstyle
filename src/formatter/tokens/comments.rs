@@ -3319,8 +3319,14 @@ impl FormatEngine<'_> {
         {
             let code_end = self.current.trimmed_end().len();
             let gap = self.current.len() - code_end;
-            if gap > 1 && self.current[code_end..].bytes().all(|byte| byte == b' ') {
-                let width = (gap as isize - 1 - growth).max(1) as usize + 1;
+            // A single space took no column for the join; a comment before
+            // code keeps it.
+            let single_space_moves = !self.block_comment_precedes_code_on_its_line(kind);
+            if (gap > 1 || gap == 1 && single_space_moves)
+                && self.current[code_end..].bytes().all(|byte| byte == b' ')
+            {
+                let source_gap = if gap > 1 { gap - 1 } else { gap };
+                let width = (source_gap as isize - growth).max(1) as usize + 1;
                 self.current.truncate(code_end);
                 self.current.push_str(&" ".repeat(width));
             }
@@ -3402,7 +3408,8 @@ impl FormatEngine<'_> {
                         .line_state
                         .trailing_comment_columns
                         .pop_front()
-                        .unwrap_or_default();
+                        .unwrap_or_default()
+                        .saturating_sub(self.broken_off_prefix_width());
                     let out_indent = self
                         .current
                         .chars()

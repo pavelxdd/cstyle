@@ -879,11 +879,21 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |index| index + 1);
-        tokens[line_start..open]
+        // The closer may follow code of its own on the source line.
+        let Some(first) = self
+            .current
+            .tokens()
+            .map(|span| span.first)
+            .filter(|&first| (line_start..open).contains(&first))
+        else {
+            return false;
+        };
+        let closer_before = tokens[line_start..first]
             .iter()
-            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .rfind(|token| is_code_token(token))
             .is_some_and(|token| matches!(token, Token::Symbol('}')))
-            && !self.current.trimmed_start().starts_with('}')
+            || self.follows_added_closer(first);
+        closer_before && !self.current.trimmed_start().starts_with('}')
     }
 
     fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
@@ -2240,6 +2250,7 @@ impl FormatEngine<'_> {
             let block_comment_starts_broken_body = attached_line_comment.is_none()
                 && attached_block_comment.is_some()
                 && self.layout.line_state.is_one_line_block
+                && self.brace_closes_on_its_source_line()
                 && self.options.break_one_line_blocks
                 && !self
                     .token_input
@@ -2280,6 +2291,22 @@ impl FormatEngine<'_> {
                 self.update_current_brace_indent_from_last_output_line();
             }
         }
+    }
+
+    /// Whether the brace being pushed closes on its own source line.
+    fn brace_closes_on_its_source_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|open| {
+                let group = self.tree.groups.opened_at(open)?;
+                Some((open, self.tree.groups.get(group).close?))
+            })
+            .is_some_and(|(open, close)| {
+                !tokens[open..close]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
     }
 
     fn break_open_brace_onto_own_line(
@@ -2425,7 +2452,9 @@ impl FormatEngine<'_> {
         }
         let block_indent_extra = brace.block_indent_extra;
         let comment_starts_block = (self.token_input.token_begins_source_line
-            || (self.layout.line_state.is_one_line_block && self.options.break_one_line_blocks))
+            || (self.layout.line_state.is_one_line_block
+                && self.brace_closes_on_its_source_line()
+                && self.options.break_one_line_blocks))
             && next_is_trailing_comment;
         if let Some(comment) = attached_line_comment.or(attached_block_comment)
             && !comment_starts_block
@@ -2767,8 +2796,11 @@ impl FormatEngine<'_> {
             // closing brace and the broken brace left.
             let code_len = self.current.trimmed().chars().count();
             let run_in_closer = self.run_in_closer_row() == Some(true);
+            let prefix = self
+                .broken_off_prefix_width()
+                .max(self.broken_else_if_prefix_width());
             let target = target
-                .saturating_sub(self.broken_else_if_prefix_width())
+                .saturating_sub(prefix)
                 .saturating_sub(usize::from(run_in_closer));
             self.current
                 .push_str(&" ".repeat(target.saturating_sub(code_len).max(1)));
@@ -2781,9 +2813,20 @@ impl FormatEngine<'_> {
         self.comments.skip_next_attached_comment = true;
     }
 
+    /// Whether a closer added around the statement before `first` stands
+    /// between them.
+    fn follows_added_closer(&self, first: usize) -> bool {
+        self.tree.previous_code_token(first).is_some_and(|before| {
+            self.layout
+                .line_state
+                .added_block_semicolons
+                .contains(&before)
+        })
+    }
+
     /// Width of the code before the line on its source line, which the
     /// comment's source column counts.
-    fn broken_off_prefix_width(&self) -> usize {
+    pub(crate) fn broken_off_prefix_width(&self) -> usize {
         let tokens = &self.tree.tokens;
         let Some(first) = self.current.tokens().map(|span| span.first) else {
             return 0;
@@ -2799,15 +2842,26 @@ impl FormatEngine<'_> {
         else {
             return 0;
         };
-        // A closer broken off before the line leaves the comment its source
-        // column.
-        if tokens[code_start..first]
+        // A closing header keeps the columns of the closer broken off before
+        // it.
+        let closing_header =
+            is_break_blocks_closing_header(leading_identifier(self.current.trimmed_start()));
+        let end = tokens[code_start..first]
             .iter()
-            .any(|token| matches!(token, Token::Symbol('}')))
-        {
-            return 0;
-        }
-        tokens[code_start..first].iter().map(token_char_len).sum()
+            .rposition(|token| closing_header && matches!(token, Token::Symbol('}')))
+            .map_or(first, |offset| code_start + offset);
+        // A closer added before the line holds the columns of `} ` before
+        // it, wherever the style sets the closer.
+        let added_closer = if self.follows_added_closer(first) {
+            "} ".len()
+        } else {
+            0
+        };
+        tokens[code_start..end]
+            .iter()
+            .map(token_char_len)
+            .sum::<usize>()
+            .saturating_sub(added_closer)
     }
 
     /// The source width of what a broken else-if moved off the line its

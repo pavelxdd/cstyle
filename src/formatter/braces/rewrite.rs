@@ -268,6 +268,10 @@ impl FormatEngine<'_> {
                 None,
             );
             self.comments.added_block_semicolon = Some(semicolon);
+            self.layout
+                .line_state
+                .added_block_semicolons
+                .push(semicolon);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             let header_body_bias = self.layout.pending_braceless_block_bias.take();
@@ -395,6 +399,10 @@ impl FormatEngine<'_> {
             self.push_close_brace(next, false);
             self.comments.closing_broken_added_block = false;
             self.comments.added_block_semicolon = Some(semicolon);
+            self.layout
+                .line_state
+                .added_block_semicolons
+                .push(semicolon);
             self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
                 .iter()
                 .find(|token| !matches!(token, Token::Whitespace(_)))

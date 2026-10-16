@@ -11505,4 +11505,69 @@ fn unpadding_a_header_broken_off_a_statement_widens_the_gap_before_its_comment()
         &["--style=linux", "--unpad-paren"],
         "void f()\n{\n    a();\n    while(x) {  /* note */\n        first();\n    }\n    if(ready) helper();\n    else switch(state) {  /* note */\n        case 1:\n            first();\n            break;\n        }\n}\n",
     );
+    check(
+        input,
+        &["--style=1tbs", "--unpad-paren"],
+        "void f()\n{\n    a();\n    while(x) {  /* note */\n        first();\n    }\n    if(ready) {\n        helper();\n    } else switch(state) {  /* note */\n        case 1:\n            first();\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_brace_stays_on_its_line_after_a_one_line_block_before_it() {
+    let input = "void f()\n{\n    if (ready) { helper(); } else { /* note */\n        first();\n    }\n    while (ready) { helper(); } if (state) { /* note */\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        helper();\n    } else { /* note */\n        first();\n    }\n    while (ready) {\n        helper();\n    }\n    if (state) { /* note */\n        first();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        helper();\n    }\n    else     /* note */\n    {\n        first();\n    }\n    while (ready)\n    {\n        helper();\n    }\n    if (state)   /* note */\n    {\n        first();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_broken_brace_comment_after_a_statement_keeps_its_gap() {
+    let input = "void f()\n{\n    if (state) { /* note */\n        first();\n    }\n    a(); if (state) { /* note */\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (state)   /* note */\n    {\n        first();\n    }\n    a();\n    if (state)   /* note */\n    {\n        first();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn unpadding_the_row_an_added_closer_joins_widens_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    if (ready) helper (state); /* note */\n    if (ready) helper (state)+1;   /* note */\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--add-braces", "--unpad-paren"],
+        "void f() {\n    if(ready) {\n        helper(state); }  /* note */\n    if(ready) {\n        helper(state)+1; }    /* note */\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=lisp",
+            "--add-braces",
+            "--unpad-paren",
+            "--pad-oper",
+        ],
+        "void f() {\n    if(ready) {\n        helper(state); }  /* note */\n    if(ready) {\n        helper(state) + 1; }  /* note */\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--add-braces", "--unpad-paren"],
+        "void f()\n{   if(ready) { helper(state); }   /* note */\n    if(ready) { helper(state)+1; }     /* note */\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=pico",
+            "--add-braces",
+            "--unpad-paren",
+            "--pad-oper",
+        ],
+        "void f()\n{   if(ready) { helper(state); }   /* note */\n    if(ready) { helper(state) + 1; }   /* note */\n}\n",
+    );
 }

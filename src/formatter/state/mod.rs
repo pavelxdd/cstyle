@@ -290,6 +290,8 @@ pub(crate) struct LineState {
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,
     pub(crate) template_angle_depth: usize,
+    /// The `;` of each statement on the line braces were added around.
+    pub(crate) added_block_semicolons: Vec<usize>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

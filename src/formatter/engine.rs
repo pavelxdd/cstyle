@@ -1230,6 +1230,7 @@ impl<'a> FormatEngine<'a> {
         self.layout.line_state.bit_field_colon = false;
         self.layout.line_state.is_multi_statement_line = false;
         self.layout.line_state.is_one_line_block = false;
+        self.layout.line_state.added_block_semicolons.clear();
         self.layout.line_state.column1_line_comment = {
             let mut iter = tokens.iter();
             match iter.next() {
