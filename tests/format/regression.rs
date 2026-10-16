@@ -11297,3 +11297,18 @@ fn padding_options_reach_the_while_of_an_empty_do_block() {
         "void f()\n{\n    do {} while (x);\n    do {} while ( x );\n    next();\n}\n",
     );
 }
+
+#[test]
+fn a_case_block_after_a_comment_led_label_stands_as_after_a_plain_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    /* other */ default: {\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            break;\n        /* other */ default:\n            {\n            value = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1:\n            break;\n        /* other */ default: {\n            value = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+}

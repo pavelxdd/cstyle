@@ -10,13 +10,16 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, trailing_comment_split_limit,
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+    is_comment_only_line, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, leading_identifier};
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
-    let code = &line[..trailing_comment_split_limit(line)];
+    // Comments leading the line are no part of its code.
+    let lead = line.len() - after_leading_comments(line).len();
+    let code = &line[..lead + trailing_comment_split_limit(&line[lead..])];
     // Labels that lead the line, or follow the brace closing the case
     // before, own what follows them all.
     let trimmed = code.trimmed_start().trim_start_matches('}').trimmed_start();
@@ -51,9 +54,12 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
 
 /// Whether `prefix`, the text before a label, is the brace closing the case
 /// before.
+/// Whether a label after `prefix` stands at the labels' column: after the
+/// brace closing the case before, or after comments alone.
 fn brace_led(prefix: &str) -> bool {
     let prefix = prefix.trimmed();
-    !prefix.is_empty() && prefix.chars().all(|ch| ch == '}')
+    !prefix.is_empty()
+        && (prefix.chars().all(|ch| ch == '}') || after_leading_comments(prefix).is_empty())
 }
 
 fn leading_case_label_count(line: &str) -> usize {
@@ -204,7 +210,7 @@ impl FormatEngine<'_> {
                 self.current.as_str()
             };
             // A statement label after switch labels owns the block.
-            let mut line = line.trimmed_start();
+            let mut line = after_leading_comments(line);
             while let Some(colon) = find_case_colon(line) {
                 let rest = line[colon + 1..].trimmed_start();
                 if rest.is_empty() {
@@ -221,7 +227,7 @@ impl FormatEngine<'_> {
                     return false;
                 }
                 let current = self.current.trimmed_start();
-                if !current.is_empty() && !is_comment_only_line(current) {
+                if holds_code_after_leading_comments(current) {
                     // A statement kept after the label owns no brace.
                     return case_label_token_offset(current, header).is_some()
                         && !if self.current.holds_comment_opener() {
