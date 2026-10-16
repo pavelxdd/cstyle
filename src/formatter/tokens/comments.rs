@@ -24,8 +24,8 @@ use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_unmatched_open_brace, is_comment_line, is_comment_only_line,
-    line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
+    ContainsAnyByte, has_unmatched_open_brace, holds_code_after_leading_comments, is_comment_line,
+    is_comment_only_line, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
@@ -182,9 +182,11 @@ impl FormatEngine<'_> {
         };
         // As a routed comment row does, a comment right after an `else`
         // makes what follows the else's braceless body; one after a blank
-        // line has its split else.
+        // line has its split else. Code after the comment on its line is
+        // that body itself.
         let trimmed = line.trimmed_start();
         let else_body_level = ((trimmed.starts_with("/*") || trimmed.starts_with("//"))
+            && !holds_code_after_leading_comments(trimmed)
             && self.output.scoped().last().is_some_and(|previous| {
                 let previous = previous.trimmed();
                 previous.strip_prefix('}').map_or(previous, str::trim_start) == "else"

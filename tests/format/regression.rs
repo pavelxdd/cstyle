@@ -10539,3 +10539,19 @@ fn ratliff_sets_a_compound_literal_closer_its_line_shares_with_a_nested_one_a_le
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn a_one_line_block_after_a_comment_leading_its_line_leaves_no_level_to_the_next_header() {
+    for body in ["/* note */ helper();", "/* note */ { helper(); }"] {
+        let input = format!(
+            "void f()\n{{\n    if (ready)\n        {body}\n    while (ready)\n        /* note */\n        helper();\n}}\n"
+        );
+        let expected = "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+        check(&input, &["--add-one-line-braces"], expected);
+        check(expected, &["--add-one-line-braces"], expected);
+    }
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n        /* note */ other();\n    while (ready)\n        /* note */\n        helper();\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n    { helper(); }\n    else\n        /* note */ { other(); }\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+    check(input, &["--add-one-line-braces"], expected);
+    check(expected, &["--add-one-line-braces"], expected);
+}

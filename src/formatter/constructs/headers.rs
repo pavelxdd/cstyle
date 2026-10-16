@@ -13,8 +13,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, is_comment_only_line, line_brace_imbalance,
-    preprocessor_directive, unmatched_open_paren_column, unmatched_open_paren_columns,
+    ContainsAnyByte, holds_code_after_leading_comments, is_comment_line, is_comment_only_line,
+    line_brace_imbalance, preprocessor_directive, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1207,7 +1208,10 @@ impl FormatEngine<'_> {
         self.output.scoped().iter().rev().find_map(|line| {
             let code = &self.output.code_of(line);
             let trimmed = code.trimmed();
-            if trimmed.is_empty() || trimmed.starts_with('#') || is_comment_line(line) {
+            if trimmed.is_empty()
+                || trimmed.starts_with('#')
+                || is_comment_line(line) && !holds_code_after_leading_comments(line)
+            {
                 return None;
             }
             Some(trimmed == "else" || trimmed.ends_with("} else"))

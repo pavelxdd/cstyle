@@ -117,6 +117,18 @@ pub(crate) fn is_comment_line(line: &str) -> bool {
             .is_some_and(|rest| rest.is_empty() || rest.starts_with_any(b" \t*/"))
 }
 
+/// Whether `line` holds code after the block comments that lead it.
+pub(crate) fn holds_code_after_leading_comments(line: &str) -> bool {
+    let mut rest = line.trimmed_start();
+    while let Some(after_open) = rest.strip_prefix("/*") {
+        let Some(close) = after_open.find("*/") else {
+            return false;
+        };
+        rest = after_open[close + 2..].trimmed_start();
+    }
+    !rest.is_empty() && !rest.starts_with("//")
+}
+
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
     line.starts_with("//")
         || line.starts_with("/*")

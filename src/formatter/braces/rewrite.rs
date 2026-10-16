@@ -26,8 +26,8 @@ use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, line_ends_with_comment,
-    preprocessor_directive, unmatched_open_paren_column,
+    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, is_comment_line,
+    line_ends_with_comment, preprocessor_directive, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -2104,6 +2104,11 @@ impl FormatEngine<'_> {
             }
             None if braced_init => self.current.push_str(source_gap.unwrap_or_default()),
             None => {}
+        }
+        // A block after a comment leading its line takes the line the
+        // comment kept for the code after it.
+        if self.current_is_preindented && is_comment_line(&self.current) {
+            self.layout.continuation_indent.clear_next_line();
         }
         let collapsed_non_empty_command_block = brace_type == BraceType::Command
             && block == "{}"
