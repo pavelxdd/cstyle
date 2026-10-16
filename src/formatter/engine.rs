@@ -338,6 +338,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) block_spacing: BlockSpacingState,
     pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
+    /// Padding lines before closers the run-in styles join to the row
+    /// before them.
+    pub(crate) joined_closer_padding_lines: Vec<usize>,
     /// A brace frame opened while its case label or header still stood on
     /// the current line, placed from structural columns.
     pub(crate) brace_frame_awaits_line: bool,
@@ -495,6 +498,7 @@ impl<'a> FormatEngine<'a> {
             block_spacing: BlockSpacingState::default(),
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
+            joined_closer_padding_lines: Vec::new(),
             brace_frame_awaits_line: false,
             label_split_shift: None,
             disabled_formatting: None,

@@ -473,12 +473,7 @@ impl FormatEngine<'_> {
         {
             if line_goes_on && !self.current_is_blank() {
                 self.block_spacing.pending_one_line_block = true;
-                // Closers run into the line before take no padding there.
-                self.block_spacing.append_blank |= comment_keeps_closing_header
-                    && !matches!(
-                        self.options.brace_style,
-                        BraceStyle::Lisp | BraceStyle::Pico
-                    );
+                self.block_spacing.append_blank |= comment_keeps_closing_header;
             } else {
                 self.block_spacing.append_blank = true;
             }

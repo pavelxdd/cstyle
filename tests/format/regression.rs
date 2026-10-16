@@ -11199,3 +11199,28 @@ fn styles_breaking_closing_braces_break_the_while_off_an_empty_do_block() {
     );
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn run_in_closers_take_the_padding_before_a_commented_else_ahead_of_the_row_they_join() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n        value=0;\n    } /* c */ else {\n        result=0;\n    }\n    if (ready) {\n        value=0; // note\n    } /* c */ else {\n        result=0;\n    }\n    next();\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks=all"],
+        "void f() {\n    if (ready) {\n        first();\n\n        value=0; } /* c */ else {\n\n        result=0; }\n\n    if (ready) {\n        value=0; // note\n\n    } /* c */ else {\n\n        result=0; }\n\n    next(); }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--break-blocks=all"],
+        "void f()\n{   if (ready)\n    {   first();\n\n        value=0; } /* c */ else\n\n    {   result=0; }\n\n    if (ready)\n    {   value=0; // note\n\n    } /* c */ else\n\n    {   result=0; }\n\n    next(); }\n",
+    );
+}
+
+#[test]
+fn lisp_pads_after_a_commented_else_if_a_closer_joins_as_after_a_commented_else() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } /* c */ else if (other) {\n        result=0;\n    } /* d */ else {\n        result=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks"],
+        "void f() {\n    if (ready) {\n        value=0; } /* c */ else if (other) {\n\n        result=0; } /* d */ else {\n\n        result=1; } }\n",
+    );
+}

@@ -34,6 +34,51 @@ pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -
 }
 
 impl FormatEngine<'_> {
+    /// The padding due before a closer the run-in styles join to the row
+    /// before it goes ahead of that row, and of a lone brace running into it.
+    pub(crate) fn lift_joined_closer_padding(&mut self) {
+        let lines = std::mem::take(&mut self.joined_closer_padding_lines);
+        for blank in lines.into_iter().rev() {
+            let Some(row) = blank.checked_sub(1) else {
+                continue;
+            };
+            let joins = self
+                .output
+                .get(blank)
+                .is_some_and(|line| line.trimmed().is_empty())
+                && self
+                    .output
+                    .get(blank + 1)
+                    .is_some_and(|line| line.trimmed_start().starts_with('}'))
+                && {
+                    let previous = &self.output[row];
+                    !previous.trimmed().is_empty()
+                        && preprocessor_directive(previous.trimmed_start()).is_none()
+                        && !previous.trimmed_end().ends_with('\\')
+                        && !line_ends_with_comment(previous)
+                };
+            if !joins {
+                continue;
+            }
+            let target = if self.options.brace_style == BraceStyle::Pico
+                && row > 0
+                && self.output[row - 1].trimmed() == "{"
+            {
+                row - 1
+            } else {
+                row
+            };
+            for index in (target..blank).rev() {
+                self.output.swap_lines(index, index + 1);
+            }
+            for line in &mut self.source_run_in_brace_lines {
+                if (target..blank).contains(line) {
+                    *line += 1;
+                }
+            }
+        }
+    }
+
     pub(crate) fn merge_source_run_in_braces(&mut self) {
         let mut indices = std::mem::take(&mut self.source_run_in_brace_lines);
         indices.sort_unstable();

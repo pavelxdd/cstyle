@@ -982,6 +982,20 @@ impl OutputBuffer {
         self.lines.get_mut(index)
     }
 
+    /// Exchanges lines `a` and `b` with the tables kept about them.
+    pub(crate) fn swap_lines(&mut self, a: usize, b: usize) {
+        self.lines.swap(a, b);
+        self.meta.swap(a, b);
+        self.parens.swap(a, b);
+        self.tokens.swap(a, b);
+        self.comments.swap(a, b);
+        self.verbatim.swap(a, b);
+        self.indented_directive_continuation.swap(a, b);
+        self.comment_kept_case_level.swap(a, b);
+        self.last_non_empty_dirty.set(true);
+        self.record_change(a.min(b));
+    }
+
     pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
         self.parens.remove(index);

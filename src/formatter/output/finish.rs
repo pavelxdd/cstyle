@@ -605,6 +605,7 @@ impl FormatEngine<'_> {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
+        self.lift_joined_closer_padding();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();
         self.fuse_adjacent_braces();
