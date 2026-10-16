@@ -629,6 +629,10 @@ impl FormatEngine<'_> {
                 _ => false,
             }
         };
+        // A statement before the header counts while it stays on the
+        // output line: added braces may have taken it off.
+        let preceding_top_level_statement =
+            preceding_top_level_statement && self.current.trimmed_end().contains(';');
         let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
             && !self.in_broken_one_line_block(start)
             && (preceding_top_level_statement

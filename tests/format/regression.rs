@@ -9922,3 +9922,12 @@ fn a_label_block_after_a_bare_block_closes_where_label_blocks_do() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn breaking_one_line_headers_breaks_an_else_header_once_added_braces_take_the_statement_off() {
+    let input = "void f()\n{\n    if (ready) { helper(); } else switch (state) {\n    case 1:\n        first();\n    }\n    if (ready) helper(); else for (;;) {\n        first();\n    }\n    if (ready) helper(); else while (x) {\n        first();\n    }\n}\n";
+    let expected = "void f() {\n    if (ready) {\n        helper(); }\n    else\n        switch (state) {\n        case 1:\n            first(); }\n    if (ready) {\n        helper(); }\n    else\n        for (;;) {\n            first(); }\n    if (ready) {\n        helper(); }\n    else\n        while (x) {\n            first(); } }\n";
+    let args = ["--style=lisp", "--add-braces", "--break-one-line-headers"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
