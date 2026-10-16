@@ -10565,3 +10565,11 @@ fn tab_indents_fill_an_element_brace_run_in_to_rows_below_with_a_tab() {
         check(expected, &[indent], expected);
     }
 }
+
+#[test]
+fn vtk_sets_a_branch_row_after_a_broken_element_at_the_aggregate_rows() {
+    let input = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {3,\n     4}\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
+    let expected = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {\n        3,\n        4\n    }\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

@@ -787,15 +787,7 @@ impl FormatEngine<'_> {
         {
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
-        // An element opening a preprocessor branch after an element that
-        // ends the branch before it is a row of the same list.
-        let branch_row = matches!(tokens[comma], Token::Symbol('}'))
-            && groups
-                .closed_at(comma)
-                .is_some_and(|nested| groups.get(nested).parent == Some(group))
-            && tokens[comma..first]
-                .iter()
-                .any(|token| matches!(token, Token::Preprocessor(_)));
+        let branch_row = self.opens_branch_row(group, comma, first);
         if !branch_row && groups.enclosing(comma) != Some(group) {
             return None;
         }
@@ -1225,7 +1217,8 @@ impl FormatEngine<'_> {
             || self.vtk_array_outer(group).is_some()
             || !(previous == open
                 || matches!(tokens[previous], Token::Symbol(','))
-                    && groups.enclosing(previous) == Some(group))
+                    && groups.enclosing(previous) == Some(group)
+                || self.opens_branch_row(group, previous, first))
             || !self.tree.previous_code_token(open).is_some_and(
                 |before| matches!(&tokens[before], Token::Operator(operator) if operator == "="),
             )
@@ -1424,6 +1417,20 @@ impl FormatEngine<'_> {
             levels.saturating_sub(1)
         };
         Some(lead + levels * self.options.indent_width + self.case_unindent_spaces())
+    }
+
+    /// Whether the element at `first` in `group` opens a preprocessor
+    /// branch after the element at `previous` that ends the branch before
+    /// it: a row of the same list, though no `,` separates them.
+    fn opens_branch_row(&self, group: GroupId, previous: usize, first: usize) -> bool {
+        let groups = &self.tree.groups;
+        matches!(self.tree.tokens[previous], Token::Symbol('}'))
+            && groups
+                .closed_at(previous)
+                .is_some_and(|nested| groups.get(nested).parent == Some(group))
+            && self.tree.tokens[previous..first]
+                .iter()
+                .any(|token| matches!(token, Token::Preprocessor(_)))
     }
 
     /// Whether the `{` at `open` opens an element of the list around it,
