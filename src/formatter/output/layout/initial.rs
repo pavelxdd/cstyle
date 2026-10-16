@@ -769,15 +769,15 @@ impl FormatEngine<'_> {
                     <= self.options.indent_width / 2
                 && self
                     .output
-                    .scoped()
-                    .iter()
+                    .scoped_range()
                     .rev()
-                    .skip_while(|line| line.as_str() != previous.as_str())
+                    .skip_while(|&index| self.output[index].as_str() != previous.as_str())
                     .skip(1)
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|line| {
-                        let trimmed = line.trimmed_start();
-                        trimmed == "}" || trimmed.starts_with("} ")
+                    .find(|&index| !self.output.trimmed(index).is_empty())
+                    .is_some_and(|index| {
+                        let trimmed = self.output[index].trimmed_start();
+                        (trimmed == "}" || trimmed.starts_with("} "))
+                            && self.output.directive_of_continuation(index).is_none()
                     })
             {
                 layout.exact_indent_spaces = Some(
@@ -798,17 +798,18 @@ impl FormatEngine<'_> {
                 && !line_is_control_body_header(labels::after_user_label(previous_code))
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2
+                // A directive's rows hold no code closer.
                 && self
                     .output
-                    .scoped()
-                    .iter()
+                    .scoped_range()
                     .rev()
-                    .skip_while(|line| line.as_str() != previous.as_str())
+                    .skip_while(|&index| self.output[index].as_str() != previous.as_str())
                     .skip(1)
-                    .find(|line| !line.trimmed().is_empty())
-                    .is_some_and(|line| {
-                        let trimmed = line.trimmed_start();
-                        trimmed == "}" || trimmed.starts_with("} ")
+                    .find(|&index| !self.output.trimmed(index).is_empty())
+                    .is_some_and(|index| {
+                        let trimmed = self.output[index].trimmed_start();
+                        (trimmed == "}" || trimmed.starts_with("} "))
+                            && self.output.directive_of_continuation(index).is_none()
                     })
             {
                 layout.exact_indent_spaces =

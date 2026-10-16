@@ -11272,3 +11272,13 @@ fn a_kept_line_ending_in_a_label_stays_at_the_column_of_its_first_statement() {
         input,
     );
 }
+
+#[test]
+fn a_declaration_after_a_define_ending_in_a_closer_continues_its_declarator_row() {
+    let input = "#define CHECK(v) \\\n    do { \\\n        h(v); \\\n    } while (0)\n\nstatic const struct Item\n    first = {\n        1, 2\n    };\n";
+    check(
+        input,
+        &["--style=kr"],
+        "#define CHECK(v) \\\n    do { \\\n        h(v); \\\n    } while (0)\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n",
+    );
+}
