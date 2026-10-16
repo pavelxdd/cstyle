@@ -12378,3 +12378,12 @@ fn an_else_a_comment_leads_stands_at_its_if() {
         "void f()\n{\n    if (ready)\n        if (other)\n#ifdef FEATURE\n        {\n            value=0;\n        }\n#endif\n        /* note */ else {\n            result=0;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_before_the_first_row_of_a_nested_element_stands_at_the_row() {
+    check(
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            // note\n            .value = 2,\n        }\n    };\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            // note\n            .value = 2,\n        }\n    };\n}\n",
+    );
+}

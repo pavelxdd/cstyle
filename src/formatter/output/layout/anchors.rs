@@ -3811,9 +3811,20 @@ impl FormatEngine<'_> {
                             && groups.enclosing(previous) == Some(group)
                     })
         });
+        // The first element of a list, and of a nested element whose brace
+        // ends a row, takes the comments before it.
         let compound_literal_first_element = groups.enclosing(first).is_some_and(|group| {
-            self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
-                && self.tree.previous_code_token(first) == Some(groups.get(group).open)
+            let kind = self.tree.blocks.kind(group);
+            let open = groups.get(group).open;
+            self.tree.previous_code_token(first) == Some(open)
+                && (kind == Some(BlockKind::CompoundLiteral)
+                    || kind == Some(BlockKind::Initializer)
+                        && groups.get(group).parent.is_some_and(|parent| {
+                            self.tree.blocks.kind(parent) == Some(BlockKind::Initializer)
+                        })
+                        && self.output.line_with_token(open).is_some_and(|line| {
+                            self.output.line_tokens(line).is_some_and(|span| span.last == open)
+                        }))
         });
         let is_else = matches!(&tokens[first], Token::Word(word) if word == "else");
         // An arm after a ternary `?` or `:` ending the line before.
