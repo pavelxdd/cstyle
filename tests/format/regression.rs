@@ -11701,3 +11701,13 @@ fn a_message_row_after_a_conditional_aligns_as_after_the_row_before_it() {
         "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                   and:2];\n#endif\n}\n",
     );
 }
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_stands_at_the_row_before_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        /* note */ };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n        /* note */\n    };\n}\n",
+    );
+}

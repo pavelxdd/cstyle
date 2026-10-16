@@ -1014,7 +1014,11 @@ impl FormatEngine<'_> {
             .or(control_header_comment_indent)
             .or(user_label_comment_indent)
             .or_else(|| {
-                self.standalone_block_comment_indent_spaces(kind, definition_header_comment_indent)
+                self.standalone_block_comment_indent_spaces(
+                    kind,
+                    definition_header_comment_indent,
+                    self.comment_leads_closer(comment, index),
+                )
             });
         let lambda_parameter_comment_indent = self.lambda_parameter_comment_indent_spaces(kind);
         let label_line = (kind == CommentKind::Block
@@ -2076,10 +2080,21 @@ impl FormatEngine<'_> {
                 })
     }
 
+    /// Whether the comment at token `index` leads a closer on its line.
+    fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment)
+            && tokens[index + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+                .is_some_and(|token| matches!(token, Token::Symbol('}')))
+    }
+
     fn standalone_block_comment_indent_spaces(
         &self,
         kind: CommentKind,
         definition_header_comment_indent: Option<usize>,
+        leads_closer: bool,
     ) -> Option<usize> {
         if kind != CommentKind::Block || !self.current.trimmed().is_empty() {
             return None;
@@ -2302,10 +2317,25 @@ impl FormatEngine<'_> {
                     .unwrap_or(column + 1)
             })
         });
+        // A comment split off an initializer's closer stands at the row
+        // before it.
+        let previous_element_row_indent = previous_line
+            .filter(|line| {
+                let code = self.output.code_trimmed_of(line);
+                leads_closer
+                    && self.in_initializer_brace()
+                    && !code.is_empty()
+                    && !code.ends_with_any(b"{;")
+                    && !code.trimmed_start().starts_with('}')
+            })
+            .map(|line| {
+                leading_visual_width(line, self.options.tab_width) + self.case_unindent_spaces()
+            });
         previous_statement_indent
             .or(previous_operator_indent)
             .or(previous_opening_body_indent)
             .or(previous_paren_indent)
+            .or(previous_element_row_indent)
             .or(definition_header_comment_indent)
             .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
             .or_else(|| self.active_body_comment_indent_spaces())
