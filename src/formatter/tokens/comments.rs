@@ -26,7 +26,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace,
     holds_code_after_leading_comments, is_bare_comment_line, is_comment_line, is_comment_only_line,
-    line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
+    line_brace_imbalance, line_ends_with_comment, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
@@ -428,6 +428,9 @@ impl FormatEngine<'_> {
         if !self.current_is_preindented || !is_comment_line(&self.current) {
             return false;
         }
+        // A delimiter the line's code closed set no column for it.
+        let closes_delimiters =
+            line_paren_imbalance(after_leading_comments(self.current.as_str())).0 > 0;
         let line_continuation_indent = self
             .layout
             .continuation_indent
@@ -438,7 +441,9 @@ impl FormatEngine<'_> {
                 self.layout
                     .frame_stack
                     .active_delimiter()
-                    .filter(|frame| frame.opener_output_line < self.output.len())
+                    .filter(|frame| {
+                        !closes_delimiters && frame.opener_output_line < self.output.len()
+                    })
                     .and_then(|frame| frame.continuation_indent_column)
                     .unwrap_or(captured)
             });

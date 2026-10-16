@@ -12219,3 +12219,12 @@ fn a_comment_leading_the_body_brace_of_a_class_with_bases_stands_at_the_class() 
         "class Next : public Base\n/* note */ {\n};\n",
     );
 }
+
+#[test]
+fn a_comment_led_row_closing_a_paren_stands_where_the_row_would() {
+    check(
+        "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n",
+    );
+}
