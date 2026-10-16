@@ -10058,6 +10058,26 @@ fn loop_headers_take_a_macro_call_for_their_condition() {
     );
 }
 
+// An else broken off the closer of braces added on its line leaves its
+// comment where the joined line had it, as after a written closer.
+#[test]
+fn an_else_broken_off_an_added_closer_keeps_its_comment_column() {
+    let input = "void f()\n{\n    if (a) x(); else // note\n        y();\n    if (a) x();   else // note\n        y();\n    if (a) x();else // note\n    {\n        y();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else   // note\n    {\n        y();\n    }\n    if (a)\n    {\n        x();\n    }\n    else     // note\n    {\n        y();\n    }\n    if (a)\n    {\n        x();\n    }\n    else  // note\n    {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["--style=horstmann", "-j"][..],
+            "void f()\n{   if (a)\n    {   x();\n    }\n    else   // note\n    {   y();\n    }\n    if (a)\n    {   x();\n    }\n    else     // note\n    {   y();\n    }\n    if (a)\n    {   x();\n    }\n    else  // note\n    {   y();\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

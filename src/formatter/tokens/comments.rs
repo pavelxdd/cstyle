@@ -2946,6 +2946,31 @@ impl FormatEngine<'_> {
             .map_or(0, |_| 1)
     }
 
+    /// The columns a closer added after the statement before takes ahead of
+    /// the closing header leading the current line: the source line placed
+    /// the header's comment past them.
+    fn added_closer_width_before_closing_header(&self) -> usize {
+        let tokens = &self.tree.tokens;
+        // Only a comment ending its source line keeps that column.
+        let ends_line = self.comments.pushed_comment.is_some_and(|comment| {
+            tokens[comment + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_none_or(|token| matches!(token, Token::Newline))
+        });
+        let follows_added_closer = ends_line
+            && self.current.tokens().is_some_and(|span| {
+                self.tree
+                    .previous_code_token(span.first)
+                    .is_some_and(|before| self.comments.added_block_semicolon == Some(before))
+            });
+        if follows_added_closer {
+            self.closing_header_closer_width().unwrap_or(0)
+        } else {
+            0
+        }
+    }
+
     /// The source width from a `}` to the `while` that starts the current
     /// line after it on its source line.
     /// The width of the `}` and the space after it that a closing header
@@ -2957,12 +2982,17 @@ impl FormatEngine<'_> {
             return None;
         }
         let close = self.tree.previous_code_token(first)?;
-        if !matches!(tokens[close], Token::Symbol('}')) {
-            return None;
-        }
-        tokens[close..first]
+        // A closer added after a statement stands right past its `;`.
+        let (start, added) = match tokens[close] {
+            Token::Symbol('}') => (close, 0),
+            Token::Symbol(';') if self.comments.added_block_semicolon == Some(close) => {
+                (close + 1, 1)
+            }
+            _ => return None,
+        };
+        tokens[start..first]
             .iter()
-            .try_fold(0, |width, token| match token {
+            .try_fold(added, |width, token| match token {
                 Token::Newline => None,
                 token => Some(width + token_char_len(token)),
             })
@@ -3374,9 +3404,11 @@ impl FormatEngine<'_> {
             && !gap.contains('\t')
             && self.current_line_broke_off_header()
         {
-            // Padding the statement takes from the gap as on any line.
+            // Padding the statement takes from the gap as on any line; a
+            // closer added before a closing header gave the gap its columns.
             let growth = self.current_segment_growth().unwrap_or(0);
-            let width = (gap.chars().count() as isize - growth).max(1) as usize;
+            let added = self.added_closer_width_before_closing_header() as isize;
+            let width = (gap.chars().count() as isize - growth + added).max(1) as usize;
             self.current.push_str(&" ".repeat(width));
             return;
         }
@@ -3592,6 +3624,9 @@ pub(crate) struct CommentState {
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
     pub(crate) follows_added_one_line_block: bool,
+    /// The `;` of the last statement braces were added around on its line:
+    /// their closer stands right after it.
+    pub(crate) added_block_semicolon: Option<usize>,
     /// A block added around a statement is being closed on a line of its
     /// own.
     pub(crate) closing_broken_added_block: bool,
