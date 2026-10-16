@@ -12739,3 +12739,13 @@ fn a_case_label_a_comment_leads_keeps_the_gap_before_its_brace_comment() {
     let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1: {    // note\n        value=0;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_member_after_a_directive_in_a_case_block_type_stands_at_the_members() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (state)\n    {\n    case 1:\n    {\n#ifdef FEATURE\n        static const struct\n        {\n#endif\n            int value;\n        } items[] =\n        {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+    );
+}

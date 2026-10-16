@@ -1418,8 +1418,8 @@ impl FormatEngine<'_> {
                 .current_closing_brace_open(self.options.tab_width)
                 .map(|(width, ..)| width)
         } else {
-            self.output
-                .last_line_outside_comment()
+            // Directives between the members hold no member.
+            self.previous_code_line_past_comments_and_directives()
                 .and_then(|previous| {
                     let code = self.output.code_of(previous).trimmed();
                     let width = leading_visual_width(previous, self.options.tab_width);
