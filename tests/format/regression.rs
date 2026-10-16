@@ -11381,3 +11381,20 @@ fn a_line_splice_after_a_statement_stays_on_its_line_when_statements_are_kept() 
         "void f() {\n    fail();    \\\n    next(); }\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_continuation_row_leaves_the_row_continued() {
+    // The comment changes nothing about the code after it.
+    let input = "static const struct Item\n    /* note */ first = {\n    1, 2\n};\n";
+    check(input, &["--style=google"], input);
+}
+
+#[test]
+fn breaking_return_types_breaks_a_definition_a_comment_leads() {
+    let input = "/* note */ void f()\n{\n    run();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-return-type"],
+        "/* note */ void\nf()\n{\n    run();\n}\n",
+    );
+}
