@@ -12205,3 +12205,17 @@ fn a_comment_leading_a_line_starts_no_operator_chain() {
         "void f()\n{\n    /* note */ out << helper(first, (second\n                                     << third));\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_the_body_brace_of_a_class_with_bases_stands_at_the_class() {
+    check(
+        "class Next : public Base\n    /* note */ {\n};\n",
+        &["--style=allman"],
+        "class Next : public Base\n/* note */\n{\n};\n",
+    );
+    check(
+        "class Next : public Base\n    /* note */ {\n};\n",
+        &["--style=java"],
+        "class Next : public Base\n/* note */ {\n};\n",
+    );
+}

@@ -1073,7 +1073,7 @@ impl FormatEngine<'_> {
     }
 
     /// A comment line among a class's bases stands at them, and one before
-    /// its body's brace at the head.
+    /// its body's brace, on the brace's line or not, at the head.
     fn class_base_comment_position(
         &self,
         kind: CommentKind,
@@ -1086,9 +1086,15 @@ impl FormatEngine<'_> {
                 .next_input_whitespace
                 .as_deref()
                 .is_some_and(|whitespace| whitespace.contains('\n'));
+        let tokens = &self.tree.tokens;
+        let before_body = self.layout.in_class_base_clause
+            && index
+                .checked_add(1)
+                .and_then(|start| next_code_token(tokens, start))
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')));
         if !self.layout.in_class_base_clause
             || !self.current.trimmed().is_empty()
-            || !ends_line
+            || !ends_line && !before_body
             || comment.contains('\n')
             || self.layout.nesting.paren_depth != 0
             // A line comment at column one stays there.
@@ -1098,10 +1104,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let tokens = &self.tree.tokens;
-        if next_code_token(tokens, index + 1)
-            .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
-        {
+        if before_body {
             return Some(ClassBaseComment {
                 spaces: (self
                     .layout
