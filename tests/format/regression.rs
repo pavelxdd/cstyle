@@ -12599,3 +12599,9 @@ fn a_brace_row_after_a_brace_row_a_comment_leads_stands_at_the_brace_rows() {
         "void f()\n    {\n    struct Item items[] =\n        {\n        /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
     );
 }
+
+#[test]
+fn a_nested_element_a_comment_leads_closes_at_its_row_in_a_case_block() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            /* note */ {\n                SECOND, 2\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &[], input);
+}

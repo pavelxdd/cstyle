@@ -20,7 +20,9 @@ use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_to
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{ContainsAnyByte, preprocessor_directive};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, after_leading_comments, preprocessor_directive,
+};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
@@ -1506,11 +1508,10 @@ impl FormatEngine<'_> {
         }
         let open = self.tree.groups.get(group).open;
         let line = self.output.line_with_token(open)?;
-        // A brace attached to the line before after layout closes its way.
+        // A brace attached to the line before after layout closes its way;
+        // one a comment leads closes at the line all the same.
         (self.output.line_tokens(line)?.first == open
-            && self.output.as_slice()[line]
-                .trimmed_start()
-                .starts_with('{'))
+            && after_leading_comments(&self.output.as_slice()[line]).starts_with('{'))
         .then(|| self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
