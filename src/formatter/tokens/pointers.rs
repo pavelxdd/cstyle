@@ -1789,7 +1789,7 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
     ) && !language::is_header(first)
 }
 
-pub(super) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
+pub(crate) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
     if operator.starts_with('&') {
         match options.reference_align {
             ReferenceAlign::None => PointerAlign::None,

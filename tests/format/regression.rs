@@ -10745,3 +10745,26 @@ fn indented_access_labels_leave_the_members_at_the_class_level_with_an_odd_inden
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn an_attached_return_type_ending_in_a_pointer_keeps_the_pointer_alignment() {
+    let input = "static struct Item *\nmake(int value);\nstatic struct Item &\nfind(int value);\n";
+    for (align, expected) in [
+        (
+            "--align-pointer=type",
+            "static struct Item* make(int value);\nstatic struct Item& find(int value);\n",
+        ),
+        (
+            "--align-pointer=middle",
+            "static struct Item * make(int value);\nstatic struct Item & find(int value);\n",
+        ),
+        (
+            "--align-pointer=name",
+            "static struct Item *make(int value);\nstatic struct Item &find(int value);\n",
+        ),
+    ] {
+        let args = [align, "--attach-return-type-decl"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}

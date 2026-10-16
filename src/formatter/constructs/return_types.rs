@@ -1,3 +1,4 @@
+use crate::config::PointerAlign;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
@@ -13,6 +14,7 @@ use crate::formatter::text::line_scan::{
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::is_identifier_continue;
 
 impl FormatEngine<'_> {
@@ -392,10 +394,19 @@ impl FormatEngine<'_> {
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
-        let separator = if previous_trimmed.ends_with_any(b"*&^") {
-            ""
-        } else {
-            " "
+        // A pointer ending the return type joins the name as its alignment
+        // sets it apart.
+        let separator = match previous_trimmed.as_bytes().last() {
+            Some(&operator @ (b'*' | b'&'))
+                if matches!(
+                    resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" }),
+                    PointerAlign::Type | PointerAlign::Middle
+                ) =>
+            {
+                " "
+            }
+            Some(b'*' | b'&' | b'^') => "",
+            _ => " ",
         };
         self.output.set_pending_tokens(Some(TokenSpan {
             first: head.start,
