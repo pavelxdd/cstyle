@@ -10602,3 +10602,16 @@ fn break_blocks_pads_no_line_between_a_header_after_a_kept_else_and_its_block() 
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn break_blocks_pads_after_a_kept_one_line_block_that_continues_a_header_block() {
+    let input = "void f()\n{\n    if (state) {\n        a();\n    }\n    { value = 0; }\n    value = 1;\n    if (state) {\n        a();\n    }\n    {\n        value = 0;\n    }\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    if (state) {\n        a();\n    }\n\n    { value = 0; }\n\n    value = 1;\n\n    if (state) {\n        a();\n    }\n\n    {\n        value = 0;\n    }\n\n    value = 1;\n}\n";
+    let args = [
+        "--style=stroustrup",
+        "--keep-one-line-blocks",
+        "--break-blocks",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

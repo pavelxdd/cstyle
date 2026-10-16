@@ -327,38 +327,43 @@ impl FormatEngine<'_> {
             .is_some_and(|header| !matches!(header, "case" | "default"));
         self.block_spacing.pending_one_line_block =
             matches!(brace_type, BraceType::Command | BraceType::NonStatement)
-                && header_block
-                && !self.block_spacing.header_follows_statement;
+                && (header_block && !self.block_spacing.header_follows_statement
+                    || self.brace_continues_header_block());
         self.clear_block_spacing_header();
     }
 
     pub(crate) fn observe_block_spacing_open_brace(&mut self) {
         if self.options.break_blocks {
-            // A directive or comment between the blocks ends the header.
-            let follows_close_brace = self.current.active_token().is_some_and(|brace| {
-                self.tree.tokens[..brace]
-                    .iter()
-                    .rev()
-                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
-            });
-            if follows_close_brace
-                && self
-                    .layout
-                    .nesting
-                    .last_closed_brace_header
-                    .as_deref()
-                    .is_some_and(|header| {
-                        !matches!(header, "case" | "default")
-                            && (is_standard_break_blocks_opening_header(header)
-                                || is_break_blocks_closing_header(header))
-                    })
-            {
+            if self.brace_continues_header_block() {
                 let depth = self.layout.nesting.brace_header_stack.len();
                 self.block_spacing.header_continued_depths.push(depth);
             }
             self.clear_block_spacing_header();
         }
+    }
+
+    /// Whether the brace being pushed opens a block right after a header's
+    /// block closed, which astyle reads as more of that header; a directive
+    /// or comment between the blocks ends the header.
+    fn brace_continues_header_block(&self) -> bool {
+        let follows_close_brace = self.current.active_token().is_some_and(|brace| {
+            self.tree.tokens[..brace]
+                .iter()
+                .rev()
+                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .is_some_and(|token| matches!(token, Token::Symbol('}')))
+        });
+        follows_close_brace
+            && self
+                .layout
+                .nesting
+                .last_closed_brace_header
+                .as_deref()
+                .is_some_and(|header| {
+                    !matches!(header, "case" | "default")
+                        && (is_standard_break_blocks_opening_header(header)
+                            || is_break_blocks_closing_header(header))
+                })
     }
 
     pub(crate) fn observe_block_spacing_inline_close_brace(&mut self) {
