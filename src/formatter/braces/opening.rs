@@ -1838,7 +1838,8 @@ impl FormatEngine<'_> {
             BraceType::Array | BraceType::CompoundLiteral | BraceType::Enum
         ) || init_run_in)
             && !non_attaching_lambda_body
-            && !self.current_is_blank()
+            // Comments alone before the brace leave it leading its row.
+            && !line_scan::after_leading_comments(self.current.trimmed_start()).is_empty()
             && !operator_led_broken_brace
             && !source_broken_enum
             && !matches!(next, None | Some(Token::Newline))
@@ -2341,7 +2342,20 @@ impl FormatEngine<'_> {
                 .active_token()
                 .and_then(|brace| self.tree.groups.enclosing(brace))
                 .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace);
-        if element_brace_after_closer && !self.current.trimmed_start().starts_with('}') {
+        // An element's brace after comments alone keeps their row, as it
+        // would lead its own; a run-in style runs the row into the brace.
+        let element_brace_after_comments = matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+        ) && !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Horstmann
+        ) && !self.current_is_blank()
+            && line_scan::after_leading_comments(self.current.trimmed_start()).is_empty()
+            && self.in_initializer_brace();
+        if (element_brace_after_closer || element_brace_after_comments)
+            && !self.current.trimmed_start().starts_with('}')
+        {
             self.attach_open_brace_to_current_line(brace, placement, next);
             return;
         }

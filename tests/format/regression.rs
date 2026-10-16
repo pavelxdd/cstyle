@@ -11921,3 +11921,18 @@ fn a_comment_after_blocks_broken_off_one_line_follows_the_block_it_ends() {
         "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;    /* note */\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_element_brace_after_a_comment_alone_opens_its_row_as_one_leading_it() {
+    let input = "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {3,\n     4},\n    {5,\n     6}\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
+    );
+}
