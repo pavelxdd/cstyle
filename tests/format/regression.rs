@@ -12003,3 +12003,11 @@ fn a_case_block_brace_attaches_to_a_comment_led_label_as_to_any() {
         "void f()\n{\n    switch (kind) {\n    /* note */ case 1: { // first\n        value=0;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn indenting_define_bodies_leaves_a_case_block_after_a_conditional_a_case_block() {
+    let input = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {   // own\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {\n        // own\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=mozilla"], expected);
+    check(input, &["--style=mozilla", "--indent-preproc-define"], expected);
+}
