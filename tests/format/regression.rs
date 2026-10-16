@@ -10867,3 +10867,46 @@ fn a_header_and_body_comments_lead_close_its_body_before_a_closing_directive() {
         "void f()\n    {\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n    }\n",
     );
 }
+
+#[test]
+fn a_case_block_holding_case_labels_closes_under_its_brace_and_keeps_its_comments_in_its_body() {
+    let input = "void run(int op)\n{\n    switch (op) {\n    case REOPEN: {\n        if (cursor) {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n    case OPEN_READ:\n    case OPEN_WRITE:\n        open(cursor);\nhints:\n        apply(cursor);\n        break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void run(int op)\n{\n    switch (op) {\n    case REOPEN: {\n        if (cursor) {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n        case OPEN_READ:\n        case OPEN_WRITE:\n            open(cursor);\nhints:\n            apply(cursor);\n            break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void run(int op)\n{\n    switch (op)\n    {\n    case REOPEN:\n    {\n        if (cursor)\n        {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n        case OPEN_READ:\n        case OPEN_WRITE:\n            open(cursor);\nhints:\n            apply(cursor);\n            break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void run(int op)\n    {\n    switch (op)\n        {\n        case REOPEN:\n            {\n            if (cursor)\n                {\n                reset(cursor);\n                goto hints;\n                }\n            /* fall through into open */\n            case OPEN_READ:\n            case OPEN_WRITE:\n                open(cursor);\nhints:\n                apply(cursor);\n                break;\n            }\n        case CLOSE:\n            close(cursor);\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_element_brace_stays_on_the_brace_line_in_every_style() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  { /* second item */\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    check(
+        input,
+        &["--mode=c"],
+        "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+    );
+    let broken = "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n";
+    check(input, &["--style=java"], broken);
+    check(input, &["--style=kr"], broken);
+}
+
+#[test]
+fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n#pragma once\n        {\n            push(state);\n        }\n        break;\n    }\n}\n",
+    );
+}

@@ -2428,17 +2428,8 @@ impl FormatEngine<'_> {
             .frame_stack
             .last_closed_brace()
             .filter(|frame| frame.case_block || frame.header.as_deref() == Some("switch"))?;
-        let target = if frame.case_block && frame.nested_case_label {
-            frame.header_indent_column
-                + if matches!(
-                    self.options.brace_style,
-                    BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-                ) {
-                    2 * self.options.indent_width
-                } else {
-                    self.options.indent_width
-                }
-        } else if self.options.brace_style == BraceStyle::Ratliff
+        // A case block closes under its own brace, whatever labels it holds.
+        let target = if self.options.brace_style == BraceStyle::Ratliff
             && frame.header.as_deref() == Some("switch")
         {
             frame.body_indent_column

@@ -1292,7 +1292,8 @@ fn whitesmith_indents_case_body_block_brace_to_body_level() {
 }
 
 #[test]
-fn nested_case_label_inside_case_block_uses_the_nested_label_column() {
+fn nested_case_label_inside_case_block_uses_the_nested_label_column_and_the_block_closes_under_its_brace()
+ {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
 
@@ -1301,7 +1302,7 @@ fn nested_case_label_inside_case_block_uses_the_nested_label_column() {
             "void run(int value){\nswitch(value){\ncase 3:{\ncase 4:\ncall();\nbreak;\n}\n}\n}\n",
             &options,
         ),
-        "void run(int value)\n{\n    switch(value)\n    {\n    case 3:\n    {\n        case 4:\n            call();\n            break;\n        }\n    }\n}\n",
+        "void run(int value)\n{\n    switch(value)\n    {\n    case 3:\n    {\n        case 4:\n            call();\n            break;\n    }\n    }\n}\n",
     );
 }
 
