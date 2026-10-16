@@ -521,7 +521,10 @@ impl FormatEngine<'_> {
                 let last = self.output.len() - 1;
                 let spaces = self.output.lead_width(last, self.options.tab_width);
                 let code = after_leading_comments(&self.output[last]).to_string();
-                self.record_preprocessor_branch_body_indent(&code, spaces);
+                // A label stands outside the body its column would set.
+                if labels::line_kind(&code, &self.options.access_labels) == LineKind::Normal {
+                    self.record_preprocessor_branch_body_indent(&code, spaces);
+                }
             }
             // A call the code after the comment closes ends the statement
             // as on any line.
@@ -1460,8 +1463,9 @@ impl FormatEngine<'_> {
                 self.current.push_str(&prefix);
                 self.current_is_preindented = true;
             }
+            // The label a comment leads sets no column for the line after.
             self.layout.continuation_indent.next_line_indent_spaces =
-                (!follows_objc_interface).then_some(spaces);
+                (!follows_objc_interface && label_line.is_none()).then_some(spaces);
             if kind == CommentKind::Block
                 && !follows_objc_interface
                 && (!self.token_input.has_next_meaningful_token

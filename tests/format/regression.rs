@@ -11455,3 +11455,13 @@ fn the_while_of_a_do_a_comment_leads_stands_at_the_do_line() {
     );
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_statement_after_a_comment_led_label_in_a_directive_stands_in_its_block() {
+    let input = "void f()\n{\n    if (ready) {\n#ifdef FEATURE\n    /* note */ retry:\n#endif\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n#ifdef FEATURE\n/* note */ retry:\n#endif\n        value = 1;\n    }\n}\n",
+    );
+}
