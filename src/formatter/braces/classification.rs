@@ -10,7 +10,7 @@ use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, after_leading_comments, is_comment_only_line, trailing_comment_split_limit,
+    ContainsAnyByte, after_leading_comments, is_bare_comment_line, trailing_comment_split_limit,
     trailing_matching_parens, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
@@ -487,7 +487,7 @@ impl FormatEngine<'_> {
             match self.output.scoped_range().rev().find(|&index| {
                 let trimmed = self.output.trimmed(index);
                 !trimmed.is_empty()
-                    && !is_comment_only_line(trimmed)
+                    && !is_bare_comment_line(trimmed)
                     && !trimmed.starts_with('#')
                     && self.output.directive_of_continuation(index).is_none()
             }) {

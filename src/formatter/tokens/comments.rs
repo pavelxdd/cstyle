@@ -25,9 +25,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_column_at, vi
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace,
-    holds_code_after_leading_comments, is_comment_line, is_comment_only_line, line_brace_imbalance,
-    line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_brace_content_offset,
+    holds_code_after_leading_comments, is_bare_comment_line, is_comment_line, is_comment_only_line,
+    line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1114,7 +1114,7 @@ impl FormatEngine<'_> {
         }
         let previous_row = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
-            !trimmed.is_empty() && !is_comment_only_line(trimmed)
+            !trimmed.is_empty() && !is_bare_comment_line(trimmed)
         });
         let spaces = previous_row
             .and_then(|row| self.colon_led_row_indent_spaces(row))

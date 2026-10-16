@@ -20,7 +20,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
-use crate::formatter::text::line_scan::is_comment_only_line;
+use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     unmatched_open_paren_column, unmatched_open_paren_columns,
@@ -1025,7 +1025,7 @@ impl FormatEngine<'_> {
             && self.output.last_line_outside_comment().is_some()
             && let Some(previous) = self.output.scoped().iter().rev().find(|line| {
                 let trimmed = line.trimmed_start();
-                !trimmed.is_empty() && !is_comment_only_line(trimmed)
+                !trimmed.is_empty() && !is_bare_comment_line(trimmed)
             })
             && let Some(spaces) = self.colon_led_row_indent_spaces(previous)
         {

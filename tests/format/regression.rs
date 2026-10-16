@@ -12118,3 +12118,12 @@ fn elements_after_a_comment_leading_the_first_align_to_the_first() {
         "enum Kind { /* a */ First,\n                    Second\n          };\nint list[] = { /* a */ 1,\n                       2\n             };\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_definition_head_leaves_its_broken_brace_alone() {
+    check(
+        "/* note */ void f()\n/* note */ {\n    value = 1;\n}\n",
+        &["--style=kr"],
+        "/* note */ void f()\n/* note */\n{\n    value = 1;\n}\n",
+    );
+}

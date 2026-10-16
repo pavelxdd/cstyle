@@ -135,6 +135,11 @@ pub(crate) fn holds_code_after_leading_comments(line: &str) -> bool {
     !rest.is_empty() && !rest.starts_with("/*") && !rest.starts_with("//")
 }
 
+/// Whether `line`, trimmed, holds comments and no code.
+pub(crate) fn is_bare_comment_line(line: &str) -> bool {
+    is_comment_only_line(line) && !holds_code_after_leading_comments(line)
+}
+
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
     line.starts_with("//")
         || line.starts_with("/*")
