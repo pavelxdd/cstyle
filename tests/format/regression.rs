@@ -12733,3 +12733,9 @@ fn a_macro_header_a_comment_leads_indents_its_body() {
         "#define CHECK(A) \\\n    switch (A) {           \\\n    /* note */ case 1:       \\\n        fail();    \\\n        break;    \\\n    }\n",
     );
 }
+
+#[test]
+fn a_case_label_a_comment_leads_keeps_the_gap_before_its_brace_comment() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1: {    // note\n        value=0;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

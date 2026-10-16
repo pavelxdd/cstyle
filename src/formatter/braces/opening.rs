@@ -2931,9 +2931,12 @@ impl FormatEngine<'_> {
             .iter()
             .rposition(|token| matches!(token, Token::Newline))
             .map_or(0, |newline| newline + 1);
-        // A comment leading the source line went off with the code after it.
+        // A comment leading the source line went off with the code after it,
+        // unless it leads the line still.
+        let comment_stays = self.current.trimmed_start().starts_with("/*");
         let Some(code_start) = (line_start..first).find(|&index| {
-            is_code_token(&tokens[index]) || matches!(tokens[index], Token::Comment(..))
+            is_code_token(&tokens[index])
+                || !comment_stays && matches!(tokens[index], Token::Comment(..))
         }) else {
             return 0;
         };
