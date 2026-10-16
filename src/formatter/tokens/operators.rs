@@ -1696,8 +1696,8 @@ impl FormatEngine<'_> {
         if !matches!(operator, "<<" | ">>") {
             return;
         }
-        let line_indent_spaces = self.current_line_indent_spaces();
-        let operator_output_column = line_indent_spaces + self.current_visual_width();
+        let (line_indent_spaces, text_start) = self.current_output_indent();
+        let operator_output_column = text_start + self.current_visual_width();
         let chain_anchor_column = self
             .layout
             .frame_stack

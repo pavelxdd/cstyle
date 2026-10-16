@@ -12076,3 +12076,12 @@ fn a_comment_before_the_body_of_a_class_with_bases_stands_at_the_class() {
         );
     }
 }
+
+#[test]
+fn a_stream_chain_a_comment_leads_aligns_at_its_operator() {
+    check(
+        "void f()\n{\n    /* note */ std::cout << first\n              << second;\n    /* note */ std::cout << \"first\"\n              \"second\";\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ std::cout << first\n                         << second;\n    /* note */ std::cout << \"first\"\n                         \"second\";\n}\n",
+    );
+}

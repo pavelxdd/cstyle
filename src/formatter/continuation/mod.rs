@@ -491,6 +491,20 @@ impl FormatEngine<'_> {
         self.continuation_base_indent() * self.options.indent_width + split_else_extra
     }
 
+    /// The indent of the current line in output columns, and where its text
+    /// starts: a line a comment preindented carries its own indent.
+    pub(crate) fn current_output_indent(&self) -> (usize, usize) {
+        if self.current_is_preindented {
+            (
+                leading_visual_width(&self.current, self.options.tab_width),
+                0,
+            )
+        } else {
+            let spaces = self.current_line_indent_spaces();
+            (spaces, spaces)
+        }
+    }
+
     /// [`Self::current_line_indent_spaces`] for a line that starts a
     /// statement, which the `if`s an `else` broke from stand deeper.
     pub(crate) fn statement_line_indent_spaces(&self) -> usize {

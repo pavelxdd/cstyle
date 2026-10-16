@@ -15,9 +15,9 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
-    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    code_holds_word, holds_code_after_leading_comments, is_comment_line, is_comment_only_line,
+    line_brace_imbalance, line_has_brace, line_paren_imbalance, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -637,6 +637,7 @@ impl FormatEngine<'_> {
         if starts_string_literal_token(current)
             && (is_comment_line(previous_trimmed) || is_comment_only_line(previous_trimmed))
             && !previous_trimmed.starts_with('*')
+            && !holds_code_after_leading_comments(previous_trimmed)
             || starts_string_literal_token(current)
                 && starts_string_literal_token(previous_code.trimmed_start())
                 && self.paren_closes_of(previous_code) == 0
