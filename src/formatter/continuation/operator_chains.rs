@@ -16,8 +16,9 @@ use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, last_unmatched_open_delimiter, leads_with_operator,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    ContainsAnyByte, is_bare_comment_line, is_comment_line, last_unmatched_open_delimiter,
+    leads_with_operator, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -587,7 +588,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !is_comment_line(previous.trimmed_start()) {
+        if !is_bare_comment_line(previous.trimmed_start()) {
             return None;
         }
         let before_comment = self
@@ -619,7 +620,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !is_comment_line(previous.trimmed_start()) {
+        if !is_bare_comment_line(previous.trimmed_start()) {
             return None;
         }
         let before_comment = self

@@ -13177,3 +13177,9 @@ fn indented_brace_styles_set_a_brace_row_a_comment_leads_with_the_brace_rows() {
         "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
     );
 }
+
+#[test]
+fn a_shift_row_of_a_statement_a_comment_leads_after_a_stream_stays_in_its_parens() {
+    let input = "void f()\n{\n    out << value << ((b + (c - 1))\n                     << c);\n    /* c */ m = 1 << (((p & (size - 1))\n                       >> shift)\n                      + OFFSET);\n}\n";
+    check(input, &["--style=kr"], input);
+}
