@@ -13,8 +13,8 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, advance_quoted_literal, is_comment_line, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    ContainsAnyByte, advance_quoted_literal, is_bare_comment_line, is_comment_line,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -2510,9 +2510,20 @@ impl FormatEngine<'_> {
     /// Whether the line follows a directive other than a conditional: a
     /// brace there opens a plain block, not the block of a label before.
     pub(crate) fn follows_plain_directive(&self) -> bool {
-        self.output.last_line_outside_comment().is_some_and(|line| {
-            preprocessor_directive(line.trimmed_start())
-                .is_some_and(|directive| !is_conditional_preprocessor(directive))
+        // Comment lines after the directive leave it the line before.
+        self.output.last_line_outside_comment().is_some_and(|_| {
+            self.output
+                .scoped()
+                .iter()
+                .rev()
+                .find(|line| {
+                    let trimmed = line.trimmed_start();
+                    !trimmed.is_empty() && !is_bare_comment_line(trimmed)
+                })
+                .is_some_and(|line| {
+                    preprocessor_directive(line.trimmed_start())
+                        .is_some_and(|directive| !is_conditional_preprocessor(directive))
+                })
         })
     }
 

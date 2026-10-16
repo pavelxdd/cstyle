@@ -13091,3 +13091,13 @@ fn a_run_in_switch_brace_before_a_case_block_holding_a_table_stays_at_the_switch
         "void f()\n{   switch (op)\n    {   default:\n        {   int table[][2] =\n            {   { FIRST, 1 },\n                {   SECOND, 2|\n                    /* note */ 4\n                },\n            };\n            break;\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_brace_after_a_directive_and_a_comment_after_a_case_label_stays_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 3:\n#line 46 \"input.l\"\n    // note\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 2:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 3:\n#line 46 \"input.l\"\n        // note\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
