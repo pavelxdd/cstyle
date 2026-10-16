@@ -1166,17 +1166,22 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        // In the block a case label opens, directives stand at its body.
+        // In the block a case label opens, directives stand at its body, or
+        // past a label the block holds at that label's body.
         if let Some(spaces) = self
             .layout
             .frame_stack
             .active_brace()
             .filter(|frame| frame.case_block)
             .map(|frame| {
+                let body = self
+                    .active_case_label_indent_spaces()
+                    .map_or(frame.body_indent_column, |label| {
+                        label + self.options.indent_width
+                    });
                 // The line adjuster takes the case unindent of the line off.
-                frame.body_indent_column
-                    + self.layout.line_adjuster.case_unindent_depth_for_line("#")
-                        * self.options.indent_width
+                body + self.layout.line_adjuster.case_unindent_depth_for_line("#")
+                    * self.options.indent_width
             })
         {
             return PreprocessorLineIndent::Exact {

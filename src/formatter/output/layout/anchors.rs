@@ -6324,6 +6324,16 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A label in a case's block leaves the comments in the block's body.
+        let in_switch_body = self
+            .tree
+            .groups
+            .enclosing(first)
+            .and_then(|body| self.tree.blocks.owner(body))
+            .is_some_and(|owner| matches!(&tokens[owner], Token::Word(word) if word == "switch"));
+        if !in_switch_body {
+            return None;
+        }
         Some(self.token_column(first)? + self.options.indent_width)
     }
 

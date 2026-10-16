@@ -13101,3 +13101,25 @@ fn a_brace_after_a_directive_and_a_comment_after_a_case_label_stays_a_plain_bloc
         "void f()\n{\n    switch (state) {\n    case 2:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 3:\n#line 46 \"input.l\"\n        // note\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_before_a_directive_ahead_of_a_label_in_a_case_block_stays_in_the_block_body() {
+    // As without the directive, the comment stands with the block's
+    // statements, not past the label after it.
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        if (ready) {\n            reset(value);\n        }\n        /* fall through */\n#ifdef FEATURE\n    case SECOND:\n#endif\n        apply(value);\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n        if (ready) {\n            reset(value);\n        }\n        /* fall through */\n#ifdef FEATURE\n        case SECOND:\n#endif\n            apply(value);\n            break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn indented_conditionals_after_a_label_in_a_case_block_stand_at_the_label_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        run();\n#ifdef FEATURE\n    case SECOND:\n#endif\n        apply(value);\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n        run();\n        #ifdef FEATURE\n        case SECOND:\n            #endif\n            apply(value);\n            break;\n    }\n    }\n}\n",
+    );
+}
