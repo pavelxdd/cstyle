@@ -5,7 +5,7 @@ use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
@@ -716,7 +716,9 @@ impl FormatEngine<'_> {
 
     pub(crate) fn is_objc_standalone_line(&self) -> bool {
         matches!(
-            self.current.split_whitespace().next(),
+            after_leading_comments(&self.current)
+                .split_whitespace()
+                .next(),
             Some(
                 "@interface"
                     | "@implementation"

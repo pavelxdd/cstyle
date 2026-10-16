@@ -12500,3 +12500,10 @@ fn a_statement_broken_off_a_block_closer_keeps_the_gap_before_its_comment() {
         "void f()\n{\n    while (ready)\n        {\n            value=0;\n        }\n    other(1); // note\n}\n",
     );
 }
+
+#[test]
+fn an_interface_line_a_comment_leads_sets_no_continuation_for_its_members() {
+    let input = "/* note */ @interface Item : NSObject\n@property (nonatomic) int value;\n- (void)update:(int)value;\n@end\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=vtk"], input);
+}
