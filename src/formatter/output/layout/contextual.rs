@@ -842,6 +842,16 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trimmed().is_empty())
             && self.output.iter().any(|line| !line.trimmed().is_empty())
             && !self.previous_code_ends_statement()
+            // A row within parentheses aligns in them past the blank line.
+            && !self.output.pending_tokens().is_some_and(|span| {
+                self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                    let group = self.tree.groups.get(group);
+                    group.delimiter == Delimiter::Paren
+                        && self.output.line_with_token(group.open).is_some_and(|line| {
+                            !self.output.trimmed(line).starts_with('#')
+                        })
+                })
+            })
         {
             layout.exact_indent_spaces = Some(self.options.indent_width);
         }
