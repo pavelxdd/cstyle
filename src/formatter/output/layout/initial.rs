@@ -20,6 +20,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
+use crate::formatter::text::line_scan::is_comment_only_line;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
     unmatched_open_paren_column, unmatched_open_paren_columns,
@@ -1018,22 +1019,31 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces =
                 Some(leading_visual_width(previous, self.options.tab_width));
         }
+        // Comments between the rows take no part in their columns.
         if layout.line_kind == LineKind::Normal
-            && let Some(previous) = self.output.last_line_outside_comment()
+            && !line.trimmed_start().starts_with_any(b",{}")
+            && self.output.last_line_outside_comment().is_some()
+            && let Some(previous) = self.output.scoped().iter().rev().find(|line| {
+                let trimmed = line.trimmed_start();
+                !trimmed.is_empty() && !is_comment_only_line(trimmed)
+            })
+            && let Some(spaces) = self.colon_led_row_indent_spaces(previous)
         {
-            let previous_trimmed = previous.trimmed_start();
-            if previous_trimmed.starts_with(':')
-                && previous_trimmed.ends_with(',')
-                && !line.trimmed_start().starts_with_any(b",{}")
-                && self.open_paren_column_of(previous_trimmed).is_none()
-                && !has_unmatched_open_brace(previous_trimmed)
-                && self.current_inline_array_column().is_none()
-            {
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width) + 2);
-            }
+            layout.exact_indent_spaces = Some(spaces);
         }
         layout
+    }
+
+    /// The column of the rows after `previous`, a `:`-led row that a comma
+    /// continues: they align after its colon.
+    pub(crate) fn colon_led_row_indent_spaces(&self, previous: &str) -> Option<usize> {
+        let previous_trimmed = previous.trimmed_start();
+        (previous_trimmed.starts_with(':')
+            && previous_trimmed.ends_with(',')
+            && self.open_paren_column_of(previous_trimmed).is_none()
+            && !has_unmatched_open_brace(previous_trimmed)
+            && self.current_inline_array_column().is_none())
+        .then(|| leading_visual_width(previous, self.options.tab_width) + 2)
     }
 }
 

@@ -66,6 +66,14 @@ pub(crate) fn line_comment_backslash_trailing_space(line: &str) -> bool {
     comment < line.len() && tail.starts_with("//") && tail.trimmed_end().ends_with('\\')
 }
 
+/// Where a comment in a class's base clause stands, and whether the body's
+/// brace follows it.
+#[derive(Clone, Copy)]
+struct ClassBaseComment {
+    spaces: usize,
+    before_body: bool,
+}
+
 /// Indent candidates for a comment token, computed before it is placed.
 #[derive(Clone, Copy)]
 struct CommentIndents {
@@ -81,6 +89,7 @@ struct CommentIndents {
     user_label: Option<usize>,
     control_header: Option<usize>,
     block_continuation: Option<usize>,
+    class_base: Option<ClassBaseComment>,
     lambda_parameter: Option<usize>,
     /// The label column, for a comment leading a statement label's line.
     label_line: Option<usize>,
@@ -1050,9 +1059,66 @@ impl FormatEngine<'_> {
             user_label: user_label_comment_indent,
             control_header: control_header_comment_indent,
             block_continuation: block_comment_continuation_indent,
+            class_base: self.class_base_comment_position(kind, comment, index),
             lambda_parameter: lambda_parameter_comment_indent,
             label_line,
         }
+    }
+
+    /// A comment line among a class's bases stands at them, and one before
+    /// its body's brace at the head.
+    fn class_base_comment_position(
+        &self,
+        kind: CommentKind,
+        comment: &str,
+        index: usize,
+    ) -> Option<ClassBaseComment> {
+        let ends_line = !self.token_input.has_next_meaningful_token
+            || self
+                .token_input
+                .next_input_whitespace
+                .as_deref()
+                .is_some_and(|whitespace| whitespace.contains('\n'));
+        if !self.layout.in_class_base_clause
+            || !self.current.trimmed().is_empty()
+            || !ends_line
+            || comment.contains('\n')
+            || self.layout.nesting.paren_depth != 0
+            // A line comment at column one stays there.
+            || kind == CommentKind::Line
+                && self.layout.line_state.column1_line_comment
+                && !self.options.indent_col1_comments
+        {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        if next_code_token(tokens, index + 1)
+            .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
+        {
+            return Some(ClassBaseComment {
+                spaces: (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
+                    + self.case_body_indent_extra(LineKind::Normal))
+                    * self.options.indent_width,
+                before_body: true,
+            });
+        }
+        let previous_row = self.output.scoped().iter().rev().find(|line| {
+            let trimmed = line.trimmed_start();
+            !trimmed.is_empty() && !is_comment_only_line(trimmed)
+        });
+        let spaces = previous_row
+            .and_then(|row| self.colon_led_row_indent_spaces(row))
+            .unwrap_or_else(|| {
+                self.next_continuation_indent()
+                    .columns(self.options.indent_width)
+            });
+        Some(ClassBaseComment {
+            spaces,
+            before_body: false,
+        })
     }
 
     /// Moves the current line to where the comment starts: breaks the line or
@@ -1073,6 +1139,7 @@ impl FormatEngine<'_> {
             user_label: user_label_comment_indent,
             control_header: control_header_comment_indent,
             block_continuation: block_comment_continuation_indent,
+            class_base: class_base_comment_indent,
             lambda_parameter: lambda_parameter_comment_indent,
             label_line,
             ..
@@ -1257,6 +1324,29 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.active_constructor_initializer().is_some())
         .then(|| self.constructor_initializer_base_indent_spaces())
         .flatten();
+        // The bases after a comment among them keep the column their head
+        // set.
+        if let Some(ClassBaseComment {
+            spaces,
+            before_body,
+        }) = class_base_comment_indent
+        {
+            let level = self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options);
+            let prefix = self.options.continuation_indent_prefix(level, spaces);
+            self.clear_current();
+            self.current.push_str(&prefix);
+            self.current_is_preindented = true;
+            let continuation = &mut self.layout.continuation_indent;
+            continuation.input_line_continuation_indent = Some(ContinuationIndent::Spaces(spaces));
+            if !before_body {
+                continuation.next_input_line_continuation_indent = continuation
+                    .next_line_indent_spaces
+                    .map(ContinuationIndent::Spaces);
+            }
+        }
         if let Some(spaces) = constructor_member_comment_indent {
             self.clear_current();
             self.current.push_str(&" ".repeat(spaces));
@@ -1305,6 +1395,7 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Block
             && self.current.trimmed().is_empty()
             && !comment.contains('\n')
+            && class_base_comment_indent.is_none()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
             let previous_code = self.output.code_trimmed_of(previous);
@@ -1407,6 +1498,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && !self.last_line_closes_top_level_declaration()
+            && class_base_comment_indent.is_none()
             && let Some(spaces) = label_line
                 .or(constructor_member_comment_indent)
                 .or(brace_element_comment_indent)

@@ -12039,3 +12039,40 @@ fn a_comment_leading_the_body_of_a_header_after_else_stands_in_that_body() {
         "void f()\n{\n    if (ready) {\n        value=1;\n    } else for (;;) {\n            /* note */\n            value=0;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_between_base_class_rows_stands_at_the_rows() {
+    for comment in ["// note", "/* note */"] {
+        check(
+            &format!(
+                "class Derived : public Base,\n                {comment}\n                private Other {{\n}};\n"
+            ),
+            &["--style=kr"],
+            &format!("class Derived : public Base,\n    {comment}\n    private Other\n{{\n}};\n"),
+        );
+        check(
+            &format!(
+                "class Derived\n    : public Base,\n  {comment}\n      private Other {{\n}};\n"
+            ),
+            &["--style=whitesmith"],
+            &format!(
+                "class Derived\n    : public Base,\n      {comment}\n      private Other\n    {{\n    }};\n"
+            ),
+        );
+    }
+}
+
+#[test]
+fn a_comment_before_the_body_of_a_class_with_bases_stands_at_the_class() {
+    for comment in ["// note", "/* note */"] {
+        check(
+            &format!(
+                "class Derived :\n    public Base,\n    private Other\n    {comment}\n{{\n}};\nstruct Item : Base\n  {comment}\n{{\n}};\n"
+            ),
+            &["--style=allman"],
+            &format!(
+                "class Derived :\n    public Base,\n    private Other\n{comment}\n{{\n}};\nstruct Item : Base\n{comment}\n{{\n}};\n"
+            ),
+        );
+    }
+}
