@@ -10122,6 +10122,16 @@ fn a_comment_row_inside_brackets_stands_at_the_row_after_it() {
     );
 }
 
+// Without a brace style a bare block's brace keeps the code after it on its
+// line, whatever one-line block that code holds.
+#[test]
+fn a_run_in_bare_block_brace_keeps_its_code_beside_a_one_line_block() {
+    let input = "void f()\n{\n    x = 1;\n    { int cnt; for(cnt=0; cnt<3; cnt++){}\n        h(cnt);\n    }\n}\n";
+    let expected = "void f()\n{\n    x = 1;\n    {   int cnt;\n        for(cnt=0; cnt<3; cnt++) {}\n        h(cnt);\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
 // A bare block's brace after a comment stays where the source set it: only a
 // header's brace moves before a comment trailing the header.
 #[test]

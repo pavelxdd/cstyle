@@ -2672,12 +2672,30 @@ impl FormatEngine<'_> {
                 self.options.brace_style,
                 BraceStyle::Horstmann | BraceStyle::Pico
             );
+        // The brace's own block decides, not another block on its line.
+        let one_line_block = self
+            .current
+            .active_token()
+            .filter(|&open| matches!(self.tree.tokens.get(open), Some(Token::Symbol('{'))))
+            .and_then(|open| {
+                let close = self
+                    .tree
+                    .groups
+                    .get(self.tree.groups.opened_at(open)?)
+                    .close?;
+                Some(
+                    !self.tree.tokens[open..close]
+                        .iter()
+                        .any(|token| matches!(token, Token::Newline)),
+                )
+            })
+            .unwrap_or(self.layout.line_state.is_one_line_block);
         if (self.options.brace_style == BraceStyle::None || runs_into_nested_brace)
             && brace_type != BraceType::Namespace
             && self.token_input.token_begins_source_line
             && !previous_line_opens_lambda_body
             && !matches!(next, None | Some(Token::Newline))
-            && (!(self.options.break_one_line_blocks && self.layout.line_state.is_one_line_block)
+            && (!(self.options.break_one_line_blocks && one_line_block)
                 || matches!(
                     brace_type,
                     BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
