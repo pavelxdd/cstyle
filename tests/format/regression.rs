@@ -10670,3 +10670,17 @@ fn kept_one_line_blocks_take_braces_added_after_a_comment_leading_the_statement_
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_member_split_off_its_return_type_after_an_indented_access_label_stands_at_the_members() {
+    let input =
+        "class Item {\npublic:\n    int value() const\n    {\n        return value_;\n    }\n};\n";
+    let expected = "class Item {\n  public:\n    int\n    value() const {\n        return value_;\n    }\n};\n";
+    let args = [
+        "--style=google",
+        "--break-return-type",
+        "--keep-one-line-statements",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

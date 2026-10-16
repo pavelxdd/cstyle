@@ -372,8 +372,13 @@ impl FormatEngine<'_> {
         {
             return;
         }
+        // The members after an access label stand at the class body, which
+        // an indented label leaves.
+        if starts_access_label(line, &self.options.access_labels) {
+            return;
+        }
         let mut next_spaces = line_indent_spaces + self.options.indent_width;
-        if kind == LineKind::Label && !starts_access_label(line, &self.options.access_labels) {
+        if kind == LineKind::Label {
             next_spaces = next_spaces.max(
                 (self
                     .layout
