@@ -10852,3 +10852,18 @@ fn an_else_body_a_comment_leads_after_a_conditional_stays_on_its_line() {
     check(input, &["--style=kr"], input);
     check(input, &["--style=kr", "--break-one-line-headers"], input);
 }
+
+#[test]
+fn a_header_and_body_comments_lead_close_its_body_before_a_closing_directive() {
+    let input = "void f()\n{\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n    }\n",
+    );
+}

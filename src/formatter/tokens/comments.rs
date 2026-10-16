@@ -465,7 +465,7 @@ impl FormatEngine<'_> {
             .split_once("*/")
             .is_some_and(|(_, after)| after.trimmed_end().ends_with(';'))
         {
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }
         if !trimmed.trimmed().is_empty() {
