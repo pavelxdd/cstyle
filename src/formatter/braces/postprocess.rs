@@ -567,9 +567,12 @@ fn run_in_next_line_is_access_label(
     next_line: &str,
     options: &FormatOptions,
 ) -> bool {
-    labels::is_access_label(next_line, &options.access_labels)
-        && leading_visual_width(next_line, options.tab_width)
-            <= leading_visual_width(brace_line, options.tab_width)
+    // A comment trailing the label leaves it a label.
+    labels::is_access_label(
+        &next_line[..trailing_comment_split_limit(next_line)],
+        &options.access_labels,
+    ) && leading_visual_width(next_line, options.tab_width)
+        <= leading_visual_width(brace_line, options.tab_width)
 }
 
 fn previous_line_is_namespace_header(input: &[&str], before: usize) -> bool {

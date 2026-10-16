@@ -12237,3 +12237,12 @@ fn a_comment_leading_a_declarator_continues_no_operator_into_its_brace() {
         "static const struct Item\n    /* note */ first =\n{\n    1, 2\n},\nsecond =\n{\n    3, 4\n};\n",
     );
 }
+
+#[test]
+fn an_access_label_a_comment_trails_keeps_its_class_brace_alone() {
+    check(
+        "class Item\n{\npublic: /* note */\n    int value;\n};\n",
+        &["--style=pico"],
+        "class Item\n{\npublic: /* note */\n    int value; };\n",
+    );
+}
