@@ -11,6 +11,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -575,7 +576,16 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_level(indent);
         }
+        // A list among a call's arguments is no element of a list around
+        // the call.
+        let in_parens = self
+            .tree
+            .groups
+            .opened_at(token_index)
+            .and_then(|group| self.tree.groups.get(group).parent)
+            .is_some_and(|parent| self.tree.groups.get(parent).delimiter != Delimiter::Brace);
         let enclosed = brace_type == BraceType::Array
+            && !in_parens
             && !self
                 .inline_array
                 .list_rows
@@ -1106,6 +1116,18 @@ impl FormatEngine<'_> {
     pub(crate) fn line_start_inline_array_column(&self) -> Option<usize> {
         let pending = self.output.len();
         let frames = &self.inline_array.frames;
+        // A row a list it starts in closes stands among that list's rows.
+        if let (line, open, Some(column)) = self.inline_array.line_start
+            && line == pending
+            && frames.len() < open
+            && self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.groups.enclosing(span.first))
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace)
+        {
+            return Some(column);
+        }
         let opened_here = frames
             .iter()
             .rev()
@@ -1741,6 +1763,9 @@ pub(crate) struct InlineArrayState {
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(super) aggregate_braces: Vec<bool>,
     pub(crate) list_rows: BraceListRows,
+    /// The line after the last published one, the lists open where it
+    /// starts, and the column of the innermost.
+    pub(crate) line_start: (usize, usize, Option<usize>),
 }
 
 pub(crate) fn initializer_brace_line_comment_gap(

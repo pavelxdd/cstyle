@@ -6,6 +6,7 @@ use crate::formatter::continuation::operator_chains;
 use crate::formatter::ends_inside_block_comment;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -46,6 +47,12 @@ impl FormatEngine<'_> {
             self.output.mark_last_verbatim();
         }
         self.shift_inline_arrays_to_published_line(published);
+        self.inline_array.line_start = (
+            self.output.len(),
+            self.inline_array.frames.len(),
+            self.current_inline_array_column()
+                .filter(|_| self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Array)),
+        );
         // The code length may have split the line over several.
         if first.is_some()
             && let Some(line) = (published..self.output.len())

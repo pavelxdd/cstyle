@@ -14457,3 +14457,13 @@ fn a_row_continuing_a_call_in_a_run_in_list_stands_at_the_arguments() {
     let commented = "void f()\n{\n    call((struct Item) { .y = call(first,\n                                   /* note */\n                                   second), .z = 1 });\n}\n";
     check(commented, &["--style=allman"], commented);
 }
+
+#[test]
+fn a_list_argument_of_a_call_in_a_list_aligns_to_its_own_elements() {
+    let input = "int list[] = { 7, f({1,\n                     2}),\n               8 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[] = { 7, f({1,\n                     2}),\n               8\n             };\n",
+    );
+}

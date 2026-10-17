@@ -1639,9 +1639,19 @@ impl FormatEngine<'_> {
                 && !block_comment_after_statement
             {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
-            } else if let Some(previous) = self.output.last_line_outside_comment()
+            } else if let Some(index) = self.output.last_line_outside_comment_index()
+                && let previous = &self.output[index]
                 && previous.trimmed_end().ends_with(',')
                 && !previous.trimmed_start().starts_with_any(b":,}")
+                // A row of a list closed on it holds no row of the list after.
+                && !self
+                    .output
+                    .line_tokens(index)
+                    .zip(self.output.pending_tokens())
+                    .is_some_and(|(before, row)| {
+                        self.tree.groups.enclosing(before.first)
+                            != self.tree.groups.enclosing(row.first)
+                    })
             {
                 let previous_spaces = leading_visual_width(previous, self.options.tab_width);
                 if previous_spaces > current_spaces {

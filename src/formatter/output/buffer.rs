@@ -1786,7 +1786,7 @@ impl OutputBuffer {
     }
 
     #[inline]
-    fn last_line_outside_comment_index(&self) -> Option<usize> {
+    pub(crate) fn last_line_outside_comment_index(&self) -> Option<usize> {
         match self.last_outside_comment_cache.get() {
             Some((len, version, index)) if len == self.lines.len() && version == self.version => {
                 index
