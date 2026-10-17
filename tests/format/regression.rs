@@ -15546,3 +15546,19 @@ fn a_label_in_a_bare_block_a_comment_leads_leaves_its_statements_at_the_block_bo
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn pico_parts_a_comment_leading_an_enum_closer_as_one_leading_a_block_closer() {
+    let input = "void f()\n{\n    enum Kind {\n        First,\n        Third\n    /* note */ };\n    if (ready) {\n        value = 1;\n    /* note */ }\n    value = 1;\n}\n";
+    let expected = "void f()\n{   enum Kind\n    {   First,\n        Third\n        /* note */\n    };\n    if (ready)\n    {   value = 1;\n        /* note */\n    }\n    value = 1; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_conditional_after_a_label_of_a_switch_in_a_case_block_stands_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n#ifdef FEATURE\n            value = 2;\n#endif\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n            #ifdef FEATURE\n            value = 2;\n            #endif\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}
