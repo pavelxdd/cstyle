@@ -2,8 +2,9 @@ use crate::formatter::lexer::{Token, line_comments, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_byte, is_bare_comment_line, line_brace_imbalance, line_paren_imbalance,
-    preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, find_byte, holds_code_after_leading_comments, is_bare_comment_line,
+    line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
@@ -1119,8 +1120,13 @@ impl OutputBuffer {
     pub(crate) fn brace_meta(&self, index: usize) -> &LineBraceMeta {
         self.meta[index].get_or_init(|| {
             let line = &self.lines[index];
-            // A row of a block comment holds no code.
-            if self.tokens[index].get().is_none() && self.comments[index].get().lead.is_some() {
+            // A row of a block comment holds no code; a brace the formatter
+            // added after a comment opened on the line is code of its own.
+            if self.tokens[index].get().is_none()
+                && self.comments[index].get().lead.is_some()
+                && !(self.comment_start_index(index) == index
+                    && holds_code_after_leading_comments(line))
+            {
                 let (comment_split_limit, comment_code_end) = comment_split(line);
                 LineBraceMeta {
                     code_starts_with_hash: false,

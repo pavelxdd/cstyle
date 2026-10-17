@@ -14073,3 +14073,13 @@ fn a_base_row_after_a_conditional_continues_its_class_head_before_a_brace_on_its
     check(input, &["--style=kr"], input);
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn an_added_do_block_a_comment_leads_closes_at_its_do() {
+    let input = "void f()\n{\n    do\n        /* note */ value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    do\n        /* note */ {\n        value=0;\n    } while (ready);\n}\n",
+    );
+}
