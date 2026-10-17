@@ -14013,3 +14013,16 @@ fn a_block_a_comment_leads_after_a_nested_braceless_else_closes_at_the_else() {
         "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        else\n            /* note */ {\n            result=0;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_conditional_between_a_case_label_and_a_brace_a_comment_leads_leaves_it_as_without_it() {
+    // The brace opens the case's block and breaks from its comment as it
+    // does right after the label.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &[], expected);
+    check(input, &["--style=kr"], expected);
+    let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+    let plain_expected = expected.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+    check(&plain, &["--style=kr"], &plain_expected);
+}
