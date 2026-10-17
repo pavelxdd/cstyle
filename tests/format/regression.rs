@@ -8640,16 +8640,16 @@ fn a_declarator_starting_with_default_after_a_closer_is_no_label() {
 
 #[test]
 fn an_objc_method_closer_after_a_message_stands_where_the_style_closes_bodies() {
-    let input = "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n}\n@end\n";
+    let input = "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n}\n@end\n";
     check(
         input,
         &["--style=ratliff"],
-        "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n    }\n@end\n",
+        "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n    }\n@end\n",
     );
     check(
         input,
         &["--style=whitesmith"],
-        "@implementation Item\n- (int)total\n    {\n    return [[self items] count] + [self.other countWith:1\n                                   and:2];\n    }\n@end\n",
+        "@implementation Item\n- (int)total\n    {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n    }\n@end\n",
     );
 }
 
@@ -11695,11 +11695,11 @@ fn a_kept_one_line_block_after_a_comment_after_a_case_label_takes_a_line_of_its_
 
 #[test]
 fn a_message_row_after_a_conditional_aligns_as_after_the_row_before_it() {
-    let input = "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                                   and:2];\n#endif\n}\n";
+    let input = "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                                         and:2];\n#endif\n}\n";
     check(
         input,
         &["--style=kr"],
-        "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                   and:2];\n#endif\n}\n",
+        "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                              and:2];\n#endif\n}\n",
     );
 }
 
@@ -12023,7 +12023,7 @@ fn a_message_closer_alone_on_its_line_stands_at_its_bracket() {
     check(
         input,
         &["--style=kr"],
-        "void f()\n{\n    return [self.other countWith:1\n            and:2\n           ];\n}\n",
+        "void f()\n{\n    return [self.other countWith:1\n                       and:2\n           ];\n}\n",
     );
 }
 
@@ -13251,4 +13251,61 @@ fn a_comment_led_row_after_a_comment_line_in_a_continuation_stays_in_it() {
 fn a_comment_line_in_a_subscript_continued_in_a_condition_stands_at_its_rows() {
     let input = "void f()\n{\n    if (table[first +\n              /* note */\n              second] && other) {\n        value=0;\n    }\n}\n";
     check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_among_message_rows_stands_at_the_rows() {
+    let input = "- (int)total\n{\n    return y + [self.other countWith:1\n                           /* note */\n                           and:2];\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_message_keyword_spelled_as_a_word_operator_aligns_as_other_keywords() {
+    let input = "- (int)total\n{\n    return y + [self.other countWith:1\n and:2];\n    return y + [self.other countWith:1\n or:2];\n}\n";
+    check(
+        input,
+        &[],
+        "- (int)total\n{\n    return y + [self.other countWith:1\n                           and:2];\n    return y + [self.other countWith:1\n                           or:2];\n}\n",
+    );
+}
+
+#[test]
+fn message_rows_align_at_the_keyword_whatever_brackets_precede_on_the_line() {
+    let input = "- (int)total\n{\n    x = y + [self.other countWith:1\n using:2];\n    x = a[1] + [self.other countWith:1\n using:2];\n    x = [a b] + [self.other countWith:1\n using:2];\n}\n";
+    check(
+        input,
+        &[],
+        "- (int)total\n{\n    x = y + [self.other countWith:1\n                        using:2];\n    x = a[1] + [self.other countWith:1\n                           using:2];\n    x = [a b] + [self.other countWith:1\n                            using:2];\n}\n",
+    );
+}
+
+#[test]
+fn padding_operators_leaves_a_message_keyword_spelled_as_a_word_operator_attached() {
+    let input = "- (void)update\n{\n    [self.other countWith:value and:other or:last];\n}\n";
+    check(input, &["--pad-oper"], input);
+}
+
+#[test]
+fn a_long_message_splits_at_a_keyword_spelled_as_a_word_operator_as_at_any_keyword() {
+    let input = "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:valueNumberTwo or:valueNumberThree];\n}\n";
+    check(
+        input,
+        &["--max-code-length=60", "--break-after-logical"],
+        "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:\n                      valueNumberTwo or:valueNumberThree];\n}\n",
+    );
+    check(
+        input,
+        &["--max-code-length=76"],
+        "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:valueNumberTwo or:\n                      valueNumberThree];\n}\n",
+    );
+}
+
+#[test]
+fn message_rows_in_any_header_condition_align_at_the_keyword() {
+    let input = "- (void)update\n{\n    if ([self.other countWith:1\n using:2]) {\n        go();\n    }\n    while ([self.other countWith:1\n using:2]) {\n        go();\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "- (void)update\n{\n    if ([self.other countWith:1\n                    using:2]) {\n        go();\n    }\n    while ([self.other countWith:1\n                       using:2]) {\n        go();\n    }\n}\n",
+    );
 }

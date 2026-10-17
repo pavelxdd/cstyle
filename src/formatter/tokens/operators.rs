@@ -42,14 +42,25 @@ pub(crate) fn starts_ternary_arm(line: &str) -> bool {
     line.starts_with('?') || (line.starts_with(':') && !line.starts_with("::"))
 }
 
-pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
-    if ["and", "or"].into_iter().any(|operator| {
-        line.strip_prefix(operator).is_some_and(|tail| {
-            tail.chars()
-                .next()
-                .is_none_or(|ch| !is_identifier_continue(ch))
+/// Whether `text` starts with the word operator `and` or `or`; a message
+/// keyword spelled so, its colon after it, names no operator.
+pub(crate) fn starts_with_word_operator(text: &str) -> bool {
+    ["and", "or"].into_iter().any(|operator| {
+        text.strip_prefix(operator).is_some_and(|tail| {
+            !tail.starts_with(is_identifier_continue) && !leads_keyword_colon(tail)
         })
-    }) {
+    })
+}
+
+/// Whether `tail`, the text after a word, holds the single colon that
+/// makes the word a message keyword.
+pub(crate) fn leads_keyword_colon(tail: &str) -> bool {
+    let tail = tail.trim_start_matches([' ', '\t']);
+    tail.starts_with(':') && !tail.starts_with("::")
+}
+
+pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
+    if starts_with_word_operator(line) {
         return true;
     }
     let bytes = line.as_bytes();
@@ -338,13 +349,7 @@ pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
 
 pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
     let head = head.trimmed_start();
-    if ["and", "or"].into_iter().any(|operator| {
-        head.strip_prefix(operator).is_some_and(|tail| {
-            tail.chars()
-                .next()
-                .is_none_or(|ch| !is_identifier_continue(ch))
-        })
-    }) {
+    if starts_with_word_operator(head) {
         return true;
     }
     if head.starts_with("++") || head.starts_with("--") {

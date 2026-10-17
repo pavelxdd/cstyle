@@ -27,7 +27,7 @@ use crate::formatter::text::line_scan::{
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, head_ends_assignment_operator,
+    array_bound_operator_column, head_ends_assignment_operator, leads_keyword_colon,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
@@ -1209,7 +1209,10 @@ fn logical_word_split_point(
     let end = index + word.len();
     let before = line[..index].chars().next_back();
     let after = line[end..].chars().next();
-    if before.is_some_and(is_identifier_continue) || after.is_some_and(is_identifier_continue) {
+    if before.is_some_and(is_identifier_continue)
+        || after.is_some_and(is_identifier_continue)
+        || leads_keyword_colon(&line[end..])
+    {
         return None;
     }
     Some((if prefer_after_logical { end } else { index }, 80))
@@ -1808,6 +1811,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                 && !bytes
                     .get(index + word.len())
                     .is_some_and(|after| name_char(*after))
+                && !leads_keyword_colon(&line[index + word.len()..])
         }) {
             end = index + word.len();
             let at = if break_after_logical {
