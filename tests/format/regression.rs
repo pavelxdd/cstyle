@@ -14638,3 +14638,28 @@ fn pico_runs_the_body_of_a_one_line_statement_block_in_after_its_brace() {
         "void f()\n{   value=1;\n    {   value=0; }\n    {   value=0;}\n    if (a)\n    {   /* note */ }\n    {   /* note */ }\n    {   ; }\n    {   ;}\n    { }\n    MACRO\n    { value=0; } }\n",
     );
 }
+
+#[test]
+fn a_case_block_kept_whole_on_its_label_line_leaves_the_next_statement_in_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "-o", "-O"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=whitesmith", "-o", "-O"][..],
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1: { value=0; }\n            break;\n        case 2: value=1;\n            break;\n        }\n    }\n",
+        ),
+        (
+            &["--style=pico"][..],
+            "void f()\n{   switch (kind)\n    {   case 1: { value=0; }\n            break;\n        case 2: value=1;\n            break; } }\n",
+        ),
+        (
+            &["--style=lisp", "-O"][..],
+            "void f() {\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break; } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+    }
+}

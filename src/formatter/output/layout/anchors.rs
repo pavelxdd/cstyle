@@ -6531,7 +6531,16 @@ impl FormatEngine<'_> {
     fn statement_after_case_block_indent(&self, first: usize) -> Option<usize> {
         let (label, open) = self.case_block_before(first)?;
         let line = self.output.line_with_token(label)?;
+        // A block kept whole on its label's line is a statement of the case.
+        let closes_on_label_line = self
+            .tree
+            .groups
+            .opened_at(open)
+            .and_then(|group| self.tree.groups.get(group).close)
+            .and_then(|close| self.output.line_with_token(close))
+            == Some(line);
         if self.output.line_tokens(line)?.first != label
+            || closes_on_label_line
             || self
                 .output
                 .line_with_token(open)
