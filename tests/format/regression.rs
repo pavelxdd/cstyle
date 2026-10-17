@@ -14801,3 +14801,13 @@ fn a_list_after_a_statement_a_header_line_went_on_with_opens_as_a_list() {
         "void f()\n{\n    if (ready) helper(); value = { 1,\n                                   2\n                                 };\n}\n",
     );
 }
+
+#[test]
+fn the_while_of_an_else_do_kept_after_a_statement_stands_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else do {\n        first();\n    } while (state);\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    if (ready)\n        helper(); else do {\n            first(); }\n        while (state);\n    value = 1; }\n",
+    );
+}

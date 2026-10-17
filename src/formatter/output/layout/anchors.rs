@@ -5462,11 +5462,17 @@ impl FormatEngine<'_> {
         });
         let Some(line) = self.line_led_by(owner).filter(|_| !header_on_line) else {
             // A `do` run in as the braceless body of a header on its line,
-            // an `else` too, closes at that body's level.
+            // an `else` too, closes at that body's level: an `else` stands
+            // at its `if`.
             let header = header?;
-            let line = self
-                .line_led_by_header(header)
-                .filter(|&line| self.output.line_with_token(owner) == Some(line))?;
+            let leader = if matches!(&tokens[header], Token::Word(word) if word == "else") {
+                self.tree.statements.if_of_else(header).unwrap_or(header)
+            } else {
+                header
+            };
+            let line = self.line_led_by_header(leader).filter(|_| {
+                self.output.line_with_token(owner) == self.output.line_with_token(header)
+            })?;
             return Some(
                 self.output.lead_width(line, self.options.tab_width)
                     + self.options.indent_width
