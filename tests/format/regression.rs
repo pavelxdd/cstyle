@@ -13413,3 +13413,13 @@ fn a_comment_trailing_a_nested_brace_run_stays_on_its_line() {
         "void f()\n    {\n    struct Item list[] = { { /* note */\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_split_off_a_list_closer_indents_with_tabs_at_the_list_body() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n    /* note */ };\n}\n";
+    check(
+        input,
+        &["--indent=tab=4"],
+        "void f()\n{\n\tstruct Item list[] = { {\n\t\t\t.value = 1,\n\t\t}\n\t\t/* note */\n\t};\n}\n",
+    );
+}

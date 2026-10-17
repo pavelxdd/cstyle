@@ -248,6 +248,31 @@ impl FormatEngine<'_> {
             if opens_block {
                 return None;
             }
+            // A comment at the row of a list before it stands with that row.
+            let tab_width = self.options.tab_width;
+            if let Some(previous) = (0..index)
+                .rev()
+                .find(|&previous| self.output.line_tokens(previous).is_some())
+                && self.output.lead_width(previous, tab_width)
+                    == self.output.lead_width(index, tab_width)
+                && self.output.line_tokens(previous).is_some_and(|span| {
+                    let groups = &self.tree.groups;
+                    let list = match self.tree.tokens[span.first] {
+                        Token::Symbol('}') => groups.closed_at(span.first),
+                        _ => groups.enclosing(span.first),
+                    };
+                    list.is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+                })
+            {
+                return Some(
+                    self.tab_columns(previous, self.output.lead_width(previous, tab_width)),
+                );
+            }
             // A comment inside a statement continues it.
             let next =
                 (index + 1..self.output.len()).find_map(|next| self.output.line_tokens(next))?;
