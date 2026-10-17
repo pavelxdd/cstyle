@@ -14413,9 +14413,9 @@ fn a_row_after_a_row_holding_a_closed_inner_list_stands_at_its_own_list() {
 }
 
 #[test]
-fn a_list_running_in_past_an_element_of_a_nested_list_keeps_its_first_element() {
+fn a_list_running_in_past_an_element_of_a_nested_list_breaks_after_its_brace() {
     let input = "int list[][2] = {\n    {1, 2}, {3,\n             4}\n};\n";
-    let expected = "int list[][2] = {\n    {1, 2}, {3,\n        4\n    }\n};\n";
+    let expected = "int list[][2] = {\n    {1, 2}, {\n        3,\n        4\n    }\n};\n";
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
@@ -15672,4 +15672,20 @@ fn run_in_styles_run_a_nested_first_row_into_a_compound_literals_broken_brace() 
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
+}
+
+#[test]
+fn a_list_opened_mid_row_of_a_broken_list_breaks_after_its_brace_when_it_spans_rows() {
+    let input = "int t[] = {\n    10, { 11,\n          12 },\n    13,\n};\n";
+    let expected = "int t[] = {\n    10, {\n        11,\n        12\n    },\n    13,\n};\n";
+    for style in ["--style=kr", "--style=gnu"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let input = "void f()\n{\n    x = { 10, { 11,\n                12 } };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    x = { 10, { 11,\n                12\n              }\n        };\n}\n",
+    );
 }

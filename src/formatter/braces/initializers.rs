@@ -11,6 +11,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -623,9 +624,29 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         );
+        // A list opened after a comma among the rows of a list that sets
+        // them a level in breaks after its brace when it spans rows, as a
+        // row's block does.
+        let spanning_mid_row_list = run_in_after_comma
+            && self.enclosing_list_rows_leveled(token_index)
+            && self
+                .tree
+                .groups
+                .opened_at(token_index)
+                .is_some_and(|group| {
+                    let groups = &self.tree.groups;
+                    // A row of its own elements starts on a later line.
+                    groups.get(group).close.is_some_and(|close| {
+                        (token_index + 1..close).any(|index| {
+                            matches!(self.tree.tokens[index], Token::Newline)
+                                && groups.enclosing(index) == Some(group)
+                                && next_code_token(&self.tree.tokens, index + 1) != Some(close)
+                        })
+                    })
+                });
         let break_first = (enclosed || double_brace_initializer)
             && !first_is_brace
-            && !run_in_after_comma
+            && (!run_in_after_comma || spanning_mid_row_list)
             && !runs_in
             && !range_for_header_initializer;
         let nested = enclosed
@@ -813,6 +834,22 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
+    }
+
+    /// Whether the list around the one `brace` opens sets its rows a level
+    /// in: its brace ends its source line or opens on a nested brace.
+    fn enclosing_list_rows_leveled(&self, brace: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .opened_at(brace)
+            .and_then(|group| groups.get(group).parent)
+            .is_some_and(|parent| {
+                let open = groups.get(parent).open;
+                self.tree.tokens[open + 1..]
+                    .iter()
+                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+                    .is_some_and(|token| matches!(token, Token::Newline | Token::Symbol('{')))
+            })
     }
 
     pub(super) fn close_inline_array_brace(&mut self) {
