@@ -914,6 +914,17 @@ impl FormatEngine<'_> {
                 .is_some_and(|close| !self.tree.tokens[index..close].iter().any(breaks_line))
     }
 
+    pub(crate) fn exit_ended_braceless_blocks(&mut self, next: Option<&Token>) {
+        while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+            && self.layout.indentation.indent() == base + delta
+            && !self.next_keeps_braceless_block(next, base)
+        {
+            self.layout.indentation.exit_braceless_block();
+        }
+        // Leaving braceless bodies can end an else-if chain too.
+        self.unwind_else_if_break_depths_unless_else(next);
+    }
+
     fn push_semicolon(
         &mut self,
         next: Option<&Token>,
@@ -1088,14 +1099,12 @@ impl FormatEngine<'_> {
                 self.preprocessor.split_else.trigger_output_len = None;
                 self.layout.continuation_indent.clear_next_line();
             }
-            while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
-                && self.layout.indentation.indent() == base + delta
-                && !self.next_keeps_braceless_block(next, base)
-            {
-                self.layout.indentation.exit_braceless_block();
+            // The comments closing the line stand on it at the body's level.
+            if self.comments.next_comment_ends_line && !self.current_is_blank() {
+                self.braceless_exit_after_line = true;
+            } else {
+                self.exit_ended_braceless_blocks(next);
             }
-            // Leaving braceless bodies can end an else-if chain too.
-            self.unwind_else_if_break_depths_unless_else(next);
         } else {
             if self.current.trimmed_start().starts_with(':')
                 && self.layout.nesting.paren_depth == 0

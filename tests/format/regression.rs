@@ -14954,3 +14954,13 @@ fn vtk_keeps_designator_rows_after_an_indented_nested_closer_at_their_level() {
         "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n            },\n        [SECOND] = {\n            .type = 1,\n            },\n    },\n};\n",
     );
 }
+
+#[test]
+fn a_comment_after_the_while_of_an_else_do_leaves_its_closer_at_the_else_body_before_a_directive() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n#ifdef FEATURE\n    } while (state); /* note */\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) helper();\n    else do {\n            first();\n#ifdef FEATURE\n        } while (state); /* note */\n#endif\n    value = 1;\n}\n",
+    );
+}

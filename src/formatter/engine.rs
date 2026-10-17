@@ -348,6 +348,9 @@ pub(crate) struct FormatEngine<'a> {
     /// A brace frame opened while its case label or header still stood on
     /// the current line, placed from structural columns.
     pub(crate) brace_frame_awaits_line: bool,
+    /// Braceless bodies a statement ended before the comments closing its
+    /// line, left once that line is laid out.
+    pub(crate) braceless_exit_after_line: bool,
     /// How far splitting a statement off its case label moved the
     /// statement's columns.
     pub(crate) label_split_shift: Option<(usize, isize)>,
@@ -508,6 +511,7 @@ impl<'a> FormatEngine<'a> {
             source_run_in_brace_lines: Vec::new(),
             joined_closer_padding_lines: Vec::new(),
             brace_frame_awaits_line: false,
+            braceless_exit_after_line: false,
             label_split_shift: None,
             statement_after_label_pending: false,
             disabled_formatting: None,
@@ -620,6 +624,9 @@ impl<'a> FormatEngine<'a> {
         self.current_line_has_class_initializer_colon = false;
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
+        if std::mem::take(&mut self.braceless_exit_after_line) {
+            self.exit_ended_braceless_blocks(None);
+        }
     }
 
     #[cfg(test)]
