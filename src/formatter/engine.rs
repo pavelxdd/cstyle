@@ -1237,13 +1237,21 @@ impl<'a> FormatEngine<'a> {
     }
 
     fn observe_input_line(&mut self, tokens: &[Token]) {
+        // A directive leaves the continuation to the line after it.
+        let directive = tokens
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Preprocessor(_)));
         self.layout
             .continuation_indent
-            .input_line_continuation_indent = self
-            .layout
-            .continuation_indent
-            .next_input_line_continuation_indent
-            .take();
+            .input_line_continuation_indent = if directive {
+            None
+        } else {
+            self.layout
+                .continuation_indent
+                .next_input_line_continuation_indent
+                .take()
+        };
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;

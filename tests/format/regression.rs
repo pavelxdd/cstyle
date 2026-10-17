@@ -14368,3 +14368,13 @@ fn an_element_brace_after_a_closer_keeps_its_row_with_a_comment_after_it() {
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn a_comment_led_ternary_arm_after_a_directive_stands_at_the_condition() {
+    let input = "void f()\n{\n    return value;\n#ifdef FEATURE\n    return ready ? first\n#endif\n                 /* note */ : second;\n}\n";
+    check(
+        input,
+        &["--style=mozilla"],
+        "void f()\n{\n    return value;\n#ifdef FEATURE\n    return ready ? first\n#endif\n           /* note */ : second;\n}\n",
+    );
+}
