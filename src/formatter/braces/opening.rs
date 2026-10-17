@@ -2461,16 +2461,29 @@ impl FormatEngine<'_> {
                 .and_then(|brace| self.tree.groups.enclosing(brace))
                 .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace);
         // An element's brace after comments alone keeps their row, as it
-        // would lead its own; a run-in style runs the row into the brace.
+        // would lead its own; a run-in style keeps the row's first element
+        // after it as written.
         let element_brace_after_comments = matches!(
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-        ) && !matches!(
-            self.options.brace_style,
-            BraceStyle::Pico | BraceStyle::Horstmann
         ) && !self.current_is_blank()
             && line_scan::after_leading_comments(self.current.trimmed_start()).is_empty()
             && self.in_initializer_brace();
+        if element_brace_after_comments
+            && !ends_row
+            && matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Horstmann
+            )
+        {
+            self.emit_opening_brace_space(brace_type);
+            self.current.push('{');
+            self.layout.command_state.observe_char('{');
+            if let Some(gap) = self.token_input.next_input_whitespace.clone() {
+                self.current.push_str(&gap);
+            }
+            return;
+        }
         if (element_brace_after_closer || element_brace_after_comments)
             && !self.current.trimmed_start().starts_with('}')
         {

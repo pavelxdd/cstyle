@@ -14720,3 +14720,18 @@ fn an_operand_row_after_a_comment_led_operand_row_stands_with_it() {
     check(input, &["--style=kr"], input);
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn run_in_styles_keep_the_first_element_after_a_list_brace_comments_lead() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        {3, 4},\n        /* note */ {5,\n         6}\n    };\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   static const struct Item items[] =\n    {   {3, 4},\n        /* note */ {5,\n            6\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   static const struct Item items[] =\n    {   {3, 4 },\n        /* note */ {5,\n            6 } }; }\n",
+    );
+}

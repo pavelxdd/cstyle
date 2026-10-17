@@ -964,6 +964,27 @@ impl FormatEngine<'_> {
             return None;
         }
         let open = groups.get(group).open;
+        // The rows of a list whose brace leads its row past comments alone
+        // stand a level past that row, its first element run in or not.
+        let before_open = tokens[..open]
+            .iter()
+            .rev()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .filter(|token| !matches!(token, Token::Whitespace(_)));
+        if before_open.clone().next().is_some()
+            && before_open
+                .clone()
+                .all(|token| matches!(token, Token::Comment(..)))
+            && let Some(line) = self.output.line_with_token(open)
+            && next_code_token(tokens, open + 1)
+                .is_some_and(|element| self.output.line_with_token(element) == Some(line))
+        {
+            return Some(
+                self.output.lead_width(line, self.options.tab_width)
+                    + self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        }
         // astyle continues a sign that opens the first element through the
         // rows after it; the engine follows that.
         if next_code_token(tokens, open + 1).is_some_and(|element| {
