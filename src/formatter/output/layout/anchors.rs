@@ -900,8 +900,9 @@ impl FormatEngine<'_> {
         {
             // At file scope only: within a block the rows already stand at
             // the indented brace.
-            let file_scope_vtk =
-                self.options.brace_style == BraceStyle::Vtk && groups.get(group).parent.is_none();
+            let file_scope_vtk = self.options.brace_style == BraceStyle::Vtk
+                && groups.get(group).parent.is_none()
+                && self.vtk_array_outer(group).is_some();
             let vtk_levels = |brace_alone: bool| {
                 usize::from(file_scope_vtk && brace_alone) * self.options.indent_width
             };
@@ -3423,7 +3424,19 @@ impl FormatEngine<'_> {
                 self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
             });
         }
-        self.initializer_row_indent(next)
+        // Before a brace row the style sets a level in, at the list's body.
+        let indented_brace_row =
+            self.tree
+                .groups
+                .opened_at(next)
+                .is_some_and(|row| match self.options.brace_style {
+                    BraceStyle::Whitesmith | BraceStyle::Ratliff => true,
+                    BraceStyle::Vtk => self.vtk_nested_rows_like_blocks(row),
+                    _ => false,
+                });
+        self.initializer_row_indent(next).map(|spaces| {
+            spaces.saturating_sub(usize::from(indented_brace_row) * self.options.indent_width)
+        })
     }
 
     #[inline(never)]

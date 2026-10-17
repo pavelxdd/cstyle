@@ -15142,3 +15142,29 @@ fn a_comma_between_template_arguments_ends_no_declarator() {
         "void f()\n{\n    auto result = helper<Item, Other>(value,\n            #ifdef FEATURE\n            other);\n            #endif\n    value = 1;\n}\n",
     );
 }
+
+#[test]
+fn indented_directives_before_a_brace_row_the_style_sets_in_stand_at_the_list_body() {
+    let input = "static const struct Item items[] = {\n    {1, 2},\n#ifdef OTHER\n    {5, 6},\n#endif\n    {7, 8}\n};\n";
+    let expected = "static const struct Item items[] = {\n        {1, 2},\n    #ifdef OTHER\n        {5, 6},\n    #endif\n        {7, 8}\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        input,
+        &["--style=ratliff", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn vtk_indents_a_directive_after_a_branch_of_broken_aggregate_rows_at_the_rows() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    {1, 2}\n#elif OTHER\n    {1, 2},\n    {3,\n     4}\n#else\n#ifdef FEATURE\n    {5, 6},\n#endif\n    {7, 8}\n#endif\n};\n";
+    check(
+        input,
+        &["--style=vtk", "--indent-preproc-cond"],
+        "static const struct Item items[] = {\n    #if FEATURE\n    {1, 2}\n    #elif OTHER\n    {1, 2},\n    {\n        3,\n        4\n    }\n    #else\n    #ifdef FEATURE\n    {5, 6},\n    #endif\n    {7, 8}\n    #endif\n};\n",
+    );
+}
