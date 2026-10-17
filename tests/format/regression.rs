@@ -15432,3 +15432,35 @@ fn a_run_in_row_a_comment_leads_keeps_the_gap_before_its_trailing_comment() {
         "void f()\n{   enum Kind\n    {   /* note */ First,  // first\n        Second\n    };\n}\n";
     check(input, &["--style=horstmann"], input);
 }
+
+#[test]
+fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_opened_after_code() {
+    let input = "void f()\n{\n    if (ready) {\n        int list[] = { 1,\n                       2 };\n        helper(list);\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=vtk", "--indent=tab=4", "--indent-after-parens"][..],
+            "void f()\n{\n\tif (ready)\n\t\t{\n\t\tint list[] = { 1,\n\t\t        2\n\t\t    };\n\t\thelper(list);\n\t\t}\n}\n",
+        ),
+        (
+            &[
+                "--style=whitesmith",
+                "--indent=tab=4",
+                "--indent-after-parens",
+            ][..],
+            "void f()\n\t{\n\tif (ready)\n\t\t{\n\t\tint list[] = { 1,\n\t\t        2\n\t\t    };\n\t\thelper(list);\n\t\t}\n\t}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let input = "int list[] = { 1,\n    2\n};\nint table[][2] = { { 1, 2 },\n    { 3, 4 }\n};\n";
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--indent=tab=4",
+            "--indent-after-parens",
+        ],
+        "int list[] = { 1,\n        2\n    };\nint table[][2] = { { 1, 2 },\n\t\t{ 3, 4 }\n\t};\n",
+    );
+}
