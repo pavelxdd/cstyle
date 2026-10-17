@@ -15492,3 +15492,26 @@ fn comment_rows_among_bit_field_declarators_stand_with_the_declarator_rows() {
     let input = "struct Item {\n    unsigned int\n    first:1,\n    second:1,\n    // note\n    third:1;\n};\n";
     check(input, &[], input);
 }
+
+#[test]
+fn delete_empty_lines_deletes_those_of_a_lambda_body_as_of_its_nested_blocks() {
+    let input = "void f()\n{\n    call([&](int v) {\n        first();\n\n        if (v) {\n            second();\n\n            third();\n        }\n\n    });\n    auto g = [&] {\n        first();\n\n        second();\n    };\n}\n";
+    let expected = "void f()\n{\n    call([&](int v) {\n        first();\n        if (v) {\n            second();\n            third();\n        }\n    });\n    auto g = [&] {\n        first();\n        second();\n    };\n}\n";
+    check(input, &["--delete-empty-lines"], expected);
+}
+
+#[test]
+fn indent_cases_sets_conditional_directives_in_a_case_block_at_its_statements() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n#ifdef FEATURE\n        if (ready) {\n#endif\n            reset(value);\n        }\n    }\n    case SECOND: {\n        value = 1;\n#ifdef FEATURE\n        value = 2;\n#endif\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (op) {\n    case FIRST: {\n            #ifdef FEATURE\n            if (ready) {\n            #endif\n                reset(value);\n            }\n        }\n    case SECOND: {\n            value = 1;\n            #ifdef FEATURE\n            value = 2;\n            #endif\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-cases", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent-cases", "--indent-preproc-cond"],
+        expected,
+    );
+}

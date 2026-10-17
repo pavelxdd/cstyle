@@ -1227,6 +1227,7 @@ impl FormatEngine<'_> {
             .map(|frame| {
                 let body = self
                     .active_case_label_indent_spaces()
+                    .filter(|_| frame.nested_case_label)
                     .map_or(frame.body_indent_column, |label| {
                         label + self.options.indent_width
                     });
