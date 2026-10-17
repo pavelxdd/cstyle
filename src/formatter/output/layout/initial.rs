@@ -1597,10 +1597,6 @@ impl FormatEngine<'_> {
                         column
                     };
                     let base = self.continuation_base_indent() * self.options.indent_width;
-                    let source_indent = self
-                        .token_input
-                        .token_source_line_indent
-                        .max(leading_visual_width(line, self.options.tab_width));
                     let stream_indent = previous_code
                         .find(" << ")
                         .or_else(|| previous_code.find(" >> "))
@@ -1615,7 +1611,6 @@ impl FormatEngine<'_> {
                     } else {
                         stream_indent
                             .or_else(|| self.enclosing_inline_array_column().filter(within))
-                            .or((source_indent > 0).then_some(source_indent))
                             .unwrap_or(spaces)
                     });
                 } else if self.layout.nesting.paren_depth == 0

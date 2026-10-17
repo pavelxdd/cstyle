@@ -14535,3 +14535,13 @@ fn vtk_stands_the_brace_rows_of_a_typed_brace_initializer_a_level_past_the_state
         "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n}\n",
     );
 }
+
+#[test]
+fn a_row_closing_a_list_past_the_maximum_continuation_stays_at_its_elements() {
+    let input = "void f(void)\n{\n  static const unsigned char partial_payload[] = { 0x00, 0x04, 0x00, 0x11,\n                                                   0x22 };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    static const unsigned char partial_payload[] = { 0x00, 0x04, 0x00, 0x11,\n                                                     0x22\n                                                   };\n}\n",
+    );
+}
