@@ -13469,3 +13469,18 @@ fn comments_leading_a_case_block_brace_line_open_its_body() {
         "void f()\n{\n    switch (kind)\n    {\n    case 2:\n    {\n        /* a */ /* b */\n        result=1;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_brace_before_a_block_and_a_line_comment_stays_on_its_header_line() {
+    let input = "void f()\n{\n    if (x) { /* a */ // b\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    if (x) { /* a */ // b\n        y();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   if (x) { /* a */ // b\n        y(); } }\n",
+    );
+}

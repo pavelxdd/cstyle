@@ -1671,7 +1671,7 @@ impl FormatEngine<'_> {
         } else if brace_type == BraceType::Command
             && matches!(
                 self.options.brace_style,
-                BraceStyle::Allman | BraceStyle::Horstmann
+                BraceStyle::Allman | BraceStyle::Vtk | BraceStyle::Horstmann | BraceStyle::Pico
             )
             && self.token_input.token_followed_by_line_comment_on_line
             && let Some(comment) = attached_block_comment
