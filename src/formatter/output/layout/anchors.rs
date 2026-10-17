@@ -210,9 +210,11 @@ impl FormatEngine<'_> {
         })
         .or_else(|| when(after_logical, || self.logical_chain_operand_indent(first)))
         .or_else(|| {
-            when(matches!(token, Token::Word(_)) && after_comma, || {
-                self.declarator_after_initializer_indent(first)
-            })
+            let after_close_paren = matches!(previous, Some(Token::Symbol(')')));
+            when(
+                matches!(token, Token::Word(_)) && (after_comma || after_close_paren),
+                || self.declarator_after_initializer_indent(first),
+            )
         })
         .or_else(|| {
             when(opens_brace && (whitesmith || vtk), || {
@@ -2564,7 +2566,19 @@ impl FormatEngine<'_> {
         if !matches!(tokens[first], Token::Word(_)) {
             return None;
         }
-        let comma = self.tree.previous_code_token(first)?;
+        // Attributes before the declarator lead it.
+        let mut comma = self.tree.previous_code_token(first)?;
+        while let Some(attribute) = groups
+            .closed_at(comma)
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+            .and_then(|group| self.tree.previous_code_token(groups.get(group).open))
+            .filter(|&word| {
+                matches!(&tokens[word], Token::Word(word)
+                    if matches!(word.as_str(), "__attribute__" | "__declspec" | "alignas"))
+            })
+        {
+            comma = self.tree.previous_code_token(attribute)?;
+        }
         let close = self.tree.previous_code_token(comma)?;
         let initializer = groups.closed_at(close)?;
         if !matches!(tokens[comma], Token::Symbol(','))

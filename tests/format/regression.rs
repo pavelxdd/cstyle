@@ -14162,3 +14162,9 @@ fn padding_operators_leaves_the_closer_of_template_parameters_a_conditional_spli
     let input = "#ifdef FEATURE\ntemplate <typename First,\n#endif\n          typename Second>\nclass Pair\n{\n};\n";
     check(input, &["--style=allman", "--pad-oper"], input);
 }
+
+#[test]
+fn a_declarator_after_an_attribute_line_past_an_initializer_stands_with_the_attribute() {
+    let input = "void f()\n{\n    static const struct Item\n        first =\n    { 1, 2 },\n    __attribute__((unused))\n    second =\n    { 3, 4 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
