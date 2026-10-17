@@ -491,36 +491,40 @@ impl FormatEngine<'_> {
     }
 
     fn continues_operator_expression(&self) -> bool {
-        self.output.last_line_outside_comment().is_some_and(|line| {
-            let code = self.output.code_trimmed_of(line);
-            if head_ends_assignment_operator(code) {
-                return true;
-            }
-            // `>=` is always a comparison; a trailing `>` whose line has a
-            // `<` is usually a template close, not an expression break.
-            if code.ends_with(">=") {
-                return true;
-            }
-            if code.ends_with('>') && code.contains('<') {
-                return false;
-            }
-            let trimmed = code.trimmed_start();
-            let ends_single_word_label = trimmed.split_once(':').is_some_and(|(label, rest)| {
-                rest.is_empty()
-                    && !label.is_empty()
-                    && label.trimmed_end().chars().all(is_identifier_continue)
-            });
-            let ends_ternary_colon = code.ends_with(':')
-                && !is_case_label_start(trimmed)
-                && !is_default_label_start(trimmed)
-                && (self.layout.frame_stack.last_ternary_with_colon().is_some()
-                    || !ends_single_word_label);
-            head_ends_binary_operator(code)
-                || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
-                    .iter()
-                    .any(|operator| code.ends_with(operator))
-                || ends_ternary_colon
-        })
+        // Comment lines continue nothing of their own.
+        self.output
+            .last_code_line_past_comments_and_directives()
+            .is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line);
+                if head_ends_assignment_operator(code) {
+                    return true;
+                }
+                // `>=` is always a comparison; a trailing `>` whose line has a
+                // `<` is usually a template close, not an expression break.
+                if code.ends_with(">=") {
+                    return true;
+                }
+                if code.ends_with('>') && code.contains('<') {
+                    return false;
+                }
+                let trimmed = code.trimmed_start();
+                let ends_single_word_label =
+                    trimmed.split_once(':').is_some_and(|(label, rest)| {
+                        rest.is_empty()
+                            && !label.is_empty()
+                            && label.trimmed_end().chars().all(is_identifier_continue)
+                    });
+                let ends_ternary_colon = code.ends_with(':')
+                    && !is_case_label_start(trimmed)
+                    && !is_default_label_start(trimmed)
+                    && (self.layout.frame_stack.last_ternary_with_colon().is_some()
+                        || !ends_single_word_label);
+                head_ends_binary_operator(code)
+                    || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
+                        .iter()
+                        .any(|operator| code.ends_with(operator))
+                    || ends_ternary_colon
+            })
     }
 
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
