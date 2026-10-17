@@ -841,13 +841,22 @@ impl FormatEngine<'_> {
                 })
         })?;
         let code = self.output.code_trimmed_of(line);
-        let candidate = code
-            .trimmed_start()
-            .strip_prefix('{')
-            .map_or(code.trimmed_start(), str::trim_start);
+        let trimmed = code.trimmed_start();
+        let lead = code.len() - trimmed.len();
+        // A label run in past its block's brace stands past the brace; one
+        // kept after a closer stands where it would alone on its line.
+        let (candidate, offset) = match trimmed.strip_prefix('{') {
+            Some(rest) => {
+                let candidate = rest.trim_start();
+                (candidate, code.len() - candidate.len())
+            }
+            None => (
+                trimmed.strip_prefix('}').map_or(trimmed, str::trim_start),
+                lead,
+            ),
+        };
         let colon = find_case_colon(candidate)?;
         candidate[colon + 1..].trimmed().is_empty().then(|| {
-            let offset = code.len() - candidate.len();
             visual_width_from(&code[..offset], 0, self.options.tab_width)
                 + self.options.indent_width
         })

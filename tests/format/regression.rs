@@ -14103,3 +14103,13 @@ fn a_line_comment_after_a_brace_a_comment_leads_past_a_case_label_stays_with_the
         "void f()\n{\n    switch (k) {\n    case 3:\n    /* note */ {   // own\n        break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_statement_a_comment_leads_after_a_label_kept_on_its_closer_stands_in_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 3: {\n        value=2;\n    } default:\n        /* note */ break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--keep-one-line-statements"],
+        input,
+    );
+}
