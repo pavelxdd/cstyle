@@ -15062,3 +15062,13 @@ fn a_comment_after_a_lambda_head_leaves_its_body_brace_as_without_it() {
         "void f()\n{\n    helper(items, [&](const Item &item)  /* note */\n    {\n        return item.value > 0;\n    });\n}\n",
     );
 }
+
+#[test]
+fn pico_runs_the_one_line_body_of_a_lambda_argument_in_after_its_brace() {
+    let input = "void f()\n{\n    helper(items, [&](const Item &item)\n    { return item.value > 0; });\n    helper([]\n    { return 0; });\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   helper(items, [&](const Item &item)\n    {   return item.value > 0; });\n    helper([]\n    { return 0; }); }\n",
+    );
+}

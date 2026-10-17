@@ -1525,13 +1525,22 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_level(indent);
         }
+        // Pico runs the body of a lambda below its parameters in as it
+        // does a function's.
+        let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
+            && previous_line_lambda_header
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(')')))
+        .then(|| " ".repeat(self.options.indent_width - 1));
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
             None::<&str>,
             source_gap,
             false,
-            None,
+            opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
         if brace_type == BraceType::CompoundLiteral {
