@@ -1225,8 +1225,9 @@ impl FormatEngine<'_> {
     }
 
     /// Styles that indent braces lay out the rows of an initializer whose
-    /// attached `{` runs a nested `{` in as if the outer `{` stood on its
-    /// own line: rows two levels past the declaration, the `}` one.
+    /// attached `{` runs its first row in and holds brace rows as if the
+    /// outer `{` stood on its own line: rows two levels past the
+    /// declaration, the `}` one.
     #[inline(never)]
     fn run_in_nested_array_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
@@ -1250,14 +1251,16 @@ impl FormatEngine<'_> {
             (group, 2)
         };
         let open = groups.get(group).open;
+        let closer = levels == 1;
+        let rows = &self.inline_array.list_rows;
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
             || groups
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
             || (self.options.brace_style == BraceStyle::Vtk && !self.in_code(open))
-            || !next_code_token(tokens, open + 1)
-                .is_some_and(|element| matches!(tokens[element], Token::Symbol('{')))
+            || !(rows.brace_rows.contains(&open)
+                || closer && self.holds_line_ending_brace(group) == Some(true))
         {
             return None;
         }
@@ -1267,11 +1270,32 @@ impl FormatEngine<'_> {
         if span.first == open || self.output.line_with_token(element) != Some(line) {
             return None;
         }
+        // The `}` closes a level past the statement.
+        let base = if closer {
+            self.statement_start_line(line)
+        } else {
+            line
+        };
         Some(
-            self.output.lead_width(line, self.options.tab_width)
+            self.output.lead_width(base, self.options.tab_width)
                 + levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// Whether a brace inside `group` ends its output line, its first
+    /// element on a later line.
+    fn holds_line_ending_brace(&self, group: GroupId) -> Option<bool> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let open = groups.get(group).open;
+        let close = groups.get(group).close?;
+        Some((open + 1..close).any(|index| {
+            matches!(tokens[index], Token::Symbol('{'))
+                && next_code_token(tokens, index + 1).is_some_and(|element| {
+                    self.output.line_with_token(element) != self.output.line_with_token(index)
+                })
+        }))
     }
 
     /// VTK leaves the rows of a file-scope initializer declared with an

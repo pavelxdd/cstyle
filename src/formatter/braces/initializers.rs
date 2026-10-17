@@ -865,10 +865,32 @@ impl FormatEngine<'_> {
                     .output
                     .get(open_output_len)
                     .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('{')));
-        let call_argument_array_column = self.output.get(open_output_len).and_then(|line| {
-            line.rfind(", {")
-                .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
-        });
+        // The last `, {` of the line holding the list's brace opens the list
+        // only when no later brace of the line opens another.
+        let later_brace_on_line = self
+            .current
+            .active_token()
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .map(|group| self.tree.groups.get(group).open)
+            .and_then(|open| {
+                let span = self
+                    .output
+                    .line_tokens(self.output.line_with_token(open)?)?;
+                Some(
+                    self.tree.tokens[open + 1..=span.last]
+                        .iter()
+                        .any(|token| matches!(token, Token::Symbol('{'))),
+                )
+            })
+            .unwrap_or(false);
+        let call_argument_array_column = self
+            .output
+            .get(open_output_len)
+            .filter(|_| !later_brace_on_line)
+            .and_then(|line| {
+                line.rfind(", {")
+                    .map(|comma| visual_width_from(&line[..comma + 2], 0, self.options.tab_width))
+            });
         let call_argument_array = call_argument_array_column.is_some();
         let typed_initializer = matches!(closing_brace_type, Some(BraceType::Initializer))
             && self

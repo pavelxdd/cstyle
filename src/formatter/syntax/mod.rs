@@ -448,6 +448,9 @@ pub(crate) struct BraceListRows {
     /// Lists that stand their rows a level in: a brace among their elements
     /// begins or ends its source line or stands first after theirs.
     pub(crate) nested: IndexSet<usize>,
+    /// Nested lists with a brace among their elements that begins its
+    /// source line or stands first after theirs.
+    pub(crate) brace_rows: IndexSet<usize>,
     /// Braces past an element on a row of a list whose elements run in
     /// after its brace and align there; their own elements align to them in
     /// turn.
@@ -493,6 +496,7 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
                 if let Some(&parent) = stack.last() {
                     if begins_line || previous == Some(parent) {
                         rows.nested.insert(parent);
+                        rows.brace_rows.insert(parent);
                         rows_of_nested.insert(index);
                     } else {
                         children.push((index, parent));

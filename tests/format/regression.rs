@@ -14378,3 +14378,38 @@ fn a_comment_led_ternary_arm_after_a_directive_stands_at_the_condition() {
         "void f()\n{\n    return value;\n#ifdef FEATURE\n    return ready ? first\n#endif\n           /* note */ : second;\n}\n",
     );
 }
+
+#[test]
+fn indented_brace_styles_stand_a_nested_list_rows_past_its_run_in_first_row() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7,\n        {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    int list[][2] = { 7,\n            {3, 4}\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    int list[][2] = { 7,\n            {3, 4}\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_nested_list_holding_a_later_element_brace_on_its_first_row_closes_at_its_statement() {
+    let input = "int list[] = { 7, {1, 2},\n               {3, 4} };\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "int list[] = { 7, {1, 2},\n        {3, 4}\n    };\n",
+    );
+}
+
+#[test]
+fn indented_brace_styles_close_a_list_around_a_line_ending_element_brace_past_the_statement() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7, {\n            1,\n            2\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    int list[][2] = { 7, {\n            1,\n            2\n            }\n        };\n    }\n",
+    );
+}
