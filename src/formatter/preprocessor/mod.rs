@@ -1202,6 +1202,21 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        // A directive between a braceless header and its body stands at the
+        // header.
+        if opening
+            && let Some(directive) = self.preprocessor.active_directive
+            && let Some(body) = next_code_token(&self.tree.tokens, directive + 1)
+            && let Some(header) = self.tree.statements.braceless_header(body)
+            && header < directive
+            && let Some(line) = self.output.line_with_token(header)
+        {
+            let spaces = self.output.lead_width(line, self.options.tab_width);
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         if opening && let Some(spaces) = self.list_row_directive_column() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),

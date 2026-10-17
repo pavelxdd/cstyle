@@ -14483,3 +14483,9 @@ fn a_comment_led_brace_row_sets_its_branch_body_column_for_the_next_branch() {
         "static const struct Item items[] = {\n#if FEATURE\n    /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
     );
 }
+
+#[test]
+fn a_conditional_between_a_nested_braceless_header_and_its_body_stands_at_the_header() {
+    let input = "void f()\n{\n    if (ready)\n        if (other)\n        #ifdef FEATURE\n            value=0;\n        #endif\n        else\n        #ifdef FEATURE\n            result=0;\n        #endif\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], input);
+}
