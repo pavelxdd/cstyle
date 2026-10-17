@@ -13649,3 +13649,43 @@ fn a_braceless_else_body_after_its_ifs_indented_closer_stands_past_the_if() {
         );
     }
 }
+
+#[test]
+fn a_closing_directive_after_a_continued_statement_in_a_case_block_stands_at_its_opener() {
+    let input = "void f()\n{\n    if (x) {\n        switch (op) {\n        case 1: {\n            value = 1;\n            check(a, b\n                  || c);\n#ifndef FEATURE\n#endif\n        }\n        /* b\n        */\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--indent-preproc-cond"],
+        "void f()\n{\n    if (x) {\n        switch (op) {\n        case 1: {\n            value = 1;\n            check(a, b\n                  || c);\n            #ifndef FEATURE\n            #endif\n        }\n            /* b\n            */\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_file_scope_conditional_after_a_macro_holding_a_case_label_stays_at_the_margin() {
+    let input = "#define GEN(name) \\\ncase name: \\\n  return 1;\nint f(int x)\n{\n    return 0;\n}\n\n#ifdef FEATURE\n#define NAME 1\n#endif\n";
+    check(input, &["--indent-preproc-cond"], input);
+}
+
+#[test]
+fn a_conditional_inside_a_continued_statement_of_a_case_block_stands_at_the_continuation() {
+    let input = "void f(int x)\n{\n    switch (x) {\n    case 2: {\n        const char *name =\n#ifdef PREFIX\n            \"a\"\n#else\n            \"b\"\n#endif\n            ;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond"],
+        "void f(int x)\n{\n    switch (x) {\n    case 2: {\n        const char *name =\n            #ifdef PREFIX\n            \"a\"\n            #else\n            \"b\"\n            #endif\n            ;\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        "void f(int x)\n    {\n    switch (x)\n        {\n        case 2:\n            {\n            const char *name =\n                #ifdef PREFIX\n                \"a\"\n                #else\n                \"b\"\n                #endif\n                ;\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_conditional_splitting_an_else_from_its_if_in_a_case_block_stands_at_the_statements() {
+    check(
+        "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        if (a) {\n            token = 1;\n        } else\n#ifndef FEATURE\n            if (b) {\n                token = 2;\n            } else\n#endif\n            {\n                token = 3;\n            }\n        break;\n    }\n    }\n}\n",
+        &["--indent-preproc-cond"],
+        "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        if (a) {\n            token = 1;\n        } else\n        #ifndef FEATURE\n            if (b) {\n                token = 2;\n            } else\n        #endif\n            {\n                token = 3;\n            }\n        break;\n    }\n    }\n}\n",
+    );
+}

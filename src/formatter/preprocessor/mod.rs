@@ -994,10 +994,15 @@ impl FormatEngine<'_> {
             }
         }
         if !line_is_continued_comment && !is_opaque_literal_continuation {
+            let indent_spaces = indent.and_then(|indent| match indent {
+                PreprocessorLineIndent::Exact { spaces, .. } => Some(spaces),
+                PreprocessorLineIndent::Level(_) => None,
+            });
             self.update_preprocessor_state(
                 part,
                 opening_indentable,
                 index == 0 && branch_separator_after_else,
+                indent_spaces,
             );
         }
         let line_ends_with_backslash = part.trimmed_end().ends_with('\\');
@@ -1180,7 +1185,7 @@ impl FormatEngine<'_> {
             .layout
             .frame_stack
             .active_brace()
-            .filter(|frame| opening && frame.case_block)
+            .filter(|frame| opening && frame.case_block && self.directive_between_statements())
             .map(|frame| {
                 let body = self
                     .active_case_label_indent_spaces()
@@ -1219,16 +1224,25 @@ impl FormatEngine<'_> {
             }
             return PreprocessorLineIndent::Level(indent.level);
         }
-        if let Some(case_label_column) = self.active_case_label_indent_spaces() {
+        if let Some(spaces) = opening
+            .then(|| self.assigned_value_directive_column())
+            .flatten()
+            .or_else(|| self.preprocessor_continuation_spaces())
+        {
             return PreprocessorLineIndent::Exact {
-                structural_level: self.layout.indentation.indent() + 1,
-                spaces: case_label_column + self.options.indent_width,
-            };
-        }
-        if let Some(spaces) = self.preprocessor_continuation_spaces() {
-            PreprocessorLineIndent::Exact {
                 structural_level: self.layout.indentation.indent(),
                 spaces,
+            };
+        }
+        // Only a directive in braces can follow a case label's body.
+        let in_braces = self
+            .preprocessor
+            .active_directive
+            .is_none_or(|directive| self.tree.groups.enclosing(directive).is_some());
+        if in_braces && let Some(case_label_column) = self.active_case_label_indent_spaces() {
+            PreprocessorLineIndent::Exact {
+                structural_level: self.layout.indentation.indent() + 1,
+                spaces: case_label_column + self.options.indent_width,
             }
         } else {
             // A block nested in a case body stands past the case's own level.
@@ -1270,6 +1284,9 @@ impl FormatEngine<'_> {
     /// The column of a directive inside a continued statement: in the
     /// condition of a control header astyle takes the header's level back off.
     fn preprocessor_continuation_spaces(&self) -> Option<usize> {
+        if self.directive_between_statements() {
+            return None;
+        }
         // A paren opened past the pending column holds the next line.
         let spaces = self
             .layout
@@ -1305,11 +1322,14 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// `indent_spaces` is the column the directive took, when it took one
+    /// apart from its level.
     fn update_preprocessor_state(
         &mut self,
         line: &str,
         opening_indentable: Option<bool>,
         branch_separator_after_else: bool,
+        indent_spaces: Option<usize>,
     ) {
         match preprocessor_directive(line) {
             Some("if" | "ifdef" | "ifndef") => {
@@ -1338,15 +1358,13 @@ impl FormatEngine<'_> {
                         *spaces += self.options.indent_width;
                     }
                 }
-                let spaces = self
-                    .options
-                    .indent_preproc_conditional
-                    .then(|| {
-                        self.break_else_if_directive_column()
-                            .or_else(|| self.list_row_directive_column())
-                    })
-                    .flatten()
-                    .or_else(|| self.preprocessor_continuation_spaces());
+                // The directives going on with the conditional stand at the
+                // column its opening one took.
+                let spaces = if self.options.indent_preproc_conditional {
+                    indent_spaces
+                } else {
+                    self.preprocessor_continuation_spaces()
+                };
                 self.layout.indentation.push_preprocessor_indent(
                     self.layout.indentation.indent()
                         + self.case_body_indent_extra(LineKind::Normal)

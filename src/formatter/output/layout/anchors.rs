@@ -3184,6 +3184,68 @@ impl FormatEngine<'_> {
             .or_else(|| self.block_body_column(next))
     }
 
+    /// Whether the directive being laid out stands between statements: the
+    /// code before it ends one, or the code after it starts one, a header's
+    /// body among them, or closes its block.
+    pub(crate) fn directive_between_statements(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(directive) = self.preprocessor.active_directive else {
+            return false;
+        };
+        let Some(previous) = self.tree.previous_code_token(directive) else {
+            return true;
+        };
+        let ends_header = match &tokens[previous] {
+            Token::Word(word) => matches!(word.as_str(), "else" | "do"),
+            Token::Symbol(')') => self
+                .tree
+                .groups
+                .closed_at(previous)
+                .and_then(|group| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(group).open)
+                })
+                .is_some_and(|keyword| {
+                    matches!(&tokens[keyword], Token::Word(word)
+                        if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                }),
+            Token::Symbol(';' | '}') => true,
+            _ => false,
+        };
+        if ends_header {
+            return true;
+        }
+        let mut next = directive + 1;
+        let next = loop {
+            let Some(index) = next_code_token(tokens, next) else {
+                return false;
+            };
+            if !matches!(tokens[index], Token::Preprocessor(_)) {
+                break index;
+            }
+            next = index + 1;
+        };
+        matches!(tokens[next], Token::Symbol('}'))
+            || self.tree.statements.starts_block_statement(next)
+            || self.tree.statements.braceless_header(next).is_some()
+    }
+
+    /// Column of a directive opening a conditional inside an assigned value
+    /// split off its `=`: that of the value after it.
+    pub(crate) fn assigned_value_directive_column(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let mut next = self.preprocessor.active_directive? + 1;
+        let next = loop {
+            let index = next_code_token(tokens, next)?;
+            if !matches!(tokens[index], Token::Preprocessor(_)) {
+                break index;
+            }
+            next = index + 1;
+        };
+        self.assigned_value_in_case_block_indent(next)
+            .or_else(|| self.assignment_continuation_indent(next))
+    }
+
     /// Column of a directive opening a conditional among an initializer's
     /// rows: that of the row after it.
     pub(crate) fn list_row_directive_column(&self) -> Option<usize> {
