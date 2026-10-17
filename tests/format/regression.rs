@@ -14223,3 +14223,9 @@ fn a_row_after_a_closer_row_a_comment_leads_stands_at_the_elements_in_run_in_sty
         "void f() {\n    struct Item list[] = { {\n            .value = 1,\n            /* note */ }, {\n            .value = 2, } }; }\n",
     );
 }
+
+#[test]
+fn a_comment_line_in_a_subscript_continues_at_its_content() {
+    let input = "void f()\n{\n    value = table[first +\n                  /* one */\n                  // two\n                  second];\n}\n";
+    check(input, &["--style=allman"], input);
+}

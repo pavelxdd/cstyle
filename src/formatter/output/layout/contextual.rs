@@ -2328,15 +2328,23 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        // A message's rows align at its selectors past the comments too.
-        let in_brackets = self
+        // A message's rows align at its selectors past the comments too; a
+        // subscript, its `[` after an operand, continues in its brackets.
+        let in_message = self
             .output
             .pending_tokens()
             .and_then(|span| self.tree.groups.enclosing(span.first))
-            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Bracket);
+            .is_some_and(|group| {
+                let open = self.tree.groups.get(group).open;
+                self.tree.groups.get(group).delimiter == Delimiter::Bracket
+                    && !self.tree.previous_code_token(open).is_some_and(|before| {
+                        matches!(&self.tree.tokens[before], Token::Word(word) if word != "return")
+                            || matches!(self.tree.tokens[before], Token::Symbol(')' | ']'))
+                    })
+            });
         if !plain
             && replay.input_continuation_indent.is_none()
-            && !in_brackets
+            && !in_message
             && !line_start.starts_with_any(b"#{}")
             && (is_comment_line(line_start)
                 || self.output.last_non_empty_scoped().is_some_and(|previous| {
