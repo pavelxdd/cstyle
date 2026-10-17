@@ -2343,11 +2343,34 @@ impl FormatEngine<'_> {
         } else {
             self.options.indent_width
         };
+        // A brace ending a line that continues its statement nests the rows
+        // from the line the statement starts.
+        let lead_line = if matches!(self.tree.tokens[span.first], Token::Symbol('{' | '}')) {
+            line
+        } else {
+            self.statement_start_line(line)
+        };
         Some(
-            self.output.lead_width(line, self.options.tab_width)
+            self.output.lead_width(lead_line, self.options.tab_width)
                 + level
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// The output line on which the statement continued on output line
+    /// `line` starts; a row or declarator after a `,` starts its own.
+    fn statement_start_line(&self, mut line: usize) -> usize {
+        let tokens = &self.tree.tokens;
+        while let Some(first) = self.output.line_tokens(line).map(|span| span.first)
+            && !self.tree.statements.starts_block_statement(first)
+            && let Some(previous) = self.tree.previous_code_token(first)
+            && !matches!(tokens[previous], Token::Symbol(';' | '{' | '}' | ','))
+            && let Some(previous_line) = self.output.line_with_token(previous)
+            && previous_line < line
+        {
+            line = previous_line;
+        }
+        line
     }
 
     /// The `};` of a case block starting its line stands at the block's `{`

@@ -13717,3 +13717,22 @@ fn leading_comments_of_a_broken_closer_leave_the_trailing_comment_of_its_header_
         "void f()\n{\n    if (ready)\n    {\n        value=0;\n        /* a */ /* b */\n    }\n    else     // second\n    {\n        value=1;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_header_brace_past_added_braces_stays_on_its_line() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) { /* note */\n        first();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        helper();\n    } else for (;;) { /* note */\n            first();\n        }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_first_list_row_a_comment_leads_after_a_split_declaration_stands_as_without_it() {
+    let input = "static const struct Item\n    first = {\n    /* note */ 1, 2\n};\n";
+    check(input, &["--style=stroustrup"], input);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=stroustrup"],
+        &input.replace("/* note */ ", ""),
+    );
+}
