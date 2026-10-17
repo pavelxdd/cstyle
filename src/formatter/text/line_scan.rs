@@ -214,6 +214,11 @@ pub(crate) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {
 }
 
 pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
+    has_top_level_char(text, ',')
+}
+
+/// Whether `text` holds `target` outside quotes and parentheses.
+pub(crate) fn has_top_level_char(text: &str, target: char) -> bool {
     let mut depth = 0usize;
     let mut in_quote = false;
     let mut quote = '\0';
@@ -238,7 +243,7 @@ pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
         match ch {
             '(' => depth += 1,
             ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => return true,
+            _ if ch == target && depth == 0 => return true,
             _ => {}
         }
     }

@@ -3,6 +3,7 @@
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
+use crate::formatter::text::line_scan::has_top_level_char;
 
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::constructs::class_declarations::code_opens_class_base_clause;
@@ -1807,10 +1808,13 @@ impl FormatEngine<'_> {
         let after_operator = operator_start + operator.len();
         let rest = &code[after_operator..];
         let value = rest.trimmed_start();
-        // An assignment a block on the line holds ended in it.
+        // An assignment a block on the line holds ended in it, as does one a
+        // `;` of its own level ends.
         if value.is_empty()
             || value.starts_with(':') && !value.starts_with("::")
             || code.ends_with('}') && rest.contains(';')
+            || unmatched_open_paren_column(&code[..operator_start]).is_none()
+                && has_top_level_char(rest, ';')
         {
             return None;
         }

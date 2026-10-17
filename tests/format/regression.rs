@@ -14423,3 +14423,9 @@ fn a_row_of_an_inner_list_past_the_maximum_continuation_stands_at_the_outer_list
         "void f(void)\n{\n    struct_args_type value_args = {is_value, {(uintptr_t)ptr, size,\n                                   flags, 0\n                                             }\n                                  };\n}\n",
     );
 }
+
+#[test]
+fn a_kept_statement_ending_in_a_label_starts_no_continuation_across_a_directive() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    value = 1; again:\n#endif\n    next();\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}
