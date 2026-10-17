@@ -4852,6 +4852,16 @@ impl FormatEngine<'_> {
                 .is_some_and(|span| {
                     statements.starts_block_statement(span.first)
                         || statements.braceless_header(span.first).is_some()
+                        // A closer an `else` follows on its line leads the
+                        // chain of that `else`; a switch's closer stands by
+                        // its labels.
+                        || matches!(self.tree.tokens[span.first], Token::Symbol('}'))
+                            && next_code_token(&self.tree.tokens, span.first + 1).is_some_and(
+                                |next| matches!(&self.tree.tokens[next], Token::Word(word) if word == "else"),
+                            )
+                            && !self.header_keyword_before(open).is_some_and(|keyword| {
+                                matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "switch")
+                            })
                 })
     }
 

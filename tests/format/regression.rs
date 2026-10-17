@@ -14192,3 +14192,9 @@ fn a_comment_after_a_nested_compound_literals_brace_leaves_the_brace_in_place() 
     let call = "void f(void)\n{\n    g(&(T) {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    });\n}\n";
     check(call, &["--style=kr"], call);
 }
+
+#[test]
+fn a_comment_after_the_closer_of_a_do_run_in_after_an_else_moves_none_of_it() {
+    let input = "void f()\n{\n    if (x) {\n        helper();\n    } else do {\n            first();\n        } while (state); /* note */\n    z();\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
