@@ -422,6 +422,7 @@ impl FormatEngine<'_> {
         brace_type: BraceType,
         block_indent_extra: usize,
         force_break_one_line: bool,
+        trailing_comment: Option<&str>,
     ) {
         let control_paren_indent = self.control_paren_init_brace_indent_spaces();
         let brace_begins_line = self.current_is_blank();
@@ -446,6 +447,9 @@ impl FormatEngine<'_> {
         self.emit_opening_brace_space(brace_type);
         self.current.push('{');
         self.layout.command_state.observe_char('{');
+        if let Some(comment) = trailing_comment {
+            self.push_attached_comment_with_source_gap(comment);
+        }
         if brace_begins_line {
             self.layout
                 .continuation_indent

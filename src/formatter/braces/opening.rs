@@ -944,7 +944,7 @@ impl FormatEngine<'_> {
         closer_before && !self.current.trimmed_start().starts_with('}')
     }
 
-    fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
+    pub(super) fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
         if comment.trimmed_start().starts_with("//")
             && self.current.trimmed() == "{"
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
@@ -1191,6 +1191,7 @@ impl FormatEngine<'_> {
                 brace_type,
                 block_indent_extra,
                 false,
+                None,
             );
             return;
         }
@@ -1217,11 +1218,16 @@ impl FormatEngine<'_> {
         }
         let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
         if self.should_open_multiline_attached_initializer_brace(brace_type, next) {
+            // A comment ending the brace's line stays after the brace.
+            let trailing_comment = comments.line.or(comments
+                .block
+                .filter(|_| self.comments.next_comment_ends_line));
             self.open_multiline_attached_initializer_brace(
                 brace.header.take(),
                 brace_type,
                 block_indent_extra,
                 false,
+                trailing_comment,
             );
             return;
         }
@@ -1990,6 +1996,7 @@ impl FormatEngine<'_> {
                 brace_type,
                 block_indent_extra,
                 false,
+                None,
             );
             return true;
         }
@@ -3212,7 +3219,7 @@ impl FormatEngine<'_> {
         }
         !self.current_is_blank()
             && brace_type == BraceType::CompoundLiteral
-            && matches!(next, None | Some(Token::Newline))
+            && (matches!(next, None | Some(Token::Newline)) || self.comments.next_comment_ends_line)
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && !line_ends_lambda_parameter_list(self.current.trimmed_end())
             && self.should_attach_opening_brace(brace_type, next)
@@ -3588,6 +3595,8 @@ impl FormatEngine<'_> {
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && brace_type != BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
+            // A comment ending the line holds no code of the block.
+            && !self.comments.next_comment_ends_line
             && self.current.trimmed_end().ends_with(')')
             && self.current.last_open_paren().is_some()
             && !matches!(
@@ -3660,6 +3669,17 @@ impl FormatEngine<'_> {
                 .nesting
                 .brace_type_stack
                 .contains(&BraceType::Class)
+        {
+            return true;
+        }
+        // A compound literal's brace nested in an aggregate keeps its place
+        // before a comment too.
+        if brace_type == BraceType::CompoundLiteral
+            && self.comments.next_comment_ends_line
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
         {
             return true;
         }

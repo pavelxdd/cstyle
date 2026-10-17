@@ -14174,3 +14174,21 @@ fn a_comment_after_a_base_row_moves_none_of_the_rows_after_it() {
     let input = "struct Item\n    : public Base, /* note */\n      private Other {\n};\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_after_a_nested_compound_literals_brace_leaves_the_brace_in_place() {
+    let input = "void f(void)\n{\n    struct T t = {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    struct T t =\n    {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    };\n}\n",
+    );
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct T t =\n        {\n        .k = (S[]) { /* c */\n                {0}\n            },\n        };\n    }\n",
+    );
+    let call = "void f(void)\n{\n    g(&(T) {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    });\n}\n";
+    check(call, &["--style=kr"], call);
+}
