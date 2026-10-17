@@ -873,9 +873,12 @@ impl FormatEngine<'_> {
             ),
         };
         let colon = find_case_colon(candidate)?;
+        // The label's column is the output's, from which the line adjuster
+        // takes the case unindent off again.
         candidate[colon + 1..].trimmed().is_empty().then(|| {
             visual_width_from(&code[..offset], 0, self.options.tab_width)
                 + self.options.indent_width
+                + self.case_unindent_spaces()
         })
     }
 

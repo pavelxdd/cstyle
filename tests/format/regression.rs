@@ -15562,3 +15562,15 @@ fn a_conditional_after_a_label_of_a_switch_in_a_case_block_stands_at_the_label_b
     check(input, &["--indent-preproc-cond"], expected);
     check(expected, &["--indent-preproc-cond"], expected);
 }
+
+#[test]
+fn a_comment_led_statement_closing_a_switch_in_a_case_block_stands_at_its_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* note */ value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* note */ value = 3; }\n        break; } } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* first */ /* second */ value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* first */ /* second */\n            value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
