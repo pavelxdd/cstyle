@@ -781,17 +781,18 @@ impl FormatEngine<'_> {
         // The first row of a nested group whose `{` ends a row stands a
         // level past the braces that row leaves open; a row its braces lead
         // counts from where the style sets a brace line apart.
-        let indented_braces = matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-        );
+        // VTK lays out an aggregate's list at file scope as styles that
+        // indent no braces do.
+        let indented_braces = match self.options.brace_style {
+            BraceStyle::Whitesmith | BraceStyle::Ratliff => true,
+            BraceStyle::Vtk => self.vtk_nested_rows_like_blocks(group),
+            _ => false,
+        };
         if comma == groups.get(group).open
             && groups
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
-            && (self.options.brace_style != BraceStyle::Vtk
-                || self.vtk_nested_rows_like_blocks(group))
             && self.opens_initializer_element(comma)
             && let Some((lead, levels, _)) = self.brace_ending_row_levels(comma)
         {
@@ -1472,6 +1473,20 @@ impl FormatEngine<'_> {
         let (depth, at_elements) = match self.options.brace_style {
             BraceStyle::Whitesmith | BraceStyle::Ratliff => (1, true),
             BraceStyle::Vtk if self.vtk_nested_rows_like_blocks(group) => (1, true),
+            // A group of the first nesting closes as in styles that indent
+            // no braces.
+            BraceStyle::Vtk
+                if groups.get(group).parent.is_some_and(|parent| {
+                    groups.get(parent).parent.is_none_or(|outer| {
+                        !matches!(
+                            self.tree.blocks.kind(outer),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+                }) =>
+            {
+                (1, false)
+            }
             BraceStyle::Vtk => (2, true),
             _ => (1, false),
         };

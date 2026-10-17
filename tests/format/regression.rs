@@ -13747,3 +13747,13 @@ fn a_nested_literal_closer_a_comment_trails_stands_as_without_it() {
         &input.replace(" /* note */", ""),
     );
 }
+
+#[test]
+fn vtk_closes_the_groups_of_a_file_scope_aggregate_run_in_list_as_their_braces_open() {
+    // astyle sets a `}, {` a level past the last group's `}`; both close
+    // equal groups and stand alike.
+    let input =
+        "static const struct Item items[] = { {\n        1,\n    }, {\n        2,\n    }\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(input, &["--style=kr"], input);
+}
