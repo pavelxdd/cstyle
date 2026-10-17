@@ -315,8 +315,10 @@ impl FormatEngine<'_> {
             }
             if self.current_is_blank() {
                 // An else-chain goes on in the braceless body holding it.
-                if let Some(level) = nested_header_level.or(header_body_bias
-                    .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
+                if let Some(level) = nested_header_level
+                    .filter(|_| next_is_closing_header)
+                    .or(header_body_bias
+                        .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
                 {
                     let delta = level.saturating_sub(self.layout.indentation.indent());
                     if delta > 0 {

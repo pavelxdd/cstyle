@@ -14592,3 +14592,13 @@ fn a_bare_block_after_a_header_braces_were_added_to_takes_the_blank_after_it() {
         "void f()\n{\n    if (ready) { result=0; }\n\n    {\n        value=0;\n    }\n\n    result = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_block_after_a_header_holding_a_header_one_line_braces_were_added_to_stands_at_the_header() {
+    let input = "void f()\n{\n    while (ready) if (other) value++;\n    {\n        value=0;\n    }\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f()\n{\n    while (ready) if (other) { value++; }\n    {\n        value=0;\n    }\n    result = 1;\n}\n",
+    );
+}
