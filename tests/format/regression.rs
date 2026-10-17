@@ -14429,3 +14429,13 @@ fn a_kept_statement_ending_in_a_label_starts_no_continuation_across_a_directive(
     let input = "void f()\n{\n#ifdef FEATURE\n    value = 1; again:\n#endif\n    next();\n}\n";
     check(input, &["--style=kr", "--keep-one-line-statements"], input);
 }
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_stands_at_the_case_bodies() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (state)\n        {\n            /* note */ value = 0;\n        case 1:\n            break;\n        }\n    }\n",
+    );
+}

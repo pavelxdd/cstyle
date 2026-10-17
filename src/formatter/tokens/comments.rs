@@ -802,9 +802,11 @@ impl FormatEngine<'_> {
             // A switch's body column holds its labels; indented switches
             // set the statements of a case a level past them, the column
             // counting the switches around it.
-            frame.body_indent_column
-                + usize::from(self.case_body_indent_extra(LineKind::Normal) > 0)
-                    * self.options.indent_width
+            self.switch_statement_comment_floor(
+                frame.body_indent_column
+                    + usize::from(self.case_body_indent_extra(LineKind::Normal) > 0)
+                        * self.options.indent_width,
+            )
         } else if matches!(
             frame.semantic_kind,
             BraceSemanticKind::Array
@@ -1083,6 +1085,7 @@ impl FormatEngine<'_> {
                     definition_header_comment_indent,
                     self.comment_leads_closer(comment, index),
                 )
+                .map(|spaces| self.switch_statement_comment_floor(spaces))
             });
         let lambda_parameter_comment_indent = self.lambda_parameter_comment_indent_spaces(kind);
         let label_line = (kind == CommentKind::Block
@@ -2414,6 +2417,35 @@ impl FormatEngine<'_> {
             .is_some_and(
                 |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
             )
+    }
+
+    /// A comment leading a statement directly in a switch body stands where
+    /// the statements of the switch's cases do, before its first label too.
+    fn switch_statement_comment_floor(&self, spaces: usize) -> usize {
+        match self.direct_switch_body_indent_spaces() {
+            Some(statements)
+                if self
+                    .current
+                    .active_comment()
+                    .is_some_and(|index| self.comment_leads_statement_on_line(index)) =>
+            {
+                spaces.max(statements)
+            }
+            _ => spaces,
+        }
+    }
+
+    /// Whether the comment at `index` leads code on its line other than a
+    /// switch label or a brace.
+    fn comment_leads_statement_on_line(&self, index: usize) -> bool {
+        self.tree.tokens[index + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+            .is_some_and(|token| match token {
+                Token::Newline | Token::Preprocessor(_) | Token::Symbol('{' | '}') => false,
+                Token::Word(word) => word != "case" && word != "default",
+                _ => true,
+            })
     }
 
     /// Whether the comment at `index` leads a closer, past the comments
