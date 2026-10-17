@@ -15084,3 +15084,12 @@ fn deleting_empty_lines_keeps_one_ending_a_continued_line() {
     let input = "void f()\n{\n#define CHECK(A) \\\n    fail();  \\\n\n    value = 1;\n}\n";
     check(input, &["--style=kr", "--delete-empty-lines"], input);
 }
+
+#[test]
+fn breaking_return_types_breaks_a_declaration_a_comment_leads() {
+    check(
+        "/* note */ int helper(int value);\n",
+        &["--style=kr", "--break-return-type-decl"],
+        "/* note */ int\nhelper(int value);\n",
+    );
+}
