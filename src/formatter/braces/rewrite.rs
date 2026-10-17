@@ -798,11 +798,20 @@ impl FormatEngine<'_> {
                             + self.case_body_indent_extra(LineKind::Normal),
                     )
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                // Comments leading the body's own line already stand at its
+                // level; the header ended the line before.
+                let body_indent = if !self.current_is_blank()
+                    && after_leading_comments(&self.current).trimmed().is_empty()
+                {
+                    header_indent
+                } else {
+                    header_indent + 1
+                };
                 self.finish_line();
                 self.layout
                     .continuation_indent
-                    .set_next_line_level(header_indent + 1);
-                self.layout.pending_braceless_block_bias = Some(header_indent + 1);
+                    .set_next_line_level(body_indent);
+                self.layout.pending_braceless_block_bias = Some(body_indent);
                 self.layout.command_state.current_header = None;
                 self.previous_was_newline = true;
                 return true;

@@ -14567,3 +14567,13 @@ fn vtk_stands_a_comment_led_first_row_of_a_file_scope_aggregate_with_its_rows() 
     let input = "static const struct Item items[] =\n{\n    /* note */ { \"first\", 1 },\n    { \"second\", 2 },\n};\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn breaking_a_header_off_a_comment_leading_a_braceless_body_keeps_the_body_level() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ if (other)\n            { value=0; }\n        else\n            /* note */ { result=0; }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        /* note */\n        if (other) {\n            value=0;\n        } else\n            /* note */ {\n            result=0;\n        }\n}\n",
+    );
+}
