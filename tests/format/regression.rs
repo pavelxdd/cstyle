@@ -14113,3 +14113,10 @@ fn a_statement_a_comment_leads_after_a_label_kept_on_its_closer_stands_in_the_la
         input,
     );
 }
+
+#[test]
+fn a_kept_statement_after_a_case_label_a_comment_leads_keeps_its_space() {
+    let input =
+        "void f()\n{\n    switch (other) {\n    /* note */ case 2: value=0; break;\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+}

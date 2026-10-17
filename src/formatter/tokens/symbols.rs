@@ -1532,6 +1532,20 @@ impl FormatEngine<'_> {
                     self.emit_trailing_source_space();
                 }
             }
+        } else if case_label_colon
+            && !self.statement_after_label_pending
+            && !matches!(
+                next,
+                Some(Token::Comment(_, _)) | Some(Token::Newline) | None
+            )
+        {
+            // A case label comments lead keeps the statement it keeps on its
+            // line apart from it, as any label does.
+            if pad_off {
+                self.emit_trailing_source_space();
+            } else {
+                self.emit_trailing_source_space_or_ensure();
+            }
         } else if is_asm_operand_colon
             || ((is_class_initializer
                 || (is_enum_underlying_type && pad_off)
