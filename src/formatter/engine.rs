@@ -1253,9 +1253,13 @@ impl<'a> FormatEngine<'a> {
                     self.output.comment_start_index(index) == index
                         && !self.output.code_before_comment_trimmed(index).is_empty()
                 });
+        // So does an empty line.
+        let empty = tokens
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));
         self.layout
             .continuation_indent
-            .input_line_continuation_indent = if directive {
+            .input_line_continuation_indent = if directive || empty {
             None
         } else {
             self.layout

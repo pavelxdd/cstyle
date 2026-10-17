@@ -14848,3 +14848,13 @@ fn a_row_after_a_directive_in_a_continued_declarator_list_stands_as_without_it()
         "void f()\n{\n    static const struct Item\n        first = {\n#ifdef FEATURE\n        1, 2\n#endif\n    },\n    second = {\n        3, 4\n    };\n}\n",
     );
 }
+
+#[test]
+fn an_argument_after_an_empty_line_keeps_its_paren_column() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n\n              [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n\n              [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
