@@ -14819,3 +14819,11 @@ fn a_block_opened_on_a_header_body_line_nests_past_that_line() {
     let input = "void f()\n{\n    if (a)\n        x(); else if (b) do {\n            y();\n        } while (c);\n    if (a)\n        x(); else if (b) {\n        y();\n    }\n}\n";
     check(input, &["--style=kr", "--keep-one-line-statements"], input);
 }
+
+#[test]
+fn comments_run_in_after_a_list_brace_stay_on_its_line() {
+    let input = "void f()\n{\n    static const struct Item values[] = {\n        /* a */        /* b */  /* c */\n        {\"x\", \"y\"},\n    };\n}\n";
+    let expected = "void f()\n{   static const struct Item values[] =\n    {   /* a */        /* b */  /* c */\n        {\"x\", \"y\"},\n    };\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}

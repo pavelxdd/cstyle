@@ -2856,6 +2856,7 @@ impl FormatEngine<'_> {
             }
             self.current.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
+            self.attach_comment_run_after_brace();
         }
         if (!objc_method_brace && self.should_indent_brace_line(brace_type))
             || block_indent_extra > 0
