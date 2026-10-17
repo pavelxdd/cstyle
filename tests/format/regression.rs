@@ -14150,3 +14150,9 @@ fn a_comment_line_opening_a_case_block_moves_none_of_its_statements_under_indent
         "void f()\n{\n    switch (op) {\n    case FIRST: {\n            // note\n            if (ready) {\n                reset(value);\n            }\n            break;\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_line_between_message_rows_keeps_them_at_the_selector_keyword() {
+    let input = "- (void)update:(int)value with:(int)other\n{\n    [self apply:value\n          // note\n          with:other];\n}\n";
+    check(input, &["--style=kr"], input);
+}

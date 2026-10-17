@@ -2328,8 +2328,15 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
+        // A message's rows align at its selectors past the comments too.
+        let in_brackets = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Bracket);
         if !plain
             && replay.input_continuation_indent.is_none()
+            && !in_brackets
             && !line_start.starts_with_any(b"#{}")
             && (is_comment_line(line_start)
                 || self.output.last_non_empty_scoped().is_some_and(|previous| {
