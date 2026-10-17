@@ -1049,10 +1049,10 @@ pub(crate) fn label_line_holds_braceless_header(code: &str) -> bool {
         return false;
     };
     let statement = code[colon + 1..].trimmed();
-    let header = ["if", "while", "for", "else"]
+    let header = ["if", "while", "for", "else", "do"]
         .into_iter()
         .any(|word| starts_header_word(statement, word));
-    header && (statement.ends_with(')') || statement == "else")
+    header && (statement.ends_with(')') || matches!(statement, "else" | "do"))
 }
 
 fn starts_inline_case_statement(line: &str) -> bool {

@@ -14612,3 +14612,18 @@ fn a_do_body_closer_added_braces_break_stands_at_its_do_inside_another_do() {
         "void f()\n{\n    do do {\n            x;\n        } while(a);\n    while(b);\n}\n",
     );
 }
+
+#[test]
+fn run_in_styles_set_the_body_of_a_do_on_a_case_label_line_a_level_past_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: do\n            x;\n        while (a);\n        break;\n    case 2: do {\n            x;\n        } while (a);\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: do\n            x;\n        while (a);\n        break;\n    case 2: do {\n            x; }\n        while (a);\n        break; } }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind)\n    {   case 1: do\n                x;\n            while (a);\n            break;\n        case 2: do\n            {   x; }\n            while (a);\n            break; } }\n",
+    );
+}
