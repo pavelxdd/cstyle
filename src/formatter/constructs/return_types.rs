@@ -10,7 +10,8 @@ use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
+    ContainsAnyByte, find_outside_quotes, line_comment_split_limit,
+    reverse_scan_skips_block_comment,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -362,8 +363,13 @@ impl FormatEngine<'_> {
                     previous.first >= head.start
                         && self.tree.previous_code_token(head.name_start).is_some_and(
                             |before_name| {
-                                before_name >= previous.last
-                                    && !self.tree.tokens[previous.last..=before_name]
+                                // Comments after the type stay with it.
+                                let last = self
+                                    .tree
+                                    .previous_code_token(previous.last + 1)
+                                    .unwrap_or(previous.last);
+                                before_name >= last
+                                    && !self.tree.tokens[last..=before_name]
                                         .iter()
                                         .any(|token| matches!(token, Token::Newline))
                             },
@@ -371,10 +377,14 @@ impl FormatEngine<'_> {
                 });
         let previous = &self.output[previous_index];
         // AStyle attaches only return types it recognizes as types, and never
-        // a split `struct Type *`.
-        let previous_trimmed = previous.trimmed();
+        // a split `struct Type *`. Block comments after the type go along;
+        // a line comment would take the name.
+        let previous_trimmed = self
+            .output
+            .code_before_comment_trimmed(previous_index)
+            .trimmed();
         previous_is_return_type
-            && !line_ends_with_comment(previous)
+            && line_comment_split_limit(previous) == previous.len()
             && is_attachable_return_type_line(previous_trimmed)
             && !(previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
     }

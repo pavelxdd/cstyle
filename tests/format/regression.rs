@@ -14997,3 +14997,38 @@ fn an_operand_row_a_comment_leads_after_a_comment_line_in_asm_stays_at_the_rows(
     let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     // note\n                     : \"=r\"(v)\n                     /* c */ : \"r\"(o));\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn attaching_return_types_joins_a_name_to_a_type_block_comments_follow() {
+    let input = "static struct Item * /* note */\nmake(int value);\nint /* a */ /* b */\nhelper(int value);\nint /* note */\nhelper(int value)\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+        ],
+        "static struct Item * /* note */ make(int value);\nint /* a */ /* b */ helper(int value);\nint /* note */ helper(int value)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn attaching_return_types_leaves_a_name_off_a_type_a_line_comment_follows() {
+    let input = "int // note\nhelper(int value);\n";
+    check(input, &["--style=kr", "--attach-return-type-decl"], input);
+}
+
+#[test]
+fn attaching_return_types_joins_a_name_a_comment_leads_as_without_the_comment() {
+    check(
+        "int\n/* note */ helper(int value);\n",
+        &["--style=kr", "--attach-return-type-decl"],
+        "int /* note */ helper(int value);\n",
+    );
+}
+
+#[test]
+fn attaching_return_types_keeps_an_empty_line_between_a_type_and_its_name() {
+    let input = "int\n\nhelper(int value);\nint value;\n";
+    check(input, &["--style=kr", "--attach-return-type-decl"], input);
+}
