@@ -7073,9 +7073,11 @@ impl FormatEngine<'_> {
         }
         let width = self.options.indent_width;
         let brace_line = self.output.line_with_token(open)?;
-        // A comment leading the brace's line leaves the brace no line of its own.
+        // A comment leading the brace's line leaves the brace of a header no
+        // line of its own; a bare block's brace has no header to follow.
         let anchor = if self.output.line_tokens(brace_line)?.first == open
-            && self.output.trimmed(brace_line).starts_with('{')
+            && (self.output.trimmed(brace_line).starts_with('{')
+                || self.tree.blocks.kind(block) == Some(BlockKind::Block))
         {
             BodyAnchor::BraceLine(self.output.lead_width(brace_line, self.options.tab_width))
         } else {

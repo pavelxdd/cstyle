@@ -15538,3 +15538,11 @@ fn pad_oper_pads_a_binary_xor_after_a_closing_paren_as_after_a_name() {
         "void f()\n{\n    x = a ^ b;\n    x = (a | b) ^ c;\n    x = f(a) ^ b;\n}\n",
     );
 }
+
+#[test]
+fn a_label_in_a_bare_block_a_comment_leads_leaves_its_statements_at_the_block_body() {
+    let input = "void f()\n{\n    return value;\n    /* note */ {\n    retry:\n        value = 1;\n    }\n}\n";
+    let expected = "void f() {\n    return value;\n        /* note */ {\nretry:\n        value = 1;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
