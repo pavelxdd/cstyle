@@ -15248,3 +15248,13 @@ fn indenting_after_parens_keeps_later_template_parameters_at_the_step() {
         "template <typename First,\n    typename Second,\n    /* c */\n    typename Third>\nclass Pair\n{\n};\n",
     );
 }
+
+#[test]
+fn whitesmith_parts_a_label_from_its_statement_in_a_function_whose_brace_a_conditional_holds() {
+    let input = "void f()\n#ifdef FEATURE\n{\n#endif\n    done: if (ready) { value=0; }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n#ifdef FEATURE\n    {\n#endif\ndone:\n    if (ready)\n        {\n        value=0;\n        }\n    }\n",
+    );
+}

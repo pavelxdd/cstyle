@@ -1651,7 +1651,7 @@ impl FormatEngine<'_> {
                     .is_some_and(|index| is_comment_only_line(self.output[index].trimmed_start()))
                 && !self
                     .output
-                    .last_code_line_scoped()
+                    .last_code_line_past_comments_and_directives()
                     .is_some_and(|previous| {
                         self.output.code_trimmed_of(previous).ends_with_any(b"{;}")
                     })
