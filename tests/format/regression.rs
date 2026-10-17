@@ -14120,3 +14120,13 @@ fn a_kept_statement_after_a_case_label_a_comment_leads_keeps_its_space() {
         "void f()\n{\n    switch (other) {\n    /* note */ case 2: value=0; break;\n    }\n}\n";
     check(input, &["--keep-one-line-statements"], input);
 }
+
+#[test]
+fn vtk_closes_each_group_of_a_file_scope_aggregate_list_at_its_brace() {
+    // At file scope the list stands as in styles that indent no braces: a
+    // row closing one group and opening the next stands at the braces, as
+    // the last closer does.
+    let input = "static const struct Item items[] = {\n    {\n        1, 2\n    }, {\n        3, 4\n    }\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(input, &["--style=kr"], input);
+}

@@ -1599,12 +1599,20 @@ impl FormatEngine<'_> {
     /// that line.
     #[inline(never)]
     fn initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
-        // VTK closes only a nested row at its brace, like a block.
         if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;
         }
         let group = self.tree.groups.closed_at(first)?;
-        if self.options.brace_style == BraceStyle::Vtk && !self.vtk_nested_rows_like_blocks(group) {
+        // VTK closes only a nested group at its brace, like a block in code
+        // and as styles that indent no braces at file scope.
+        if self.options.brace_style == BraceStyle::Vtk
+            && !self.tree.groups.get(group).parent.is_some_and(|parent| {
+                matches!(
+                    self.tree.blocks.kind(parent),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+        {
             return None;
         }
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
