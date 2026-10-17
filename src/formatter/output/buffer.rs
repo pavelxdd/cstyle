@@ -1847,6 +1847,11 @@ impl OutputBuffer {
         self.trimmed(index).starts_with('#') || self.directive_of_continuation(index).is_some()
     }
 
+    /// The comment whose text starts line `index`.
+    pub(crate) fn lead_comment(&self, index: usize) -> Option<usize> {
+        self.comments.get(index)?.get().lead
+    }
+
     /// The first comment token recorded on line `index`.
     pub(crate) fn comment_token(&self, index: usize) -> Option<usize> {
         let comments = self.comments.get(index)?.get();

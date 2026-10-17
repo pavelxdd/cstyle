@@ -4725,9 +4725,10 @@ impl FormatEngine<'_> {
         } else {
             BraceType::Command
         };
-        // A style indenting braces closes an attached block at its body.
+        // A style indenting braces closes an attached block at its body. A
+        // comment leading the brace's line leaves the brace its header's.
         let mut extra = 0;
-        let line = if open_line_first == open {
+        let line = if open_line_first == open && self.output.lead_comment(open_line).is_none() {
             open_line
         } else {
             if self.should_indent_brace_line(brace_type) {

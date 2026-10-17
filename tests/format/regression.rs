@@ -14003,3 +14003,13 @@ fn a_comment_after_the_closer_of_a_labels_block_moves_none_of_it() {
         "void f()\n{\n    x = 1;\ndone: {\n        value = 1;\n    } // note\n    result = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_block_a_comment_leads_after_a_nested_braceless_else_closes_at_the_else() {
+    let input = "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        else\n            /* note */ { result=0; }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        else\n            /* note */ {\n            result=0;\n        }\n}\n",
+    );
+}
