@@ -15274,3 +15274,39 @@ fn a_bit_field_colon_leading_its_line_keeps_the_space_after_it() {
     let input = "struct Item {\n    int a\n    : 3;\n    int b\n    :  4;\n};\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn max_code_length_aligns_the_parameters_split_off_a_head_a_comment_leads() {
+    let input = "int count;\n\n/* note */ bool operator==(const Item &first, const Item &second)\n{\n    return first.value == second.value;\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--max-code-length=60"],
+        "int count;\n\n/* note */ bool operator==(const Item &first,\n                           const Item &second)\n{\n    return first.value == second.value;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_an_operand_row_split_off_an_assignment_a_comment_leads() {
+    let input =
+        "void f()\n{\n    /* c */ result = first_value + second_value + third_value + more;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--max-code-length=60"],
+        "void f()\n{\n    /* c */ result = first_value + second_value + third_value +\n                     more;\n}\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_steps_arguments_split_off_an_assignment_a_comment_leads_past_it() {
+    let input =
+        "void f()\n{\n    /* c */ value = compute(first_argument, second_argument, third);\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--max-code-length=60",
+            "--indent-after-parens",
+        ],
+        "void f()\n{\n    /* c */ value = compute(first_argument, second_argument,\n            third);\n}\n",
+    );
+}

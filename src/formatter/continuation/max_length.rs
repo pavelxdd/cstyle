@@ -18,7 +18,7 @@ use crate::formatter::syntax::{
     TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
     template_openers,
 };
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, last_unmatched_open_delimiter, line_paren_imbalance,
@@ -26,6 +26,7 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, head_ends_assignment_operator, leads_keyword_colon,
 };
@@ -481,16 +482,37 @@ impl FormatEngine<'_> {
         }
         let split = split_result(code, width, SplitRules::new(self.options))?;
         let lead_width = leading_visual_width(line, self.options.tab_width);
-        let tail_spaces = if ends_statement_before_comment(&split.head) {
+        let head = format!("{lead}{}", split.head);
+        // Rows split off inside parens align after the paren they continue.
+        let paren_column = (!self.options.indent_after_parens)
+            .then(|| unmatched_open_paren_column(&head))
+            .flatten()
+            .map(|open| visual_width_from(&head[..=open], 0, self.options.tab_width));
+        // Past an assignment they align at its value.
+        let value_column = (!self.options.indent_after_parens)
+            .then(|| find_assignment_operator(&head))
+            .flatten()
+            .map(|(start, operator)| start + operator.len())
+            .filter(|&value| !head[value..].trim().is_empty())
+            .map(|value| {
+                let value = value + (head[value..].len() - head[value..].trim_start().len());
+                visual_width_from(&head[..value], 0, self.options.tab_width)
+            });
+        // Indenting after parens, an assignment before the paren stacks a
+        // level of its own.
+        let step = self.options.continuation_indent * self.options.indent_width;
+        let stacked_assignment = self.options.indent_after_parens
+            && unmatched_open_paren_column(&head).is_some_and(|open| {
+                find_assignment_operator(&head).is_some_and(|(start, _)| start < open)
+            });
+        let tail_spaces = if let Some(column) = paren_column.or(value_column) {
+            column
+        } else if ends_statement_before_comment(&split.head) {
             lead_width
         } else {
-            lead_width + self.options.continuation_indent * self.options.indent_width
+            lead_width + step * (1 + usize::from(stacked_assignment))
         };
-        Some((
-            format!("{lead}{}", split.head),
-            split.tail.to_string(),
-            tail_spaces,
-        ))
+        Some((head, split.tail.to_string(), tail_spaces))
     }
 }
 
