@@ -470,10 +470,11 @@ impl FormatEngine<'_> {
         }
         // Code after the comment that ends a statement or opens a block
         // leaves no column for the next line.
-        if trimmed
-            .split_once("*/")
-            .is_some_and(|(_, after)| after.trimmed_end().ends_with_any(b";{"))
-        {
+        if trimmed.split_once("*/").is_some_and(|(_, after)| {
+            after[..trailing_comment_split_limit(after)]
+                .trimmed_end()
+                .ends_with_any(b";{")
+        }) {
             self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }

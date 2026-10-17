@@ -14901,3 +14901,13 @@ fn an_element_brace_after_a_comma_and_a_comment_keeps_its_row() {
     let input = "void f()\n{\n    int table[][2] = { {\n            1,\n            2\n        }, /* a */ {\n            3,\n            4\n        }\n    };\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn an_added_brace_goes_before_the_comment_after_a_header_a_comment_leads() {
+    let input = "void f()\n{\n    /* note */ if (ready) /* why */ value=0;\n    if (ready) /* why */ value=0;\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    /* note */ if (ready) { /* why */\n        value=0;\n    }\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}

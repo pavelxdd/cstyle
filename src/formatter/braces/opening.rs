@@ -1056,7 +1056,8 @@ impl FormatEngine<'_> {
     }
 
     fn reorder_brace_before_current_block_comment(&self) -> Option<String> {
-        let comment_start = self.current_trailing_comment_split_limit();
+        // Comments leading the line are no trailing comment.
+        let comment_start = trailing_comment_split_limit(&self.current);
         if comment_start == self.current.len() {
             return None;
         }
