@@ -13955,3 +13955,18 @@ fn a_comment_after_the_closer_of_a_case_block_holding_a_label_moves_none_of_it()
         "void f()\n{   switch (op)\n    {   case FIRST:\n        {   value = 0;\n            case SECOND:\n                apply(value);\n                break;\n        } /* end */\n        case THIRD:\n            break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn an_empty_line_after_an_else_a_comment_trails_stays_before_its_if() {
+    let input = "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n    if (c)\n        y = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n        if (c)\n            y = 1;\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n        if (c)\n            y = 1;\n}\n",
+    );
+}

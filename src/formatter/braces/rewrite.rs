@@ -1000,7 +1000,17 @@ impl FormatEngine<'_> {
                     None,
                 )
             };
+        // A header line its trailing comment ended is out already; a newline
+        // that ends an empty line after it keeps that line as any other.
+        let ends_empty_line = self.current.trimmed().is_empty()
+            && tokens[..newline_index]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Newline));
         self.finish_line();
+        if ends_empty_line && self.should_preserve_input_empty_line() {
+            self.push_empty_line();
+        }
         if let Some(spaces) = exact_body_indent {
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.layout.pending_braceless_block_bias = Some(spaces / self.options.indent_width);
