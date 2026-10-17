@@ -14827,3 +14827,14 @@ fn comments_run_in_after_a_list_brace_stay_on_its_line() {
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn a_label_continued_over_lines_in_a_switch_a_comment_leads_stands_as_a_label() {
+    let input = "void f()\n{\n    /* note */ switch (flags) {\n    case FIRST |\n            SECOND:\n        value = 1;\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    /* note */ switch (flags) {\n    case FIRST |\n            SECOND:\n        value = 1;\n        break; } }\n",
+    );
+}

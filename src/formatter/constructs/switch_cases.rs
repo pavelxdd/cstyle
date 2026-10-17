@@ -13,9 +13,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, advance_quoted_literal, holds_code_after_leading_comments,
-    is_bare_comment_line, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_paren_column,
+    ContainsAnyByte, advance_quoted_literal, after_leading_comments,
+    holds_code_after_leading_comments, is_bare_comment_line, is_comment_line,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -367,11 +367,13 @@ impl SwitchCaseObserver {
             || self.delimiter_state.quote.is_some()
             || self.delimiter_state.raw_delimiter.is_some();
         if !starts_in_opaque_text
-            && trimmed.strip_prefix("switch").is_some_and(|rest| {
-                rest.chars()
-                    .next()
-                    .is_none_or(|ch| ch == '(' || ch.is_whitespace())
-            })
+            && after_leading_comments(trimmed)
+                .strip_prefix("switch")
+                .is_some_and(|rest| {
+                    rest.chars()
+                        .next()
+                        .is_none_or(|ch| ch == '(' || ch.is_whitespace())
+                })
         {
             self.pending_switch = true;
             self.pending_switch_paren_depth = 0;
