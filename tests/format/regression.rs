@@ -14360,3 +14360,11 @@ fn a_brace_ending_its_line_inside_an_element_list_stands_the_outer_list_rows_a_l
         "void f(void) {\n    struct Record\n        record = { .name = 1,\n            .value = {\n                .update = {\n                    .first = 1,\n                    }\n                }\n        };\n    }\n",
     );
 }
+
+#[test]
+fn an_element_brace_after_a_closer_keeps_its_row_with_a_comment_after_it() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, { /* c */\n            .value = 2,\n        }\n    };\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=kr"] {
+        check(input, &[style], input);
+    }
+}

@@ -2476,19 +2476,20 @@ impl FormatEngine<'_> {
             self.attach_open_brace_to_current_line(brace, placement, next);
             return;
         }
-        let source_attached_initializer_line = matches!(
-            brace_type,
-            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-        ) && matches!(next, Some(Token::Newline))
-            && (!matches!(
-                self.options.brace_style,
-                BraceStyle::Allman
-                    | BraceStyle::Whitesmith
-                    | BraceStyle::Vtk
-                    | BraceStyle::Gnu
-                    | BraceStyle::Horstmann
-                    | BraceStyle::Pico
-            ) || element_brace_after_closer);
+        let source_attached_initializer_line = element_brace_after_closer
+            || matches!(
+                brace_type,
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+            ) && matches!(next, Some(Token::Newline))
+                && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Allman
+                        | BraceStyle::Whitesmith
+                        | BraceStyle::Vtk
+                        | BraceStyle::Gnu
+                        | BraceStyle::Horstmann
+                        | BraceStyle::Pico
+                );
         let gnu_macro_open_brace =
             self.options.brace_style == BraceStyle::Gnu && has_hash_outside_literals(&self.current);
         let allman_operator_led_brace = matches!(self.options.brace_style, BraceStyle::Allman)
