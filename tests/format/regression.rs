@@ -14868,3 +14868,13 @@ fn deleting_empty_lines_attaches_the_brace_of_a_header_a_comment_leads() {
         "void f()\n{\n    /* note */ if (ready) {\n        value=0;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_line_comment_after_a_brace_an_empty_line_parted_opens_its_body() {
+    let input = "void f()\n{\n    if (ready)\n\n    {   // note\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    if (ready) {\n        // note\n        value=0;\n    }\n}\n",
+    );
+}

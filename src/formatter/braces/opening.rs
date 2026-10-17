@@ -2215,7 +2215,8 @@ impl FormatEngine<'_> {
             line[trailing_comment_split_limit(&line)..].contains("//");
         // The comment the brace's own line held opens the body.
         let line_comment_starts_body = (brace_attached_before_trailing_comment
-            || attached_case_label_output_brace)
+            || attached_case_label_output_brace
+            || brace_type == BraceType::Command)
             && self.token_input.token_begins_source_line;
         if let Some(Token::Comment(CommentKind::Line, comment)) = next
             && !line_already_has_line_comment
