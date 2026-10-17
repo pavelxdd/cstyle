@@ -1044,6 +1044,7 @@ impl FormatEngine<'_> {
             });
         let line_comment_can_carry_continuation = !standalone_line_comment
             || previous_line_ends_operator
+            || self.layout.nesting.paren_depth > 0
             || matches!(
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma

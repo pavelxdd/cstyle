@@ -14991,3 +14991,9 @@ fn indenting_after_parens_continues_a_bracket_row_a_comment_leads_as_any_bracket
         "void f()\n{\n    value = table[first\n            /* note */ + second];\n}\n",
     );
 }
+
+#[test]
+fn an_operand_row_a_comment_leads_after_a_comment_line_in_asm_stays_at_the_rows() {
+    let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     // note\n                     : \"=r\"(v)\n                     /* c */ : \"r\"(o));\n}\n";
+    check(input, &["--style=kr"], input);
+}
