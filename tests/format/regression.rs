@@ -14895,3 +14895,9 @@ fn a_list_run_into_its_first_element_brace_after_a_function_stays_at_file_scope(
     check(input, &["--style=allman"], input);
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn an_element_brace_after_a_comma_and_a_comment_keeps_its_row() {
+    let input = "void f()\n{\n    int table[][2] = { {\n            1,\n            2\n        }, /* a */ {\n            3,\n            4\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+}

@@ -2455,12 +2455,21 @@ impl FormatEngine<'_> {
             brace_type,
             BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
         ) && ends_row
-            && self.layout.previous == PreviousToken::Comma
-            && self
-                .current
-                .active_token()
-                .and_then(|brace| self.tree.groups.enclosing(brace))
-                .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace);
+            // Comments between the comma and the brace on its line take no
+            // part.
+            && self.current.active_token().is_some_and(|brace| {
+                self.tree.previous_code_token(brace).is_some_and(|before| {
+                    matches!(self.tree.tokens[before], Token::Symbol(','))
+                        && !self.tree.tokens[before..brace]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                })
+                    && self
+                        .tree
+                        .groups
+                        .enclosing(brace)
+                        .is_some_and(|list| self.tree.groups.get(list).delimiter == Delimiter::Brace)
+            });
         // An element's brace after comments alone keeps their row, as it
         // would lead its own; a run-in style keeps the row's first element
         // after it as written.
