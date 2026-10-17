@@ -15168,3 +15168,12 @@ fn vtk_indents_a_directive_after_a_branch_of_broken_aggregate_rows_at_the_rows()
         "static const struct Item items[] = {\n    #if FEATURE\n    {1, 2}\n    #elif OTHER\n    {1, 2},\n    {\n        3,\n        4\n    }\n    #else\n    #ifdef FEATURE\n    {5, 6},\n    #endif\n    {7, 8}\n    #endif\n};\n",
     );
 }
+
+#[test]
+fn pico_runs_a_bare_block_after_a_switch_in_as_after_any_statement() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1:\n        break;\n    }\n    { value=0; }\n}\n",
+        &["--style=pico"],
+        "void f()\n{   switch (state)\n    {   case 1:\n            break; }\n    {   value=0; } }\n",
+    );
+}
