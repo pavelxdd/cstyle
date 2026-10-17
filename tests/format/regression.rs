@@ -14555,3 +14555,9 @@ fn list_rows_past_the_maximum_continuation_stay_at_their_elements() {
         "void f(void)\n{\n    merge_iter_args_type merge_iteration_args_value = {tsd_tsdn(tsd),\n                                                       cnt_all,\n                                                       other\n                                                      };\n}\n",
     );
 }
+
+#[test]
+fn a_closing_conditional_in_a_header_stands_at_the_conditional_opened_before_it() {
+    let input = "void f()\n{\n    #ifdef FEATURE\n    while (ready &&\n    #endif\n            other) {\n        value=0;\n    }\n    while (ready &&\n        #ifdef FEATURE\n            more &&\n        #endif\n            other) {\n        value=0;\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], input);
+}

@@ -1051,8 +1051,26 @@ impl FormatEngine<'_> {
         if self.layout.line_adjuster.is_in_macro_block() {
             return None;
         }
+        // A conditional opened before the header continues at its opener.
+        let opened_before_header = !matches!(directive, "if" | "ifdef" | "ifndef")
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| {
+                    self.layout
+                        .frame_stack
+                        .active_header()
+                        .is_some_and(|header| {
+                            indent
+                                .spaces
+                                .unwrap_or(indent.level * self.options.indent_width)
+                                <= header.line_indent_spaces
+                        })
+                });
         if self.options.indent_preproc_conditional
             && is_conditional_preprocessor(directive)
+            && !opened_before_header
             && self
                 .layout
                 .frame_stack
