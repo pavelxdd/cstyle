@@ -654,6 +654,15 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Whether the innermost brace holds a list of values: an array or
+    /// aggregate initializer or a compound literal.
+    pub(crate) fn innermost_brace_is_brace_list(&self) -> bool {
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Array | BraceType::CompoundLiteral)
+        )
+    }
+
     pub(crate) fn enclosed_in_compound_literal(&self) -> bool {
         self.layout
             .nesting

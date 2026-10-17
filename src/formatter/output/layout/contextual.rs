@@ -2975,6 +2975,9 @@ impl FormatEngine<'_> {
             && starts_string_literal_token(previous.trimmed_start())
             // A string row closing a paren ends the operand it continued.
             && self.paren_closes_of(self.output.code_of(previous)) == 0
+            // A brace list's next element stands at its elements.
+            && !(self.output.code_trimmed_of(previous).ends_with(',')
+                && self.pending_row_in_initializer_brace())
         {
             layout.exact_indent_spaces = Some(
                 leading_visual_width(previous, self.options.tab_width)

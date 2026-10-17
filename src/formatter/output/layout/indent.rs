@@ -37,8 +37,8 @@ use crate::formatter::tokens::literals::{
     starts_string_literal_token, string_literal_has_opening_context,
 };
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
-    starts_with_chain_operator,
+    array_bound_operator_column, find_assignment_operator, head_ends_assignment_operator,
+    head_ends_binary_operator, starts_with_chain_operator,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -139,7 +139,11 @@ impl FormatEngine<'_> {
             let code = self.output.code_trimmed_of(raw);
             let trimmed_code = code.trimmed_start();
             if trimmed_code.ends_with(',') {
-                if single_string_literal_comma_line(code) {
+                // A brace list's next element stands at its elements, not
+                // at the row that continued the one before.
+                if single_string_literal_comma_line(code)
+                    && !self.pending_row_in_initializer_brace()
+                {
                     return Some(
                         leading_visual_width(raw, self.options.tab_width)
                             + self.layout.line_adjuster.total_case_unindent_depth()
@@ -188,10 +192,14 @@ impl FormatEngine<'_> {
                     if let Some(spaces) = skipped_comment_indent {
                         return Some(spaces + case_unindent);
                     }
+                    // A designator's value continues under the value.
+                    let designator_value = before_string.trimmed_start().starts_with_any(b".[")
+                        && head_ends_assignment_operator(before_string);
                     if before_string.trimmed().is_empty()
                         || (before_string.contains(',')
                             && self.open_paren_column_of(before_string).is_none())
                         || (self.pending_row_in_initializer_brace()
+                            && !designator_value
                             && self.open_paren_column_of(before_string).is_none())
                     {
                         return Some(leading + case_unindent);

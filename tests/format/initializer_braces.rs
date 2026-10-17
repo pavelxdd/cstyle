@@ -1807,7 +1807,7 @@ fn compound_literal_nested_operator_continuation_does_not_leak() {
 }
 
 #[test]
-fn initializer_operator_continuation_sits_at_member_level() {
+fn initializer_operator_continuation_aligns_under_the_value() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
     options.pad_operators = true;
@@ -1831,8 +1831,8 @@ fn initializer_operator_continuation_sits_at_member_level() {
             "{",
             "    struct Config result = {",
             "        .value = ((unsigned)alpha) |",
-            "        ((unsigned)beta << 8) |",
-            "        ((unsigned)gamma << 16),",
+            "                 ((unsigned)beta << 8) |",
+            "                 ((unsigned)gamma << 16),",
             "    };",
             "}",
         )

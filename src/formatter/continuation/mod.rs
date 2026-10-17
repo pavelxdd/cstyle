@@ -792,7 +792,7 @@ impl FormatEngine<'_> {
             .nesting
             .current_continuation_indent_spaces()
             .is_some()
-            && !self.in_initializer_brace()
+            && (!self.in_initializer_brace() || self.innermost_brace_is_brace_list())
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
             && (self.layout.command_state.current_header.is_none()
@@ -1128,7 +1128,7 @@ impl FormatEngine<'_> {
                 },
             );
         }
-        if (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
+        if (!self.in_initializer_brace() || self.innermost_brace_is_brace_list())
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
             && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
@@ -1195,9 +1195,7 @@ impl FormatEngine<'_> {
         {
             return ContinuationIndent::Spaces(column);
         }
-        if (self.in_initializer_brace() && !self.innermost_brace_is_compound_literal())
-            || self.innermost_init_block_brace()
-        {
+        if self.in_initializer_brace() || self.innermost_init_block_brace() {
             return ContinuationIndent::Level(base_indent);
         }
         let max_level = self.options.max_continuation_indent / self.options.indent_width.max(1);
@@ -1777,7 +1775,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn assignment_continuation_indent_spaces(&self) -> Option<usize> {
-        if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
+        if self.in_initializer_brace() {
             return None;
         }
         // Every assignment operator holds `=`.
@@ -1817,7 +1815,7 @@ impl FormatEngine<'_> {
     }
 
     fn assignment_rhs_continuation_column(&self) -> Option<usize> {
-        if self.in_initializer_brace() && !self.innermost_brace_is_compound_literal() {
+        if self.in_initializer_brace() {
             return None;
         }
         if !self.current.holds_equals() {

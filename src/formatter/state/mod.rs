@@ -89,6 +89,7 @@ pub(crate) struct NestingState {
 struct ScopeDepth {
     parens: usize,
     questions: usize,
+    continuations: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -173,7 +174,30 @@ impl NestingState {
         self.continuation_indent_spaces_stack.truncate(target_size);
     }
 
+    /// Drops the continuations an element of the innermost brace list
+    /// registered, as the comma ending it at the list's own depth does.
+    pub(crate) fn trim_to_brace_element_continuation(&mut self) {
+        if let Some(depth) = self.brace_scope_depth_stack.last()
+            && depth.parens == self.paren_depth
+        {
+            self.continuation_indent_spaces_stack
+                .truncate(depth.continuations);
+        }
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
+        // A brace list's elements continue nothing of the expression
+        // around it.
+        if matches!(
+            self.brace_type_stack.last(),
+            Some(BraceType::Array | BraceType::CompoundLiteral)
+        ) && self
+            .brace_scope_depth_stack
+            .last()
+            .is_some_and(|depth| self.continuation_indent_spaces_stack.len() <= depth.continuations)
+        {
+            return None;
+        }
         self.continuation_indent_spaces_stack.last().copied()
     }
 
@@ -204,6 +228,7 @@ impl NestingState {
         self.brace_scope_depth_stack.push(ScopeDepth {
             parens: self.paren_depth,
             questions: self.question_depth,
+            continuations: self.continuation_indent_spaces_stack.len(),
         });
         self.brace_header_stack.push(header);
         self.brace_type_stack.push(brace_type);
@@ -230,6 +255,7 @@ impl NestingState {
         let depth = self.brace_scope_depth_stack.pop().unwrap_or(ScopeDepth {
             parens: 0,
             questions: 0,
+            continuations: 0,
         });
         if self.paren_depth > depth.parens {
             recovery.parens = self.paren_depth - depth.parens;

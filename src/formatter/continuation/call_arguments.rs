@@ -641,6 +641,8 @@ impl FormatEngine<'_> {
             || starts_string_literal_token(current)
                 && starts_string_literal_token(previous_code.trimmed_start())
                 && self.paren_closes_of(previous_code) == 0
+                // A brace list's next element stands at its elements.
+                && !(previous_code.ends_with(',') && self.pending_row_in_initializer_brace())
         {
             // The row published lost the case unindent the line is yet to.
             return Some(SplitElseCallLineLayout {

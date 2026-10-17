@@ -1381,16 +1381,19 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        if language::is_assignment_operator(operator)
-            && (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
-            && !self.in_aggregate_declaration_brace()
-        {
+        if language::is_assignment_operator(operator) && !self.in_aggregate_declaration_brace() {
             let rhs_next = if self.comments.next_comment_ends_line {
                 None
             } else {
                 next
             };
-            self.register_current_continuation_indent(rhs_next);
+            // A designator's value continues under it; one on the next
+            // row stands with the list's elements.
+            let value_follows = !matches!(rhs_next, None | Some(Token::Newline));
+            if !self.in_initializer_brace() || self.innermost_brace_is_brace_list() && value_follows
+            {
+                self.register_current_continuation_indent(rhs_next);
+            }
         }
         self.layout.command_state.observe_text(operator);
         self.layout.previous = PreviousToken::Operator;

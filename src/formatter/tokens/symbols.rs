@@ -1168,6 +1168,11 @@ impl FormatEngine<'_> {
         {
             self.layout.nesting.clear_continuation_indents();
             self.layout.compound_literal.after_comma = true;
+        } else if self.innermost_brace_is_brace_list()
+            && self.layout.nesting.current_brace_paren_depth()
+                == Some(self.layout.nesting.paren_depth)
+        {
+            self.layout.nesting.trim_to_brace_element_continuation();
         } else if self.layout.indentation.statement_depth() > 0
             || self.layout.nesting.paren_depth > 0
         {

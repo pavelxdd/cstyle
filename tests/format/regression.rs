@@ -13309,3 +13309,27 @@ fn message_rows_in_any_header_condition_align_at_the_keyword() {
         "- (void)update\n{\n    if ([self.other countWith:1\n                    using:2]) {\n        go();\n    }\n    while ([self.other countWith:1\n                       using:2]) {\n        go();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_designator_value_continues_under_the_value_in_any_brace_list() {
+    check(
+        "void f(void)\n{\n    struct Config c = {\n        .value = FLAG_A |\n        FLAG_B,\n        .other = FLAG_A | FLAG_B |\n        FLAG_C,\n        .third = helper(1) +\n        2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n        FLAG_B,\n        .last = FLAG_A\n        | FLAG_B,\n    };\n    helper((struct Config) {\n        .value = FLAG_A |\n        FLAG_B,\n        .other = FLAG_A | FLAG_B |\n        FLAG_C,\n        .third = helper(1) +\n        2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n        FLAG_B,\n        .last = FLAG_A\n        | FLAG_B,\n    });\n}\n",
+        &[],
+        "void f(void)\n{\n    struct Config c = {\n        .value = FLAG_A |\n                 FLAG_B,\n        .other = FLAG_A | FLAG_B |\n                 FLAG_C,\n        .third = helper(1) +\n                 2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n              FLAG_B,\n        .last = FLAG_A\n                | FLAG_B,\n    };\n    helper((struct Config) {\n        .value = FLAG_A |\n                 FLAG_B,\n        .other = FLAG_A | FLAG_B |\n                 FLAG_C,\n        .third = helper(1) +\n                 2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n              FLAG_B,\n        .last = FLAG_A\n                | FLAG_B,\n    });\n}\n",
+    );
+    check(
+        "void f(void)\n{\n    struct Config c = {\n        .inner = { .value = FLAG_A |\n        FLAG_B },\n    };\n}\n",
+        &[],
+        "void f(void)\n{\n    struct Config c = {\n        .inner = {\n            .value = FLAG_A |\n                     FLAG_B\n        },\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_designator_string_value_continues_under_the_value() {
+    let input = "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n        \"second\",\n        [1] = \"first \"\n        \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n";
+    check(
+        input,
+        &[],
+        "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n                \"second\",\n        [1] = \"first \"\n              \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n",
+    );
+}
