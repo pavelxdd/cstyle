@@ -2454,7 +2454,16 @@ impl FormatEngine<'_> {
             let code = self.output.code_trimmed_of(line);
             let trimmed = code.trimmed_start();
             let raw_trimmed = line.trimmed();
-            if raw_trimmed.starts_with("/*") && raw_trimmed.ends_with("*/") {
+            // A comment leading code stands where the code does.
+            if raw_trimmed.starts_with("/*")
+                && raw_trimmed.ends_with("*/")
+                && !self.current.active_comment().is_some_and(|comment| {
+                    self.tree.tokens[comment + 1..]
+                        .iter()
+                        .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+                        .is_some_and(|token| !matches!(token, Token::Newline))
+                })
+            {
                 return Some(
                     leading_visual_width(line, self.options.tab_width)
                         + self.case_unindent_spaces(),

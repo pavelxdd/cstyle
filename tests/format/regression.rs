@@ -13370,3 +13370,13 @@ fn a_comment_line_before_a_comment_led_case_label_leaves_the_label_in_place() {
         "void f(void) {\n    switch (x) {\n        case 1: {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_leading_a_member_after_a_comment_line_stands_at_the_members() {
+    let input = "@interface Item : NSObject\n/* first */\n/* second */ @property (nonatomic) int value;\n@end\n";
+    check(
+        input,
+        &[],
+        "@interface Item : NSObject\n    /* first */\n/* second */ @property (nonatomic) int value;\n@end\n",
+    );
+}
