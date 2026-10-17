@@ -658,14 +658,21 @@ impl FormatEngine<'_> {
         })
     }
 
-    /// Whether the line being laid out opens a nested `{ ... }` block in a
-    /// style that sets its brace a level past the body.
+    /// Whether the line being laid out opens a nested `{ ... }` block or an
+    /// element's list in a style that sets its brace a level past the body.
     fn pending_line_opens_indented_plain_block(&self) -> bool {
         self.output
             .pending_tokens()
             .and_then(|span| self.tree.groups.opened_at(span.first))
-            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block))
-            && self.should_indent_brace_line(BraceType::Command)
+            .is_some_and(|group| match self.tree.blocks.kind(group) {
+                Some(BlockKind::Block) => self.should_indent_brace_line(BraceType::Command),
+                Some(BlockKind::Initializer) => {
+                    self.tree.groups.get(group).parent.is_some_and(|parent| {
+                        self.tree.blocks.kind(parent) == Some(BlockKind::Initializer)
+                    }) && self.should_indent_brace_line(BraceType::Array)
+                }
+                _ => false,
+            })
     }
 
     /// Records the body column of a conditional's branch from `line`, the
@@ -679,12 +686,15 @@ impl FormatEngine<'_> {
         if !is_preprocessor_branch_body(line) {
             return;
         }
-        let body_indent_spaces =
-            if line.trimmed_start().starts_with('{') && self.line_brace_stands_past_body(index) {
-                emitted_indent_spaces.saturating_sub(self.options.indent_width)
-            } else {
-                emitted_indent_spaces
-            };
+        // A row a comment leads stands at the body, its brace past it.
+        let body_indent_spaces = if line.trimmed_start().starts_with('{')
+            && self.output.lead_comment(index).is_none()
+            && self.line_brace_stands_past_body(index)
+        {
+            emitted_indent_spaces.saturating_sub(self.options.indent_width)
+        } else {
+            emitted_indent_spaces
+        };
         if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
             if branch.first_body_indent_spaces.is_none() {
                 branch.first_body_indent_spaces = Some(body_indent_spaces);

@@ -14473,3 +14473,13 @@ fn a_comment_led_statement_before_the_first_case_stands_at_indented_case_bodies(
     let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
     check(input, &["--style=mozilla", "--indent-cases"], input);
 }
+
+#[test]
+fn a_comment_led_brace_row_sets_its_branch_body_column_for_the_next_branch() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    /* note */ {1, 2}\n#elif OTHER\n    {1, 2},\n    {3, 4}\n#endif\n};\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n#if FEATURE\n    /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
+    );
+}
