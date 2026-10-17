@@ -871,6 +871,8 @@ impl<'a> FormatEngine<'a> {
             } else {
                 (following, after_following)
             };
+        self.next_line.code_leads_with_close_brace =
+            matches!(code_following, Some(Token::Symbol('}')));
         self.next_line.word_followed_by_open_paren = matches!(
             (code_following, code_after_following),
             (Some(Token::Word(_)), Some(Token::Symbol('(')))
@@ -2319,7 +2321,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_initializer_member_before_closing_brace(&self) -> bool {
-        if !self.next_line.leads_with_close_brace
+        if !self.next_line.code_leads_with_close_brace
             || !(self.in_initializer_brace()
                 || self.innermost_init_block_brace()
                 || self.current_inline_array_column().is_some())

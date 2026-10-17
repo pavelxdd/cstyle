@@ -13386,3 +13386,9 @@ fn a_comment_line_after_a_compound_literal_argument_stands_at_the_arguments() {
     let input = "void f()\n{\n    helper((struct Item) { 1, 2 },\n           /* note */\n           other);\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_line_after_the_last_designator_stands_at_the_designators() {
+    let input = "struct Config c = {\n    .first = 1,\n    .last = '*'\n    // note /* inner */ text\n};\nstruct Config d = {\n    .first = 1,\n    .last = '*'\n    /* note */\n};\n";
+    check(input, &[], input);
+}
