@@ -14449,3 +14449,11 @@ fn a_comment_led_statement_before_the_first_case_runs_into_the_switch_brace() {
         "void f()\n{   switch (state)\n    {   /* note */ value = 0;\n        case 1:\n            break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_row_continuing_a_call_in_a_run_in_list_stands_at_the_arguments() {
+    let input = "void f()\n{\n    call((struct Item) { .y = call(first,\n                                   second), .z = 1 });\n}\n";
+    check(input, &["--style=allman"], input);
+    let commented = "void f()\n{\n    call((struct Item) { .y = call(first,\n                                   /* note */\n                                   second), .z = 1 });\n}\n";
+    check(commented, &["--style=allman"], commented);
+}

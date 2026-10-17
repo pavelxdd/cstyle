@@ -3406,6 +3406,9 @@ impl FormatEngine<'_> {
                 && has_unmatched_open_brace(previous_code)
                 && let Some(open) = previous_code.rfind('{')
                 && previous_code[open + 1..].starts_with(char::is_whitespace)
+                // A row continuing a call after the brace stands at its
+                // arguments.
+                && unmatched_open_paren_columns(&previous_code[open..]).is_empty()
             {
                 layout.exact_indent_spaces = Some(
                     visual_width_from(
