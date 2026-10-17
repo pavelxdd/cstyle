@@ -28,7 +28,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
-    unmatched_open_paren_column,
+    trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1194,7 +1194,8 @@ impl FormatEngine<'_> {
     /// The column of the rows after `previous`, a `:`-led row that a comma
     /// continues: they align after its colon.
     pub(crate) fn colon_led_row_indent_spaces(&self, previous: &str) -> Option<usize> {
-        let previous_trimmed = previous.trimmed_start();
+        // A comment after the row takes no part in it.
+        let previous_trimmed = previous[..trailing_comment_split_limit(previous)].trimmed();
         (previous_trimmed.starts_with(':')
             && previous_trimmed.ends_with(',')
             && self.open_paren_column_of(previous_trimmed).is_none()

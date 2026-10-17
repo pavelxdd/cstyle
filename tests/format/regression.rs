@@ -14168,3 +14168,9 @@ fn a_declarator_after_an_attribute_line_past_an_initializer_stands_with_the_attr
     let input = "void f()\n{\n    static const struct Item\n        first =\n    { 1, 2 },\n    __attribute__((unused))\n    second =\n    { 3, 4 };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_after_a_base_row_moves_none_of_the_rows_after_it() {
+    let input = "struct Item\n    : public Base, /* note */\n      private Other {\n};\n";
+    check(input, &["--style=kr"], input);
+}
