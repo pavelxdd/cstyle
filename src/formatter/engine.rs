@@ -1455,9 +1455,12 @@ impl<'a> FormatEngine<'a> {
             && (is_code_token(token) || matches!(token, Token::Preprocessor(_)))
         {
             self.statement_after_label_pending = false;
-            if !matches!(token, Token::Preprocessor(_) | Token::RawLine(_))
-                && self.current_holds_comments_after_label(matches!(token, Token::Symbol('{')))
-            {
+            // A brace a line comment follows takes the comments before it
+            // with the line comment, as any brace does.
+            let brace = matches!(token, Token::Symbol('{'));
+            let keeps_line = matches!(token, Token::Preprocessor(_) | Token::RawLine(_))
+                || brace && self.token_input.token_followed_by_line_comment_on_line;
+            if !keeps_line && self.current_holds_comments_after_label(brace) {
                 self.finish_line();
             }
         }

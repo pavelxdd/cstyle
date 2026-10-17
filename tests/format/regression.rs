@@ -14083,3 +14083,23 @@ fn an_added_do_block_a_comment_leads_closes_at_its_do() {
         "void f()\n{\n    do\n        /* note */ {\n        value=0;\n    } while (ready);\n}\n",
     );
 }
+
+#[test]
+fn a_line_comment_after_a_brace_a_comment_leads_past_a_case_label_stays_with_the_comment() {
+    let input = "void f()\n{\n    switch (k) {\n    case 3:\n    /* note */ {   // own\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (k)\n    {\n    case 3:\n        /* note */     // own\n    {\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (k)\n        {\n        case 3:\n            /* note */     // own\n            {\n            break;\n            }\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (k) {\n    case 3:\n    /* note */ {   // own\n        break;\n    }\n    }\n}\n",
+    );
+}
