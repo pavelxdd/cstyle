@@ -2380,7 +2380,7 @@ fn whitesmith_label_in_case_block_keeps_comments_and_statement_after_its_switch(
 
 #[test]
 fn trailing_comment_on_case_body_statement_keeps_it_before_next_label() {
-    let input = "void *f(int n)\n{\n    switch (t)\n    {\n    case 1:    /* C closure */\n    {\n        if (n)\n            return a;\n        /* else */\n        }  /* FALLTHROUGH */\n    case 2:\n        return NULL;  /* light */\n    default:\n    {\n        g();\n        return NULL;\n    }\n    }\n}\n";
+    let input = "void *f(int n)\n{\n    switch (t)\n    {\n    case 1:    /* C closure */\n    {\n        if (n)\n            return a;\n        /* else */\n    }  /* FALLTHROUGH */\n    case 2:\n        return NULL;  /* light */\n    default:\n    {\n        g();\n        return NULL;\n    }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
 
@@ -5742,7 +5742,7 @@ fn a_commented_case_block_closer_keeps_its_column_before_a_label() {
     check(
         input,
         &["--style=horstmann"],
-        "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n            }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
+        "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n        }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
     );
 }
 
@@ -6780,29 +6780,29 @@ fn an_initializer_run_in_after_a_block_brace_measures_from_the_brace() {
 }
 
 #[test]
-fn a_comment_after_a_joined_case_block_closer_keeps_a_level() {
+fn a_comment_after_a_joined_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }  /* x */\n    case B: {\n      g(e);\n    }\n    case C: {\n      h();\n      break;\n    }\n  }\n}\n",
         &["--style=pico"],
-        "void f(void)\n{   switch (k)\n    {   case A:\n            {   g(e); } /* x */\n        case B:\n        {   g(e); }\n        case C:\n        {   h();\n            break; } } }\n",
+        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e); } /* x */\n        case B:\n        {   g(e); }\n        case C:\n        {   h();\n            break; } } }\n",
     );
 }
 
 #[test]
-fn a_comment_after_a_lone_case_block_closer_keeps_a_level() {
+fn a_comment_after_a_lone_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);  /* c */\n    }  /* x */\n    case B: {\n      g(e);  /* c */\n    }\n    case C: {\n      g(e);  // c\n    }  /* x */\n  }\n}\n",
         &["--style=pico"],
-        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n            }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n            }  /* x */\n    } }\n",
+        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n        }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n        }  /* x */\n    } }\n",
     );
 }
 
 #[test]
-fn a_comment_spares_a_level_after_a_whitesmith_case_block() {
+fn a_comment_line_after_a_whitesmith_case_block_spares_a_level_a_trailing_one_none() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }\n    /* after */\n    h(); /* t */\n    case B: {\n      g(e);  /* c */\n    } // y\n    case C:\n      g(); /* z */\n  }\n}\n",
         &["--style=whitesmith"],
-        "void f(void)\n    {\n    switch (k)\n        {\n        case A:\n            {\n            g(e);\n            }\n            /* after */\n            h(); /* t */\n        case B:\n            {\n            g(e);  /* c */\n            } // y\n        case C:\n            g(); /* z */\n        }\n    }\n",
+        "void f(void)\n    {\n    switch (k)\n        {\n        case A:\n            {\n            g(e);\n            }\n            /* after */\n        h(); /* t */\n        case B:\n            {\n            g(e);  /* c */\n            } // y\n        case C:\n            g(); /* z */\n        }\n    }\n",
     );
 }
 
@@ -6811,16 +6811,16 @@ fn a_ratliff_case_closer_keeps_its_column_before_a_comment() {
     check(
         "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
         &["--style=ratliff"],
-        "void f(void) {\n    switch (k) {\n        case B: {\n            g(e);\n            } // y\n        case C: {\n            g(e);\n                } /* z */\n        case D: {\n            g(e);\n            }\n        }\n    }\n",
+        "void f(void) {\n    switch (k) {\n        case B: {\n            g(e);\n            } // y\n        case C: {\n            g(e);\n            } /* z */\n        case D: {\n            g(e);\n            }\n        }\n    }\n",
     );
 }
 
 #[test]
-fn a_comment_after_a_whitesmith_case_block_closer_spares_a_level() {
+fn a_comment_after_a_whitesmith_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
         &["--style=whitesmith"],
-        "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n                } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
+        "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n            } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
     );
 }
 
@@ -9558,31 +9558,31 @@ fn statements_after_a_commented_row_past_a_case_block_stand_where_the_row_before
     for (args, expected) in [
         (
             &["--style=kr"][..],
-            "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n        b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+            "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
         ),
         (
             &["--style=allman"][..],
-            "void f(int x)\n{\n    switch (x)\n    {\n    case 1:\n    {\n        a();\n    }\n        b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+            "void f(int x)\n{\n    switch (x)\n    {\n    case 1:\n    {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
         ),
         (
             &["--style=whitesmith", "-S"][..],
-            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n    }\n",
+            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n    }\n",
         ),
         (
             &["--style=gnu"][..],
-            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
         ),
         (
             &["--style=horstmann"][..],
-            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n    }\n}\n",
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n    }\n}\n",
         ),
         (
             &["--style=pico"][..],
-            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d(); } }\n",
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d(); } }\n",
         ),
         (
             &["--style=vtk"][..],
-            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n            b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
         ),
     ] {
         check(input, args, expected);
@@ -12652,11 +12652,11 @@ fn a_declarator_split_from_an_aggregate_type_a_comment_leads_continues() {
 }
 
 #[test]
-fn a_statement_a_comment_leads_after_a_run_in_case_block_closer_stands_as_a_comment_line() {
+fn a_statement_a_comment_leads_after_a_run_in_case_block_closer_stands_as_without_it() {
     check(
         "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0; }\n    /* note */\n    break;\n    case 2: {\n        value=0; }\n    /* note */ break; }\n}\n",
         &["--style=lisp"],
-        "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; }\n        /* note */\n    break;\n    case 2: {\n        value=0; }\n        /* note */ break; } }\n",
+        "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; }\n        /* note */\n    break;\n    case 2: {\n        value=0; }\n    /* note */ break; } }\n",
     );
 }
 
@@ -13421,5 +13421,20 @@ fn a_comment_split_off_a_list_closer_indents_with_tabs_at_the_list_body() {
         input,
         &["--indent=tab=4"],
         "void f()\n{\n\tstruct Item list[] = { {\n\t\t\t.value = 1,\n\t\t}\n\t\t/* note */\n\t};\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_on_a_line_after_a_case_block_moves_none_of_its_code() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        pop(state);\n    }  /* FALLTHROUGH */\n    case 2: {\n        pop(state);\n    }\n    /* note */\n    break; /* note */\n    case 3: {\n        pop(state);\n    }\n    /* lead */ break;\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        pop(state);\n    }  /* FALLTHROUGH */\n    case 2: {\n        pop(state);\n    }\n        /* note */\n    break; /* note */\n    case 3: {\n        pop(state);\n    }\n    /* lead */ break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            pop(state);\n            }  /* FALLTHROUGH */\n        case 2:\n            {\n            pop(state);\n            }\n            /* note */\n        break; /* note */\n        case 3:\n            {\n            pop(state);\n            }\n        /* lead */ break;\n        }\n    }\n",
     );
 }

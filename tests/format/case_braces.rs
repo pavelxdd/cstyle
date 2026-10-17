@@ -904,7 +904,7 @@ fn comment_inside_case_if_block_keeps_following_body_indent() {
 }
 
 #[test]
-fn fallthrough_comment_in_case_block_keeps_body_indent() {
+fn fallthrough_comment_after_a_case_block_moves_none_of_its_closer() {
     let source = fixture!(
         "int f(int value) {",
         "  switch (value) {",
@@ -928,7 +928,7 @@ fn fallthrough_comment_in_case_block_keeps_body_indent() {
             "        if (value)",
             "            return value;",
             "        /* else */",
-            "        }  /* fallthrough */",
+            "    }  /* fallthrough */",
             "    default:",
             "        return 0;",
             "    }",
