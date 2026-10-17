@@ -1037,13 +1037,14 @@ impl FormatEngine<'_> {
             );
         }
         // A declarator split from its aggregate type goes on past comment
-        // lines as from the type's line.
+        // and blank lines as from the type's line.
         if layout.line_kind == LineKind::Normal
             && self.layout.indentation.statement_depth() == 0
-            && self
+            && (self
                 .output
                 .last_non_empty_index()
                 .is_some_and(|index| is_bare_comment_line(self.output.trimmed(index)))
+                || self.output.last().is_some_and(|last| last.trimmed().is_empty()))
             && !line.trimmed_start().starts_with_any(b"{}")
             && !line_starts_call(line.trimmed_start())
             && let Some(previous) = self.previous_code_line_past_comments_and_directives()

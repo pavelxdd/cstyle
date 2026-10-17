@@ -13786,3 +13786,9 @@ fn a_case_label_brace_before_a_block_and_a_line_comment_stays_on_the_label_line(
         check(input, &[style], expected);
     }
 }
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_by_a_blank_line_stays_continued() {
+    let input = "static const struct Item\n\n    first = { 1, 2 };\nvoid f()\n{\n    static const struct Item\n\n        first = { 1, 2 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
