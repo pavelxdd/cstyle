@@ -15464,3 +15464,21 @@ fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_o
         "int list[] = { 1,\n        2\n    };\nint table[][2] = { { 1, 2 },\n\t\t{ 3, 4 }\n\t};\n",
     );
 }
+
+#[test]
+fn a_nested_list_run_in_after_its_outer_brace_keeps_its_source_gap() {
+    for input in [
+        "void f()\n{\n    k = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+        "void f()\n{\n    k = {   { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+        "void f()\n{\n    int table[][2] = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    ] {
+        check(input, &[], input);
+        check(input, &["--style=allman"], input);
+    }
+    let input = "void f()\n{\n    int table[][2] = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    check(
+        input,
+        &["--indent=spaces=8"],
+        "void f()\n{\n        int table[][2] = { { 1, 2 },\n                { 3, 4 }\n        };\n}\n",
+    );
+}

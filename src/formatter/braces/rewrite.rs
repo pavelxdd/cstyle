@@ -2180,14 +2180,10 @@ impl FormatEngine<'_> {
                 && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Initializer) => {
             }
             None if array_element_after_brace && run_in_array_gap_after_brace => {
-                let target_column = if self.current.trimmed_end() == "{" {
-                    Some(
-                        leading_visual_width(&self.current, self.options.tab_width)
-                            + self.options.indent_width,
-                    )
-                } else {
-                    self.current_inline_array_column()
-                };
+                let target_column = (self.current.trimmed_end() == "{").then(|| {
+                    leading_visual_width(&self.current, self.options.tab_width)
+                        + self.options.indent_width
+                });
                 if let Some(column) = target_column {
                     let current_column = self.current_visual_width();
                     if current_column < column {
