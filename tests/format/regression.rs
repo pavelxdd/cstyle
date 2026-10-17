@@ -15032,3 +15032,9 @@ fn attaching_return_types_keeps_an_empty_line_between_a_type_and_its_name() {
     let input = "int\n\nhelper(int value);\nint value;\n";
     check(input, &["--style=kr", "--attach-return-type-decl"], input);
 }
+
+#[test]
+fn a_statement_a_comment_leads_in_a_block_run_in_after_a_braceless_body_stands_with_its_siblings() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) {\n            /* note */ first();\n            second();\n        }\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}

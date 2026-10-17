@@ -490,24 +490,8 @@ impl FormatEngine<'_> {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
         }
-        // The statements of such a block, and of blocks within an `else`
-        // when else-if chains break, keep the column of the first one, as
-        // do those of a block whose header the engine places a level deep.
-        if self.tree.statements.starts_block_statement(first)
-            && self.tree.groups.enclosing(first).is_some_and(|group| {
-                layout.exact_indent_spaces.is_none()
-                    && (self.group_in_braced_chain_of_braceless_body(group)
-                        || self.options.break_else_ifs
-                            && self
-                                .tree
-                                .groups
-                                .ancestors(group)
-                                .any(|id| self.block_of_else(id)))
-                    || self.block_of_run_in_header_chain(group)
-            })
-            && let Some(spaces) = self
-                .sibling_statement_column(first)
-                .or_else(|| self.block_body_column(first))
+        if let Some(spaces) =
+            self.chained_block_statement_column(first, layout.exact_indent_spaces.is_some())
         {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -4920,6 +4904,35 @@ impl FormatEngine<'_> {
             .groups
             .closed_at(first)
             .is_some_and(|group| self.block_of_run_in_header_chain(group))
+    }
+
+    /// The statements of a block in a braced chain of a braceless body, and
+    /// of blocks within an `else` when else-if chains break, keep the
+    /// column of the first one, as do those of a block whose header the
+    /// engine places a level deep. The first two only where no rule
+    /// `placed` the line.
+    pub(crate) fn chained_block_statement_column(
+        &self,
+        first: usize,
+        placed: bool,
+    ) -> Option<usize> {
+        if !self.tree.statements.starts_block_statement(first)
+            || !self.tree.groups.enclosing(first).is_some_and(|group| {
+                !placed
+                    && (self.group_in_braced_chain_of_braceless_body(group)
+                        || self.options.break_else_ifs
+                            && self
+                                .tree
+                                .groups
+                                .ancestors(group)
+                                .any(|id| self.block_of_else(id)))
+                    || self.block_of_run_in_header_chain(group)
+            })
+        {
+            return None;
+        }
+        self.sibling_statement_column(first)
+            .or_else(|| self.block_body_column(first))
     }
 
     /// Whether `group` is the block of a header that is the braceless body

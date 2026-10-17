@@ -441,7 +441,10 @@ impl FormatEngine<'_> {
                     .output
                     .pending_tokens()
                     .filter(|_| holds_code_after_leading_comments(&trimmed))
-                    .and_then(|span| self.stacked_bracket_row_indent(span.first))
+                    .and_then(|span| {
+                        self.stacked_bracket_row_indent(span.first)
+                            .or_else(|| self.chained_block_statement_column(span.first, false))
+                    })
                     .or(line_continuation_indent)
                     .or_else(|| {
                         // A control header's condition placed its comments.
