@@ -9553,6 +9553,29 @@ fn a_row_of_comments_after_a_case_block_stands_at_the_next_label_as_comment_line
 }
 
 #[test]
+fn code_a_comment_leads_after_a_case_block_stands_where_the_code_alone_would() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        {\n            value = 0;\n        }\n        /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=stroustrup"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 0;\n    }\n    /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n",
+        ),
+        (
+            &[][..],
+            "void f()\n{\n    switch (kind) {\n    case 1:\n    {\n        value = 0;\n    }\n    /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        check(
+            &expected.replace("/* note */ break;", "break;"),
+            args,
+            &expected.replace("/* note */ break;", "break;"),
+        );
+    }
+}
+
+#[test]
 fn statements_after_a_commented_row_past_a_case_block_stand_where_the_row_before_it_would() {
     let input = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n";
     for (args, expected) in [
@@ -10789,6 +10812,74 @@ fn break_blocks_pads_around_a_header_a_comment_leads_on_its_line() {
         "void f()\n{\n    value = 1;\n\n    /* c */ if (x)\n        a();\n\n    value = 2;\n}\n";
     check(input, &["--style=linux", "--break-blocks"], expected);
     check(expected, &["--style=linux", "--break-blocks"], expected);
+}
+
+#[test]
+fn break_blocks_keeps_a_comment_split_off_a_header_after_a_label_on_its_header() {
+    let input = "void f()\n{\n    value = 0;\nretry:\n    /* note */ for (;;) {\n        value = 1;\n    }\n    switch (state) {\n    again:\n    /* note */ case 1:\n        value = 1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    value = 0;\nretry:\n\n    /* note */\n    for (;;) {\n        value = 1;\n    }\n\n    switch (state) {\nagain:\n\n    /* note */\n    case 1:\n        value = 1;\n        break;\n    }\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+    check(expected, &["--break-blocks=all"], expected);
+}
+
+#[test]
+fn a_comment_led_brace_after_a_header_stands_past_a_directive_as_without_it() {
+    for (args, expected) in [
+        (
+            &[][..],
+            "void f()\n{\n    if (ready)\n#ifdef TRACE\n        /* note */ {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n",
+        ),
+        (
+            &["--style=allman"][..],
+            "void f()\n{\n    if (ready)\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n",
+        ),
+    ] {
+        let input = "void f()\n{\n    if (ready)\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n";
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected
+                .replace("#ifdef TRACE\n", "")
+                .replace("#endif\n", ""),
+        );
+    }
+}
+
+#[test]
+fn a_comment_led_case_block_brace_past_a_directive_splits_as_without_it() {
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected
+                .replace("#ifdef TRACE\n", "")
+                .replace("#endif\n", ""),
+        );
+    }
+}
+
+#[test]
+fn a_line_comment_before_a_headers_brace_stands_past_a_directive_as_without_it() {
+    let input = "void f()\n{\n    while (ready)\n#if TRACE\n    // note\n    {\n        push(state);\n    }\n#endif\n    for (;;)\n#if TRACE\n    // first\n    // second\n    {\n        push(state);\n    }\n#endif\n}\n";
+    let expected = "void f()\n{\n    while (ready)\n#if TRACE\n        // note\n    {\n        push(state);\n    }\n#endif\n    for (;;)\n#if TRACE\n        // first\n        // second\n    {\n        push(state);\n    }\n#endif\n}\n";
+    for args in [&[][..], &["--indent-col1-comments"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#if TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected.replace("#if TRACE\n", "").replace("#endif\n", ""),
+        );
+    }
 }
 
 #[test]

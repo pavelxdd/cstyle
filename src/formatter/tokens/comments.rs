@@ -1763,6 +1763,15 @@ impl FormatEngine<'_> {
                     .next_input_line_continuation_indent = Some(ContinuationIndent::Spaces(spaces));
             }
         }
+        // A line comment between a control header and its body stands at
+        // the body, as one the header's line breaks before.
+        if kind == CommentKind::Line
+            && standalone_line_comment
+            && let Some(spaces) = control_header_comment_indent
+        {
+            self.layout.continuation_indent.next_line_indent = None;
+            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
+        }
         if kind == CommentKind::Line
             && standalone_line_comment
             && (self.layout.line_state.column1_line_comment
@@ -1806,8 +1815,8 @@ impl FormatEngine<'_> {
                 self.active_body_comment_indent_spaces()
                     .is_none_or(|body| body <= spaces)
             });
-            let spaces = preprocessor_indent
-                .or(control_header_comment_indent)
+            let spaces = control_header_comment_indent
+                .or(preprocessor_indent)
                 .or(definition_header_comment_indent)
                 .or(case_label_comment_indent)
                 .or(column1_case_label_comment_indent)
@@ -2360,16 +2369,18 @@ impl FormatEngine<'_> {
                 return None;
             }
             let pending_header_line = if self.current.trimmed().is_empty() {
-                self.output
-                    .scoped()
-                    .iter()
+                let output = &self.output;
+                output
+                    .scoped_range()
                     .rev()
-                    .find(|line| {
-                        let trimmed = line.trimmed_start();
-                        !trimmed.is_empty() && !is_comment_only_line(trimmed)
+                    .find(|&index| {
+                        let trimmed = output.trimmed(index);
+                        !trimmed.is_empty()
+                            && !is_comment_only_line(trimmed)
+                            && !output.is_directive_line(index)
                     })
-                    .is_some_and(|line| {
-                        let code = self.output.code_of(line).trimmed_start();
+                    .is_some_and(|index| {
+                        let code = output.code_before_comment(index).trimmed_start();
                         let candidate = code
                             .strip_prefix('}')
                             .map_or(code, |tail| tail.trimmed_start());
