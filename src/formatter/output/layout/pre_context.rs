@@ -8,6 +8,7 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
+use crate::formatter::text::line_scan::unmatched_open_brace_content_offset;
 use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -610,11 +611,27 @@ impl FormatEngine<'_> {
                     None
                 }
             });
-            if spaces.saturating_sub(base) > self.options.max_continuation_indent {
+            // Past the maximum a stream row stands at its operator; a row of
+            // a list aligned after its brace keeps the list's column.
+            if spaces.saturating_sub(base) > self.options.max_continuation_indent
+                && (stream_indent.is_some() || !self.aligned_list_row())
+            {
                 layout.exact_indent_spaces =
                     stream_indent.or((source_indent > 0).then_some(source_indent));
             }
         }
         layout
+    }
+
+    /// Whether the line is a row of a list whose elements run in after its
+    /// brace and align there.
+    fn aligned_list_row(&self) -> bool {
+        self.current_inline_array_column().is_some()
+            && self
+                .inline_array
+                .frames
+                .last()
+                .and_then(|frame| self.output.get(frame.output_line))
+                .is_some_and(|line| unmatched_open_brace_content_offset(line).is_some())
     }
 }
