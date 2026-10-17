@@ -201,7 +201,11 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
     let mut paren_depth = 0isize;
     for (cursor, token) in tokens.iter().enumerate() {
         match token {
-            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
+            // A directive between the parameters leaves them one list.
+            Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(_, _)
+            | Token::Preprocessor(_) => {}
             Token::Word(_) | Token::Number(_) => {}
             Token::Operator(operator) if operator == "<" => {
                 let first_after_open =

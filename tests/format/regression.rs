@@ -14156,3 +14156,9 @@ fn a_comment_line_between_message_rows_keeps_them_at_the_selector_keyword() {
     let input = "- (void)update:(int)value with:(int)other\n{\n    [self apply:value\n          // note\n          with:other];\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn padding_operators_leaves_the_closer_of_template_parameters_a_conditional_splits() {
+    let input = "#ifdef FEATURE\ntemplate <typename First,\n#endif\n          typename Second>\nclass Pair\n{\n};\n";
+    check(input, &["--style=allman", "--pad-oper"], input);
+}
