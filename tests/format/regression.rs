@@ -15103,3 +15103,13 @@ fn a_bare_block_after_the_block_of_an_attributed_if_starts_its_own_line() {
         "void f() {\n    if (ready) [[likely]] {\n        value = 1;\n        }\n        {\n        value = 1;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_label_inside_the_block_of_a_label_a_comment_leads_stands_in_that_block() {
+    let input = "void f()\n{\n    switch (op) {\n    /* note */ case FIRST: {\n        reset(value);\n    case SECOND:\n        apply(value);\n        break;\n    }\n    case THIRD:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    /* note */ case FIRST: {\n        reset(value);\n        case SECOND:\n            apply(value);\n            break;\n    }\n    case THIRD:\n        break;\n    }\n}\n",
+    );
+}

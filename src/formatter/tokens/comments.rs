@@ -505,6 +505,7 @@ impl FormatEngine<'_> {
             if labels::line_kind(code, &self.options.access_labels) == LineKind::SwitchLabel {
                 self.update_case_body_indent(LineKind::SwitchLabel, code);
                 self.update_case_brace_unindent(LineKind::SwitchLabel, code);
+                self.nested_case_label_indent_override(LineKind::SwitchLabel);
             }
             if let Some((head, tail, spaces)) = self.split_comment_led_line(&trimmed) {
                 self.push_raw_comment_output_line(head);
