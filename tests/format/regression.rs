@@ -13525,3 +13525,26 @@ fn a_comment_line_among_call_arguments_in_a_list_stands_at_the_arguments() {
     let input = "void f()\n{\n    value = (struct Item) {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n    struct Item item = {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_in_a_later_branch_of_list_rows_stands_at_the_rows_values_take() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    {1, 2}\n#else\n    // note\n    {1, 2},\n#endif\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n    // note\n        {1, 2},\n#endif\n    };\n",
+    );
+}
+
+#[test]
+fn vtk_sets_every_brace_row_of_a_list_in_code_a_level_past_its_values() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        3,\n        {1, 2},\n        {\n            {1, 2},\n            3,\n            {1, 2},\n        },\n        4, {5, 6},\n        {7, 8}, {9, 10},\n    };\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    static const struct Item items[] =\n        {\n        3,\n            {1, 2},\n            {\n                {1, 2},\n            3,\n                {1, 2},\n            },\n        4, {5, 6},\n            {7, 8}, {9, 10},\n        };\n    value = 1;\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(
+        &input.replace("struct Item", "Item"),
+        &["--style=vtk"],
+        &expected.replace("struct Item", "Item"),
+    );
+}

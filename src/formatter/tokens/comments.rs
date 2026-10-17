@@ -539,7 +539,7 @@ impl FormatEngine<'_> {
                 let code = after_leading_comments(&self.output[last]).to_string();
                 // A label stands outside the body its column would set.
                 if labels::line_kind(&code, &self.options.access_labels) == LineKind::Normal {
-                    self.record_preprocessor_branch_body_indent(&code, spaces);
+                    self.record_preprocessor_branch_body_indent(&code, last, spaces);
                 }
             }
         }

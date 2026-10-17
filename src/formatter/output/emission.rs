@@ -363,7 +363,11 @@ impl FormatEngine<'_> {
     ) {
         let line_kind = layout.line_kind;
         self.restore_objc_message_alignment(post_emission.restore_objc_message_align);
-        self.record_preprocessor_branch_body_indent(line, emitted_indent_spaces);
+        self.record_preprocessor_branch_body_indent(
+            line,
+            self.output.len().saturating_sub(1),
+            emitted_indent_spaces,
+        );
         if let Some(spaces) = post_emission.split_condition_body_indent_spaces {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }

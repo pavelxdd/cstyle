@@ -668,22 +668,23 @@ impl FormatEngine<'_> {
             && self.should_indent_brace_line(BraceType::Command)
     }
 
+    /// Records the body column of a conditional's branch from `line`, the
+    /// code of output line `index`.
     pub(crate) fn record_preprocessor_branch_body_indent(
         &mut self,
         line: &str,
+        index: usize,
         emitted_indent_spaces: usize,
     ) {
         if !is_preprocessor_branch_body(line) {
             return;
         }
-        // A style indenting braces sets a `{` a level past its body.
-        let body_indent_spaces = if line.trimmed_start().starts_with('{')
-            && self.should_indent_brace_line(BraceType::Command)
-        {
-            emitted_indent_spaces.saturating_sub(self.options.indent_width)
-        } else {
-            emitted_indent_spaces
-        };
+        let body_indent_spaces =
+            if line.trimmed_start().starts_with('{') && self.line_brace_stands_past_body(index) {
+                emitted_indent_spaces.saturating_sub(self.options.indent_width)
+            } else {
+                emitted_indent_spaces
+            };
         if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
             if branch.first_body_indent_spaces.is_none() {
                 branch.first_body_indent_spaces = Some(body_indent_spaces);

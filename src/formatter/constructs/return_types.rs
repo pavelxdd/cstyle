@@ -534,7 +534,7 @@ impl FormatEngine<'_> {
             let spaces = self
                 .output
                 .lead_width(return_type_line, self.options.tab_width);
-            self.record_preprocessor_branch_body_indent(&return_type, spaces);
+            self.record_preprocessor_branch_body_indent(&return_type, return_type_line, spaces);
         }
         true
     }

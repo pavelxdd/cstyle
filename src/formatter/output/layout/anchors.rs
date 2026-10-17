@@ -1076,8 +1076,7 @@ impl FormatEngine<'_> {
             let line = self.output.line_with_token(open)?;
             if !is_aggregate(closed)
                 || self.output.line_tokens(line)?.first != open
-                || self.vtk_array_outer(closed).is_none()
-                || closed == self.vtk_array_outer(closed)?
+                || closed == self.vtk_block_like_outer(closed)?
             {
                 return None;
             }
@@ -1112,7 +1111,7 @@ impl FormatEngine<'_> {
                 return None;
             }
         }
-        let outer = self.vtk_array_outer(group)?;
+        let outer = self.vtk_block_like_outer(group)?;
         if cast_brace {
             let close = self.tree.previous_code_token(first)?;
             let line = self.output.line_with_token(close)?;
@@ -1128,12 +1127,31 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let flush_outer =
-            self.options.brace_style == BraceStyle::Vtk && group == outer && !self.in_code(open);
         let mut content = self.output.lead_width(open_line, self.options.tab_width);
-        if flush_outer {
+        if self.vtk_flush_outer(group, outer) {
             content += self.options.indent_width;
         }
+        let spaces = if self.array_element_brace_indented(first, group, outer) {
+            content + self.options.indent_width
+        } else {
+            content
+        };
+        Some(spaces + self.case_unindent_spaces())
+    }
+
+    /// Whether VTK keeps the outer braces `outer` of `group` in column one
+    /// at file scope.
+    fn vtk_flush_outer(&self, group: GroupId, outer: GroupId) -> bool {
+        self.options.brace_style == BraceStyle::Vtk
+            && group == outer
+            && !self.in_code(self.tree.groups.get(group).open)
+    }
+
+    /// Whether the row at `first`, an element of `group` in an array laid
+    /// out like blocks within `outer`, stands a level past the elements.
+    fn array_element_brace_indented(&self, first: usize, group: GroupId, outer: GroupId) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
         // A `{` starting its line stands a level in; at file scope, a row
         // of the outer braces that starts with its elements stays at them.
         // A row led by a comment stays at the elements.
@@ -1155,15 +1173,36 @@ impl FormatEngine<'_> {
                     .iter()
                     .any(|token| matches!(token, Token::Newline))
             });
-        let indented = matches!(tokens[first], Token::Symbol('{'))
+        matches!(tokens[first], Token::Symbol('{'))
             && !after_comment
-            && (brace_alone || row_spans_lines || !flush_outer);
-        let spaces = if indented {
-            content + self.options.indent_width
-        } else {
-            content
+            && (brace_alone || row_spans_lines || !self.vtk_flush_outer(group, outer))
+    }
+
+    /// Whether output line `index`, led by a `{`, stands a level past the
+    /// body around it: a block's indented brace, or an element's brace that
+    /// the style sets past the elements.
+    pub(crate) fn line_brace_stands_past_body(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        let is_aggregate = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
         };
-        Some(spaces + self.case_unindent_spaces())
+        let element = self.output.line_tokens(index).and_then(|span| {
+            groups
+                .opened_at(span.first)
+                .filter(|&group| is_aggregate(group))
+                .and_then(|_| groups.enclosing(span.first))
+                .filter(|&list| is_aggregate(list))
+                .map(|list| (span.first, list))
+        });
+        match element {
+            Some((first, list)) if self.options.brace_style == BraceStyle::Vtk => self
+                .vtk_block_like_outer(list)
+                .is_some_and(|outer| self.array_element_brace_indented(first, list, outer)),
+            _ => self.should_indent_brace_line(BraceType::Command),
+        }
     }
 
     /// Styles that indent braces lay out the rows of an initializer whose
@@ -1293,6 +1332,28 @@ impl FormatEngine<'_> {
             start = before;
         }
         Some(outer)
+    }
+
+    /// The outermost initializer around `group` that VTK lays out like
+    /// blocks: one in code, or the assigned initializer of a declaration
+    /// without an aggregate keyword.
+    fn vtk_block_like_outer(&self, group: GroupId) -> Option<GroupId> {
+        let groups = &self.tree.groups;
+        self.vtk_array_outer(group).or_else(|| {
+            (self.options.brace_style == BraceStyle::Vtk && self.in_code(groups.get(group).open))
+                .then(|| {
+                    groups
+                        .ancestors(group)
+                        .take_while(|&id| {
+                            matches!(
+                                self.tree.blocks.kind(id),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        })
+                        .last()
+                })
+                .flatten()
+        })
     }
 
     /// VTK places the first element of an assigned initializer whose `{`
