@@ -13611,3 +13611,41 @@ fn a_closer_of_a_group_opened_mid_row_stands_at_the_braces_open_before_it() {
         check(input, &[style], &expected);
     }
 }
+
+#[test]
+fn a_declarator_a_comment_leads_after_a_split_declaration_head_stays_continued() {
+    let input =
+        "void f()\n{\n    static const struct Item\n        /* note */ first =\n    { 1, 2 };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=kr"],
+        &input.replace("/* note */ ", ""),
+    );
+}
+
+#[test]
+fn a_braceless_else_body_after_its_ifs_indented_closer_stands_past_the_if() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else\n        result=0;\n    after();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=gnu",
+            "void f()\n{\n    if (ready)\n        {\n            first();\n        } /* c */ else\n        result=0;\n    after();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (ready)\n        {\n        first();\n        } /* c */ else\n        result=0;\n    after();\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    if (ready) {\n        first();\n        } /* c */ else\n        result=0;\n    after();\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(
+            &input.replace("else\n", "else if (other)\n"),
+            &[style],
+            &expected.replace("else\n", "else if (other)\n"),
+        );
+    }
+}

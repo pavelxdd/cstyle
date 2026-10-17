@@ -5616,10 +5616,25 @@ impl FormatEngine<'_> {
             });
         let levels = 1 + chained + usize::from(nested);
         Some(
-            self.output.lead_width(line, self.options.tab_width)
+            self.closer_led_header_lead(line)
+                .unwrap_or_else(|| self.output.lead_width(line, self.options.tab_width))
                 + levels * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// The lead of the header line of the block that the `}` leading output
+    /// line `line` closes, as for `} else`: a closer the style sets apart
+    /// leaves the header after it at the block's header.
+    fn closer_led_header_lead(&self, line: usize) -> Option<usize> {
+        let first = self.output.line_tokens(line)?.first;
+        if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
+            return None;
+        }
+        let block = self.tree.groups.closed_at(first)?;
+        let header = self.header_keyword_before(self.tree.groups.get(block).open)?;
+        let header_line = self.line_led_by(header)?;
+        (header_line != line).then(|| self.output.lead_width(header_line, self.options.tab_width))
     }
 
     /// The header whose body the `{` at `first` opens in another branch of
