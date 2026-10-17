@@ -239,7 +239,10 @@ impl FormatEngine<'_> {
         } else if lambda_header {
             BraceType::Definition
         } else if (header_condition_closed
-            || header.is_none() && is_conditional_header_line(self.current.trimmed_start()))
+            || header.is_none()
+                && is_conditional_header_line(self.current.trimmed_start())
+                // A statement the header's line went on with ended it.
+                && self.layout.command_state.previous_command_char == Some(')'))
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(

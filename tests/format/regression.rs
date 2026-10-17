@@ -9659,31 +9659,32 @@ fn a_broken_while_closing_a_do_chained_after_else_stands_at_the_else_body() {
 }
 
 #[test]
-fn break_one_line_headers_keeps_a_run_in_if_line_whole_whatever_follows_its_else() {
-    // Run-in styles keep `if (x) a(); else ...` on its line, an `else`
-    // heading a block as much as an `else` with a statement.
+fn break_one_line_headers_parts_a_kept_if_line_from_its_header_when_a_brace_goes_on() {
+    // Kept one-line statements keep `if (x) a(); else b();` whole; a brace
+    // further on the line parts the `if` from the statement after it.
     let input = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n    case 1:\n        first();\n        break;\n    }\n    if (ready) helper(); else for (;;) {\n        first();\n    }\n    g();\n}\n";
-    for (style, expected) in [
+    for (style, kept, broken) in [
         (
             "--style=lisp",
             "void f() {\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break; }\n    if (ready) helper(); else for (;;) {\n            first(); }\n    g(); }\n",
+            "void f() {\n    if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state) {\n        case 1:\n            first();\n            break; }\n    if (ready)\n        helper(); else for (;;) {\n            first(); }\n    g(); }\n",
         ),
         (
             "--style=pico",
             "void f()\n{   if (ready) helper(); else other();\n    if (ready) helper(); else switch (state)\n        {   case 1:\n                first();\n                break; }\n    if (ready) helper(); else for (;;)\n        {   first(); }\n    g(); }\n",
+            "void f()\n{   if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state)\n        {   case 1:\n                first();\n                break; }\n    if (ready)\n        helper(); else for (;;)\n        {   first(); }\n    g(); }\n",
         ),
     ] {
-        check(input, &[style, "--break-one-line-headers"], expected);
-        check(input, &[style], expected);
+        check(input, &[style], kept);
+        check(input, &[style, "--break-one-line-headers"], broken);
     }
-    // So do kept one-line statements in any style.
     let kept = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break;\n        }\n    if (ready) helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n";
+    check(input, &["--style=kr", "-o"], kept);
     check(
         input,
         &["--style=kr", "-o", "--break-one-line-headers"],
-        kept,
+        "void f()\n{\n    if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state) {\n        case 1:\n            first();\n            break;\n        }\n    if (ready)\n        helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n",
     );
-    check(input, &["--style=kr", "-o"], kept);
 }
 
 #[test]
@@ -14760,4 +14761,43 @@ fn a_list_argument_closer_before_more_arguments_stands_at_its_brace() {
 fn whitesmith_keeps_an_interface_header_a_comment_leads_on_its_line() {
     let input = "/* note */ @interface Item : NSObject\n@property (nonatomic) int value;\n@end\n";
     check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn breaking_one_line_headers_parts_a_header_from_a_kept_line_a_brace_goes_on() {
+    let input = "void f()\n{\n    if (ready) helper(); else {\n        other();\n    }\n    if (ready) helper(); else other();\n    while (ready) helper(); if (other) {\n        third();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--break-one-line-headers",
+        ],
+        "void f()\n{\n    if (ready)\n        helper(); else {\n        other();\n    }\n    if (ready) helper(); else other();\n    while (ready)\n        helper(); if (other) {\n        third();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--break-one-line-headers"],
+        "void f() {\n    if (ready)\n        helper(); else {\n        other(); }\n    if (ready) helper(); else other();\n    while (ready)\n        helper(); if (other) {\n        third(); } }\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_statement_going_on_past_the_line_after_another() {
+    let input = "void f()\n{\n    helper(); call(1,\n        2);\n    helper(); value = 1 +\n        2;\n    helper(); int list[] = {\n        1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    helper(); call(1,\n                   2);\n    helper(); value = 1 +\n                      2;\n    helper(); int list[] = {\n        1, 2\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_list_after_a_statement_a_header_line_went_on_with_opens_as_a_list() {
+    let input = "void f()\n{\n    if (ready) helper(); value = { 1,\n        2 };\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    if (ready) helper(); value = { 1,\n                                   2\n                                 };\n}\n",
+    );
 }

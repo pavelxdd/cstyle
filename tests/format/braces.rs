@@ -1755,7 +1755,7 @@ fn allman_keeps_adjacent_nested_malformed_open_braces_idempotent() {
 fn unpad_bare_block_after_operator_breaks_idempotently() {
     let mut options = FormatOptions::default();
     options.unpad_parens = true;
-    let expected = "xdefault%{#endif#if A;\n+=&&continue]returncasecase}                      // line...for42returnif42~zelseconstexpr\n";
+    let expected = "xdefault%{#endif#if A;\n+=&&continue]returncasecase}// line...for42returnif42~zelseconstexpr\n";
 
     assert_eq!(
         format_exact(

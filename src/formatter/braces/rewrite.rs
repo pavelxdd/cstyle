@@ -681,7 +681,26 @@ impl FormatEngine<'_> {
         // output line: added braces may have taken it off.
         let preceding_top_level_statement =
             preceding_top_level_statement && self.current.trimmed_end().contains(';');
+        // A block, or a list going on past the line, further on the line
+        // parts the header from the statement it keeps there.
+        let brace_goes_on = !matches!(&tokens[statement_start], Token::Word(word) if is_header(self.options, word))
+            && !matches!(tokens[statement_start], Token::Symbol('{'))
+            && (statement_start..line_end).any(|index| {
+                matches!(tokens[index], Token::Symbol('{'))
+                    && self.tree.groups.opened_at(index).is_some_and(|group| {
+                        !matches!(
+                            self.tree.blocks.kind(group),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        ) || self
+                            .tree
+                            .groups
+                            .get(group)
+                            .close
+                            .is_none_or(|close| close > line_end)
+                    })
+            });
         let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
+            && !brace_goes_on
             && !self.in_broken_one_line_block(start)
             && (preceding_top_level_statement
                 || preceding_label

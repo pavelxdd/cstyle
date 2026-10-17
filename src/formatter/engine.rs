@@ -1338,9 +1338,9 @@ impl<'a> FormatEngine<'a> {
         if has_semicolon {
             let mut statement_count = 0usize;
             let mut paren_depth = 0i32;
-            // A header or a label after a statement starts another.
+            // Code after a statement starts another.
             let mut after_statement = false;
-            for (index, token) in tokens.iter().enumerate() {
+            for token in tokens {
                 match token {
                     Token::Symbol('(') => paren_depth += 1,
                     Token::Symbol(')') => paren_depth -= 1,
@@ -1349,13 +1349,11 @@ impl<'a> FormatEngine<'a> {
                         after_statement = true;
                         continue;
                     }
-                    Token::Word(word)
+                    token
                         if after_statement
                             && paren_depth <= 0
-                            && (crate::formatter::constructs::headers::is_header(
-                                self.options,
-                                word,
-                            ) || labels::starts_label(&tokens[index + 1..])) =>
+                            && is_code_token(token)
+                            && !matches!(token, Token::Symbol('}' | ')' | '\\')) =>
                     {
                         statement_count += 1;
                     }
