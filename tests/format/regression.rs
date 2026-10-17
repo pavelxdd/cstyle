@@ -14266,3 +14266,23 @@ fn a_list_opening_after_a_case_brace_a_comment_follows_stands_at_the_case_block(
         "void f(int op)\n{\n    switch (op) {\n    case 1: { /* c */\n            static const char *list[] = { \"first\",\n                                          \"second\"\n                                        };\n        }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_list_holding_a_brace_past_an_element_keeps_its_elements_aligned() {
+    let input = "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9\n                };\n",
+    );
+}
+
+#[test]
+fn a_list_whose_first_brace_follows_a_comment_keeps_its_elements_aligned() {
+    let input = "int list[] = { /* c */ {1, 2},\n               7 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[] = { /* c */ {1, 2},\n                       7\n             };\n",
+    );
+}

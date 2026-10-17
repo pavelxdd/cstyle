@@ -441,13 +441,24 @@ pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> IndexSet<usize>
     indices
 }
 
+/// Lists that stand their rows a level in: a brace among their elements
+/// begins its source line or stands first after theirs.
 pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
     let mut indices = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
+    let mut begins_line = true;
+    let mut previous = None;
     for (index, token) in tokens.iter().enumerate() {
         match token {
+            Token::Whitespace(_) => continue,
+            Token::Newline => {
+                begins_line = true;
+                continue;
+            }
             Token::Symbol('{') => {
-                if let Some(&parent) = stack.last() {
+                if let Some(&parent) = stack.last()
+                    && (begins_line || previous == Some(parent))
+                {
                     indices.insert(parent);
                 }
                 stack.push(index);
@@ -457,6 +468,8 @@ pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
             }
             _ => {}
         }
+        begins_line = false;
+        previous = Some(index);
     }
     indices
 }
