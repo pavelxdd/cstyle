@@ -14917,3 +14917,13 @@ fn a_typed_initializer_an_empty_line_parts_from_a_directive_keeps_its_gap() {
     let input = "void f()\n{\n#ifdef FEATURE\n\n    auto *item = new Item{ 1, 2 };\n#endif\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn indenting_after_parens_steps_a_template_head_a_comment_leads_from_its_line() {
+    let input = "/* note */ template <typename First,\n          typename Second>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "/* note */ template <typename First,\n    typename Second>\nclass Pair\n{\n};\n",
+    );
+}

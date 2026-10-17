@@ -77,9 +77,21 @@ pub(crate) fn template_continuation_indent_spaces(
     line: &str,
     angle_step: Option<usize>,
 ) -> Option<usize> {
-    // Comments leading the line keep the columns of the head after them.
+    // Comments leading the line keep the columns of the head after them;
+    // a step counts from the line's own indent.
     let code = after_leading_comments(line);
     if code.len() < line.trimmed_start().len() && code.starts_with("template") {
+        if let Some(step) = angle_step {
+            let code = &code[..trailing_comment_split_limit(code)];
+            let depth = angle_chars(code).fold(0usize, |depth, (_, ch)| {
+                if ch == '<' {
+                    depth + 1
+                } else {
+                    depth.saturating_sub(1)
+                }
+            });
+            return (depth > 0).then(|| line.len() - line.trimmed_start().len() + depth * step);
+        }
         let masked = format!(
             "{}{code}",
             " ".repeat(line[..line.len() - code.len()].chars().count())
