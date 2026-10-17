@@ -503,6 +503,9 @@ impl FormatEngine<'_> {
             } else {
                 self.push_raw_comment_output_line(trimmed);
             }
+            if std::mem::take(&mut self.brace_frame_awaits_line) {
+                self.rebase_brace_frame_on_emitted_line();
+            }
             // The line after a comment closes at the column the comment opened.
             // A comment leading its line counts from the line as published,
             // which the case unindent already moved.

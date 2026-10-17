@@ -14938,3 +14938,9 @@ fn gnu_closes_an_else_kept_on_a_closer_line_at_its_brace_before_a_directive() {
         "void f()\n{\n    if (ready)\n        {\n            first();\n        } /* c */ else\n        {\n            result=0;\n#ifdef FEATURE\n        }\n#endif\n    value = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_list_a_comment_leads_in_a_case_block_indents_its_rows_past_the_declaration() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        /* note */ int table[][2] = {\n            { FIRST, 1 },\n            { SECOND, 2 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

@@ -443,7 +443,8 @@ impl FormatEngine<'_> {
         let Some(line) = self.output.last() else {
             return;
         };
-        let trimmed = line.trimmed_start();
+        // Comments leading the line took its code's column.
+        let trimmed = after_leading_comments(line.trimmed_start());
         let lead = leading_visual_width(line, self.options.tab_width);
         let case_unindent = self.case_unindent_spaces();
         if let Some(frame) = self.layout.frame_stack.active_brace_mut().filter(|frame| {
