@@ -13798,3 +13798,13 @@ fn ratliff_closes_a_namespace_a_comment_leads_as_any_namespace() {
     let input = "namespace outer {\n/* note */ namespace inner {\nint helper(int value);\n}\n}\n";
     check(input, &["--style=ratliff"], input);
 }
+
+#[test]
+fn a_row_a_comment_leads_in_padded_parens_stands_at_the_padded_content() {
+    let input = "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-paren-out"],
+        "void f()\n{\n    mask = 1 << ( ( (value & (size - 1) )\n                    /* note */ >> shift)\n                  + offset);\n}\n",
+    );
+}

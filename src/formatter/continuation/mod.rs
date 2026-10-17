@@ -594,6 +594,13 @@ impl FormatEngine<'_> {
             )
         };
         let has_next = !matches!(next, None | Some(Token::Newline));
+        // Padding outside a paren puts a space before the next one.
+        let current_columns = current_columns
+            + usize::from(
+                self.options.pad_parens_outside
+                    && matches!(next, Some(Token::Symbol('(')))
+                    && !self.current.ends_with_any(b" \t"),
+            );
         let attach_delta = if self.options.indent_after_parens {
             0
         } else {
