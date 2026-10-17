@@ -1506,14 +1506,15 @@ impl FormatEngine<'_> {
                 let in_list_rows = self.layout.nesting.current_brace_paren_depth()
                     == Some(self.layout.nesting.paren_depth);
                 brace_element_comment_indent = in_list_rows
-                    .then(|| self.current_inline_array_column())
-                    .flatten()
-                    .or_else(|| {
-                        unmatched_open_brace_content_offset(previous_code).map(|offset| {
-                            visual_width_from(&previous[..offset], 0, self.options.tab_width)
-                                + self.case_unindent_spaces()
+                    .then(|| {
+                        self.current_inline_array_column().or_else(|| {
+                            unmatched_open_brace_content_offset(previous_code).map(|offset| {
+                                visual_width_from(&previous[..offset], 0, self.options.tab_width)
+                                    + self.case_unindent_spaces()
+                            })
                         })
-                    });
+                    })
+                    .flatten();
                 // Else it stands where the row after it goes on, as the row
                 // before set it.
                 brace_element_comment_indent = brace_element_comment_indent

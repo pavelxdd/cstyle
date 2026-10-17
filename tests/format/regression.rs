@@ -14229,3 +14229,9 @@ fn a_comment_line_in_a_subscript_continues_at_its_content() {
     let input = "void f()\n{\n    value = table[first +\n                  /* one */\n                  // two\n                  second];\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn a_comment_line_in_a_call_on_a_run_in_list_row_stands_at_the_arguments() {
+    let input = "void f()\n{\n    int list[] = { call(first,\n                        /* c */\n                        second), 2\n                 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
