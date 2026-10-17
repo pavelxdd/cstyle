@@ -13808,3 +13808,18 @@ fn a_row_a_comment_leads_in_padded_parens_stands_at_the_padded_content() {
         "void f()\n{\n    mask = 1 << ( ( (value & (size - 1) )\n                    /* note */ >> shift)\n                  + offset);\n}\n",
     );
 }
+
+#[test]
+fn a_comment_line_before_a_list_closer_a_comment_leads_leaves_it_at_the_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        /* note */\n        /* end */ }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n            /* note */\n            /* end */ } }; }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1,\n            /* note */\n            /* end */ } }; }\n",
+    );
+}

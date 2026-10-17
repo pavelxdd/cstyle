@@ -2394,12 +2394,19 @@ impl FormatEngine<'_> {
             )
     }
 
+    /// Whether the comment at `index` leads a closer, past the comments
+    /// between them.
     fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
         let tokens = &self.tree.tokens;
         matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment)
             && tokens[index + 1..]
                 .iter()
-                .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+                .find(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+                    )
+                })
                 .is_some_and(|token| matches!(token, Token::Symbol('}')))
     }
 
@@ -2711,17 +2718,17 @@ impl FormatEngine<'_> {
                         && self.output.directive_of_continuation(index).is_none()
                 })
             })
-            .flatten()
-            .map(|index| &self.output[index]);
+            .flatten();
         let previous_element_row_indent = previous_row
-            .filter(|line| {
-                let code = self.output.code_trimmed_of(line);
+            .filter(|&index| {
+                let code = self.output.code_trimmed(index);
                 leads_closer
                     && self.in_initializer_brace()
                     && !code.is_empty()
                     && !code.ends_with_any(b"{;")
             })
-            .and_then(|line| {
+            .and_then(|index| {
+                let line = &self.output[index];
                 if self
                     .output
                     .code_trimmed_of(line)
@@ -2729,6 +2736,19 @@ impl FormatEngine<'_> {
                     .starts_with('}')
                 {
                     self.active_body_comment_indent_spaces()
+                } else if self
+                    .output
+                    .code_trimmed_of(line)
+                    .trimmed_start()
+                    .starts_with('{')
+                    && self.line_brace_stands_past_body(index)
+                {
+                    // A brace row a style sets past the values leaves the
+                    // comment at them.
+                    Some(
+                        leading_visual_width(line, self.options.tab_width)
+                            .saturating_sub(self.options.indent_width),
+                    )
                 } else {
                     Some(leading_visual_width(line, self.options.tab_width))
                 }
