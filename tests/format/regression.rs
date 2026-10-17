@@ -14811,3 +14811,11 @@ fn the_while_of_an_else_do_kept_after_a_statement_stands_at_the_else_body() {
         "void f() {\n    if (ready)\n        helper(); else do {\n            first(); }\n        while (state);\n    value = 1; }\n",
     );
 }
+
+#[test]
+fn a_block_opened_on_a_header_body_line_nests_past_that_line() {
+    // An `else if` block stands at its chain; a `do` the `if` heads nests
+    // past the line.
+    let input = "void f()\n{\n    if (a)\n        x(); else if (b) do {\n            y();\n        } while (c);\n    if (a)\n        x(); else if (b) {\n        y();\n    }\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}

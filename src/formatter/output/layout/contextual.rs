@@ -2178,6 +2178,15 @@ impl FormatEngine<'_> {
             } else if !line_start.starts_with_any(b"{}#")
                 && code.ends_with("{")
                 && trimmed.contains(')')
+                // A line a statement starts continues no header.
+                && !self
+                    .output
+                    .last_line_outside_comment_index()
+                    .and_then(|index| self.output.line_tokens(index))
+                    .is_some_and(|span| {
+                        self.tree.statements.starts_block_statement(span.first)
+                            || self.tree.statements.braceless_header(span.first).is_some()
+                    })
                 && let Some(header) =
                     self.output
                         .scoped()
