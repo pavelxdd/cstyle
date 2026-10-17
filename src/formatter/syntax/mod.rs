@@ -469,12 +469,13 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
         match token {
             Token::Whitespace(_) => continue,
             Token::Newline => {
-                // A brace among elements that ends its line opens rows.
+                // A brace among elements that ends its line opens rows in
+                // the lists around it.
                 if let Some(open) = open_on_line.take()
+                    && let Some((_, around)) = stack.split_last()
                     && stack.last() == Some(&open)
-                    && let Some(&parent) = stack.len().checked_sub(2).and_then(|at| stack.get(at))
                 {
-                    rows.nested.insert(parent);
+                    rows.nested.extend(around.iter().copied());
                 }
                 begins_line = true;
                 continue;

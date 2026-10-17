@@ -14350,3 +14350,13 @@ fn a_list_holding_an_element_brace_that_ends_its_line_stands_its_rows_a_level_in
     let input = "void f(void)\n{\n    int list[][2] = { 7, {\n            1,\n            2\n        }\n    };\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn a_brace_ending_its_line_inside_an_element_list_stands_the_outer_list_rows_a_level_in() {
+    let input = "void f(void)\n{\n    struct Record\n        record = { .name = 1,\n        .value = { .update = {\n                .first = 1,\n            }\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    struct Record\n        record = { .name = 1,\n            .value = {\n                .update = {\n                    .first = 1,\n                    }\n                }\n        };\n    }\n",
+    );
+}
