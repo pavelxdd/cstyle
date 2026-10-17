@@ -13854,3 +13854,13 @@ fn a_comment_line_before_the_first_member_of_an_indented_struct_brace_leaves_it_
         "void f()\n{\n    switch (state)\n        {\n        case 1:\n            {\n#ifdef FEATURE\n            static const struct\n                {\n#endif\n                /* note */\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_line_before_a_case_label_leaves_a_comment_another_follows_on_its_last_line() {
+    let input = "void f(int a)\n{\n    switch (a) {\n    case 4:\n        w();\n        /* a\n         * b */ /* c */\n        /* note */\n    case 5:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(int a)\n{\n    switch (a) {\n    case 4:\n        w();\n        /* a\n         * b */ /* c */\n    /* note */\n    case 5:\n        break;\n    }\n}\n",
+    );
+}

@@ -667,9 +667,11 @@ impl FormatEngine<'_> {
             let text = self.output[start].trimmed_start();
             let previous = self.output[start - 1].trimmed_start();
             if text.starts_with("/*") {
-                // Block comments one after another move together.
+                // Block comments one after another move together; one that a
+                // comment follows on its line stays, as it would last.
                 if previous.ends_with("*/")
                     && (previous.starts_with("/*") || previous.starts_with('*'))
+                    && !text_follows_comment_close(previous)
                 {
                     start -= 1;
                     continue;
