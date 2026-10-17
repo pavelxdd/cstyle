@@ -14413,3 +14413,13 @@ fn indented_brace_styles_close_a_list_around_a_line_ending_element_brace_past_th
         "void f(void) {\n    int list[][2] = { 7, {\n            1,\n            2\n            }\n        };\n    }\n",
     );
 }
+
+#[test]
+fn a_row_of_an_inner_list_past_the_maximum_continuation_stands_at_the_outer_list() {
+    let input = "void f(void)\n{\n\tstruct_args_type value_args = {is_value, {(uintptr_t)ptr, size,\n\t\tflags, 0}};\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    struct_args_type value_args = {is_value, {(uintptr_t)ptr, size,\n                                   flags, 0\n                                             }\n                                  };\n}\n",
+    );
+}

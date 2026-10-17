@@ -1605,15 +1605,19 @@ impl FormatEngine<'_> {
                         .find(" << ")
                         .or_else(|| previous_code.find(" >> "))
                         .map(|index| index + 1);
-                    layout.exact_indent_spaces = Some(
-                        if spaces.saturating_sub(base) > self.options.max_continuation_indent {
-                            stream_indent
-                                .or((source_indent > 0).then_some(source_indent))
-                                .unwrap_or(spaces)
-                        } else {
-                            spaces
-                        },
-                    );
+                    // Past the maximum a row stands at the list around its
+                    // own when that one is within it.
+                    let within = |column: &usize| {
+                        column.saturating_sub(base) <= self.options.max_continuation_indent
+                    };
+                    layout.exact_indent_spaces = Some(if within(&spaces) {
+                        spaces
+                    } else {
+                        stream_indent
+                            .or_else(|| self.enclosing_inline_array_column().filter(within))
+                            .or((source_indent > 0).then_some(source_indent))
+                            .unwrap_or(spaces)
+                    });
                 } else if self.layout.nesting.paren_depth == 0
                     && (previous_code.ends_with(',')
                         || (previous_code.contains('{') && previous.len() != previous_code.len()))

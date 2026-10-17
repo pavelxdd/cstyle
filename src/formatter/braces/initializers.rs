@@ -1119,6 +1119,21 @@ impl FormatEngine<'_> {
             .map(|frame| frame.body_column)
     }
 
+    /// The column of the list around the one the pending line continues.
+    pub(crate) fn enclosing_inline_array_column(&self) -> Option<usize> {
+        let pending = self.output.len();
+        let frames = &self.inline_array.frames;
+        let opened_here = frames
+            .iter()
+            .rev()
+            .take_while(|frame| frame.output_line == pending)
+            .count();
+        let [.., outer, inner] = &frames[..frames.len() - opened_here] else {
+            return None;
+        };
+        (outer.depth + 1 == inner.depth).then_some(outer.body_column)
+    }
+
     /// Whether the line continues a brace whose first element shares its
     /// line, so it aligns to that element.
     pub(crate) fn continues_aligned_brace_elements(&self) -> bool {
