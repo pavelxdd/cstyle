@@ -3544,7 +3544,31 @@ impl FormatEngine<'_> {
     }
 
     fn should_attach_opening_brace(&self, brace_type: BraceType, next: Option<&Token>) -> bool {
-        !self.current_is_blank() && self.style_attaches_opening_brace(brace_type, next)
+        !self.current_is_blank()
+            && self.style_attaches_opening_brace(brace_type, next)
+            && !(brace_type == BraceType::Command
+                && self.options.brace_style != BraceStyle::Lisp
+                && line_scan::after_leading_comments(self.current.trimmed()).is_empty()
+                && self.brace_follows_case_label_colon())
+    }
+
+    /// Whether the brace being pushed follows a case label's colon, past the
+    /// comments and directives between them: comments leading it break from
+    /// it as from a label's brace.
+    fn brace_follows_case_label_colon(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(colon) = self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .filter(|&colon| matches!(tokens[colon], Token::Symbol(':')))
+        else {
+            return false;
+        };
+        (0..colon)
+            .rev()
+            .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
+            .any(|index| matches!(&tokens[index], Token::Word(word) if word == "case" || word == "default"))
     }
 
     pub(crate) fn style_attaches_opening_brace(

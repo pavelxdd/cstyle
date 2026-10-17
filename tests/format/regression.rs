@@ -13884,3 +13884,23 @@ fn a_comment_after_a_directive_past_a_case_label_stands_in_the_case_body() {
         "void f()\n{\n    switch (kind)\n        {\n        case 1:\n#line 46 \"input.l\"\n            /* note */\n                {\n                pop(state);\n                }\n            break;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_brace_a_comment_leads_after_a_case_label_and_a_directive_breaks_from_the_comment() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1:\n#line 46 \"input.l\"\n            /* note */\n                {\n                pop(state);\n                }\n            break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state); }\n        break; } }\n",
+    );
+}
