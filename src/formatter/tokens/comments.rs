@@ -2429,7 +2429,11 @@ impl FormatEngine<'_> {
         ) {
             return spaces;
         }
-        match self.direct_switch_body_indent_spaces() {
+        let statements = self.direct_switch_body_indent_spaces().or_else(|| {
+            let frame = self.layout.frame_stack.active_brace()?;
+            (frame.header.as_deref() == Some("switch")).then_some(frame.body_indent_column)
+        });
+        match statements {
             Some(statements)
                 if self
                     .current

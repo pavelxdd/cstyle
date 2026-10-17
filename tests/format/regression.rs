@@ -14467,3 +14467,9 @@ fn a_list_argument_of_a_call_in_a_list_aligns_to_its_own_elements() {
         "int list[] = { 7, f({1,\n                     2}),\n               8\n             };\n",
     );
 }
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_stands_at_indented_case_bodies() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &["--style=mozilla", "--indent-cases"], input);
+}
