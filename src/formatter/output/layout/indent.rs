@@ -27,7 +27,7 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, is_comment_only_line, preprocessor_directive,
+    after_leading_comments, has_unmatched_open_brace, is_comment_only_line, preprocessor_directive,
     reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
@@ -668,7 +668,10 @@ impl FormatEngine<'_> {
             .take(256)
             .take_while(|line| !line.trimmed_end().ends_with_any(b";{}"))
         {
-            if colon_spaces.is_none() && previous.trimmed_start().starts_with(':') {
+            // Comments leading an operand row take its column.
+            if colon_spaces.is_none()
+                && after_leading_comments(previous.trimmed_start()).starts_with(':')
+            {
                 colon_spaces = Some(leading_visual_width(previous, self.options.tab_width));
             }
             if previous.contains("asm") || previous.contains("__asm__") {

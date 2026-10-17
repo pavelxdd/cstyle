@@ -14713,3 +14713,10 @@ fn a_directive_after_a_case_block_stands_at_its_label() {
         "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n                {\n                value = 1;\n                break;\n                }\n            #ifdef FEATURE\n        }\n            #endif\n    }\n",
     );
 }
+
+#[test]
+fn an_operand_row_after_a_comment_led_operand_row_stands_with_it() {
+    let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     /* note */ : \"=r\"(value)\n                     : \"r\"(other));\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}
