@@ -14318,3 +14318,29 @@ fn a_row_after_a_row_holding_a_closed_inner_list_stands_at_its_own_list() {
     let input = "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9\n                };\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn a_list_running_in_past_an_element_of_a_nested_list_keeps_its_first_element() {
+    let input = "int list[][2] = {\n    {1, 2}, {3,\n             4}\n};\n";
+    let expected = "int list[][2] = {\n    {1, 2}, {3,\n        4\n    }\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_double_brace_list_breaks_after_its_inner_brace_whatever_its_first_element() {
+    let input = "void f()\n{\n    value = {{\"first\",\n              2}};\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    value = {{\n            \"first\",\n            2\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn styles_running_rows_in_keep_a_nested_list_first_element_after_its_brace() {
+    let input = "void f()\n{\n    value = {{1,\n              2}};\n}\n";
+    let expected = "void f()\n{   value = {{1,\n            2\n        }\n    };\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}

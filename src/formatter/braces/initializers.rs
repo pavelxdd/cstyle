@@ -598,9 +598,15 @@ impl FormatEngine<'_> {
             && self.current.trimmed_end().ends_with(',');
         let range_for_header_initializer =
             double_brace_initializer && self.current.trimmed_start().starts_with("for (");
+        // Styles running rows in after braces keep the first element there.
+        let runs_in = matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        );
         let break_first = (enclosed || double_brace_initializer)
             && !first_is_brace
             && !run_in_after_comma
+            && !runs_in
             && !range_for_header_initializer;
         let nested = enclosed
             || double_brace_initializer
@@ -901,7 +907,6 @@ impl FormatEngine<'_> {
         let finished_inner_closer = !forced_break
             && !broken_enum_row
             && !run_in_after_comment
-            && !self.token_input.token_begins_source_line
             && self.output.len() > open_output_len
             && self.current.trimmed_start().starts_with('}')
             && (closing_line_opened_literal

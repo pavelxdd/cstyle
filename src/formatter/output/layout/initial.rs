@@ -1594,7 +1594,7 @@ impl FormatEngine<'_> {
                     } else if starts_new(previous_body) && starts_new(current_body) {
                         brace_column + self.options.indent_width
                     } else {
-                        column.max(brace_column + 1)
+                        column
                     };
                     let base = self.continuation_base_indent() * self.options.indent_width;
                     let source_indent = self
