@@ -13509,3 +13509,13 @@ fn a_comment_leading_an_enum_head_leaves_its_brace_to_the_style() {
         "/* note */ enum Kind\n{\n    First = 1,\n};\n",
     );
 }
+
+#[test]
+fn a_directive_closing_a_conditional_opened_before_a_switch_stands_at_its_opener() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    switch (kind) {\n#endif\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent-preproc-cond"],
+        "void f() {\n    #ifdef FEATURE\n    switch (kind) {\n    #endif\n        case 1:\n            break;\n        }\n    }\n",
+    );
+}

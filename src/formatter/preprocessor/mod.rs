@@ -1160,7 +1160,15 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        if let Some(spaces) = self.direct_switch_body_indent_spaces() {
+        // A directive closing a conditional opened before the switch body
+        // stands at the one that opened it.
+        let opened_before_block = !opening
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| indent.level < self.layout.indentation.indent());
+        if !opened_before_block && let Some(spaces) = self.direct_switch_body_indent_spaces() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
                 spaces,
