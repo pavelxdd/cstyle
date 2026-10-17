@@ -6395,7 +6395,15 @@ impl FormatEngine<'_> {
         let unindent =
             self.layout.line_adjuster.next_line_case_unindent_depth() * self.options.indent_width;
         if closing.is_some() {
-            return Some(self.output.lead_width(line, self.options.tab_width) + unindent);
+            // Styles indenting braces close the block where they would set
+            // its brace.
+            let brace_indent = usize::from(matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith | BraceStyle::Vtk
+            )) * self.options.indent_width;
+            return Some(
+                self.output.lead_width(line, self.options.tab_width) + brace_indent + unindent,
+            );
         }
         if self.tree.statements.block_opening(first) == Some(open) {
             return Some(

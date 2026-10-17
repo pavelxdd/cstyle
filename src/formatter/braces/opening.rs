@@ -3365,12 +3365,26 @@ impl FormatEngine<'_> {
             | BraceStyle::WebKit
             | BraceStyle::Ratliff
             | BraceStyle::Lisp => true,
+            // A brace a block comment and a line comment follow stays on its
+            // line, which cannot take both comments before it.
             BraceStyle::Allman
             | BraceStyle::Whitesmith
             | BraceStyle::Vtk
             | BraceStyle::Gnu
             | BraceStyle::Horstmann
-            | BraceStyle::Pico => false,
+            | BraceStyle::Pico => {
+                !self.token_input.token_begins_source_line
+                    && self.token_input.token_followed_by_line_comment_on_line
+                    && self.current.active_token().is_some_and(|brace| {
+                        self.tree.tokens[brace + 1..]
+                            .iter()
+                            .find(|token| !matches!(token, Token::Whitespace(_)))
+                            .is_some_and(|token| {
+                                matches!(token, Token::Comment(CommentKind::Block, comment)
+                                    if !comment.contains('\n'))
+                            })
+                    })
+            }
         }
     }
 

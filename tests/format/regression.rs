@@ -13757,3 +13757,32 @@ fn vtk_closes_the_groups_of_a_file_scope_aggregate_run_in_list_as_their_braces_o
     check(input, &["--style=vtk"], input);
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_case_label_brace_before_a_block_and_a_line_comment_stays_on_the_label_line() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: { /* a */ // b\n        y();\n        break;\n    }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    switch (x)\n    {\n    case 1: { /* a */ // b\n        y();\n        break;\n    }\n    }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n            }\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n            }\n        }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   switch (x)\n    {   case 1: { /* a */ // b\n            y();\n            break;\n        }\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n        }\n        }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+    }
+}
