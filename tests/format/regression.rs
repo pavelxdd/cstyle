@@ -14525,3 +14525,13 @@ fn an_element_list_of_a_typed_brace_initializer_stays_on_its_row() {
         "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n    Item w{ {1, 2},\n        {3, 4} };\n}\n",
     );
 }
+
+#[test]
+fn vtk_stands_the_brace_rows_of_a_typed_brace_initializer_a_level_past_the_statement() {
+    let input = "void f()\n{\n    auto x = Item{ {1, 2},\n                   {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n}\n",
+    );
+}

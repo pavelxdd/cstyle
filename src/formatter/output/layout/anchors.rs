@@ -1258,7 +1258,14 @@ impl FormatEngine<'_> {
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
-            || (self.options.brace_style == BraceStyle::Vtk && !self.in_code(open))
+            || (self.options.brace_style == BraceStyle::Vtk
+                && (!self.in_code(open)
+                    // VTK sets a typed brace initializer's rows as a
+                    // statement's continuation.
+                    || self
+                        .tree
+                        .previous_code_token(open)
+                        .is_some_and(|before| matches!(tokens[before], Token::Word(_)))))
             || !(rows.brace_rows.contains(&open)
                 || closer && self.holds_line_ending_brace(group) == Some(true))
         {
