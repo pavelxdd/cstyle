@@ -14838,3 +14838,13 @@ fn a_label_continued_over_lines_in_a_switch_a_comment_leads_stands_as_a_label() 
         "void f() {\n    /* note */ switch (flags) {\n    case FIRST |\n            SECOND:\n        value = 1;\n        break; } }\n",
     );
 }
+
+#[test]
+fn a_row_after_a_directive_in_a_continued_declarator_list_stands_as_without_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n#ifdef FEATURE\n            1, 2\n#endif\n        },\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n#ifdef FEATURE\n        1, 2\n#endif\n    },\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}

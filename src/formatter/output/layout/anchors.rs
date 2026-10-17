@@ -2481,7 +2481,7 @@ impl FormatEngine<'_> {
 
     /// The output line on which the statement continued on output line
     /// `line` starts; a row or declarator after a `,` starts its own.
-    fn statement_start_line(&self, mut line: usize) -> usize {
+    pub(crate) fn statement_start_line(&self, mut line: usize) -> usize {
         let tokens = &self.tree.tokens;
         while let Some(first) = self.output.line_tokens(line).map(|span| span.first)
             && !self.tree.statements.starts_block_statement(first)

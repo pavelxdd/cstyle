@@ -1292,6 +1292,9 @@ impl FormatEngine<'_> {
                         layout.exact_indent_spaces = Some(spaces);
                     }
                 } else if header_code.ends_with('{') && !self.in_unindented_scope_body() {
+                    // A brace ending a continued line opens its body past the
+                    // statement's first line.
+                    let header = &self.output[self.statement_start_line(header_index)];
                     let spaces = leading_visual_width(header, self.options.tab_width)
                         + self.options.indent_width;
                     if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
