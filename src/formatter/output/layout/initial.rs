@@ -1638,7 +1638,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
             } else if let Some(previous) = self.output.last_line_outside_comment()
                 && previous.trimmed_end().ends_with(',')
-                && !previous.trimmed_start().starts_with_any(b":,")
+                && !previous.trimmed_start().starts_with_any(b":,}")
             {
                 let previous_spaces = leading_visual_width(previous, self.options.tab_width);
                 if previous_spaces > current_spaces {
