@@ -2195,10 +2195,12 @@ impl FormatEngine<'_> {
                 }
                 _ => self.ensure_space(),
             },
+            // A typed initializer right after a directive line takes the
+            // space; an empty line between them leaves the source gap.
             None if braced_init
                 && self
                     .output
-                    .last_non_empty_scoped()
+                    .last()
                     .is_some_and(|line| line.trimmed_start().starts_with("#if")) =>
             {
                 self.ensure_space();
@@ -2214,7 +2216,7 @@ impl FormatEngine<'_> {
                         || !self.preprocessor.branch_stack.is_empty()))
                     || self
                         .output
-                        .last_non_empty_scoped()
+                        .last()
                         .is_some_and(|line| line.trimmed_start().starts_with("#endif"))) =>
             {
                 self.ensure_space();
