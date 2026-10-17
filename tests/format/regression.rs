@@ -15078,3 +15078,9 @@ fn lisp_padding_before_a_row_a_closer_joins_leaves_an_empty_line_already_there()
     let input = "void f() {\n    if (ready) {\n        value=0; }\n\n    else if (other) {\n\n        value=1; } /* last */ else {\n\n        value=2; } /* note */\n}\n";
     check(input, &["--style=lisp", "--break-blocks=all"], input);
 }
+
+#[test]
+fn deleting_empty_lines_keeps_one_ending_a_continued_line() {
+    let input = "void f()\n{\n#define CHECK(A) \\\n    fail();  \\\n\n    value = 1;\n}\n";
+    check(input, &["--style=kr", "--delete-empty-lines"], input);
+}

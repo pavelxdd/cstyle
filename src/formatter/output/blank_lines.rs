@@ -92,6 +92,11 @@ impl FormatEngine<'_> {
             && !self.layout.nesting.brace_type_stack.is_empty()
             && !self.preserve_block_spacing_comment_blank
             && !self.in_empty_line_protected_context()
+            // An empty line after a line splice ends the spliced line.
+            && !self
+                .output
+                .last()
+                .is_some_and(|line| line.trimmed_end().ends_with('\\'))
     }
 
     fn in_empty_line_protected_context(&self) -> bool {
