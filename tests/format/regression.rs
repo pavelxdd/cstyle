@@ -14944,3 +14944,13 @@ fn a_list_a_comment_leads_in_a_case_block_indents_its_rows_past_the_declaration(
     let input = "void f()\n{\n    switch (op) {\n    default: {\n        /* note */ int table[][2] = {\n            { FIRST, 1 },\n            { SECOND, 2 },\n        };\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn vtk_keeps_designator_rows_after_an_indented_nested_closer_at_their_level() {
+    let input = "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n        },\n        [SECOND] = {\n            .type = 1,\n        },\n    },\n};\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n            },\n        [SECOND] = {\n            .type = 1,\n            },\n    },\n};\n",
+    );
+}
