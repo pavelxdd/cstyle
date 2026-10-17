@@ -15209,3 +15209,12 @@ fn a_comment_line_after_a_chained_assignment_and_a_directive_carries_its_continu
         "void f()\n{\n#ifdef FEATURE\n    first = second = third =\n#endif\n                         // note\n                         value;\n}\n",
     );
 }
+
+#[test]
+fn horstmann_runs_a_comment_led_member_in_at_the_indented_class_body() {
+    check(
+        "class Pair\n{\n    /* note */ First first;\n};\n",
+        &["--style=horstmann", "--indent-classes"],
+        "class Pair\n{       /* note */ First first;\n};\n",
+    );
+}
