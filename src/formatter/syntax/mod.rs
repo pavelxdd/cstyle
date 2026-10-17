@@ -446,7 +446,7 @@ pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> IndexSet<usize>
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct BraceListRows {
     /// Lists that stand their rows a level in: a brace among their elements
-    /// begins its source line or stands first after theirs.
+    /// begins or ends its source line or stands first after theirs.
     pub(crate) nested: IndexSet<usize>,
     /// Braces past an element on a row of a list whose elements run in
     /// after its brace and align there; their own elements align to them in
@@ -469,8 +469,14 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
         match token {
             Token::Whitespace(_) => continue,
             Token::Newline => {
+                // A brace among elements that ends its line opens rows.
+                if let Some(open) = open_on_line.take()
+                    && stack.last() == Some(&open)
+                    && let Some(&parent) = stack.len().checked_sub(2).and_then(|at| stack.get(at))
+                {
+                    rows.nested.insert(parent);
+                }
                 begins_line = true;
-                open_on_line = None;
                 continue;
             }
             Token::Comment(..) => {}

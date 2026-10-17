@@ -14344,3 +14344,9 @@ fn styles_running_rows_in_keep_a_nested_list_first_element_after_its_brace() {
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn a_list_holding_an_element_brace_that_ends_its_line_stands_its_rows_a_level_in() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7, {\n            1,\n            2\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+}
