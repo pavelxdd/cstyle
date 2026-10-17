@@ -1826,10 +1826,10 @@ impl FormatEngine<'_> {
             return None;
         }
         // A block kept on its line stands as a statement after a label.
+        let after_label = std::mem::take(&mut self.statement_after_label_pending);
         if self.previous_was_newline
             || source_separate_macro_block
-            || std::mem::take(&mut self.statement_after_label_pending)
-                && self.current_holds_comments_after_label(false)
+            || after_label && self.current_holds_comments_after_label(false)
         {
             self.finish_line();
         }

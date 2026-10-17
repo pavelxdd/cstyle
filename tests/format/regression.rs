@@ -15177,3 +15177,9 @@ fn pico_runs_a_bare_block_after_a_switch_in_as_after_any_statement() {
         "void f()\n{   switch (state)\n    {   case 1:\n            break; }\n    {   value=0; } }\n",
     );
 }
+
+#[test]
+fn a_block_kept_after_a_label_leaves_the_comments_leading_the_next_line() {
+    let input = "void f()\n{\ndone:\n    { value=0; }\n    /* note */ value = 1;\n}\n";
+    check(input, &["--style=1tbs", "--keep-one-line-blocks"], input);
+}
