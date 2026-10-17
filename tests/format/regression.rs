@@ -15268,3 +15268,9 @@ fn vtk_breaks_a_list_brace_off_the_comment_leading_it_at_the_brace_column() {
         "void f()\n{\n    struct Item item =\n    /* note */\n        {\n        1, 2\n        };\n}\n",
     );
 }
+
+#[test]
+fn a_bit_field_colon_leading_its_line_keeps_the_space_after_it() {
+    let input = "struct Item {\n    int a\n    : 3;\n    int b\n    :  4;\n};\n";
+    check(input, &["--style=kr"], input);
+}

@@ -1828,6 +1828,18 @@ impl FormatEngine<'_> {
             return false;
         }
         let current = self.current.trimmed_end();
+        // A colon leading its line goes on with the member before it.
+        let current = if current.is_empty() {
+            match self.output.last_code_line_past_comments_and_directives() {
+                Some(line) => self.output.code_trimmed_of(line),
+                None => return false,
+            }
+        } else {
+            current
+        };
+        if current.ends_with_any(b";{}") {
+            return false;
+        }
         let segment = current
             .rfind([';', '{', '}'])
             .map_or(current, |index| &current[index + 1..])
