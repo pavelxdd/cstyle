@@ -1363,7 +1363,7 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+                .is_some_and(|line| is_lambda_body_header(self.output.code_trimmed_of(line)));
         let lambda_header = self.current_is_lambda_body_header()
             || previous_line_lambda_header
             || (self.current.trimmed_end().ends_with(')')
@@ -1719,10 +1719,10 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+                .is_some_and(|line| is_lambda_body_header(self.output.code_trimmed_of(line)));
         let previous_line_trailing_return_lambda_header = self.current_is_blank()
             && self.output.last_non_empty_scoped().is_some_and(|line| {
-                let line = line.trimmed_end();
+                let line = self.output.code_trimmed_of(line);
                 is_lambda_body_header(line) && line.contains("->")
             });
         // A control header's condition indexing an array opens no lambda.

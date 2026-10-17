@@ -15047,3 +15047,18 @@ fn a_function_brace_inside_a_conditional_opens_a_function_body() {
         "void f()\n#ifdef FEATURE\n{\n#endif\n    {\n        value = 0;\n    }\n    value = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_lambda_head_leaves_its_body_brace_as_without_it() {
+    let input = "void f()\n{\n    helper(items, [&](const Item &item)  /* note */\n    { return item.value > 0; });\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    helper(items, [&](const Item &item) { /* note */\n        return item.value > 0;\n    });\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    helper(items, [&](const Item &item)  /* note */\n    {\n        return item.value > 0;\n    });\n}\n",
+    );
+}
