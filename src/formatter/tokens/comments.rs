@@ -2842,6 +2842,18 @@ impl FormatEngine<'_> {
             .or(previous_element_row_indent)
             .or(definition_header_comment_indent)
             .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
+            // An enumerator no comma ends goes on past the comment.
+            .or_else(|| {
+                (self.in_enum_declaration_brace()
+                    && previous_line.is_some_and(|line| {
+                        let code = self.output.code_trimmed_of(line);
+                        !code.is_empty()
+                            && !code.ends_with_any(b",{}")
+                            && !code.trimmed_start().starts_with('#')
+                    }))
+                .then_some(self.layout.continuation_indent.next_line_indent_spaces)
+                .flatten()
+            })
             .or_else(|| self.active_body_comment_indent_spaces())
             .or_else(|| {
                 (self.layout.indentation.statement_depth() > 0)

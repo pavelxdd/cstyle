@@ -195,6 +195,13 @@ impl FormatEngine<'_> {
                 && self.layout.frame_stack.active_stream().is_some_and(|stream| {
                     self.output.last_code_line_index_past_comments_and_directives()
                         == Some(stream.operator_output_line)
+                })
+            // So does an enumerator's value no comma ends.
+            || self.layout.continuation_indent.next_line_indent_spaces.is_some()
+                && self.in_enum_declaration_brace()
+                && self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    let code = self.output.code_trimmed_of(previous);
+                    find_assignment_operator(code).is_some() && !code.ends_with_any(b",{}")
                 });
         if in_continuation {
             return;

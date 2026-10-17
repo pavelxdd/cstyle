@@ -15218,3 +15218,13 @@ fn horstmann_runs_a_comment_led_member_in_at_the_indented_class_body() {
         "class Pair\n{       /* note */ First first;\n};\n",
     );
 }
+
+#[test]
+fn a_comment_after_an_empty_line_continues_the_last_enumerator_as_without_it() {
+    let input = "enum Kind {\n    FIRST = 0x01,\n    SECOND = 0x02\n\n    /**\n      note\n    */\n};\nenum Other {\n    FIRST = 0x01\n\n    // note\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "enum Kind {\n    FIRST = 0x01,\n    SECOND = 0x02\n\n             /**\n               note\n             */\n};\nenum Other {\n    FIRST = 0x01\n\n            // note\n};\n",
+    );
+}
