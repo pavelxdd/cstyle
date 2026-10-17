@@ -14964,3 +14964,19 @@ fn a_comment_after_the_while_of_an_else_do_leaves_its_closer_at_the_else_body_be
         "void f()\n{\n    if (ready) helper();\n    else do {\n            first();\n#ifdef FEATURE\n        } while (state); /* note */\n#endif\n    value = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_preprocessor_block_opening_the_file_indents_a_class_head_as_one_after_code() {
+    let input = "#ifdef FEATURE\nclass Item;\n#endif\nint value;\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-block"],
+        "#ifdef FEATURE\n    class Item;\n#endif\nint value;\n",
+    );
+    let input = "int first;\n#ifdef FEATURE\nclass Item;\n#endif\nint value;\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-block"],
+        "int first;\n#ifdef FEATURE\n    class Item;\n#endif\nint value;\n",
+    );
+}
