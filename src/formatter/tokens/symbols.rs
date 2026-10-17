@@ -25,7 +25,8 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    after_leading_comments, is_bare_comment_line, is_comment_only_line, trailing_matching_parens,
+    after_leading_comments, is_bare_comment_line, is_comment_only_line,
+    trailing_comment_split_limit, trailing_matching_parens,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
@@ -1858,12 +1859,15 @@ impl FormatEngine<'_> {
     }
 
     fn is_class_initializer_colon(&self) -> bool {
-        let code = &self.current[..self.current_trailing_comment_split_limit()];
+        // Comments leading the head take no part in it.
+        let code = after_leading_comments(self.current.trimmed());
+        let code = &code[..trailing_comment_split_limit(code)];
         self.code_is_class_initializer_signature(code.trimmed_end())
     }
 
     pub(crate) fn class_initializer_follows_function_try(&self) -> bool {
-        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed_end();
+        let code = after_leading_comments(self.current.trimmed());
+        let code = code[..trailing_comment_split_limit(code)].trimmed_end();
         if trailing_word(code) == "try" {
             return true;
         }
@@ -1875,7 +1879,8 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find_map(|line| {
-                let code = self.output.code_of(line).trimmed();
+                // Comments leading a line's code take no part in it.
+                let code = after_leading_comments(self.output.code_of(line).trimmed());
                 (!code.is_empty() && !code.starts_with_any(b"#/*")).then_some(code)
             })
             .is_some_and(|code| trailing_word(code) == "try")
@@ -1933,7 +1938,7 @@ impl FormatEngine<'_> {
             return false;
         };
         let code = &self.output.code_of(line);
-        self.code_is_class_initializer_signature(code.trimmed_end())
+        self.code_is_class_initializer_signature(after_leading_comments(code.trimmed()))
     }
 
     fn ternary_owner_role_for_question(&self) -> TernaryOwnerRole {

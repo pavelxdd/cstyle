@@ -15310,3 +15310,19 @@ fn indenting_after_parens_steps_arguments_split_off_an_assignment_a_comment_lead
         "void f()\n{\n    /* c */ value = compute(first_argument, second_argument,\n            third);\n}\n",
     );
 }
+
+#[test]
+fn a_constructor_head_a_comment_leads_opens_its_initializers_as_without_it() {
+    let input =
+        "int count;\n\n/* note */ Item::Item(int value)\n    : value(value), other(0)\n{\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_function_try_head_a_comment_leads_parts_its_initializer_colon_as_without_it() {
+    check(
+        "int count;\n/* b */ Item::Item(int value) try\n    : value(value)\n{\n} catch (...) {\n}\n",
+        &["--style=kr"],
+        "int count;\n/* b */ Item::Item(int value) try\n:\n    value(value)\n{\n} catch (...)\n{\n}\n",
+    );
+}
