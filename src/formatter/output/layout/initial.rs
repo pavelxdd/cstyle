@@ -15,6 +15,7 @@ use crate::formatter::continuation::{
     ContinuationIndent, operator_chains, splits_aggregate_declaration_name,
 };
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::output::model::{AlignedLineLayout, LineLayout, LineReplayLayout, LineRoute};
 use crate::formatter::preprocessor::is_known_preprocessor_directive;
 use crate::formatter::preprocessor::layout::SplitElseLineStart;
@@ -189,6 +190,26 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// The source indent of the line being laid out, from its first token
+    /// when that token begins its source line: a line finished at a token on
+    /// a later source line keeps the indent it was written at.
+    fn pending_line_source_indent(&self) -> usize {
+        let tokens = &self.tree.tokens;
+        self.output
+            .pending_tokens()
+            .and_then(|span| {
+                let start = tokens[..span.first]
+                    .iter()
+                    .rposition(|token| !matches!(token, Token::Whitespace(_)))
+                    .map_or(0, |position| position + 1);
+                (start == 0 || matches!(tokens[start - 1], Token::Newline)).then(|| {
+                    let indent: String = tokens[start..span.first].iter().map(token_text).collect();
+                    leading_visual_width(&indent, self.options.tab_width)
+                })
+            })
+            .unwrap_or(self.token_input.token_source_line_indent)
+    }
+
     fn normal_line_layout(
         &mut self,
         line: &LineView<'_>,
@@ -262,7 +283,7 @@ impl FormatEngine<'_> {
             } else if let Some(column) = self.paren_column_past_closed_braces(previous_code) {
                 spaces = Some(column);
             } else if self.layout.indentation.indent() == 0
-                && self.token_input.token_source_line_indent == 0
+                && self.pending_line_source_indent() == 0
                 && previous_code.trimmed_start().starts_with('#')
                 && line
                     .trimmed_start()

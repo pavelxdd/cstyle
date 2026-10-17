@@ -14059,3 +14059,12 @@ fn a_declarator_split_from_its_aggregate_type_continues_after_a_conditional_else
     let input = "#ifdef FEATURE\ntemplate <typename T>\n#endif\nT helper(T value)\n{\n    return value;\n}\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n";
     check(input, &["--style=linux"], input);
 }
+
+#[test]
+fn a_base_row_after_a_conditional_continues_its_class_head_before_a_brace_on_its_own_line() {
+    // The row continues the head where it was written, whatever column the
+    // brace after it stands at.
+    let input = "class Derived : public Base,\n#ifdef FEATURE\n    private Other\n{\n#endif\npublic:\n    int value;\n};\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=vtk"], input);
+}
