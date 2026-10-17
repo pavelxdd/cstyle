@@ -14439,3 +14439,13 @@ fn a_comment_led_statement_before_the_first_case_stands_at_the_case_bodies() {
         "void f()\n    {\n    switch (state)\n        {\n            /* note */ value = 0;\n        case 1:\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_runs_into_the_switch_brace() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (state)\n    {   /* note */ value = 0;\n        case 1:\n            break;\n    }\n}\n",
+    );
+}

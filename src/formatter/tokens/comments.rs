@@ -2420,8 +2420,15 @@ impl FormatEngine<'_> {
     }
 
     /// A comment leading a statement directly in a switch body stands where
-    /// the statements of the switch's cases do, before its first label too.
+    /// the statements of the switch's cases do, before its first label too;
+    /// one a style runs into the switch's brace stands after it.
     fn switch_statement_comment_floor(&self, spaces: usize) -> usize {
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) {
+            return spaces;
+        }
         match self.direct_switch_body_indent_spaces() {
             Some(statements)
                 if self
