@@ -1533,6 +1533,7 @@ impl FormatEngine<'_> {
                 }
             }
         } else if case_label_colon
+            && !aligned_continuation_colon
             && !self.statement_after_label_pending
             && !matches!(
                 next,

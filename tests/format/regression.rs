@@ -14130,3 +14130,13 @@ fn vtk_closes_each_group_of_a_file_scope_aggregate_list_at_its_brace() {
     check(input, &["--style=vtk"], input);
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_brace_after_a_case_label_split_over_lines_keeps_one_space_in_lisp() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST |\n         THIRD: {\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (op) {\n    case FIRST |\n            THIRD: {\n            value = 2;\n            break; } } }\n",
+    );
+}
