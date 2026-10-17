@@ -14489,3 +14489,13 @@ fn a_conditional_between_a_nested_braceless_header_and_its_body_stands_at_the_he
     let input = "void f()\n{\n    if (ready)\n        if (other)\n        #ifdef FEATURE\n            value=0;\n        #endif\n        else\n        #ifdef FEATURE\n            result=0;\n        #endif\n}\n";
     check(input, &["--style=kr", "--indent-preproc-cond"], input);
 }
+
+#[test]
+fn a_comment_after_conditionals_closing_over_a_comment_line_stands_at_its_scope() {
+    let input = "#if FEATURE\n# ifndef VALUE\n   /* note */\n# endif\n#endif\n/* end */\n";
+    check(
+        input,
+        &["--style=stroustrup", "-w", "-xW", "-xw", "-Y"],
+        "#if FEATURE\n    #ifndef VALUE\n        /* note */\n    #endif\n#endif\n/* end */\n",
+    );
+}

@@ -1237,11 +1237,19 @@ impl<'a> FormatEngine<'a> {
     }
 
     fn observe_input_line(&mut self, tokens: &[Token]) {
-        // A directive leaves the continuation to the line after it.
+        // A directive after a statement's continued line leaves its
+        // continuation to the line after it.
         let directive = tokens
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
-            .is_some_and(|token| matches!(token, Token::Preprocessor(_)));
+            .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
+            && (0..self.output.len())
+                .rev()
+                .find(|&index| !self.output.is_directive_line(index))
+                .is_some_and(|index| {
+                    self.output.comment_start_index(index) == index
+                        && !self.output.code_before_comment_trimmed(index).is_empty()
+                });
         self.layout
             .continuation_indent
             .input_line_continuation_indent = if directive {
