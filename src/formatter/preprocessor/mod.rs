@@ -1198,11 +1198,9 @@ impl FormatEngine<'_> {
                 .is_some_and(|indent| indent.spaces.is_some());
         if !opened_before_block
             && !follows_opener
-            && let Some(spaces) = self.direct_switch_body_indent_spaces().map(|spaces| {
-                spaces
-                    + self.layout.line_adjuster.case_unindent_depth_for_line("#")
-                        * self.options.indent_width
-            })
+            && let Some(spaces) = self
+                .direct_switch_body_indent_spaces()
+                .map(|spaces| spaces + self.enclosing_case_block_unindent_spaces())
         {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -1286,13 +1284,11 @@ impl FormatEngine<'_> {
             .active_directive
             .is_none_or(|directive| self.tree.groups.enclosing(directive).is_some());
         if in_braces && let Some(case_label_column) = self.active_case_label_indent_spaces() {
-            // The line adjuster takes the case unindent of the line off.
             PreprocessorLineIndent::Exact {
                 structural_level: self.layout.indentation.indent() + 1,
                 spaces: case_label_column
                     + self.options.indent_width
-                    + self.layout.line_adjuster.case_unindent_depth_for_line("#")
-                        * self.options.indent_width,
+                    + self.enclosing_case_block_unindent_spaces(),
             }
         } else {
             // A block nested in a case body stands past the case's own level.
@@ -1302,6 +1298,16 @@ impl FormatEngine<'_> {
                     + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The case unindent the line adjuster takes off a directive in a switch
+    /// that case blocks enclose: the switch's labels took it off already.
+    fn enclosing_case_block_unindent_spaces(&self) -> usize {
+        self.layout
+            .line_adjuster
+            .case_unindent_depth_for_line("#")
+            .min(self.layout.frame_stack.open_case_blocks())
+            * self.options.indent_width
     }
 
     /// astyle indents a conditional's continued lines as code: after a paren

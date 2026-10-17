@@ -15594,3 +15594,11 @@ fn a_compound_literal_row_its_closer_parts_stands_among_the_rows_before_it() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn a_conditional_before_a_label_after_a_case_block_and_its_statements_stands_at_the_labels() {
+    let input = "void f()\n{\n    switch (x) {\n    case 0:\n        a();\n        break;\n    case 1: {\n        b();\n    }\n    break;\n\n#ifdef FEATURE\n    case 2: {\n        c();\n    }\n    break;\n#endif\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n    case 0:\n        a();\n        break;\n    case 1: {\n        b();\n    }\n    break;\n\n    #ifdef FEATURE\n    case 2: {\n        c();\n    }\n    break;\n    #endif\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}

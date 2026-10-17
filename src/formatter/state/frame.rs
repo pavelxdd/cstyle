@@ -1137,6 +1137,14 @@ impl FrameStack {
         self.brace_frames.last()
     }
 
+    /// The case blocks open around the innermost brace.
+    pub(crate) fn open_case_blocks(&self) -> usize {
+        self.brace_frames
+            .iter()
+            .filter(|frame| frame.case_block)
+            .count()
+    }
+
     pub(crate) fn active_brace_mut(&mut self) -> Option<&mut BraceFrame> {
         self.brace_frames.last_mut()
     }
