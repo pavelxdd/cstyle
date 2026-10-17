@@ -13519,3 +13519,9 @@ fn a_directive_closing_a_conditional_opened_before_a_switch_stands_at_its_opener
         "void f() {\n    #ifdef FEATURE\n    switch (kind) {\n    #endif\n        case 1:\n            break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_line_among_call_arguments_in_a_list_stands_at_the_arguments() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n    struct Item item = {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n}\n";
+    check(input, &[], input);
+}
