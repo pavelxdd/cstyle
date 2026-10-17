@@ -14548,11 +14548,11 @@ fn a_row_closing_a_list_past_the_maximum_continuation_stays_at_its_elements() {
 
 #[test]
 fn list_rows_past_the_maximum_continuation_stay_at_their_elements() {
-    let input = "void f(void)\n{\n\tmerge_iter_args_type merge_iteration_args_value = {tsd_tsdn(tsd),\n\t    cnt_all,\n\t    other};\n}\n";
+    let input = "void f(void)\n{\n\thelper_args_config_t result_with_iteration_args = {make_item(cx),\n\t    counter,\n\t    other};\n}\n";
     check(
         input,
         &["--style=allman"],
-        "void f(void)\n{\n    merge_iter_args_type merge_iteration_args_value = {tsd_tsdn(tsd),\n                                                       cnt_all,\n                                                       other\n                                                      };\n}\n",
+        "void f(void)\n{\n    helper_args_config_t result_with_iteration_args = {make_item(cx),\n                                                       counter,\n                                                       other\n                                                      };\n}\n",
     );
 }
 
