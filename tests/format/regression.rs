@@ -14735,3 +14735,13 @@ fn run_in_styles_keep_the_first_element_after_a_list_brace_comments_lead() {
         "void f()\n{   static const struct Item items[] =\n    {   {3, 4 },\n        /* note */ {5,\n            6 } }; }\n",
     );
 }
+
+#[test]
+fn a_list_argument_a_comment_leads_closes_as_one_without_it() {
+    let input = "void f()\n{\n    call(value, {1,\n         2});\n    call(value, /* note */ {1,\n         2});\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    call(value, {1,\n                 2\n                });\n    call(value, /* note */ {1,\n                            2\n                           });\n}\n",
+    );
+}
