@@ -20,6 +20,7 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -1571,19 +1572,24 @@ impl FormatEngine<'_> {
         let in_header_condition = self.layout.frame_stack.in_header_condition();
         let header_condition_row_indent = in_header_condition
             .then(|| {
-                self.output
-                    .last_non_empty_scoped()
-                    .filter(|line| {
-                        let trimmed = line.trimmed_start();
-                        !is_comment_only_line(trimmed)
-                            && !["if", "while", "for"]
-                                .iter()
-                                .any(|header| comment_starts_header_word(trimmed, header))
-                            && !trimmed.starts_with("} while")
-                            && !trimmed.starts_with("else if")
-                            && !trimmed.starts_with("} else if")
-                    })
-                    .map(|line| leading_visual_width(line, self.options.tab_width))
+                let line = self.output.last_non_empty_scoped().filter(|line| {
+                    let trimmed = line.trimmed_start();
+                    !is_comment_only_line(trimmed)
+                        && !["if", "while", "for"]
+                            .iter()
+                            .any(|header| comment_starts_header_word(trimmed, header))
+                        && !trimmed.starts_with("} while")
+                        && !trimmed.starts_with("else if")
+                        && !trimmed.starts_with("} else if")
+                })?;
+                // A row closing parens it did not open leaves the column of
+                // the paren around them.
+                if self.paren_imbalance_of(self.output.code_trimmed_of(line)).0 > 0 {
+                    return self
+                        .comment_paren_content_column()
+                        .map(|column| column + self.case_unindent_spaces());
+                }
+                Some(leading_visual_width(line, self.options.tab_width))
             })
             .flatten();
         if kind == CommentKind::Block
@@ -2355,6 +2361,21 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the comment at token `index` leads a closer on its line.
+    /// The column of the first code in the paren around the comment being
+    /// placed, when that code comes before the comment.
+    fn comment_paren_content_column(&self) -> Option<usize> {
+        let comment = self.current.active_comment()?;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(comment)?;
+        if groups.get(group).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let content = next_code_token(&self.tree.tokens, groups.get(group).open + 1)?;
+        (content < comment)
+            .then(|| self.token_column(content))
+            .flatten()
+    }
+
     /// Whether the comment at token `index` leads a `case` or `default`
     /// label on its line.
     fn comment_leads_switch_label(&self, index: usize) -> bool {

@@ -2770,7 +2770,9 @@ impl FormatEngine<'_> {
         } else {
             let open = groups.get(group).open;
             let content = self.token_column(next_code_token(tokens, open + 1)?)?;
-            // The parens may nest in a control header's condition.
+            // The parens may nest in a control header's condition, opened
+            // on the header's line.
+            let open_line = self.output.line_with_token(open);
             let condition = std::iter::successors(Some(group), |&inner| {
                 groups
                     .get(inner)
@@ -2783,6 +2785,7 @@ impl FormatEngine<'_> {
                     .is_some_and(|keyword| {
                         matches!(&tokens[keyword], Token::Word(word)
                             if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                            && self.output.line_with_token(keyword) == open_line
                     })
             });
             match self.control_condition_header_indent().filter(|_| condition) {

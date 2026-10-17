@@ -13392,3 +13392,9 @@ fn a_comment_line_after_the_last_designator_stands_at_the_designators() {
     let input = "struct Config c = {\n    .first = 1,\n    .last = '*'\n    // note /* inner */ text\n};\nstruct Config d = {\n    .first = 1,\n    .last = '*'\n    /* note */\n};\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_line_after_a_condition_row_closing_parens_stands_at_the_open_paren() {
+    let input = "void f(void)\n{\n    if (\n        (a\n         || (b\n             && (c\n                 || d))\n         /* note */\n         || (e\n             && g))) {\n        h();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
