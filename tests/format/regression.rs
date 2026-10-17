@@ -14755,3 +14755,9 @@ fn a_list_argument_closer_before_more_arguments_stands_at_its_brace() {
         "void f()\n{\n    helper(first, { .a = 1,\n                    .b = 2\n                  }, last);\n    helper(first, {1,\n                   2\n                  }, last);\n}\n",
     );
 }
+
+#[test]
+fn whitesmith_keeps_an_interface_header_a_comment_leads_on_its_line() {
+    let input = "/* note */ @interface Item : NSObject\n@property (nonatomic) int value;\n@end\n";
+    check(input, &["--style=whitesmith"], input);
+}

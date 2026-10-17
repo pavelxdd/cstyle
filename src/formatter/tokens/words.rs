@@ -81,7 +81,7 @@ impl FormatEngine<'_> {
             && !self.current_line_has_class_initializer_colon
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
-            && !self.current.trimmed_start().starts_with("@interface ")
+            && !after_leading_comments(self.current.trimmed_start()).starts_with("@interface ")
             && !self.current.has_unclosed_bracket()
             && self.current.trimmed_end().ends_with(':')
             && !self.current.trimmed_end().ends_with("::")
