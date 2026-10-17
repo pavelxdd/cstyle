@@ -13993,3 +13993,13 @@ fn a_chain_row_after_a_comment_and_an_empty_line_continues_its_chain() {
     let input = "void f()\n{\n    std::cout << first\n              // c\n\n              << second;\n    std::cout << first\n\n              // c\n              << second;\n    std::cout << first\n              /* c */\n\n              << second;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_after_the_closer_of_a_labels_block_moves_none_of_it() {
+    let input = "void f()\n{\n    x = 1;\n    done: {\n        value = 1;\n    } // note\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    x = 1;\ndone: {\n        value = 1;\n    } // note\n    result = 1;\n}\n",
+    );
+}
