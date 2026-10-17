@@ -1474,9 +1474,11 @@ impl FormatEngine<'_> {
         });
         if head_row_spaces.is_none()
             && kind == CommentKind::Block
-            && self.current.trimmed().is_empty()
             && !comment.contains('\n')
             && class_base_comment_indent.is_none()
+            // A member initializer's row a comment leads is no list's.
+            && constructor_member_comment_indent.is_none()
+            && self.current.trimmed().is_empty()
             && let Some(previous) = self.output.last_non_empty_scoped()
         {
             // Directives between the rows leave the row before them.
@@ -1700,8 +1702,11 @@ impl FormatEngine<'_> {
                 .current
                 .active_comment()
                 .is_some_and(|index| self.comment_leads_switch_label(index));
-            self.comments.comment_keeps_line_column =
-                label_line.is_some() || head_row_spaces.is_some() || leads_switch_label;
+            // As does a constructor's member initializer.
+            self.comments.comment_keeps_line_column = label_line.is_some()
+                || head_row_spaces.is_some()
+                || leads_switch_label
+                || constructor_member_comment_indent.is_some();
             if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1
