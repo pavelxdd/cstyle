@@ -14515,3 +14515,13 @@ fn an_operand_after_a_comment_line_continues_the_expression_before_it() {
     let input = "void f()\n{\n    total +=\n        // note\n        value * other;\n    total =\n        /* note */\n        value * other;\n}\n";
     check(input, &["--style=1tbs", "--align-pointer=name"], input);
 }
+
+#[test]
+fn an_element_list_of_a_typed_brace_initializer_stays_on_its_row() {
+    let input = "void f()\n{\n    auto x = Item{ {1, 2},\n                   {3, 4} };\n    Item w{ {1, 2},\n            {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n    Item w{ {1, 2},\n        {3, 4} };\n}\n",
+    );
+}

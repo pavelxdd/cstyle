@@ -860,10 +860,12 @@ impl FormatEngine<'_> {
             .get(open_output_len)
             .is_some_and(|line| line.trimmed_start().starts_with("return "));
         // A returned `{{` keeps its closers on the last row.
-        let enclosed_run_in = self.output.get(open_output_len).is_some_and(|line| {
-            line.contains_from_first_byte("{ {")
-                || !return_initializer && line.contains_from_first_byte("{{")
-        });
+        // A typed initializer keeps its closer on its last row.
+        let enclosed_run_in = closing_brace_type != Some(BraceType::Initializer)
+            && self.output.get(open_output_len).is_some_and(|line| {
+                line.contains_from_first_byte("{ {")
+                    || !return_initializer && line.contains_from_first_byte("{{")
+            });
         let range_for_initializer = self.output.get(open_output_len).is_some_and(|line| {
             let trimmed = line.trimmed_start();
             trimmed.starts_with("for ") && trimmed.trimmed_end().ends_with('{')

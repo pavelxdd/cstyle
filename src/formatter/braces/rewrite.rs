@@ -1318,7 +1318,10 @@ impl FormatEngine<'_> {
                     .brace_type_stack
                     .last()
                     .is_some_and(|brace_type| {
-                        matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
+                        matches!(
+                            brace_type,
+                            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+                        )
                     })
                     .then_some(BraceType::Array)
             })
@@ -2092,6 +2095,11 @@ impl FormatEngine<'_> {
         match leading_gap {
             Some(gap) => self.current.push_str(gap),
             None if after_comma => {}
+            // A typed initializer's element keeps its gap after the brace.
+            None if array_element_after_brace
+                && run_in_array_gap_after_brace
+                && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Initializer) => {
+            }
             None if array_element_after_brace && run_in_array_gap_after_brace => {
                 let target_column = if self.current.trimmed_end() == "{" {
                     Some(
