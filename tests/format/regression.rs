@@ -14858,3 +14858,13 @@ fn an_argument_after_an_empty_line_keeps_its_paren_column() {
         "void f()\n{\n    std::sort(items.begin(), items.end(),\n\n              [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
     );
 }
+
+#[test]
+fn deleting_empty_lines_attaches_the_brace_of_a_header_a_comment_leads() {
+    let input = "void f()\n{\n    /* note */ if (ready)\n\n    {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    /* note */ if (ready) {\n        value=0;\n    }\n}\n",
+    );
+}

@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -77,7 +78,8 @@ impl FormatEngine<'_> {
         if !code.ends_with(')') || code.starts_with('#') {
             return false;
         }
-        let first = code
+        let first = after_leading_comments(code)
+            .trimmed_start()
             .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
             .next()
             .unwrap_or_default();
