@@ -197,8 +197,11 @@ impl FormatEngine<'_> {
                     if let Some(line) = self.output.last() {
                         let code = line.trimmed();
                         let code = code.strip_prefix('}').map_or(code, str::trim_start);
-                        if code.starts_with("else")
-                            && line_is_control_body_header(code)
+                        // So does a header a comment leads.
+                        let comment_led = self.output.lead_comment(self.output.len() - 1).is_some()
+                            && line_is_control_body_header(after_leading_comments(code));
+                        if (code.starts_with("else") && line_is_control_body_header(code)
+                            || comment_led)
                             && self.preprocessor.split_else.extra_levels == 0
                         {
                             // The line counts the levels broken else-ifs add,

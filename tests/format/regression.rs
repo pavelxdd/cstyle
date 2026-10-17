@@ -14499,3 +14499,13 @@ fn a_comment_after_conditionals_closing_over_a_comment_line_stands_at_its_scope(
         "#if FEATURE\n    #ifndef VALUE\n        /* note */\n    #endif\n#endif\n/* end */\n",
     );
 }
+
+#[test]
+fn an_added_one_line_block_after_a_comment_led_header_stands_at_the_header() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ if (other)\n            value=0;\n        else\n            result=0;\n}\n";
+    check(
+        input,
+        &["--style=allman", "--add-one-line-braces"],
+        "void f()\n{\n    if (ready)\n        /* note */ if (other)\n        { value=0; }\n        else\n        { result=0; }\n}\n",
+    );
+}
