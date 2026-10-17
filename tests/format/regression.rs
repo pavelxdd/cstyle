@@ -15113,3 +15113,12 @@ fn a_label_inside_the_block_of_a_label_a_comment_leads_stands_in_that_block() {
         "void f()\n{\n    switch (op) {\n    /* note */ case FIRST: {\n        reset(value);\n        case SECOND:\n            apply(value);\n            break;\n    }\n    case THIRD:\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn break_blocks_pads_an_if_with_an_empty_block_an_else_follows_as_any_if() {
+    check(
+        "void f()\n{\n    value = 0;\n    if (a) {} else { y(); }\n    value = 1;\n}\n",
+        &["--style=kr", "--break-blocks", "--keep-one-line-blocks"],
+        "void f()\n{\n    value = 0;\n\n    if (a) {} else { y(); }\n\n    value = 1;\n}\n",
+    );
+}
