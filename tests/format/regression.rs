@@ -14246,3 +14246,13 @@ fn a_member_initializer_row_a_comment_leads_stands_at_the_initializers() {
         "Item::Item(int value, int other)\n    : value_(value),\n      /* note */ other_(other)\n{\n}\n",
     );
 }
+
+#[test]
+fn keeping_one_line_statements_keeps_a_brace_a_comment_leads_past_a_case_label_and_a_directive() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}

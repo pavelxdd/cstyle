@@ -3562,6 +3562,7 @@ impl FormatEngine<'_> {
             && self.style_attaches_opening_brace(brace_type, next)
             && !(brace_type == BraceType::Command
                 && self.options.brace_style != BraceStyle::Lisp
+                && self.options.break_one_line_statements
                 && !self.token_input.token_followed_by_line_comment_on_line
                 && line_scan::after_leading_comments(self.current.trimmed()).is_empty()
                 && self.brace_follows_case_label_colon())
