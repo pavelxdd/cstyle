@@ -11,7 +11,7 @@ use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::continuation::min_conditional_indent_spaces;
-use crate::formatter::engine::{FormatEngine, ForwardFind};
+use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
@@ -2827,29 +2827,10 @@ impl FormatEngine<'_> {
         let line_end = (start..=span.last)
             .rev()
             .find(|&index| is_code_token(&tokens[index]))?;
+        // A first line that ends at no `,` registers nothing: the rows after
+        // it continue from their own lines.
         if !matches!(tokens[line_end], Token::Symbol(',')) || groups.enclosing(line_end) != group {
-            // A statement that registers nothing continues its lines one
-            // level past its first.
-            let registers = ForwardFind::first_in(
-                &self.declarator_registers_cache,
-                tokens,
-                start,
-                comma,
-                |index| {
-                    matches!(tokens[index], Token::Symbol('(' | '[' | '{' | '?'))
-                        || matches!(&tokens[index], Token::Operator(operator)
-                            if operator.ends_with('=') || operator == "?" || operator == "<<" || operator == ">>")
-                },
-            )
-            .is_some();
-            return (!registers
-                && matches!(tokens[line_end], Token::Word(_))
-                && matches!(&tokens[start], Token::Word(word) if !is_header(word) && word != "return"))
-                .then(|| {
-                    self.output.lead_width(start_line, self.options.tab_width)
-                        + self.options.continuation_indent * self.options.indent_width
-                        + self.case_unindent_spaces()
-                });
+            return None;
         }
         // A statement run in after a block brace registers its name a level
         // past the line astyle reads, and no second word.

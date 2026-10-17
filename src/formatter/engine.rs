@@ -308,7 +308,6 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
     /// declarator's `,`.
-    pub(crate) declarator_registers_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last statement start a declarator's `,` looked back to: the
     /// tokens' address, the `,`, and the start.
     pub(crate) declarator_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
@@ -456,7 +455,6 @@ impl<'a> FormatEngine<'a> {
             colon_run_cache: std::cell::Cell::new(None),
             operand_assign_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
-            declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
             header_braces_cache: std::cell::Cell::new(None),

@@ -15515,3 +15515,11 @@ fn indent_cases_sets_conditional_directives_in_a_case_block_at_its_statements() 
         expected,
     );
 }
+
+#[test]
+fn declarator_rows_after_a_type_on_its_own_line_continue_as_from_their_own_line() {
+    let input = "unsigned int\nflag,\nother;\nvoid f()\n{\n    unsigned int\n    flag,\n    other;\n    static const char\n    *first,\n    *second;\n    unsigned\n    long value,\n    other;\n}\n";
+    let expected = "unsigned int\nflag,\nother;\nvoid f()\n{\n    unsigned int\n    flag,\n    other;\n    static const char\n    *first,\n    *second;\n    unsigned\n    long value,\n         other;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
