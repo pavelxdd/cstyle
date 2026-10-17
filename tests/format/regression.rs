@@ -15128,3 +15128,17 @@ fn a_comment_line_before_an_else_in_a_braceless_body_stands_at_the_else() {
     let input = "void f()\n{\n    if (ready)\n        if (other) {\n            value=0;\n        }\n        // note\n        else {\n            result=0;\n        }\n    value = 1;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comma_between_template_arguments_ends_no_declarator() {
+    let input = "void f()\n{\n    auto result = helper<Item, Other>(value,\n#ifdef FEATURE\n                                       other);\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--indent-preproc-cond",
+            "--indent-after-parens",
+        ],
+        "void f()\n{\n    auto result = helper<Item, Other>(value,\n            #ifdef FEATURE\n            other);\n            #endif\n    value = 1;\n}\n",
+    );
+}

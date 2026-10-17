@@ -1188,7 +1188,11 @@ impl FormatEngine<'_> {
             self.layout.nesting.trim_to_current_statement_continuation();
         } else if self.innermost_brace_is_compound_literal() {
             self.layout.nesting.clear_continuation_indents();
-        } else if !self.in_initializer_brace() && !self.in_aggregate_declaration_brace() {
+        } else if !self.in_initializer_brace()
+            && !self.in_aggregate_declaration_brace()
+            // A comma between template arguments parts no declarators.
+            && self.layout.line_state.template_angle_depth == 0
+        {
             if self.multi_declarator_indent_spaces.is_none() && self.current.holds_equals() {
                 let line = self.current.trimmed_end();
                 let prefix = line.len() - line.trimmed_start().len();
