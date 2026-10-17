@@ -2237,6 +2237,7 @@ impl FormatEngine<'_> {
             self.comments.skip_next_attached_comment = true;
         } else if attached_case_label_output_brace
             && !self.token_input.token_begins_source_line
+            && !self.comments.comment_opens_brace_body
             && let Some(Token::Comment(CommentKind::Block, comment)) = next
             && !comment.contains('\n')
         {
@@ -2552,6 +2553,7 @@ impl FormatEngine<'_> {
         // stays on the label's line.
         if self.current_is_blank()
             && !self.token_input.token_begins_source_line
+            && !self.comments.comment_opens_brace_body
             && let Some(Token::Comment(kind, comment)) = next
             && (*kind == CommentKind::Line || !comment.contains('\n'))
             && let Some(index) = self.output.len().checked_sub(1)

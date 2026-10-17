@@ -13454,3 +13454,18 @@ fn a_comment_line_between_a_split_declaration_head_and_its_declarator_stands_at_
         "static const struct Item\n    // note\n    first = {\n    1, 2\n};\n",
     );
 }
+
+#[test]
+fn comments_leading_a_case_block_brace_line_open_its_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 2: { /* a */ /* b */\n        result=1;\n    }\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (kind) {\n    case 2: {\n        /* a */ /* b */\n        result=1;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 2:\n    {\n        /* a */ /* b */\n        result=1;\n    }\n    }\n}\n",
+    );
+}
