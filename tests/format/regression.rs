@@ -13833,3 +13833,15 @@ fn ratliff_closes_an_initializer_whose_brace_a_comment_leads_a_level_in() {
         "void f() {\n    struct Item item =\n    /* note */ {\n        1, 2\n        };\n    }\n",
     );
 }
+
+#[test]
+fn break_blocks_all_sets_a_blank_line_before_an_else_a_comment_leads_as_before_any_else() {
+    let input = "void f()\n{\n    x();\n    if (ready)\n        value=0;\n    /* note */ else\n        value=2;\n    y();\n}\n";
+    let expected = "void f()\n{\n    x();\n\n    if (ready)\n        value=0;\n\n    /* note */ else\n        value=2;\n\n    y();\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=kr", "--break-blocks=all"],
+        &expected.replace("/* note */ ", ""),
+    );
+}
