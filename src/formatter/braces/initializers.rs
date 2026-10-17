@@ -209,6 +209,16 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the pending line starts with the closer of a list that is an
+    /// argument in parens: the closer stands where the list closes.
+    pub(crate) fn line_closes_list_argument(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.closed_at(span.first))
+            .and_then(|group| self.tree.groups.get(group).parent)
+            .is_some_and(|parent| self.tree.groups.get(parent).delimiter == Delimiter::Paren)
+    }
+
     pub(crate) fn closed_initializer_or_array_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -223,7 +233,7 @@ impl FormatEngine<'_> {
         }
         // A comment after the closer leaves it the closer of its own row.
         let code = line[..trailing_comment_split_limit(line)].trimmed();
-        if code.starts_with("}, ") {
+        if code.starts_with("}, ") && !self.line_closes_list_argument() {
             return Some(indent.max(self.continuation_base_indent()) * self.options.indent_width);
         }
         if code != "}"

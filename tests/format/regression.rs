@@ -14745,3 +14745,13 @@ fn a_list_argument_a_comment_leads_closes_as_one_without_it() {
         "void f()\n{\n    call(value, {1,\n                 2\n                });\n    call(value, /* note */ {1,\n                            2\n                           });\n}\n",
     );
 }
+
+#[test]
+fn a_list_argument_closer_before_more_arguments_stands_at_its_brace() {
+    let input = "void f()\n{\n    helper(first, { .a = 1,\n                    .b = 2 }, last);\n    helper(first, {1,\n                   2}, last);\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    helper(first, { .a = 1,\n                    .b = 2\n                  }, last);\n    helper(first, {1,\n                   2\n                  }, last);\n}\n",
+    );
+}
