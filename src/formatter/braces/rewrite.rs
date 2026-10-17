@@ -20,7 +20,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
-use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
@@ -1811,9 +1811,15 @@ impl FormatEngine<'_> {
             && next_code_token(tokens, start + 1).is_some_and(|first| {
                 !matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
             });
+        let statement_block = self
+            .tree
+            .groups
+            .opened_at(start)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block));
         let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
             && self.current_is_blank()
             && (self.layout.command_state.current_header.is_some()
+                || statement_block
                 || self.current_ends_definition_header()
                 || self.output_ends_objc_method_header()))
         .then(|| " ".repeat((usize::from(switch_statement) + 1) * self.options.indent_width - 1));
@@ -2067,8 +2073,18 @@ impl FormatEngine<'_> {
         preserve_raw: bool,
         opening_body_gap: Option<String>,
     ) {
-        let block = if preserve_raw || is_comment_only_one_line_block_tokens(tokens) {
+        let block = if preserve_raw {
             tokens.iter().map(token_text).collect::<String>()
+        } else if is_comment_only_one_line_block_tokens(tokens) {
+            let gapped = opening_body_gap
+                .as_deref()
+                .and_then(|gap| with_opening_body_gap(tokens, gap));
+            gapped
+                .as_deref()
+                .unwrap_or(tokens)
+                .iter()
+                .map(token_text)
+                .collect::<String>()
         } else {
             format_one_line_block_tokens(
                 tokens,
@@ -3511,6 +3527,18 @@ fn matching_open_paren(tokens: &[Token], close_paren: usize, line_start: usize) 
     None
 }
 
+/// The block's tokens with `gap` between the brace and its first body
+/// token; an empty block takes none.
+fn with_opening_body_gap(tokens: &[Token], gap: &str) -> Option<Vec<Token>> {
+    let first_body = next_non_whitespace(tokens, 1, tokens.len())?;
+    if matches!(tokens.get(first_body), Some(Token::Symbol('}'))) {
+        return None;
+    }
+    let mut adjusted = tokens.to_vec();
+    adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
+    Some(adjusted)
+}
+
 fn format_one_line_block_tokens(
     tokens: &[Token],
     options: &FormatOptions,
@@ -3518,6 +3546,8 @@ fn format_one_line_block_tokens(
     opening_body_gap: Option<&str>,
     after_directive: bool,
 ) -> String {
+    let adjusted_tokens = opening_body_gap.and_then(|gap| with_opening_body_gap(tokens, gap));
+    let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     if is_semicolon_only_one_line_block_tokens(tokens) {
         return tokens
             .iter()
@@ -3526,16 +3556,6 @@ fn format_one_line_block_tokens(
             .trimmed_end()
             .to_string();
     }
-    let adjusted_tokens = opening_body_gap.and_then(|gap| {
-        let first_body = next_non_whitespace(tokens, 1, tokens.len())?;
-        if matches!(tokens.get(first_body), Some(Token::Symbol('}'))) {
-            return None;
-        }
-        let mut adjusted = tokens.to_vec();
-        adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
-        Some(adjusted)
-    });
-    let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     let mut formatter = FormatEngine::new(options);
     formatter.one_line_block_mode = true;
     formatter.one_line_block_after_directive = after_directive;

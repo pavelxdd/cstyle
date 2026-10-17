@@ -10264,12 +10264,13 @@ fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a
     check(expected, &["--add-braces"], expected);
 }
 
-// Pico keeps a bare one-line block whole as it keeps a header's, the way
-// styles keeping one-line blocks do.
+// Pico runs the body of a bare one-line block in after its brace as it
+// does a header's block below the header; a block on its header's line
+// keeps its space.
 #[test]
-fn pico_keeps_a_bare_one_line_block_as_it_keeps_a_headers() {
+fn pico_runs_a_bare_one_line_block_in_as_a_block_below_its_header() {
     let input = "void f()\n{\n    value = 1;\n    { value = 0; }\n    if (ready) { value = 2; }\n    { value = 3; } more();\n}\n";
-    let expected = "void f()\n{   value = 1;\n    { value = 0; }\n    if (ready) { value = 2; }\n    { value = 3; } more(); }\n";
+    let expected = "void f()\n{   value = 1;\n    {   value = 0; }\n    if (ready) { value = 2; }\n    {   value = 3; } more(); }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
@@ -14625,5 +14626,15 @@ fn run_in_styles_set_the_body_of_a_do_on_a_case_label_line_a_level_past_the_case
         input,
         &["--style=pico"],
         "void f()\n{   switch (kind)\n    {   case 1: do\n                x;\n            while (a);\n            break;\n        case 2: do\n            {   x; }\n            while (a);\n            break; } }\n",
+    );
+}
+
+#[test]
+fn pico_runs_the_body_of_a_one_line_statement_block_in_after_its_brace() {
+    let input = "void f()\n{\n    value=1;\n    { value=0; }\n    {value=0;}\n    if (a)\n    { /* note */ }\n    { /* note */ }\n    { ; }\n    {;}\n    { }\n    MACRO\n    { value=0; }\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   value=1;\n    {   value=0; }\n    {   value=0;}\n    if (a)\n    {   /* note */ }\n    {   /* note */ }\n    {   ; }\n    {   ;}\n    { }\n    MACRO\n    { value=0; } }\n",
     );
 }
