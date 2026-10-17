@@ -1671,7 +1671,11 @@ impl FormatEngine<'_> {
         } else if brace_type == BraceType::Command
             && matches!(
                 self.options.brace_style,
-                BraceStyle::Allman | BraceStyle::Vtk | BraceStyle::Horstmann | BraceStyle::Pico
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
             )
             && self.token_input.token_followed_by_line_comment_on_line
             && let Some(comment) = attached_block_comment
@@ -1699,6 +1703,11 @@ impl FormatEngine<'_> {
             self.layout
                 .continuation_indent
                 .set_next_line_spaces(header_indent_spaces);
+            // Whitesmith closes the block at the brace it would indent.
+            if self.options.brace_style == BraceStyle::Whitesmith {
+                let brace_column = header_indent_spaces + self.options.indent_width;
+                self.update_current_brace_indent_columns(brace_column, brace_column);
+            }
             self.layout.previous = PreviousToken::Other;
             return true;
         }
