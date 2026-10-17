@@ -489,6 +489,12 @@ impl FormatEngine<'_> {
                 .split_once("*/")
                 .is_some_and(|(_, after)| !after.trimmed().is_empty());
             let code_ends_statement = trimmed.trimmed_end().ends_with(';');
+            // A label the comment leads opens its case body as any label.
+            let code = after_leading_comments(trimmed.trimmed_start());
+            if labels::line_kind(code, &self.options.access_labels) == LineKind::SwitchLabel {
+                self.update_case_body_indent(LineKind::SwitchLabel, code);
+                self.update_case_brace_unindent(LineKind::SwitchLabel, code);
+            }
             if let Some((head, tail, spaces)) = self.split_comment_led_line(&trimmed) {
                 self.push_raw_comment_output_line(head);
                 let level = self.layout.indentation.indent();

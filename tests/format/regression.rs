@@ -14023,6 +14023,23 @@ fn a_conditional_between_a_case_label_and_a_brace_a_comment_leads_leaves_it_as_w
     check(input, &[], expected);
     check(input, &["--style=kr"], expected);
     let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
-    let plain_expected = expected.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+    let plain_expected = expected
+        .replace("#ifdef TRACE\n", "")
+        .replace("#endif\n", "");
     check(&plain, &["--style=kr"], &plain_expected);
+}
+
+#[test]
+fn a_comment_leading_a_case_label_moves_no_aggregate_of_its_block_under_indented_switches() {
+    let input = "void f()\n{\n    switch (state) {\n    /* note */ case 1: {\n        static const struct {\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-switches"],
+        "void f()\n{\n    switch (state) {\n        /* note */ case 1: {\n            static const struct {\n                int value;\n            } items[] = {\n                { 1 },\n            };\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (state)\n        {\n        /* note */ case 1:\n            {\n            static const struct\n                {\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n    }\n",
+    );
 }
