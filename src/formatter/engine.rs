@@ -44,6 +44,7 @@ use crate::formatter::text::columns;
 use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
@@ -1609,6 +1610,20 @@ impl<'a> FormatEngine<'a> {
                 .map(|column| column - offset),
             None => unmatched_open_paren_column(text),
         }
+    }
+
+    /// The column past the `(` a call leaves open on the line whose code
+    /// `text` is, when the line ends an argument after braces it closed in
+    /// the call.
+    pub(crate) fn paren_column_past_closed_braces(&self, text: &str) -> Option<usize> {
+        if !text.ends_with(',') {
+            return None;
+        }
+        let open = self.open_paren_column_of(text)?;
+        unmatched_open_paren_columns(text)
+            .last()
+            .is_some_and(|&paren| text[paren..].contains('}'))
+            .then_some(open + 1)
     }
 
     /// `self.paren_imbalance_of(text)`, read from the cache of the output line

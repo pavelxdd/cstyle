@@ -13380,3 +13380,9 @@ fn a_comment_leading_a_member_after_a_comment_line_stands_at_the_members() {
         "@interface Item : NSObject\n    /* first */\n/* second */ @property (nonatomic) int value;\n@end\n",
     );
 }
+
+#[test]
+fn a_comment_line_after_a_compound_literal_argument_stands_at_the_arguments() {
+    let input = "void f()\n{\n    helper((struct Item) { 1, 2 },\n           /* note */\n           other);\n}\n";
+    check(input, &[], input);
+}

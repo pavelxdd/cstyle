@@ -1493,6 +1493,7 @@ impl FormatEngine<'_> {
                 // Else it stands where the row after it goes on, as the row
                 // before set it.
                 brace_element_comment_indent = brace_element_comment_indent
+                    .or_else(|| self.paren_column_past_closed_braces(previous_code))
                     .or(self.layout.continuation_indent.next_line_indent_spaces);
                 let spaces = brace_element_comment_indent.unwrap_or_else(|| {
                     leading_visual_width(previous, self.options.tab_width)

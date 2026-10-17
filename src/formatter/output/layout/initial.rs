@@ -27,7 +27,7 @@ use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
     find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -259,14 +259,8 @@ impl FormatEngine<'_> {
                     && !operator_chains::starts_operator_chain_continuation(line))
             {
                 spaces = None;
-            } else if previous_code.ends_with(',')
-                && let Some(open) = self.open_paren_column_of(previous_code)
-                && unmatched_open_paren_columns(previous_code)
-                    .last()
-                    .is_some_and(|&paren| previous_code[paren..].contains('}'))
-            {
-                // Braces closed inside a call leave its paren open.
-                spaces = Some(open + 1);
+            } else if let Some(column) = self.paren_column_past_closed_braces(previous_code) {
+                spaces = Some(column);
             } else if self.layout.indentation.indent() == 0
                 && self.token_input.token_source_line_indent == 0
                 && previous_code.trimmed_start().starts_with('#')
