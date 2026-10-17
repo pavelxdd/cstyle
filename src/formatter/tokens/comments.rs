@@ -3689,6 +3689,15 @@ impl FormatEngine<'_> {
 
     /// The width of the comments, and the space after them, that alone led
     /// the source line of the current line's code and were broken off it.
+    /// Whether code precedes the comment token `index` on its source line.
+    fn comment_follows_code(&self, index: usize) -> bool {
+        self.tree.tokens[..index]
+            .iter()
+            .rev()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .any(is_code_token)
+    }
+
     fn broken_off_leading_comments_width(&self) -> usize {
         let tokens = &self.tree.tokens;
         if self.current.trimmed_start().starts_with("/*") {
@@ -4016,11 +4025,16 @@ impl FormatEngine<'_> {
             return;
         }
         // Comments that led the source line and stand on a line of their own
-        // now take no columns from it.
-        let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty())
-            .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
-            .flatten()
-            .map(|column| column.saturating_sub(self.broken_off_leading_comments_width()));
+        // now take no columns from it; one before the code of its source
+        // line had none.
+        let target_column = (!self.layout.line_state.trailing_comment_columns.is_empty()
+            && self
+                .comments
+                .pushed_comment
+                .is_none_or(|index| self.comment_follows_code(index)))
+        .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
+        .flatten()
+        .map(|column| column.saturating_sub(self.broken_off_leading_comments_width()));
         // A closer after code on its source line runs back into that line,
         // which keeps the gap before its comment.
         if !gap.is_empty() && self.run_in_closer_row() == Some(false) {

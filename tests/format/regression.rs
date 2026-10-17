@@ -13707,3 +13707,13 @@ fn a_comment_line_before_the_first_member_of_a_struct_in_a_case_block_leaves_it_
         "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn leading_comments_of_a_broken_closer_leave_the_trailing_comment_of_its_header_its_column() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    /* a */ /* b */ } else { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        value=0;\n        /* a */ /* b */\n    }\n    else     // second\n    {\n        value=1;\n    }\n}\n",
+    );
+}
