@@ -790,18 +790,6 @@ impl FormatEngine<'_> {
                 &mut open_paren_columns,
             );
         }
-        if is_define && !line.trimmed_end().ends_with('\\') {
-            if !(is_define && self.preprocessor_split_else_active()) {
-                self.layout.continuation_indent.clear_next_line();
-                self.layout
-                    .continuation_indent
-                    .next_input_line_continuation_indent = None;
-            }
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.frame_stack.clear_stream_frames();
-            self.layout.frame_stack.clear_logical_frames();
-            self.layout.continuation_indent.logical_chain_indent_spaces = None;
-        }
         if directive == Some("endif")
             && let Some(previous) = self.output.last()
             && has_hash_outside_literals(previous)

@@ -15523,3 +15523,9 @@ fn declarator_rows_after_a_type_on_its_own_line_continue_as_from_their_own_line(
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_definition_among_conditionals_leaves_an_operator_continuation_going_on() {
+    let input = "void f()\n{\n    flags = FIRST\n            | SECOND\n#if !defined(LIMIT)\n# define LIMIT 3\n#endif\n#if FEATURE\n            | THIRD\n#endif\n            ;\n    value = 1;\n}\n";
+    check(input, &[], input);
+}
