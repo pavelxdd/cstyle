@@ -2511,6 +2511,14 @@ impl FormatEngine<'_> {
                 self.layout
                     .continuation_indent
                     .set_next_line_spaces(body_indent);
+                // A comment ending the row stays after the brace.
+                if let Some(comment) = placement.comments.line.or(placement
+                    .comments
+                    .block
+                    .filter(|_| self.comments.next_comment_ends_line))
+                {
+                    self.push_attached_comment_with_source_gap(comment);
+                }
                 self.finish_line();
                 self.update_current_brace_indent_from_last_output_line();
             }

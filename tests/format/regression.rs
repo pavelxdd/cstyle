@@ -13398,3 +13398,18 @@ fn a_comment_line_after_a_condition_row_closing_parens_stands_at_the_open_paren(
     let input = "void f(void)\n{\n    if (\n        (a\n         || (b\n             && (c\n                 || d))\n         /* note */\n         || (e\n             && g))) {\n        h();\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_trailing_a_nested_brace_run_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item list[] = { { /* note */\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    struct Item list[] = { { /* note */\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item list[] = { { /* note */\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
+    );
+}
