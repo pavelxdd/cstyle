@@ -15199,3 +15199,13 @@ fn indenting_after_parens_stacks_no_initializer_brace_starting_its_line() {
     let input = "static const struct Item\n    first =\n{   1, 2 },\nsecond =\n{   3, 4 };\n";
     check(input, &["--style=kr", "--indent-after-parens"], input);
 }
+
+#[test]
+fn a_comment_line_after_a_chained_assignment_and_a_directive_carries_its_continuation() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    first = second = third =\n#endif\n        // note\n        value;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FEATURE\n    first = second = third =\n#endif\n                         // note\n                         value;\n}\n",
+    );
+}

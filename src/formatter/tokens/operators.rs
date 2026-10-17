@@ -340,11 +340,15 @@ pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
 }
 
 pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
-    let head = head.trimmed_end();
-    let Some((start, operator)) = find_assignment_operator(head) else {
-        return false;
-    };
-    start + operator.len() == head.len()
+    // Chained assignments end with the last of them.
+    let mut rest = head.trimmed_end();
+    while let Some((start, operator)) = find_assignment_operator(rest) {
+        if start + operator.len() == rest.len() {
+            return true;
+        }
+        rest = &rest[start + operator.len()..];
+    }
+    false
 }
 
 pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
