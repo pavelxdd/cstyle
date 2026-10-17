@@ -15183,3 +15183,13 @@ fn a_block_kept_after_a_label_leaves_the_comments_leading_the_next_line() {
     let input = "void f()\n{\ndone:\n    { value=0; }\n    /* note */ value = 1;\n}\n";
     check(input, &["--style=1tbs", "--keep-one-line-blocks"], input);
 }
+
+#[test]
+fn pico_runs_a_comment_into_a_one_line_block_with_the_tab_fill_it_indents_with() {
+    let input = "void f()\n{\n\t{\t/* note */ value = 1; }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent=force-tab=4"],
+        "void f()\n{\n\t{\t/* note */ value = 1; } }\n",
+    );
+}

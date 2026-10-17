@@ -4,6 +4,7 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
+use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::headers::line_is_control_body_header;
@@ -1533,7 +1534,7 @@ impl FormatEngine<'_> {
                 .output
                 .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(')')))
-        .then(|| " ".repeat(self.options.indent_width - 1));
+        .then(|| self.opening_body_fill(tokens, start, self.options.indent_width - 1));
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
@@ -1850,7 +1851,13 @@ impl FormatEngine<'_> {
                 || statement_block
                 || self.current_ends_definition_header()
                 || self.output_ends_objc_method_header()))
-        .then(|| " ".repeat((usize::from(switch_statement) + 1) * self.options.indent_width - 1));
+        .then(|| {
+            self.opening_body_fill(
+                tokens,
+                start,
+                (usize::from(switch_statement) + 1) * self.options.indent_width - 1,
+            )
+        });
         let empty_block_after_operator =
             is_empty_block && self.layout.previous == PreviousToken::Operator;
         let brace_header = is_asm_block.then_some("_asm");
@@ -2090,6 +2097,23 @@ impl FormatEngine<'_> {
             }
         }
         false
+    }
+
+    /// The fill, `width` columns, a pico brace runs its body in with. The
+    /// tab pass leaves the fill before a comment alone, so a comment's is
+    /// written as the finished output indents.
+    fn opening_body_fill(&self, tokens: &[Token], start: usize, width: usize) -> String {
+        let comment_first = next_non_whitespace(tokens, start + 1, tokens.len())
+            .is_some_and(|first| matches!(tokens[first], Token::Comment(..)));
+        if !comment_first {
+            return " ".repeat(width);
+        }
+        let brace_column = self.current_line_indent_spaces();
+        horstmann_run_in_fill(
+            &format!("{}{{", " ".repeat(brace_column)),
+            &format!("{}{{", " ".repeat(brace_column + 1 + width)),
+            &self.output_options(),
+        )
     }
 
     fn push_attached_one_line_block(
