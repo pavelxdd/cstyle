@@ -946,13 +946,8 @@ impl FormatEngine<'_> {
                     && groups.enclosing(last) == Some(group)
                     // A nested initializer whose `{` ends the line of a row
                     // lays out its rows from that line; the engine places
-                    // the row itself only after a comment, or where the
-                    // style indents the nested closing brace.
-                    || (tokens[comma..first].iter().any(|token| matches!(token, Token::Comment(..)))
-                        || matches!(
-                            self.options.brace_style,
-                            BraceStyle::Whitesmith | BraceStyle::Ratliff | BraceStyle::Vtk
-                        ))
+                    // the row itself only after a comment.
+                    || tokens[comma..first].iter().any(|token| matches!(token, Token::Comment(..)))
                         && groups.opened_at(last).is_some_and(|nested| {
                         self.tree.blocks.kind(nested) == Some(BlockKind::Initializer)
                             && groups.get(nested).close.is_some_and(|close| {

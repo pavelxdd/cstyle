@@ -14878,3 +14878,13 @@ fn a_line_comment_after_a_brace_an_empty_line_parted_opens_its_body() {
         "void f()\n{\n    if (ready) {\n        // note\n        value=0;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_designator_row_its_nested_brace_ends_stays_a_level_past_the_statement() {
+    let input = "void f()\n{\n    struct Item item = { .a = 1,\n        .obj = {\n            .b = 1,\n            .c = 2\n        },\n        .d = 3\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item item = { .a = 1,\n        .obj = {\n            .b = 1,\n            .c = 2\n            },\n        .d = 3\n        };\n    }\n",
+    );
+}
