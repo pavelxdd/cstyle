@@ -277,9 +277,13 @@ impl FormatEngine<'_> {
         if let Some(previous) = self.output.last_non_empty_scoped() {
             let previous_trimmed = previous.trimmed_start();
             let current = line_start;
-            if starts_with_chain_operator(current) && previous_trimmed.starts_with("//") {
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width));
+            let comment_column = leading_visual_width(previous, self.options.tab_width);
+            // A line comment left at column one is no row of the chain.
+            if starts_with_chain_operator(current)
+                && previous_trimmed.starts_with("//")
+                && (comment_column > 0 || self.options.indent_col1_comments)
+            {
+                layout.exact_indent_spaces = Some(comment_column);
             }
             let previous_code = self.output.code_trimmed_of(previous);
             if let Some(base) = self.constructor_initializer_base_indent_spaces()

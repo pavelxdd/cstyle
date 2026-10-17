@@ -187,7 +187,14 @@ impl FormatEngine<'_> {
             .layout
             .nesting
             .current_continuation_indent_spaces()
-            .is_some();
+            .is_some()
+            // A stream statement its last code line leaves open continues
+            // past the empty line at the column registered for its next row.
+            || self.layout.continuation_indent.next_line_indent_spaces.is_some()
+                && self.layout.frame_stack.active_stream().is_some_and(|stream| {
+                    self.output.last_code_line_index_past_comments_and_directives()
+                        == Some(stream.operator_output_line)
+                });
         if in_continuation {
             return;
         }

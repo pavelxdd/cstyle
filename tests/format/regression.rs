@@ -13980,3 +13980,16 @@ fn an_empty_line_after_a_directive_in_a_continued_statement_keeps_its_continuati
         "void f() {\n    std::cout << first\n#endif\n\n              << second << std::endl;\n    value = first\n#endif\n\n            + second;\n}\n",
     );
 }
+
+#[test]
+fn a_chain_row_after_a_line_comment_left_at_column_one_continues_its_chain() {
+    let input =
+        "void f()\n{\n    std::cout << first\n// c\n              << second << std::endl;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_chain_row_after_a_comment_and_an_empty_line_continues_its_chain() {
+    let input = "void f()\n{\n    std::cout << first\n              // c\n\n              << second;\n    std::cout << first\n\n              // c\n              << second;\n    std::cout << first\n              /* c */\n\n              << second;\n}\n";
+    check(input, &["--style=kr"], input);
+}
