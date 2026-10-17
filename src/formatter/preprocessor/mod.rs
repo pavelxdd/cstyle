@@ -1201,6 +1201,15 @@ impl FormatEngine<'_> {
             && let Some(spaces) = self
                 .direct_switch_body_indent_spaces()
                 .map(|spaces| spaces + self.enclosing_case_block_unindent_spaces())
+                .map(|spaces| {
+                    // After statements a case block's close left short of
+                    // the case body, as `break;`, the directive stands with
+                    // them.
+                    opening
+                        .then(|| self.previous_statement_line_column())
+                        .flatten()
+                        .map_or(spaces, |column| column.min(spaces))
+                })
         {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -1298,6 +1307,28 @@ impl FormatEngine<'_> {
                     + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The column, before the line adjuster's case unindent, of the line
+    /// holding the statement the active directive follows, when a `;` or `}`
+    /// ends it.
+    fn previous_statement_line_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let previous = self.tree.previous_code_token(directive)?;
+        if !matches!(self.tree.tokens[previous], Token::Symbol(';' | '}')) {
+            return None;
+        }
+        let start = (0..=previous)
+            .rev()
+            .find(|&index| self.tree.statements.starts_block_statement(index))?;
+        let line = self.output.line_with_token(start)?;
+        // The line adjuster takes the case unindent the statement's line took
+        // off the directive's line again.
+        (self.output.line_tokens(line)?.first == start).then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.layout.line_adjuster.case_unindent_depth_for_line("#")
+                    * self.options.indent_width
+        })
     }
 
     /// The case unindent the line adjuster takes off a directive in a switch
