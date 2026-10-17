@@ -13548,3 +13548,49 @@ fn vtk_sets_every_brace_row_of_a_list_in_code_a_level_past_its_values() {
         &expected.replace("struct Item", "Item"),
     );
 }
+
+#[test]
+fn a_conditional_among_the_rows_of_a_list_its_line_runs_in_stands_at_the_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n#ifdef FEATURE\n            .other = 3,\n#endif\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=google", "--indent-preproc-cond"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n            #ifdef FEATURE\n            .other = 3,\n            #endif\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn indented_brace_styles_set_every_nested_group_of_a_run_in_list_at_its_brace_levels() {
+    let file = "int list[][1] = { {\n        1,\n    }, {\n        2,\n    }\n};\n";
+    let code = "void f()\n{\n    static const struct Item items[] = { {\n            1,\n        }, {\n            2,\n        }\n    };\n}\n";
+    for (style, file_expected, code_expected) in [
+        (
+            "--style=whitesmith",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n    };\n",
+            "void f()\n    {\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n};\n",
+            "void f()\n{\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n    };\n",
+            "void f() {\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n    }\n",
+        ),
+    ] {
+        check(file, &[style], file_expected);
+        check(code, &[style], code_expected);
+    }
+}
+
+#[test]
+fn a_run_in_list_opening_a_case_block_stands_at_the_blocks_statements() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        int list[][1] = { {\n                1,\n            }\n        };\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            int list[][1] = { {\n                    1,\n                    }\n                };\n            }\n        }\n    }\n",
+    );
+}

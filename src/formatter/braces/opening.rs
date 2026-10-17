@@ -2503,8 +2503,20 @@ impl FormatEngine<'_> {
             self.current.push('{');
             self.layout.command_state.observe_char('{');
             if !matches!(next, Some(Token::Symbol('{' | '#'))) && !element_brace_after_closer {
+                // A list run into its first element's brace lays its line
+                // out as any statement's.
+                let run_in_list = !source_attached_initializer_line
+                    && self
+                        .current
+                        .active_token()
+                        .and_then(|brace| self.tree.groups.enclosing(brace))
+                        .is_some_and(|list| {
+                            self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                        });
                 let body_indent = if source_attached_initializer_line {
                     self.current_line_indent_spaces() + self.options.indent_width
+                } else if run_in_list {
+                    self.current_line_indent_spaces() + self.options.indent_width * 2
                 } else {
                     // The line publishes as it stands, so it takes its
                     // indent here.
@@ -2517,7 +2529,7 @@ impl FormatEngine<'_> {
                     leading_visual_width(&self.current, self.options.tab_width)
                         + self.options.indent_width * 2
                 };
-                self.current_is_preindented = true;
+                self.current_is_preindented = !run_in_list;
                 self.layout
                     .continuation_indent
                     .set_next_line_spaces(body_indent);

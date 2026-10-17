@@ -1197,6 +1197,12 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        if opening && let Some(spaces) = self.list_row_directive_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         // A directive continuing a conditional stands at the one that opened
         // it, past the case label's body it may have left.
         if let Some(indent) = self
@@ -1335,7 +1341,10 @@ impl FormatEngine<'_> {
                 let spaces = self
                     .options
                     .indent_preproc_conditional
-                    .then(|| self.break_else_if_directive_column())
+                    .then(|| {
+                        self.break_else_if_directive_column()
+                            .or_else(|| self.list_row_directive_column())
+                    })
                     .flatten()
                     .or_else(|| self.preprocessor_continuation_spaces());
                 self.layout.indentation.push_preprocessor_indent(

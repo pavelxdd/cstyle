@@ -779,20 +779,31 @@ impl FormatEngine<'_> {
         }
         let comma = self.tree.previous_code_token(first)?;
         // The first row of a nested group whose `{` ends a row stands a
-        // level past the braces that row leaves open, where braces stay
-        // out of their elements.
+        // level past the braces that row leaves open; a row its braces lead
+        // counts from where the style sets a brace line apart.
+        let indented_braces = matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        );
         if comma == groups.get(group).open
-            && !matches!(
-                self.options.brace_style,
-                BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
-            )
             && groups
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            && (self.options.brace_style != BraceStyle::Vtk
+                || self.vtk_nested_rows_like_blocks(group))
             && self.opens_initializer_element(comma)
             && let Some((lead, levels, _)) = self.brace_ending_row_levels(comma)
         {
+            let line = self.output.line_with_token(comma)?;
+            let brace_led = self.output.line_tokens(line).is_some_and(|span| {
+                matches!(self.tree.tokens[span.first], Token::Symbol('{' | '}'))
+            });
+            let lead = if indented_braces && brace_led && self.line_brace_stands_past_body(line) {
+                lead.saturating_sub(self.options.indent_width)
+            } else {
+                lead
+            };
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
         let branch_row = self.opens_branch_row(group, comma, first);
@@ -3154,6 +3165,21 @@ impl FormatEngine<'_> {
         }
         self.sibling_statement_column(next)
             .or_else(|| self.block_body_column(next))
+    }
+
+    /// Column of a directive opening a conditional among an initializer's
+    /// rows: that of the row after it.
+    pub(crate) fn list_row_directive_column(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let mut next = self.preprocessor.active_directive? + 1;
+        let next = loop {
+            let index = next_code_token(tokens, next)?;
+            if !matches!(tokens[index], Token::Preprocessor(_)) {
+                break index;
+            }
+            next = index + 1;
+        };
+        self.initializer_row_indent(next)
     }
 
     #[inline(never)]
