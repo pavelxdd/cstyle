@@ -14888,3 +14888,10 @@ fn a_designator_row_its_nested_brace_ends_stays_a_level_past_the_statement() {
         "void f()\n    {\n    struct Item item = { .a = 1,\n        .obj = {\n            .b = 1,\n            .c = 2\n            },\n        .d = 3\n        };\n    }\n",
     );
 }
+
+#[test]
+fn a_list_run_into_its_first_element_brace_after_a_function_stays_at_file_scope() {
+    let input = "void f()\n{\n}\nint x[] = { {\n        1\n    }\n};\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=kr"], input);
+}

@@ -2560,9 +2560,13 @@ impl FormatEngine<'_> {
                         + self.options.indent_width * 2
                 };
                 self.current_is_preindented = !run_in_list;
-                self.layout
-                    .continuation_indent
-                    .set_next_line_spaces(body_indent);
+                // The line a list runs into takes its own place; the
+                // column is the next line's.
+                if !run_in_list {
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_spaces(body_indent);
+                }
                 // A comment ending the row stays after the brace.
                 if let Some(comment) = placement.comments.line.or(placement
                     .comments
@@ -2572,6 +2576,11 @@ impl FormatEngine<'_> {
                     self.push_attached_comment_with_source_gap(comment);
                 }
                 self.finish_line();
+                if run_in_list {
+                    self.layout
+                        .continuation_indent
+                        .set_next_line_spaces(body_indent);
+                }
                 self.update_current_brace_indent_from_last_output_line();
             }
         } else {
