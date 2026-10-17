@@ -13792,3 +13792,9 @@ fn a_declarator_split_from_its_aggregate_type_by_a_blank_line_stays_continued() 
     let input = "static const struct Item\n\n    first = { 1, 2 };\nvoid f()\n{\n    static const struct Item\n\n        first = { 1, 2 };\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn ratliff_closes_a_namespace_a_comment_leads_as_any_namespace() {
+    let input = "namespace outer {\n/* note */ namespace inner {\nint helper(int value);\n}\n}\n";
+    check(input, &["--style=ratliff"], input);
+}

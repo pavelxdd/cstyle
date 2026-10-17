@@ -1213,7 +1213,12 @@ impl FormatEngine<'_> {
                 (spaces, open)
             }
         };
-        if !self.options.indent_namespaces && is_namespace_or_module_block_header(open) {
+        if !self.options.indent_namespaces
+            && (is_namespace_or_module_block_header(open)
+                || tree_group.is_some_and(|group| {
+                    self.tree.blocks.kind(group) == Some(BlockKind::Namespace)
+                }))
+        {
             return None;
         }
         let semantic_frame = self.layout.frame_stack.last_closed_brace().filter(|frame| {
