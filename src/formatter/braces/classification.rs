@@ -160,7 +160,9 @@ fn matching_open_index(text: &str, open: char, close: char) -> Option<usize> {
 }
 
 pub(super) fn is_namespace_or_module_block_header(line: &str) -> bool {
-    is_namespace_block_header(line) || line.trimmed_start().starts_with("module ")
+    // A comment leading the header leaves it the header.
+    let code = after_leading_comments(line.trimmed_start());
+    is_namespace_block_header(code) || code.starts_with("module ")
 }
 
 impl FormatEngine<'_> {

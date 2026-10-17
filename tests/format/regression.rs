@@ -14043,3 +14043,13 @@ fn a_comment_leading_a_case_label_moves_no_aggregate_of_its_block_under_indented
         "void f()\n    {\n    switch (state)\n        {\n        /* note */ case 1:\n            {\n            static const struct\n                {\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_namespace_a_comment_leads_keeps_its_first_member_off_its_brace_line() {
+    let input = "namespace outer {\n/* note */ namespace inner {\nint helper(int value);\n}\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "namespace outer\n{\n/* note */ namespace inner\n{\nint helper(int value); } }\n",
+    );
+}
