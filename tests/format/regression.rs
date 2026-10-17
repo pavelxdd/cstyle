@@ -15529,3 +15529,12 @@ fn a_definition_among_conditionals_leaves_an_operator_continuation_going_on() {
     let input = "void f()\n{\n    flags = FIRST\n            | SECOND\n#if !defined(LIMIT)\n# define LIMIT 3\n#endif\n#if FEATURE\n            | THIRD\n#endif\n            ;\n    value = 1;\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn pad_oper_pads_a_binary_xor_after_a_closing_paren_as_after_a_name() {
+    check(
+        "void f()\n{\n    x = a^b;\n    x = (a | b)^c;\n    x = f(a)^b;\n}\n",
+        &["-p"],
+        "void f()\n{\n    x = a ^ b;\n    x = (a | b) ^ c;\n    x = f(a) ^ b;\n}\n",
+    );
+}
