@@ -13494,3 +13494,13 @@ fn a_closing_directive_in_a_case_block_stands_at_the_directive_that_opened_it() 
         "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (ready) {\n            value=0;\n            #ifdef FEATURE\n        }\n            #endif\n        break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_comment_leading_an_enum_head_leaves_its_brace_to_the_style() {
+    let input = "/* note */ enum Kind {\n    First = 1,\n};\n";
+    check(
+        input,
+        &["--style=allman"],
+        "/* note */ enum Kind\n{\n    First = 1,\n};\n",
+    );
+}
