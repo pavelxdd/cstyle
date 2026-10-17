@@ -14140,3 +14140,13 @@ fn a_brace_after_a_case_label_split_over_lines_keeps_one_space_in_lisp() {
         "void f() {\n    switch (op) {\n    case FIRST |\n            THIRD: {\n            value = 2;\n            break; } } }\n",
     );
 }
+
+#[test]
+fn a_comment_line_opening_a_case_block_moves_none_of_its_statements_under_indented_cases() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        // note\n        if (ready) {\n            reset(value);\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-cases"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n            // note\n            if (ready) {\n                reset(value);\n            }\n            break;\n        }\n    }\n}\n",
+    );
+}

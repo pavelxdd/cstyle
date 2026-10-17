@@ -2630,10 +2630,12 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
+            // Indented cases set the comment in the body already; others a
+            // level before it, which their case unindent takes back.
             if is_comment_line(previous.trimmed_start()) {
                 comment_indent = Some(
                     leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
+                        + usize::from(!self.options.indent_cases) * self.options.indent_width,
                 );
                 continue;
             }
