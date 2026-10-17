@@ -220,10 +220,12 @@ impl FormatEngine<'_> {
         ) {
             return None;
         }
-        if line.trimmed_start().starts_with("}, ") {
+        // A comment after the closer leaves it the closer of its own row.
+        let code = line[..trailing_comment_split_limit(line)].trimmed();
+        if code.starts_with("}, ") {
             return Some(indent.max(self.continuation_base_indent()) * self.options.indent_width);
         }
-        if line.trimmed() != "}"
+        if code != "}"
             || !self
                 .output
                 .last_non_empty_scoped()

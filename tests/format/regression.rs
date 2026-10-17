@@ -13736,3 +13736,14 @@ fn a_first_list_row_a_comment_leads_after_a_split_declaration_stands_as_without_
         &input.replace("/* note */ ", ""),
     );
 }
+
+#[test]
+fn a_nested_literal_closer_a_comment_trails_stands_as_without_it() {
+    let input = "void f(void) {\n    for (;;) {\n        (*ci)[i++] = (uv_cpu_info_t) {\n            .model = p,\n            .cpu_times = (struct times) {\n                .user = 10,\n            }, /* note */\n        };\n    }\n}\n";
+    check(input, &["--style=java"], input);
+    check(
+        &input.replace(" /* note */", ""),
+        &["--style=java"],
+        &input.replace(" /* note */", ""),
+    );
+}
