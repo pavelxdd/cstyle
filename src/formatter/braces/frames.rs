@@ -166,7 +166,8 @@ impl FormatEngine<'_> {
                 })
                 .unwrap_or_else(|| self.current_line_indent_spaces())
         } else {
-            self.current_line_indent_spaces()
+            // A line comments lead stands where the comments put it.
+            self.current_output_indent().0
         };
         let closes_interrupted_comment = self
             .current

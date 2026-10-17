@@ -15258,3 +15258,13 @@ fn whitesmith_parts_a_label_from_its_statement_in_a_function_whose_brace_a_condi
         "void f()\n#ifdef FEATURE\n    {\n#endif\ndone:\n    if (ready)\n        {\n        value=0;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn vtk_breaks_a_list_brace_off_the_comment_leading_it_at_the_brace_column() {
+    let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    struct Item item =\n    /* note */\n        {\n        1, 2\n        };\n}\n",
+    );
+}
