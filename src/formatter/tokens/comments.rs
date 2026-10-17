@@ -2042,10 +2042,9 @@ impl FormatEngine<'_> {
         switch_label_block_comment_indent.or_else(|| {
             (kind == CommentKind::Block
                 && self.current.trimmed().is_empty()
-                && self
-                    .output
-                    .last_non_empty_scoped()
-                    .is_some_and(|line| line.trimmed() == "}")
+                && self.output.last_non_empty_scoped().is_some_and(|line| {
+                    line[..trailing_comment_split_limit(line)].trimmed() == "}"
+                })
                 && self
                     .layout
                     .nesting

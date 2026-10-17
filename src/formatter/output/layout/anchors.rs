@@ -2083,7 +2083,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let assign_line = self.output.line_with_token(assign)?;
-        if self.output.line_tokens(assign_line)?.last != assign {
+        // A comment that followed the brace stays on the line it leaves.
+        let last = self.output.line_tokens(assign_line)?.last;
+        if (assign + 1..=last).any(|index| index != first && is_code_token(&tokens[index])) {
             return None;
         }
         // The brace stands a level past the statement's first line.

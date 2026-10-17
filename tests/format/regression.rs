@@ -13904,3 +13904,54 @@ fn a_brace_a_comment_leads_after_a_case_label_and_a_directive_breaks_from_the_co
         "void f() {\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state); }\n        break; } }\n",
     );
 }
+
+#[test]
+fn a_comment_after_a_case_blocks_closer_moves_no_comment_led_statement_after_it() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    } /* end */\n    /* note */ second();\n    third();\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    } /* end */\n    /* note */ second();\n    third();\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (state) {\n        case 1: {\n            first();\n            } /* end */\n        /* note */ second();\n        third();\n        break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_assigned_brace_moves_none_of_its_list_under_indented_braces() {
+    let input =
+        "void f()\n{\n    struct Item\n        first = { /* note */\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item\n        first =   /* note */\n        {\n        1, 2\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    struct Item\n        first =   /* note */\n        {\n        1, 2\n        };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_the_closer_of_a_case_block_holding_a_label_moves_none_of_it() {
+    let input = "void f() {\n    switch (op) {\n    case FIRST: {\n        value = 0;\n    case SECOND:\n        apply(value);\n        break;\n    } /* end */\n    case THIRD:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        case FIRST: {\n            value = 0;\n            case SECOND:\n                apply(value);\n                break;\n            } /* end */\n        case THIRD:\n            break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (op)\n        {\n        case FIRST:\n            {\n            value = 0;\n            case SECOND:\n                apply(value);\n                break;\n            } /* end */\n        case THIRD:\n            break;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (op)\n    {   case FIRST:\n        {   value = 0;\n            case SECOND:\n                apply(value);\n                break;\n        } /* end */\n        case THIRD:\n            break;\n    }\n}\n",
+    );
+}
