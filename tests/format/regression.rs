@@ -13698,3 +13698,12 @@ fn a_conditional_before_the_closer_of_a_run_in_group_stands_at_its_rows() {
         "void f() {\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n            #ifdef FEATURE\n        }\n            #endif\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_comment_line_before_the_first_member_of_a_struct_in_a_case_block_leaves_it_at_the_members() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+        &["--style=stroustrup"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+    );
+}

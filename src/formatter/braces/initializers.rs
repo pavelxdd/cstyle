@@ -1456,15 +1456,15 @@ impl FormatEngine<'_> {
         } else {
             // Directives between the members hold no member.
             self.previous_code_line_past_comments_and_directives()
-                .and_then(|previous| {
+                .map(|previous| {
                     let code = self.output.code_of(previous).trimmed();
                     let width = leading_visual_width(previous, self.options.tab_width);
-                    // A first member under a brace on its own line sits a
-                    // level past it.
-                    match code {
-                        "{" => Some(width + self.options.indent_width),
-                        _ if code.ends_with('{') => None,
-                        _ => Some(width),
+                    // A first member sits a level past the line its brace
+                    // ends.
+                    if code.ends_with('{') {
+                        width + self.options.indent_width
+                    } else {
+                        width
                     }
                 })
         };
