@@ -1424,6 +1424,20 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_level(self.statement_level());
         }
+        // A compound literal among a call's arguments whose first element
+        // runs in after its brace keeps its rows under that element.
+        let in_paren_list_column = (token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && self.layout.nesting.paren_depth > 0
+            && self.innermost_brace_is_compound_literal()
+            && self.tree.groups.enclosing(start).is_some_and(|list| {
+                let open = self.tree.groups.get(list).open;
+                next_code_token(tokens, open + 1).is_some_and(|first| {
+                    self.output.line_with_token(first) == self.output.line_with_token(open)
+                })
+            }))
+        .then(|| self.current_inline_array_column())
+        .flatten();
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && let Some(previous) = self.output.last()
@@ -1431,15 +1445,17 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
                 self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
-                );
+                self.layout.continuation_indent.next_line_indent_spaces =
+                    Some(in_paren_list_column.unwrap_or_else(|| {
+                        leading_visual_width(previous, self.options.tab_width)
+                            + self.options.indent_width
+                    }));
             }
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && self.options.indent_braces
+            && in_paren_list_column.is_none()
             && matches!(
                 brace_type,
                 BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral

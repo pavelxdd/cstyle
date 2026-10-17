@@ -15574,3 +15574,23 @@ fn a_comment_led_statement_closing_a_switch_in_a_case_block_stands_at_its_label_
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn rows_of_a_nested_compound_literal_in_parens_stand_under_its_first_element() {
+    let input = "void f(void)\n{\n    g((struct Item[]) { { 1, 2 },\n        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n        { 3, 4 } });\n}\n";
+    let expected = "void f(void)\n{\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let expected = "void f(void)\n    {\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } });\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_compound_literal_row_its_closer_parts_stands_among_the_rows_before_it() {
+    let input =
+        "void f(void)\n{\n    foo((struct Item[]) {\n        { 1, 2 },\n        { 3, 4 } });\n}\n";
+    let expected = "void f(void) {\n    foo((struct Item[]) {\n            { 1, 2 },\n            { 3, 4 }\n        });\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

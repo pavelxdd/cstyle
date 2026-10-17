@@ -1659,9 +1659,13 @@ impl<'a> FormatEngine<'a> {
             return None;
         }
         let open = self.open_paren_column_of(text)?;
+        // A list the line leaves open holds the next row itself.
         unmatched_open_paren_columns(text)
             .last()
-            .is_some_and(|&paren| text[paren..].contains('}'))
+            .is_some_and(|&paren| {
+                let after = &text[paren..];
+                after.contains('}') && after.matches('{').count() <= after.matches('}').count()
+            })
             .then_some(open + 1)
     }
 

@@ -870,8 +870,11 @@ impl FormatEngine<'_> {
             .get(open_output_len)
             .is_some_and(|line| line.trimmed_start().starts_with("return "));
         // A returned `{{` keeps its closers on the last row.
-        // A typed initializer keeps its closer on its last row.
+        // A typed initializer keeps its closer on its last row, as does a
+        // compound literal among a call's arguments.
+        let in_paren_literal = closing_compound_literal && self.layout.nesting.paren_depth > 0;
         let enclosed_run_in = closing_brace_type != Some(BraceType::Initializer)
+            && !in_paren_literal
             && self.output.get(open_output_len).is_some_and(|line| {
                 line.contains_from_first_byte("{ {")
                     || !return_initializer && line.contains_from_first_byte("{{")
@@ -1000,7 +1003,19 @@ impl FormatEngine<'_> {
                         || range_for_initializer
                         || call_argument_array
                         || typed_initializer));
-        if row_breaks_off {
+        // A row of a compound literal the closer parts from it below
+        // publishes while the literal is open, as one a closer leading its
+        // line leaves.
+        let closer_parts_literal_row = closing_line_opened_literal
+            && !forced_break
+            && !row_breaks_off
+            && !finished_inner_closer
+            && !broken_literal_row
+            && !self.token_input.token_begins_source_line
+            && !self.current_is_blank()
+            && !run_in_after_comment
+            && self.output.len() > open_output_len;
+        if row_breaks_off || closer_parts_literal_row {
             self.finish_line();
         }
         self.inline_array.frames.pop();
