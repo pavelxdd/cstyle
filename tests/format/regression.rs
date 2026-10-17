@@ -13444,3 +13444,13 @@ fn a_comment_led_switch_label_sets_no_column_for_its_body_past_a_directive() {
     let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    }\n    break;\n    /* note */ default:\n#ifdef FEATURE\n        break;\n#endif\n    }\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_line_between_a_split_declaration_head_and_its_declarator_stands_at_the_declarator() {
+    let input = "static const struct Item\n  // note\nfirst = {\n    1, 2\n};\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "static const struct Item\n    // note\n    first = {\n    1, 2\n};\n",
+    );
+}
