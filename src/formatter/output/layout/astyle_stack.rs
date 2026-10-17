@@ -192,7 +192,7 @@ impl FormatEngine<'_> {
     /// A line inside a subscript whose `[` ends its line, or any when parens
     /// indent, stands at the top of astyle's continuation stack: a
     /// continuation level past the indent before.
-    pub(super) fn stacked_bracket_row_indent(&self, first: usize) -> Option<usize> {
+    pub(crate) fn stacked_bracket_row_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let group = groups.enclosing(first)?;
         let open = groups.get(group).open;

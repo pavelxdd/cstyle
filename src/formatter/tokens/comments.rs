@@ -437,16 +437,23 @@ impl FormatEngine<'_> {
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);
                     trimmed = format!("{prefix}{}", trimmed.trimmed_start());
-                } else if let Some(spaces) = line_continuation_indent.or_else(|| {
-                    // A control header's condition placed its comments.
-                    (!self
-                        .layout
-                        .frame_stack
-                        .active_delimiter()
-                        .is_some_and(|frame| frame.role == ParenRole::Header))
-                    .then(|| self.recent_paren_continuation_indent_spaces())
-                    .flatten()
-                }) {
+                } else if let Some(spaces) = self
+                    .output
+                    .pending_tokens()
+                    .filter(|_| holds_code_after_leading_comments(&trimmed))
+                    .and_then(|span| self.stacked_bracket_row_indent(span.first))
+                    .or(line_continuation_indent)
+                    .or_else(|| {
+                        // A control header's condition placed its comments.
+                        (!self
+                            .layout
+                            .frame_stack
+                            .active_delimiter()
+                            .is_some_and(|frame| frame.role == ParenRole::Header))
+                        .then(|| self.recent_paren_continuation_indent_spaces())
+                        .flatten()
+                    })
+                {
                     let prefix = self
                         .options
                         .continuation_indent_prefix(self.continuation_base_indent(), spaces);

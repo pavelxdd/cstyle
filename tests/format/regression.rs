@@ -14980,3 +14980,14 @@ fn a_preprocessor_block_opening_the_file_indents_a_class_head_as_one_after_code(
         "int first;\n#ifdef FEATURE\n    class Item;\n#endif\nint value;\n",
     );
 }
+
+#[test]
+fn indenting_after_parens_continues_a_bracket_row_a_comment_leads_as_any_bracket_row() {
+    let input =
+        "void f()\n{\n    value = table[first\n                  /* note */ + second];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    value = table[first\n            /* note */ + second];\n}\n",
+    );
+}
