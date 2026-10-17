@@ -1893,16 +1893,19 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
             );
-        let operator_led_broken_brace =
-            matches!(
-                self.options.brace_style,
-                BraceStyle::Allman
-                    | BraceStyle::Whitesmith
-                    | BraceStyle::Vtk
-                    | BraceStyle::Gnu
-                    | BraceStyle::Horstmann
-                    | BraceStyle::Pico
-            ) && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
+        // A designator leading a brace list's row leads no operator.
+        let leads_designator =
+            self.innermost_brace_is_brace_list() && self.current.trimmed_start().starts_with('.');
+        let operator_led_broken_brace = matches!(
+            self.options.brace_style,
+            BraceStyle::Allman
+                | BraceStyle::Whitesmith
+                | BraceStyle::Vtk
+                | BraceStyle::Gnu
+                | BraceStyle::Horstmann
+                | BraceStyle::Pico
+        ) && !leads_designator
+            && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
         // An enum brace that starts its source line stays broken.
         let source_broken_enum =
             brace_type == BraceType::Enum && self.token_input.token_begins_source_line;

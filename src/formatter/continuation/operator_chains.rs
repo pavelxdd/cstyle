@@ -334,8 +334,8 @@ impl FormatEngine<'_> {
             || current.starts_with_any(b"{}#")
             || current.starts_with("//")
             || current.starts_with("/*")
-            // A compound literal's field continues no operator.
-            || current.starts_with('.') && self.innermost_brace_is_compound_literal()
+            // A brace list's designator continues no operator.
+            || current.starts_with('.') && self.innermost_brace_is_brace_list()
         {
             return None;
         }

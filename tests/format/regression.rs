@@ -13333,3 +13333,20 @@ fn a_designator_string_value_continues_under_the_value() {
         "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n                \"second\",\n        [1] = \"first \"\n              \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_nested_designator_brace_split_over_rows_stays_after_its_designator() {
+    let input = "void f(void)\n{\n    struct Config c = {\n        .first = 1,\n        .inner = { .value = 1,\n        .other = 2 },\n        .last = 2,\n    };\n}\n";
+    let expected = "void f(void)\n{\n    struct Config c =\n    {\n        .first = 1,\n        .inner = {\n            .value = 1,\n            .other = 2\n        },\n        .last = 2,\n    };\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(
+        &input.replace(".first = 1,", "FLAG_A |\n        FLAG_B,"),
+        &["--style=allman"],
+        &expected.replace(".first = 1,", "FLAG_A |\n        FLAG_B,"),
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct Config c =\n        {\n        .first = 1,\n        .inner = {\n            .value = 1,\n            .other = 2\n            },\n        .last = 2,\n        };\n    }\n",
+    );
+}
