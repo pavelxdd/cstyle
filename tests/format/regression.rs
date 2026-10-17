@@ -13845,3 +13845,12 @@ fn break_blocks_all_sets_a_blank_line_before_an_else_a_comment_leads_as_before_a
         &expected.replace("/* note */ ", ""),
     );
 }
+
+#[test]
+fn a_comment_line_before_the_first_member_of_an_indented_struct_brace_leaves_it_at_the_members() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+        &["--style=vtk"],
+        "void f()\n{\n    switch (state)\n        {\n        case 1:\n            {\n#ifdef FEATURE\n            static const struct\n                {\n#endif\n                /* note */\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n}\n",
+    );
+}

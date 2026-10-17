@@ -1462,8 +1462,10 @@ impl FormatEngine<'_> {
                     let code = self.output.code_of(previous).trimmed();
                     let width = leading_visual_width(previous, self.options.tab_width);
                     // A first member sits a level past the line its brace
-                    // ends.
-                    if code.ends_with('{') {
+                    // ends, or at a brace the style indents on its own line.
+                    if code == "{" && self.should_indent_brace_line(BraceType::Struct) {
+                        width
+                    } else if code.ends_with('{') {
                         width + self.options.indent_width
                     } else {
                         width
