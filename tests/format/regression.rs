@@ -13823,3 +13823,13 @@ fn a_comment_line_before_a_list_closer_a_comment_leads_leaves_it_at_the_rows() {
         "void f()\n{   struct Item list[] = { {\n            .value = 1,\n            /* note */\n            /* end */ } }; }\n",
     );
 }
+
+#[test]
+fn ratliff_closes_an_initializer_whose_brace_a_comment_leads_a_level_in() {
+    let input = "void f()\n{\n    struct Item item =\n    /* note */ {\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    struct Item item =\n    /* note */ {\n        1, 2\n        };\n    }\n",
+    );
+}

@@ -1613,10 +1613,24 @@ impl FormatEngine<'_> {
         let open = self.tree.groups.get(group).open;
         let line = self.output.line_with_token(open)?;
         // A brace attached to the line before after layout closes its way;
-        // one a comment leads closes at the line all the same.
+        // one a comment leads closes at the line all the same. Ratliff sets
+        // the closer of a statement's list a level in.
+        let outermost = self.tree.groups.get(group).parent.is_none_or(|parent| {
+            !matches!(
+                self.tree.blocks.kind(parent),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        });
+        let closer_indent =
+            usize::from(self.options.brace_style == BraceStyle::Ratliff && outermost)
+                * self.options.indent_width;
         (self.output.line_tokens(line)?.first == open
             && after_leading_comments(&self.output.as_slice()[line]).starts_with('{'))
-        .then(|| self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+        .then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + closer_indent
+                + self.case_unindent_spaces()
+        })
     }
 
     /// The line after a statement's first line holding assignments stands
