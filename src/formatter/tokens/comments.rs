@@ -1663,8 +1663,14 @@ impl FormatEngine<'_> {
                 delimiter.continuation_indent_column = Some(spaces);
             }
             let current_indent = leading_visual_width(&self.current, self.options.tab_width);
+            // So does a switch label the comment leads, which continues
+            // nothing.
+            let leads_switch_label = self
+                .current
+                .active_comment()
+                .is_some_and(|index| self.comment_leads_switch_label(index));
             self.comments.comment_keeps_line_column =
-                label_line.is_some() || head_row_spaces.is_some();
+                label_line.is_some() || head_row_spaces.is_some() || leads_switch_label;
             if current_indent != spaces || label_line.is_some() {
                 let structural_level = if follows_objc_interface {
                     1
@@ -2348,6 +2354,17 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the comment at token `index` leads a closer on its line.
+    /// Whether the comment at token `index` leads a `case` or `default`
+    /// label on its line.
+    fn comment_leads_switch_label(&self, index: usize) -> bool {
+        self.tree.tokens[index + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+            .is_some_and(
+                |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
+            )
+    }
+
     fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
         let tokens = &self.tree.tokens;
         matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment)

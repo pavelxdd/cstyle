@@ -13350,3 +13350,23 @@ fn a_nested_designator_brace_split_over_rows_stays_after_its_designator() {
         "void f(void)\n    {\n    struct Config c =\n        {\n        .first = 1,\n        .inner = {\n            .value = 1,\n            .other = 2\n            },\n        .last = 2,\n        };\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_line_before_a_comment_led_case_label_leaves_the_label_in_place() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 1: {\n        break;\n    }\n    /* note */\n    /*case B*/ default:\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    switch (x) {\n        case 1: {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n    }\n",
+    );
+}
