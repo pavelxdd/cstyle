@@ -15634,3 +15634,24 @@ fn a_conditional_closing_past_a_label_it_opened_before_stands_in_that_labels_bod
         expected,
     );
 }
+
+#[test]
+fn pico_runs_a_closer_in_after_string_rows_a_line_comment_parts() {
+    let input = "void f()\n{\n    helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second);\n}\n";
+    let expected = "void f()\n{   helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_comment_led_initializer_row_after_a_comment_led_colon_row_stands_as_without_its_comment() {
+    let input = "Item::Item(int value, int other)\n    /* note */ : value_(value),\n      /* note */ other_(other)\n{\n}\n";
+    let expected = "Item::Item(int value, int other)\n/* note */ : value_(value),\n    /* note */ other_(other)\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n/* note */ : value_(value),\n    /* note */ other_(other) {}\n",
+    );
+}

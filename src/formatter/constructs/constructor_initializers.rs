@@ -10,8 +10,8 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line,
-    trailing_comment_split_limit, unmatched_open_paren_columns,
+    after_leading_comments, has_unmatched_open_brace, inline_brace_pair_range,
+    is_comment_only_line, trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -229,7 +229,8 @@ impl FormatEngine<'_> {
 
     fn scan_output_constructor_initializer_colon(&self) -> bool {
         for index in (0..self.output.len()).rev().take(64) {
-            let trimmed = self.output.code_trimmed(index);
+            // Comments leading a line take no part in it.
+            let trimmed = after_leading_comments(self.output.code_trimmed(index));
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }

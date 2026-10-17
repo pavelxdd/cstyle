@@ -1591,7 +1591,8 @@ impl FormatEngine<'_> {
         let is_asm_operand_colon = self.is_asm_operand_colon();
         let is_class_initializer = !is_asm_operand_colon
             && (self.is_class_initializer_colon()
-                || (self.current.trimmed().is_empty() && self.colon_leads_class_initializer()));
+                || (after_leading_comments(self.current.trimmed()).is_empty()
+                    && self.colon_leads_class_initializer()));
         let function_try_initializer =
             is_class_initializer && self.class_initializer_follows_function_try();
         let is_objc_colon = self.is_objc_selector_or_message_colon();
@@ -1925,9 +1926,11 @@ impl FormatEngine<'_> {
         if self.is_class_initializer_colon() {
             return true;
         }
-        if !self.current[..self.current_trailing_comment_split_limit()]
-            .trimmed()
-            .is_empty()
+        // Comments leading the colon's line take no part in it.
+        if !after_leading_comments(
+            self.current[..self.current_trailing_comment_split_limit()].trimmed(),
+        )
+        .is_empty()
         {
             return false;
         }
