@@ -4430,6 +4430,9 @@ pub(crate) struct CommentState {
     pub(crate) reordered_brace_line_comment_gap: Option<String>,
     pub(crate) next_comment_ends_line: bool,
     pub(crate) skip_next_attached_comment: bool,
+    /// Comments after the attached one on its source line that went onto
+    /// the line with it.
+    pub(crate) attached_comment_run: usize,
     /// The comment line was placed at the column of the label or `else` it
     /// leads.
     pub(crate) comment_keeps_line_column: bool,

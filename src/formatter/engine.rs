@@ -1092,10 +1092,13 @@ impl<'a> FormatEngine<'a> {
         {
             template_angle = TemplateAngle::Open;
         }
+        // Comments alone up to the line's end leave the token ending it.
         self.comments.next_comment_ends_line = next_index.is_some_and(|comment_index| {
             matches!(tokens.get(comment_index), Some(Token::Comment(_, _)))
-                && next_non_whitespace(tokens, comment_index + 1, line.end)
-                    .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
+                && tokens[comment_index..line.end]
+                    .iter()
+                    .take_while(|token| !matches!(token, Token::Newline))
+                    .all(|token| matches!(token, Token::Comment(..) | Token::Whitespace(_)))
         });
         let starts_initializer_designator = matches!(tokens[index], Token::Symbol('['))
             && self.bracket_chain_designator(tokens, index, line.end);
@@ -1411,6 +1414,10 @@ impl<'a> FormatEngine<'a> {
 
         if self.comments.skip_next_attached_comment && matches!(token, Token::Comment(_, _)) {
             self.comments.skip_next_attached_comment = false;
+            return;
+        }
+        if self.comments.attached_comment_run > 0 && matches!(token, Token::Comment(_, _)) {
+            self.comments.attached_comment_run -= 1;
             return;
         }
         if !matches!(token, Token::Whitespace(_) | Token::Newline) {

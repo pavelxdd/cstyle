@@ -14663,3 +14663,33 @@ fn a_case_block_kept_whole_on_its_label_line_leaves_the_next_statement_in_the_ca
         check(input, args, expected);
     }
 }
+
+#[test]
+fn comments_alone_after_a_list_brace_leave_it_ending_its_line() {
+    let input = "void f()\n{\n    int table[][2] = { /* note */ /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    for style in ["--style=kr", "--style=mozilla"] {
+        check(input, &[style], input);
+    }
+    // A list argument's rows stand as after a brace one comment follows.
+    let argument =
+        "void f()\n{\n    call(value, { /* note */ /* note */\n        1, 2\n    });\n}\n";
+    check(argument, &["--style=kr"], argument);
+}
+
+// Allman breaks a list brace off the comments after it however many there
+// are, as it does off one.
+#[test]
+fn allman_breaks_a_list_brace_off_the_comments_after_it_as_off_one() {
+    let one = "void f()\n{\n    int table[][2] = { /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    let two = "void f()\n{\n    int table[][2] = { /* note */ /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    check(
+        one,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =   /* note */\n    {\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    );
+    check(
+        two,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =   /* note */ /* note */\n    {\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    );
+}

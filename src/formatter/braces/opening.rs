@@ -1052,6 +1052,7 @@ impl FormatEngine<'_> {
         }
         self.current.push_str(comment.trimmed_end());
         self.comments.skip_next_attached_comment = true;
+        self.attach_comment_run_after_brace();
     }
 
     fn reorder_brace_before_current_block_comment(&self) -> Option<String> {
@@ -2974,6 +2975,50 @@ impl FormatEngine<'_> {
         }
         self.current.push_str(comment.trimmed_end());
         self.comments.skip_next_attached_comment = true;
+        self.attach_comment_run_after_brace();
+    }
+
+    /// Takes the comments after the attached one onto its line when only
+    /// comments end the brace's source line.
+    fn attach_comment_run_after_brace(&mut self) {
+        let tokens = std::rc::Rc::clone(&self.tree.tokens);
+        let Some(rest) = self
+            .current
+            .active_token()
+            .and_then(|brace| tokens.get(brace + 1..))
+        else {
+            return;
+        };
+        let line = rest
+            .iter()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .collect::<Vec<_>>();
+        let Some(first) = line
+            .iter()
+            .position(|token| matches!(token, Token::Comment(CommentKind::Block, _)))
+        else {
+            return;
+        };
+        if !line[first..]
+            .iter()
+            .all(|token| matches!(token, Token::Comment(..) | Token::Whitespace(_)))
+        {
+            return;
+        }
+        let mut gap = String::new();
+        for token in &line[first + 1..] {
+            match token {
+                Token::Whitespace(space) => gap.push_str(space),
+                Token::Comment(_, comment) => {
+                    self.current
+                        .push_str(if gap.is_empty() { " " } else { &gap });
+                    self.current.push_str(comment.trimmed_end());
+                    self.comments.attached_comment_run += 1;
+                    gap.clear();
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Whether a closer added around the statement before `first` stands
