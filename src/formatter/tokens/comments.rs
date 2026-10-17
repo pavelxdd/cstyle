@@ -1698,6 +1698,7 @@ impl FormatEngine<'_> {
             // nor do a constructor's members.
             self.layout.continuation_indent.next_line_indent_spaces = (!follows_objc_interface
                 && label_line.is_none()
+                && !leads_switch_label
                 && constructor_member_comment_indent.is_none())
             .then_some(spaces);
             if kind == CommentKind::Block

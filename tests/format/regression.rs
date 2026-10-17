@@ -13438,3 +13438,9 @@ fn a_comment_on_a_line_after_a_case_block_moves_none_of_its_code() {
         "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            pop(state);\n            }  /* FALLTHROUGH */\n        case 2:\n            {\n            pop(state);\n            }\n            /* note */\n        break; /* note */\n        case 3:\n            {\n            pop(state);\n            }\n        /* lead */ break;\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_comment_led_switch_label_sets_no_column_for_its_body_past_a_directive() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    }\n    break;\n    /* note */ default:\n#ifdef FEATURE\n        break;\n#endif\n    }\n}\n";
+    check(input, &[], input);
+}
