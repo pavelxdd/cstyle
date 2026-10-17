@@ -3258,6 +3258,26 @@ impl FormatEngine<'_> {
             }
             next = index + 1;
         };
+        // Before the list's `}`, at the row the directive follows.
+        if matches!(tokens[next], Token::Symbol('}')) {
+            let groups = &self.tree.groups;
+            let group = groups.closed_at(next)?;
+            if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+                return None;
+            }
+            let line = self
+                .output
+                .line_with_token(self.tree.previous_code_token(next)?)?;
+            let first = self.output.line_tokens(line)?.first;
+            let row_start = self.tree.previous_code_token(first).is_some_and(|before| {
+                before == groups.get(group).open
+                    || matches!(tokens[before], Token::Symbol(','))
+                        && groups.enclosing(before) == Some(group)
+            });
+            return (groups.enclosing(first) == Some(group) && row_start).then(|| {
+                self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+            });
+        }
         self.initializer_row_indent(next)
     }
 

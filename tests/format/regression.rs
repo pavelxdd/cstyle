@@ -13689,3 +13689,12 @@ fn a_conditional_splitting_an_else_from_its_if_in_a_case_block_stands_at_the_sta
         "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        if (a) {\n            token = 1;\n        } else\n        #ifndef FEATURE\n            if (b) {\n                token = 2;\n            } else\n        #endif\n            {\n                token = 3;\n            }\n        break;\n    }\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_conditional_before_the_closer_of_a_run_in_group_stands_at_its_rows() {
+    check(
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n#ifdef FEATURE\n        }\n#endif\n    };\n}\n",
+        &["--style=google", "--indent-preproc-cond"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n            #ifdef FEATURE\n        }\n            #endif\n    };\n}\n",
+    );
+}
