@@ -15727,3 +15727,11 @@ fn a_comment_split_off_a_function_brace_after_an_objc_method_stands_at_the_brace
     check(input, &["--style=1tbs"], expected);
     check(expected, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn a_conditional_among_arguments_in_a_braceless_body_stands_at_the_arguments() {
+    let input = "void f()\n{\n    if (!ready)\n        call(\"not ready\",\n#ifdef FEATURE\n             value);\n#endif\n    call(\"not ready\",\n#ifdef FEATURE\n         value);\n#endif\n}\n";
+    let expected = "void f()\n{\n    if (!ready)\n        call(\"not ready\",\n             #ifdef FEATURE\n             value);\n             #endif\n    call(\"not ready\",\n         #ifdef FEATURE\n         value);\n         #endif\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}
