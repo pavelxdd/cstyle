@@ -15093,3 +15093,13 @@ fn breaking_return_types_breaks_a_declaration_a_comment_leads() {
         "/* note */ int\nhelper(int value);\n",
     );
 }
+
+#[test]
+fn a_bare_block_after_the_block_of_an_attributed_if_starts_its_own_line() {
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (ready) [[likely]] {\n        value = 1;\n        }\n        {\n        value = 1;\n        }\n    }\n",
+    );
+}
