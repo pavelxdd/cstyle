@@ -296,6 +296,9 @@ pub(crate) struct FormatEngine<'a> {
         std::cell::Cell<Option<crate::formatter::continuation::operator_chains::AssignmentRhsWalk>>,
     /// The looks back for the line opening an initializer's rows.
     pub(crate) row_openers: std::cell::RefCell<crate::formatter::braces::initializers::RowOpeners>,
+    /// The last look back over a run of a class's base rows.
+    pub(crate) colon_run_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::initial::ColonRunWalk>>,
     /// The last look back from a leading operator for its statement's
     /// assignment: the tokens' address, the operator, its group, and the
     /// farthest `=` found, or `None` when the look gave up.
@@ -447,6 +450,7 @@ impl<'a> FormatEngine<'a> {
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
             row_openers: std::cell::RefCell::default(),
+            colon_run_cache: std::cell::Cell::new(None),
             operand_assign_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_registers_cache: std::cell::Cell::new(None),

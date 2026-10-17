@@ -1089,9 +1089,26 @@ impl FormatEngine<'_> {
     /// for the line after the rows so far: the rows of a class's bases go
     /// on at it past each other.
     fn colon_led_rows_column(&self) -> Option<usize> {
-        let mut rows = self
+        let mut rows = self.colon_rows_before(self.output.scoped_range().end);
+        let previous = rows.next()?;
+        if let Some(spaces) = self.colon_led_row_indent_spaces(&self.output[previous]) {
+            return Some(spaces);
+        }
+        if !self
             .output
-            .scoped_range()
+            .code_trimmed_of(&self.output[previous])
+            .ends_with(',')
+        {
+            return None;
+        }
+        let row = rows.next()?;
+        self.colon_led_run_column(row)
+    }
+
+    /// The rows before output line `end` that a run of a class's bases
+    /// reads, last first.
+    fn colon_rows_before(&self, end: usize) -> impl Iterator<Item = usize> + '_ {
+        (self.output.scoped_range().start..end)
             .rev()
             .filter(|&index| {
                 let trimmed = self.output.trimmed(index);
@@ -1100,31 +1117,54 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with('#')
                     && self.output.directive_of_continuation(index).is_none()
             })
-            .map(|index| self.output[index].as_str());
-        let previous = rows.next()?;
-        if let Some(spaces) = self.colon_led_row_indent_spaces(previous) {
-            return Some(spaces);
-        }
-        if !self.output.code_trimmed_of(previous).ends_with(',') {
-            return None;
-        }
-        while let Some(row) = rows.next() {
-            if let Some(spaces) = self.colon_led_row_indent_spaces(row) {
+    }
+
+    /// The column of the `:`-led row that the run of comma-ended rows
+    /// through output line `row` goes back to, under a class's head. Each
+    /// line asks for the run one row longer, so the answer for the row
+    /// before carries over.
+    fn colon_led_run_column(&self, row: usize) -> Option<usize> {
+        let version = self.output.version();
+        let floor = self.output.scoped_range().start;
+        let mut rows = self.colon_rows_before(row + 1);
+        let mut walked = Vec::new();
+        let mut answer = None;
+        while let Some(index) = rows.next() {
+            if let Some(walk) = self.colon_run_cache.get()
+                && (walk.version, walk.floor, walk.row) == (version, floor, index)
+            {
+                answer = walk.column;
+                break;
+            }
+            walked.push(index);
+            let line = &self.output[index];
+            if let Some(spaces) = self.colon_led_row_indent_spaces(line) {
                 // Only a class's head leads its bases' rows with the colon.
-                let head = rows.next().map(|line| self.output.code_trimmed_of(line));
-                return head
+                let head = rows
+                    .next()
+                    .map(|line| self.output.code_trimmed_of(&self.output[line]));
+                answer = head
                     .is_some_and(|head| {
                         ["class", "struct", "union"]
                             .iter()
                             .any(|keyword| starts_header_word(head.trimmed_start(), keyword))
                     })
                     .then_some(spaces);
+                break;
             }
-            if !self.output.code_trimmed_of(row).ends_with(',') {
-                return None;
+            if !self.output.code_trimmed_of(line).ends_with(',') {
+                break;
             }
         }
-        None
+        if !walked.is_empty() {
+            self.colon_run_cache.set(Some(ColonRunWalk {
+                version,
+                floor,
+                row,
+                column: answer,
+            }));
+        }
+        answer
     }
 
     /// The column of the rows after `previous`, a `:`-led row that a comma
@@ -1705,4 +1745,14 @@ fn line_starts_call(line: &str) -> bool {
         .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
         .unwrap_or(line.len());
     name_end > 0 && line[name_end..].trimmed_start().starts_with('(')
+}
+
+/// A look back over a run of a class's base rows: the output version and
+/// scope start it read, the run's last row, and the column it found.
+#[derive(Clone, Copy)]
+pub(crate) struct ColonRunWalk {
+    version: u64,
+    floor: usize,
+    row: usize,
+    column: Option<usize>,
 }
