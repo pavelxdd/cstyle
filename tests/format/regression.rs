@@ -13594,3 +13594,20 @@ fn a_run_in_list_opening_a_case_block_stands_at_the_blocks_statements() {
         "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            int list[][1] = { {\n                    1,\n                    }\n                };\n            }\n        }\n    }\n",
     );
 }
+
+#[test]
+fn a_closer_of_a_group_opened_mid_row_stands_at_the_braces_open_before_it() {
+    let input = "int list[][1][1] = { { {\n            1,\n        }, {\n            2,\n        } }, { {\n            3,\n        }\n    }\n};\n";
+    let plain = "int list[][1][1] = { { {\n            1,\n        }, {\n            2,\n        }\n    }, { {\n            3,\n        }\n    }\n};\n";
+    let indented = "int list[][1][1] = { { {\n            1,\n            }, {\n            2,\n            }\n        }, { {\n            3,\n            }\n        }\n    };\n";
+    for (style, expected) in [
+        ("--style=kr", plain.to_owned()),
+        ("--style=allman", plain.to_owned()),
+        ("--style=gnu", plain.to_owned()),
+        ("--style=whitesmith", indented.to_owned()),
+        ("--style=ratliff", indented.to_owned()),
+        ("--style=vtk", indented.replace("\n    };\n", "\n};\n")),
+    ] {
+        check(input, &[style], &expected);
+    }
+}

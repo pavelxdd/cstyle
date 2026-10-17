@@ -1492,7 +1492,7 @@ impl FormatEngine<'_> {
         if !at_elements && !self.opens_initializer_element(open) {
             return None;
         }
-        let (lead, levels, leading_closers) = self.brace_ending_row_levels(open)?;
+        let (lead, levels, leading_closers) = self.brace_row_levels_through(open)?;
         // Indented braces close at their elements: a level past a row of
         // values, at a row its braces lead, since such a row stands as a
         // brace line; others close a level out.
@@ -1536,10 +1536,27 @@ impl FormatEngine<'_> {
     /// lead, the braces the row leaves open through it past the closers
     /// leading it, and those closers.
     fn brace_ending_row_levels(&self, open: usize) -> Option<(usize, usize, usize)> {
+        let line = self.output.line_with_token(open)?;
+        let span = self.output.line_tokens(line)?;
+        if span.last != open {
+            return None;
+        }
+        self.brace_row_levels_through(open)
+    }
+
+    /// For a `{` at `open` in a row it does not start, which only nested
+    /// `{`s follow: the row's lead, the braces the row leaves open through
+    /// it past the closers leading it, and those closers.
+    fn brace_row_levels_through(&self, open: usize) -> Option<(usize, usize, usize)> {
         let tokens = &self.tree.tokens;
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
-        if span.first == open || span.last != open {
+        if span.first == open
+            || !tokens[open + 1..=span.last.max(open)]
+                .iter()
+                .filter(|&token| is_code_token(token))
+                .all(|token| matches!(token, Token::Symbol('{')))
+        {
             return None;
         }
         let leading_closers = tokens[span.first..open]
