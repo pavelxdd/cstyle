@@ -99,6 +99,10 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
     while column < comma && is_word_char(chars[column]) {
         column += 1;
     }
+    // A bit-field's colon parts no type from the declarator it ends.
+    if chars[column] == ':' && chars.get(column + 1) != Some(&':') {
+        return 0;
+    }
     column += 1;
     if column >= comma || column < 4 {
         return 0;

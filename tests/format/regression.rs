@@ -15482,3 +15482,13 @@ fn a_nested_list_run_in_after_its_outer_brace_keeps_its_source_gap() {
         "void f()\n{\n        int table[][2] = { { 1, 2 },\n                { 3, 4 }\n        };\n}\n",
     );
 }
+
+#[test]
+fn comment_rows_among_bit_field_declarators_stand_with_the_declarator_rows() {
+    let input = "struct Item {\n\tunsigned int\n\t\tfirst:1,\n\t\tsecond:1,\n\t\t/* note */\n\t\tthird:1,\n\t\t/*\n\t\t * more\n\t\t */\n\t\tfourth:1,\n\t\t/* note */ fifth:1;\n};\n";
+    let expected = "struct Item {\n    unsigned int\n    first:1,\n    second:1,\n    /* note */\n    third:1,\n    /*\n     * more\n     */\n    fourth:1,\n    /* note */ fifth:1;\n};\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    let input = "struct Item {\n    unsigned int\n    first:1,\n    second:1,\n    // note\n    third:1;\n};\n";
+    check(input, &[], input);
+}
