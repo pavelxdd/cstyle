@@ -14577,3 +14577,18 @@ fn breaking_a_header_off_a_comment_leading_a_braceless_body_keeps_the_body_level
         "void f()\n{\n    if (ready)\n        /* note */\n        if (other) {\n            value=0;\n        } else\n            /* note */ {\n            result=0;\n        }\n}\n",
     );
 }
+
+#[test]
+fn a_bare_block_after_a_header_braces_were_added_to_takes_the_blank_after_it() {
+    let input = "void f()\n{\n    if (ready) result=0;\n    {\n        value=0;\n    }\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-braces", "--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        result=0;\n    }\n\n    {\n        value=0;\n    }\n\n    result = 1;\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces", "--break-blocks"],
+        "void f()\n{\n    if (ready) { result=0; }\n\n    {\n        value=0;\n    }\n\n    result = 1;\n}\n",
+    );
+}
