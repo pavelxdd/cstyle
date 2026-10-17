@@ -3361,6 +3361,29 @@ fn align_pointer_aligns_reference_param_in_assigned_lambda() {
 }
 
 #[test]
+fn align_pointer_aligns_lambda_parameters_of_any_type() {
+    let input = "void f()\n{\n    call(items, [](const Item &first, Item* second) {\n        return first.value;\n    });\n}\n";
+    for (option, expected) in [
+        (
+            "--align-pointer=middle",
+            "void f()\n{\n    call(items, [](const Item & first, Item * second) {\n        return first.value;\n    });\n}\n",
+        ),
+        (
+            "--align-pointer=type",
+            "void f()\n{\n    call(items, [](const Item& first, Item* second) {\n        return first.value;\n    });\n}\n",
+        ),
+        (
+            "--align-pointer=name",
+            "void f()\n{\n    call(items, [](const Item &first, Item *second) {\n        return first.value;\n    });\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[option.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{option}");
+    }
+}
+
+#[test]
 fn align_pointer_aligns_reference_in_second_decl_after_assignment() {
     let mut options = FormatOptions::default();
     let args = ["--style=pico", "--align-pointer=type"].map(str::to_owned);
