@@ -14920,10 +14920,21 @@ fn a_typed_initializer_an_empty_line_parts_from_a_directive_keeps_its_gap() {
 
 #[test]
 fn indenting_after_parens_steps_a_template_head_a_comment_leads_from_its_line() {
-    let input = "/* note */ template <typename First,\n          typename Second>\nclass Pair\n{\n};\n";
+    let input =
+        "/* note */ template <typename First,\n          typename Second>\nclass Pair\n{\n};\n";
     check(
         input,
         &["--style=kr", "--indent-after-parens"],
         "/* note */ template <typename First,\n    typename Second>\nclass Pair\n{\n};\n",
+    );
+}
+
+#[test]
+fn gnu_closes_an_else_kept_on_a_closer_line_at_its_brace_before_a_directive() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else {\n        result=0;\n#ifdef FEATURE\n    }\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (ready)\n        {\n            first();\n        } /* c */ else\n        {\n            result=0;\n#ifdef FEATURE\n        }\n#endif\n    value = 1;\n}\n",
     );
 }

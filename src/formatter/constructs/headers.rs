@@ -1248,7 +1248,18 @@ impl FormatEngine<'_> {
                     .and_then(|_| self.layout.frame_stack.active_braceless_header())
                     .filter(|frame| frame.can_match_else)
                     .map(|frame| frame.header_indent_spaces)
-                    .or_else(|| closed.map(|frame| frame.sibling_indent_column))
+                    .or_else(|| {
+                        closed.map(|frame| {
+                            if matches!(
+                                self.options.brace_style,
+                                BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
+                            ) {
+                                frame.header_indent_column
+                            } else {
+                                frame.sibling_indent_column
+                            }
+                        })
+                    })
                     .unwrap_or_else(|| self.current_line_indent_spaces())
             });
         // Only an `else` right after the closing brace pairs with that block.
