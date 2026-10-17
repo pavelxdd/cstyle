@@ -12,7 +12,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::output::buffer::LineFilter;
-use crate::formatter::preprocessor::PreprocessorRegion;
+use crate::formatter::preprocessor::{PreprocessorRegion, is_conditional_preprocessor};
 use crate::formatter::state::frame::{
     BraceSemanticKind, CommentFrame, CommentFrameKind, ParenRole,
 };
@@ -823,16 +823,16 @@ impl FormatEngine<'_> {
     }
 
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
-        // Comments or a conditional opening after the label leave the
-        // comment in its body.
+        // Comments, a conditional opening or a plain directive after the
+        // label leave the comment in its body.
         let line = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
             !trimmed.is_empty()
                 && (!is_comment_only_line(trimmed) || holds_code_after_leading_comments(trimmed))
-                && !matches!(
-                    preprocessor_directive(trimmed),
-                    Some("if" | "ifdef" | "ifndef")
-                )
+                && !preprocessor_directive(trimmed).is_some_and(|directive| {
+                    matches!(directive, "if" | "ifdef" | "ifndef")
+                        || !is_conditional_preprocessor(directive)
+                })
         })?;
         let code = self.output.code_trimmed_of(line);
         let candidate = code

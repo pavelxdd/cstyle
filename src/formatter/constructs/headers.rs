@@ -1545,8 +1545,9 @@ impl FormatEngine<'_> {
 
     pub(crate) fn push_pre_brace_header(&mut self) -> Option<String> {
         // A directive between a label and the brace leaves the brace a plain
-        // block among the case's statements.
-        let after_directive = self.current_is_blank() && self.follows_plain_directive();
+        // block among the case's statements, comments leading it or not.
+        let after_directive = after_leading_comments(self.current.trimmed()).is_empty()
+            && self.follows_plain_directive();
         let header = self
             .layout
             .command_state

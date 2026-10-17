@@ -13864,3 +13864,23 @@ fn a_comment_line_before_a_case_label_leaves_a_comment_another_follows_on_its_la
         "void f(int a)\n{\n    switch (a) {\n    case 4:\n        w();\n        /* a\n         * b */ /* c */\n    /* note */\n    case 5:\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_brace_a_comment_leads_after_a_directive_past_a_case_label_opens_a_plain_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n#line 46 \"input.l\"\n        /* note */\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_directive_past_a_case_label_stands_in_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n#line 46 \"input.l\"\n            /* note */\n                {\n                pop(state);\n                }\n            break;\n        }\n}\n",
+    );
+}
