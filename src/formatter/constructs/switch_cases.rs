@@ -2496,7 +2496,8 @@ impl FormatEngine<'_> {
     /// Whether the line follows a directive other than a conditional: a
     /// brace there opens a plain block, not the block of a label before.
     pub(crate) fn follows_plain_directive(&self) -> bool {
-        // Comment lines after the directive leave it the line before.
+        // Comment lines after the directive leave it the line before, as do
+        // the conditionals, which leave the label looking for its brace.
         self.output.last_line_outside_comment().is_some_and(|_| {
             self.output
                 .scoped()
@@ -2504,12 +2505,11 @@ impl FormatEngine<'_> {
                 .rev()
                 .find(|line| {
                     let trimmed = line.trimmed_start();
-                    !trimmed.is_empty() && !is_bare_comment_line(trimmed)
+                    !trimmed.is_empty()
+                        && !is_bare_comment_line(trimmed)
+                        && !preprocessor_directive(trimmed).is_some_and(is_conditional_preprocessor)
                 })
-                .is_some_and(|line| {
-                    preprocessor_directive(line.trimmed_start())
-                        .is_some_and(|directive| !is_conditional_preprocessor(directive))
-                })
+                .is_some_and(|line| preprocessor_directive(line.trimmed_start()).is_some())
         })
     }
 

@@ -14198,3 +14198,18 @@ fn a_comment_after_the_closer_of_a_do_run_in_after_an_else_moves_none_of_it() {
     let input = "void f()\n{\n    if (x) {\n        helper();\n    } else do {\n            first();\n        } while (state); /* note */\n    z();\n}\n";
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn a_plain_directive_before_a_conditional_between_a_case_label_and_a_brace_opens_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n    {\n#endif\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n        {\n#endif\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n        {\n#endif\n            pop(state); }\n        break; } }\n",
+    );
+}
