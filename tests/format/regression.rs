@@ -13488,6 +13488,11 @@ fn a_brace_before_a_block_and_a_line_comment_stays_on_its_header_line() {
         &["--style=whitesmith"],
         "void f()\n    {\n    if (x) { /* a */ // b\n        y();\n        }\n    }\n",
     );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (x) { /* a */ // b\n            y();\n        }\n}\n",
+    );
 }
 
 #[test]

@@ -574,10 +574,14 @@ impl FormatEngine<'_> {
             {
                 let nested_header_extra = same_line_nested_header_extra(trimmed);
                 let case_label = trimmed.starts_with("case ") || trimmed.starts_with("default:");
-                // Indented cases indent a case block once more.
+                // Indented cases indent a case block once more, and GNU sets a
+                // header's body past the brace it would indent.
                 let case_block_extra = usize::from(case_label && self.options.indent_cases);
+                let gnu_brace_extra =
+                    usize::from(!case_label && self.options.brace_style == BraceStyle::Gnu);
                 let target = leading_visual_width(previous, self.options.tab_width)
-                    + self.options.indent_width * (1 + nested_header_extra + case_block_extra)
+                    + self.options.indent_width
+                        * (1 + nested_header_extra + case_block_extra + gnu_brace_extra)
                     + usize::from(!case_label)
                         * self.layout.line_adjuster.next_line_case_unindent_depth()
                         * self.options.indent_width;

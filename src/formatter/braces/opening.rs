@@ -1674,6 +1674,7 @@ impl FormatEngine<'_> {
                 BraceStyle::Allman
                     | BraceStyle::Whitesmith
                     | BraceStyle::Vtk
+                    | BraceStyle::Gnu
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
@@ -1697,16 +1698,22 @@ impl FormatEngine<'_> {
             if lambda_body_breaks_before_call {
                 self.layout.nesting.mark_current_brace_break_before_call();
             }
+            let gnu = self.options.brace_style == BraceStyle::Gnu;
             self.layout
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
             self.layout
                 .continuation_indent
                 .set_next_line_spaces(header_indent_spaces);
-            // Whitesmith closes the block at the brace it would indent.
-            if self.options.brace_style == BraceStyle::Whitesmith {
+            // Whitesmith and GNU close the block at the brace they would
+            // indent, GNU setting its body a level past it.
+            if matches!(
+                self.options.brace_style,
+                BraceStyle::Whitesmith | BraceStyle::Gnu
+            ) {
                 let brace_column = header_indent_spaces + self.options.indent_width;
-                self.update_current_brace_indent_columns(brace_column, brace_column);
+                let body_column = brace_column + usize::from(gnu) * self.options.indent_width;
+                self.update_current_brace_indent_columns(body_column, brace_column);
             }
             self.layout.previous = PreviousToken::Other;
             return true;
