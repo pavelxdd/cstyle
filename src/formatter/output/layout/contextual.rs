@@ -2090,6 +2090,13 @@ impl FormatEngine<'_> {
                 .current_closing_brace_open(self.options.tab_width)
             && starts_header_word(trimmed, "do")
         {
+            // A `do` the brace's line holds after another owns the block.
+            let spaces = self
+                .layout
+                .frame_stack
+                .last_closed_brace()
+                .filter(|frame| frame.header.as_deref() == Some("do"))
+                .map_or(spaces, |frame| frame.header_indent_column);
             layout.exact_indent_spaces = Some(
                 spaces
                     + self.layout.line_adjuster.next_line_case_unindent_depth()

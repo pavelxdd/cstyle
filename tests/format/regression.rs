@@ -14602,3 +14602,13 @@ fn a_block_after_a_header_holding_a_header_one_line_braces_were_added_to_stands_
         "void f()\n{\n    while (ready) if (other) { value++; }\n    {\n        value=0;\n    }\n    result = 1;\n}\n",
     );
 }
+
+#[test]
+fn a_do_body_closer_added_braces_break_stands_at_its_do_inside_another_do() {
+    let input = "void f()\n{\n    do do x; while(a); while(b);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-braces"],
+        "void f()\n{\n    do do {\n            x;\n        } while(a);\n    while(b);\n}\n",
+    );
+}
