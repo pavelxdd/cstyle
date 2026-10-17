@@ -4584,8 +4584,21 @@ impl FormatEngine<'_> {
     /// the line recorded no tokens.
     pub(crate) fn previous_code_closes_control_condition(&self) -> Option<bool> {
         let tokens = &self.tree.tokens;
-        let first = self.output.pending_tokens()?.first;
-        let Some(previous) = self.tree.previous_code_token(first) else {
+        // A line split off a source line holds no tokens of its own: the
+        // code before it ends the last line that holds some.
+        let previous = match self.output.pending_tokens() {
+            Some(span) => self.tree.previous_code_token(span.first),
+            None => {
+                let span = self
+                    .output
+                    .last_non_empty_index()
+                    .and_then(|index| self.output.line_tokens(index))?;
+                (span.first..=span.last)
+                    .rev()
+                    .find(|&index| is_code_token(&tokens[index]))
+            }
+        };
+        let Some(previous) = previous else {
             return Some(false);
         };
         if !matches!(tokens[previous], Token::Symbol(')')) {

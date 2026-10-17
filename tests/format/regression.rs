@@ -15719,3 +15719,11 @@ fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_comment_split_off_a_function_brace_after_an_objc_method_stands_at_the_brace() {
+    let input = "@implementation Item\n- (void)update:(int)value {\n    if (value) {\n        [self reset];\n    }\n}\n@end\n\nbool operator==(const Item &first, const Item &second)\n/* note */ {\n    return true;\n}\n";
+    let expected = "@implementation Item\n- (void)update:(int)value\n{\n    if (value) {\n        [self reset];\n    }\n}\n@end\n\nbool operator==(const Item &first, const Item &second)\n/* note */\n{\n    return true;\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
