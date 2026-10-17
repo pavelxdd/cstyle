@@ -1756,6 +1756,15 @@ impl OutputBuffer {
             .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))
     }
 
+    /// `last_line_outside_comment` past directive lines, which take no part
+    /// in the layout of the statement rows around them.
+    pub(crate) fn last_line_outside_comment_past_directives(&self) -> Option<&String> {
+        let index = (0..self.lines.len())
+            .rev()
+            .find(|&index| !self.trimmed(index).is_empty() && !self.is_directive_line(index))?;
+        (self.comment_start_index(index) == index).then(|| &self.lines[index])
+    }
+
     /// The last non-blank line of the scope when no comment holds it.
     pub(crate) fn last_code_line_scoped(&self) -> Option<&String> {
         let index = self

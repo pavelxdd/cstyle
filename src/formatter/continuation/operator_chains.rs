@@ -413,7 +413,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
+        let previous = self.output.last_line_outside_comment_past_directives()?;
         let previous_trimmed = previous.trimmed_end();
         if !previous_trimmed.ends_with('}')
             && !((previous_trimmed.contains(" << ") || previous_trimmed.contains(" >> "))

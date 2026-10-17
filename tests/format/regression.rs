@@ -13970,3 +13970,13 @@ fn an_empty_line_after_an_else_a_comment_trails_stays_before_its_if() {
         "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n        if (c)\n            y = 1;\n}\n",
     );
 }
+
+#[test]
+fn an_empty_line_after_a_directive_in_a_continued_statement_keeps_its_continuation() {
+    let input = "void f()\n{\n    std::cout << first\n#endif\n\n              << second << std::endl;\n    value = first\n#endif\n\n            + second;\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    std::cout << first\n#endif\n\n              << second << std::endl;\n    value = first\n#endif\n\n            + second;\n}\n",
+    );
+}
