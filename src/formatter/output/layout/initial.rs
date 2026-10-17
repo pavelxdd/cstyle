@@ -1559,7 +1559,7 @@ impl FormatEngine<'_> {
                     Some(layout.indent * self.options.indent_width + brace_indent);
             }
         }
-        if self.current_inline_array_column().is_some()
+        if self.line_start_inline_array_column().is_some()
             && !self.innermost_brace_is_compound_literal()
             && !self.enclosed_in_compound_literal()
             && !line_start.starts_with_any(b".{}")
@@ -1568,7 +1568,7 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|previous| previous.trimmed_start().starts_with(':'))
         {
-            if let Some(column) = self.current_inline_array_column()
+            if let Some(column) = self.line_start_inline_array_column()
                 && let Some(previous) = self.output.last_non_empty_scoped()
             {
                 let previous_code = self.output.code_trimmed_of(previous);

@@ -14256,3 +14256,13 @@ fn keeping_one_line_statements_keeps_a_brace_a_comment_leads_past_a_case_label_a
         "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state);\n        }\n        break;\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_list_opening_after_a_case_brace_a_comment_follows_stands_at_the_case_block() {
+    let input = "void f(int op)\n{\n    switch (op) {\n    case 1: { /* c */\n        static const char *list[] = { \"first\",\n                                      \"second\" };\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-cases"],
+        "void f(int op)\n{\n    switch (op) {\n    case 1: { /* c */\n            static const char *list[] = { \"first\",\n                                          \"second\"\n                                        };\n        }\n    }\n}\n",
+    );
+}
