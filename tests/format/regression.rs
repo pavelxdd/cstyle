@@ -15326,3 +15326,11 @@ fn a_function_try_head_a_comment_leads_parts_its_initializer_colon_as_without_it
         "int count;\n/* b */ Item::Item(int value) try\n:\n    value(value)\n{\n} catch (...)\n{\n}\n",
     );
 }
+
+#[test]
+fn a_conditional_among_parameter_declarations_leaves_a_function_body() {
+    let input = "int helper(value, other)\nint value;\n#ifdef FEATURE\nchar *other;\n#endif\n{\n    return value;\n}\n";
+    check(input, &["--style=vtk"], input);
+    let input = "int helper(value, other)\n#ifdef FEATURE\nint value;\nchar *other;\n#endif\n{\n    return value;\n}\n";
+    check(input, &["--style=vtk"], input);
+}

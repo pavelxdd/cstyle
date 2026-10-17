@@ -725,7 +725,10 @@ fn head_end(
             {
                 return Some(HeadEnd::Found(groups.opened_at(next)));
             }
-            return unterminated(knr_semicolon);
+            // Parameter declarations go on past such conditionals.
+            if !(closes_conditionals && (knr_semicolon.is_some() || knr_parameters)) {
+                return unterminated(knr_semicolon);
+            }
         }
         if groups.enclosing(next) != level {
             return None;
