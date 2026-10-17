@@ -29,9 +29,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    code_holds_word, has_unmatched_open_brace, is_bare_comment_line, is_comment_line,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_columns,
+    code_holds_word, has_unmatched_open_brace, holds_code_after_leading_comments,
+    is_bare_comment_line, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1284,7 +1284,9 @@ impl FormatEngine<'_> {
                     if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
                         layout.exact_indent_spaces = Some(spaces);
                     }
-                } else if is_comment_line(header.trimmed_start()) {
+                } else if is_comment_line(header.trimmed_start())
+                    && !holds_code_after_leading_comments(header.trimmed_start())
+                {
                     let spaces = self
                         .output
                         .comment_indent_width(header_index, self.options.tab_width);

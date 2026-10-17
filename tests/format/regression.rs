@@ -15641,6 +15641,11 @@ fn pico_runs_a_closer_in_after_string_rows_a_line_comment_parts() {
     let expected = "void f()\n{   helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second); }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second); }\n",
+    );
 }
 
 #[test]
@@ -15714,6 +15719,10 @@ fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line
             "--style=ratliff",
             "void f() {\n    struct Item item =\n        /* note */ { 1, 2 };\n    }\n",
         ),
+        (
+            "--style=horstmann",
+            "void f()\n{   struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
     ] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
@@ -15734,4 +15743,20 @@ fn a_conditional_among_arguments_in_a_braceless_body_stands_at_the_arguments() {
     let expected = "void f()\n{\n    if (!ready)\n        call(\"not ready\",\n             #ifdef FEATURE\n             value);\n             #endif\n    call(\"not ready\",\n         #ifdef FEATURE\n         value);\n         #endif\n}\n";
     check(input, &["--indent-preproc-cond"], expected);
     check(expected, &["--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn a_comment_led_template_parameter_row_past_a_directive_stands_as_without_it() {
+    let input = "#ifdef FEATURE\ntemplate <typename First,\n#endif\n          /* note */ typename Second>\nclass Pair {\n    First first;\n};\n";
+    check(input, &["--style=java"], input);
+    let plain = input
+        .replace("#ifdef FEATURE\n", "")
+        .replace("#endif\n", "");
+    check(&plain, &["--style=java"], &plain);
+}
+
+#[test]
+fn a_comment_led_row_ending_a_statement_past_a_directive_leaves_no_column_for_the_next() {
+    let input = "#ifdef A\nint value = first +\n#endif\n            /* note */ second;\n#ifdef B\nint x;\n#endif\n";
+    check(input, &[], input);
 }

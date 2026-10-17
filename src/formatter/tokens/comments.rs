@@ -1406,6 +1406,8 @@ impl FormatEngine<'_> {
                 .output
                 .last_non_empty_scoped()
                 .is_some_and(|line| preprocessor_directive(line.trimmed_start()) == Some("endif"))
+            // A statement going on past the directive keeps its column.
+            && self.layout.continuation_indent.next_line_indent_spaces.is_none()
         {
             self.current_is_preindented = true;
             self.layout.continuation_indent.next_line_indent_spaces = Some(0);
