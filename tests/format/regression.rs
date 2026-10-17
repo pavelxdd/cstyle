@@ -14561,3 +14561,9 @@ fn a_closing_conditional_in_a_header_stands_at_the_conditional_opened_before_it(
     let input = "void f()\n{\n    #ifdef FEATURE\n    while (ready &&\n    #endif\n            other) {\n        value=0;\n    }\n    while (ready &&\n        #ifdef FEATURE\n            more &&\n        #endif\n            other) {\n        value=0;\n    }\n}\n";
     check(input, &["--indent-preproc-cond"], input);
 }
+
+#[test]
+fn vtk_stands_a_comment_led_first_row_of_a_file_scope_aggregate_with_its_rows() {
+    let input = "static const struct Item items[] =\n{\n    /* note */ { \"first\", 1 },\n    { \"second\", 2 },\n};\n";
+    check(input, &["--style=vtk"], input);
+}

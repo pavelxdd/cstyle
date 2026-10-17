@@ -2022,6 +2022,7 @@ impl FormatEngine<'_> {
                     .then(|| self.sibling_statement_column(code))
                     .flatten()
             })
+            .or_else(|| self.vtk_aggregate_array_row_indent(code))
             .or_else(|| self.vtk_array_element_indent(code))
             .or_else(|| self.initializer_row_indent(code))
             .or_else(|| self.initializer_first_row_indent(code))
