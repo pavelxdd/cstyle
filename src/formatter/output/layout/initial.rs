@@ -788,6 +788,8 @@ impl FormatEngine<'_> {
                 .chars()
                 .next()
                 .is_some_and(|ch| is_identifier_start(ch) || ch == ',')
+                // A declarator split from its aggregate type continues it.
+                && !splits_aggregate_declaration_name(previous_code)
                 && previous_code
                     .trimmed_start()
                     .chars()

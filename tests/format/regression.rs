@@ -14053,3 +14053,9 @@ fn a_namespace_a_comment_leads_keeps_its_first_member_off_its_brace_line() {
         "namespace outer\n{\n/* note */ namespace inner\n{\nint helper(int value); } }\n",
     );
 }
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_continues_after_a_conditional_elsewhere() {
+    let input = "#ifdef FEATURE\ntemplate <typename T>\n#endif\nT helper(T value)\n{\n    return value;\n}\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n";
+    check(input, &["--style=linux"], input);
+}
