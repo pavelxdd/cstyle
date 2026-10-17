@@ -4393,6 +4393,16 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
             }
             Token::Newline => break,
             Token::Comment(_, comment) => {
+                // Comments leading the code after a brace belong to its
+                // segment.
+                if open_brace_depth > 0
+                    && first_code_is_open_brace
+                    && !code_after_open_brace
+                    && pending_segment_start
+                {
+                    segment_start_column = column;
+                    pending_segment_start = false;
+                }
                 if seen_code && !comment.contains('\n') {
                     // A brace ending the code of a line leads to its body.
                     let after_ending_brace = open_brace_depth == 1

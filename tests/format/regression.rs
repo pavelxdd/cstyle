@@ -15334,3 +15334,10 @@ fn a_conditional_among_parameter_declarations_leaves_a_function_body() {
     let input = "int helper(value, other)\n#ifdef FEATURE\nint value;\nchar *other;\n#endif\n{\n    return value;\n}\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn a_run_in_row_a_comment_leads_keeps_the_gap_before_its_trailing_comment() {
+    let input =
+        "void f()\n{   enum Kind\n    {   /* note */ First,  // first\n        Second\n    };\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
