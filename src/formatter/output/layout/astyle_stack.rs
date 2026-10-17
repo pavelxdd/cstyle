@@ -733,7 +733,7 @@ impl FormatEngine<'_> {
                 .output
                 .line_with_token(open)
                 .and_then(|line| self.output.line_tokens(line))
-                .is_some_and(|span| span.last != open)
+                .is_some_and(|span| span.first != open && span.last != open)
     }
 
     /// The row of an initializer that indenting after parens stacks.

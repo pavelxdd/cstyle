@@ -15193,3 +15193,9 @@ fn pico_runs_a_comment_into_a_one_line_block_with_the_tab_fill_it_indents_with()
         "void f()\n{\n\t{\t/* note */ value = 1; } }\n",
     );
 }
+
+#[test]
+fn indenting_after_parens_stacks_no_initializer_brace_starting_its_line() {
+    let input = "static const struct Item\n    first =\n{   1, 2 },\nsecond =\n{   3, 4 };\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
