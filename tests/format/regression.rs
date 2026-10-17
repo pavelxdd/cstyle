@@ -14312,3 +14312,9 @@ fn a_row_after_a_closer_row_of_an_inner_list_stands_at_its_own_list() {
     let input = "void f(void)\n    {\n    int list[][2] = { 7,\n                      8, { 1,\n                           2\n                         },\n                      9\n                    };\n    }\n";
     check(input, &["--style=whitesmith"], input);
 }
+
+#[test]
+fn a_row_after_a_row_holding_a_closed_inner_list_stands_at_its_own_list() {
+    let input = "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9\n                };\n";
+    check(input, &["--style=whitesmith"], input);
+}

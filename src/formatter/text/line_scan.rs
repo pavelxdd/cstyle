@@ -617,6 +617,23 @@ impl DelimiterScan {
 /// Byte offset of the first element after the last unmatched `{` when the
 /// line continues past it.
 pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
+    let mut after = unmatched_open_braces(line).pop()? + 1;
+    loop {
+        after += line[after..].len() - line[after..].trimmed_start().len();
+        let Some(comment) = line[after..].strip_prefix("/*") else {
+            break;
+        };
+        after += 2 + comment.find("*/")? + 2;
+    }
+    (after < line.trimmed_end().len()).then_some(after)
+}
+
+/// Byte offset of the first `{` the line leaves open.
+pub(crate) fn first_unmatched_open_brace(line: &str) -> Option<usize> {
+    unmatched_open_braces(line).first().copied()
+}
+
+fn unmatched_open_braces(line: &str) -> Vec<usize> {
     let mut stack: Vec<usize> = Vec::new();
     let mut chars = line.char_indices().peekable();
     let mut quote = None;
@@ -642,22 +659,14 @@ pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
                 chars.next();
             }
             '"' | '\'' => quote = Some(ch),
-            '{' => stack.push(offset + 1),
+            '{' => stack.push(offset),
             '}' => {
                 stack.pop();
             }
             _ => {}
         }
     }
-    let mut after = stack.pop()?;
-    loop {
-        after += line[after..].len() - line[after..].trimmed_start().len();
-        let Some(comment) = line[after..].strip_prefix("/*") else {
-            break;
-        };
-        after += 2 + comment.find("*/")? + 2;
-    }
-    (after < line.trimmed_end().len()).then_some(after)
+    stack
 }
 
 pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {

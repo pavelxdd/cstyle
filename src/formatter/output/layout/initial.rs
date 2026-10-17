@@ -27,8 +27,8 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, has_unmatched_open_brace, is_comment_line, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    find_outside_quotes, first_unmatched_open_brace, has_unmatched_open_brace, is_comment_line,
+    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1574,9 +1574,8 @@ impl FormatEngine<'_> {
                 let previous_code = self.output.code_trimmed_of(previous);
                 if self.layout.nesting.paren_depth == 0
                     && previous_code.ends_with(',')
-                    && previous_code.contains('{')
                     && !line_start.starts_with('}')
-                    && let Some(open) = previous_code.find('{')
+                    && let Some(open) = first_unmatched_open_brace(previous_code)
                 {
                     let brace_column =
                         visual_width_from(&previous_code[..open], 0, self.options.tab_width);
