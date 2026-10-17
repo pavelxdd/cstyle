@@ -15351,12 +15351,12 @@ fn whitesmith_parts_a_label_from_its_statement_in_a_function_whose_brace_a_condi
 }
 
 #[test]
-fn vtk_breaks_a_list_brace_off_the_comment_leading_it_at_the_brace_column() {
+fn vtk_keeps_a_one_line_list_a_comment_leads_after_its_assignment() {
     let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
     check(
         input,
         &["--style=vtk"],
-        "void f()\n{\n    struct Item item =\n    /* note */\n        {\n        1, 2\n        };\n}\n",
+        "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
     );
 }
 
@@ -15688,4 +15688,34 @@ fn a_list_opened_mid_row_of_a_broken_list_breaks_after_its_brace_when_it_spans_r
         &[],
         "void f()\n{\n    x = { 10, { 11,\n                12\n              }\n        };\n}\n",
     );
+}
+
+#[test]
+fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    struct Item item =\n        /* note */ { 1, 2 };\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    struct Item item =\n        /* note */ { 1, 2 };\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
 }

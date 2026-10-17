@@ -1168,12 +1168,36 @@ impl FormatEngine<'_> {
             return None;
         }
         if before_body {
+            // A comment leading a one-line list's row stands where the
+            // brace would, a level in where the style indents it.
+            let leads_brace_row = after_assignment
+                && index
+                    .checked_add(1)
+                    .and_then(|start| next_code_token(tokens, start))
+                    .and_then(|brace| {
+                        let close = self
+                            .tree
+                            .groups
+                            .get(self.tree.groups.opened_at(brace)?)
+                            .close?;
+                        Some(
+                            !tokens[index + 1..close]
+                                .iter()
+                                .any(|token| matches!(token, Token::Newline)),
+                        )
+                    })
+                    .unwrap_or(false)
+                && matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Ratliff
+                );
             return Some(ClassBaseComment {
                 spaces: (self
                     .layout
                     .indentation
                     .line_indent(LineKind::Normal, self.options)
-                    + self.case_body_indent_extra(LineKind::Normal))
+                    + self.case_body_indent_extra(LineKind::Normal)
+                    + usize::from(leads_brace_row))
                     * self.options.indent_width,
                 before_body: true,
             });

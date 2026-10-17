@@ -1321,8 +1321,10 @@ impl FormatEngine<'_> {
                 .then_some(BraceType::Array)
             })
             .or_else(|| {
-                (self.current_is_blank() && self.previous_output_code_ends_assignment())
-                    .then_some(BraceType::Initializer)
+                // Comments leading the brace's line take no part in it.
+                (after_leading_comments(self.current.trimmed()).is_empty()
+                    && self.previous_output_code_ends_assignment())
+                .then_some(BraceType::Initializer)
             })
             .or_else(|| {
                 let previous_code = self
