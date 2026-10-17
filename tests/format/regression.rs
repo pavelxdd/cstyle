@@ -15618,3 +15618,19 @@ fn whitesmith_sets_a_conditional_after_the_statements_past_a_case_block_with_the
         expected,
     );
 }
+
+#[test]
+fn a_conditional_closing_past_a_label_it_opened_before_stands_in_that_labels_body() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    break;\n#ifdef FEATURE\n    case 2:\n        b();\n#endif\n    }\n    switch (y) {\n    case 1:\n        a();\n#ifdef FEATURE\n    case 2: {\n        b();\n    }\n    break;\n#endif\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        break;\n        #ifdef FEATURE\n        case 2:\n            b();\n            #endif\n        }\n    switch (y)\n        {\n        case 1:\n            a();\n            #ifdef FEATURE\n        case 2:\n            {\n            b();\n            }\n        break;\n        #endif\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+}

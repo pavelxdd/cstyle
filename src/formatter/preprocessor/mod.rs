@@ -1261,6 +1261,14 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        // One past a label the conditional opened before stands in that
+        // label's body.
+        if !opening && let Some(spaces) = self.label_body_past_opener_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         // A directive continuing a conditional stands at the one that opened
         // it, past the case label's body it may have left.
         if let Some(indent) = self
@@ -1329,6 +1337,33 @@ impl FormatEngine<'_> {
                 + self.layout.line_adjuster.case_unindent_depth_for_line("#")
                     * self.options.indent_width
         })
+    }
+
+    /// The body column of the label a directive continuing a conditional
+    /// follows, when the label stands between it and the conditional's
+    /// opening directive in the same braces.
+    fn label_body_past_opener_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let opener = self.preprocessor.branch_stack.last()?.directive?;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(directive);
+        if opener >= directive || groups.enclosing(opener) != group {
+            return None;
+        }
+        let label_between = (opener + 1..directive).any(|index| {
+            matches!(&self.tree.tokens[index], Token::Word(word) if word == "case" || word == "default")
+                && groups.enclosing(index) == group
+        });
+        let body = label_between.then(|| {
+            self.active_case_label_indent_spaces().map(|label| {
+                label + self.options.indent_width + self.enclosing_case_block_unindent_spaces()
+            })
+        })??;
+        // Statements a case block's close left short of the body hold it.
+        Some(
+            self.previous_statement_line_column()
+                .map_or(body, |column| column.min(body)),
+        )
     }
 
     /// The case unindent the line adjuster takes off a directive in a switch
