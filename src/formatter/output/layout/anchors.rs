@@ -6597,8 +6597,13 @@ impl FormatEngine<'_> {
     /// The `case` or `default` label and the brace of the case block that
     /// directly precedes the statement starting at `first`.
     fn case_block_before(&self, first: usize) -> Option<(usize, usize)> {
-        let tokens = &self.tree.tokens;
         let open = self.tree.statements.previous_sibling(first)?;
+        self.case_label_of_block(open).map(|label| (label, open))
+    }
+
+    /// The `case` or `default` label whose block the `{` at `open` opens.
+    fn case_label_of_block(&self, open: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
         let colon = self.tree.previous_code_token(open)?;
         if !matches!(tokens[open], Token::Symbol('{'))
             || !matches!(tokens[colon], Token::Symbol(':'))
@@ -6610,7 +6615,24 @@ impl FormatEngine<'_> {
             .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
             .find(|&index| self.tree.statements.starts_block_statement(index))?;
         matches!(&tokens[label], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
-            .then_some((label, open))
+            .then_some(label)
+    }
+
+    /// The column of a directive right after a case block: what follows
+    /// the block stands at its label.
+    pub(crate) fn directive_after_case_block_column(&self, directive: usize) -> Option<usize> {
+        let close = self.tree.previous_code_token(directive)?;
+        let block = self.tree.groups.closed_at(close)?;
+        let label = self.case_label_of_block(self.tree.groups.get(block).open)?;
+        let line = self.output.line_with_token(label)?;
+        // A block kept whole on its label's line is a statement of the case.
+        (self.output.line_tokens(line)?.first == label
+            && self.output.line_with_token(close) != Some(line))
+        .then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.case_unindent_spaces()
+                + usize::from(self.options.indent_cases) * self.options.indent_width
+        })
     }
 
     /// Column of the statement starting at `first` after its previous

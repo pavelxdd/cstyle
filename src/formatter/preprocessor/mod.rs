@@ -1183,6 +1183,17 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        if opening
+            && let Some(spaces) = self
+                .preprocessor
+                .active_directive
+                .and_then(|directive| self.directive_after_case_block_column(directive))
+        {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         // A directive closing a conditional opened before the switch body
         // stands at the one that opened it.
         let opened_before_block = !opening
@@ -1191,7 +1202,16 @@ impl FormatEngine<'_> {
                 .indentation
                 .current_preprocessor_indent()
                 .is_some_and(|indent| indent.level < self.layout.indentation.indent());
-        if !opened_before_block && let Some(spaces) = self.direct_switch_body_indent_spaces() {
+        let follows_opener = !opening
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| indent.spaces.is_some());
+        if !opened_before_block
+            && !follows_opener
+            && let Some(spaces) = self.direct_switch_body_indent_spaces()
+        {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
                 spaces,

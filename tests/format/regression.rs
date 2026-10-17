@@ -14693,3 +14693,23 @@ fn allman_breaks_a_list_brace_off_the_comments_after_it_as_off_one() {
         "void f()\n{\n    int table[][2] =   /* note */ /* note */\n    {\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
     );
 }
+
+// The directive closing the conditional stands at the one opening it.
+#[test]
+fn a_directive_after_a_case_block_stands_at_its_label() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        value = 1;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n            {\n            value = 1;\n            break;\n            }\n        #ifdef FEATURE\n        }\n        #endif\n    }\n",
+    );
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--indent-cases",
+            "--indent-preproc-cond",
+        ],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n                {\n                value = 1;\n                break;\n                }\n            #ifdef FEATURE\n        }\n            #endif\n    }\n",
+    );
+}
