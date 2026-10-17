@@ -14213,3 +14213,13 @@ fn a_plain_directive_before_a_conditional_between_a_case_label_and_a_brace_opens
         "void f() {\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n        {\n#endif\n            pop(state); }\n        break; } }\n",
     );
 }
+
+#[test]
+fn a_row_after_a_closer_row_a_comment_leads_stands_at_the_elements_in_run_in_styles() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        /* note */ }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n            /* note */ }, {\n            .value = 2, } }; }\n",
+    );
+}

@@ -1576,6 +1576,9 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A comment leading the row stands it at the elements its closers
+        // leave; the row counts from the braces they close.
+        let comment_led = self.output.lead_comment(line).is_some();
         let leading_closers = tokens[span.first..open]
             .iter()
             .take_while(|token| matches!(token, Token::Symbol('}') | Token::Whitespace(_)))
@@ -1590,11 +1593,13 @@ impl FormatEngine<'_> {
                     _ => open_count,
                 })
                 + leading_closers as isize;
-        Some((
-            self.output.lead_width(line, self.options.tab_width),
-            levels.max(0) as usize,
-            leading_closers,
-        ))
+        let lead = self.output.lead_width(line, self.options.tab_width);
+        let lead = if comment_led {
+            lead.saturating_sub(leading_closers * self.options.indent_width)
+        } else {
+            lead
+        };
+        Some((lead, levels.max(0) as usize, leading_closers))
     }
 
     /// A `}` closing an initializer whose `{` starts its own line stands at
