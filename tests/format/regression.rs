@@ -15072,3 +15072,9 @@ fn pico_runs_the_one_line_body_of_a_lambda_argument_in_after_its_brace() {
         "void f()\n{   helper(items, [&](const Item &item)\n    {   return item.value > 0; });\n    helper([]\n    { return 0; }); }\n",
     );
 }
+
+#[test]
+fn lisp_padding_before_a_row_a_closer_joins_leaves_an_empty_line_already_there() {
+    let input = "void f() {\n    if (ready) {\n        value=0; }\n\n    else if (other) {\n\n        value=1; } /* last */ else {\n\n        value=2; } /* note */\n}\n";
+    check(input, &["--style=lisp", "--break-blocks=all"], input);
+}

@@ -68,6 +68,16 @@ impl FormatEngine<'_> {
             } else {
                 row
             };
+            // An empty line already before the row pads it.
+            if target > 0 && self.output[target - 1].trimmed().is_empty() {
+                self.output.remove(blank);
+                for line in &mut self.source_run_in_brace_lines {
+                    if *line > blank {
+                        *line -= 1;
+                    }
+                }
+                continue;
+            }
             for index in (target..blank).rev() {
                 self.output.swap_lines(index, index + 1);
             }
