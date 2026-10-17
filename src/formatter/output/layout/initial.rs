@@ -27,8 +27,9 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
-    find_outside_quotes, first_unmatched_open_brace, has_unmatched_open_brace, is_comment_line,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
+    code_contains, find_outside_quotes, first_unmatched_open_brace, has_unmatched_open_brace,
+    is_comment_line, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -1345,7 +1346,7 @@ impl FormatEngine<'_> {
                 .iter()
                 .rev()
                 .take(4)
-                .any(|line| line.contains_from_first_byte("@["))
+                .any(|line| line.contains_from_first_byte("@[") && code_contains(line, "@["))
         {
             layout.exact_indent_spaces =
                 Some(leading_visual_width(previous, self.options.tab_width));

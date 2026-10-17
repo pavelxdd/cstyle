@@ -9,7 +9,9 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::line_scan::unmatched_open_brace_content_offset;
-use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, has_hash_outside_literals, has_member_after_paren,
+};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
@@ -234,7 +236,7 @@ impl FormatEngine<'_> {
             let current_trimmed = line_start;
             let previous_code = self.output.code_trimmed_of(previous);
             let uses_outer_call_column = previous_code.ends_with(',')
-                && previous_code.contains(").")
+                && has_member_after_paren(previous_code)
                 && self
                     .outer_call_indent_after_closed_previous_line()
                     .is_some_and(|target| *spaces == target);

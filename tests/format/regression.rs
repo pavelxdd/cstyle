@@ -15760,3 +15760,15 @@ fn a_comment_led_row_ending_a_statement_past_a_directive_leaves_no_column_for_th
     let input = "#ifdef A\nint value = first +\n#endif\n            /* note */ second;\n#ifdef B\nint x;\n#endif\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_paren_and_dot_inside_a_string_continue_no_call_chain() {
+    let input = "static struct driver builtin[] = {\n    PATTERNS(\"first\",\n             \"(x).\"),\n    PATTERNS(\"second\",\n             \"y\"),\n};\nvoid f()\n{\n    call(first(\").\"),\n         second);\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_message_literal_brace_inside_a_string_aligns_no_rows() {
+    let input = "static struct driver builtin[] = {\n    PATTERNS(\"first\",\n             \"@[\",\n             \"\"),\n    PATTERNS(\"second\",\n             \"y\"),\n};\n";
+    check(input, &[], input);
+}

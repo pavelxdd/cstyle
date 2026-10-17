@@ -884,6 +884,31 @@ pub(crate) fn has_hash_outside_literals(line: &str) -> bool {
         })
 }
 
+/// Whether `line` holds `text` as code, outside literals and comments.
+pub(crate) fn code_contains(line: &str, text: &str) -> bool {
+    line.contains(text)
+        && tokenize(line)
+            .iter()
+            .filter(|token| {
+                !matches!(
+                    token,
+                    Token::StringLiteral(_) | Token::CharLiteral(_) | Token::Comment(..)
+                )
+            })
+            .map(token_text)
+            .collect::<String>()
+            .contains(text)
+}
+
+/// Whether `line` reads a member right after a `)` as code, outside
+/// literals and comments.
+pub(crate) fn has_member_after_paren(line: &str) -> bool {
+    line.contains(").")
+        && tokenize(line).windows(2).any(|pair| {
+            matches!(pair[0], Token::Symbol(')')) && token_text(&pair[1]).starts_with('.')
+        })
+}
+
 /// Whether `line` holds the word `word` as code, outside literals and
 /// comments.
 pub(crate) fn code_holds_word(line: &str, word: &str) -> bool {

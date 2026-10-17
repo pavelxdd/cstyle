@@ -15,9 +15,10 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    code_holds_word, holds_code_after_leading_comments, is_comment_line, is_comment_only_line,
-    line_brace_imbalance, line_has_brace, line_paren_imbalance, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit, unmatched_open_paren_column, unmatched_open_paren_columns,
+    code_holds_word, has_member_after_paren, holds_code_after_leading_comments, is_comment_line,
+    is_comment_only_line, line_brace_imbalance, line_has_brace, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -2143,8 +2144,9 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        (previous_code.contains(").") && self.open_paren_column_of(previous_code).is_none())
-            .then(|| leading_visual_width(previous, self.options.tab_width))
+        (has_member_after_paren(previous_code)
+            && self.open_paren_column_of(previous_code).is_none())
+        .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(
@@ -2343,7 +2345,7 @@ impl FormatEngine<'_> {
         if opens.len() < 2 {
             return None;
         }
-        if previous_code.contains(").") {
+        if has_member_after_paren(previous_code) {
             return Some(opens[opens.len() - 2] + 1 + self.options.indent_width);
         }
         let inner = *opens.last()?;
