@@ -331,6 +331,11 @@ impl FormatEngine<'_> {
         })
         .or_else(|| {
             when(closes_brace, || {
+                self.aligned_list_closing_brace_indent(first)
+            })
+        })
+        .or_else(|| {
+            when(closes_brace, || {
                 self.initializer_closing_brace_indent(first)
             })
         })
@@ -1605,6 +1610,24 @@ impl FormatEngine<'_> {
     /// A `}` closing an initializer whose `{` starts its own line stands at
     /// that line.
     #[inline(never)]
+    /// The closer of a list whose elements align after its brace, among
+    /// lists that do, stands at the brace.
+    fn aligned_list_closing_brace_indent(&self, first: usize) -> Option<usize> {
+        if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
+            return None;
+        }
+        let group = self.tree.groups.closed_at(first)?;
+        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            return None;
+        }
+        let open = self.tree.groups.get(group).open;
+        let rows = &self.inline_array.list_rows;
+        if !rows.aligned_children.contains(&open) && !rows.aligned_parents.contains(&open) {
+            return None;
+        }
+        self.token_column(open)
+    }
+
     fn initializer_closing_brace_indent(&self, first: usize) -> Option<usize> {
         if !matches!(self.tree.tokens[first], Token::Symbol('}')) {
             return None;

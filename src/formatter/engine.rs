@@ -673,7 +673,7 @@ impl<'a> FormatEngine<'a> {
         );
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
-        self.inline_array.nested_brace_arrays = syntax::nested_brace_array_indices(tokens);
+        self.inline_array.list_rows = syntax::brace_list_rows(tokens, &self.tree);
         let mut cursor = TokenLineCursor::new(tokens);
         while let Some(line) = cursor.next_line() {
             self.format_line(tokens, line);

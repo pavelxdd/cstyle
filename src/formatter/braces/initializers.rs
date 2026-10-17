@@ -5,13 +5,13 @@ use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::constructs::headers::is_braceless_header_line;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::index_hash::IndexSet;
 use crate::formatter::lexer::{CommentKind, Token, next_non_whitespace};
 use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
@@ -576,6 +576,11 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.set_next_line_level(indent);
         }
         let enclosed = brace_type == BraceType::Array
+            && !self
+                .inline_array
+                .list_rows
+                .aligned_children
+                .contains(&token_index)
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
@@ -600,7 +605,7 @@ impl FormatEngine<'_> {
         let nested = enclosed
             || double_brace_initializer
             || (brace_type == BraceType::Array
-                && self.inline_array.nested_brace_arrays.contains(&token_index));
+                && self.inline_array.list_rows.nested.contains(&token_index));
         let constructor_indent = self
             .layout
             .frame_stack
@@ -816,7 +821,7 @@ impl FormatEngine<'_> {
         let closing_compound_literal =
             matches!(closing_brace_type, Some(BraceType::CompoundLiteral));
         let closing_enum = matches!(closing_brace_type, Some(BraceType::Enum));
-        let inline_array = self.inline_array.frames.pop();
+        let inline_array = self.inline_array.frames.last().copied();
         let body_column = inline_array.map(|frame| frame.body_column);
         let in_constructor_initializer = self
             .layout
@@ -907,6 +912,36 @@ impl FormatEngine<'_> {
                 || range_for_initializer
                 || call_argument_array
                 || typed_initializer);
+        // A row a closer breaks off below stands among the elements of the
+        // list it closes, not those of a list enclosing it.
+        let enclosing_list = self
+            .inline_array
+            .frames
+            .len()
+            .checked_sub(2)
+            .and_then(|index| self.inline_array.frames.get(index))
+            .is_some_and(|outer| inline_array.is_some_and(|frame| outer.depth + 1 == frame.depth));
+        let row_breaks_off = enclosing_list
+            && !finished_inner_closer
+            && !self.current_is_blank()
+            && !broken_enum_row
+            && !broken_literal_row
+            && (forced_break
+                || self.token_input.token_begins_source_line
+                || !run_in_after_comment
+                    && self.output.len() > open_output_len
+                    && (closing_line_opened_literal
+                        || aggregate_assign
+                        || objc_dictionary
+                        || closing_enum
+                        || enclosed_run_in
+                        || range_for_initializer
+                        || call_argument_array
+                        || typed_initializer));
+        if row_breaks_off {
+            self.finish_line();
+        }
+        self.inline_array.frames.pop();
         if finished_inner_closer {
             self.finish_line();
         }
@@ -1663,7 +1698,7 @@ pub(crate) struct InlineArrayState {
     pub(crate) frames: Vec<InlineArrayFrame>,
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(super) aggregate_braces: Vec<bool>,
-    pub(crate) nested_brace_arrays: IndexSet<usize>,
+    pub(crate) list_rows: BraceListRows,
 }
 
 pub(crate) fn initializer_brace_line_comment_gap(

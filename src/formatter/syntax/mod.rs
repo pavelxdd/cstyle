@@ -6,6 +6,7 @@ use crate::formatter::lexer::{
     next_non_whitespace, previous_non_layout_token_index,
 };
 use crate::formatter::structure::SourceTree;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -441,27 +442,57 @@ pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> IndexSet<usize>
     indices
 }
 
-/// Lists that stand their rows a level in: a brace among their elements
-/// begins its source line or stands first after theirs.
-pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
-    let mut indices = IndexSet::default();
+/// How brace lists lay out their element rows.
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub(crate) struct BraceListRows {
+    /// Lists that stand their rows a level in: a brace among their elements
+    /// begins its source line or stands first after theirs.
+    pub(crate) nested: IndexSet<usize>,
+    /// Braces past an element on a row of a list whose elements run in
+    /// after its brace and align there; their own elements align to them in
+    /// turn.
+    pub(crate) aligned_children: IndexSet<usize>,
+    /// The aligned lists holding such braces.
+    pub(crate) aligned_parents: IndexSet<usize>,
+}
+
+pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListRows {
+    let mut rows = BraceListRows::default();
+    let mut run_in = IndexSet::default();
+    let mut children = Vec::new();
+    let mut rows_of_nested = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
     let mut begins_line = true;
     let mut previous = None;
+    let mut open_on_line = None;
     for (index, token) in tokens.iter().enumerate() {
         match token {
             Token::Whitespace(_) => continue,
             Token::Newline => {
                 begins_line = true;
+                open_on_line = None;
                 continue;
             }
+            Token::Comment(..) => {}
+            Token::Symbol('}') => open_on_line = None,
+            _ => {
+                if let Some(open) = open_on_line.take() {
+                    run_in.insert(open);
+                }
+            }
+        }
+        match token {
             Token::Symbol('{') => {
-                if let Some(&parent) = stack.last()
-                    && (begins_line || previous == Some(parent))
-                {
-                    indices.insert(parent);
+                if let Some(&parent) = stack.last() {
+                    if begins_line || previous == Some(parent) {
+                        rows.nested.insert(parent);
+                        rows_of_nested.insert(index);
+                    } else {
+                        children.push((index, parent));
+                    }
                 }
                 stack.push(index);
+                open_on_line = Some(index);
             }
             Token::Symbol('}') => {
                 stack.pop();
@@ -471,7 +502,26 @@ pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
         begins_line = false;
         previous = Some(index);
     }
-    indices
+    // An element brace follows a separator; one after a capture list or a
+    // cast opens a lambda body or a compound literal. A row of a nested list
+    // stands as a block does.
+    for (child, parent) in children {
+        if run_in.contains(&parent)
+            && !rows.nested.contains(&parent)
+            && !rows_of_nested.contains(&parent)
+            && tree
+                .groups
+                .opened_at(parent)
+                .is_some_and(|group| tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            && tree
+                .previous_code_token(child)
+                .is_some_and(|before| matches!(tokens[before], Token::Symbol(',')))
+        {
+            rows.aligned_children.insert(child);
+            rows.aligned_parents.insert(parent);
+        }
+    }
+    rows
 }
 
 pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRoles {

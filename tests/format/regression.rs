@@ -14286,3 +14286,23 @@ fn a_list_whose_first_brace_follows_a_comment_keeps_its_elements_aligned() {
         "int list[] = { /* c */ {1, 2},\n                       7\n             };\n",
     );
 }
+
+#[test]
+fn a_list_opening_past_an_element_of_an_aligned_list_aligns_to_its_own_elements() {
+    let input = "int list[][2] = { 7, { 1,\n                       2 } };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7, { 1,\n                       2\n                     }\n                };\n",
+    );
+}
+
+#[test]
+fn a_list_opening_past_an_element_on_a_later_row_aligns_to_its_own_elements() {
+    let input = "int list[][2] = { 7,\n                  8, { 1,\n                       2 } };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7,\n                  8, { 1,\n                       2\n                     }\n                };\n",
+    );
+}
