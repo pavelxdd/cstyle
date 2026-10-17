@@ -2,6 +2,7 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
@@ -474,9 +475,8 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
                 .rev()
                 .find(|line| !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed()))
                 .is_some_and(|line| {
-                    line[..trailing_comment_split_limit(line)]
-                        .trimmed_end()
-                        .ends_with_any(b"=,({")
+                    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+                    code.ends_with_any(b"=,({") || line_ends_compound_literal_cast(code)
                 })
         };
         let runs_in = |brace: &str, at: usize| {

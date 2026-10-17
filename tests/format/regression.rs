@@ -15655,3 +15655,21 @@ fn a_comment_led_initializer_row_after_a_comment_led_colon_row_stands_as_without
         "Item::Item(int value, int other)\n/* note */ : value_(value),\n    /* note */ other_(other) {}\n",
     );
 }
+
+#[test]
+fn run_in_styles_run_a_nested_first_row_into_a_compound_literals_broken_brace() {
+    let input = "void f(void)\n{\n    q = (struct Item[]) {\n        { 1, 2 },\n        { 3, 4 }\n    };\n    foo((struct Item[]) {\n        { 1, 2 },\n        { 3, 4 }\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f(void)\n{   q = (struct Item[])\n    {   { 1, 2 },\n        { 3, 4 }\n    };\n    foo((struct Item[])\n    {   { 1, 2 },\n        { 3, 4 }\n    });\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f(void)\n{   q = (struct Item[])\n    {   { 1, 2 },\n        { 3, 4 } };\n    foo((struct Item[])\n    {   { 1, 2 },\n        { 3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
