@@ -15228,3 +15228,23 @@ fn a_comment_after_an_empty_line_continues_the_last_enumerator_as_without_it() {
         "enum Kind {\n    FIRST = 0x01,\n    SECOND = 0x02\n\n             /**\n               note\n             */\n};\nenum Other {\n    FIRST = 0x01\n\n            // note\n};\n",
     );
 }
+
+#[test]
+fn indenting_after_parens_steps_a_template_parameter_after_a_comment_line_as_without_it() {
+    let input = "template <typename First,\n          // note\n          typename Second>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    // note\n    typename Second>\nclass Pair\n{\n};\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_keeps_later_template_parameters_at_the_step() {
+    let input = "template <typename First,\n          typename Second,\n          /* c */\n          typename Third>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    typename Second,\n    /* c */\n    typename Third>\nclass Pair\n{\n};\n",
+    );
+}

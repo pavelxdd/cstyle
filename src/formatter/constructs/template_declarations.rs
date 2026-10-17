@@ -1,3 +1,4 @@
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
@@ -238,22 +239,40 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        let previous = self.output.last_non_empty_scoped();
+        // Comment lines take no part in the head's layout.
+        let previous = self.output.last_code_line_in_scope();
         if previous.is_some_and(|line| has_hash_outside_literals(line)) {
             return;
         }
         let spaces = previous
             .and_then(|line| {
-                template_continuation_indent_spaces(line, self.template_angle_step()).or_else(
-                    || {
+                template_continuation_indent_spaces(line, self.template_angle_step())
+                    .or_else(|| {
+                        // Stepping after the angles, a row of the head goes
+                        // on from the row before it.
+                        let step = self.template_angle_step()?;
+                        let code = self.output.code_trimmed_of(line);
+                        let lead = leading_visual_width(line, self.options.tab_width);
+                        let delta = angle_depth_delta(code);
+                        Some(if delta >= 0 {
+                            lead + delta.unsigned_abs() * step
+                        } else {
+                            lead.saturating_sub(delta.unsigned_abs() * step)
+                        })
+                    })
+                    .or_else(|| {
                         (source_column == 0)
                             .then(|| leading_visual_width(line, self.options.tab_width))
                             .filter(|&spaces| spaces > 0)
-                    },
-                )
+                    })
             })
             .unwrap_or(source_column);
         self.layout.continuation_indent.set_next_line_spaces(spaces);
+        // A comment the line holds alone stands there too.
+        self.layout
+            .continuation_indent
+            .input_line_continuation_indent
+            .replace(ContinuationIndent::Spaces(spaces));
     }
 
     /// The step each open `<` of a template head adds when parens indent.
