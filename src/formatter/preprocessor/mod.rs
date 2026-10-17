@@ -1166,13 +1166,13 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        // In the block a case label opens, directives stand at its body, or
-        // past a label the block holds at that label's body.
+        // In the block a case label opens, opening directives stand at its
+        // body, or past a label the block holds at that label's body.
         if let Some(spaces) = self
             .layout
             .frame_stack
             .active_brace()
-            .filter(|frame| frame.case_block)
+            .filter(|frame| opening && frame.case_block)
             .map(|frame| {
                 let body = self
                     .active_case_label_indent_spaces()

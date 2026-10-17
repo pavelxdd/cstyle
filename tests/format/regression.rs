@@ -13484,3 +13484,13 @@ fn a_brace_before_a_block_and_a_line_comment_stays_on_its_header_line() {
         "void f()\n{   if (x) { /* a */ // b\n        y(); } }\n",
     );
 }
+
+#[test]
+fn a_closing_directive_in_a_case_block_stands_at_the_directive_that_opened_it() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (ready) {\n            value=0;\n#ifdef FEATURE\n        }\n#endif\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (ready) {\n            value=0;\n            #ifdef FEATURE\n        }\n            #endif\n        break;\n    }\n    }\n}\n",
+    );
+}
