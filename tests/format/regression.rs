@@ -15038,3 +15038,12 @@ fn a_statement_a_comment_leads_in_a_block_run_in_after_a_braceless_body_stands_w
     let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) {\n            /* note */ first();\n            second();\n        }\n}\n";
     check(input, &["--style=kr", "--keep-one-line-statements"], input);
 }
+
+#[test]
+fn a_function_brace_inside_a_conditional_opens_a_function_body() {
+    check(
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    { value = 0; }\n    value = 1;\n}\n",
+        &["--style=kr"],
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    {\n        value = 0;\n    }\n    value = 1;\n}\n",
+    );
+}
