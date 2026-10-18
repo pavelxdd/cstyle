@@ -9039,6 +9039,25 @@ fn a_comment_before_a_braced_initializer_closer_leaves_it_as_after_an_assignment
 }
 
 #[test]
+fn a_comment_leading_a_declarator_row_leaves_it_where_it_stands_without() {
+    let input =
+        "void f()\n{\n    int first = 1,\n        /* note */ second = 2,\n        third;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   int first = 1,\n            /* note */ second = 2,\n            third;\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    int first = 1,\n        /* note */ second = 2,\n        third;\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

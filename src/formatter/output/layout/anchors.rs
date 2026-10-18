@@ -2258,6 +2258,7 @@ impl FormatEngine<'_> {
             })
             .or_else(|| self.stacked_argument_indent(code))
             .or_else(|| self.argument_after_comma_column(code))
+            .or_else(|| self.declarator_after_comma_indent(code))
             .or_else(|| {
                 // Otherwise an element's brace the style sets past the
                 // elements stands past the comment, set at them.
