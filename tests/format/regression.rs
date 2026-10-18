@@ -18125,3 +18125,16 @@ fn vtk_closes_a_flush_lambda_brace_at_its_statement_before_a_comment() {
         "auto handler = [&](int value)\n{\n    return value + 1;\n}; /* note */\n",
     );
 }
+
+#[test]
+fn a_default_in_a_template_head_sets_no_column_for_the_declaration_after_it() {
+    let input = "template <typename E = int>\nint\nmake()\n{\n    return 1;\n}\n";
+    check(input, &["--style=kr"], input);
+    let member = "struct Item {\n    template <typename E = int>\n    static int\n    make();\n    int value;\n};\n";
+    check(member, &["--style=kr"], member);
+    let input = "template <typename E, size_t N = size<E>()>\nconsteval auto make() -> int {\n  return 1;\n}\n";
+    let expected = "template <typename E, size_t N = size<E>()>\nconsteval auto\nmake() -> int\n{\n    return 1;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
+

@@ -2117,7 +2117,13 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = column;
             self.previous_was_newline = true;
-        } else if self.is_complete_template_declaration_line() || self.is_objc_standalone_line() {
+        } else if self.is_complete_template_declaration_line() {
+            // The declaration the head introduces continues nothing of it.
+            self.finish_line();
+            self.layout.nesting.clear_continuation_indents();
+            self.layout.indentation.clear_continuation_indents();
+            self.previous_was_newline = true;
+        } else if self.is_objc_standalone_line() {
             self.finish_line();
             self.previous_was_newline = true;
         } else if (self.is_objc_method_line() || self.layout.objc.method_continuation)
