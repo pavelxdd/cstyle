@@ -16930,3 +16930,25 @@ fn a_kept_one_line_switch_block_stands_at_its_statement() {
         "void f()\n{\n    switch (value) {\n    case 1:\n        go();\n        break;\n    default:\n        break;\n    }\n    next();\n}\n",
     );
 }
+
+#[test]
+fn a_trailing_comment_after_a_statement_past_a_broken_case_block_moves_no_code() {
+    // astyle sets such a statement a level in when a comment trails it.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n    {\n        push(state);\n    }\n    break; /* note */\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2: {\n        push(state);\n    }\n    break; /* note */\n    }\n}\n";
+    check(input, &["--style=stroustrup"], expected);
+    check(
+        &input.replace(" /* note */", ""),
+        &["--style=stroustrup"],
+        &expected.replace(" /* note */", ""),
+    );
+}
+
+#[test]
+fn lisp_pads_a_list_closer_its_row_holds_before_a_directive_too() {
+    // astyle leaves the closer unpadded when a directive follows its row.
+    let input =
+        "static const struct Item others[] = {\n    {3,\n#ifdef FEATURE\n     4}\n#endif\n};\n";
+    let expected = "static const struct Item others[] = {\n    {\n        3,\n#ifdef FEATURE\n        4 }\n#endif\n};\n";
+    check(input, &["--style=lisp"], expected);
+}
