@@ -3267,6 +3267,13 @@ impl FormatEngine<'_> {
         let group = groups.enclosing(first)?;
         let previous_line = self.output.line_with_token(previous)?;
         let previous_first = self.output.line_tokens(previous_line)?.first;
+        // The arguments after a lambda's body go on at the statement.
+        if groups
+            .closed_at(previous_first)
+            .is_some_and(|closed| self.tree.blocks.kind(closed) == Some(BlockKind::Lambda))
+        {
+            return None;
+        }
         // A row a file scope block indented stands apart from the group.
         let column = if groups.enclosing(previous_first) == Some(group)
             && !self.preprocessor.group_block_rows.contains(&previous_line)
@@ -3333,6 +3340,13 @@ impl FormatEngine<'_> {
         }
         let previous_line = self.output.line_with_token(previous)?;
         let previous_first = self.output.line_tokens(previous_line)?.first;
+        // The arguments after a lambda's body go on at the statement.
+        if groups
+            .closed_at(previous_first)
+            .is_some_and(|closed| self.tree.blocks.kind(closed) == Some(BlockKind::Lambda))
+        {
+            return None;
+        }
         // A row a file scope block indented stands apart from the group.
         let column = if groups.enclosing(previous_first) == Some(group)
             && !self.preprocessor.group_block_rows.contains(&previous_line)

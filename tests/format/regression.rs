@@ -17086,3 +17086,23 @@ fn a_block_after_a_closer_past_a_constructor_stays_on_its_line() {
     let expected = "Item::Item(int value)\n    : value(value) {\n}\nvoid f() {\n    if (a) {\n        count++;\n    }\n    {\n        value = 1;\n    }\n}\n";
     check(input, &["--style=java"], expected);
 }
+
+#[test]
+fn arguments_after_a_capture_only_lambda_broken_from_its_brace_stand_at_the_statement() {
+    let input =
+        "void f()\n{\n    result = call(first, [] {\n        go();\n    },\n    other);\n}\n";
+    let expected =
+        "void f()\n{\n    result = call(first, []\n    {\n        go();\n    },\n    other);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "void f()\n{   result = call(first, []\n    {   go();\n    },\n    other);\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn an_argument_past_a_directive_after_a_lambda_closer_stands_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] {\n        go();\n#ifdef FEATURE\n    },\n#endif\n    other,\n    more);\n}\n";
+    let expected = "void f()\n    {\n    call(first,\n         []\n        {\n        go();\n#ifdef FEATURE\n        },\n#endif\n    other,\n    more);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}
