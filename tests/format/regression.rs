@@ -16519,3 +16519,13 @@ fn indent_preproc_cond_sets_a_directive_among_arguments_at_them_in_a_braceless_b
         check(input, &["--style=kr", "--indent-preproc-cond"], expected);
     }
 }
+
+#[test]
+fn break_blocks_all_sets_no_blank_line_inside_a_comment_led_else_header() {
+    // astyle reads the comment-led `else` as a header of its own and
+    // breaks the comments before it apart.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    // between\n    /* note */ else {\n        result=0;\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n\n    // between\n    /* note */ else {\n        result=0;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+    check(expected, &["--style=kr", "--break-blocks=all"], expected);
+}
