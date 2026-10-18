@@ -1224,6 +1224,21 @@ impl FormatEngine<'_> {
 
     /// Whether the last output line of code ends with the `=`, or the
     /// declarator, that the brace at `brace` opens the list of.
+    /// Whether the brace at `brace` opens the range a range-for's `:`
+    /// leads.
+    fn brace_ranges_a_range_for(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree
+            .previous_code_token(brace)
+            .filter(|&colon| matches!(tokens[colon], Token::Symbol(':')))
+            .and_then(|colon| self.tree.groups.enclosing(colon))
+            .and_then(|header| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(header).open)
+            })
+            .is_some_and(|keyword| matches!(&tokens[keyword], Token::Word(word) if word == "for"))
+    }
+
     fn previous_output_code_ends_list_head(&self, brace: usize) -> bool {
         // Blank lines, comment lines and directives between the `=` and the
         // brace leave the assignment.
@@ -1515,6 +1530,7 @@ impl FormatEngine<'_> {
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && self.layout.nesting.paren_depth > 0
+            && !(tokens.len() == self.tree.tokens.len() && self.brace_ranges_a_range_for(start))
             && !(self
                 .layout
                 .continuation_indent

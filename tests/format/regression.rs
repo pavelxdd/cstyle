@@ -18429,3 +18429,14 @@ fn an_empty_type_body_after_a_base_clause_over_lines_stays_empty() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_brace_list_a_range_for_header_breaks_before_stands_there_on_the_next_pass() {
+    let input = "void run() {\n  for (bool word : {true, false}) {\n    go(word);\n  }\n}\n";
+    let expected = "void run()\n{\n    for (bool word :\n            {true, false})\n    {\n        go(word);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "void run()\n    {\n    for (bool word :\n            {true, false})\n        {\n        go(word);\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
