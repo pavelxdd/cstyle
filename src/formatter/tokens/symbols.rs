@@ -15,6 +15,7 @@ use crate::formatter::state::frame::{
 };
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_pointer_type_word, is_type_like_pointer_word,
     is_unpad_kept_type_word,
@@ -1659,8 +1660,16 @@ impl FormatEngine<'_> {
                     })
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some());
+        // A message's keyword after a block closing on the line is no label.
+        let in_brackets = token_index < self.tree.tokens.len()
+            && self
+                .tree
+                .groups
+                .enclosing(token_index)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Bracket);
         let is_label = !has_question
             && !is_objc_colon
+            && !in_brackets
             && !is_bit_field
             && !is_class_base
             && !is_enum_underlying_type

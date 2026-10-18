@@ -754,7 +754,7 @@ impl FormatEngine<'_> {
             self.ensure_space();
         } else if !matches!(
             next,
-            Some(Token::Symbol(';') | Token::Symbol(',') | Token::Symbol(')'))
+            Some(Token::Symbol(';') | Token::Symbol(',') | Token::Symbol(')') | Token::Symbol(']'))
         ) {
             self.finish_line();
             if !self.closing_brace_precedes_else() {

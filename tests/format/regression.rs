@@ -16967,3 +16967,10 @@ fn a_designator_row_after_a_ternary_designator_of_an_earlier_list_stands_at_the_
     let expected = "void f(void)\n{\n    struct Config c = {\n        .tern = ready ? FIRST\n                : SECOND,\n        .x = 1,\n    };\n}\nstruct Config g = {\n    .value = FLAG_A |\n             FLAG_B,\n    .lead = FLAG_A\n            | FLAG_B,\n};\n";
     check(input, &[], expected);
 }
+
+#[test]
+fn a_message_keyword_after_a_block_closer_is_no_label() {
+    let input = "- (void)run\n{\n    [view animate:^ {\n          go();\n    } completion:^(BOOL finished) {\n        stop();\n    }];\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &[], input);
+}
