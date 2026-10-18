@@ -1831,9 +1831,7 @@ impl FormatEngine<'_> {
                     && self.layout.command_state.current_header.is_none()
                     // A header's brace moves before the comment trailing it.
                     && (brace.header.is_none()
-                        || trailing_comment_split_limit(&self.current) == self.current.len()))
-                // An enum brace the style breaks takes its comment along.
-                || brace_type == BraceType::Enum && !self.options.attach_enum)
+                        || trailing_comment_split_limit(&self.current) == self.current.len())))
             && (!matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
                 || self.token_input.token_followed_by_final_line_comment)
             && !self.options.add_braces
@@ -1841,9 +1839,6 @@ impl FormatEngine<'_> {
         {
             if brace_type == BraceType::Definition {
                 self.trim_current_end();
-            } else if brace_type == BraceType::Enum {
-                self.trim_current_end();
-                self.finish_line();
             } else {
                 self.emit_opening_brace_space(brace_type);
             }
@@ -2022,9 +2017,14 @@ impl FormatEngine<'_> {
                 | BraceStyle::Pico
         ) && !leads_designator
             && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
-        // An enum brace that starts its source line stays broken.
-        let source_broken_enum =
-            brace_type == BraceType::Enum && self.token_input.token_begins_source_line;
+        // An enum brace that starts its source line stays broken, and so
+        // does one a style breaks whose values go on over lines: its values
+        // stand below it, as when the source broke it.
+        let source_broken_enum = brace_type == BraceType::Enum
+            && (self.token_input.token_begins_source_line
+                || self.options.brace_style == BraceStyle::OneTrueBrace
+                    && !self.options.attach_enum
+                    && self.brace_list_spans_lines(token_index));
         if (matches!(
             brace_type,
             BraceType::Array | BraceType::CompoundLiteral | BraceType::Enum
@@ -2095,6 +2095,20 @@ impl FormatEngine<'_> {
             return true;
         }
         false
+    }
+
+    /// Whether the group the `{` at `token_index` opens closes on a later
+    /// source line.
+    fn brace_list_spans_lines(&self, token_index: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .opened_at(token_index)
+            .and_then(|group| groups.get(group).close)
+            .is_some_and(|close| {
+                self.tree.tokens[token_index..close]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
     }
 
     /// Places the brace on the current or previous line, or on its own line,

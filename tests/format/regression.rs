@@ -4049,13 +4049,11 @@ fn run_in_enum_after_a_typedef_enum_closes_at_its_own_brace() {
         ),
         (
             "--style=mozilla",
-            "typedef enum\n{ C = 0,\n  D = 1\n} s;\nenum e\n{ A,\n  B\n};\n",
+            "typedef enum\n{\n    C = 0,\n    D = 1\n} s;\nenum e\n{\n    A,\n    B\n};\n",
         ),
     ] {
         check(input, &[style], expected);
-        if style == "--style=kr" {
-            check(expected, &[style], expected);
-        }
+        check(expected, &[style], expected);
     }
 }
 
@@ -9151,6 +9149,16 @@ fn pad_oper_keeps_the_three_way_comparison_operator_whole() {
         &["--pad-oper"],
         "struct Item {\n    auto operator<=>(const Item &) const = default;\n    bool less = (a <=> b) < 0;\n};\n",
     );
+}
+
+#[test]
+fn mozilla_breaks_a_run_in_enum_list_below_the_brace_it_breaks() {
+    // The values stand in rows below the broken brace, as they do when the
+    // source broke it, so a second pass keeps them.
+    let input = "enum mode { FIRST, SECOND,\n  THIRD };\nvoid f()\n{\n    enum { A, B,\n        C } x;\n}\n";
+    let expected = "enum mode\n{\n    FIRST, SECOND,\n    THIRD\n};\nvoid f()\n{\n    enum\n    {\n        A, B,\n        C\n    } x;\n}\n";
+    check(input, &["--style=mozilla"], expected);
+    check(expected, &["--style=mozilla"], expected);
 }
 
 #[test]
