@@ -9018,6 +9018,14 @@ fn a_label_kept_after_a_case_block_closer_leaves_the_block_at_its_label() {
 }
 
 #[test]
+fn vtk_sets_a_function_try_block_at_the_function_body() {
+    let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
+    let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
 fn a_braced_initializer_below_its_declarator_stands_as_one_after_an_assignment() {
     let input = "void f()\n{\n    Item other\n    {   .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n";
     for (style, expected) in [

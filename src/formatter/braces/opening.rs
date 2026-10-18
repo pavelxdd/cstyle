@@ -3527,7 +3527,15 @@ impl FormatEngine<'_> {
         }
         match self.options.brace_style {
             BraceStyle::Vtk => {
+                // A function's try block stands as its body does.
                 brace_type == BraceType::Command
+                    && self
+                        .current
+                        .active_token()
+                        .and_then(|brace| self.tree.groups.opened_at(brace))
+                        .map_or(!self.layout.nesting.brace_type_stack.is_empty(), |block| {
+                            self.tree.groups.get(block).parent.is_some()
+                        })
                     || (brace_type == BraceType::Array && self.layout.indentation.indent() > 0)
                     || vtk_indents_declaration_brace(
                         brace_type,

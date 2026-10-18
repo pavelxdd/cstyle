@@ -7489,12 +7489,18 @@ impl FormatEngine<'_> {
                 } else {
                     BraceType::Command
                 };
+                // VTK indents the braces of blocks inside a function, not
+                // those of a function's own try block.
+                let vtk_file_scope_block = self.options.brace_style == BraceStyle::Vtk
+                    && brace_type == BraceType::Command
+                    && self.tree.groups.get(block).parent.is_none();
                 let indented_brace = (self.options.indent_braces
                     || matches!(
                         self.options.brace_style,
                         BraceStyle::Whitesmith | BraceStyle::Vtk
                     ))
                     && self.should_indent_brace_line(brace_type)
+                    && !vtk_file_scope_block
                     || self.options.brace_style == BraceStyle::Ratliff
                         && brace_type == BraceType::Command;
                 lead + if indented_brace {
