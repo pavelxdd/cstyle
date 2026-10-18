@@ -16031,3 +16031,22 @@ fn line_comments_after_an_interface_head_stand_a_level_in_as_block_comments_do()
     let both = "@interface Item : NSObject\n    /* note */ // more\n@property (nonatomic) int value;\n@end\n";
     check(both, &[], both);
 }
+
+#[test]
+fn declarations_after_an_indented_block_that_ends_a_split_declaration_return_to_file_scope() {
+    for tail in [
+        "template <typename T>\nT helper(T value)\n{\n    return value;\n}\n",
+        "int value;\n",
+        "int helper(int value)\n{\n    return value;\n}\n",
+    ] {
+        let input =
+            format!("static struct Item *\n#ifdef FEATURE\nmake(int value);\n#endif\n\n{tail}");
+        let expected =
+            format!("static struct Item *\n#ifdef FEATURE\n    make(int value);\n#endif\n\n{tail}");
+        check(
+            &input,
+            &["--style=allman", "--indent-preproc-block"],
+            &expected,
+        );
+    }
+}
