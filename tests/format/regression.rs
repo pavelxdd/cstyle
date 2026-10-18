@@ -16812,3 +16812,12 @@ fn an_argument_after_an_indented_lambda_closer_stands_at_the_statement() {
     let expected = "void f()\n{\n    call(first,\n         [this]()\n        {\n        return call();\n        },\n    last);\n}\n";
     check(input, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_comment_inside_a_for_header_leaves_its_brace_a_block() {
+    let input = "void f()\n{   for ( /* void */ ; data != end; data += 8)\n    {   go();\n        stop();\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+    let input =
+        "void f()\n{\n    for ( /* void */ ; data != end; data += 8) {\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

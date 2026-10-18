@@ -1399,7 +1399,7 @@ impl FormatEngine<'_> {
             brace_type = BraceType::Command;
         }
         // A comment trailing the header is not inside its parentheses.
-        let code = &self.current[..self.current_trailing_comment_split_limit()];
+        let code = &self.current[..trailing_comment_split_limit(&self.current)];
         if brace_type == BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
             && ((code.trimmed_end().ends_with('(') && code.trimmed() != "(")
@@ -1772,7 +1772,8 @@ impl FormatEngine<'_> {
                 || (brace_type == BraceType::Command
                     && self.layout.command_state.current_header.is_none()
                     // A header's brace moves before the comment trailing it.
-                    && (brace.header.is_none() || current_comment_start == self.current.len()))
+                    && (brace.header.is_none()
+                        || trailing_comment_split_limit(&self.current) == self.current.len()))
                 // An enum brace the style breaks takes its comment along.
                 || brace_type == BraceType::Enum && !self.options.attach_enum)
             && (!matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
