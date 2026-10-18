@@ -1002,10 +1002,19 @@ impl FormatEngine<'_> {
                     .previous_code_token(self.tree.groups.get(group).open)
             })
             .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol(',')));
+        // A list after a call's argument is one wherever its line opens
+        // more lists.
+        let follows_call_argument = open_follows_comma
+            && self
+                .current
+                .active_token()
+                .and_then(|close| self.tree.groups.closed_at(close))
+                .and_then(|group| self.tree.groups.get(group).parent)
+                .is_some_and(|parent| self.tree.groups.get(parent).delimiter == Delimiter::Paren);
         let call_argument_array_column = self
             .output
             .get(open_output_len)
-            .filter(|_| !later_brace_on_line)
+            .filter(|_| !later_brace_on_line || follows_call_argument)
             .and_then(|line| {
                 brace_column.filter(|_| open_follows_comma).or_else(|| {
                     line.rfind(", {").map(|comma| {

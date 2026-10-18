@@ -294,7 +294,7 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| {
-            when(whitesmith || ratliff || vtk, || {
+            when(whitesmith || ratliff || vtk || closes_brace, || {
                 self.run_in_nested_array_row_indent(first)
             })
         })
@@ -816,6 +816,32 @@ impl FormatEngine<'_> {
         {
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
+        // A brace row after the closer of a broken first element of a list
+        // its brace leads stands a level past the line of that brace; VTK
+        // breaks such a row off a level further.
+        if !indented_braces
+            && self.options.brace_style != BraceStyle::Vtk
+            && matches!(tokens[first], Token::Symbol('{'))
+            && matches!(tokens[comma], Token::Symbol(','))
+            && groups.enclosing(comma) == Some(group)
+            && self
+                .tree
+                .previous_code_token(comma)
+                .is_some_and(|closer| matches!(tokens[closer], Token::Symbol('}')))
+            && let Some(element) = next_code_token(tokens, groups.get(group).open + 1)
+            && matches!(tokens[element], Token::Symbol('{'))
+            && groups
+                .opened_at(element)
+                .and_then(|row| groups.get(row).close)
+                .and_then(|close| self.output.line_with_token(close))
+                != self.output.line_with_token(element)
+            && let Some((lead, levels, _)) = self.brace_ending_row_levels(element)
+        {
+            return Some(
+                lead + levels.saturating_sub(1) * self.options.indent_width
+                    + self.case_unindent_spaces(),
+            );
+        }
         let branch_row = self.opens_branch_row(group, comma, first);
         if !branch_row && groups.enclosing(comma) != Some(group) {
             return None;
@@ -1260,14 +1286,16 @@ impl FormatEngine<'_> {
     fn run_in_nested_array_row_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        if !matches!(
+        // Other styles close such an initializer at its statement.
+        let indented_braces = matches!(
             self.options.brace_style,
             BraceStyle::Whitesmith | BraceStyle::Ratliff | BraceStyle::Vtk
-        ) {
+        );
+        if !indented_braces && !matches!(tokens[first], Token::Symbol('}')) {
             return None;
         }
         let (group, levels) = if matches!(tokens[first], Token::Symbol('}')) {
-            (groups.closed_at(first)?, 1)
+            (groups.closed_at(first)?, usize::from(indented_braces))
         } else {
             let group = groups.enclosing(first)?;
             let previous = self.tree.previous_code_token(first)?;
@@ -1279,7 +1307,7 @@ impl FormatEngine<'_> {
             (group, 2)
         };
         let open = groups.get(group).open;
-        let closer = levels == 1;
+        let closer = matches!(tokens[first], Token::Symbol('}'));
         let rows = &self.inline_array.list_rows;
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
             || groups

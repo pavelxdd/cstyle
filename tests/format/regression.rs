@@ -16257,3 +16257,35 @@ fn run_in_styles_lay_out_a_mid_row_list_of_a_nested_first_list_as_its_broken_for
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn nested_first_list_after_a_call_argument_breaks_its_closer_as_other_lists_there() {
+    let input = "void run()\n{\n    call(value, {{1, 2},\n                 {3, 4}});\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run()\n{\n    call(value, {{1, 2},\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    call(value, {{1, 2},\n            {3, 4}\n        });\n    }\n",
+        ),
+        (
+            "--style=lisp",
+            "void run() {\n    call(value, {{1, 2 },\n        {3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn brace_row_after_a_broken_first_element_of_a_call_argument_list_stands_as_assigned() {
+    let assigned = "void run()\n{\n    value = {{\n            1,\n            2\n        },\n        {3, 4}\n    };\n}\n";
+    check(assigned, &["--style=kr"], assigned);
+    let input = "void run()\n{\n    call(value, {{1,\n                  2},\n                 {3, 4}});\n}\n";
+    let expected = "void run()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
