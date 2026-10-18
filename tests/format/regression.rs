@@ -9326,6 +9326,15 @@ fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
 }
 
 #[test]
+fn whitesmith_keeps_a_trailing_return_head_after_a_directive_at_its_level() {
+    let input = "#ifdef A\nint x;\n#endif\nauto make() -> Item {\n  return value;\n}\n";
+    let expected =
+        "#ifdef A\nint x;\n#endif\nauto make() -> Item\n    {\n    return value;\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn a_macro_word_heads_the_block_its_brace_opens_on_its_line() {
     // As with the brace on a line of its own, the block is the word's.
     let input = "void f() {\n  APPLY {\n    std::visit(\n        [&](const auto& v) {\n          go(v);\n        },\n        value);\n  }\n}\n";

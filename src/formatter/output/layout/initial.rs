@@ -1411,19 +1411,37 @@ impl FormatEngine<'_> {
                                 .all(|ch| ch == '_' || ch.is_ascii_uppercase())
                     })
             };
-            if self.token_input.token_source_line_indent
+            // The line's own source indent, which a later token's line may
+            // not share.
+            let own_source_indent = self.output.pending_tokens().map_or(0, |span| {
+                let tokens = &self.tree.tokens;
+                match span.first.checked_sub(1).map(|index| &tokens[index]) {
+                    Some(Token::Whitespace(lead))
+                        if span.first < 2 || matches!(tokens[span.first - 2], Token::Newline) =>
+                    {
+                        leading_visual_width(lead, self.options.tab_width)
+                    }
+                    _ => 0,
+                }
+            });
+            if previous_trimmed == "#endif"
+                && line_start.starts_with("auto ")
+                && own_source_indent >= layout.normal_indent * self.options.indent_width
+                && own_source_indent > 0
+            {
+                layout.exact_indent_spaces = Some(own_source_indent);
+            } else if self.token_input.token_source_line_indent
                 >= layout.normal_indent * self.options.indent_width
                 && self.token_input.token_source_line_indent > 0
-                && ((previous_trimmed == "#endif" && line_start.starts_with("auto "))
-                    || ((line_start.starts_with("noexcept(") || line_start.starts_with("->"))
-                        && previous_trimmed.contains("noexcept(")
-                        && self
-                            .output
-                            .scoped()
-                            .iter()
-                            .rev()
-                            .take(4)
-                            .any(|line| line.trimmed_start() == "#endif")))
+                && ((line_start.starts_with("noexcept(") || line_start.starts_with("->"))
+                    && previous_trimmed.contains("noexcept(")
+                    && self
+                        .output
+                        .scoped()
+                        .iter()
+                        .rev()
+                        .take(4)
+                        .any(|line| line.trimmed_start() == "#endif"))
             {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
             }
