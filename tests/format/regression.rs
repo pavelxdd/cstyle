@@ -17066,3 +17066,16 @@ fn a_case_label_sharing_its_line_with_a_goto_label_keeps_the_case_column() {
     let expected = "void f(void)\n{   switch (x)\n    {   case 1:\n            go();\n            break;\n        default: done:\n            {   int r;\n                break; } } }\n";
     check(input, &["--style=pico"], expected);
 }
+
+#[test]
+fn rows_of_a_list_split_off_a_type_closer_by_the_maximum_length_stand_in_the_list() {
+    let input = "struct Item {\n    char *name;\n} DefaultItems[] = { /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    let expected = "struct Item {\n    char *name;\n} DefaultItems[] =\n{ /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    check(input, &["--style=google", "--max-code-length=80"], expected);
+    let attached = "struct Item {\n    char *name;\n} DefaultItems[] = {\n    /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    check(
+        expected,
+        &["--style=google", "--max-code-length=80"],
+        attached,
+    );
+}

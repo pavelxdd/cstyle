@@ -30,7 +30,8 @@ pub(crate) fn starts_post_closing_declaration(line: &str) -> bool {
         return false;
     };
     let tail = tail.trimmed_start();
-    if tail.is_empty() || tail.ends_with('{') {
+    // A declarator whose `=` ends the line goes on with its value.
+    if tail.is_empty() || tail.ends_with('{') || tail.ends_with('=') {
         return false;
     }
     let word = tail
