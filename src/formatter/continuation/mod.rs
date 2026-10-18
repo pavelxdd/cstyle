@@ -484,21 +484,25 @@ impl FormatEngine<'_> {
 
     pub(crate) fn for_header_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trimmed_end();
-        let trimmed = line.trimmed_start();
-        if !trimmed
-            .strip_prefix("for")
-            .is_some_and(|tail| tail.trimmed_start().starts_with('('))
-        {
-            return None;
-        }
-        let prefix_len = line.len() - trimmed.len();
-        let base_spaces = if prefix_len == 0 {
+        let (base_spaces, open) = for_header_paren(line)?;
+        let base_spaces = if base_spaces == 0 {
             self.current_line_indent_spaces()
         } else {
-            prefix_len
+            base_spaces
         };
-        let open = trimmed.find('(')?;
         Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1))
+    }
+
+    /// The continuation of the `for` header an output line starts.
+    pub(crate) fn output_for_header_continuation_spaces(&self, line: &str) -> Option<usize> {
+        let (base_spaces, open) = for_header_paren(line)?;
+        let base_spaces = leading_visual_width(line, self.options.tab_width).max(base_spaces);
+        let spaces = base_spaces + open + 1;
+        Some(if self.options.indent_after_parens {
+            spaces
+        } else {
+            spaces.max(base_spaces + min_conditional_indent_spaces(self.options))
+        })
     }
 
     pub(crate) fn current_line_indent_spaces(&self) -> usize {
@@ -2084,6 +2088,19 @@ impl FormatEngine<'_> {
         self.layout.indentation.register_continuation_indent(level);
         self.layout.run_in_state.current_run_in_indent = Some(level);
     }
+}
+
+/// The width of the blanks before a `for` header `line` and the offset of
+/// its `(` past them.
+fn for_header_paren(line: &str) -> Option<(usize, usize)> {
+    let trimmed = line.trimmed_start();
+    if !trimmed
+        .strip_prefix("for")
+        .is_some_and(|tail| tail.trimmed_start().starts_with('('))
+    {
+        return None;
+    }
+    Some((line.len() - trimmed.len(), trimmed.find('(')?))
 }
 
 fn is_nested_template_type(type_prefix: &str) -> bool {

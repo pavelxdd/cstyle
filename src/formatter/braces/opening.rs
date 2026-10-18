@@ -1257,6 +1257,21 @@ impl FormatEngine<'_> {
             return;
         }
         let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
+        if let Some(spaces) = self.broken_range_for_list_brace_spaces(brace_type, next) {
+            if !self.current_is_blank() {
+                self.finish_line();
+            }
+            self.layout.continuation_indent.set_next_line_spaces(spaces);
+            // The list is no block of the header.
+            self.open_multiline_attached_initializer_brace(
+                None,
+                brace_type,
+                block_indent_extra,
+                false,
+                None,
+            );
+            return;
+        }
         if self.should_open_multiline_attached_initializer_brace(brace_type, next) {
             // A comment ending the brace's line stays after the brace.
             let trailing_comment = comments.line.or(comments
@@ -3377,6 +3392,43 @@ impl FormatEngine<'_> {
             return None;
         }
         self.for_header_continuation_indent_spaces()
+    }
+
+    /// Where a style breaking braces sets the brace of a list a range-for
+    /// header's range opens: on its own line at the header's continuation.
+    fn broken_range_for_list_brace_spaces(
+        &self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> Option<usize> {
+        // A run-in style's brace leading its line holds the first row.
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Allman | BraceStyle::Horstmann
+        ) || !matches!(
+            brace_type,
+            BraceType::Array
+                | BraceType::Initializer
+                | BraceType::CompoundLiteral
+                | BraceType::Command
+        ) || !(matches!(next, None | Some(Token::Newline)) || self.current_is_blank())
+            || self.layout.nesting.paren_depth == 0
+        {
+            return None;
+        }
+        if self.current_is_blank() {
+            let header = self.output.last()?.trimmed_end();
+            header
+                .ends_with(':')
+                .then(|| self.output_for_header_continuation_spaces(header))
+                .flatten()
+        } else {
+            self.current
+                .trimmed_end()
+                .ends_with(':')
+                .then(|| self.for_header_continuation_indent_spaces())
+                .flatten()
+        }
     }
 
     fn should_attach_control_paren_init_brace_from_previous_line(

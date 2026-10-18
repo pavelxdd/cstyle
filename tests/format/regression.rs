@@ -16878,3 +16878,15 @@ fn run_in_and_ratliff_styles_set_a_range_for_list_at_the_header_continuation() {
         "void f() {\n    for (auto value : {\n                1, 2, 3 }) {\n        go(value); } }\n",
     );
 }
+
+#[test]
+fn allman_and_horstmann_break_a_range_for_list_brace_at_the_header_continuation() {
+    let input = "void f()\n{\n    for (auto value : {\n             1, 2, 3\n         }) {\n        go(value);\n    }\n}\n";
+    let expected = "void f()\n{\n    for (auto value :\n            {\n                1, 2, 3\n            })\n    {\n        go(value);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    // astyle sets the closer at the statement; it stands at its brace.
+    let expected = "void f()\n{   for (auto value :\n            {   1, 2, 3\n            })\n    {   go(value);\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}

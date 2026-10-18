@@ -269,12 +269,14 @@ impl FormatEngine<'_> {
         ) {
             exact_indent_spaces = Some(case_layout.exact_indent_spaces);
         }
-        // A broken `{` stands at the header that opened its frame.
+        // A broken `{` stands at the header that opened its frame; one in
+        // the header's parens opens no block of it.
         if matches!(
             self.options.brace_style,
             BraceStyle::Allman | BraceStyle::Horstmann | BraceStyle::Pico
         ) && !self.options.indent_braces
             && line.trimmed() == "{"
+            && self.layout.nesting.paren_depth == 0
             && let Some(header) = self
                 .layout
                 .frame_stack
